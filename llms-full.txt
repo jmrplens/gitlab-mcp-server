@@ -129,7 +129,7 @@ Parameter guidance:
 - deploy_token_list_group.group_id: scope_group. Source: Group ID or path owning the deploy token.
 - deploy_token_list_project.project_id: scope_project. Source: Project ID or path owning the deploy token.
 - invite_group.access_level: access_level. Source: Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
-- invite_group.email: invite_email. Source: Email address of the person to invite when they may not have an account yet. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
+- invite_group.email: invite_email. Source: Email address of the person to invite when they may not have an account yet, or several addresses separated by commas to invite each of them. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
 - invite_group.expires_at: calendar_date. Source: Date the invitation should expire, when the user requests one. Avoid: Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp.
 - invite_group.group_id: scope_group. Source: Group ID or full group path the user is being invited to. Avoid: Use group_id for the group scope. Use project_id only with access.invite_project.
 - invite_group.invite_source. Source: Name of the flow that started the invitation, recorded by GitLab for attribution. Avoid: This labels where the invitation came from. It does not change who is invited or what they get.
@@ -139,7 +139,7 @@ Parameter guidance:
 - invite_list_project.project_id: scope_project. Source: Project ID or full namespace path whose pending invitations should be listed. Avoid: Lists pending invitations, not accepted members. Use project.members for current members.
 - invite_list_project.query. Source: Substring to filter pending invitations by invite email or name. Avoid: query filters within this project's pending invitations. It does not replace project_id.
 - invite_project.access_level: access_level. Source: Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
-- invite_project.email: invite_email. Source: Email address of the person to invite when they may not have an account yet. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
+- invite_project.email: invite_email. Source: Email address of the person to invite when they may not have an account yet, or several addresses separated by commas to invite each of them. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
 - invite_project.expires_at: calendar_date. Source: Date the invitation should expire, when the user requests one. Avoid: Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp.
 - invite_project.invite_source. Source: Name of the flow that started the invitation, recorded by GitLab for attribution. Avoid: This labels where the invitation came from. It does not change who is invited or what they get.
 - invite_project.project_id: scope_project. Source: Project ID or full namespace path the user is being invited to. Avoid: Use the target project here. Use group_id only with access.invite_group.
@@ -6707,7 +6707,7 @@ Action guidance:
 - registry_get: Get details for one container registry repository.
 - registry_list_group: List container registry repositories across a group.
 - registry_list_project: Lists container registry image repositories for a project.
-- registry_rule_create: Create a container registry protection rule for a project.
+- registry_rule_create: Create a container registry protection rule for a project, with a repository path pattern that starts with the project's full path and at least one of the two minimum access levels.
 - registry_rule_delete: Delete a container registry protection rule from a project.
 - registry_rule_list: List container registry protection rules for a project.
 - registry_rule_update: Update a container registry protection rule in a project.
@@ -9402,7 +9402,7 @@ Parameter guidance:
 - commit_status_set.state: status_state. Source: Target state: pending, running, success, failed, canceled, or skipped.
 - commit_statuses.project_id: scope_project. Source: Project numeric ID or full path that owns the repository.
 - commit_statuses.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
-- commit_statuses.sha: commit_sha. Source: Commit SHA from list output, branch HEAD, or task context.
+- commit_statuses.sha: commit_sha. Source: Full commit SHA from list output or a pipeline's sha. A branch name or an abbreviated SHA lists no status.
 - compare.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - contributors.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - file_blame.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -11390,7 +11390,7 @@ Action guidance:
 - get_status: Get a user's status (emoji, message, availability, clear-at time) by numeric user_id. Use when the prompt asks whether someone is busy or what their status message says.
 - gpg_keys: List the GPG keys on the authenticated user's own account, one page at a time with page and per_page. Use when the prompt asks to view, audit, or pick one of your own GPG signing keys. No parameters are required.
 - gpg_keys_for_user: List the GPG keys registered on a specific user's account by user_id, one page at a time with page and per_page. Use after resolving a user with user.get. Viewing another user's GPG keys may require an admin token.
-- key_get_by_fingerprint: Look up a single SSH key or deploy key by its fingerprint and return the owning user. Admin-only on self-managed instances. Accepts the modern SHA256:base64 form or the legacy MD5:aa:bb:cc hex-pairs form. Use when you have only a key fingerprint (for example from an auth log) and need to identify its owner.
+- key_get_by_fingerprint: Look up a single SSH key or deploy key by its fingerprint and return the owning user. Admin-only on self-managed instances. Accepts the modern SHA256:base64 form or the legacy MD5 form of 16 hex pairs, with or without its MD5: label. Use when you have only a key fingerprint (for example from an auth log) and need to identify its owner.
 - key_get_with_user: Look up a single SSH key by its global numeric key ID and return the owning user. Admin-only on self-managed instances. Use when a prompt or audit log gives a bare key ID and you need to identify who owns it. For a specific user's own keys use the per-user SSH-key tools instead.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
 - list_impersonation_tokens: List the impersonation tokens of a user (admin token required). Use to audit a user's impersonation tokens, optionally filtering by state and paginating with offset or keyset pagination.
@@ -12627,7 +12627,7 @@ Action guidance:
 - list_project_checks: List a project's external status check services (deprecated path). Prefer external_status_check.list_project. Use this only when matching the legacy endpoint. Requires the Maintainer role and an Ultimate license.
 - list_project_mr_checks: List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and keyset pagination.
 - retry_project: Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires at least the Developer role and an Ultimate license.
-- set_project_mr_status: Set the status (passed or failed) of an external status check for a merge request, identified by sha and external_status_check_id. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.
+- set_project_mr_status: Set the status (passed, failed or pending) of an external status check for a merge request, identified by external_status_check_id and the full SHA of the merge request's head commit. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.
 - update_project: Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license.
 Parameter guidance:
 - create_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -14668,7 +14668,7 @@ List the statuses of a commit (CI jobs and external integrations), filtered by r
 - `pipeline_id` (integer): Pipeline ID filter
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `ref` (string): Branch or tag name filter
-- `sha` (string) (required): Commit SHA
+- `sha` (string) (required): Full commit SHA, 40 hex characters or 64 in a SHA-256 repository. GitLab lists the statuses of the pipelines that ran on exactly this SHA, so a branch name or an abbreviated SHA lists none
 - `sort` (string): Sort order for keyset pagination: 'asc' or 'desc'
 - `stage` (string): Stage name filter
 
@@ -14696,7 +14696,7 @@ Create an instance OAuth application. Returns: the application with application_
 
 - `confidential` (boolean): Whether application is confidential
 - `name` (string) (required): Application name
-- `redirect_uri` (string) (required): OAuth2 redirect URI
+- `redirect_uri` (string) (required): OAuth2 redirect URI, an absolute URL such as https://example.com/callback. Several are written one per line, separated by a newline
 - `scopes` (string) (required): Space-separated list of scopes
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -17436,7 +17436,7 @@ Look up an SSH key or deploy key by fingerprint and return the owning user. Retu
 
 **Parameters:**
 
-- `fingerprint` (string) (required): SSH key fingerprint, either the SHA256 form (for example SHA256:abc123) or the legacy MD5 hex-pair form (for example MD5:aa:bb:cc)
+- `fingerprint` (string) (required): SSH key fingerprint: SHA256: and the 43 base64 characters ssh-keygen -l prints, or the MD5 form of 16 colon-separated hex pairs, with or without the MD5: prefix ssh-keygen -l -E md5 prints
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -18551,7 +18551,7 @@ Invite a user to a group by email or user ID with an access level. Returns: an i
 **Parameters:**
 
 - `access_level` (integer) (required): Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
-- `email` (string): Email address to invite (either email or user_id required)
+- `email` (string): Email address to invite, or several separated by commas to invite each of them (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `id` (string or integer): Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)
@@ -18696,12 +18696,12 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_ldap_link_add
 
-Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_sync, gitlab_group_ldap_link_delete.
+Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_sync, gitlab_group_ldap_link_delete.
 
 **Parameters:**
 
-- `cn` (string): LDAP Common Name (CN)
-- `filter` (string): LDAP filter
+- `cn` (string): LDAP Common Name (CN) of the group to link. Send exactly one of cn or filter, not both.
+- `filter` (string): LDAP filter selecting the users to link. Send exactly one of cn or filter, not both.
 - `group_access` (integer) (required): Default access level for members of the LDAP group: 0 (No access), 5 (Minimal access), 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID
@@ -18711,13 +18711,13 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_ldap_link_delete
 
-Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Returns: a success confirmation. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_ldap_sync.
+Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: a success confirmation. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_ldap_sync.
 
 **Parameters:**
 
-- `cn` (string): LDAP Common Name to delete
+- `cn` (string): LDAP Common Name of the link to delete. Send exactly one of cn or filter, not both.
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `filter` (string): LDAP filter to delete
+- `filter` (string): LDAP filter of the link to delete. Send exactly one of cn or filter, not both.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `provider` (string) (required): LDAP provider name
 
@@ -19154,15 +19154,15 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_protected_environment_protect
 
-Protect a group-level environment tier with deploy access levels and approval rules. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.
+Protect a group-level environment tier with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming at least one. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.
 
 **Parameters:**
 
-- `approval_rules` (array of objects): Approval rules
-- `deploy_access_levels` (array of objects) (required): Deploy access levels
+- `approval_rules` (array of objects): Who must approve a deployment: each rule names at least one of access_level, user_id or group_id
+- `deploy_access_levels` (array of objects) (required): Who may deploy: at least one entry, each naming exactly one of access_level, user_id or group_id
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `name` (string) (required): Environment tier to protect (production, staging, testing, development, other)
-- `required_approval_count` (integer): Required number of approvals
+- `required_approval_count` (integer): Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -19180,16 +19180,16 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_protected_environment_update
 
-Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.
+Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.
 
 **Parameters:**
 
-- `approval_rules` (array of objects): Updated approval rules
-- `deploy_access_levels` (array of objects): Updated deploy access levels
+- `approval_rules` (array of objects): Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id
+- `deploy_access_levels` (array of objects): Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them
 - `environment` (string) (required): Environment tier (production, staging, testing, development, other)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `name` (string): New environment tier (production, staging, testing, development, other)
-- `required_approval_count` (integer): Required number of approvals
+- `required_approval_count` (integer): Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -25606,7 +25606,7 @@ Invite a user to a project by email or user ID with an access level. Returns: an
 **Parameters:**
 
 - `access_level` (integer) (required): Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
-- `email` (string): Email address to invite (either email or user_id required)
+- `email` (string): Email address to invite, or several separated by commas to invite each of them (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `id` (string or integer): Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)
 - `invite_source` (string): Source of the invitation that starts the member creation process
@@ -26626,15 +26626,15 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_protected_environment_protect
 
-Protect a single environment or wildcard with deploy access levels and approval rules. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_update, gitlab_protected_environment_unprotect.
+Protect a single environment or wildcard with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming at least one. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_update, gitlab_protected_environment_unprotect.
 
 **Parameters:**
 
-- `approval_rules` (array of objects): Approval rules
-- `deploy_access_levels` (array of objects) (required): Deploy access levels
+- `approval_rules` (array of objects): Who must approve a deployment: each rule names at least one of access_level, user_id or group_id
+- `deploy_access_levels` (array of objects) (required): Who may deploy: at least one entry, each naming exactly one of access_level, user_id or group_id
 - `name` (string) (required): Environment name to protect
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `required_approval_count` (integer): Required number of approvals
+- `required_approval_count` (integer): Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -26652,16 +26652,16 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_protected_environment_update
 
-Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect.
+Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect.
 
 **Parameters:**
 
-- `approval_rules` (array of objects): Updated approval rules
-- `deploy_access_levels` (array of objects): Updated deploy access levels
+- `approval_rules` (array of objects): Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id
+- `deploy_access_levels` (array of objects): Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them
 - `environment` (string) (required): Environment name
 - `name` (string): New environment name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `required_approval_count` (integer): Required number of approvals
+- `required_approval_count` (integer): Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -26831,10 +26831,10 @@ Create a container registry protection rule to restrict push/delete access by mi
 
 **Parameters:**
 
-- `minimum_access_level_for_delete` (string): Minimum access level for delete (maintainer, owner, admin)
-- `minimum_access_level_for_push` (string): Minimum access level for push (maintainer, owner, admin)
+- `minimum_access_level_for_delete` (string): Minimum access level for delete (maintainer, owner, admin). Send at least one of the two levels
+- `minimum_access_level_for_push` (string): Minimum access level for push (maintainer, owner, admin). Send at least one of the two levels
 - `project_id` (string or integer) (required): Project ID or path
-- `repository_path_pattern` (string) (required): Repository path pattern (e.g. my-project/my-image*)
+- `repository_path_pattern` (string) (required): Repository path pattern: the project's full path in lower case, then the path of the images to protect, where * matches any characters (e.g. my-group/my-project/my-image*). GitLab refuses a pattern that does not start with the project's full path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -26869,7 +26869,7 @@ Update a container registry repository-path protection rule. Returns: the update
 - `minimum_access_level_for_delete` (string): Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched
 - `minimum_access_level_for_push` (string): Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched
 - `project_id` (string or integer) (required): Project ID or path
-- `repository_path_pattern` (string): Repository path pattern
+- `repository_path_pattern` (string): Repository path pattern: the project's full path in lower case, then the path of the images to protect, where * matches any characters. GitLab refuses a pattern that does not start with the project's full path
 - `rule_id` (integer) (required): Protection rule ID
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -27237,7 +27237,7 @@ Add changelog data to a changelog file by committing the generated entries. Retu
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `to` (string): End of the range (commit SHA or tag, default: HEAD)
 - `trailer` (string): Git trailer to use for changelog generation (default: Changelog)
-- `version` (string) (required): Version string for the changelog
+- `version` (string) (required): Version of the release the changelog is for, in semantic versioning format such as 1.0.0. GitLab requires a MAJOR.MINOR.PATCH version in the value, so v1.0.0 and 1.0.0-rc.1 are taken and 1.0 is not
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -27253,7 +27253,7 @@ Generate changelog notes for a version range without committing. Returns: the re
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `to` (string): End of the range (commit SHA or tag, default: HEAD)
 - `trailer` (string): Git trailer to use (default: Changelog)
-- `version` (string) (required): Version string
+- `version` (string) (required): Version of the release the notes are for, in semantic versioning format such as 1.0.0. GitLab requires a MAJOR.MINOR.PATCH version in the value, so v1.0.0 and 1.0.0-rc.1 are taken and 1.0 is not
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -28352,8 +28352,8 @@ Set the status of an external status check for a merge request. Returns: a succe
 - `external_status_check_id` (integer) (required): External status check ID to update
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `sha` (string) (required): Head SHA of the merge request source branch
-- `status` (string) (required): Status value (e.g. passed, failed)
+- `sha` (string) (required): Full SHA of the merge request's head commit, 40 hex characters or 64 in a SHA-256 repository, as merge_request.get returns it in sha. GitLab answers 409 when it is not the head
+- `status` (string) (required): Status to set: passed, failed or pending
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

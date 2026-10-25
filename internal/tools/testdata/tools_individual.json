@@ -2929,6 +2929,7 @@
       "properties": {
         "email": {
           "description": "Email address to add",
+          "format": "email",
           "type": "string"
         },
         "skip_confirmation": {
@@ -2984,6 +2985,7 @@
       "properties": {
         "email": {
           "description": "Email address to add",
+          "format": "email",
           "type": "string"
         },
         "skip_confirmation": {
@@ -14158,7 +14160,8 @@
           "type": "string"
         },
         "sha": {
-          "description": "Commit SHA",
+          "description": "Full commit SHA, 40 hex characters or 64 in a SHA-256 repository. GitLab lists the statuses of the pipelines that ran on exactly this SHA, so a branch name or an abbreviated SHA lists none",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
           "type": "string"
         },
         "sort": {
@@ -14918,7 +14921,7 @@
           "type": "string"
         },
         "redirect_uri": {
-          "description": "OAuth2 redirect URI",
+          "description": "OAuth2 redirect URI, an absolute URL such as https://example.com/callback. Several are written one per line, separated by a newline",
           "type": "string"
         },
         "scopes": {
@@ -16334,10 +16337,12 @@
         },
         "freeze_end": {
           "description": "Cron expression for freeze end (e.g. 0 7 * * 1)",
+          "pattern": "^\\s*(@(yearly|annually|monthly|weekly|daily|midnight|noon|hourly)|\\S+(\\s+\\S+){4,5})\\s*$",
           "type": "string"
         },
         "freeze_start": {
           "description": "Cron expression for freeze start (e.g. 0 23 * * 5)",
+          "pattern": "^\\s*(@(yearly|annually|monthly|weekly|daily|midnight|noon|hourly)|\\S+(\\s+\\S+){4,5})\\s*$",
           "type": "string"
         },
         "project_id": {
@@ -16499,6 +16504,7 @@
         },
         "url": {
           "description": "External URL of the Geo site",
+          "format": "uri",
           "type": [
             "null",
             "string"
@@ -19311,6 +19317,7 @@
       "properties": {
         "email": {
           "description": "Email for the service account",
+          "format": "email",
           "type": "string"
         },
         "name": {
@@ -20158,6 +20165,7 @@
         },
         "email": {
           "description": "The user email address",
+          "format": "email",
           "type": "string"
         },
         "extern_uid": {
@@ -30486,6 +30494,7 @@
         },
         "url": {
           "description": "External URL of the Geo site",
+          "format": "uri",
           "type": [
             "null",
             "string"
@@ -41434,6 +41443,7 @@
       "properties": {
         "email": {
           "description": "Email address to look up avatar for",
+          "format": "email",
           "type": "string"
         },
         "size": {
@@ -46534,7 +46544,8 @@
       "additionalProperties": false,
       "properties": {
         "fingerprint": {
-          "description": "SSH key fingerprint, either the SHA256 form (for example SHA256:abc123) or the legacy MD5 hex-pair form (for example MD5:aa:bb:cc)",
+          "description": "SSH key fingerprint: SHA256: and the 43 base64 characters ssh-keygen -l prints, or the MD5 form of 16 colon-separated hex pairs, with or without the MD5: prefix ssh-keygen -l -E md5 prints",
+          "pattern": "^((sha256|SHA256):[A-Za-z0-9+/]{43}=?|(MD5:)?[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){15})$",
           "type": "string"
         }
       },
@@ -62659,7 +62670,7 @@
           "type": "integer"
         },
         "email": {
-          "description": "Email address to invite (either email or user_id required)",
+          "description": "Email address to invite, or several separated by commas to invite each of them (either email or user_id required)",
           "type": "string"
         },
         "expires_at": {
@@ -64377,16 +64388,40 @@
   },
   {
     "name": "gitlab_group_ldap_link_add",
-    "description": "Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_sync, gitlab_group_ldap_link_delete.",
+    "description": "Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_sync, gitlab_group_ldap_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "additionalProperties": true,
+          "properties": {
+            "cn": {
+              "minLength": 1
+            }
+          },
+          "required": [
+            "cn"
+          ]
+        },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "filter": {
+              "minLength": 1
+            }
+          },
+          "required": [
+            "filter"
+          ]
+        }
+      ],
       "properties": {
         "cn": {
-          "description": "LDAP Common Name (CN)",
+          "description": "LDAP Common Name (CN) of the group to link. Send exactly one of cn or filter, not both.",
           "type": "string"
         },
         "filter": {
-          "description": "LDAP filter",
+          "description": "LDAP filter selecting the users to link. Send exactly one of cn or filter, not both.",
           "type": "string"
         },
         "group_access": {
@@ -64471,12 +64506,36 @@
   },
   {
     "name": "gitlab_group_ldap_link_delete",
-    "description": "Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Returns: a success confirmation. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_ldap_sync.",
+    "description": "Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: a success confirmation. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_ldap_sync.",
     "inputSchema": {
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "additionalProperties": true,
+          "properties": {
+            "cn": {
+              "minLength": 1
+            }
+          },
+          "required": [
+            "cn"
+          ]
+        },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "filter": {
+              "minLength": 1
+            }
+          },
+          "required": [
+            "filter"
+          ]
+        }
+      ],
       "properties": {
         "cn": {
-          "description": "LDAP Common Name to delete",
+          "description": "LDAP Common Name of the link to delete. Send exactly one of cn or filter, not both.",
           "type": "string"
         },
         "confirm": {
@@ -64484,7 +64543,7 @@
           "type": "boolean"
         },
         "filter": {
-          "description": "LDAP filter to delete",
+          "description": "LDAP filter of the link to delete. Send exactly one of cn or filter, not both.",
           "type": "string"
         },
         "group_id": {
@@ -70763,52 +70822,100 @@
   },
   {
     "name": "gitlab_group_protected_environment_protect",
-    "description": "Protect a group-level environment tier with deploy access levels and approval rules. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.",
+    "description": "Protect a group-level environment tier with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming at least one. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "approval_rules": {
-          "description": "Approval rules",
+          "description": "Who must approve a deployment: each rule names at least one of access_level, user_id or group_id",
           "items": {
             "additionalProperties": false,
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "access_level": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "access_level"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "user_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "user_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "group_id"
+                ]
+              }
+            ],
             "properties": {
               "access_level": {
-                "description": "Access level",
+                "description": "Role whose members may approve: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at least one of access_level, user_id or group_id.",
+                "enum": [
+                  20,
+                  30,
+                  40,
+                  60,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
-              "access_level_description": {
-                "description": "Human-readable description of the access level",
-                "type": [
-                  "null",
-                  "string"
-                ]
-              },
               "group_id": {
-                "description": "Group ID",
+                "description": "ID of a group whose members may approve. Name at least one of access_level, user_id or group_id.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_inheritance_type": {
-                "description": "Group inheritance type (0=direct, 1=inherited)",
+                "description": "Group inheritance type for a group_id rule (0=direct members only, 1=inherited members too)",
+                "enum": [
+                  0,
+                  1,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "required_approvals": {
-                "description": "Required number of approvals",
+                "description": "Approvals this rule requires, 1 to 5 (GitLab's default is 1)",
+                "maximum": 5,
+                "minimum": 1,
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "user_id": {
-                "description": "User ID",
+                "description": "ID of a user who may approve. Name at least one of access_level, user_id or group_id.",
                 "type": [
                   "null",
                   "integer"
@@ -70823,33 +70930,86 @@
           ]
         },
         "deploy_access_levels": {
-          "description": "Deploy access levels",
+          "description": "Who may deploy: at least one entry, each naming exactly one of access_level, user_id or group_id",
           "items": {
             "additionalProperties": false,
+            "oneOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "access_level": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "access_level"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "user_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "user_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "group_id"
+                ]
+              }
+            ],
             "properties": {
               "access_level": {
-                "description": "Access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)",
+                "description": "Role allowed to deploy: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name exactly one of access_level, user_id or group_id.",
+                "enum": [
+                  20,
+                  30,
+                  40,
+                  60,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_id": {
-                "description": "Group ID",
+                "description": "ID of a group whose members may deploy. Name exactly one of access_level, user_id or group_id.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_inheritance_type": {
-                "description": "Group inheritance type (0=direct, 1=inherited)",
+                "description": "Group inheritance type for a group_id entry (0=direct members only, 1=inherited members too)",
+                "enum": [
+                  0,
+                  1,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "user_id": {
-                "description": "User ID",
+                "description": "ID of a user allowed to deploy. Name exactly one of access_level, user_id or group_id.",
                 "type": [
                   "null",
                   "integer"
@@ -70858,6 +71018,7 @@
             },
             "type": "object"
           },
+          "minItems": 1,
           "type": [
             "null",
             "array"
@@ -70882,7 +71043,9 @@
           "type": "string"
         },
         "required_approval_count": {
-          "description": "Required number of approvals",
+          "description": "Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.",
+          "maximum": 0,
+          "minimum": 0,
           "type": [
             "null",
             "integer"
@@ -71074,66 +71237,142 @@
   },
   {
     "name": "gitlab_group_protected_environment_update",
-    "description": "Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.",
+    "description": "Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "approval_rules": {
-          "description": "Updated approval rules",
+          "description": "Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id",
           "items": {
             "additionalProperties": false,
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "access_level": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "access_level"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "user_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "user_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "group_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "_destroy": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "_destroy"
+                ]
+              }
+            ],
+            "else": {
+              "properties": {
+                "required_approvals": {
+                  "maximum": 5,
+                  "minimum": 1
+                }
+              }
+            },
+            "if": {
+              "additionalProperties": true,
+              "properties": {
+                "_destroy": {
+                  "const": true
+                }
+              },
+              "required": [
+                "_destroy"
+              ]
+            },
             "properties": {
               "_destroy": {
-                "description": "Set true to remove this rule",
+                "description": "Set true, with the rule's id, to remove this rule",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "access_level": {
-                "description": "Access level",
+                "description": "Role whose members may approve: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well.",
+                "enum": [
+                  20,
+                  30,
+                  40,
+                  60,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
-              "access_level_description": {
-                "description": "Human-readable description of the access level",
-                "type": [
-                  "null",
-                  "string"
-                ]
-              },
               "group_id": {
-                "description": "Group ID",
+                "description": "ID of a group whose members may approve. Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_inheritance_type": {
-                "description": "Group inheritance type",
+                "description": "Group inheritance type for a group_id rule (0=direct members only, 1=inherited members too)",
+                "enum": [
+                  0,
+                  1,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "id": {
-                "description": "Existing approval rule ID to update",
+                "description": "ID of the existing approval rule to change or remove. A rule without one adds a rule.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "required_approvals": {
-                "description": "Required number of approvals",
+                "description": "Approvals this rule requires, 1 to 5 unless _destroy is true",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "user_id": {
-                "description": "User ID",
+                "description": "ID of a user who may approve. Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well.",
                 "type": [
                   "null",
                   "integer"
@@ -71148,47 +71387,174 @@
           ]
         },
         "deploy_access_levels": {
-          "description": "Updated deploy access levels",
+          "description": "Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them",
           "items": {
             "additionalProperties": false,
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "access_level": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "access_level"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "user_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "user_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "group_id"
+                ]
+              }
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "properties": {
+                    "access_level": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "user_id": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "required": [
+                    "access_level",
+                    "user_id"
+                  ]
+                },
+                {
+                  "additionalProperties": true,
+                  "properties": {
+                    "access_level": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "group_id": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "required": [
+                    "access_level",
+                    "group_id"
+                  ]
+                },
+                {
+                  "additionalProperties": true,
+                  "properties": {
+                    "group_id": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "user_id": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "required": [
+                    "user_id",
+                    "group_id"
+                  ]
+                }
+              ]
+            },
             "properties": {
               "_destroy": {
-                "description": "Set true to remove this access level",
+                "description": "Set true, with the entry's id, to remove this access level",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "access_level": {
-                "description": "Access level",
+                "description": "Role allowed to deploy: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at most one of access_level, user_id or group_id, and one of them without an id.",
+                "enum": [
+                  20,
+                  30,
+                  40,
+                  60,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_id": {
-                "description": "Group ID",
+                "description": "ID of a group whose members may deploy. Name at most one of access_level, user_id or group_id, and one of them without an id.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_inheritance_type": {
-                "description": "Group inheritance type",
+                "description": "Group inheritance type for a group_id entry (0=direct members only, 1=inherited members too)",
+                "enum": [
+                  0,
+                  1,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "id": {
-                "description": "Existing access level ID to update",
+                "description": "ID of the existing access level to change or remove. An entry without one adds an access level.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "user_id": {
-                "description": "User ID",
+                "description": "ID of a user allowed to deploy. Name at most one of access_level, user_id or group_id, and one of them without an id.",
                 "type": [
                   "null",
                   "integer"
@@ -71232,7 +71598,9 @@
           "type": "string"
         },
         "required_approval_count": {
-          "description": "Required number of approvals",
+          "description": "Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.",
+          "maximum": 0,
+          "minimum": 0,
           "type": [
             "null",
             "integer"
@@ -73996,6 +74364,7 @@
       "properties": {
         "email": {
           "description": "Service account email",
+          "format": "email",
           "type": "string"
         },
         "group_id": {
@@ -75031,6 +75400,7 @@
       "properties": {
         "email": {
           "description": "New email",
+          "format": "email",
           "type": "string"
         },
         "group_id": {
@@ -81577,6 +81947,7 @@
         },
         "bitbucket_email": {
           "description": "Atlassian account email the API token belongs to",
+          "format": "email",
           "type": "string"
         },
         "new_name": {
@@ -109693,6 +110064,7 @@
         },
         "subject_digest": {
           "description": "Hex-encoded SHA-256 digest of the attested artifact: its 64 hex characters, in either case. An OCI-style sha256: prefix is accepted and removed and the hex is lowered before the request",
+          "pattern": "^(sha256:)?[0-9A-Fa-f]{64}$",
           "type": "string"
         }
       },
@@ -132193,6 +132565,7 @@
         },
         "email": {
           "description": "New email address",
+          "format": "email",
           "type": "string"
         },
         "extern_uid": {
@@ -163553,6 +163926,7 @@
         },
         "domain": {
           "description": "Custom domain name (e.g. example.com)",
+          "format": "hostname",
           "type": "string"
         },
         "key": {
@@ -163684,6 +164058,7 @@
         },
         "domain": {
           "description": "The Pages domain name to delete",
+          "format": "hostname",
           "type": "string"
         },
         "project_id": {
@@ -163741,6 +164116,7 @@
       "properties": {
         "domain": {
           "description": "The Pages domain name",
+          "format": "hostname",
           "type": "string"
         },
         "project_id": {
@@ -164271,6 +164647,7 @@
         },
         "domain": {
           "description": "The Pages domain name to update",
+          "format": "hostname",
           "type": "string"
         },
         "key": {
@@ -167271,6 +167648,7 @@
         },
         "cron": {
           "description": "Cron expression (e.g. 0 1 * * *)",
+          "pattern": "^\\s*(@(yearly|annually|monthly|weekly|daily|midnight|noon|hourly)|\\S+(\\s+\\S+){4,5})\\s*$",
           "type": "string"
         },
         "cron_timezone": {
@@ -168907,6 +169285,7 @@
         },
         "cron": {
           "description": "Updated cron expression",
+          "pattern": "^\\s*(@(yearly|annually|monthly|weekly|daily|midnight|noon|hourly)|\\S+(\\s+\\S+){4,5})\\s*$",
           "type": "string"
         },
         "cron_timezone": {
@@ -184847,7 +185226,7 @@
           "type": "integer"
         },
         "email": {
-          "description": "Email address to invite (either email or user_id required)",
+          "description": "Email address to invite, or several separated by commas to invite each of them (either email or user_id required)",
           "type": "string"
         },
         "expires_at": {
@@ -196529,6 +196908,7 @@
       "properties": {
         "email": {
           "description": "Service account email",
+          "format": "email",
           "type": "string"
         },
         "name": {
@@ -197591,6 +197971,7 @@
       "properties": {
         "email": {
           "description": "New email",
+          "format": "email",
           "type": "string"
         },
         "name": {
@@ -207513,52 +207894,100 @@
   },
   {
     "name": "gitlab_protected_environment_protect",
-    "description": "Protect a single environment or wildcard with deploy access levels and approval rules. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_update, gitlab_protected_environment_unprotect.",
+    "description": "Protect a single environment or wildcard with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming at least one. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_update, gitlab_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "approval_rules": {
-          "description": "Approval rules",
+          "description": "Who must approve a deployment: each rule names at least one of access_level, user_id or group_id",
           "items": {
             "additionalProperties": false,
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "access_level": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "access_level"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "user_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "user_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "group_id"
+                ]
+              }
+            ],
             "properties": {
               "access_level": {
-                "description": "Access level",
+                "description": "Role whose members may approve: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at least one of access_level, user_id or group_id.",
+                "enum": [
+                  20,
+                  30,
+                  40,
+                  60,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
-              "access_level_description": {
-                "description": "Human-readable description of the access level",
-                "type": [
-                  "null",
-                  "string"
-                ]
-              },
               "group_id": {
-                "description": "Group ID",
+                "description": "ID of a group whose members may approve. Name at least one of access_level, user_id or group_id.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_inheritance_type": {
-                "description": "Group inheritance type (0=direct, 1=inherited)",
+                "description": "Group inheritance type for a group_id rule (0=direct members only, 1=inherited members too)",
+                "enum": [
+                  0,
+                  1,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "required_approvals": {
-                "description": "Required number of approvals",
+                "description": "Approvals this rule requires, 1 to 5 (GitLab's default is 1)",
+                "maximum": 5,
+                "minimum": 1,
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "user_id": {
-                "description": "User ID",
+                "description": "ID of a user who may approve. Name at least one of access_level, user_id or group_id.",
                 "type": [
                   "null",
                   "integer"
@@ -207573,33 +208002,86 @@
           ]
         },
         "deploy_access_levels": {
-          "description": "Deploy access levels",
+          "description": "Who may deploy: at least one entry, each naming exactly one of access_level, user_id or group_id",
           "items": {
             "additionalProperties": false,
+            "oneOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "access_level": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "access_level"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "user_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "user_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "group_id"
+                ]
+              }
+            ],
             "properties": {
               "access_level": {
-                "description": "Access level (0=No access, 30=Developer, 40=Maintainer, 60=Admin)",
+                "description": "Role allowed to deploy: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name exactly one of access_level, user_id or group_id.",
+                "enum": [
+                  20,
+                  30,
+                  40,
+                  60,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_id": {
-                "description": "Group ID",
+                "description": "ID of a group whose members may deploy. Name exactly one of access_level, user_id or group_id.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_inheritance_type": {
-                "description": "Group inheritance type (0=direct, 1=inherited)",
+                "description": "Group inheritance type for a group_id entry (0=direct members only, 1=inherited members too)",
+                "enum": [
+                  0,
+                  1,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "user_id": {
-                "description": "User ID",
+                "description": "ID of a user allowed to deploy. Name exactly one of access_level, user_id or group_id.",
                 "type": [
                   "null",
                   "integer"
@@ -207608,6 +208090,7 @@
             },
             "type": "object"
           },
+          "minItems": 1,
           "type": [
             "null",
             "array"
@@ -207625,7 +208108,9 @@
           ]
         },
         "required_approval_count": {
-          "description": "Required number of approvals",
+          "description": "Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.",
+          "maximum": 0,
+          "minimum": 0,
           "type": [
             "null",
             "integer"
@@ -207810,66 +208295,142 @@
   },
   {
     "name": "gitlab_protected_environment_update",
-    "description": "Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect.",
+    "description": "Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "approval_rules": {
-          "description": "Updated approval rules",
+          "description": "Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id",
           "items": {
             "additionalProperties": false,
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "access_level": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "access_level"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "user_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "user_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "group_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "_destroy": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "_destroy"
+                ]
+              }
+            ],
+            "else": {
+              "properties": {
+                "required_approvals": {
+                  "maximum": 5,
+                  "minimum": 1
+                }
+              }
+            },
+            "if": {
+              "additionalProperties": true,
+              "properties": {
+                "_destroy": {
+                  "const": true
+                }
+              },
+              "required": [
+                "_destroy"
+              ]
+            },
             "properties": {
               "_destroy": {
-                "description": "Set true to remove this rule",
+                "description": "Set true, with the rule's id, to remove this rule",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "access_level": {
-                "description": "Access level",
+                "description": "Role whose members may approve: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well.",
+                "enum": [
+                  20,
+                  30,
+                  40,
+                  60,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
-              "access_level_description": {
-                "description": "Human-readable description of the access level",
-                "type": [
-                  "null",
-                  "string"
-                ]
-              },
               "group_id": {
-                "description": "Group ID",
+                "description": "ID of a group whose members may approve. Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_inheritance_type": {
-                "description": "Group inheritance type",
+                "description": "Group inheritance type for a group_id rule (0=direct members only, 1=inherited members too)",
+                "enum": [
+                  0,
+                  1,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "id": {
-                "description": "Existing approval rule ID to update",
+                "description": "ID of the existing approval rule to change or remove. A rule without one adds a rule.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "required_approvals": {
-                "description": "Required number of approvals",
+                "description": "Approvals this rule requires, 1 to 5 unless _destroy is true",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "user_id": {
-                "description": "User ID",
+                "description": "ID of a user who may approve. Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well.",
                 "type": [
                   "null",
                   "integer"
@@ -207884,47 +208445,174 @@
           ]
         },
         "deploy_access_levels": {
-          "description": "Updated deploy access levels",
+          "description": "Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them",
           "items": {
             "additionalProperties": false,
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "access_level": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "access_level"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "user_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "user_id"
+                ]
+              },
+              {
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "group_id"
+                ]
+              }
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "properties": {
+                    "access_level": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "user_id": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "required": [
+                    "access_level",
+                    "user_id"
+                  ]
+                },
+                {
+                  "additionalProperties": true,
+                  "properties": {
+                    "access_level": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "group_id": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "required": [
+                    "access_level",
+                    "group_id"
+                  ]
+                },
+                {
+                  "additionalProperties": true,
+                  "properties": {
+                    "group_id": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "user_id": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "required": [
+                    "user_id",
+                    "group_id"
+                  ]
+                }
+              ]
+            },
             "properties": {
               "_destroy": {
-                "description": "Set true to remove this access level",
+                "description": "Set true, with the entry's id, to remove this access level",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "access_level": {
-                "description": "Access level",
+                "description": "Role allowed to deploy: 20 (Reporter), 30 (Developer), 40 (Maintainer) or 60 (Admin). Name at most one of access_level, user_id or group_id, and one of them without an id.",
+                "enum": [
+                  20,
+                  30,
+                  40,
+                  60,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_id": {
-                "description": "Group ID",
+                "description": "ID of a group whose members may deploy. Name at most one of access_level, user_id or group_id, and one of them without an id.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "group_inheritance_type": {
-                "description": "Group inheritance type",
+                "description": "Group inheritance type for a group_id entry (0=direct members only, 1=inherited members too)",
+                "enum": [
+                  0,
+                  1,
+                  null
+                ],
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "id": {
-                "description": "Existing access level ID to update",
+                "description": "ID of the existing access level to change or remove. An entry without one adds an access level.",
                 "type": [
                   "null",
                   "integer"
                 ]
               },
               "user_id": {
-                "description": "User ID",
+                "description": "ID of a user allowed to deploy. Name at most one of access_level, user_id or group_id, and one of them without an id.",
                 "type": [
                   "null",
                   "integer"
@@ -207954,7 +208642,9 @@
           ]
         },
         "required_approval_count": {
-          "description": "Required number of approvals",
+          "description": "Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.",
+          "maximum": 0,
+          "minimum": 0,
           "type": [
             "null",
             "integer"
@@ -209360,13 +210050,35 @@
     "description": "Create a container registry protection rule to restrict push/delete access by minimum access level.\n\nSee also: gitlab_registry_protection_list, gitlab_registry_list_project\n\nReturns: JSON with the created protection rule details.",
     "inputSchema": {
       "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "minimum_access_level_for_push"
+          ]
+        },
+        {
+          "required": [
+            "minimum_access_level_for_delete"
+          ]
+        }
+      ],
       "properties": {
         "minimum_access_level_for_delete": {
-          "description": "Minimum access level for delete (maintainer, owner, admin)",
+          "description": "Minimum access level for delete (maintainer, owner, admin). Send at least one of the two levels",
+          "enum": [
+            "maintainer",
+            "owner",
+            "admin"
+          ],
           "type": "string"
         },
         "minimum_access_level_for_push": {
-          "description": "Minimum access level for push (maintainer, owner, admin)",
+          "description": "Minimum access level for push (maintainer, owner, admin). Send at least one of the two levels",
+          "enum": [
+            "maintainer",
+            "owner",
+            "admin"
+          ],
           "type": "string"
         },
         "project_id": {
@@ -209377,7 +210089,8 @@
           ]
         },
         "repository_path_pattern": {
-          "description": "Repository path pattern (e.g. my-project/my-image*)",
+          "description": "Repository path pattern: the project's full path in lower case, then the path of the images to protect, where * matches any characters (e.g. my-group/my-project/my-image*). GitLab refuses a pattern that does not start with the project's full path",
+          "pattern": "^[a-z0-9]+(([._/]|__|-*)[a-z0-9*])*$",
           "type": "string"
         }
       },
@@ -209647,7 +210360,8 @@
           ]
         },
         "repository_path_pattern": {
-          "description": "Repository path pattern",
+          "description": "Repository path pattern: the project's full path in lower case, then the path of the images to protect, where * matches any characters. GitLab refuses a pattern that does not start with the project's full path",
+          "pattern": "^[a-z0-9]+(([._/]|__|-*)[a-z0-9*])*$",
           "type": "string"
         },
         "rule_id": {
@@ -209713,10 +210427,20 @@
       "properties": {
         "minimum_access_level_for_delete": {
           "description": "Minimum access level to delete matching tags (maintainer, owner, admin)",
+          "enum": [
+            "maintainer",
+            "owner",
+            "admin"
+          ],
           "type": "string"
         },
         "minimum_access_level_for_push": {
           "description": "Minimum access level to push matching tags (maintainer, owner, admin)",
+          "enum": [
+            "maintainer",
+            "owner",
+            "admin"
+          ],
           "type": "string"
         },
         "project_id": {
@@ -213913,7 +214637,8 @@
           "type": "string"
         },
         "version": {
-          "description": "Version string for the changelog",
+          "description": "Version of the release the changelog is for, in semantic versioning format such as 1.0.0. GitLab requires a MAJOR.MINOR.PATCH version in the value, so v1.0.0 and 1.0.0-rc.1 are taken and 1.0 is not",
+          "pattern": "(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)",
           "type": "string"
         }
       },
@@ -213990,7 +214715,8 @@
           "type": "string"
         },
         "version": {
-          "description": "Version string",
+          "description": "Version of the release the notes are for, in semantic versioning format such as 1.0.0. GitLab requires a MAJOR.MINOR.PATCH version in the value, so v1.0.0 and 1.0.0-rc.1 are taken and 1.0 is not",
+          "pattern": "(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)",
           "type": "string"
         }
       },
@@ -226994,11 +227720,17 @@
           ]
         },
         "sha": {
-          "description": "Head SHA of the merge request source branch",
+          "description": "Full SHA of the merge request's head commit, 40 hex characters or 64 in a SHA-256 repository, as merge_request.get returns it in sha. GitLab answers 409 when it is not the head",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
           "type": "string"
         },
         "status": {
-          "description": "Status value (e.g. passed, failed)",
+          "description": "Status to set: passed, failed or pending",
+          "enum": [
+            "passed",
+            "failed",
+            "pending"
+          ],
           "type": "string"
         }
       },
@@ -231341,6 +232073,7 @@
             },
             "url": {
               "description": "Source GitLab instance URL",
+              "format": "uri",
               "type": "string"
             }
           },
@@ -235541,6 +236274,7 @@
         },
         "freeze_end": {
           "description": "Cron expression for freeze end",
+          "pattern": "^\\s*(@(yearly|annually|monthly|weekly|daily|midnight|noon|hourly)|\\S+(\\s+\\S+){4,5})\\s*$",
           "type": "string"
         },
         "freeze_period_id": {
@@ -235549,6 +236283,7 @@
         },
         "freeze_start": {
           "description": "Cron expression for freeze start",
+          "pattern": "^\\s*(@(yearly|annually|monthly|weekly|daily|midnight|noon|hourly)|\\S+(\\s+\\S+){4,5})\\s*$",
           "type": "string"
         },
         "project_id": {
@@ -235969,6 +236704,7 @@
       "properties": {
         "email": {
           "description": "New email for the service account",
+          "format": "email",
           "type": "string"
         },
         "name": {
@@ -236996,6 +237732,7 @@
         },
         "commit_sha": {
           "description": "Full commit SHA to update the submodule to",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
           "type": "string"
         },
         "project_id": {

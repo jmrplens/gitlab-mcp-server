@@ -7996,6 +7996,12 @@
       "package": "internal/tools/groupldap",
       "kind": "rest",
       "method": "DELETE",
+      "path": "/groups/mygroup/ldap_group_links/main/engineers"
+    },
+    {
+      "package": "internal/tools/groupldap",
+      "kind": "rest",
+      "method": "DELETE",
       "path": "/groups/mygroup/ldap_group_links/main/missing"
     },
     {

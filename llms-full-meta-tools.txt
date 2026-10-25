@@ -129,7 +129,7 @@ Parameter guidance:
 - deploy_token_list_group.group_id: scope_group. Source: Group ID or path owning the deploy token.
 - deploy_token_list_project.project_id: scope_project. Source: Project ID or path owning the deploy token.
 - invite_group.access_level: access_level. Source: Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
-- invite_group.email: invite_email. Source: Email address of the person to invite when they may not have an account yet. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
+- invite_group.email: invite_email. Source: Email address of the person to invite when they may not have an account yet, or several addresses separated by commas to invite each of them. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
 - invite_group.expires_at: calendar_date. Source: Date the invitation should expire, when the user requests one. Avoid: Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp.
 - invite_group.group_id: scope_group. Source: Group ID or full group path the user is being invited to. Avoid: Use group_id for the group scope. Use project_id only with access.invite_project.
 - invite_group.invite_source. Source: Name of the flow that started the invitation, recorded by GitLab for attribution. Avoid: This labels where the invitation came from. It does not change who is invited or what they get.
@@ -139,7 +139,7 @@ Parameter guidance:
 - invite_list_project.project_id: scope_project. Source: Project ID or full namespace path whose pending invitations should be listed. Avoid: Lists pending invitations, not accepted members. Use project.members for current members.
 - invite_list_project.query. Source: Substring to filter pending invitations by invite email or name. Avoid: query filters within this project's pending invitations. It does not replace project_id.
 - invite_project.access_level: access_level. Source: Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
-- invite_project.email: invite_email. Source: Email address of the person to invite when they may not have an account yet. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
+- invite_project.email: invite_email. Source: Email address of the person to invite when they may not have an account yet, or several addresses separated by commas to invite each of them. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
 - invite_project.expires_at: calendar_date. Source: Date the invitation should expire, when the user requests one. Avoid: Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp.
 - invite_project.invite_source. Source: Name of the flow that started the invitation, recorded by GitLab for attribution. Avoid: This labels where the invitation came from. It does not change who is invited or what they get.
 - invite_project.project_id: scope_project. Source: Project ID or full namespace path the user is being invited to. Avoid: Use the target project here. Use group_id only with access.invite_group.
@@ -6707,7 +6707,7 @@ Action guidance:
 - registry_get: Get details for one container registry repository.
 - registry_list_group: List container registry repositories across a group.
 - registry_list_project: Lists container registry image repositories for a project.
-- registry_rule_create: Create a container registry protection rule for a project.
+- registry_rule_create: Create a container registry protection rule for a project, with a repository path pattern that starts with the project's full path and at least one of the two minimum access levels.
 - registry_rule_delete: Delete a container registry protection rule from a project.
 - registry_rule_list: List container registry protection rules for a project.
 - registry_rule_update: Update a container registry protection rule in a project.
@@ -9402,7 +9402,7 @@ Parameter guidance:
 - commit_status_set.state: status_state. Source: Target state: pending, running, success, failed, canceled, or skipped.
 - commit_statuses.project_id: scope_project. Source: Project numeric ID or full path that owns the repository.
 - commit_statuses.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
-- commit_statuses.sha: commit_sha. Source: Commit SHA from list output, branch HEAD, or task context.
+- commit_statuses.sha: commit_sha. Source: Full commit SHA from list output or a pipeline's sha. A branch name or an abbreviated SHA lists no status.
 - compare.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - contributors.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - file_blame.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -11390,7 +11390,7 @@ Action guidance:
 - get_status: Get a user's status (emoji, message, availability, clear-at time) by numeric user_id. Use when the prompt asks whether someone is busy or what their status message says.
 - gpg_keys: List the GPG keys on the authenticated user's own account, one page at a time with page and per_page. Use when the prompt asks to view, audit, or pick one of your own GPG signing keys. No parameters are required.
 - gpg_keys_for_user: List the GPG keys registered on a specific user's account by user_id, one page at a time with page and per_page. Use after resolving a user with user.get. Viewing another user's GPG keys may require an admin token.
-- key_get_by_fingerprint: Look up a single SSH key or deploy key by its fingerprint and return the owning user. Admin-only on self-managed instances. Accepts the modern SHA256:base64 form or the legacy MD5:aa:bb:cc hex-pairs form. Use when you have only a key fingerprint (for example from an auth log) and need to identify its owner.
+- key_get_by_fingerprint: Look up a single SSH key or deploy key by its fingerprint and return the owning user. Admin-only on self-managed instances. Accepts the modern SHA256:base64 form or the legacy MD5 form of 16 hex pairs, with or without its MD5: label. Use when you have only a key fingerprint (for example from an auth log) and need to identify its owner.
 - key_get_with_user: Look up a single SSH key by its global numeric key ID and return the owning user. Admin-only on self-managed instances. Use when a prompt or audit log gives a bare key ID and you need to identify who owns it. For a specific user's own keys use the per-user SSH-key tools instead.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
 - list_impersonation_tokens: List the impersonation tokens of a user (admin token required). Use to audit a user's impersonation tokens, optionally filtering by state and paginating with offset or keyset pagination.
@@ -12627,7 +12627,7 @@ Action guidance:
 - list_project_checks: List a project's external status check services (deprecated path). Prefer external_status_check.list_project. Use this only when matching the legacy endpoint. Requires the Maintainer role and an Ultimate license.
 - list_project_mr_checks: List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and keyset pagination.
 - retry_project: Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires at least the Developer role and an Ultimate license.
-- set_project_mr_status: Set the status (passed or failed) of an external status check for a merge request, identified by sha and external_status_check_id. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.
+- set_project_mr_status: Set the status (passed, failed or pending) of an external status check for a merge request, identified by external_status_check_id and the full SHA of the merge request's head commit. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.
 - update_project: Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license.
 Parameter guidance:
 - create_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").

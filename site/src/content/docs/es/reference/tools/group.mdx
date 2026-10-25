@@ -2181,7 +2181,7 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 
 ### `group.ldap_link_add`
 
-> Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: [`group.ldap_link_list`](#groupldap_link_list), [`group.ldap_sync`](#groupldap_sync), [`group.ldap_link_delete`](#groupldap_link_delete).
+> Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: [`group.ldap_link_list`](#groupldap_link_list), [`group.ldap_sync`](#groupldap_sync), [`group.ldap_link_delete`](#groupldap_link_delete).
 
 - **Meta-herramienta**: `gitlab_group`, acción `ldap_link_add`
 - **Herramienta individual**: `gitlab_group_ldap_link_add`
@@ -2195,13 +2195,15 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 | `group_access`   | `integer` (`0`, `5`, `10`, `15`, `20`, `25`, `30`, `40`, `50`) | sí        | Default access level for members of the LDAP group: 0 (No access), 5 (Minimal access), 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner) |
 | `group_id`       | `string`                                                       | sí        | Group ID or URL-encoded path                                                                                                                                                                       |
 | `provider`       | `string`                                                       | sí        | LDAP provider name                                                                                                                                                                                 |
-| `cn`             | `string`                                                       | no        | LDAP Common Name (CN)                                                                                                                                                                              |
-| `filter`         | `string`                                                       | no        | LDAP filter                                                                                                                                                                                        |
+| `cn`             | `string`                                                       | no        | LDAP Common Name (CN) of the group to link. Send exactly one of cn or filter, not both.                                                                                                            |
+| `filter`         | `string`                                                       | no        | LDAP filter selecting the users to link. Send exactly one of cn or filter, not both.                                                                                                               |
 | `member_role_id` | `integer`                                                      | no        | Custom member role ID                                                                                                                                                                              |
+
+Además necesita exactamente uno de estos: `cn`; `filter`.
 
 ### `group.ldap_link_delete`
 
-> Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Returns: a success confirmation. See also: [`group.ldap_link_list`](#groupldap_link_list), [`group.ldap_link_add`](#groupldap_link_add), [`group.ldap_sync`](#groupldap_sync).
+> Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: a success confirmation. See also: [`group.ldap_link_list`](#groupldap_link_list), [`group.ldap_link_add`](#groupldap_link_add), [`group.ldap_sync`](#groupldap_sync).
 
 - **Meta-herramienta**: `gitlab_group`, acción `ldap_link_delete`
 - **Herramienta individual**: `gitlab_group_ldap_link_delete`
@@ -2210,12 +2212,14 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 - **Token de grano fino**: LDAP Group Link: Delete en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#group))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
-| Parámetro  | Tipo     | Requerido | Descripción                  |
-| ---------- | -------- | --------- | ---------------------------- |
-| `group_id` | `string` | sí        | Group ID or URL-encoded path |
-| `provider` | `string` | sí        | LDAP provider name           |
-| `cn`       | `string` | no        | LDAP Common Name to delete   |
-| `filter`   | `string` | no        | LDAP filter to delete        |
+| Parámetro  | Tipo     | Requerido | Descripción                                                                         |
+| ---------- | -------- | --------- | ----------------------------------------------------------------------------------- |
+| `group_id` | `string` | sí        | Group ID or URL-encoded path                                                        |
+| `provider` | `string` | sí        | LDAP provider name                                                                  |
+| `cn`       | `string` | no        | LDAP Common Name of the link to delete. Send exactly one of cn or filter, not both. |
+| `filter`   | `string` | no        | LDAP filter of the link to delete. Send exactly one of cn or filter, not both.      |
+
+Además necesita exactamente uno de estos: `cn`; `filter`.
 
 ### `group.ldap_link_delete_for_provider`
 
@@ -2524,7 +2528,7 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 
 ### `group.protected_env_protect`
 
-> Protect a group-level environment tier with deploy access levels and approval rules. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: [`group.protected_env_get`](#groupprotected_env_get), [`group.protected_env_update`](#groupprotected_env_update), [`group.protected_env_unprotect`](#groupprotected_env_unprotect).
+> Protect a group-level environment tier with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming at least one. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: [`group.protected_env_get`](#groupprotected_env_get), [`group.protected_env_update`](#groupprotected_env_update), [`group.protected_env_unprotect`](#groupprotected_env_unprotect).
 
 - **Meta-herramienta**: `gitlab_group`, acción `protected_env_protect`
 - **Herramienta individual**: `gitlab_group_protected_environment_protect`
@@ -2533,13 +2537,13 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 - **Token de grano fino**: Protected Environment: Create en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#group))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro                 | Tipo                                                                  | Requerido | Descripción                                                                    |
-| ------------------------- | --------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------ |
-| `deploy_access_levels`    | `object[]`                                                            | sí        | Deploy access levels                                                           |
-| `group_id`                | `string/integer`                                                      | sí        | Group ID or URL-encoded path                                                   |
-| `name`                    | `string` (`production`, `staging`, `testing`, `development`, `other`) | sí        | Environment tier to protect (production, staging, testing, development, other) |
-| `approval_rules`          | `object[]`                                                            | no        | Approval rules                                                                 |
-| `required_approval_count` | `integer`                                                             | no        | Required number of approvals                                                   |
+| Parámetro                 | Tipo                                                                  | Requerido | Descripción                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
+| `deploy_access_levels`    | `object[]`                                                            | sí        | Who may deploy: at least one entry, each naming exactly one of access_level, user_id or group_id                 |
+| `group_id`                | `string/integer`                                                      | sí        | Group ID or URL-encoded path                                                                                     |
+| `name`                    | `string` (`production`, `staging`, `testing`, `development`, `other`) | sí        | Environment tier to protect (production, staging, testing, development, other)                                   |
+| `approval_rules`          | `object[]`                                                            | no        | Who must approve a deployment: each rule names at least one of access_level, user_id or group_id                 |
+| `required_approval_count` | `integer`                                                             | no        | Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead. |
 
 ### `group.protected_env_unprotect`
 
@@ -2559,7 +2563,7 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 
 ### `group.protected_env_update`
 
-> Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: [`group.protected_env_get`](#groupprotected_env_get), [`group.protected_env_protect`](#groupprotected_env_protect), [`group.protected_env_unprotect`](#groupprotected_env_unprotect).
+> Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: [`group.protected_env_get`](#groupprotected_env_get), [`group.protected_env_protect`](#groupprotected_env_protect), [`group.protected_env_unprotect`](#groupprotected_env_unprotect).
 
 - **Meta-herramienta**: `gitlab_group`, acción `protected_env_update`
 - **Herramienta individual**: `gitlab_group_protected_environment_update`
@@ -2568,14 +2572,14 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 - **Token de grano fino**: Protected Environment: Update en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#group))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                 | Tipo                                                                  | Requerido | Descripción                                                             |
-| ------------------------- | --------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------- |
-| `environment`             | `string` (`production`, `staging`, `testing`, `development`, `other`) | sí        | Environment tier (production, staging, testing, development, other)     |
-| `group_id`                | `string/integer`                                                      | sí        | Group ID or URL-encoded path                                            |
-| `approval_rules`          | `object[]`                                                            | no        | Updated approval rules                                                  |
-| `deploy_access_levels`    | `object[]`                                                            | no        | Updated deploy access levels                                            |
-| `name`                    | `string` (`production`, `staging`, `testing`, `development`, `other`) | no        | New environment tier (production, staging, testing, development, other) |
-| `required_approval_count` | `integer`                                                             | no        | Required number of approvals                                            |
+| Parámetro                 | Tipo                                                                  | Requerido | Descripción                                                                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `environment`             | `string` (`production`, `staging`, `testing`, `development`, `other`) | sí        | Environment tier (production, staging, testing, development, other)                                                                                              |
+| `group_id`                | `string/integer`                                                      | sí        | Group ID or URL-encoded path                                                                                                                                     |
+| `approval_rules`          | `object[]`                                                            | no        | Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id                              |
+| `deploy_access_levels`    | `object[]`                                                            | no        | Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them |
+| `name`                    | `string` (`production`, `staging`, `testing`, `development`, `other`) | no        | New environment tier (production, staging, testing, development, other)                                                                                          |
+| `required_approval_count` | `integer`                                                             | no        | Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead.                                                 |
 
 ### `group.push_rule_add`
 

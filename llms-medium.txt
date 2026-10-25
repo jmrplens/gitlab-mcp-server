@@ -864,7 +864,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_group_protected_branch_update: Update a group-level protected branch, adding or removing (_destroy) allowed-to-push, merge, and unprotect entries.
 - gitlab_group_protected_environment_get: Get a single group-level protected environment by tier name.
 - gitlab_group_protected_environment_list: List group-level protected environments with order_by/sort and offset or keyset pagination.
-- gitlab_group_protected_environment_protect: Protect a group-level environment tier with deploy access levels and approval rules.
+- gitlab_group_protected_environment_protect: Protect a group-level environment tier with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming ...
 - gitlab_group_protected_environment_unprotect: Unprotect a group-level environment tier, removing its deployment gates from the group and its subgroup projects.
 - gitlab_group_protected_environment_update: Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry).
 - gitlab_group_release_list: List releases across all projects in a group with pagination, ordering, and keyset support.
@@ -1334,7 +1334,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_protected_branches_list: List protected branches and wildcard rules for a project with optional search, ordering, and offset or keyset pagination.
 - gitlab_protected_environment_get: Get a single protected (or wildcard) environment by name.
 - gitlab_protected_environment_list: List protected environments in a project with order_by/sort and offset or keyset pagination.
-- gitlab_protected_environment_protect: Protect a single environment or wildcard with deploy access levels and approval rules.
+- gitlab_protected_environment_protect: Protect a single environment or wildcard with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each namin...
 - gitlab_protected_environment_unprotect: Unprotect a single environment or wildcard, removing its deployment gates.
 - gitlab_protected_environment_update: Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry).
 - gitlab_purge_dependency_proxy: Purge a group's dependency proxy cache.

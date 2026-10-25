@@ -282,12 +282,12 @@ No parameters.
 - **Fine-grained token**: OAuth Application: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, not idempotent
 
-| Parameter      | Type      | Mandatory | Description                         |
-| -------------- | --------- | --------- | ----------------------------------- |
-| `name`         | `string`  | yes       | Application name                    |
-| `redirect_uri` | `string`  | yes       | OAuth2 redirect URI                 |
-| `scopes`       | `string`  | yes       | Space-separated list of scopes      |
-| `confidential` | `boolean` | no        | Whether application is confidential |
+| Parameter      | Type      | Mandatory | Description                                                                                                                                                           |
+| -------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`         | `string`  | yes       | Application name                                                                                                                                                      |
+| `redirect_uri` | `string`  | yes       | OAuth2 redirect URI, an absolute URL such as [`https://example.com/callback`](https://example.com/callback). Several are written one per line, separated by a newline |
+| `scopes`       | `string`  | yes       | Space-separated list of scopes                                                                                                                                        |
+| `confidential` | `boolean` | no        | Whether application is confidential                                                                                                                                   |
 
 ### `admin.application_delete`
 

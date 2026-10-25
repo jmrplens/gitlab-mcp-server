@@ -175,13 +175,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: External Status Check: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                  | Tipo             | Requerido | Descripción                                 |
-| -------------------------- | ---------------- | --------- | ------------------------------------------- |
-| `external_status_check_id` | `integer`        | sí        | External status check ID to update          |
-| `merge_request_iid`        | `integer`        | sí        | Merge request internal ID                   |
-| `project_id`               | `string/integer` | sí        | Project ID or URL-encoded path              |
-| `sha`                      | `string`         | sí        | Head SHA of the merge request source branch |
-| `status`                   | `string`         | sí        | Status value (e.g. passed, failed)          |
+| Parámetro                  | Tipo                                     | Requerido | Descripción                                                                                                                                                                      |
+| -------------------------- | ---------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `external_status_check_id` | `integer`                                | sí        | External status check ID to update                                                                                                                                               |
+| `merge_request_iid`        | `integer`                                | sí        | Merge request internal ID                                                                                                                                                        |
+| `project_id`               | `string/integer`                         | sí        | Project ID or URL-encoded path                                                                                                                                                   |
+| `sha`                      | `string`                                 | sí        | Full SHA of the merge request's head commit, 40 hex characters or 64 in a SHA-256 repository, as merge_request.get returns it in sha. GitLab answers 409 when it is not the head |
+| `status`                   | `string` (`passed`, `failed`, `pending`) | sí        | Status to set: passed, failed or pending                                                                                                                                         |
 
 ### `external_status_check.update_project`
 

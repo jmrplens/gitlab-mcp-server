@@ -437,7 +437,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `package.registry_rule_create`
 
-> Create a container registry protection rule for a project.
+> Create a container registry protection rule for a project, with a repository path pattern that starts with the project's full path and at least one of the two minimum access levels.
 
 - **Meta-herramienta**: `gitlab_package`, acción `registry_rule_create`
 - **Herramienta individual**: `gitlab_registry_protection_create`
@@ -446,12 +446,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Container Repository Protection Rule: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#package))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro                         | Tipo             | Requerido | Descripción                                                |
-| --------------------------------- | ---------------- | --------- | ---------------------------------------------------------- |
-| `project_id`                      | `string/integer` | sí        | Project ID or path                                         |
-| `repository_path_pattern`         | `string`         | sí        | Repository path pattern (e.g. my-project/my-image\*)       |
-| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin) |
-| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin)   |
+| Parámetro                         | Tipo                                      | Requerido | Descripción                                                                                                                                                                                                                                              |
+| --------------------------------- | ----------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                      | `string/integer`                          | sí        | Project ID or path                                                                                                                                                                                                                                       |
+| `repository_path_pattern`         | `string`                                  | sí        | Repository path pattern: the project's full path in lower case, then the path of the images to protect, where \* matches any characters (e.g. my-group/my-project/my-image\*). GitLab refuses a pattern that does not start with the project's full path |
+| `minimum_access_level_for_delete` | `string` (`maintainer`, `owner`, `admin`) | no        | Minimum access level for delete (maintainer, owner, admin). Send at least one of the two levels                                                                                                                                                          |
+| `minimum_access_level_for_push`   | `string` (`maintainer`, `owner`, `admin`) | no        | Minimum access level for push (maintainer, owner, admin). Send at least one of the two levels                                                                                                                                                            |
+
+Además necesita al menos uno de estos: `minimum_access_level_for_push`; `minimum_access_level_for_delete`.
 
 ### `package.registry_rule_delete`
 
@@ -495,13 +497,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Container Repository Protection Rule: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#package))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                                                                              |
-| --------------------------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_id`                      | `string/integer` | sí        | Project ID or path                                                                                                                                                                       |
-| `rule_id`                         | `integer`        | sí        | Protection rule ID                                                                                                                                                                       |
-| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched |
-| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched |
-| `repository_path_pattern`         | `string`         | no        | Repository path pattern                                                                                                                                                                  |
+| Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                                                                                                        |
+| --------------------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `project_id`                      | `string/integer` | sí        | Project ID or path                                                                                                                                                                                                 |
+| `rule_id`                         | `integer`        | sí        | Protection rule ID                                                                                                                                                                                                 |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the push level stays set. Omit the field to leave it untouched                           |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove it, which GitLab accepts while the delete level stays set. Omit the field to leave it untouched                           |
+| `repository_path_pattern`         | `string`         | no        | Repository path pattern: the project's full path in lower case, then the path of the images to protect, where \* matches any characters. GitLab refuses a pattern that does not start with the project's full path |
 
 ### `package.registry_tag_delete`
 
@@ -591,12 +593,12 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Container Registry Protection Tag Rule: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#package))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro                         | Tipo             | Requerido | Descripción                                                             |
-| --------------------------------- | ---------------- | --------- | ----------------------------------------------------------------------- |
-| `minimum_access_level_for_delete` | `string`         | sí        | Minimum access level to delete matching tags (maintainer, owner, admin) |
-| `minimum_access_level_for_push`   | `string`         | sí        | Minimum access level to push matching tags (maintainer, owner, admin)   |
-| `project_id`                      | `string/integer` | sí        | Project ID or path                                                      |
-| `tag_name_pattern`                | `string`         | sí        | Tag name pattern as a RE2 regular expression (e.g. v.+)                 |
+| Parámetro                         | Tipo                                      | Requerido | Descripción                                                             |
+| --------------------------------- | ----------------------------------------- | --------- | ----------------------------------------------------------------------- |
+| `minimum_access_level_for_delete` | `string` (`maintainer`, `owner`, `admin`) | sí        | Minimum access level to delete matching tags (maintainer, owner, admin) |
+| `minimum_access_level_for_push`   | `string` (`maintainer`, `owner`, `admin`) | sí        | Minimum access level to push matching tags (maintainer, owner, admin)   |
+| `project_id`                      | `string/integer`                          | sí        | Project ID or path                                                      |
+| `tag_name_pattern`                | `string`                                  | sí        | Tag name pattern as a RE2 regular expression (e.g. v.+)                 |
 
 ### `package.registry_tag_rule_delete`
 

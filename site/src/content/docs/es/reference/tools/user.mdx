@@ -933,9 +933,9 @@ Sin parámetros.
 - **Token de grano fino**: SSH Key: Read en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro     | Tipo     | Requerido | Descripción                                                                                                                        |
-| ------------- | -------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `fingerprint` | `string` | sí        | SSH key fingerprint, either the SHA256 form (for example SHA256:abc123) or the legacy MD5 hex-pair form (for example MD5:aa:bb:cc) |
+| Parámetro     | Tipo     | Requerido | Descripción                                                                                                                                                                                  |
+| ------------- | -------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fingerprint` | `string` | sí        | SSH key fingerprint: SHA256: and the 43 base64 characters ssh-keygen -l prints, or the MD5 form of 16 colon-separated hex pairs, with or without the MD5: prefix ssh-keygen -l -E md5 prints |
 
 ### `user.key_get_with_user`
 
