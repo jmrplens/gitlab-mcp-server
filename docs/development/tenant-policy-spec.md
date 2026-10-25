@@ -696,6 +696,17 @@ the issue leaves alone is the saturation itself, a source arriving once the limi
 table is full being blocked by neither table, which is the `/48` aggregate's (`AUB-006`)
 and issue 958's capacity rules'.
 
+F-13 ([issue 957](https://github.com/jmrplens/gitlab-mcp-server/issues/957)) recorded the
+settings read around the configuration package, which every row naming one carried
+(`HLD-001`, `RQB-004`, `IDN-009`, `IDN-014`, `AUT-006`, `DST-003`). Issue 957 put the twelve
+variables it found that way on `prefixedNames` and read each through `config.Getenv` or
+`config.TrimmedGetenv` under the same spelling, and gave the listen ceiling the flag
+`INV-017` asks of a limit in HTTP mode (`--max-listen-streams`), so no row carries the
+finding. The local allow-lists, which HTTP mode never reads, have no flag and need none:
+their source is `StdioEnvOnly`. G14 keeps F-13 as the finding a row would have to carry
+if one of its variables were read any other way again, and the one variable read around
+the package on purpose, the env file's, is declared with its reason rather than recorded.
+
 F-36 ([issue 1053](https://github.com/jmrplens/gitlab-mcp-server/issues/1053)) is the one
 finding a decision recorded rather than a reading of the code found. The three documents
 the server publishes without a credential, the SEP-2127 card at every path it is mounted

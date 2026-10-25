@@ -13,23 +13,20 @@ other spelling, apart from the three groups below that stay bare. The rule
 for a new setting is that it is added to
 `prefixedNames` in `internal/config/env_name.go` and read through
 `config.Getenv` or `config.TrimmedGetenv` there, never through `os.Getenv`.
-That is the target rather than the whole tree today: thirteen variables are
-not on the list. Twelve are read with `os.Getenv` or `os.LookupEnv` where they
-are used: `ENV_FILE` (`internal/config/env_file.go`), `STDIO_MAX_LINE_BYTES`
-and `MAX_LISTEN_STREAMS` (`cmd/server`), `DESCRIPTION_SUBSTITUTIONS`
-(`internal/gatewaycompat`), the three `ALLOWED_*_DIRS`
-(`internal/toolutil/file_utils.go`) and the five `TELEMETRY*` variables
-(`internal/telemetry` and `cmd/server`). `ALLOW_PRIVATE_INSTANCES` goes through
-`config.TrimmedGetenv` under its full name (`internal/gitlab/destination.go`),
-which the helper reads verbatim because the list does not hold it. Moving them
-onto the list, or recording which are exempt and why, is issue 957.
-`make check-tenancy` holds the thirteen in place meanwhile (rule G14): every
-`GITLAB_MCP_` variable the server reads any other way is answered by the
-register row that names it, which carries F-13 until its read moves, or by a
-declaration in `cmd/audit_tenancy/declarations.go` with its reason, which is
-how `ENV_FILE`, `TELEMETRY` and `DESCRIPTION_SUBSTITUTIONS`, the three no row
-names, are answered. A variable read that way that no row names and no
-declaration answers fails the gate, and so does one a row without F-13 names.
+Every variable the server defines follows it but one, `ENV_FILE`, which names
+the dotenv file to load and is read once from the process environment before
+any file is loaded (`internal/config/env_file.go`), so a file this server
+declines to load cannot nominate itself. The twelve others issue 957 found read
+around the list, the listen and stdio line ceilings, the five `TELEMETRY*`
+variables, the three `ALLOWED_*_DIRS`, `ALLOW_PRIVATE_INSTANCES` and
+`DESCRIPTION_SUBSTITUTIONS`, are on it since then, read under the same
+spelling, and none of them has an old spelling for `config.RetiredEnvUses` to
+report. `make check-tenancy` holds it (rule G14): every `GITLAB_MCP_` variable
+the server reads any other way is answered by the register row that names it,
+which would have to carry F-13, or by a declaration in
+`cmd/audit_tenancy/declarations.go` with its reason, which is how `ENV_FILE` is
+answered. A variable read that way that no row names and no declaration
+answers fails the gate, and so does one a row without F-13 names.
 So does a name handed to `config.Getenv` that the list does not hold, which it
 reads bare, unless a declaration there says the name is somebody else's, as
 the one for `GITLAB_URL` does: a setting moved onto `config.Getenv` and left
