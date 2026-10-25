@@ -431,12 +431,16 @@ func allowDecisions() []Decision {
 			// A value that does not parse warns and keeps the default rather
 			// than refusing startup (issue 957), for the stdio line limit's
 			// reason (RQB-004): a mistyped number must not take the client
-			// down with the server.
-			Source: EnvOnly, Envs: []string{"GITLAB_MCP_MAX_LISTEN_STREAMS"},
+			// down with the server. Issue 957 gave it the flag INV-017 asks
+			// of a limit in HTTP mode, which writes the variable on either
+			// transport (cmd/server:envBackedFlags), so a value the flag
+			// does not parse warns and keeps the default too.
+			Source: Configurable, Flags: []string{"--max-listen-streams"},
+			Envs:      []string{"GITLAB_MCP_MAX_LISTEN_STREAMS"},
 			Malformed: WarnKeepDefault, MalformedBy: "issue 957",
 			Zero: ZeroOffKeepsCount, AtCapacity: RefuseNewcomer,
 			Decided:  []string{"issue 540", "issue 956", "issue 957"},
-			Findings: []string{"F-04", "F-13", "F-21"},
+			Findings: []string{"F-04", "F-21"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"subscriptions/listen"}, Era: EraModern, Channel: RPC, Code: CodeTooManyRequests,
@@ -450,6 +454,7 @@ func allowDecisions() []Decision {
 				alias(pkgServer, "maxListenStreamsPerServer", "ListenStreamsPerCredential"),
 				alias(pkgServer, "codeTooManyRequests", "CodeTooManyRequests"),
 				enforce(pkgServer, "maxListenStreamsEnv"),
+				enforce(pkgServer, "maxListenStreamsSetting"),
 				enforce(pkgServer, "listenLimitsFromEnv"),
 				enforce(pkgServer, "listenLimits.middleware"),
 				tooManyListens,

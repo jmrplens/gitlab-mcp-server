@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -75,6 +75,11 @@ const defaultMaxStdioLineBytes = 4 << 20
 // client genuinely sends larger messages — the inline-base64 case above.
 const stdioMaxLineBytesEnv = "GITLAB_MCP_STDIO_MAX_LINE_BYTES"
 
+// stdioMaxLineBytesSetting is the same variable without its prefix, the name
+// [config.TrimmedGetenv] reads it under (issue 957); the warning names the
+// variable in full, as an operator exports it.
+const stdioMaxLineBytesSetting = "STDIO_MAX_LINE_BYTES"
+
 // stdioLimitsFromEnv reads the configured line ceiling, keeping the default
 // when the value is missing, unparseable or not positive.
 //
@@ -83,7 +88,7 @@ const stdioMaxLineBytesEnv = "GITLAB_MCP_STDIO_MAX_LINE_BYTES"
 // start over one mistyped number would take the client down with it.
 func stdioLimitsFromEnv() stdioLimits {
 	limits := stdioLimits{maxLineBytes: defaultMaxStdioLineBytes, maxDepth: maxInboundJSONDepth}
-	raw := strings.TrimSpace(os.Getenv(stdioMaxLineBytesEnv))
+	raw := config.TrimmedGetenv(stdioMaxLineBytesSetting)
 	if raw == "" {
 		return limits
 	}

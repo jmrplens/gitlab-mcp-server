@@ -84,6 +84,23 @@ func resourceURIs(first, count int) string {
 	return "[" + strings.Join(uris, ",") + "]"
 }
 
+// listenPastTheFirstStream opens one listen, waits for its acknowledgement,
+// and returns the answer to a second one, the listen a ceiling of one stream
+// refuses.
+func listenPastTheFirstStream(t *testing.T, s *session) (string, map[string]any) {
+	t.Helper()
+	s.send(t, request(1, "subscriptions/listen", `{"notifications":{"resourceSubscriptions":["gitlab://project/900"]}}`))
+	deadline := time.Now().Add(callTimeout)
+	for acknowledged := false; !acknowledged; {
+		if time.Now().After(deadline) {
+			t.Fatalf("the first listen was never acknowledged\nstderr: %s", s.stderrText())
+		}
+		method, _ := s.readMessage(t, callTimeout)["method"].(string)
+		acknowledged = method == "notifications/subscriptions/acknowledged"
+	}
+	return s.callRaw(t, request(2, "subscriptions/listen", `{"notifications":{"resourceSubscriptions":["gitlab://project/901"]}}`))
+}
+
 // assertStdioRefusal holds one answer to an in-band refusal carrying code and
 // every one of says, and to carrying the retired -32000 nowhere on the line.
 func assertStdioRefusal(t *testing.T, line string, got map[string]any, code int, says ...string) {
@@ -122,16 +139,7 @@ func TestRetryLater_ModernRefusals_CarryTheCodeOfWhatTheySay(t *testing.T) {
 		env["GITLAB_MCP_CAPABILITY_SURFACE"] = "full"
 		env["GITLAB_MCP_MAX_LISTEN_STREAMS"] = "1"
 		s := startSession(t, env)
-		s.send(t, request(1, "subscriptions/listen", `{"notifications":{"resourceSubscriptions":["gitlab://project/900"]}}`))
-		deadline := time.Now().Add(callTimeout)
-		for acknowledged := false; !acknowledged; {
-			if time.Now().After(deadline) {
-				t.Fatalf("the first listen was never acknowledged\nstderr: %s", s.stderrText())
-			}
-			method, _ := s.readMessage(t, callTimeout)["method"].(string)
-			acknowledged = method == "notifications/subscriptions/acknowledged"
-		}
-		line, got := s.callRaw(t, request(2, "subscriptions/listen", `{"notifications":{"resourceSubscriptions":["gitlab://project/901"]}}`))
+		line, got := listenPastTheFirstStream(t, s)
 		assertStdioRefusal(t, line, got, tenancy.CodeTooManyRequests,
 			"too many open subscriptions/listen streams (per-credential limit 1); close one and retry")
 	})

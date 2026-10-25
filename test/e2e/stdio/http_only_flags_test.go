@@ -6,7 +6,8 @@
 // refuses to start at all when ignoring one would cost more than a setting
 // (issue 1045). Variables that configure a setting only HTTP mode has are
 // named the same way and never read, so no value of one refuses the start
-// (issue 1171).
+// (issue 1171). A flag both transports read, such as --max-listen-streams, is
+// read on stdio and named nowhere (issue 957).
 package stdioe2e
 
 import (
@@ -18,6 +19,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // The four lines cmd/server writes about HTTP-only flags on a stdio run,
@@ -119,6 +122,26 @@ func TestHTTPOnlyFlags_OnStdio_TheRevalidationFlagNamesItsVariable(t *testing.T)
 	}
 	if logs := s.stderrText(); strings.Contains(logs, stdioIgnoredVariablesLine) {
 		t.Errorf("the revalidation interval, which stdio reads, was named as a variable it ignores:\n%s", logs)
+	}
+}
+
+// TestHTTPOnlyFlags_OnStdio_TheListenCeilingFlagIsReadAndNotNamed passes
+// --max-listen-streams, the flag issue 957 gave the listen ceiling, to a stdio
+// server whose environment allows five streams. The flag writes its variable
+// before anything reads it, so both transports read it: the second listen
+// meets the flag's ceiling of one, and the flag is not named among those a
+// stdio run ignores.
+func TestHTTPOnlyFlags_OnStdio_TheListenCeilingFlagIsReadAndNotNamed(t *testing.T) {
+	env := baseEnv(throttlingGitLab(t))
+	env["GITLAB_MCP_CAPABILITY_SURFACE"] = "full"
+	env["GITLAB_MCP_MAX_LISTEN_STREAMS"] = "5"
+	s := startSessionWithArgs(t, env, "--max-listen-streams=1")
+
+	line, got := listenPastTheFirstStream(t, s)
+	assertStdioRefusal(t, line, got, tenancy.CodeTooManyRequests,
+		"too many open subscriptions/listen streams (per-credential limit 1); close one and retry")
+	if logs := s.stderrText(); strings.Contains(logs, stdioIgnoredFlagsLine) {
+		t.Errorf("--max-listen-streams, which stdio reads, was named among the flags it ignores:\n%s", logs)
 	}
 }
 

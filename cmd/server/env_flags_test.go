@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // withFreshFlagSet swaps in a clean flag set, so a test can register and parse
@@ -117,6 +120,7 @@ func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) 
 		"description-substitutions": "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
 		"pprof-addr":                "GITLAB_MCP_PPROF_ADDR",
 		"allow-private-instances":   "GITLAB_MCP_ALLOW_PRIVATE_INSTANCES",
+		"max-listen-streams":        "GITLAB_MCP_MAX_LISTEN_STREAMS",
 	}
 
 	got := make(map[string]string, len(envBackedFlags))
@@ -165,6 +169,31 @@ func TestEnvBackedFlags_UploadLimitUsage_NamesTheSuffixes(t *testing.T) {
 	}
 }
 
+// TestEnvBackedFlags_ListenStreamsUsage_NamesBothCeilings verifies that the
+// usage of -max-listen-streams states the default the variable has and the
+// process-wide ceiling that stays when it is 0, held to the constants the
+// middleware enforces (register rows HLD-001 and HLD-002), since the usage
+// spells both as literals.
+func TestEnvBackedFlags_ListenStreamsUsage_NamesBothCeilings(t *testing.T) {
+	var usage string
+	for _, entry := range envBackedFlags {
+		if entry.flagName == "max-listen-streams" {
+			usage = entry.usage
+		}
+	}
+	for _, want := range []string{
+		fmt.Sprintf("(default %d; 0 removes this ceiling", maxListenStreamsPerServer),
+		fmt.Sprintf("the process-wide one of %d stays", maxListenStreamsPerProcess),
+		"warns and keeps the default",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(usage, want) {
+				t.Errorf("usage %q does not carry %q", usage, want)
+			}
+		})
+	}
+}
+
 // TestEnvBackedFlags_NoTokenFlag pins a deliberate absence.
 //
 // A --gitlab-token flag would put a credential on the command line, where ps
@@ -184,5 +213,221 @@ func TestEnvBackedFlags_NoTokenFlag(t *testing.T) {
 	registerEnvBackedFlags()
 	if flag.CommandLine.Lookup("gitlab-token") != nil {
 		t.Error("-gitlab-token is registered")
+	}
+}
+
+// settingOutcome is what a reader made of the value it was given.
+type settingOutcome int
+
+const (
+	// outcomeApplied is the value taking effect.
+	outcomeApplied settingOutcome = iota + 1
+	// outcomeRefused is the value refused: an error from its reader, or from
+	// the flag package, which ends the start before anything reads it.
+	outcomeRefused
+	// outcomeKeptDefault is the default kept, with a warning.
+	outcomeKeptDefault
+	// outcomeSkipped is an entry that does not resolve skipped with a warning,
+	// and the rest of the list kept.
+	outcomeSkipped
+	// outcomeReadAsOff is the value read as off.
+	outcomeReadAsOff
+	// outcomeUnread is the value taking no effect at all, which is what a
+	// reader that does not read the variable makes of every value.
+	outcomeUnread
+)
+
+// outcomeOf is what a value that does not parse does under each policy the
+// register states (tenancy.Malformed).
+var outcomeOf = map[tenancy.Malformed]settingOutcome{
+	tenancy.RefuseStartup:   outcomeRefused,
+	tenancy.WarnKeepDefault: outcomeKeptDefault,
+	tenancy.SkipEntry:       outcomeSkipped,
+	tenancy.ReadsAsOff:      outcomeReadAsOff,
+}
+
+// settingCase is one setting issue 957 moved onto the configuration
+// package's list, with a value its reader cannot use and one it can.
+type settingCase struct {
+	// setting is the name config.Getenv reads, without the prefix.
+	setting string
+	// row is the register row that names the setting, "" for one no row
+	// names because it is not a limit.
+	row string
+	// flag is the flag that sets it, "" for one with no flag.
+	flag string
+	// register declares flag on a fresh flag set, for a flag that is not one
+	// of envBackedFlags; nil for one that is, or for no flag.
+	register func(t *testing.T)
+	// malformed is a value the reader cannot use, and wellFormed one it can.
+	malformed, wellFormed string
+	// policy is what malformed does, which is its row's when a row names it.
+	policy tenancy.Malformed
+	// flagPolicy is what malformed does as the flag's value, when that is not
+	// policy: a flag the flag package parses refuses what it cannot parse.
+	flagPolicy tenancy.Malformed
+	// observe reads the setting the way the server does and says what it
+	// made of value.
+	observe func(t *testing.T, value string) settingOutcome
+}
+
+// numberOutcome classifies a numeric reader's answer: the value configured,
+// or the default with the warning that it could not be parsed.
+func numberOutcome(got int, value string, def int, warned bool) settingOutcome {
+	if got != def && strconv.Itoa(got) == strings.TrimSpace(value) {
+		return outcomeApplied
+	}
+	if got == def && warned {
+		return outcomeKeptDefault
+	}
+	return outcomeUnread
+}
+
+// settingsMovedByIssue957 are the settings issue 957 moved onto the
+// configuration package's list, each with how the server reads it.
+func settingsMovedByIssue957() []settingCase {
+	return []settingCase{
+		{
+			setting: "MAX_LISTEN_STREAMS", row: "HLD-001", flag: "max-listen-streams",
+			malformed: "many", wellFormed: "8", policy: tenancy.WarnKeepDefault,
+			observe: func(t *testing.T, value string) settingOutcome {
+				t.Helper()
+				warned := captureLogMessages(t)
+				got := listenLimitsFromEnv().perCredential
+				return numberOutcome(got, value, maxListenStreamsPerServer, warned("listen stream limit could not be parsed"))
+			},
+		},
+		{
+			setting: "STDIO_MAX_LINE_BYTES", row: "RQB-004",
+			malformed: "4MiB", wellFormed: "65536", policy: tenancy.WarnKeepDefault,
+			observe: func(t *testing.T, value string) settingOutcome {
+				t.Helper()
+				warned := captureLogMessages(t)
+				got := stdioLimitsFromEnv().maxLineBytes
+				return numberOutcome(got, value, defaultMaxStdioLineBytes, warned("stdio line limit could not be parsed"))
+			},
+		},
+	}
+}
+
+// setFlag passes value to tc's flag on a fresh flag set, the way an operator
+// types it, and reports the flag package's refusal. A flag of envBackedFlags
+// then writes its variable, as main does before anything reads one.
+func setFlag(t *testing.T, tc settingCase, value string) error {
+	t.Helper()
+	withFreshFlagSet(t)
+	if tc.register != nil {
+		tc.register(t)
+	} else {
+		registerEnvBackedFlags()
+	}
+	if err := flag.CommandLine.Parse([]string{"-" + tc.flag + "=" + value}); err != nil {
+		return err
+	}
+	applyEnvBackedFlags()
+	return nil
+}
+
+// TestSettingsMovedByIssue957_AValueOfEach_GetsItsPolicyAtTheEnvironmentAndTheFlag
+// is the table issue 957 measures its fix with: one row per setting it moved
+// onto the configuration package's list, each fed a value its reader cannot
+// use and one it can, through the variable and, where it has one, through its
+// flag. The value that does not parse must do what the row's malformed-value
+// policy says, and the one that does must take effect, which is also what
+// shows the reader reads that variable: a reader left on another name makes
+// nothing of either, and a reader that never reads a value cannot be told
+// apart by the malformed one alone where the policy is to read it as off.
+//
+// At the flag the variable is set beside it to the other value, so the flag
+// is seen to win over the environment in both directions, the precedence HTTP
+// mode documents and both transports keep for these flags. A setting a row
+// names is held to that row too: the row names its variable and its flag, and
+// its malformed-value policy is the one the reader keeps.
+func TestSettingsMovedByIssue957_AValueOfEach_GetsItsPolicyAtTheEnvironmentAndTheFlag(t *testing.T) {
+	for _, tc := range settingsMovedByIssue957() {
+		t.Run(tc.setting, func(t *testing.T) {
+			if !slices.Contains(config.PrefixedEnvNames(), tc.setting) {
+				t.Errorf("%s is not on the configuration package's list", tc.setting)
+			}
+			tc.checkRow(t)
+			tc.checkEnvironment(t)
+			tc.checkFlag(t)
+		})
+	}
+}
+
+// checkRow holds the register row that names the setting to it: the row
+// names its variable, and its flag exactly when it has one, and its
+// malformed-value policy is the one the reader keeps.
+func (tc settingCase) checkRow(t *testing.T) {
+	t.Helper()
+	if tc.row == "" {
+		return
+	}
+	d, ok := tenancy.Lookup(tc.row)
+	if !ok {
+		t.Fatalf("%s names no register row", tc.row)
+	}
+	env := config.EnvPrefix + tc.setting
+	if !slices.Contains(d.Envs, env) || d.Malformed != tc.policy {
+		t.Errorf("%s: envs %v, malformed policy %d; want %s among them and policy %d",
+			tc.row, d.Envs, d.Malformed, env, tc.policy)
+	}
+	if hasFlag := slices.Contains(d.Flags, "--"+tc.flag); hasFlag != (tc.flag != "") {
+		t.Errorf("%s: flags %v, want --%s named exactly when the setting has a flag", tc.row, d.Flags, tc.flag)
+	}
+}
+
+// checkEnvironment sets the variable to each value and asks the reader.
+func (tc settingCase) checkEnvironment(t *testing.T) {
+	t.Helper()
+	env := config.EnvPrefix + tc.setting
+	for _, layer := range []struct {
+		name, value string
+		want        settingOutcome
+	}{
+		{"the environment, well formed", tc.wellFormed, outcomeApplied},
+		{"the environment, malformed", tc.malformed, outcomeOf[tc.policy]},
+	} {
+		t.Run(layer.name, func(t *testing.T) {
+			t.Setenv(env, layer.value)
+			if got := tc.observe(t, layer.value); got != layer.want {
+				t.Errorf("%s=%q: outcome %d, want %d", env, layer.value, got, layer.want)
+			}
+		})
+	}
+}
+
+// checkFlag passes each value to the flag with the variable set to the other
+// one, and asks the reader, for a setting that has a flag.
+func (tc settingCase) checkFlag(t *testing.T) {
+	t.Helper()
+	if tc.flag == "" {
+		return
+	}
+	env := config.EnvPrefix + tc.setting
+	malformedWant := outcomeOf[tc.policy]
+	if tc.flagPolicy != tenancy.MalformedNone {
+		malformedWant = outcomeOf[tc.flagPolicy]
+	}
+	for _, layer := range []struct {
+		name, value, beside string
+		want                settingOutcome
+	}{
+		{"the flag, well formed over a malformed variable", tc.wellFormed, tc.malformed, outcomeApplied},
+		{"the flag, malformed over a well-formed variable", tc.malformed, tc.wellFormed, malformedWant},
+	} {
+		t.Run(layer.name, func(t *testing.T) {
+			t.Setenv(env, layer.beside)
+			if err := setFlag(t, tc, layer.value); err != nil {
+				if layer.want != outcomeRefused {
+					t.Errorf("-%s=%q refused by the flag package: %v, want outcome %d", tc.flag, layer.value, err, layer.want)
+				}
+				return
+			}
+			if got := tc.observe(t, layer.value); got != layer.want {
+				t.Errorf("-%s=%q beside %s=%q: outcome %d, want %d", tc.flag, layer.value, env, layer.beside, got, layer.want)
+			}
+		})
 	}
 }

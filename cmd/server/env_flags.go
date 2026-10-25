@@ -83,6 +83,14 @@ var envBackedFlags = []struct {
 		envName:  config.EnvPrefix + "PPROF_ADDR",
 		usage:    "Serve Go's profiling handlers (net/http/pprof) on this loopback address, e.g. 127.0.0.1:6060; empty serves nothing. Refused unless the host is loopback",
 	},
+	{
+		// INV-017 asks a flag of a limit in HTTP mode, and the listen
+		// ceiling had none (issue 957). It is read once per server built, on
+		// either transport, so writing the variable is the whole of it.
+		flagName: "max-listen-streams",
+		envName:  maxListenStreamsEnv,
+		usage:    "Concurrent subscriptions/listen streams one credential may hold open (default 64; 0 removes this ceiling, and the process-wide one of 512 stays). A value that is not a whole number of 0 or more warns and keeps the default",
+	},
 }
 
 // registerEnvBackedFlags declares the flags. Call before flag.Parse.

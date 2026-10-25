@@ -482,12 +482,13 @@ FLAGS
   A stdio server takes its configuration from the environment. Of these flags
   it reads the General ones, -transport, -http, the ones that set a variable
   (-upload-max-file-size, -allow-private-instances, -client-compat,
-  -description-substitutions, -yolo-mode) and the Telemetry group. Every other
-  flag is read in HTTP mode only, and a stdio run given one names it at startup
-  with the variable to set instead. Where ignoring it would cost more than a
-  setting, the run refuses to start: -read-only, -safe-mode or -exclude-tools
-  asking to withhold what stdio would then serve, and -gitlab-url naming an
-  instance other than the one GITLAB_URL sends the token to.
+  -description-substitutions, -max-listen-streams, -yolo-mode) and the
+  Telemetry group. Every other flag is read in HTTP mode only, and a stdio run
+  given one names it at startup with the variable to set instead. Where
+  ignoring it would cost more than a setting, the run refuses to start:
+  -read-only, -safe-mode or -exclude-tools asking to withhold what stdio would
+  then serve, and -gitlab-url naming an instance other than the one GITLAB_URL
+  sends the token to.
 
  General
   -h, -help                 Show this help message
@@ -551,6 +552,10 @@ FLAGS
  Tool surface
   -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
   -capability-surface str   Capability surface: full|minimal (default full)
+  -max-listen-streams int   Concurrent subscriptions/listen streams one credential may hold open (default
+                            64; 0 removes this ceiling, and the process-wide one of 512 stays). Both
+                            transports; a value that is not a whole number of 0 or more warns and keeps
+                            the default
   -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
   -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
   -exclude-tools string     Comma-separated tool names, group names or canonical action IDs
