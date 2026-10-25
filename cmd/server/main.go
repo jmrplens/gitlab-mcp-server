@@ -4116,14 +4116,12 @@ func transportFailureBudget(cfg *config.Config) *transportBudget {
 	if !tenancy.TransportSourceBudgetOn(cfg.TrustedProxyHeader) { // register row AUB-002
 		return nil
 	}
-	window := cfg.AuthFailureWindow
-	if window <= 0 {
-		// The fast budget is off, but this one is not: it catches header
-		// rotation, which is a different question. It keeps the default
-		// window rather than inheriting a zero that would make every record
-		// lapse instantly.
-		window = config.DefaultAuthFailureWindow
-	}
+	// A zero fast window switches the fast budget off, and not this one: it
+	// catches header rotation, which is a different question, so it keeps the
+	// default window rather than inheriting a zero that would make every
+	// record lapse instantly. The limiter and the accounting share the window
+	// resolved here.
+	window := windowOrDefault(cfg.AuthFailureWindow, config.DefaultAuthFailureWindow)
 	return newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, window), window)
 }
 

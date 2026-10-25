@@ -29,8 +29,8 @@
 //     pass the register constant at its index, exactly as many times as it
 //     says.
 //   - G4 pin. A Pin site keeps its own literal, and that literal folds to the
-//     register constant's value and type (the second statements issue 958
-//     records).
+//     register constant's value and type. No row declares one since issue 958
+//     made the pool's second statements of three defaults aliases.
 //   - G5 references. An Enforce site that names what it reads refers to it,
 //     and every register function a row names is called from one of its
 //     Enforce sites.

@@ -849,13 +849,13 @@ func allowDecisions() []Decision {
 			Config: []string{"MaxHTTPClients"}, Malformed: RefuseStartup, Zero: ZeroRefused, ZeroBy: "issue 958",
 			AtCapacity: EvictAcrossKeys,
 			Decided:    []string{"ADR-0020", "issue 561", "issue 958"},
-			Findings:   []string{"F-16"},
-			// The pool keeps its own fallback, stated a second time (issue
-			// 958); it is held equal rather than aliased.
+			// The pool's own fallback aliases the value as the configuration's
+			// default does, where it used to state it a second time and be held
+			// equal to it by a pin (issue 958, answering F-16 here).
 			Sites: []Site{
 				alias(pkgConfig, "DefaultMaxHTTPClients", "PoolSize"),
 				alias(pkgConfig, "MaxHTTPClients", "PoolSizeMax"),
-				pin(pkgPool, "defaultMaxSize", "PoolSize"),
+				alias(pkgPool, "defaultMaxSize", "PoolSize"),
 				enforce(pkgPool, "ServerPool.insertEntry"),
 				enforce(pkgServer, "validateHTTPPoolAndRateBounds"),
 			},
@@ -898,7 +898,10 @@ func allowDecisions() []Decision {
 			Values: []string{"PoolIdleTimeout", "PoolIdleTimeoutMax", "PoolIdleSweepDivisor", "PoolIdleSweepFloor"},
 			Source: Configurable, Flags: []string{"--pool-idle-timeout"}, Envs: []string{"GITLAB_MCP_POOL_IDLE_TIMEOUT"},
 			Config: []string{"PoolIdleTimeout"}, Malformed: RefuseStartup, Zero: ZeroOff,
-			Findings: []string{"F-16"},
+			// The pool's own fallback aliases the value as the configuration's
+			// default does, where it used to state it a second time (issue 958,
+			// answering F-16 here).
+			Decided: []string{"issue 958"},
 			Refusals: []Refusal{
 				listenEnd("credential_reset", StartOver, refuse(pkgServer, "endOfCredentialReset")),
 			},
@@ -907,7 +910,7 @@ func allowDecisions() []Decision {
 				alias(pkgConfig, "MaxPoolIdleTimeout", "PoolIdleTimeoutMax"),
 				alias(pkgPool, "idleSweepDivisor", "PoolIdleSweepDivisor"),
 				alias(pkgPool, "idleSweepMinInterval", "PoolIdleSweepFloor"),
-				pin(pkgPool, "DefaultIdleTimeout", "PoolIdleTimeout"),
+				alias(pkgPool, "DefaultIdleTimeout", "PoolIdleTimeout"),
 				enforce(pkgPool, "ServerPool.StartIdleEviction"),
 			},
 		},

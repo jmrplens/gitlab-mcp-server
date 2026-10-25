@@ -2065,10 +2065,10 @@ func TestLongestAuthBlock_AShorterLaterBlock_KeepsTheLongerEarlierOne(t *testing
 
 // TestTransportBudget_Window_FallsBackToTheDefault covers the two shapes a
 // caller can leave the effective window in: a nil budget, which is a
-// deployment without a trusted proxy header, and one built with a
-// non-positive window, which is what a configured zero resolves to. Both
-// answer with the default, because that is what their limiter was built with,
-// and Retry-After is read off this value.
+// deployment without a trusted proxy header, and one built from a
+// non-positive --auth-failure-window, which [transportFailureBudget] resolves
+// to the default. Both answer with the default, because that is what their
+// limiter was built with, and Retry-After is read off this value.
 func TestTransportBudget_Window_FallsBackToTheDefault(t *testing.T) {
 	t.Parallel()
 
@@ -2077,12 +2077,18 @@ func TestTransportBudget_Window_FallsBackToTheDefault(t *testing.T) {
 		t.Errorf("(nil).window() = %v, want %v", got, authFailureWindow)
 	}
 
-	limiter := serverpool.NewAuthRateLimiter(2, authFailureWindow)
-	if got := newTransportBudget(limiter, 0).window(); got != authFailureWindow {
-		t.Errorf("window() with a zero configured window = %v, want %v", got, authFailureWindow)
+	for _, window := range []time.Duration{0, -time.Second} {
+		t.Run(window.String(), func(t *testing.T) {
+			t.Parallel()
+			budget := transportFailureBudget(&config.Config{TrustedProxyHeader: "X-Forwarded-For", AuthFailureWindow: window})
+			if got := budget.window(); got != authFailureWindow {
+				t.Errorf("window() with a configured window of %v = %v, want %v", window, got, authFailureWindow)
+			}
+		})
 	}
 
 	const configured = 5 * time.Minute
+	limiter := serverpool.NewAuthRateLimiter(2, configured)
 	if got := newTransportBudget(limiter, configured).window(); got != configured {
 		t.Errorf("window() = %v, want the configured %v", got, configured)
 	}
@@ -2125,7 +2131,7 @@ func TestTransportBudget_Cleanup_ForgetsLapsedPairsOnly(t *testing.T) {
 	}
 }
 
-// TestNewTransportBudget_AZeroWindow_DeduplicatesOverTheDefault covers the
+// TestTransportFailureBudget_AZeroWindow_DeduplicatesOverTheDefault covers the
 // configuration that reaches the budget with no window of its own: a zero
 // --auth-failure-window, which turns the primary budget off and leaves this one
 // to fall back to the default.
@@ -2133,17 +2139,29 @@ func TestTransportBudget_Cleanup_ForgetsLapsedPairsOnly(t *testing.T) {
 // The fallback has to reach the accounting, not only the value the budget
 // reports. A pair remembered for no time at all is forgotten at once, so every
 // failure of one client charges the source again, and the fleet budget counts
-// failures rather than clients: the very aggregation it exists to avoid.
-func TestNewTransportBudget_AZeroWindow_DeduplicatesOverTheDefault(t *testing.T) {
+// failures rather than clients: the very aggregation it exists to avoid. A
+// charge that counts again re-opens its pair at the time it was made, so a
+// pair still stamped with its first charge was counted once.
+func TestTransportFailureBudget_AZeroWindow_DeduplicatesOverTheDefault(t *testing.T) {
 	t.Parallel()
 
-	budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow), 0)
-	const source = "203.0.113.7"
-	for range 5 {
-		budget.charge(source, "198.51.100.1")
+	budget := transportFailureBudget(&config.Config{TrustedProxyHeader: "X-Forwarded-For"})
+	const source, key = "203.0.113.7", "198.51.100.1"
+	pair := source + "\x00" + key
+	budget.charge(source, key)
+	budget.mu.Lock()
+	first := budget.charged[pair]
+	budget.mu.Unlock()
+	for range 4 {
+		time.Sleep(time.Millisecond)
+		budget.charge(source, key)
 	}
-	if blocked, _ := budget.blockedFor(source); blocked {
-		t.Error("one client failing five times exhausted a budget of two distinct clients; a zero window deduplicated over nothing")
+
+	budget.mu.Lock()
+	defer budget.mu.Unlock()
+	if len(budget.charged) != 1 || !budget.charged[pair].Equal(first) {
+		t.Errorf("one client failing five times left %d pair(s), the pair stamped %v after %v; a zero window deduplicated over nothing",
+			len(budget.charged), budget.charged[pair], first)
 	}
 }
 

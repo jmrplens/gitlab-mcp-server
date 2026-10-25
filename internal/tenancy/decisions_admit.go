@@ -400,14 +400,17 @@ func admitDecisions() []Decision {
 			Source: Configurable, Flags: []string{"--revalidate-interval"},
 			Envs: []string{"GITLAB_MCP_SESSION_REVALIDATE_INTERVAL"}, Config: []string{"RevalidateInterval"},
 			Malformed: RefuseStartup, Zero: ZeroOff,
-			Findings: []string{"F-16"},
+			// The pool's own fallback aliases the value as the configuration's
+			// default does, where it used to state it a second time (issue 958,
+			// answering F-16 here).
+			Decided: []string{"issue 958"},
 			Refusals: []Refusal{
 				listenEnd("credential_revoked", Reauthorize, refuse(pkgServer, "endOfCredentialRevocation")),
 			},
 			Sites: []Site{
 				alias(pkgConfig, "DefaultRevalidateInterval", "RevalidateInterval"),
 				alias(pkgConfig, "MaxRevalidateInterval", "RevalidateIntervalMax"),
-				pin(pkgPool, "DefaultRevalidateInterval", "RevalidateInterval"),
+				alias(pkgPool, "DefaultRevalidateInterval", "RevalidateInterval"),
 				enforce(pkgPool, "ServerPool.revalidateAll"),
 			},
 		},
@@ -538,7 +541,7 @@ func admitDecisions() []Decision {
 			ID: "AUB-002", Question: Admit, Kind: Budget, Class: ClassA, Disposition: Valued,
 			Resource: "distinct failing primary keys one transport source, an IPv6 one by its /64, may produce in a window",
 			Key:      KeySource, StdioKey: KeyNone,
-			Decided: []string{"issue 954", "issue 982"},
+			Decided: []string{"issue 954", "issue 982", "issue 958"},
 			// The pairs already charged are remembered in a map keyed on the
 			// source and the primary key, both of which a caller mints, in
 			// both authentication modes, and issue 982 bounded it twice. A
@@ -572,16 +575,17 @@ func admitDecisions() []Decision {
 			AtCapacity: ReclaimOwnThenRefuse,
 			// Whether the budget exists is TransportSourceBudgetOn's answer.
 			Functions: []string{"TransportSourceBudgetOn"},
-			Findings:  []string{"F-16"},
 			Refusals:  blockedRefusals,
 			// The window falls back to the default when AUB-001's is zero, in
-			// two places kept in step by hand (issue 958): the function that
-			// builds the budget and the budget's constructor. Both are declared
-			// rather than moved to one. The budget's window reads what its
-			// constructor resolved, and the default only for a budget that
-			// does not exist.
+			// the one helper every budget that reads another's window goes
+			// through, called where the budget is built (issue 958, answering
+			// F-16 here): it was kept in step by hand in that function and in
+			// the budget's constructor. The budget's window reads what was
+			// resolved there, and the default only for a budget that does not
+			// exist.
 			Sites: []Site{
 				alias(pkgServer, "transportFailureLimit", "TransportSourceDistinctKeys"),
+				enforce(pkgServer, "windowOrDefault"),
 				enforce(pkgServer, "transportFailureBudget"),
 				enforce(pkgServer, "newTransportBudget"),
 				enforce(pkgServer, "transportBudget.window"),
@@ -708,6 +712,7 @@ func admitDecisions() []Decision {
 			Sites: []Site{
 				alias(pkgServer, "networkFailingPrefixes", "AuthNetworkFailingPrefixes"),
 				enforce(pkgServer, "authNetworkBudget"),
+				enforce(pkgServer, "windowOrDefault"),
 				resolve, check,
 			},
 		},

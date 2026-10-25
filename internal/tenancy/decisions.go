@@ -92,11 +92,6 @@ func alias(pkg, name, reads string) Site {
 	return Site{Pkg: pkg, Name: name, Role: Alias, Reads: reads}
 }
 
-// pin is a site that keeps its own literal, held equal to reads.
-func pin(pkg, name, reads string) Site {
-	return Site{Pkg: pkg, Name: name, Role: Pin, Reads: reads}
-}
-
 // arg is the index'th argument of count calls to call inside the function
 // name, which carries reads.
 func arg(pkg, name, call string, index, count int, reads string) Site {

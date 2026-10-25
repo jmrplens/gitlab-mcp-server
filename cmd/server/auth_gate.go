@@ -990,14 +990,12 @@ type sourcePairs struct {
 // newTransportBudget wraps a limiter in the per-key accounting above.
 //
 // window is the one the limiter was built with, not the one the operator
-// configured: the two differ when the configured value was zero or less, and
-// the accounting here has to follow the limiter rather than the configuration.
+// configured: the two differ when the configured value was zero or less, which
+// [transportFailureBudget] resolves to the default for both, and the
+// accounting here has to follow the limiter rather than the configuration.
 func newTransportBudget(limiter *serverpool.AuthRateLimiter, window time.Duration) *transportBudget {
 	if limiter == nil {
 		return nil
-	}
-	if window <= 0 {
-		window = authFailureWindow
 	}
 	return &transportBudget{
 		limiter:         limiter,
@@ -1010,9 +1008,9 @@ func newTransportBudget(limiter *serverpool.AuthRateLimiter, window time.Duratio
 
 // window is the effective window this budget lapses pairs on, for the guards
 // that answer Retry-After with it. A nil budget reports the default, which is
-// what its own limiter would have used. A budget that exists was built by
-// [newTransportBudget], which already resolved a window of zero or less to the
-// default, so its own window is the answer as it stands.
+// what its own limiter would have used. A budget that exists was built from
+// the window [transportFailureBudget] resolved, a configured zero or less
+// already the default, so its own window is the answer as it stands.
 func (b *transportBudget) window() time.Duration {
 	if b == nil {
 		return authFailureWindow

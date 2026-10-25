@@ -113,6 +113,23 @@ func authFailureLimiter(cfg *config.Config) *serverpool.AuthRateLimiter {
 	return serverpool.NewAuthRateLimiter(cfg.AuthFailureLimit, cfg.AuthFailureWindow)
 }
 
+// windowOrDefault is the window a budget reads from a setting that a zero may
+// have switched off: the setting, or fallback when it is zero or less.
+//
+// A window of zero switches off the budget that owns it and no other
+// (INV-015). The budgets that read another one's window keep the default in
+// its place rather than inheriting a zero, which would make every record lapse
+// the moment it is kept: the transport-source budget reads the failure window
+// (AUB-002), and the /48 aggregate reads both windows (AUB-006). It replaces
+// the copies in transportFailureBudget and newTransportBudget and the two in
+// authNetworkBudget (issue 958).
+func windowOrDefault(configured, fallback time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+	return fallback
+}
+
 // authSprayBudget builds the distinct-token budget from the configuration, or
 // returns nil when the deployment turned it off.
 //
@@ -154,17 +171,10 @@ const networkFailingPrefixes = tenancy.AuthNetworkFailingPrefixes // register ro
 // in the same window. The figure is a register constant, so it is built for
 // every deployment; the windows it reads are the operator's, and a window of
 // zero, which switches the budget that owns it off, gives this one the default
-// rather than switching it off too (INV-015), as [transportFailureBudget]
-// reads the fast window.
+// rather than switching it off too (INV-015, [windowOrDefault]).
 func authNetworkBudget(cfg *config.Config) *serverpool.DistinctTokenBudget {
-	window := cfg.AuthDistinctWindow
-	if window <= 0 {
-		window = config.DefaultAuthDistinctWindow
-	}
-	step := cfg.AuthFailureWindow
-	if step <= 0 {
-		step = config.DefaultAuthFailureWindow
-	}
+	window := windowOrDefault(cfg.AuthDistinctWindow, config.DefaultAuthDistinctWindow)
+	step := windowOrDefault(cfg.AuthFailureWindow, config.DefaultAuthFailureWindow)
 	return serverpool.NewDistinctTokenBudget(networkFailingPrefixes, window, step)
 }
 
