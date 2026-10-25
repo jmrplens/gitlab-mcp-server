@@ -36,9 +36,10 @@ checks below are run by hand.
 
 The one exception is release immutability, which is visible in the public
 release metadata and is already checked (see below). The NuGet.org trusted
-publishing policy at the end of this page is not a GitHub setting at all, but it
-is recorded here for the same reason: it lives outside the repository, the
-release depends on it, and no gate can see it.
+publishing policy and the PyPI trusted publisher at the end of this page are not
+GitHub settings at all, but they are recorded here for the same reason: they
+live outside the repository, the release depends on them, and no gate can see
+them.
 
 ## SC-04: enable immutable releases
 
@@ -311,6 +312,52 @@ makes it permanent.
 
 **What tells you it drifted.** The `nuget` job of the next release fails at
 its login step, before any push, and nothing else in the release is affected.
+
+## PyPI trusted publisher
+
+**What to set.** On pypi.org, the project `jmrplens-gitlab-mcp-server`, then
+**Manage**, then **Publishing**: one GitHub trusted publisher that lets the
+release workflow upload the wheels with no stored credential.
+
+**Why.** `release.yml`'s `pypi` job holds `id-token: write` and runs
+`scripts/publish-pypi.sh --trusted-publishing` (issue 1243). The script signs a
+PEP 740 publish attestation for each wheel with the job's identity, asks GitHub
+for an OIDC token for the audience pypi.org publishes, and posts that token to
+`https://pypi.org/_/oidc/mint-token`, which mints an upload token only when the
+token's claims match a publisher of the project. PyPI then keeps each
+attestation only when its signing identity is that same publisher, and serves it
+as the wheel's provenance, which the `verify-published` job holds every wheel
+to. No repository secret is involved: `make publish-pypi` with a `PYPI_TOKEN` is
+the only tokened path, for an out-of-band upload, and it attests nothing.
+
+**Current state.** Satisfied. The publisher's fields, as PyPI's integrity API
+names them in the provenance of 3.3.0's wheels:
+
+| Field       | Value               |
+| ----------- | ------------------- |
+| Owner       | `jmrplens`          |
+| Repository  | `gitlab-mcp-server` |
+| Workflow    | `release.yml`       |
+| Environment | `release`           |
+
+**How to check.** The project's Publishing page on pypi.org lists the
+publisher. The provenance of any released wheel names the publisher that
+uploaded it:
+
+```bash
+curl -s https://pypi.org/integrity/jmrplens-gitlab-mcp-server/3.3.0/jmrplens_gitlab_mcp_server-3.3.0-py3-none-win_amd64.whl/provenance \
+  | jq '.attestation_bundles[].publisher'
+```
+
+A release rehearsal does not exercise the exchange: it runs in the
+`release-rehearsal` environment, which this publisher does not name and must
+not, and the script's `--dry-run` stops before the mint and signs nothing.
+
+**What tells you it drifted.** The `pypi` job of the next release fails at the
+mint, after the attestations are signed and before anything is uploaded, with
+PyPI's reason (`invalid-publisher` when no publisher matches the token's
+claims). A wheel uploaded through any other publisher fails `verify-published`,
+which names the publisher its provenance carries.
 
 ## Checking all of it at once
 

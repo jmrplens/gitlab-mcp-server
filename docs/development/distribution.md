@@ -246,15 +246,15 @@ manifests point at the release assets themselves. The `make` targets run the
 same scripts by hand, and each package target takes the directory of release
 binaries as a variable (`NPM_BINARIES`, `PYPI_BINARIES`, `NUGET_BINARIES`).
 
-| Channel  | Assemble                                    | Validate                                                                                                  | Publish                                                                                       | Release job    |
-| -------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------- |
-| npm      | `make gen-npm` (`scripts/build-npm.mjs`)    | `make validate-npm` in a `node:22` container, `make validate-npm-local` on a runner                       | `scripts/publish-npm.sh`; `make publish-npm-dry` and `make publish-npm` by hand               | `npm`          |
-| PyPI     | `make gen-pypi` (`scripts/build_pypi.py`)   | `make validate-pypi` in a `python:3.14-slim` container, `make validate-pypi-local` on a runner            | `pypa/gh-action-pypi-publish`; `make publish-pypi-dry` and `make publish-pypi` by hand        | `pypi`         |
-| NuGet    | `make gen-nuget` (`scripts/build_nuget.py`) | `make validate-nuget` in the .NET SDK container pinned by digest, `make validate-nuget-local` on a runner | `scripts/publish-nuget.sh`; `make publish-nuget-dry` and `make publish-nuget` by hand         | `nuget`        |
-| Homebrew | `scripts/update-homebrew-tap.sh`            | The script's `--dry-run`, in a rehearsal                                                                  | The same script pushes the formula to `jmrplens/homebrew-tap`                                 | `homebrew`     |
-| winget   | `komac update`, pinned and hash-checked     | `komac update --dry-run`, in a rehearsal; Microsoft's validation of the pull request                      | A version pull request to `microsoft/winget-pkgs` through the `jmrplens/winget-pkgs` fork     | `winget`       |
-| Registry | `scripts/update-server-json-sha.sh`         | `make check-server-json`; `make check-server-json-packages` downloads every declared artifact             | `mcp-publisher publish`                                                                       | `mcp-registry` |
-| LobeHub  | `make gen-lhm-manifest`                     | `make check-lhm-manifest`                                                                                 | `make publish-lobehub`, by hand from a machine with `lhm login` and `lhm github connect` done | none           |
+| Channel  | Assemble                                    | Validate                                                                                                  | Publish                                                                                                 | Release job    |
+| -------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------- |
+| npm      | `make gen-npm` (`scripts/build-npm.mjs`)    | `make validate-npm` in a `node:22` container, `make validate-npm-local` on a runner                       | `scripts/publish-npm.sh`; `make publish-npm-dry` and `make publish-npm` by hand                         | `npm`          |
+| PyPI     | `make gen-pypi` (`scripts/build_pypi.py`)   | `make validate-pypi` in a `python:3.14-slim` container, `make validate-pypi-local` on a runner            | `scripts/publish-pypi.sh --trusted-publishing`; `make publish-pypi-dry` and `make publish-pypi` by hand | `pypi`         |
+| NuGet    | `make gen-nuget` (`scripts/build_nuget.py`) | `make validate-nuget` in the .NET SDK container pinned by digest, `make validate-nuget-local` on a runner | `scripts/publish-nuget.sh`; `make publish-nuget-dry` and `make publish-nuget` by hand                   | `nuget`        |
+| Homebrew | `scripts/update-homebrew-tap.sh`            | The script's `--dry-run`, in a rehearsal                                                                  | The same script pushes the formula to `jmrplens/homebrew-tap`                                           | `homebrew`     |
+| winget   | `komac update`, pinned and hash-checked     | `komac update --dry-run`, in a rehearsal; Microsoft's validation of the pull request                      | A version pull request to `microsoft/winget-pkgs` through the `jmrplens/winget-pkgs` fork               | `winget`       |
+| Registry | `scripts/update-server-json-sha.sh`         | `make check-server-json`; `make check-server-json-packages` downloads every declared artifact             | `mcp-publisher publish`                                                                                 | `mcp-registry` |
+| LobeHub  | `make gen-lhm-manifest`                     | `make check-lhm-manifest`                                                                                 | `make publish-lobehub`, by hand from a machine with `lhm login` and `lhm github connect` done           | none           |
 
 `scripts/verify_published_packages.py` (the `verify-published` job) reads the
 npm, PyPI and NuGet packages back out of their registries and compares the
@@ -274,6 +274,32 @@ The job's timeout (50 minutes) is sized to outlast the deadline and the
 downloads after it. A digest that does not match is reported at once,
 whatever is left to wait, and `--retry-budget 0`, the out-of-band run days
 later, waits for nothing.
+
+The PyPI upload is steps of the repository's own rather than
+`pypa/gh-action-pypi-publish`, whose generated container action runs an image
+pypa names by a registry tag, in the job that holds the identity PyPI trusts
+(issue 1243). `scripts/publish-pypi.sh --trusted-publishing` installs twine and
+`pypi-attestations` into a throwaway venv from
+`.github/requirements/pypi-publish.txt`, a lock compiled with `pip-compile
+--generate-hashes --strip-extras` from `pypi-publish.in` beside it, under the
+Python 3.12 the runner's own `python3` is, in `--require-hashes` mode and from
+wheels only; runs `twine check --strict`; signs a PEP 740 publish
+attestation for each wheel with the job's identity; exchanges the job's OIDC
+token for an upload token the way PyPI documents trusted publishing by hand
+(the audience `https://pypi.org/_/oidc/audience` publishes, then a POST to
+`https://pypi.org/_/oidc/mint-token`); and hands that token to twine alone,
+which uploads each wheel with its attestation and `--skip-existing`. A
+rehearsal runs it with `--dry-run`, which installs and checks and stops before
+anything is signed or minted. Dependabot's `pip` entry recompiles the lock
+under the repository's cooldowns, with the Python its header names, and CI's
+supply-chain job installs it as the script does, with the runner's `python3`,
+on every push, so a lock that does not install there fails before a release
+does. `verify_published_packages.py` then holds
+each wheel to the provenance PyPI serves for it: a bundle from this
+repository's trusted publisher (`release.yml`, environment `release`) whose
+attestation states PyPI's publish predicate for the wheel's file name at the
+SHA-256 of the bytes downloaded, so a release uploaded without attestations,
+through another publisher or of other bytes fails there.
 
 ### Which release moves "latest"
 

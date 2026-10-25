@@ -155,8 +155,9 @@ def read_verified(wheels_dir, version):
     """Load the digests build_pypi.py recorded, or fail if there are none:
     the binaries' by platform, and the notices'.
 
-    The manifest lives in the wheelhouse and is removed once read, so the
-    publish step never sees a non-wheel file in packages-dir.
+    The manifest lives in the wheelhouse and is removed once read, so
+    scripts/publish-pypi.sh --no-assemble never sees a non-wheel file in the
+    wheelhouse, which it would refuse.
     """
     path = os.path.join(wheels_dir, VERIFIED_MANIFEST)
     if not os.path.isfile(path):

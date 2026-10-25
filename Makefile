@@ -1495,8 +1495,9 @@ publish-pypi-dry:
 	scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
 
 ## publish-pypi: assemble, validate and publish the PyPI wheels out of band.
-## Auth via PYPI_TOKEN, and no attestation is made. The release workflow
-## publishes through the OIDC trusted publisher instead; this target is for
+## Auth via PYPI_TOKEN, and no attestation is made. The release workflow runs
+## the same script with --trusted-publishing, which mints the upload token
+## from the job's identity and attests each wheel; this target is for
 ## bootstrap/manual publishes.
 publish-pypi:
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }

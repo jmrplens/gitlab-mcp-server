@@ -1335,7 +1335,7 @@ jobs:
     environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
     permissions:
       contents: read # download the published release assets
-      id-token: write # PyPI trusted publishing
+      id-token: write # PyPI trusted publishing, and the identity each wheel's publish attestation is signed with
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -1364,15 +1364,31 @@ jobs:
       - name: Build and validate PyPI wheels
         run: make validate-pypi-local PYPI_BINARIES=dist
 
-      # OIDC trusted publisher — no stored token, PEP 740 attestations
-      # attached automatically, and skip-existing means a re-run of this job
-      # lands on already-uploaded files without failing.
+      # Steps of our own rather than pypa/gh-action-pypi-publish, whose
+      # generated container action runs an image pypa names by a registry tag,
+      # which a push to that namespace can move while this job holds the
+      # identity PyPI trusts (issue 1243). The script installs twine and
+      # pypi-attestations from .github/requirements/pypi-publish.txt in
+      # hash-checking mode, runs twine check --strict, signs a PEP 740 publish
+      # attestation for each wheel with the job's identity, then exchanges the
+      # job's OIDC token for an upload token, under the trusted publisher on
+      # pypi.org that names this repository, release.yml and the `release`
+      # environment, and hands it to twine alone. --no-assemble uploads the
+      # wheelhouse the previous step validated, and --skip-existing inside the
+      # script makes a re-run of this job land on files already uploaded
+      # without failing. A rehearsal runs the same script with --dry-run,
+      # which installs and checks and stops before anything is signed or
+      # minted: `release-rehearsal` is named by no publisher, so a mint would
+      # be refused anyway, and a signature would put a rehearsal's identity in
+      # the public transparency log.
       - name: Publish to PyPI
-        if: env.REHEARSAL != 'true'
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: pypi/dist
-          skip-existing: true
+        run: |
+          set -euo pipefail
+          if [ "$REHEARSAL" = "true" ]; then
+            bash scripts/publish-pypi.sh dist "${RELEASE_TAG#v}" --no-assemble --trusted-publishing --dry-run
+          else
+            bash scripts/publish-pypi.sh dist "${RELEASE_TAG#v}" --no-assemble --trusted-publishing
+          fi
 
   nuget:
     name: "🟪 Publish to NuGet"
@@ -1775,6 +1791,11 @@ jobs:
       # rearranges fails here instead of leaving an attestation nobody finds.
       # The digests arrive as a job output and are written to a file rather
       # than expanded into the command line.
+      #
+      # Each wheel is held to its PEP 740 provenance as PyPI's integrity API
+      # serves it: an attestation from the trusted publisher the pypi job
+      # uploads through (release.yml, environment release) stating the
+      # wheel's file name at the SHA-256 of the bytes downloaded (issue 1243).
       #
       # This runs minutes after the uploads, and a registry that has not
       # finished publishing the version answers 404, so the downloads wait

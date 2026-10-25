@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -3782,6 +3783,258 @@ func TestLoadWorkflows_ReleaseEnvironment_IsNamedOnlyForATagPush(t *testing.T) {
 	if got, want := pythonStr(login["if"]), "env.REHEARSAL != 'true'"; got != want {
 		t.Errorf("the NuGet login runs if %q, want %q", got, want)
 	}
+}
+
+// The committed lock the PyPI upload installs from, the file it is compiled
+// from, and the shape of each of its requirements once a continuation is
+// joined: a name pinned to one version and at least one SHA-256 of a file of
+// it.
+const (
+	pypiRequirements       = ".github/requirements/pypi-publish.txt"
+	pypiRequirementsSource = ".github/requirements/pypi-publish.in"
+	pypiPublishCall        = `bash scripts/publish-pypi.sh dist "${RELEASE_TAG#v}" --no-assemble --trusted-publishing`
+)
+
+var hashedRequirement = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*==[^\s=]+(?: --hash=sha256:[0-9a-f]{64})+$`)
+
+// anyPipInstall is a pip install in more spellings than the pip-unhashed rule
+// reads: pip3 or pip3.12 too, and a path to pip whose quote closes before the
+// subcommand, as "$VENV/bin/pip" install, the spelling the script used before
+// it installed from the lock.
+var anyPipInstall = regexp.MustCompile(`\bpip[0-9.]*["']?\s+install\b`)
+
+// TestLoadWorkflows_PyPIJob_PublishesThroughItsOwnSteps verifies that the
+// release workflow's pypi job uploads with steps of its own rather than
+// through pypa/gh-action-pypi-publish (issue 1243), whose generated container
+// action runs an image pypa names by a registry tag, in a job holding the
+// id-token: write PyPI's trusted publishing exchanges.
+//
+// The audit refuses that action on its own now that declarations.go no longer
+// accepts the directory it writes, but only as a uses: it cannot judge, which
+// says nothing about what replaced it. This holds the replacement: no
+// workflow names an action of pypa's; the job publishes through
+// scripts/publish-pypi.sh in trusted-publishing mode, from the wheelhouse the
+// job validated, in a step that runs in a rehearsal too and passes --dry-run
+// there and only there; every pip install the script runs is hash-checked
+// from the committed lock; every requirement of the lock is pinned to one
+// version and hashed, so what runs beside the token is what the lock names;
+// the command pypi-publish.in tells a maintainer to regenerate the lock with
+// is the one the lock's header names, which Dependabot reruns; and CI
+// installs the lock as the script does, with the runner's own python3, so a
+// lock that does not install under the release job's interpreter fails on
+// its pull request rather than in that job.
+// scripts/publish_pypi_sh_test.py holds what the script does with each flag.
+func TestLoadWorkflows_PyPIJob_PublishesThroughItsOwnSteps(t *testing.T) {
+	t.Parallel()
+
+	root := repositoryRoot(t)
+	checks := []struct {
+		assert func(*testing.T, string)
+		name   string
+	}{
+		{name: "no workflow names an action of pypa's", assert: assertNoPypaAction},
+		{name: "the job publishes through the script under the trusted publisher", assert: assertPyPIPublishRunsTheScript},
+		{name: "every pip install of the script is hash-checked from the lock", assert: assertPyPIScriptInstallsFromTheLock},
+		{name: "every requirement of the lock is pinned and hashed", assert: assertPyPILockIsHashed},
+		{name: "the lock's source documents the command its header names", assert: assertPyPILockCommandIsDocumented},
+		{name: "CI installs the lock with the runner's python3", assert: assertCIInstallsThePyPILock},
+	}
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			t.Parallel()
+
+			check.assert(t, root)
+		})
+	}
+}
+
+// assertNoPypaAction holds every workflow under root to naming no action of
+// pypa's, in any spelling of a uses: key.
+func assertNoPypaAction(t *testing.T, root string) {
+	t.Helper()
+
+	workflows, err := loadWorkflows(root)
+	if err != nil {
+		t.Fatalf("loadWorkflows: %v", err)
+	}
+	for _, loaded := range workflows {
+		for _, uses := range parsedUses(loaded.text) {
+			if strings.HasPrefix(uses.reference, "pypa/") {
+				t.Errorf("%s:%d: uses: %s, an action of pypa's; the pypi job uploads with scripts/publish-pypi.sh",
+					loaded.path, uses.line, uses.reference)
+			}
+		}
+	}
+}
+
+// assertPyPIPublishRunsTheScript holds the pypi job's Publish to PyPI step to
+// running in a rehearsal too, and to calling publish-pypi.sh twice under the
+// trusted publisher, with --dry-run on the rehearsal branch and only there.
+func assertPyPIPublishRunsTheScript(t *testing.T, root string) {
+	t.Helper()
+
+	publish := releaseStep(t, releaseJob(t, releaseWorkflow(t, root), "pypi"), stepNamed("Publish to PyPI"))
+	if condition, ok := publish["if"]; ok {
+		t.Errorf("Publish to PyPI runs if %q, want it to run in a rehearsal too, as a dry run", pythonStr(condition))
+	}
+	run := pythonStr(publish["run"])
+	rehearse, release, branched := strings.Cut(run, "\nelse\n")
+	if !branched || !hasLine(rehearse, `if [ "$REHEARSAL" = "true" ]; then`) {
+		t.Fatalf("Publish to PyPI does not branch on REHEARSAL:\n%s", run)
+	}
+	if !hasLine(rehearse, pypiPublishCall+" --dry-run") {
+		t.Errorf("the rehearsal branch does not run %s --dry-run:\n%s", pypiPublishCall, rehearse)
+	}
+	if !hasLine(release, pypiPublishCall) || strings.Contains(release, "--dry-run") {
+		t.Errorf("the release branch does not run %s, and only that:\n%s", pypiPublishCall, release)
+	}
+	if calls := strings.Count(run, "scripts/publish-pypi.sh"); calls != 2 {
+		t.Errorf("Publish to PyPI calls publish-pypi.sh %d times, want 2:\n%s", calls, run)
+	}
+}
+
+// assertPyPIScriptInstallsFromTheLock holds every pip install of
+// scripts/publish-pypi.sh, in every spelling anyPipInstall reads, to
+// --require-hashes and the committed lock.
+func assertPyPIScriptInstallsFromTheLock(t *testing.T, root string) {
+	t.Helper()
+
+	script, err := readTextFile(filepath.Join(root, "scripts", "publish-pypi.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := stripComments(script)
+	if !strings.Contains(body, `REQUIREMENTS="$ROOT/`+pypiRequirements+`"`) {
+		t.Errorf("scripts/publish-pypi.sh does not name %s as REQUIREMENTS", pypiRequirements)
+	}
+	installs := 0
+	for line := range strings.SplitSeq(body, "\n") {
+		if !anyPipInstall.MatchString(line) {
+			continue
+		}
+		installs++
+		if !strings.Contains(line, "--require-hashes") || !strings.Contains(line, `-r "$REQUIREMENTS"`) {
+			t.Errorf("scripts/publish-pypi.sh installs without --require-hashes from the lock: %s", strings.TrimSpace(line))
+		}
+	}
+	if installs == 0 {
+		t.Error("scripts/publish-pypi.sh installs nothing, so twine is whatever the runner has")
+	}
+}
+
+// assertPyPILockIsHashed holds every requirement of the committed lock, its
+// continuations joined, to one pinned version with its SHA-256 hashes.
+func assertPyPILockIsHashed(t *testing.T, root string) {
+	t.Helper()
+
+	lock, err := readTextFile(filepath.Join(root, filepath.FromSlash(pypiRequirements)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirements := 0
+	for requirement := range strings.SplitSeq(strings.ReplaceAll(lock, "\\\n", " "), "\n") {
+		requirement = strings.Join(strings.Fields(requirement), " ")
+		if requirement == "" || strings.HasPrefix(requirement, "#") {
+			continue
+		}
+		requirements++
+		if !hashedRequirement.MatchString(requirement) {
+			t.Errorf("%s: %q is not one pinned version with its SHA-256 hashes", pypiRequirements, requirement)
+		}
+	}
+	if requirements == 0 {
+		t.Errorf("%s names no requirement", pypiRequirements)
+	}
+}
+
+// assertPyPILockCommandIsDocumented holds the pip-compile command, the
+// comment line that names pip-compile and its flags, that pypi-publish.in
+// tells a maintainer to regenerate the lock with to the one the lock's
+// header names. Dependabot's pip updater reruns the header's command, so a
+// lock regenerated by another one, which --strip-extras alone can tell apart,
+// is a lock Dependabot would then rewrite.
+func assertPyPILockCommandIsDocumented(t *testing.T, root string) {
+	t.Helper()
+
+	commands := func(path string) []string {
+		text, err := readTextFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found []string
+		for line := range strings.SplitSeq(text, "\n") {
+			comment, isComment := strings.CutPrefix(strings.TrimSpace(line), "#")
+			if comment = strings.TrimSpace(comment); isComment && strings.HasPrefix(comment, "pip-compile --") {
+				found = append(found, comment)
+			}
+		}
+		if len(found) != 1 {
+			t.Fatalf("%s names %d pip-compile commands, want 1: %q", path, len(found), found)
+		}
+		return found
+	}
+	if header, documented := commands(pypiRequirements)[0], commands(pypiRequirementsSource)[0]; documented != header {
+		t.Errorf("%s regenerates the lock with %q, while %s was generated by %q", pypiRequirementsSource, documented,
+			pypiRequirements, header)
+	}
+}
+
+// assertCIInstallsThePyPILock holds ci.yml's supply-chain job to installing
+// the lock the way scripts/publish-pypi.sh does, hash-checked and from wheels
+// alone, in a step before the job's setup-python, which would put another
+// python3 than the runner's first on PATH. The script tests stand in for pip,
+// so nothing else installs the real lock before a release does.
+func assertCIInstallsThePyPILock(t *testing.T, root string) {
+	t.Helper()
+
+	workflows, err := loadWorkflows(root)
+	if err != nil {
+		t.Fatalf("loadWorkflows: %v", err)
+	}
+	var ci map[string]any
+	for _, loaded := range workflows {
+		if loaded.path == workflowDir+"/ci.yml" {
+			ci = loaded.doc
+		}
+	}
+	if ci == nil {
+		t.Fatalf("%s/ci.yml is not among the workflows under %s", workflowDir, root)
+	}
+	steps, _ := releaseJob(t, ci, "supply-chain")["steps"].([]any)
+	install, setupPython := -1, -1
+	for index, raw := range steps {
+		step, _ := raw.(map[string]any)
+		if uses, _ := step["uses"].(string); strings.HasPrefix(uses, "actions/setup-python@") && setupPython < 0 {
+			setupPython = index
+		}
+		run, _ := step["run"].(string)
+		for line := range strings.SplitSeq(run, "\n") {
+			if !strings.Contains(line, "-r "+pypiRequirements) {
+				continue
+			}
+			install = index
+			if !strings.Contains(line, "--require-hashes") || !strings.Contains(line, "--only-binary :all:") {
+				t.Errorf("ci.yml installs %s otherwise than the script does: %s", pypiRequirements, strings.TrimSpace(line))
+			}
+		}
+	}
+	switch {
+	case install < 0:
+		t.Errorf("ci.yml's supply-chain job installs no %s, so nothing installs the lock before a release", pypiRequirements)
+	case setupPython >= 0 && setupPython < install:
+		t.Errorf("ci.yml installs %s in step %d, after setup-python in step %d, so not with the runner's python3",
+			pypiRequirements, install, setupPython)
+	}
+}
+
+// hasLine reports whether one line of text, its indentation trimmed, is want.
+func hasLine(text, want string) bool {
+	for line := range strings.SplitSeq(text, "\n") {
+		if strings.TrimSpace(line) == want {
+			return true
+		}
+	}
+	return false
 }
 
 // releaseWorkflow returns the release workflow under root as loadWorkflows,

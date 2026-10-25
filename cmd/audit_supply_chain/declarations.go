@@ -72,12 +72,12 @@ var actionCategories = map[string]string{
 // declaration, and the record shows the reviewer of that bump what the
 // generating file does now. An entry that excuses nothing is reported, on the
 // terms every declaration table in this repository is held to.
-var declaredUnjudgedActions = map[string]declaration{
-	"pypa/gh-action-pypi-publish ./.github/.tmp/.generated-actions/run-pypi-publish-in-docker-container": {
-		category: categoryGeneratedAtRunTime,
-		reason:   "create-docker-action.py, which the record holds for the pinned commit, writes this directory as a container action whose image is docker://ghcr.io/pypa/gh-action-pypi-publish:<the commit the workflow pins>, the image pypa's own release workflow publishes for that commit. The image is named by a registry tag, which a push to pypa's ghcr.io namespace can move and this audit cannot see, so the pypi job trusts that namespace as far as it trusts the action's repository; replacing the action with an upload of our own is the fix, which is issue 1243",
-	},
-}
+//
+// The table is empty. Its one entry was pypa/gh-action-pypi-publish, whose
+// generated container action runs an image pypa names by a registry tag, which
+// a push to pypa's ghcr.io namespace can move and this audit cannot see; the
+// pypi job uploads with scripts/publish-pypi.sh instead (issue 1243).
+var declaredUnjudgedActions = map[string]declaration{}
 
 // categoryInputGuarded is the one reason a match in the run block of a pinned
 // composite action's step may be accepted: the match sits in a branch the
@@ -293,7 +293,7 @@ var declaredScripts = map[string]scriptDeclaration{
 	},
 	"scripts/publish-pypi.sh": {
 		category: scriptJobGlue,
-		reason:   "wraps twine for make publish-pypi, the out-of-band publish from a maintainer's machine, which no job runs yet; item 13 rewires it to the package command",
+		reason:   "wraps twine and pypi-attestations, installed from the hash-pinned .github/requirements/pypi-publish.txt, in release.yml's pypi job, which mints the upload token from the job's identity, and in make publish-pypi; item 13 rewires it to the package command",
 	},
 	"scripts/smoke-test-image.sh": {
 		category: scriptJobGlue,
