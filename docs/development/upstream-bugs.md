@@ -349,7 +349,7 @@ readable without opening the tracker:
 | 98 | client-go | [`UpdateGroupIssueBoardOptions` models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 7, beside row 96 | No | No; the switches go out in a body of this server's own | Yes, since [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241); `group.group_board_update` sends both in a body that embeds `UpdateGroupIssueBoardOptions` |
 | 99 | gitlab-org/gitlab | [The roles and permissions page does not say when a Guest or a Planner can view pipelines and merge requests](#the-roles-and-permissions-page-does-not-say-when-a-guest-or-a-planner-can-view-pipelines-and-merge-requests) | Yes, by another user, [gitlab-org/gitlab#632031](https://gitlab.com/gitlab-org/gitlab/-/issues/632031), which the merge request closes, closed by its author on 2026-10-11 | Yes, [gitlab-org/gitlab!260353](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260353), merged | **Yes, 19.5.0** | No | Not needed; `pipeline.latest`'s refusal names the role the policy names |
 | 100 | gitlab-org/gitlab | [The roles and permissions page gives Guest, Planner and Reporter the pipeline security report](#the-roles-and-permissions-page-gives-guest-planner-and-reporter-the-pipeline-security-report) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260471](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260471), merged | **Yes, 19.5.0** | No | Not needed; no hint of this server names who can view a pipeline's findings |
-| 101 | client-go | [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 6, beside rows 96 and 98 | No | No; the keys are read around the SDK | Yes; four requests of our own on the group board routes, and the captured response everywhere else; [issue 1283](https://github.com/jmrplens/gitlab-mcp-server/issues/1283) moves three of the four to client-go |
+| 101 | client-go | [The board structs miss keys GitLab sends on a board and its lists](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 6, beside rows 96 and 98 | No | No; the keys are read around the SDK | Yes; the captured response on every board and list answer, and one request of our own, the group board update, kept for row 98's switches; [issue 1283](https://github.com/jmrplens/gitlab-mcp-server/issues/1283) moved the group board list, read and create to client-go |
 | 102 | gitlab-org/orbit/knowledge-graph | [The pinned version check stops with "no merge base" on forks and long branches](#the-pinned-version-check-stops-with-no-merge-base-on-forks-and-long-branches) | Yes, by the merge request | Yes, [gitlab-org/orbit/knowledge-graph!2746](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2746), merged | **Yes**, on `main` on 2026-10-09 and in every tag from v0.140.0; CI only | No | Not needed |
 | 103 | client-go | [The target branch rule methods discard GraphQL errors](#the-target-branch-rule-methods-discard-graphql-errors) | No | No | No | No | Yes, the three handlers read the refusal from the captured answer |
 | 104 | client-go | [The Terraform state documents select neither a state's versions nor when it will be deleted](#the-terraform-state-documents-select-neither-a-states-versions-nor-when-it-will-be-deleted) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | The list's paging: a document of this server's own; none for the fields |
@@ -6141,8 +6141,9 @@ the body only when set.
   [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241).
   `groupboards.UpdateGroupBoard`
   (`internal/tools/groupboards/group_boards.go`) sends a request of its own,
-  `rawUpdateGroupBoard`, so that the board it answers with carries what
-  `gl.GroupIssueBoard` does not model
+  `rawUpdateGroupBoard`, whose answer it reads like the group board list,
+  read and create, which call client-go: what `gl.GroupIssueBoard` does not
+  model comes off the captured response
   ([row 101](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists)),
   and its body is `updateGroupBoardBody`, which embeds
   `gl.UpdateGroupIssueBoardOptions` and adds `hide_backlog_list` and
@@ -6183,8 +6184,8 @@ documents them under "Update a group issue board" with no tier, where the
 four scope fields beside them are marked Premium and Ultimate only. The
 answer struct leaves them out as well: `GroupIssueBoard` models neither switch,
 nor the licensed `assignee` and `weight`, which `Entities::Board` exposes, and
-that is why `groupboards` reads every group board through a request of its
-own; that half is
+that is why `groupboards` reads them off the captured response of every
+answer that carries a board; that half is
 [row 101](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists).
 
 **How we found it**: reviewing the change for
@@ -6214,40 +6215,47 @@ only when set.
   added the two list switches to `IssueBoard` and its update options only.
 - **In review**: yes, in the same merge request, open.
 - **Merged**: no.
-- **Blocking**: no. This server reads the keys around the SDK, through
-  requests of its own and the captured response.
-- **Workaround**: yes. `groupboards` lists, reads, creates and updates
-  every group board through a request of its own (`rawListGroupBoards`,
-  `rawGetGroupBoard`, `rawCreateGroupBoard` and `rawUpdateGroupBoard` in
-  `internal/tools/groupboards/group_boards.go`), decoded into
-  `groupIssueBoardAPI`, which adds the four board keys and each list's
-  `limit_metric`; its four list reads and writes take `limit_metric` off the
-  captured response (ADR-0021, `toolutil.CapturedBoardList` and
-  `CapturedBoardLists` in `internal/toolutil/sent_shapes.go`). The project
-  side calls the SDK's own method on every route and reads what its structs
-  do not model off the captured response: the board's `group` and each of its
-  lists' `limit_metric` on the board list, get, create and update answers
-  (`toolutil.BoardExtra`, read by `CapturedBoard` and `CapturedBoards`), and a
-  list's `limit_metric` on the list routes' own answers (`CapturedBoardList`,
-  `CapturedBoardLists`). Until
+- **Blocking**: no. This server reads the keys around the SDK, off the
+  captured response.
+- **Workaround**: yes. Both packages call the SDK's own method on every
+  board and list route but one, and read what its structs do not model off
+  the captured response (ADR-0021, the readers in
+  `internal/toolutil/sent_shapes.go`). On the project side that is the
+  board's `group` and each of its lists' `limit_metric` on the board list,
+  get, create and update answers (`toolutil.BoardExtra`, read by
+  `CapturedBoard` and `CapturedBoards`). On the group side it is the two
+  list switches, the `assignee`, the `weight` and each list's `limit_metric`
+  on the same four answers (`toolutil.GroupBoardExtra`, read by
+  `CapturedGroupBoard` and `CapturedGroupBoards`), a shape of its own
+  because the two structs miss different keys. On both sides a list's
+  `limit_metric` is read the same way on the list routes' own answers
+  (`CapturedBoardList`, `CapturedBoardLists`). Until
   [issue 1256](https://github.com/jmrplens/gitlab-mcp-server/issues/1256) the
   project board get and list-of-lists reads sent requests of their own, and
   the other six project answers published every list without its
-  `limit_metric`. The four group board requests are the case ADR-0021 gives
-  to the captured response too, since client-go has a method for each
-  (`ListGroupIssueBoards`, `GetGroupIssueBoard`, `CreateGroupIssueBoard`,
-  `UpdateIssueBoard`). The update keeps a request of its own on purpose:
-  since [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241)
-  it sends through it, in `updateGroupBoardBody`, the two list switches
-  `UpdateGroupIssueBoardOptions` does not model
-  ([row 98](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes)).
-  Moving the list, get and create needs a reader for the four board keys
-  `groupIssueBoardAPI` adds, which `toolutil.BoardExtra` does not carry, and
-  is left to a change of its own,
-  [issue 1283](https://github.com/jmrplens/gitlab-mcp-server/issues/1283).
-  What retires the workaround is a release that models the keys: the four
-  group board requests and the board readers of `sent_shapes.go` go, and
-  every handler reads the SDK's structs alone.
+  `limit_metric`; until
+  [issue 1283](https://github.com/jmrplens/gitlab-mcp-server/issues/1283) the
+  group board list, read and create did as well, decoding a superset of
+  `GroupIssueBoard` that added the four board keys and the metric, where
+  client-go has a method for each (`ListGroupIssueBoards`,
+  `GetGroupIssueBoard`, `CreateGroupIssueBoard`). The one route left with a
+  request of its own is the group board update, on purpose: since
+  [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241)
+  `rawUpdateGroupBoard` sends through it, in `updateGroupBoardBody`, the two
+  list switches `UpdateGroupIssueBoardOptions` does not model
+  ([row 98](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes)),
+  and it decodes the answer into `GroupIssueBoard` and reads the same
+  `GroupBoardExtra` off the captured response as the other three. The unit
+  tests `TestGroupBoardRoutes_WholeShapeOfOneAnswer` and
+  `TestGroupBoardRoutes_UnreadableCapturedKey_IsTheCapturesFailure` in
+  `internal/tools/groupboards` hold the four answers to every key, and the
+  Enterprise end-to-end scenario
+  `TestGroupBoards_ScopedBoardWithLimitedColumns_EveryBoardAnswerCarriesTheCapturedKeys`
+  holds the create to what a new board has and the update, read and listing
+  to a scoped board with two limited columns, on every surface. What retires
+  the workaround is a release that models the keys: the board readers of
+  `sent_shapes.go` go and every handler reads the SDK's structs alone; the
+  update's request goes with row 98.
 
 **Where**: client-go v3.15.0 to v3.30.0, the version `go.mod` pins, which
 leave both files unchanged, `group_boards.go:97-104` and `boards.go:133-142`:
@@ -7036,12 +7044,16 @@ method leaves out when it is empty, and a routing test.
   measures of a merge request's head pipeline through
   `toolutil.MergeRequestExtra`, a project board's weight scope through
   `toolutil.BoardExtra`, and a reader of its own in `dorametrics`,
-  `mergetrains`, `resourceevents` and `groupboards`. A deployable's coverage
-  and duration, on a deployment and on an environment's last deployment, are
-  still read from client-go and left out at 0, so they show no false 0 and
-  drop a measured one. It retires when the structs carry pointers. A
-  milestone's burndown events need none of this: client-go already decodes
-  their weight as a pointer.
+  `mergetrains` and `resourceevents`. A deployable's coverage and duration,
+  on a deployment and on an environment's last deployment, are still read
+  from client-go and left out at 0, so they show no false 0 and drop a
+  measured one. It retires when the structs carry pointers. A milestone's
+  burndown events need none of this: client-go already decodes their weight
+  as a pointer. Nor is a group board's weight scope a case of this row:
+  `GroupIssueBoard` declares no weight to decode at all, which is
+  [row 101](#the-board-structs-miss-keys-gitlab-sends-on-a-board-and-its-lists)'s
+  gap, and `toolutil.GroupBoardExtra` reads it off the captured response as
+  a pointer.
 
 **Where**: at v3.15.0 and unchanged at v3.30.0, `DORAMetric.Value`
 (`float64`, `dora_metrics.go`), `Pipeline.Duration` and

@@ -262,7 +262,7 @@ func (s *scanner) unlessRebound(facts *facts, call *ast.CallExpr) string {
 // build takes no client-go option, so no rule above reaches it, and
 // (*gl.Client).Do sends it as it is. Judging the constructor rather than the
 // send is what keeps a request a helper built from being reported where it is
-// sent, as the four group board handlers send one: every request starts at a
+// sent, as the group board update sends one: every request starts at a
 // constructor, and each one that can start it without the caller's context is
 // judged where it is called, client-go's builders by the option rules, these
 // two here, and the standard library's by noctx, which is what covers the
