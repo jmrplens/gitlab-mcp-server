@@ -203,13 +203,19 @@ const (
 	actionEpicLabelEventGet        harness.ActionID = "group.event_epic_label_get"
 )
 
-// The group board create, the one Premium action of the board family; the
-// reads and the column actions are Free and live in the common package.
+// The group board create and delete, the two Premium actions of the board
+// family, and the Free actions called beside them here: the reads, the
+// update and the column create, whose answers carry what only a licensed
+// instance sends on a board (its assignee and weight scope) and on a column
+// (the metric its work-in-progress limit is counted by). The rest of the
+// board and column lifecycle is Free and lives in the common package.
 const (
-	actionGroupBoardCreate harness.ActionID = "group.group_board_create"
-	actionGroupBoardList   harness.ActionID = "group.group_board_list"
-	actionGroupBoardGet    harness.ActionID = "group.group_board_get"
-	actionGroupBoardDelete harness.ActionID = "group.group_board_delete"
+	actionGroupBoardCreate     harness.ActionID = "group.group_board_create"
+	actionGroupBoardList       harness.ActionID = "group.group_board_list"
+	actionGroupBoardGet        harness.ActionID = "group.group_board_get"
+	actionGroupBoardUpdate     harness.ActionID = "group.group_board_update"
+	actionGroupBoardDelete     harness.ActionID = "group.group_board_delete"
+	actionGroupBoardCreateList harness.ActionID = "group.group_board_create_list"
 )
 
 // The project board actions whose answers carry a column, called here because
