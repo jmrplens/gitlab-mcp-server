@@ -32,15 +32,23 @@ here against packages signed the way nuget.org signs them, against every
 archive it must refuse to guess about, and through the command line that hands
 it the digests.
 
+The wheels are held to their PEP 740 provenance too (issue 1243), since the
+pypi job now signs their publish attestations with steps of its own: each
+departure from a provenance release.yml's trusted publisher signed for the
+bytes PyPI serves is named, once, and the documents served are shaped as
+PyPI's integrity API served 3.3.0's.
+
 Run with:
 
     python3 -m unittest discover -s scripts -p 'verify_published_packages_test.py'
 """
 
+import base64
 import contextlib
 import hashlib
 import importlib.util
 import io
+import json
 import os
 import struct
 import sys
@@ -672,6 +680,205 @@ class NoticesTest(unittest.TestCase):
             finally:
                 sys.argv = real_argv
         self.assertIn("names none of the release binaries", str(raised.exception.code))
+
+
+RELEASE_PUBLISHER = {"environment": "release", "kind": "GitHub", "repository": "jmrplens/gitlab-mcp-server",
+                     "workflow": "release.yml"}
+
+
+def statement(filename, digest, predicate="https://docs.pypi.org/attestations/publish/v1", subjects=None):
+    """An in-toto statement as pypi-attestations signs one for a wheel."""
+    return {"_type": "https://in-toto.io/Statement/v1",
+            "subject": subjects if subjects is not None else [{"name": filename, "digest": {"sha256": digest}}],
+            "predicateType": predicate, "predicate": None}
+
+
+def provenance(*bundles):
+    """A provenance document as PyPI's integrity API served 3.3.0's, a bundle
+    being a publisher and the statements of its attestations."""
+    def attestation(signed):
+        encoded = signed if isinstance(signed, str) else base64.b64encode(json.dumps(signed).encode()).decode()
+        return {"version": 1, "verification_material": {"certificate": "MIIC", "transparency_entries": []},
+                "envelope": {"statement": encoded, "signature": "c2lnbmF0dXJl"}}
+    return json.dumps({"version": 1, "attestation_bundles": [
+        {"publisher": publisher, "attestations": [attestation(signed) for signed in statements]}
+        for publisher, statements in bundles]}).encode()
+
+
+class PypiProvenanceTest(unittest.TestCase):
+    """Every wheel PyPI serves carries a publish attestation that
+    release.yml's trusted publisher signed for exactly the bytes served."""
+
+    VERSION = "1.0.0"
+    WHEEL = "pkg-1.0.0-py3-none-manylinux_2_17_x86_64.whl"
+
+    def setUp(self):
+        self.real_urlopen = vpp.urllib.request.urlopen
+        self.addCleanup(setattr, vpp.urllib.request, "urlopen", self.real_urlopen)
+        self.binary = b"\x7fELFthe bytes the release signed"
+        self.blob = wheel(self.VERSION, self.binary)
+        self.digest = hashlib.sha256(self.blob).hexdigest()
+        self.url = f"https://pypi.org/integrity/{vpp.PYPI_DIST}/{self.VERSION}/{self.WHEEL}/provenance"
+
+    def good(self):
+        return provenance((RELEASE_PUBLISHER, [statement(self.WHEEL, self.digest)]))
+
+    def check(self, *outcomes, budget=None):
+        opener = FakeOpener({self.url: list(outcomes)})
+        vpp.urllib.request.urlopen = opener
+        problems = []
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            vpp.check_pypi_provenance(self.VERSION, {self.WHEEL: self.digest}, problems,
+                                      budget or vpp.RetryBudget(seconds=0))
+        return problems, out.getvalue(), opener
+
+    def test_check_pypi_hands_on_the_digest_of_every_wheel_it_read(self):
+        index = f"https://pypi.org/pypi/{vpp.PYPI_DIST}/{self.VERSION}/json"
+        wheel_url = "https://files.pythonhosted.org/x/" + self.WHEEL
+        meta = json.dumps({"urls": [{"packagetype": "bdist_wheel", "filename": self.WHEEL, "url": wheel_url}]})
+        vpp.urllib.request.urlopen = FakeOpener({index: [meta.encode()], wheel_url: [self.blob]})
+        digests = {asset: hashlib.sha256(self.binary).hexdigest() for asset in vpp.WHEEL_ASSETS.values()}
+        with contextlib.redirect_stdout(io.StringIO()):
+            served = vpp.check_pypi(self.VERSION, digests, [], vpp.RetryBudget(seconds=0))
+        self.assertEqual(served, {self.WHEEL: self.digest})
+
+    def test_a_provenance_release_yml_signed_for_the_served_bytes_passes(self):
+        problems, out, opener = self.check(self.good())
+        self.assertEqual(problems, [])
+        self.assertIn(f"ok  pypi {self.WHEEL}", out)
+        self.assertIn("attested by release.yml", out)
+        self.assertEqual(opener.count(self.url), 1)
+
+    def test_another_publishers_bundle_beside_release_yml_does_not_hide_it(self):
+        other = dict(RELEASE_PUBLISHER, workflow="ci.yml")
+        problems, _, _ = self.check(provenance((other, [statement(self.WHEEL, "0" * 64)]),
+                                               (RELEASE_PUBLISHER, [statement(self.WHEEL, self.digest)])))
+        self.assertEqual(problems, [])
+
+    def test_a_provenance_that_lags_the_wheel_is_waited_out(self):
+        slept = []
+        budget = vpp.RetryBudget(seconds=40, delay=20, sleep=slept.append)
+        problems, _, opener = self.check(http_error(self.url), self.good(), budget=budget)
+        self.assertEqual(problems, [])
+        self.assertEqual(slept, [20])
+        self.assertEqual(opener.count(self.url), 2)
+
+    def test_each_departure_from_the_release_workflows_provenance_is_named_once(self):
+        def signed_by(publisher, *statements):
+            return provenance((publisher, list(statements)))
+        good = statement(self.WHEEL, self.digest)
+        cases = [
+            ("no provenance at all", http_error(self.url), "PyPI serves no provenance for it"),
+            ("a body that is not JSON", b"<html>", "cannot be read"),
+            ("another version of the format", json.dumps({"version": 2, "attestation_bundles": []}).encode(),
+             "is not a version 1 provenance"),
+            ("a statement that is not base64 JSON", signed_by(RELEASE_PUBLISHER, "not base64!"), "cannot be read"),
+            ("another repository", signed_by(dict(RELEASE_PUBLISHER, repository="someone/else"), good),
+             "names GitHub someone/else release.yml (environment release)"),
+            ("another workflow", signed_by(dict(RELEASE_PUBLISHER, workflow="ci.yml"), good),
+             "names GitHub jmrplens/gitlab-mcp-server ci.yml (environment release)"),
+            ("no environment", signed_by(dict(RELEASE_PUBLISHER, environment=None), good),
+             "names GitHub jmrplens/gitlab-mcp-server release.yml (environment None)"),
+            ("another kind of publisher", signed_by(dict(RELEASE_PUBLISHER, kind="GitLab"), good),
+             "names GitLab jmrplens/gitlab-mcp-server release.yml (environment release)"),
+            ("other bytes", signed_by(RELEASE_PUBLISHER, statement(self.WHEEL, "0" * 64)),
+             f"{self.WHEEL} at sha256 {'0' * 64}"),
+            ("another file", signed_by(RELEASE_PUBLISHER, statement("other.whl", self.digest)),
+             f"other.whl at sha256 {self.digest}"),
+            ("another predicate", signed_by(RELEASE_PUBLISHER, statement(self.WHEEL, self.digest,
+                                                                         predicate="https://slsa.dev/provenance/v1")),
+             "https://slsa.dev/provenance/v1"),
+            ("a second subject", signed_by(RELEASE_PUBLISHER, statement(self.WHEEL, self.digest, subjects=[
+                {"name": self.WHEEL, "digest": {"sha256": self.digest}},
+                {"name": "other.whl", "digest": {"sha256": self.digest}}])), "other.whl"),
+            ("no attestation in the bundle", signed_by(RELEASE_PUBLISHER), "it states nothing"),
+        ]
+        for name, outcome, said in cases:
+            with self.subTest(name):
+                budget = vpp.RetryBudget(seconds=0, sleep=lambda _: self.fail("a finding was retried"))
+                problems, _, opener = self.check(outcome, budget=budget)
+                self.assertEqual(len(problems), 1, problems)
+                self.assertTrue(problems[0].startswith(f"pypi {self.WHEEL}: "), problems[0])
+                self.assertIn(said, problems[0])
+                self.assertEqual(opener.count(self.url), 1)
+
+    def test_a_provenance_for_other_bytes_is_not_waited_out(self):
+        budget = vpp.RetryBudget(seconds=600, delay=20, sleep=lambda _: self.fail("a mismatch was retried"))
+        problems, _, _ = self.check(provenance((RELEASE_PUBLISHER, [statement(self.WHEEL, "0" * 64)])),
+                                    budget=budget)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn(f"but PyPI serves {self.WHEEL} at sha256 {self.digest}", problems[0])
+        self.assertEqual(budget.waits, 0)
+
+
+class PypiProvenanceMainTest(unittest.TestCase):
+    """main() holds every wheel it reads to its provenance, and --skip-pypi
+    reads none."""
+
+    VERSION = "1.0.0"
+
+    def setUp(self):
+        self.real_urlopen = vpp.urllib.request.urlopen
+        self.addCleanup(setattr, vpp.urllib.request, "urlopen", self.real_urlopen)
+        self.binary = b"\x7fELFthe bytes the release signed"
+        self.blob = wheel(self.VERSION, self.binary)
+        self.wheels = [f"pkg-{self.VERSION}-py3-none-{fragment}.whl" for fragment in vpp.WHEEL_ASSETS]
+
+    def provenance_url(self, filename):
+        return f"https://pypi.org/integrity/{vpp.PYPI_DIST}/{self.VERSION}/{filename}/provenance"
+
+    def serve(self, missing=()):
+        index = f"https://pypi.org/pypi/{vpp.PYPI_DIST}/{self.VERSION}/json"
+        urls = [{"packagetype": "bdist_wheel", "filename": name, "url": "https://files.pythonhosted.org/x/" + name}
+                for name in self.wheels]
+        script = {index: [json.dumps({"urls": urls}).encode()]}
+        digest = hashlib.sha256(self.blob).hexdigest()
+        for name in self.wheels:
+            script["https://files.pythonhosted.org/x/" + name] = [self.blob]
+            if name not in missing:
+                script[self.provenance_url(name)] = [provenance((RELEASE_PUBLISHER, [statement(name, digest)]))]
+        opener = FakeOpener(script)
+        vpp.urllib.request.urlopen = opener
+        return opener
+
+    def run_main(self, *extra):
+        with tempfile.TemporaryDirectory() as tmp:
+            checksums = os.path.join(tmp, "checksums.txt")
+            with open(checksums, "w", encoding="utf-8") as fh:
+                for asset in sorted(set(vpp.WHEEL_ASSETS.values())):
+                    fh.write(f"{hashlib.sha256(self.binary).hexdigest()}  {asset}\n")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                try:
+                    vpp.main(["--skip-npm", "--skip-nuget", "--retry-budget", "0", *extra, self.VERSION, checksums])
+                    code = 0
+                except SystemExit as exc:
+                    code = exc.code
+            return code, out.getvalue()
+
+    def test_every_wheel_attested_by_release_yml_passes(self):
+        opener = self.serve()
+        code, out = self.run_main()
+        self.assertEqual(code, 0, out)
+        for name in self.wheels:
+            with self.subTest(name):
+                self.assertEqual(opener.count(self.provenance_url(name)), 1)
+        self.assertIn("Every wheel PyPI serves carries the publish attestation release.yml signed for its bytes.", out)
+
+    def test_a_wheel_without_its_provenance_fails_the_run(self):
+        self.serve(missing=(self.wheels[0],))
+        code, out = self.run_main()
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"pypi {self.wheels[0]}: PyPI serves no provenance for it", out)
+        self.assertNotIn("carries the publish attestation", out)
+
+    def test_skipping_pypi_reads_no_provenance(self):
+        opener = self.serve()
+        code, out = self.run_main("--skip-pypi")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(opener.calls, [])
+        self.assertNotIn("carries the publish attestation", out)
 
 
 class NugetUnsignedTest(unittest.TestCase):

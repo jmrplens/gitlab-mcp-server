@@ -188,9 +188,19 @@ On Windows, `(Get-Command gitlab-mcp-server).Source` gives the path for the
 first form. For a pinned `uvx`, name the same version in `--from`
 (`jmrplens-gitlab-mcp-server==<version>`). The `pip`, `uv tool install` and
 `uvx` locations were checked on 3.1.0 against the release's signed
-`checksums.txt`. The wheels also carry PyPI's own
-publish attestation (PEP 740), shown on each file's page on PyPI. The
-release signature and the other channels are covered in
+`checksums.txt`.
+
+Each wheel also carries a publish attestation (PEP 740) that the release
+workflow signs before it uploads the wheel, which PyPI checks against the
+project's trusted publisher and shows on the file's page. To check it
+yourself, against the wheel PyPI serves:
+
+```bash
+uvx pypi-attestations verify pypi --repository https://github.com/jmrplens/gitlab-mcp-server \
+  pypi:jmrplens_gitlab_mcp_server-%%VERSION%%-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+```
+
+The release signature and the other channels are covered in
 [release integrity](/gitlab-mcp-server/operations/security/#verifying-release-integrity).
 
 ## Upgrade and uninstall

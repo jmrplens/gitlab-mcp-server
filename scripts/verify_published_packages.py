@@ -33,6 +33,22 @@ The attestation itself is not looked up: the comparison proves nuget.org
 serves exactly the bytes the job attested, and the job fails if the
 attestation step does.
 
+The wheels are held to their PEP 740 provenance as well (issue 1243). The
+pypi job signs a publish attestation for each wheel with its own identity and
+uploads the two together, and PyPI keeps an attestation only once it verifies
+against the trusted publisher the upload authenticated as, then serves it
+from its integrity API. Each wheel's provenance there has to hold a bundle
+from this repository's publisher (GitHub, release.yml, the release
+environment), one of whose attestations states PyPI's publish predicate for
+the wheel's file name at the SHA-256 of the bytes downloaded here. A release
+uploaded without attestations, through another publisher, or of bytes other
+than the ones the job signed fails here, and so does a version uploaded with a
+token, as 2.7.5's bootstrap was, which has no provenance. The Sigstore
+signature itself is not checked again, which takes more than the standard
+library: PyPI verified it on upload, and `pypi-attestations verify pypi
+--repository https://github.com/jmrplens/gitlab-mcp-server pypi:<file>`
+verifies it from anywhere.
+
 The third-party notices are compared too. From the first release after
 3.1.0, THIRD_PARTY_NOTICES is a release asset listed in checksums.txt, and
 every npm platform package and every wheel carries a copy beside LICENSE
@@ -84,6 +100,8 @@ bytes" into one, which is the finding this job exists to make.
 """
 
 import argparse
+import base64
+import binascii
 import hashlib
 import io
 import json
@@ -124,6 +142,18 @@ WHEEL_ASSETS = {
     "win_amd64": "gitlab-mcp-server-windows-amd64.exe",
     "win_arm64": "gitlab-mcp-server-windows-arm64.exe",
 }
+
+# The trusted publisher every wheel's provenance has to come from, as PyPI's
+# integrity API names it (docs/development/repository-settings.md records the
+# publisher on pypi.org), and what each of its attestations states.
+PYPI_PUBLISHER = {
+    "kind": "GitHub",
+    "repository": "jmrplens/gitlab-mcp-server",
+    "workflow": "release.yml",
+    "environment": "release",
+}
+IN_TOTO_STATEMENT = "https://in-toto.io/Statement/v1"
+PYPI_PUBLISH_PREDICATE = "https://docs.pypi.org/attestations/publish/v1"
 
 # NuGet: the pointer package id, and runtime identifier -> release asset name.
 # The same table lives in scripts/build_nuget.py, repeated for the reason the
@@ -331,8 +361,8 @@ def pypi_wheels(version, budget=None):
 
 
 def wheel_contents(url, version, budget=None):
-    """Download one wheel and return its binary bytes and its
-    THIRD_PARTY_NOTICES bytes (None when it carries none)."""
+    """Download one wheel and return its binary bytes, its THIRD_PARTY_NOTICES
+    bytes (None when it carries none) and the SHA-256 of the whole wheel."""
     blob = fetch(url, budget)
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
         names = zf.namelist()
@@ -341,8 +371,90 @@ def wheel_contents(url, version, budget=None):
         prefix = f"{PYPI_NORM}-{version}.data/scripts/"
         for name in names:
             if name.startswith(prefix) and os.path.basename(name).startswith("gitlab-mcp-server"):
-                return zf.read(name), notices
+                return zf.read(name), notices, sha256(blob)
     raise LookupError(f"{url} ships no binary under {PYPI_NORM}-{version}.data/scripts/")
+
+
+def pypi_provenance_url(filename, version):
+    """Where PyPI's integrity API serves one file's PEP 740 provenance."""
+    return f"https://pypi.org/integrity/{PYPI_DIST}/{version}/{filename}/provenance"
+
+
+def provenance_bundles(document):
+    """Return each bundle of a provenance document as its publisher and the
+    in-toto statements its attestations sign. ValueError names a document that
+    is not a version 1 provenance, or an attestation whose statement is not
+    base64 of a JSON object."""
+    if not isinstance(document, dict) or document.get("version") != 1 or not isinstance(
+            document.get("attestation_bundles"), list):
+        raise ValueError("it is not a version 1 provenance")
+    bundles = []
+    for bundle in document["attestation_bundles"]:
+        publisher = bundle.get("publisher") if isinstance(bundle, dict) else None
+        attestations = bundle.get("attestations") if isinstance(bundle, dict) else None
+        if not isinstance(publisher, dict) or not isinstance(attestations, list):
+            raise ValueError("a bundle names no publisher or no attestations")
+        statements = []
+        for attestation in attestations:
+            try:
+                encoded = attestation["envelope"]["statement"]
+                signed = json.loads(base64.b64decode(encoded, validate=True))
+            except (TypeError, KeyError, binascii.Error, ValueError) as exc:
+                raise ValueError(f"an attestation's statement is not base64 of a JSON object: {exc}") from exc
+            if not isinstance(signed, dict):
+                raise ValueError("an attestation's statement is not a JSON object")
+            statements.append(signed)
+        bundles.append((publisher, statements))
+    return bundles
+
+
+def describe_publisher(publisher):
+    """Name a trusted publisher the way a release engineer looks it up on pypi.org."""
+    return (f"{publisher.get('kind')} {publisher.get('repository')} {publisher.get('workflow')} "
+            f"(environment {publisher.get('environment')})")
+
+
+def describe_statement(signed):
+    """Name what one statement says: its predicate and each subject, by file
+    name and SHA-256."""
+    subjects = signed.get("subject") if isinstance(signed.get("subject"), list) else []
+    named = ", ".join(
+        f"{s.get('name')} at sha256 {(s.get('digest') or {}).get('sha256')}" if isinstance(s, dict) else repr(s)
+        for s in subjects) or "no subject"
+    return f"{signed.get('predicateType')} of {named}"
+
+
+def check_pypi_provenance(version, served, problems, budget=None):
+    """Hold each wheel read back, by its file name and the SHA-256 of the
+    bytes served, to a publish attestation from release.yml's trusted
+    publisher in its provenance. A provenance not served yet is waited for
+    from budget, as a wheel is; what one that is served says is judged once."""
+    for filename, digest in sorted(served.items()):
+        url = pypi_provenance_url(filename, version)
+        try:
+            bundles = provenance_bundles(json.loads(fetch(url, budget)))
+        except urllib.error.URLError as exc:
+            problems.append(f"pypi {filename}: PyPI serves no provenance for it at {url}: {exc}")
+            continue
+        except ValueError as exc:
+            problems.append(f"pypi {filename}: the provenance at {url} cannot be read: {exc}")
+            continue
+        ours = [statements for publisher, statements in bundles
+                if all(publisher.get(key) == value for key, value in PYPI_PUBLISHER.items())]
+        if not ours:
+            others = "; ".join(describe_publisher(publisher) for publisher, _ in bundles) or "no publisher"
+            problems.append(f"pypi {filename}: no attestation in its provenance comes from "
+                            f"{describe_publisher(PYPI_PUBLISHER)}; it names {others}")
+            continue
+        want = [{"name": filename, "digest": {"sha256": digest}}]
+        statements = [signed for bundle in ours for signed in bundle]
+        if any(signed.get("_type") == IN_TOTO_STATEMENT and signed.get("predicateType") == PYPI_PUBLISH_PREDICATE
+               and signed.get("subject") == want for signed in statements):
+            print(f"  ok  pypi {filename:<60} attested by release.yml")
+            continue
+        stated = "; ".join(describe_statement(signed) for signed in statements) or "it states nothing"
+        problems.append(f"pypi {filename}: no attestation release.yml signed states {PYPI_PUBLISH_PREDICATE} of "
+                        f"{filename} alone, but PyPI serves {filename} at sha256 {digest}: {stated}")
 
 
 def check_notices(label, notices, where, digests, problems):
@@ -507,12 +619,15 @@ def check_npm(version, digests, problems, budget=None):
 
 
 def check_pypi(version, digests, problems, budget=None):
+    """Hold each published wheel's binary and notices to the signed ones, and
+    return the SHA-256 of every wheel read, by file name, for its provenance."""
     seen = set()
+    served = {}
     try:
         wheels = list(pypi_wheels(version, budget))
     except (urllib.error.URLError, KeyError) as exc:
         problems.append(f"pypi: could not list the published wheels: {exc}")
-        return
+        return served
     for filename, url in wheels:
         asset = next((a for frag, a in WHEEL_ASSETS.items() if frag in filename), None)
         if asset is None:
@@ -524,7 +639,7 @@ def check_pypi(version, digests, problems, budget=None):
             problems.append(f"pypi {filename}: checksums.txt does not name the release asset {asset}")
             continue
         try:
-            binary, notices = wheel_contents(url, version, budget)
+            binary, notices, served[filename] = wheel_contents(url, version, budget)
         except (urllib.error.URLError, LookupError) as exc:
             problems.append(f"pypi {filename}: could not read the wheel: {exc}")
             continue
@@ -540,6 +655,7 @@ def check_pypi(version, digests, problems, budget=None):
     missing = sorted(set(WHEEL_ASSETS.values()) - seen)
     if missing:
         problems.append(f"pypi: no wheel published for {', '.join(missing)}")
+    return served
 
 
 def check_nuget_listing(version, problems, budget=None):
@@ -685,7 +801,8 @@ def main(argv=None, clock=time.monotonic, sleep=time.sleep):
     if not args.skip_npm:
         check_npm(args.version, digests, problems, budget)
     if not args.skip_pypi:
-        check_pypi(args.version, digests, problems, budget)
+        served = check_pypi(args.version, digests, problems, budget)
+        check_pypi_provenance(args.version, served, problems, budget)
     attested = None
     if not args.skip_nuget:
         if args.nuget_digests:
@@ -712,6 +829,8 @@ def main(argv=None, clock=time.monotonic, sleep=time.sleep):
                   "which reads differently from a digest that did not match.")
         sys.exit(1)
     print("\nEvery published package carries the binary the release signed.")
+    if not args.skip_pypi:
+        print("Every wheel PyPI serves carries the publish attestation release.yml signed for its bytes.")
     if attested:
         print("Every NuGet package nuget.org serves is, without its repository signature, the one the release attested.")
 

@@ -190,10 +190,19 @@ release que instalaste. En Windows, `(Get-Command gitlab-mcp-server).Source` da 
 primera forma. Para un `uvx` fijado a una versión, nombra la misma versión
 en `--from` (`jmrplens-gitlab-mcp-server==<versión>`). Las ubicaciones de
 `pip`, `uv tool install` y `uvx` se comprobaron en la 3.1.0 contra el
-`checksums.txt` firmado de la release. Las wheels llevan
-además la atestación de publicación del propio PyPI (PEP 740), visible en la
-página de cada archivo en PyPI. La firma de la release y el resto de canales
-se explican en
+`checksums.txt` firmado de la release.
+
+Cada wheel lleva además una atestación de publicación (PEP 740) que el
+workflow de release firma antes de subirla, que PyPI comprueba contra el
+publicador de confianza del proyecto y muestra en la página del archivo. Para
+comprobarla tú mismo, contra la wheel que sirve PyPI:
+
+```bash
+uvx pypi-attestations verify pypi --repository https://github.com/jmrplens/gitlab-mcp-server \
+  pypi:jmrplens_gitlab_mcp_server-%%VERSION%%-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+```
+
+La firma de la release y el resto de canales se explican en
 <a href="/gitlab-mcp-server/es/operations/security/#verificación-de-la-integridad-del-release">integridad del release</a>.
 
 ## Actualizar y desinstalar
