@@ -23,9 +23,18 @@ builds:
     goarch:
       - amd64
       - arm64
+    # The full commit rather than {{.ShortCommit}}: git abbreviates a commit to
+    # as many characters as the clone's object count needs, so a short commit
+    # made the bytes depend on the clone that built them (3.3.0 was stamped
+    # f8813193, which a full clone of the repository abbreviates to nine
+    # characters today), and a rebuild from any other clone came out
+    # different. The image stamps the full commit too (release.yml passes
+    # github.sha).
     ldflags:
-      - &ldflags -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
-    # Reproducible builds: stamp binary mtime from commit timestamp.
+      - &ldflags -s -w -X main.version={{.Version}} -X main.commit={{.FullCommit}}
+    # Stamps the file's modification time from the commit, so the binary's
+    # time on disk is the same in every build too. It does not change the
+    # bytes, which are what checksums.txt lists.
     mod_timestamp: "{{ .CommitTimestamp }}"
     # -buildmode=pie makes the Linux binaries dynamically linked, and the
     # linker picks their ELF interpreter (PT_INTERP) by stat-ing the build
