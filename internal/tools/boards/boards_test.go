@@ -968,7 +968,8 @@ func TestFormatBoardMarkdown_GroupBoardProjectNameFallback(t *testing.T) {
 
 // TestFormatListBoardsMarkdown pins the whole board list: the counted heading,
 // one row per board carrying its ID, the linked project, and the number of
-// columns, then the guidance section with the preserve-links hint first.
+// columns, the one sentence saying no column on the page is limited, then the
+// guidance section with the preserve-links hint first.
 func TestFormatListBoardsMarkdown(t *testing.T) {
 	out := ListBoardsOutput{
 		Boards: []BoardOutput{
@@ -990,9 +991,63 @@ func TestFormatListBoardsMarkdown(t *testing.T) {
 		"| --- | --- | --- | --- | --- | --- |\n" +
 		"| 1 | Dev | [group/dev](https://gitlab.example.com/group/dev) | [v1](https://gitlab.example.com/group/dev/-/milestones/1) | [@alice](https://gitlab.example.com/alice) | 2 |\n" +
 		"| 2 | Ops | MyProject |  |  | 0 |\n\n" +
+		"No column on these boards has a work-in-progress limit.\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
-		"- Use action 'project.board_get' to read one board with its columns\n" +
+		"- Use action 'project.board_get' to read one board with every column, its scope and its position\n" +
+		"- Use action 'project.board_create' to add a new board\n"
+	if md != want {
+		t.Errorf("FormatListBoardsMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatListBoardsMarkdown_LimitedColumns_TableNamesEachOne pins the
+// section a page of boards closes with when its boards limit columns: one row
+// per limited column naming its board, its own ID and its scope, escaped like
+// the label GitLab sent, with both ceilings and the metric they are counted
+// by. The list used to say only how many columns each board has, so a limit
+// showed only once a board or its columns were read, never on the listing
+// (issue 1284). A column with no ceiling has no row, the one that names a
+// metric without one included, and the pagination line follows the section.
+func TestFormatListBoardsMarkdown_LimitedColumns_TableNamesEachOne(t *testing.T) {
+	out := ListBoardsOutput{
+		Boards: []BoardOutput{
+			{
+				ID: 1, Name: "Dev",
+				Lists: []BoardListOutput{
+					{ID: 100, Label: &LabelOutput{Name: "Doing"}, MaxIssueCount: 3, LimitMetric: "issue_count"},
+					{ID: 101, Label: &LabelOutput{Name: "To Do"}},
+					{ID: 102, Label: &LabelOutput{Name: "Review | <b>"}, MaxIssueWeight: 4, LimitMetric: "issue_weights"},
+				},
+			},
+			{
+				ID: 2, Name: "Ops",
+				Lists: []BoardListOutput{
+					{ID: 200, Assignee: &BoardListAssigneeOutput{ID: 3, Username: "alice"}, MaxIssueCount: 2, MaxIssueWeight: 8, LimitMetric: "all_metrics"},
+					{ID: 201, Milestone: &MilestoneOutput{ID: 5, Title: "v1"}, LimitMetric: "issue_count"},
+				},
+			},
+		},
+		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2, PerPage: 20},
+	}
+
+	md := FormatListBoardsMarkdown(out)
+
+	want := "## Issue Boards (2)\n\n" +
+		"| ID | Name | Project | Milestone | Assignee | Lists |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | Dev |  |  |  | 3 |\n" +
+		"| 2 | Ops |  |  |  | 2 |\n\n" +
+		"### Column Limits\n\n" +
+		"| Board | List | Scope | Max Issues | Max Weight | Limit Metric |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | 100 | Doing | 3 | - | issue_count |\n" +
+		"| 1 | 102 | Review &#124; &lt;b> | - | 4 | issue_weights |\n" +
+		"| 2 | 200 | @alice | 2 | 8 | all_metrics |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'project.board_get' to read one board with every column, its scope and its position\n" +
 		"- Use action 'project.board_create' to add a new board\n"
 	if md != want {
 		t.Errorf("FormatListBoardsMarkdown()\n got %q\nwant %q", md, want)

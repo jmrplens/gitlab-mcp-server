@@ -705,8 +705,9 @@ func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 }
 
 // TestFormatListGroupBoardsMarkdown pins the whole list: the counted heading,
-// one row per board with its ID and its linked group and milestone, and the
-// guidance section last with the preserve-links hint first.
+// one row per board with its ID and its linked group and milestone, the one
+// sentence saying no column on the page is limited, and the guidance section
+// last with the preserve-links hint first.
 func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 	out := ListGroupBoardsOutput{
 		Boards: []GroupBoardOutput{
@@ -727,9 +728,64 @@ func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 		"| --- | --- | --- | --- | --- |\n" +
 		"| 1 | Board A | [grp](https://gitlab.example.com/groups/grp) | [M1](https://gitlab.example.com/groups/grp/-/milestones/3) | 1 |\n" +
 		"| 2 | Board B | [grp](https://gitlab.example.com/groups/grp) |  | 0 |\n\n" +
+		"No column on these boards has a work-in-progress limit.\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
-		"- Use action 'group.group_board_get' to read one board with its columns\n" +
+		"- Use action 'group.group_board_get' to read one board with every column, its scope and its position\n" +
+		"- Use action 'group.group_board_create' to add a new board to the group\n"
+	if md != want {
+		t.Errorf("FormatListGroupBoardsMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatListGroupBoardsMarkdown_LimitedColumns_TableNamesEachOne pins the
+// section a page of group boards closes with when its boards limit columns:
+// one row per limited column naming its board, its own ID and its scope,
+// escaped like the label GitLab sent, with both ceilings and the metric they
+// are counted by. The list used to say only how many columns each board has,
+// so a limit showed only once a board or its columns were read, never on the
+// listing (issue 1284). A column with no ceiling has no row, the one that
+// names a metric without one included, and the pagination line follows the
+// section.
+func TestFormatListGroupBoardsMarkdown_LimitedColumns_TableNamesEachOne(t *testing.T) {
+	out := ListGroupBoardsOutput{
+		Boards: []GroupBoardOutput{
+			{
+				ID: 1, Name: "Board A",
+				Lists: []BoardListOutput{
+					{ID: 10, Label: &LabelOutput{Name: "Doing"}, MaxIssueCount: 3, LimitMetric: "issue_count"},
+					{ID: 11, Label: &LabelOutput{Name: "To Do"}},
+					{ID: 12, Label: &LabelOutput{Name: "Review | <b>"}, MaxIssueWeight: 4, LimitMetric: "issue_weights"},
+				},
+			},
+			{
+				ID: 2, Name: "Board B",
+				Lists: []BoardListOutput{
+					{ID: 20, Iteration: &IterationOutput{ID: 7, Title: "Sprint 1"}, MaxIssueCount: 2, MaxIssueWeight: 8, LimitMetric: "all_metrics"},
+					{ID: 21, Assignee: &BoardListAssigneeOutput{ID: 3, Username: "alice"}, LimitMetric: "issue_count"},
+				},
+			},
+		},
+		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2, PerPage: 20},
+	}
+
+	md := FormatListGroupBoardsMarkdown(out)
+
+	want := "## Group Issue Boards (2)\n\n" +
+		"| ID | Name | Group | Milestone | Lists |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | Board A |  |  | 3 |\n" +
+		"| 2 | Board B |  |  | 2 |\n\n" +
+		"### Column Limits\n\n" +
+		"| Board | List | Scope | Max Issues | Max Weight | Limit Metric |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | 10 | Doing | 3 | - | issue_count |\n" +
+		"| 1 | 12 | Review &#124; &lt;b> | - | 4 | issue_weights |\n" +
+		"| 2 | 20 | Iteration: Sprint 1 | 2 | 8 | all_metrics |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'group.group_board_get' to read one board with every column, its scope and its position\n" +
 		"- Use action 'group.group_board_create' to add a new board to the group\n"
 	if md != want {
 		t.Errorf("FormatListGroupBoardsMarkdown()\n got %q\nwant %q", md, want)
@@ -1355,8 +1411,8 @@ func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 // assignee and milestone arms of the scope decision were never taken at all,
 // and the emptiness checks beside each of them were never reached: a column
 // whose assignee has no username, or whose milestone or iteration has no
-// title, must read as the board's own backlog or closed column rather than as
-// a bare handle or a label with nothing after it.
+// title, must render as an empty cell, as a column GitLab sends with no scope
+// does, rather than as a bare handle or a label with nothing after it.
 func TestFormatListBoardListsMarkdown_ScopeOfEachColumnKind(t *testing.T) {
 	cases := []struct {
 		name string
