@@ -4,26 +4,37 @@ Thank you for your interest in contributing to gitlab-mcp-server! This guide cov
 
 By participating, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
 For security issues, please follow the [Security Policy](SECURITY.md) instead of opening a public issue.
+How the project makes decisions, who holds which role and what it depends on to continue are in [GOVERNANCE.md](GOVERNANCE.md), and where it is going is on the [roadmap](https://docs.jmrp.io/gitlab-mcp-server/roadmap/).
 
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+- [Finding a First Task](#finding-a-first-task)
 - [Development Setup](#development-setup)
 - [Branch Naming](#branch-naming)
 - [Commit Messages](#commit-messages)
 - [Pull Requests](#pull-requests)
+- [Code Review](#code-review)
 - [Code Standards](#code-standards)
 - [Testing](#testing)
 - [Documentation](#documentation)
+- [Release Process](#release-process)
 - [Issue Reporting](#issue-reporting)
 - [Labels](#labels)
 
 ## Getting Started
 
 1. Clone the repository
-2. To run the end-to-end suite against your own GitLab, create a `.env` at the repository root with `GITLAB_URL` and `GITLAB_TOKEN`: `make test-e2e` reads it. The server itself never loads a `.env` from its working directory (see [Configuration](https://docs.jmrp.io/gitlab-mcp-server/configuration/) for how it is configured)
-3. Run `make build` to verify the setup
-4. Run `make test` to ensure all tests pass
+2. Run `make install-tools` to install the pinned `golangci-lint`, `govulncheck` and `gotestsum`; the Go module dependencies are fetched by the first build
+3. To run the end-to-end suite against your own GitLab, create a `.env` at the repository root with `GITLAB_URL` and `GITLAB_TOKEN`: `make test-e2e` reads it. The server itself never loads a `.env` from its working directory (see [Configuration](https://docs.jmrp.io/gitlab-mcp-server/configuration/) for how it is configured)
+4. Run `make build` to verify the setup
+5. Run `make test` to ensure all tests pass
+
+## Finding a First Task
+
+Issues small enough for a first contribution carry the [`good first issue`](https://github.com/jmrplens/gitlab-mcp-server/labels/good%20first%20issue) label. The label goes on an issue whose change stays in one place in the code or the documentation, needs no GitLab license to test, and is not part of work already under way, and the issue says what done looks like. Larger issues anyone is welcome to take carry [`help wanted`](https://github.com/jmrplens/gitlab-mcp-server/labels/help%20wanted).
+
+Say in the issue that you are taking it, so nobody else starts the same work, and ask there about anything the issue leaves unclear. When you open the pull request, link the issue with `Closes #N`.
 
 ## Development Setup
 
@@ -37,6 +48,12 @@ For security issues, please follow the [Security Policy](SECURITY.md) instead of
 ### Build and Test
 
 ```bash
+# Install the pinned linters and test runner (once, and after the Makefile pins move)
+make install-tools
+
+# Install the documentation site's dependencies (the site's checks run from site/)
+(cd site && pnpm install --frozen-lockfile)
+
 # Build
 make build
 
@@ -49,8 +66,9 @@ make test-race
 # Run end-to-end tests (requires .env with real GitLab credentials)
 make test-e2e
 
-# Run end-to-end tests in Docker mode (ephemeral GitLab CE; GitLab peaks ~7.5 GiB, capped at 12 GiB)
-make test-e2e-docker
+# Run end-to-end tests against an ephemeral GitLab CE with a runner and fixtures in Docker
+# (GitLab peaks at about 7.5 GiB, capped at 12 GiB)
+make test-e2e-ce
 
 # Check test coverage
 make coverage
@@ -129,10 +147,10 @@ docs(site): describe the wiki tools in English and Spanish
 
 1. Create a feature branch from `main`
 2. Make your changes in small, focused commits
-3. Push the branch and open a pull request — reviewers are auto-requested via [CODEOWNERS](CODEOWNERS)
+3. Push the branch and open a pull request; [CODEOWNERS](CODEOWNERS) requests the maintainer's review
 4. Fill in the PR template (auto-populated from `.github/pull_request_template.md`)
-5. Address review feedback
-6. Squash-merge once approved (the only allowed merge strategy). The squash commit's message is the pull request description, so the description carries no skip command GitHub reads (a bracketed skip ci or one of the four other commands GitHub documents, or a skip-checks trailer), which would turn off every workflow on main for that commit; `make check-pr-description` refuses one
+5. Answer every review thread, with a change or the reason for none, as [Code Review](#code-review) describes
+6. The maintainer squash-merges the pull request once it meets [Code Review](#code-review); squash is the only merge method the repository allows. The squash commit's message is the pull request description, so the description carries no skip command GitHub reads (a bracketed skip ci or one of the four other commands GitHub documents, or a skip-checks trailer), which would turn off every workflow on main for that commit; `make check-pr-description` refuses one
 
 ### PR Size Guidelines
 
@@ -140,7 +158,48 @@ docs(site): describe the wiki tools in English and Spanish
 - **Medium** (200–500 lines): Acceptable for feature additions
 - **Large** (>500 lines): Split into smaller PRs when possible
 
+## Code Review
+
+Every change reaches `main` through a pull request, except the version stamp the release workflow pushes after a release ([GOVERNANCE.md](GOVERNANCE.md#roles-and-responsibilities) says how), and every pull request is reviewed before it is merged. This section is the standard the review holds a change to; [GOVERNANCE.md](GOVERNANCE.md) says who holds the role.
+
+### How a review is conducted
+
+- **Who reviews.** The maintainer reviews every pull request a contributor opens, and is the one who merges. Automated reviewers also comment on most pull requests. Their threads are read like a person's: each one is answered with a change, or with the reason the change is not made, and then resolved. The maintainer's own pull requests go through the same checks and automated reviews; until a second maintainer joins, no person other than the author reviews them.
+- **Where.** In the pull request's review threads, on the lines they concern. A question is answered in its thread rather than in a new comment, and a thread is resolved once it is answered.
+- **What the reviewer reads.** The diff, the description's account of what changed and how it was checked, and the checks' results. The description has to say enough to judge the change without running it: what was wrong or missing, what the change does about it, and what was run to show it works.
+
+### What is checked
+
+- **Correctness.** The change does what its description says, against what GitLab documents and sends, including its errors, its empty answers and the paths a test does not take by default.
+- **Tests.** New or changed behavior has tests in the automated suite and a fix has a regression test, as [Testing](#testing) requires, and the packages the change touches stay covered. A new catalog action has an end-to-end scenario that names it.
+- **Security.** The change holds the [threat model](SECURITY.md#threat-model): no tool argument reaches beyond the token's own permissions or redirects a request to another host or path, GitLab-authored text is escaped wherever a result interpolates it, no secret reaches code, fixtures or logs, and in HTTP mode nothing one caller holds reaches another. A limit, a budget or what a setting's zero means is decided in `internal/tenancy`.
+- **The published surface.** Tool and action names, input and output schemas, annotations and descriptions are deliberate, and what a model reads names only actions and tools the server serves.
+- **Code standards.** The change follows [Code Standards](#code-standards), and any exception the linters allow is marked where it occurs with the reason.
+- **Documentation.** A change a user can see updates its site page in English and Spanish together, a change to how the repository works updates `docs/development/`, and every generated artifact is regenerated rather than edited (see [Documentation](#documentation)).
+- **History.** Commit messages follow [Commit Messages](#commit-messages), and the description, which becomes the squash commit's message, carries no skip command and no block a review bot injected.
+
+### What a change needs to be accepted
+
+- The required `✅ CI` check passes. It aggregates the build, the tests on Linux, macOS and Windows, the 90% coverage floor, the linters and the repository's own gates, `make check-pr-description` among them.
+- Every review thread is resolved. The branch rules refuse the merge otherwise, except to the repository admin role, which is on their bypass list; the maintainer, who holds that role, merges a pull request only once this item and the one above hold.
+- A contributor's pull request completes the template's checklist, with any item that does not apply marked so. The maintainer's own pull requests carry the same information in the description's account of what was run.
+- The maintainer agrees the change belongs in the project. A correct change can still be declined when it falls outside the [roadmap](https://docs.jmrp.io/gitlab-mcp-server/roadmap/) or a recorded decision; the reason is given in the pull request.
+
+The branch rules require no approval count while the project has one maintainer, so acceptance is the maintainer's merge itself, made only when everything above holds.
+
 ## Code Standards
+
+### Style Guides
+
+Contributions are expected to follow these guides. The tools listed beside each enforce them in CI, and an exception is rare and marked at its location with the reason.
+
+| Language                                   | Style guide                                                                                                                                                                               | Enforced by                                                                                                                                     |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go                                         | [Effective Go](https://go.dev/doc/effective_go), [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments) and [Google's Go Style Guide](https://google.github.io/styleguide/go/) | `golangci-lint` with the linters and formatters in `.golangci.yml`; `nolintlint` requires every `//nolint` to name its linter and give a reason |
+| TypeScript, JavaScript and Astro (`site/`) | The rules of `site/eslint.config.mjs` and the formatting of `site/.prettierrc`                                                                                                            | `pnpm run lint` in `site/` (ESLint and Prettier among its checks)                                                                               |
+| Markdown and MDX                           | The rules of `.markdownlint-cli2.jsonc`, with pipe tables padded                                                                                                                          | `markdownlint-cli2` on every Markdown and MDX file; `go run ./cmd/format_md_tables/ --check` on `README.md`, `docs/` and the site's pages       |
+
+`.github/instructions/go.instructions.md` turns the Go guides into the rules this repository applies, and the conventions below are the ones specific to it.
 
 ### Go Conventions
 
@@ -185,9 +244,16 @@ A script in another language is the exception, and `make check-supply-chain` hol
 
 ## Testing
 
+### Policy
+
+- **New or changed behavior must come with tests.** A pull request that adds functionality or changes what existing functionality does adds tests for it to the automated suite in the same pull request, and CI runs them on every pull request and every push to `main`. This holds for the server, the commands under `cmd/` and the scripts under `scripts/` alike.
+- **A bug fix adds a regression test** that fails without the fix and passes with it, unless the defect cannot be reproduced in a test (a race in a third-party service, a platform the runners lack); the pull request then says why.
+- **A new catalog action needs an end-to-end scenario** under `test/e2e/gitlab/` that names it, or a declared exemption in `cmd/audit_e2e_coverage/exemptions.go` with its reason; `go run ./cmd/audit_e2e_coverage/ -static` fails CI otherwise.
+- **A test is not weakened to make a change pass.** A test that has to change because the behavior it holds changed says so in the pull request.
+
 ### Requirements
 
-- **Unit tests** for every tool handler — use `httptest` to mock GitLab API responses
+- **Unit tests** for every tool handler: use `httptest` to mock GitLab API responses
 - **Table-driven tests** with `t.Run()` subtests
 - **Test naming**: `TestToolName_Scenario_ExpectedResult`
 - **Coverage target**: CI fails when total coverage of `./cmd/...` and `./internal/...` drops below 90% (`COVERAGE_MIN` in `.github/workflows/ci.yml`); the `increase-test-coverage` skill aims at 100% for every package a change touches
@@ -312,34 +378,34 @@ Templates auto-apply the relevant labels listed in [Labels](#labels).
 
 Labels arrive four ways, none of which removes one placed by hand. Issue templates apply their kind label on submission, and their "Area" dropdown is read by `.github/workflows/issue-area.yml`, which applies the area label the answer names. Pull requests are labeled from the paths they touch by `.github/workflows/labeler.yml` against the map in `.github/labeler.yml`, and from the title's conventional prefix by the same workflow: `fix:` is a `bug`, `feat:` a `feature`, and nothing else is mapped. Milestones pair with a version label both ways (`v2.8.0` for milestone `2.8.0`), kept in step by `.github/workflows/version-labels.yml`. The repo uses a flat label set (no `type::`/`priority::` namespaces — those are GitLab conventions), and the area labels use the same words on issues and on pull requests so the two can be filtered together:
 
-| Label              | Color     | Used by                                                                          |
-| ------------------ | --------- | -------------------------------------------------------------------------------- |
-| `bug`              | `#d73a4a` | Bug Report template; `fix:` titles                                               |
-| `feature`          | `#a2eeef` | Feature Request template; `feat:` titles                                         |
-| `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)                                            |
-| `documentation`    | `#0075ca` | Documentation template; path labeler on docs-only PRs                            |
-| `security`         | `#d73a4a` | Security Advisories; path labeler on security paths; Area "Authentication"       |
-| `ci`               | `#bfdadc` | Path labeler — pipeline, workflows, lint configuration                           |
-| `distribution`     | `#fbca04` | Path labeler — release artifacts and install channels; Area "Installation"       |
-| `dependencies`     | `#0052cc` | Path labeler and Dependabot — dependency files                                   |
-| `transport`        | `#5c8dd6` | Path labeler — `cmd/server`, the transport e2e modules; Area "Transport"         |
-| `mcp`              | `#a371f7` | Path labeler — resources, prompts, completions, subscriptions; Area "MCP"        |
-| `tools`            | `#1f883d` | Area "GitLab tools" only: two thirds of PRs touch `internal/tools/`, so no path  |
-| `telemetry`        | `#6fbf9a` | Path labeler — `internal/telemetry`, `internal/mcpotel`; Area "Telemetry"        |
-| `site`             | `#f0a35c` | Path labeler — the site's build and components, not its content; Area "Site"     |
-| `tooling`          | `#9aa5b1` | Path labeler — the auditors and generators under `cmd/`; Area "CI and tooling"   |
-| `platform`         | `#e9c46a` | Path labeler — `*_windows.go`, `*_darwin.go`, `*_unix.go`; Area "Platform"       |
-| `e2e`              | `#8bd3c7` | Path labeler — the e2e suite and its Docker fixtures                             |
-| `release`          | `#0e8a16` | Manual — release tracking issues                                                 |
-| `high-priority`    | `#b60205` | Manual — critical bugs and security advisories                                   |
-| `needs-triage`     | `#c2e0c6` | All issue templates; retired by `triage.yml` on milestone or close               |
-| `v<version>`       | `#1d76db` | `version-labels.yml` — paired with the milestone of the same number              |
-| `good first issue` | `#7057ff` | Manual — newcomer-friendly issues                                                |
-| `help wanted`      | `#008672` | Manual — community contributions welcome                                         |
-| `question`         | `#d876e3` | Manual — questions / discussions                                                 |
-| `duplicate`        | `#cfd3d7` | Manual — duplicates of existing issues                                           |
-| `invalid`          | `#e4e669` | Manual — out of scope                                                            |
-| `wontfix`          | `#ffffff` | Manual — accepted but won't implement                                            |
+| Label              | Color     | Used by                                                                         |
+| ------------------ | --------- | ------------------------------------------------------------------------------- |
+| `bug`              | `#d73a4a` | Bug Report template; `fix:` titles                                              |
+| `feature`          | `#a2eeef` | Feature Request template; `feat:` titles                                        |
+| `enhancement`      | `#a2eeef` | Enhancement template (GitHub default)                                           |
+| `documentation`    | `#0075ca` | Documentation template; path labeler on docs-only PRs                           |
+| `security`         | `#d73a4a` | Security Advisories; path labeler on security paths; Area "Authentication"      |
+| `ci`               | `#bfdadc` | Path labeler: pipeline, workflows, lint configuration                           |
+| `distribution`     | `#fbca04` | Path labeler: release artifacts and install channels; Area "Installation"       |
+| `dependencies`     | `#0052cc` | Path labeler and Dependabot: dependency files                                   |
+| `transport`        | `#5c8dd6` | Path labeler: `cmd/server`, the transport e2e modules; Area "Transport"         |
+| `mcp`              | `#a371f7` | Path labeler: resources, prompts, completions, subscriptions; Area "MCP"        |
+| `tools`            | `#1f883d` | Area "GitLab tools" only: two thirds of PRs touch `internal/tools/`, so no path |
+| `telemetry`        | `#6fbf9a` | Path labeler: `internal/telemetry`, `internal/mcpotel`; Area "Telemetry"        |
+| `site`             | `#f0a35c` | Path labeler: the site's build and components, not its content; Area "Site"     |
+| `tooling`          | `#9aa5b1` | Path labeler: the auditors and generators under `cmd/`; Area "CI and tooling"   |
+| `platform`         | `#e9c46a` | Path labeler: `*_windows.go`, `*_darwin.go`, `*_unix.go`; Area "Platform"       |
+| `e2e`              | `#8bd3c7` | Path labeler: the e2e suite and its Docker fixtures                             |
+| `release`          | `#0e8a16` | Manual: release tracking issues                                                 |
+| `high-priority`    | `#b60205` | Manual: critical bugs and security advisories                                   |
+| `needs-triage`     | `#c2e0c6` | All issue templates; retired by `triage.yml` on milestone or close              |
+| `v<version>`       | `#1d76db` | `version-labels.yml`, paired with the milestone of the same number              |
+| `good first issue` | `#7057ff` | Manual: newcomer-friendly issues                                                |
+| `help wanted`      | `#008672` | Manual: community contributions welcome                                         |
+| `question`         | `#d876e3` | Manual: questions / discussions                                                 |
+| `duplicate`        | `#cfd3d7` | Manual: duplicates of existing issues                                           |
+| `invalid`          | `#e4e669` | Manual: out of scope                                                            |
+| `wontfix`          | `#ffffff` | Manual: accepted but won't implement                                            |
 
 The Area dropdown's options are the strings `issue-area.yml` matches, so a change to one has to land in the three templates and that workflow together; an answer the workflow does not know fails its run rather than passing quietly, which is how the drift is noticed.
 

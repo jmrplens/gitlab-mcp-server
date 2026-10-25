@@ -35,11 +35,15 @@ That trade is not worth taking for items that change roughly never, so the
 checks below are run by hand.
 
 The one exception is release immutability, which is visible in the public
-release metadata and is already checked (see below). The NuGet.org trusted
-publishing policy and the PyPI trusted publisher at the end of this page are not
-GitHub settings at all, but they are recorded here for the same reason: they
-live outside the repository, the release depends on them, and no gate can see
-them.
+release metadata and is already checked (see below). The npm trusted
+publishers, the NuGet.org trusted publishing policy and the PyPI trusted
+publisher at the end of this page are not GitHub settings at all, but they are
+recorded here for the same reason: they live outside the repository, the
+release depends on them, and no gate can see them. The `Protect main` item is
+the rule every pull request merges under rather than something the release
+depends on, and it is recorded here because
+[GOVERNANCE.md](../../GOVERNANCE.md#access-and-two-factor-authentication)
+describes it and no file in the tree can show it.
 
 ## SC-04: enable immutable releases
 
@@ -227,6 +231,63 @@ above.
 
 **What tells you it drifted.** Nothing automatic; the commands above.
 
+## Protect main: how a change reaches `main`
+
+**What to set.** Repository → Settings → Rules, the branch ruleset
+`Protect main` (id `16049728`), enforcement **Active**, targeting
+`refs/heads/main`, with four rules: **Restrict deletions**, **Block force
+pushes**, **Require a pull request before merging** with **0** required
+approvals and **Require conversation resolution before merging** turned on,
+and **Require status checks to pass** with the one check `✅ CI`. Its bypass
+list holds **Deploy keys**, for the reason the next item gives, and the
+**Repository admin** role. Beside the ruleset, Repository → Settings → General
+→ Pull Requests allows **squash merging** alone.
+
+**Why.** [Code Review](../../CONTRIBUTING.md#code-review) says what a pull
+request needs before it is merged, and these are the parts of it GitHub can
+hold: every review thread answered and resolved, and the one aggregate check
+every CI job reports into. No approval is required because GitHub does not let
+the author of a pull request approve it, so while the project has one
+maintainer a required approval is one only the bypass could satisfy on the
+maintainer's own pull requests. Squash is the only merge method because the
+squash commit's message is the pull request description, which
+`make check-pr-description` holds, so `main` gains one commit per pull request,
+with a message that was checked.
+
+**The admin bypass.** With the **Repository admin** role on the bypass list,
+the ruleset does not refuse a merge the maintainer makes: what holds that merge
+is [What a change needs to be accepted](../../CONTRIBUTING.md#what-a-change-needs-to-be-accepted).
+GitHub records each bypass of the ruleset, a version stamp's push included, and
+lists them:
+
+```bash
+gh api 'repos/jmrplens/gitlab-mcp-server/rulesets/rule-suites?ref=refs/heads/main&rule_suite_result=bypass&time_period=month' \
+  --jq '.[] | {pushed_at, actor_name, after_sha}'
+```
+
+**How to check.**
+
+```bash
+gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 \
+  --jq '{include: .conditions.ref_name.include, rules: [.rules[] | {type, parameters}], bypass: .bypass_actors}'
+gh api repos/jmrplens/gitlab-mcp-server --jq '{allow_squash_merge, allow_merge_commit, allow_rebase_merge}'
+```
+
+The first answers `include: ["refs/heads/main"]`; the rules `deletion` and
+`non_fast_forward` with no parameters, `pull_request` with
+`required_approving_review_count: 0` and
+`required_review_thread_resolution: true`, and `required_status_checks` naming
+the one context `✅ CI`; and two bypass actors,
+`{"actor_type": "DeployKey", "actor_id": null, "bypass_mode": "always"}` and
+`{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}`. The
+second answers `allow_squash_merge: true` and the other two `false`. The
+ruleset's own `allowed_merge_methods` lists all three methods; the repository
+setting is what narrows them to squash.
+
+**Current state.** Applied. Read on 2026-10-25, both commands answer as above.
+
+**What tells you it drifted.** Nothing automatic; the commands above.
+
 ## SC-01: keep the deploy-key ruleset bypass declared
 
 **What to set.** In the `Protect main` ruleset, keep **Deploy keys** on the
@@ -257,6 +318,51 @@ bypass but would also make every release wait on a second human action, in a job
 that runs after the artifacts are already published, to commit a version number
 the release itself determined. The bypass with the credentialed push isolated in
 its own job, which is what `release.yml` does today, is the better trade.
+
+## npm trusted publishers
+
+**What to set.** On npmjs.com, for each of the seven packages,
+`@jmrp.io/gitlab-mcp-server` and the six `@jmrp.io/gitlab-mcp-server-<os>-<cpu>`
+packages, the package's settings, **Trusted Publisher**: GitHub Actions, user
+`jmrplens`, repository `gitlab-mcp-server`, workflow `release.yml`, environment
+`release`.
+
+**Why.** `release.yml`'s `npm` job holds `id-token: write`, and npm exchanges
+the job's OIDC token for a publish credential only when its claims match the
+publisher configured on the package, so no npm token is stored anywhere and
+the registry attaches provenance to each version. npm binds a publisher to one
+package rather than to an account, which is why each of the seven has its own;
+the first version of each was published with a token, since a package has to
+exist before it can have a publisher
+([Release Process](release-process.md)). `make publish-npm` with an npm token
+is the only tokened path, for an out-of-band publish.
+
+**Current state.** Satisfied for all seven. Read on 2026-10-25, the registry
+names `GitHub Actions` as the publisher of each package's 3.3.0, through a
+trusted publisher (`trustedPublisher.id: "github"`), and each version's SLSA
+provenance names `.github/workflows/release.yml` at `refs/tags/v3.3.0` in this
+repository. Neither record names the environment: the package's settings page
+on npmjs.com is the only place it shows.
+
+**How to check.**
+
+```bash
+for p in gitlab-mcp-server gitlab-mcp-server-darwin-arm64 gitlab-mcp-server-darwin-x64 \
+  gitlab-mcp-server-linux-arm64 gitlab-mcp-server-linux-x64 gitlab-mcp-server-win32-arm64 gitlab-mcp-server-win32-x64; do
+  curl -s "https://registry.npmjs.org/@jmrp.io%2f$p/3.3.0" \
+    | jq -c '{name, publisher: ._npmUser.name, trusted: ._npmUser.trustedPublisher.id}'
+done
+```
+
+Each line answers `publisher: "GitHub Actions"` and `trusted: "github"`. A
+release rehearsal does not exercise the exchange: it runs in the
+`release-rehearsal` environment, which no publisher names, and publishes
+nothing.
+
+**What tells you it drifted.** The `Publish to npm` step of the next release
+fails at the first package npm refuses. `scripts/publish-npm.sh` skips a
+version already published, so once the publisher is restored the job can be
+re-run.
 
 ## NuGet.org trusted publishing policy
 
@@ -365,6 +471,8 @@ which names the publisher its provenance carries.
 gh api repos/jmrplens/gitlab-mcp-server/releases/latest --jq '"immutable_release=\(.immutable)"'
 gh api repos/jmrplens/gitlab-mcp-server/rulesets --jq '.[] | "ruleset=\(.name) target=\(.target)"'
 gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.bypass_actors[] | "bypass=\(.actor_type)"'
+gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.rules[] | "main_rule=\(.type) approvals=\(.parameters.required_approving_review_count) threads=\(.parameters.required_review_thread_resolution) checks=\([.parameters.required_status_checks[]?.context] | join(","))"'
+gh api repos/jmrplens/gitlab-mcp-server --jq '"squash=\(.allow_squash_merge) merge_commit=\(.allow_merge_commit) rebase=\(.allow_rebase_merge)"'
 gh api repos/jmrplens/gitlab-mcp-server/environments/release --jq '"release_policy=\(.deployment_branch_policy) admins_bypass=\(.can_admins_bypass)"'
 gh api repos/jmrplens/gitlab-mcp-server/environments/release/deployment-branch-policies --jq '.branch_policies[] | "release_ref=\(.type):\(.name)"'
 gh api repos/jmrplens/gitlab-mcp-server/environments/release-rehearsal/secrets --jq '"rehearsal_secrets=\(.total_count)"'

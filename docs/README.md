@@ -12,4 +12,6 @@ internal architecture, the gates and generators, and the
 [Architectural Decision Records](development/adr/README.md).
 [ADR-0025](development/adr/adr-0025-the-site-is-the-only-home-of-user-documentation.md)
 records why the user documentation lives only on the site. Start with
-[CONTRIBUTING.md](../CONTRIBUTING.md) for how a change is proposed and reviewed.
+[CONTRIBUTING.md](../CONTRIBUTING.md) for how a change is proposed and reviewed,
+and [GOVERNANCE.md](../GOVERNANCE.md) for how the project makes decisions and who
+holds which role.

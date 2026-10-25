@@ -42,6 +42,8 @@ N/A
 
 ## Checklist
 
+What a review checks and what a merge requires are in [Code Review](https://github.com/jmrplens/gitlab-mcp-server/blob/main/CONTRIBUTING.md#code-review).
+
 ### Code Quality
 
 - [ ] Code compiles: `go build ./...`

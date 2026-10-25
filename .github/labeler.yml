@@ -29,7 +29,7 @@
 documentation:
   - changed-files:
       - any-glob-to-all-files:
-          - "{docs/**,site/src/content/**,README.md,CONTRIBUTING.md,CODE_OF_CONDUCT.md,AGENTS.md,CLAUDE.md,llms*.txt,llms-install.md,.github/copilot-instructions.md,.github/dockerhub-description.md,.github/pull_request_template.md,.github/{agents,instructions,skills,ISSUE_TEMPLATE}/**}"
+          - "{docs/**,site/src/content/**,README.md,CONTRIBUTING.md,CODE_OF_CONDUCT.md,GOVERNANCE.md,AGENTS.md,CLAUDE.md,llms*.txt,llms-install.md,.github/copilot-instructions.md,.github/dockerhub-description.md,.github/pull_request_template.md,.github/{agents,instructions,skills,ISSUE_TEMPLATE}/**}"
 
 # Anything where a mistake is a vulnerability rather than a bug: credential
 # handling and admission (oauth, serverpool, the HTTP auth gate), the GitLab

@@ -1,10 +1,12 @@
 ---
 title: About this project
-description: Who maintains GitLab MCP Server, why it exists, how it is licensed and versioned, and how to report problems or contribute.
+description: Who maintains GitLab MCP Server and how it is governed, why it exists, how it is licensed and versioned, and how to report problems or contribute.
 datePublished: "2026-07-26"
 faq:
   - q: "Who maintains GitLab MCP Server?"
     a: "GitLab MCP Server is built and maintained by José Manuel Requena Plens (jmrplens), an R&D firmware and software engineer based in Valencia, Spain, working on industrial embedded systems, open-source tooling, and self-hosted infrastructure. Research identity: ORCID 0000-0003-1250-6212. It is an independent open-source project and is not affiliated with, endorsed by, or operated by GitLab Inc."
+  - q: "How is GitLab MCP Server governed?"
+    a: "It has a single maintainer, who makes the final decision on every change and release. Changes are proposed and discussed in public issues and pull requests, and decisions about the architecture are recorded as architecture decision records in the repository. GOVERNANCE.md in the repository sets out the model, how a disagreement is settled, the roles and who holds them, the two-factor rule for access, and what the project depends on to continue; the roadmap page says what it intends to do and not do over the next year."
   - q: "Is GitLab MCP Server affiliated with GitLab Inc.?"
     a: "No. It is an independent open-source project that talks to GitLab through the public REST v4 and GraphQL APIs, exactly as any other API client would. GitLab is a trademark of GitLab Inc.; this project uses the name only to describe what it connects to. GitLab also publishes its own official MCP integration, which is a separate product with different instance prerequisites."
   - q: "How is GitLab MCP Server licensed?"
@@ -33,6 +35,8 @@ The project is built and maintained by **José Manuel Requena Plens** ([jmrplens
 | Mastodon       | [@jmrplens@mstdn.jmrp.io](https://mstdn.jmrp.io/@jmrplens)        |
 | LinkedIn       | [in/jmrplens](https://www.linkedin.com/in/jmrplens)               |
 
+The maintainer makes the final decision on every change and release. Changes are proposed and discussed in public [issues](https://github.com/jmrplens/gitlab-mcp-server/issues) and pull requests, and decisions about the architecture are recorded as [architecture decision records](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/README.md). [GOVERNANCE.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/GOVERNANCE.md) sets out the model, how a disagreement is settled, the roles and who holds them, the two-factor rule for access, and what the project depends on to continue. The [roadmap](/gitlab-mcp-server/roadmap/) says what the project intends to do and not do over the next year.
+
 ## Why it exists
 
 Most GitLab MCP integrations expose a curated slice of the API — enough to read a merge request or open an issue — because a hand-maintained tool list is easier to keep coherent. This project started from the opposite premise: generate the _whole_ API surface from the catalog, so an operation is never missing merely because nobody got round to adding it, and keep it working on Community Edition with nothing but a personal access token.
@@ -47,7 +51,7 @@ This is an independent open-source project. It is not affiliated with, endorsed 
 
 The project is released under the [MIT license](https://github.com/jmrplens/gitlab-mcp-server/blob/main/LICENSE) and follows semantic versioning. Current version: **%%VERSION%%**.
 
-The major version tracks the major of [`gitlab-org/api/client-go`](https://gitlab.com/gitlab-org/api/client-go), the official GitLab API client this server is built on: when client-go moves to v3, this project moves to v3 in the same release, and deprecated compatibility fields kept during the v2 cycle are removed there. Every other dependency update ships as a minor or patch release.
+The major version tracks the major of [`gitlab-org/api/client-go`](https://gitlab.com/gitlab-org/api/client-go), the official GitLab API client this server is built on. 3.0.0 moved to client-go v3 and removed the compatibility fields kept during the v2 cycle, and the next client-go major will be this project's next major too. Every other dependency update ships as a minor or patch release.
 
 Every release publishes signed binaries for Linux, macOS and Windows on both amd64 and arm64, a container image on GHCR and Docker Hub, and a Claude Desktop extension. Release notes and downloads are on the [Releases page](https://github.com/jmrplens/gitlab-mcp-server/releases); binary signatures can be verified with Cosign as described under [release integrity](/gitlab-mcp-server/operations/security/).
 

@@ -1045,7 +1045,7 @@ check-md-tables:
 ## and dynamic alias audits; and the site's check, build and lint. Not every
 ## documentation gate: check-doc-tool-names, for one, is a target and a CI step of its own.
 audit-docs:
-	npx markdownlint-cli2 README.md AGENTS.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md "docs/**/*.md" "test/e2e/**/*.md" "site/src/content/docs/**/*.mdx" "site/src/content/i18n/**/*.md"
+	npx markdownlint-cli2 README.md AGENTS.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md GOVERNANCE.md SECURITY.md "docs/**/*.md" "test/e2e/**/*.md" "site/src/content/docs/**/*.mdx" "site/src/content/i18n/**/*.md"
 	go run ./cmd/format_md_tables/ --check
 	go run ./cmd/gen_llms/ --check
 	go run ./cmd/gen_lhm_manifest/ --check
