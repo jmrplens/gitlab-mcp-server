@@ -12905,6 +12905,62 @@ func TestValidateHTTPDurationConfig_RefusesWhatWouldNeverExpire(t *testing.T) {
 	}
 }
 
+// TestValidateHTTPDurationConfig_ANegativeDuration_IsRefused pins the three
+// duration flags whose zero turns their setting off to what their variables
+// accept (issue 1171, Q16 of its triage): zero and anything up to the maximum
+// start, and a negative value refuses the start, naming the flag and what zero
+// means. A negative --session-timeout, --revalidate-interval or
+// --pool-idle-timeout used to start a server that read it as off, the session
+// timeout without the warning its zero writes, while the variable of each
+// refused the same value. The upper bound is held beside it, the session
+// timeout's for the first time.
+func TestValidateHTTPDurationConfig_ANegativeDuration_IsRefused(t *testing.T) {
+	t.Parallel()
+
+	settings := []struct {
+		flag    string
+		max     time.Duration
+		setting func(*config.Config) *time.Duration
+	}{
+		{"--session-timeout", config.MaxSessionTimeout, func(c *config.Config) *time.Duration { return &c.SessionTimeout }},
+		{"--revalidate-interval", config.MaxRevalidateInterval, func(c *config.Config) *time.Duration { return &c.RevalidateInterval }},
+		{"--pool-idle-timeout", config.MaxPoolIdleTimeout, func(c *config.Config) *time.Duration { return &c.PoolIdleTimeout }},
+	}
+	values := []struct {
+		name    string
+		value   func(maxValue time.Duration) time.Duration
+		wantErr string
+	}{
+		{name: "zero", value: func(time.Duration) time.Duration { return 0 }},
+		{name: "at its maximum", value: func(maxValue time.Duration) time.Duration { return maxValue }},
+		{name: "a nanosecond below zero", value: func(time.Duration) time.Duration { return -time.Nanosecond }, wantErr: " must not be negative, got -1ns (0 turns it off)"},
+		{name: "a minute below zero", value: func(time.Duration) time.Duration { return -time.Minute }, wantErr: " must not be negative, got -1m0s (0 turns it off)"},
+		{name: "past its maximum", value: func(maxValue time.Duration) time.Duration { return maxValue + time.Nanosecond }, wantErr: " exceeds maximum of "},
+	}
+	for _, s := range settings {
+		for _, v := range values {
+			t.Run(s.flag+"/"+v.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				*s.setting(cfg) = v.value(s.max)
+
+				err := validateHTTPDurationConfig(cfg)
+
+				if v.wantErr == "" {
+					if err != nil {
+						t.Errorf("validateHTTPDurationConfig = %v, want nil", err)
+					}
+					return
+				}
+				if err == nil || !strings.HasPrefix(err.Error(), s.flag+" ") || !strings.Contains(err.Error(), v.wantErr) {
+					t.Errorf("error = %v, want it to name %s and read %q", err, s.flag, v.wantErr)
+				}
+			})
+		}
+	}
+}
+
 // TestDoToolSearch_AnEmptyQuery_IsNotAnError covers the exit taken before a
 // catalog is ever built.
 //

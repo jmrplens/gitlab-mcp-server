@@ -1465,15 +1465,31 @@ func validateHTTPSurfaceConfig(cfg *config.Config) error {
 	return nil
 }
 
+// validateHTTPDurationConfig holds the duration flags to the range their
+// variables accept: from 0, which turns each setting off, to its maximum.
+//
+// A negative --session-timeout, --revalidate-interval or --pool-idle-timeout is
+// refused rather than read as off, since zero already says that and a minus
+// sign is a typo, and because the variable of each refuses one: the three used
+// to let it through to readers that take anything not positive as off, the
+// session timeout's without the warning its zero writes (issue 1171, Q16 of its
+// triage). The action timeout and the drain delay refused one already.
 func validateHTTPDurationConfig(cfg *config.Config) error {
-	if cfg.SessionTimeout > config.MaxSessionTimeout {
-		return fmt.Errorf("--session-timeout %s exceeds maximum of %s", cfg.SessionTimeout, config.MaxSessionTimeout)
-	}
-	if cfg.RevalidateInterval > config.MaxRevalidateInterval {
-		return fmt.Errorf("--revalidate-interval %s exceeds maximum of %s", cfg.RevalidateInterval, config.MaxRevalidateInterval)
-	}
-	if cfg.PoolIdleTimeout > config.MaxPoolIdleTimeout {
-		return fmt.Errorf("--pool-idle-timeout %s exceeds maximum of %s", cfg.PoolIdleTimeout, config.MaxPoolIdleTimeout)
+	for _, d := range []struct {
+		flag  string
+		value time.Duration
+		max   time.Duration
+	}{
+		{"--session-timeout", cfg.SessionTimeout, config.MaxSessionTimeout},
+		{"--revalidate-interval", cfg.RevalidateInterval, config.MaxRevalidateInterval},
+		{"--pool-idle-timeout", cfg.PoolIdleTimeout, config.MaxPoolIdleTimeout},
+	} {
+		if d.value < 0 {
+			return fmt.Errorf("%s must not be negative, got %s (0 turns it off)", d.flag, d.value)
+		}
+		if d.value > d.max {
+			return fmt.Errorf("%s %s exceeds maximum of %s", d.flag, d.value, d.max)
+		}
 	}
 	if cfg.ActionTimeout < 0 || cfg.ActionTimeout > config.MaxActionTimeout {
 		return fmt.Errorf("--action-timeout %s is outside 0 (disabled) to %s", cfg.ActionTimeout, config.MaxActionTimeout)

@@ -434,6 +434,9 @@ func admitDecisions() []Decision {
 				enforce(pkgPool, "ServerPool.revalidateAll"),
 				enforce(pkgServer, "prepareStdioCatalog"),
 				enforce(pkgServer, "refreshStdioAuthority"),
+				// The flag's range, a negative value refused as the variable
+				// refuses it (issue 1171).
+				enforce(pkgServer, "validateHTTPDurationConfig"),
 			},
 		},
 		{
