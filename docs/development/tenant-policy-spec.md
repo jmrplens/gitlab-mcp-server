@@ -177,7 +177,9 @@ where its value comes from, in three ways:
   configurable or not keyed on the process, and a reason about the process on a row that
   does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); a variable without the
   `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
-  policy (`INV-017`); a behavior at capacity the capacity rule does not allow for the
+  policy, and a value only stdio's environment reaches (`StdioEnvOnly`, issue 957) with
+  a flag, with no variable or malformed-value policy, or on a row that does not exist on
+  stdio (`INV-017`); a behavior at capacity the capacity rule does not allow for the
   row's kind, key and table, which is how `INV-005` and `INV-010` are read for what each
   structure holds (`VAL-006`, issue 958; see [Validation checklist](#validation-checklist));
   and a value no operator setting reaches, a constant or a Go option's, that does not say
@@ -201,8 +203,8 @@ where its value comes from, in three ways:
   (`INV-010`); an in-band code of the server's own that mirrors no status the gate
   answers its class of next action with (`INV-012`); any other zero that does not mean
   off (`INV-015`); a reason whose unit differs from its key or misstates its own
-  (`INV-016`); a value only an environment variable reaches, and any other malformed
-  value that does not refuse startup (`INV-017`);
+  (`INV-016`); a value only an environment variable reaches in HTTP mode, and any other
+  malformed value that does not refuse startup (`INV-017`);
   and a ceiling nothing bounds (`INV-018`).
 
 - **INV-001 Identity from the credential.** A limit derives who a caller is from the
@@ -314,7 +316,13 @@ where its value comes from, in three ways:
   (`IDN-014`); a directory of a local allow-list that does not resolve is skipped and the
   rest kept, since an entry that names nothing widens nothing (`AUT-006`); and the
   private-instance opt-out reads a value it does not parse as off, so a typo never turns
-  the destination guard off (`DST-003`).
+  the destination guard off (`DST-003`). The flag is asked of a setting in HTTP mode,
+  and a setting HTTP mode never reads has none to have: the local allow-lists are
+  consulted once a caller-supplied path is admitted, which a server reached over HTTP
+  refuses first (`RQB-008`), so their row's source is `StdioEnvOnly`, a value only
+  stdio's environment reaches, which departs from nothing (`AUT-006`, issue 957), where
+  a value only an environment variable reaches in HTTP mode (`EnvOnly`) still records
+  the departure.
 - **INV-018 Bound the process on the process.** A bound whose purpose is to protect the
   process, or an upstream budget the whole deployment shares, is keyed on the process.
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state

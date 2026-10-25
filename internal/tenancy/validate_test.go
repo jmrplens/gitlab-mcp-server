@@ -307,10 +307,20 @@ func TestValidate_ClassConsistent(t *testing.T) {
 }
 
 // TestValidate_ThroughConfig holds a configurable value to the configuration
-// package's rule, and every other way in to a finding.
+// package's rule, a value only an environment variable reaches in HTTP mode to
+// a finding, and one only stdio's environment reaches to its variables and its
+// malformed-value policy on a row that exists on stdio, with no flag.
+//
+// The last is what issue 957 made of the local allow-lists: INV-017 asks a
+// flag of a setting in HTTP mode, and HTTP mode never reads one of theirs,
+// since a server reached over HTTP refuses every caller-supplied local path
+// before the list is consulted (RQB-008).
 func TestValidate_ThroughConfig(t *testing.T) {
 	configurable := func(d *Decision) {
 		d.Source, d.Flags, d.Envs, d.Malformed = Configurable, []string{"--x"}, []string{"GITLAB_MCP_X"}, RefuseStartup
+	}
+	stdioEnv := func(d *Decision) {
+		d.Source, d.Envs, d.Malformed, d.StdioKey = StdioEnvOnly, []string{"GITLAB_MCP_X"}, SkipEntry, KeyProcess
 	}
 	runRule(t, checkThroughConfig, []ruleCase{
 		{"configurable through the package", row(configurable), ""},
@@ -318,14 +328,39 @@ func TestValidate_ThroughConfig(t *testing.T) {
 		{"no variable", row(func(d *Decision) { configurable(d); d.Envs = nil }), "no GITLAB_MCP_ variable"},
 		{"no malformed policy", row(func(d *Decision) { configurable(d); d.Malformed = MalformedNone }), "no malformed-value policy"},
 		{"an unprefixed variable", row(func(d *Decision) { d.Envs = []string{"MAX_THINGS"} }), "MAX_THINGS does not carry"},
-		{"an environment variable alone", row(func(d *Decision) { d.Source = EnvOnly }), "outside the configuration package"},
+		{"an environment variable alone", row(func(d *Decision) { d.Source = EnvOnly }), "with no flag and no finding"},
 		{"an environment variable alone, recorded", row(func(d *Decision) { d.Source, d.Findings = EnvOnly, []string{"F-13"} }), ""},
 		// F-16 recorded bounds with no reason and defaults written twice, and
 		// no longer the value only a Go option reached, so it excuses no value
 		// only an environment variable reaches.
 		{
 			"an environment variable alone, carrying F-16",
-			row(func(d *Decision) { d.Source, d.Findings = EnvOnly, []string{"F-16"} }), "outside the configuration package",
+			row(func(d *Decision) { d.Source, d.Findings = EnvOnly, []string{"F-16"} }), "with no flag and no finding",
+		},
+		{"stdio's environment alone", row(stdioEnv), ""},
+		{
+			"stdio's environment alone, with a flag",
+			row(func(d *Decision) { stdioEnv(d); d.Flags = []string{"--x"} }), "stdio's environment alone, with a flag",
+		},
+		{
+			"stdio's environment alone, with no variable",
+			row(func(d *Decision) { stdioEnv(d); d.Envs = nil }), "stdio's environment alone, with no GITLAB_MCP_ variable",
+		},
+		{
+			"stdio's environment alone, with no malformed policy",
+			row(func(d *Decision) { stdioEnv(d); d.Malformed = MalformedNone }), "stdio's environment alone, with no malformed-value policy",
+		},
+		{
+			"stdio's environment alone, on a row stdio does not have",
+			row(func(d *Decision) { stdioEnv(d); d.StdioKey = KeyNone }), "on a row that does not exist on stdio",
+		},
+		// A finding excuses nothing here: the source states that HTTP mode
+		// never reads the setting, which is a fact about the row rather than a
+		// departure, so a row it does not describe is wrong rather than
+		// recorded.
+		{
+			"stdio's environment alone, with a flag and F-13",
+			row(func(d *Decision) { stdioEnv(d); d.Flags, d.Findings = []string{"--x"}, []string{"F-13"} }), "with a flag",
 		},
 		// A value only a Go option reaches is no operator's configuration:
 		// checkFixedReasoned holds it to its reason, as it holds a constant.
@@ -406,6 +441,7 @@ func TestValidate_FixedReasoned(t *testing.T) {
 		{"a configurable value", row(from(Configurable, "")), ""},
 		{"a configurable value said to be fixed", row(from(Configurable, "why")), "is not a constant or a Go option's"},
 		{"an environment variable said to be fixed", row(from(EnvOnly, "why")), "is not a constant or a Go option's"},
+		{"stdio's environment said to be fixed", row(from(StdioEnvOnly, "why")), "is not a constant or a Go option's"},
 		{"a derived value said to be fixed", row(from(Derived, "why")), "is not a constant or a Go option's"},
 		{"no value", row(nil), ""},
 	})

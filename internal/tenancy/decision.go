@@ -116,7 +116,9 @@ const (
 	Constant
 	// Configurable is a value with a flag and a GITLAB_MCP_ variable.
 	Configurable
-	// EnvOnly is a value only an environment variable changes.
+	// EnvOnly is a value only an environment variable changes, of a setting
+	// HTTP mode reads as well, which INV-017 asks a flag of: a row passes
+	// [Validate] with it only through a finding.
 	EnvOnly
 	// OptionOnly is a value only a Go option changes, which no operator can
 	// reach.
@@ -125,6 +127,14 @@ const (
 	// the process is started under (HLD-011, from its descriptor limit, and
 	// HLD-010, from HLD-011's). No operator sets it, as none sets a constant.
 	Derived
+	// StdioEnvOnly is a value only an environment variable changes, of a
+	// setting only stdio reads. INV-017 asks a flag of a setting in HTTP
+	// mode, and HTTP mode never reads this one: the local allow-lists are
+	// consulted once a caller-supplied path is admitted, and a server
+	// reached over HTTP refuses every such path first (RQB-008). Issue 957
+	// gave it a name of its own, so that a value only an environment
+	// variable reaches in HTTP mode (EnvOnly) still departs from INV-017.
+	StdioEnvOnly
 )
 
 // Zero is what a value of zero means for a decision (INV-015).

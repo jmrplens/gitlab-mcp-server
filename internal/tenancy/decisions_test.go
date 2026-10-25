@@ -1061,6 +1061,32 @@ func TestDecisions_MalformedExceptions_AreDecidedByIssue957(t *testing.T) {
 	}
 }
 
+// TestDecisions_LocalAllowLists_AreReadFromStdiosEnvironmentAlone pins the
+// value source issue 957 gave AUT-006, the one row on it. RQB-004's stdio
+// line is read on stdio alone too, but a per-request bound is declared with
+// no value source. AUT-006's three allow-lists are consulted once a
+// caller-supplied local path is admitted, and a server reached over HTTP
+// refuses every such path first (RQB-008), so INV-017's flag, which it asks
+// of a setting in HTTP mode, has nothing to configure. The row names the
+// variables and no flag, and exists on stdio.
+func TestDecisions_LocalAllowLists_AreReadFromStdiosEnvironmentAlone(t *testing.T) {
+	var stdioOnly []string
+	for _, d := range Decisions() {
+		if d.Source == StdioEnvOnly {
+			stdioOnly = append(stdioOnly, d.ID)
+		}
+	}
+	if want := []string{"AUT-006"}; !slices.Equal(stdioOnly, want) {
+		t.Errorf("the rows only stdio's environment reaches are %v, want %v", stdioOnly, want)
+	}
+	d, _ := Lookup("AUT-006")
+	wantEnvs := []string{"GITLAB_MCP_ALLOWED_UPLOAD_DIRS", "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS", "GITLAB_MCP_ALLOWED_IMPORT_DIRS"}
+	if !slices.Equal(d.Envs, wantEnvs) || len(d.Flags) != 0 || d.StdioKey != KeyProcess {
+		t.Errorf("AUT-006: envs %v, flags %v, stdio key %s; want the three allow-lists, no flag and the process on stdio",
+			d.Envs, d.Flags, d.StdioKey)
+	}
+}
+
 // TestDecisions_TelemetryToolName_IsARowOfItsOwn pins IDN-014, the row issue
 // 957 gave GITLAB_MCP_TELEMETRY_TOOL_NAME, which no row named: a process-wide
 // rule set by its flag and its variable, read around the configuration

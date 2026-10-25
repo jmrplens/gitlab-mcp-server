@@ -341,10 +341,14 @@ func checkClassConsistent(d Decision, _ map[string]Decision) []string {
 }
 
 // checkThroughConfig holds a configurable value to a flag, a GITLAB_MCP_
-// variable and a malformed-value policy, and a value only an environment
-// variable reaches to a finding. A value only a Go option reaches is no
-// operator's configuration: it is a constant to every operator, and
-// checkFixedReasoned holds it to its reason as it holds one (issue 958).
+// variable and a malformed-value policy, a value only an environment variable
+// reaches in HTTP mode to a finding, since INV-017 asks a flag of it, and one
+// only stdio's environment reaches to [stdioEnvFaults]. Whether a variable is
+// read through the configuration package is the code's to answer, which the
+// register cannot see, and cmd/audit_tenancy's G14 holds it. A value only a
+// Go option reaches is no operator's configuration: it is a constant to every
+// operator, and checkFixedReasoned holds it to its reason as it holds one
+// (issue 958).
 func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 	var out []string
 	for _, env := range d.Envs {
@@ -365,8 +369,35 @@ func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 		}
 	case EnvOnly:
 		if !d.RecordsDeparture(invThroughConfig) {
-			out = append(out, "configurable outside the configuration package, with no finding")
+			out = append(out, "configurable in HTTP mode by an environment variable alone, with no flag and no finding")
 		}
+	case StdioEnvOnly:
+		out = append(out, stdioEnvFaults(d)...)
+	}
+	return out
+}
+
+// stdioEnvFaults is what a value only stdio's environment reaches says
+// against itself (issue 957). The source is a statement that HTTP mode never
+// reads the setting, so it needs no flag and passes with none, and holds the
+// rest of INV-017 instead: the variables that set it and what a value that
+// does not parse does. A flag would be a way in the source denies, and a row
+// that does not exist on stdio has no stdio to be read on. A finding excuses
+// none of these, since each is the row contradicting what it says of itself
+// rather than a departure from an invariant.
+func stdioEnvFaults(d Decision) []string {
+	var out []string
+	if len(d.Flags) > 0 {
+		out = append(out, "read from stdio's environment alone, with a flag")
+	}
+	if len(d.Envs) == 0 {
+		out = append(out, "read from stdio's environment alone, with no GITLAB_MCP_ variable")
+	}
+	if d.Malformed == MalformedNone {
+		out = append(out, "read from stdio's environment alone, with no malformed-value policy")
+	}
+	if d.StdioKey == KeyNone {
+		out = append(out, "read from stdio's environment alone, on a row that does not exist on stdio")
 	}
 	return out
 }

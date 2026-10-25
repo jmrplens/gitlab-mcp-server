@@ -172,7 +172,12 @@ func authorizeDecisions() []Decision {
 			ID: "AUT-006", Question: Authorize, Kind: Rule, Class: ClassP, Disposition: Ruled,
 			Resource: "the local directories a stdio tool may read from or write to",
 			Key:      KeyProcess, StdioKey: KeyProcess,
-			Source: EnvOnly,
+			// Only stdio reads the three lists: each is consulted once a
+			// caller-supplied local path is admitted, and a server reached
+			// over HTTP refuses every such path first (RQB-008), so they have
+			// no flag and INV-017's, which it asks of a setting in HTTP mode,
+			// would configure nothing (issue 957).
+			Source: StdioEnvOnly,
 			Envs: []string{
 				"GITLAB_MCP_ALLOWED_UPLOAD_DIRS", "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS", "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
 			},

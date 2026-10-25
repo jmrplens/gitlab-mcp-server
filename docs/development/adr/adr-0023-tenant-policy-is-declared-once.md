@@ -104,8 +104,11 @@ the code; the layers keep enforcing.**
   mintable value with no capacity, an in-band code of the server's own that mirrors no
   status the gate answers its class of next action with (`INV-012`), any other zero that does not mean off, a reason
   whose unit differs from its key or misstates its own, a value only an environment
-  variable reaches or one that does not parse and does not refuse startup with no
-  decision recorded, and a ceiling nothing bounds.
+  variable reaches in HTTP mode or one that does not parse and does not refuse startup
+  with no decision recorded, and a ceiling nothing bounds. A value only stdio's
+  environment reaches departs from nothing, since `INV-017` asks a flag of a setting in
+  HTTP mode alone, and its source says so (`StdioEnvOnly`, the local allow-lists, issue
+  957).
 
 **The gate**, `cmd/audit_tenancy`, loads `./cmd/server` and `./internal/...` through the
 type checker and holds the register to the code: each site aliases, pins or reads what its
