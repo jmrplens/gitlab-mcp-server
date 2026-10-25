@@ -35,7 +35,7 @@ off the list would otherwise be read under a name no operator sets.
 Every variable this server defines carries the prefix, with no exception for
 a name that already began with `GITLAB_`: the switches that did (`GITLAB_TIER`,
 `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES`,
-`GITLAB_SKIP_TLS_VERIFY`) and `YOLO_MODE` were renamed in 2.8.0, and their old
+`GITLAB_SKIP_TLS_VERIFY`) and `YOLO_MODE` were renamed in 3.0.0, and their old
 spellings were removed in 3.1.0. `config.RetiredEnvUses` finds one still set in
 the environment so a deployment is told rather than quietly reconfigured, and
 splits its answer: `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` and `EXCLUDE_TOOLS`

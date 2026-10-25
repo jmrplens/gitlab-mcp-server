@@ -186,7 +186,7 @@ gitlab-mcp-server
 gitlab-mcp-server
 ```
 
-Un `.env` en el directorio actual no se lee: ese directorio pertenece al repositorio que abrió el cliente, no a quien opera el servidor. Si existe, se nombra en `WARN` al arrancar. Las grafías que tenían las variables antes de 2.8.0 no las lee nada desde 3.1.0: una que siga definida se nombra al arrancar con la variable a la que hay que renombrarla, y `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` y `EXCLUDE_TOOLS` impiden el arranque, porque ignorar una serviría lo que retiraba. La [referencia de variables de entorno](/gitlab-mcp-server/es/reference/environment/) tiene la regla completa.
+Un `.env` en el directorio actual no se lee: ese directorio pertenece al repositorio que abrió el cliente, no a quien opera el servidor. Si existe, se nombra en `WARN` al arrancar. Las grafías que renombró la 3.0.0 no las lee nada desde la 3.1.0: una que siga definida se nombra al arrancar con la variable a la que hay que renombrarla, y `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` y `EXCLUDE_TOOLS` impiden el arranque, porque ignorar una serviría lo que retiraba. La [referencia de variables de entorno](/gitlab-mcp-server/es/reference/environment/) tiene la regla completa.
 
 ### Modo HTTP
 

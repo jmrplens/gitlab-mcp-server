@@ -46,7 +46,7 @@ Stdio mode reads its configuration from environment variables, falling back to `
 
 ## Variable naming
 
-Settings this project defines are read as `GITLAB_MCP_<NAME>` from 2.8.0.
+Settings this project defines are read as `GITLAB_MCP_<NAME>` from 3.0.0.
 
 A stdio MCP server runs in whatever shell its client was started from, next to
 every other tool that person uses. Names as generic as `LOG_LEVEL`, `AUTH_MODE`
@@ -54,7 +54,7 @@ or `RATE_LIMIT_RPS` may already be owned by something else there, and the
 collision is silent: the server reads a value nobody gave it and behaves in a
 way nobody configured.
 
-The spellings used before 2.8.0 were removed in 3.1.0 and are read by nothing:
+The spellings 3.0.0 renamed were removed in 3.1.0 and are read by nothing:
 the bare generic names (`TOOL_SURFACE`, `LOG_LEVEL` and the rest), the
 switches that already began with `GITLAB_` (`GITLAB_TIER`, `GITLAB_READ_ONLY`,
 `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES`, `GITLAB_SKIP_TLS_VERIFY`) and

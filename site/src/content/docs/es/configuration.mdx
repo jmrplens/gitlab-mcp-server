@@ -46,7 +46,7 @@ El modo stdio lee su configuración de variables de entorno, y recurre a `~/.git
 
 ## Nombres de las variables
 
-Los ajustes que define este proyecto se leen como `GITLAB_MCP_<NOMBRE>` desde la 2.8.0.
+Los ajustes que define este proyecto se leen como `GITLAB_MCP_<NOMBRE>` desde la 3.0.0.
 
 Un servidor MCP por stdio se ejecuta en la shell desde la que arrancó su
 cliente, junto a todas las demás herramientas de esa persona. Nombres tan
@@ -54,7 +54,7 @@ genéricos como `LOG_LEVEL`, `AUTH_MODE` o `RATE_LIMIT_RPS` pueden pertenecer ya
 a otra cosa, y la colisión es silenciosa: el servidor lee un valor que nadie le
 dio y se comporta como nadie configuró.
 
-Las grafías anteriores a la 2.8.0 se eliminaron en la 3.1.0 y nada las lee: los
+Las grafías que renombró la 3.0.0 se eliminaron en la 3.1.0 y nada las lee: los
 nombres genéricos sin prefijo (`TOOL_SURFACE`, `LOG_LEVEL` y el resto), los
 interruptores que ya empezaban por `GITLAB_` (`GITLAB_TIER`,
 `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES`,

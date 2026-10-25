@@ -186,7 +186,7 @@ gitlab-mcp-server
 gitlab-mcp-server
 ```
 
-A `.env` in the current directory is not read: that directory belongs to whatever repository the client opened, not to the operator. One that exists is named at `WARN` on startup. The spellings variables had before 2.8.0 are read by nothing since 3.1.0: one left set is named at startup with the variable to rename it to, and `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` and `EXCLUDE_TOOLS` refuse the start instead, since ignoring one would serve what it withheld. The [environment variable reference](/gitlab-mcp-server/reference/environment/) has the full rule.
+A `.env` in the current directory is not read: that directory belongs to whatever repository the client opened, not to the operator. One that exists is named at `WARN` on startup. The spellings 3.0.0 renamed are read by nothing since 3.1.0: one left set is named at startup with the variable to rename it to, and `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE` and `EXCLUDE_TOOLS` refuse the start instead, since ignoring one would serve what it withheld. The [environment variable reference](/gitlab-mcp-server/reference/environment/) has the full rule.
 
 ### HTTP mode
 
