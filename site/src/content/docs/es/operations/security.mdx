@@ -347,7 +347,7 @@ gitlab-mcp-server --http \
   --auth-distinct-token-limit=50 --auth-distinct-token-window=10m
 ```
 
-La escalera se construye a partir de `--auth-failure-window`: una ventana, luego diez, luego sesenta, y se olvida tras sesenta de silencio. Se detiene ahí en vez de crecer sin fin, porque un bloqueo es una defensa y no un castigo, y quien herede después esa dirección no hizo nada para merecerlo.
+La escalera se construye a partir de `--auth-failure-window`: una ventana, luego diez, luego sesenta, y se olvida tras sesenta de silencio. Una ventana de `0` desactiva el presupuesto de fallos y deja la escalera activa, construida con el minuto por defecto, de modo que desactivar un presupuesto nunca desactiva otro. Se detiene ahí en vez de crecer sin fin, porque un bloqueo es una defensa y no un castigo, y quien herede después esa dirección no hizo nada para merecerlo.
 
 Con la telemetría activada, los rechazos se exportan como `gitlab_mcp.auth.blocks`, separados por el presupuesto que rechazó. La dirección no es, deliberadamente, una dimensión de esa métrica.
 

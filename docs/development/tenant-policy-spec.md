@@ -180,7 +180,7 @@ where its value comes from, in three ways:
   one zero another row decides that passes without a finding (`RTC-007`, issue 951); and
   a zero refused at startup or replaced by the default, the row's own or one of its
   settings' (`INV-015`), which is how the exceptions issue 958 states pass (`POL-001`,
-  `RTC-001`'s burst, `ADM-008`, `HLD-003`). The decision is the one the
+  `RTC-001`'s burst, `ADM-005`, `ADM-008`, `HLD-003`). The decision is the one the
   row's `OffWithBy` or `ZeroBy` names, among those it records: a row whose decisions are
   about something else does not pass that way, and a `ZeroBy` on a row whose every zero
   means off decides nothing and is refused.
@@ -275,7 +275,10 @@ where its value comes from, in three ways:
   zero, since a pool with no bound would grow with every credential presented and one
   that kept no entry could serve nothing (`POL-001`); the tool-call bucket's burst
   refuses a zero beside a positive rate, the rate being the setting that says off
-  (`RTC-001`); and the credential age ceiling and the per-credential watcher ceiling,
+  (`RTC-001`); the OAuth cache TTL refuses a zero or a negative value through its flag
+  and its variable alike, in either authentication mode, since the verifier stamps the
+  TTL into every token's expiration, so a zero would expire each token as it is verified
+  (`ADM-005`); and the credential age ceiling and the per-credential watcher ceiling,
   which no operator sets, keep their default for a Go option's zero, the first because
   it exists so that every credential is re-checked whatever else is off (`ADM-008`) and
   the second because off would leave one credential's watchers bounded only by the
@@ -606,19 +609,28 @@ exceptions, which their rows record through `ZeroBy` and no longer carry the fin
 the pool size's and the burst's, which its decision of 2026-09-28 keeps refused; the
 credential age ceiling's, the exception its own text keeps; and the watcher ceiling's
 option's, under its measure that each zero left departing is an exception with its reason
-(see `INV-015`). F-34 stays on the four whose zero a change of code answers: the
-OAuth cache TTL's flag, which selects the default where its variable refuses (`ADM-005`),
-the fast lockout's window, whose zero also switches the distinct-credential budget off
-(`AUB-001`, `AUB-003`), and the session timeout's variable (`END-005`). F-16, of the same
+(see `INV-015`). It answered the other four with code, and no row carries F-34 any
+longer. The OAuth cache TTL's flag selected the default in oauth mode and went unread in
+legacy mode, where its variable refused in both, and now refuses a zero or a negative
+value at startup in either mode as the variable does, the fifth stated exception
+(`ADM-005`). The fast lockout's window switched the distinct-credential budget
+off with it, whose escalation steps by that window; a zero there now switches the
+lockout off alone, and the escalation steps by the default window, as the
+transport-source budget and the `/48` aggregate already counted in it (`AUB-001`,
+`AUB-003`). And the session timeout's variable refused the zero its flag reads as off,
+and now reads it as off too (`END-005`), as every duration variable whose zero means off
+now reads `0s` as it reads `0`. Each records the issue. F-16, of the same
 issue, recorded bounds no setting reaches with no reason stated, and defaults and
 fallbacks written in two places. Issue 958 stated a reason for every value no setting
 reaches (see [Validation checklist](#validation-checklist)), so the rejected-token
 cache, the credential age ceiling, the unexplained-401 interval, the probe bound and the
 upstream retries (`ADM-006`, `ADM-008`, `ADM-010`, `POL-006`, `RTC-006`) record the
-issue and carry the finding no longer. It stays on the four written twice: the
-revalidation interval, the pool size and the idle timeout, which the pool states a
-second time (`ADM-009`, `POL-001`, `POL-004`), and the transport-source budget's window
-fallback (`AUB-002`), whose `500` states its reason now. F-16, like F-11, now records a
+issue and carry the finding no longer. It then wrote the four written twice once: the
+revalidation interval, the pool size and the idle timeout, which the pool stated a
+second time and now aliases from the register as `internal/config` does (`ADM-009`,
+`POL-001`, `POL-004`), and the transport-source budget's window fallback (`AUB-002`),
+which every budget that reads another one's window takes from one helper, so no row
+carries F-16 either. F-16, like F-11, records a
 departure from no invariant: the `INV-017` departure it covered, a value only a Go option
 reached, is none, since a Go option is not configuration. F-35
 ([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) recorded the
@@ -717,7 +729,7 @@ failed authentication per address.
 
 Issue 954 then changed the key, and answered F-14 and F-25 with it; the rows it moved
 (`IDN-004`, `IDN-005`, `AUB-001` to `AUB-003`) record the issue among their decisions and
-carry neither finding, and F-34 stays on `AUB-001` and `AUB-003` for issue 958. Every
+carry neither finding, nor F-34, which issue 958 answered on `AUB-001` and `AUB-003`. Every
 budget before admission reads its key off the address through `budgetKey`: a whole IPv4
 address, an IPv4-mapped one as the IPv4 address it names, and an IPv6 address by the
 fixed `/64` it lies in, since an IPv6 subnet is a `/64` (RFC 4291) and a caller on one
@@ -1056,7 +1068,10 @@ capacity rule (see [Validation checklist](#validation-checklist)): the rejected-
 cache's eviction of its oldest record and the authentication tables' stop at a full
 table are behaviors the rule allows for what each holds, each row says why it names the
 one it does, and `ADM-006` and `AUB-004` record the issue and carry the finding no
-longer. Four
+longer. F-16 and F-34 are answered by issue 958 too, as the paragraph that records them
+says: every zero that does not mean off is a stated exception with its reason, every
+other zero means off through the flag and the variable alike and switches nothing else
+off, and each default and fallback is written once. Four
 more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
