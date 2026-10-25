@@ -673,6 +673,8 @@ ENVIRONMENT VARIABLES (stdio mode)
                                     is refused, not buffered
   GITLAB_MCP_MAX_LISTEN_STREAMS     Concurrent subscriptions/listen streams one credential may hold open
                                     (default 64; 0 disables the per-credential ceiling). Both transports
+  GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long (default 65m, 0
+                                    disables). Both transports
   GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
                                     How often a token is read again (default %s; 0 stops the periodic
                                     read). Both transports: a stdio process re-reads its fine-grained
@@ -721,8 +723,6 @@ ENVIRONMENT VARIABLES (HTTP mode)
                                     no client deletes keeps one of the process's session slots until it expires,
                                     and with 0 until its credential's pool entry is evicted
   GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
-  GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long, both transports
-                                    (default 65m, 0 disables)
   GITLAB_MCP_DRAIN_DELAY            After SIGTERM, answer /health with 503 draining this long before closing
                                     the listener (default 0)
   GITLAB_MCP_AUTH_FAILURE_LIMIT     Failed authentications one address, an IPv6 one by its /64, may

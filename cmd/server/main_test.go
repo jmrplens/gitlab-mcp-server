@@ -1670,6 +1670,54 @@ func helpBlock(help, start, end string) string {
 	return block
 }
 
+// TestPrintHelp_HTTPEnvironmentBlock_ListsTheSettingsStdioDoesNotRead holds
+// the split of the help's two environment blocks to the code: the HTTP block,
+// whose variables it says have no stdio equivalent, documents exactly the
+// settings only HTTP mode has ([config.HTTPOnlyEnvUses] with every setting
+// this project defines set), and the stdio block documents none of them.
+//
+// Nothing held the split, so a setting stdio began reading kept its entry
+// under "no stdio equivalent": GITLAB_MCP_ACTION_TIMEOUT, which bounds an
+// action on both transports, sat there marked as both transports', and
+// GITLAB_MCP_SESSION_REVALIDATE_INTERVAL stayed there after issue 1171 gave
+// stdio the setting. A setting HTTP mode gains fails here until it has an
+// entry in the HTTP block.
+//
+// Not parallel: it sets environment variables.
+func TestPrintHelp_HTTPEnvironmentBlock_ListsTheSettingsStdioDoesNotRead(t *testing.T) {
+	stdout := captureStdout(t)
+	printHelp()
+	help := stdout()
+
+	for _, name := range config.PrefixedEnvNames() {
+		t.Setenv(config.EnvPrefix+name, "set")
+	}
+	httpOnly := config.HTTPOnlyEnvUses()
+
+	httpBlock := helpVariableNames(helpBlock(help, helpHTTPEnvironmentHeader, helpExamplesHeader))
+	if got := slices.Sorted(slices.Values(httpBlock)); !slices.Equal(got, httpOnly) {
+		t.Errorf("the HTTP environment block documents %v, want the settings only HTTP mode has, %v", got, httpOnly)
+	}
+	for _, name := range helpVariableNames(helpBlock(help, helpStdioEnvironmentHeader, helpHTTPEnvironmentHeader)) {
+		if slices.Contains(httpOnly, name) {
+			t.Errorf("the stdio environment block documents %s, a setting only HTTP mode has", name)
+		}
+	}
+}
+
+// helpVariableNames returns the variables block documents, the first word of
+// each row that names one of this project's settings.
+func helpVariableNames(block string) []string {
+	var names []string
+	for line := range strings.SplitSeq(block, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && strings.HasPrefix(fields[0], config.EnvPrefix) && helpIndent(line) == 2 {
+			names = append(names, fields[0])
+		}
+	}
+	return names
+}
+
 // TestPrintHelp_RevalidateIntervalVariable_SaysWhatStdioReadsItFor holds the
 // help's entry of GITLAB_MCP_SESSION_REVALIDATE_INTERVAL to both of its
 // readers since issue 1171 gave stdio the setting: it sits in the stdio block
