@@ -305,7 +305,7 @@ runs:
 		origin + "1: " + nestedKey + " step 1: run block matches " + curlFinding,
 		checkStepAction(origin+"2", "actions/checkout", nil, nil, true)[0],
 		origin + "3: run block matches " + cargoBinstallFinding,
-		release + ": " + composedKey + "/create.py matches '\\\\bpip\\\\s+install\\\\b(?![^\\\\n]*--require-hashes)': pip install without --require-hashes resolves at run time",
+		release + ": " + composedKey + "/create.py matches '\\\\bpip[0-9.]*[\"\\']?\\\\s+install\\\\b(?![^\\\\n]*--require-hashes)': pip install without --require-hashes resolves at run time",
 		release + ": " + composedKey + "/lib.sh (via " + composedKey + "/run.sh) matches " + latestFinding,
 		origin + "6: $GITHUB_ACTION_PATH/missing.sh resolves to " + composedKey + "/missing.sh, which is not a readable file in that action, so what it runs cannot be judged",
 		origin + "7: $env:GITHUB_ACTION_PATH/unrecorded.ps1 resolves to " + composedKey + "/unrecorded.ps1, which " + actionRecordPath +

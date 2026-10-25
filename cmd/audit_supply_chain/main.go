@@ -50,7 +50,13 @@ var supportedMajor = regexp.MustCompile("`(\\d+)\\.x`")
 // pipInstall is the positive half of the pip rule. RE2 has no lookahead, so the
 // original pattern's negative lookahead is applied separately by
 // [pipInstallWithoutHashes] against the remainder of the matched line.
-var pipInstall = regexp.MustCompile(`\bpip\s+install\b`)
+//
+// pip is read in the spellings a run block or a script uses for it: pip3 and
+// pip3.12 as well, and a path to pip whose quote closes before the
+// subcommand, as "$VENV/bin/pip" install. The original read pip alone, so an
+// unhashed "$VENV/bin/pip" install, the spelling scripts/publish-pypi.sh used
+// before it installed from a lock, passed it.
+var pipInstall = regexp.MustCompile(`\bpip[0-9.]*["']?\s+install\b`)
 
 // credentialedPermissions are the permissions that make a job worth attacking:
 // one can rewrite the repository, one mints the repository's signing and
@@ -117,7 +123,7 @@ var unlockedCode = []unlockedRule{
 	{
 		match:   pipInstallWithoutHashes,
 		name:    "pip-unhashed",
-		display: `'\\bpip\\s+install\\b(?![^\\n]*--require-hashes)'`,
+		display: `'\\bpip[0-9.]*["\']?\\s+install\\b(?![^\\n]*--require-hashes)'`,
 		why:     "pip install without --require-hashes resolves at run time",
 	},
 	{
@@ -275,7 +281,8 @@ func regexpMatcher(expression *regexp.Regexp) func(string) bool {
 //
 // This is the RE2 rendering of the original lookahead. Python asked for
 // \bpip\s+install\b(?![^\n]*--require-hashes), whose negative lookahead scans
-// the remainder of the line the match ends on; Go's regexp package has no
+// the remainder of the line the match ends on ([pipInstall] now reads more
+// spellings of pip than that first half did); Go's regexp package has no
 // lookahead, so that remainder is sliced out and searched directly. The two
 // halves must stay together: dropping the second one would flag every hashed
 // install, and dropping the first would flag nothing.

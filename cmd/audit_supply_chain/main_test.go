@@ -787,6 +787,8 @@ func TestCheckCredentialedJob_RunBlock_RejectsRunTimeCode(t *testing.T) {
 		{name: "curl piped to bash", run: "curl -fsSL https://example.test/i.sh | bash", wantProblem: true},
 		{name: "pip install unhashed", run: "pip install --quiet jsonschema", wantProblem: true},
 		{name: "pip install hashed", run: "pip install --require-hashes -r req.txt", wantProblem: false},
+		{name: "pip3 install unhashed", run: "pip3 install --quiet jsonschema", wantProblem: true},
+		{name: "venv pip install unhashed", run: `"$VENV/bin/pip" install twine`, wantProblem: true},
 		{name: "comment about npx", run: "# Pinned, not @latest: npx would resolve at run time\nnpm ci", wantProblem: false},
 		{name: "pinned npm install", run: "npm install -g npm@11.5.1", wantProblem: false},
 		{name: "plain vet", run: "go vet ./...", wantProblem: false},
@@ -837,6 +839,13 @@ func TestPipInstallWithoutHashes_Line_DecidesTheMatch(t *testing.T) {
 		{name: "unhashed install at end of text", run: "pip install pyyaml", want: true},
 		{name: "no pip at all", run: "make build", want: false},
 		{name: "pipx is not pip", run: "pipx install ruff", want: false},
+		{name: "pipenv is not pip", run: "pipenv install", want: false},
+		{name: "pip3 is still pip install", run: "pip3 install pyyaml", want: true},
+		{name: "a versioned pip is still pip install", run: "pip3.12 install pyyaml", want: true},
+		{name: "a quoted path to pip is still pip install", run: `"$VENV/bin/pip" install pyyaml`, want: true},
+		{name: "a single-quoted path to pip3 is still pip install", run: `'/opt/venv/bin/pip3' install pyyaml`, want: true},
+		{name: "hashed pip3 passes", run: "pip3 install --require-hashes -r r.txt", want: false},
+		{name: "a hashed install through a quoted path passes", run: `"$VENV/bin/pip" install --require-hashes -r r.txt`, want: false},
 	}
 
 	for _, testCase := range cases {
@@ -1123,7 +1132,7 @@ func TestCheckCredentialedJob_EachRule_NamesItsPatternAndReason(t *testing.T) {
 		{
 			name: "unhashed pip install",
 			run:  "pip install pyyaml",
-			want: where + `'\\bpip\\s+install\\b(?![^\\n]*--require-hashes)'` +
+			want: where + `'\\bpip[0-9.]*["\']?\\s+install\\b(?![^\\n]*--require-hashes)'` +
 				": pip install without --require-hashes resolves at run time",
 		},
 		{
@@ -3797,12 +3806,6 @@ const (
 
 var hashedRequirement = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*==[^\s=]+(?: --hash=sha256:[0-9a-f]{64})+$`)
 
-// anyPipInstall is a pip install in more spellings than the pip-unhashed rule
-// reads: pip3 or pip3.12 too, and a path to pip whose quote closes before the
-// subcommand, as "$VENV/bin/pip" install, the spelling the script used before
-// it installed from the lock.
-var anyPipInstall = regexp.MustCompile(`\bpip[0-9.]*["']?\s+install\b`)
-
 // TestLoadWorkflows_PyPIJob_PublishesThroughItsOwnSteps verifies that the
 // release workflow's pypi job uploads with steps of its own rather than
 // through pypa/gh-action-pypi-publish (issue 1243), whose generated container
@@ -3894,8 +3897,9 @@ func assertPyPIPublishRunsTheScript(t *testing.T, root string) {
 }
 
 // assertPyPIScriptInstallsFromTheLock holds every pip install of
-// scripts/publish-pypi.sh, in every spelling anyPipInstall reads, to
-// --require-hashes and the committed lock.
+// scripts/publish-pypi.sh, in every spelling the pip-unhashed rule reads
+// ([pipInstall]), to --require-hashes and the committed lock, which is more
+// than that rule asks.
 func assertPyPIScriptInstallsFromTheLock(t *testing.T, root string) {
 	t.Helper()
 
@@ -3909,7 +3913,7 @@ func assertPyPIScriptInstallsFromTheLock(t *testing.T, root string) {
 	}
 	installs := 0
 	for line := range strings.SplitSeq(body, "\n") {
-		if !anyPipInstall.MatchString(line) {
+		if !pipInstall.MatchString(line) {
 			continue
 		}
 		installs++

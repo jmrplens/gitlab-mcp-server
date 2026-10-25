@@ -18,7 +18,8 @@
 //     credentialed when its permissions grant contents: write, id-token: write
 //     or packages: write, or when it reads a secret the secret table
 //     (secrets.go) says can write. That means no npx, no @latest, no curl
-//     piped into a shell, no unhashed pip install, no cargo binstall (which
+//     piped into a shell, no unhashed pip install (pip3, pip3.12 and a quoted
+//     path to pip included), no cargo binstall (which
 //     installs a prebuilt binary whatever version it is given), no cargo
 //     install without --locked and an exact version or a --path, no go install
 //     at anything but an exact version or a full commit, and no download
