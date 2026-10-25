@@ -1487,14 +1487,17 @@ validate-pypi-local:
 	python3 scripts/build_pypi.py --binaries "$(PYPI_BINARIES)" --version "$$VER" && \
 	python3 scripts/validate_pypi.py --wheels pypi/dist --version "$$VER"
 
-## publish-pypi-dry: assemble and validate the PyPI wheelhouse without uploading.
+## publish-pypi-dry: assemble and validate the PyPI wheelhouse, install twine
+## from the hash-pinned .github/requirements/pypi-publish.txt and run its
+## check, without uploading.
 publish-pypi-dry:
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
 	scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
 
 ## publish-pypi: assemble, validate and publish the PyPI wheels out of band.
-## Auth via PYPI_TOKEN. The release workflow publishes through the OIDC
-## trusted publisher instead; this target is for bootstrap/manual publishes.
+## Auth via PYPI_TOKEN, and no attestation is made. The release workflow
+## publishes through the OIDC trusted publisher instead; this target is for
+## bootstrap/manual publishes.
 publish-pypi:
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
 	scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"

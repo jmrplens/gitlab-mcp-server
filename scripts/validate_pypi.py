@@ -2,8 +2,8 @@
 """Validate the PyPI wheelhouse before anything is uploaded.
 
 A published PyPI file name is burned forever (deleting a release does not
-free its file names), so everything checkable is checked before twine or the
-publish action ever sees the wheels:
+free its file names), so everything checkable is checked before
+scripts/publish-pypi.sh or twine ever sees the wheels:
 
 - all six platform wheels exist for the given version, and nothing else;
 - every RECORD hash and size matches the archived bytes;
@@ -32,7 +32,8 @@ publish action ever sees the wheels:
   console script must answer an MCP initialize handshake over stdio with
   pure JSON-RPC and the right server version (skipped with --no-install);
 - `twine check --strict` passes over every wheel, when twine is installed
-  in the interpreter running this (the publish action runs its own).
+  in the interpreter running this (scripts/publish-pypi.sh runs its own,
+  with the twine its hash-pinned requirements install).
 
 Standard library only. Usage:
     python3 scripts/validate_pypi.py --wheels pypi/dist --version 2.7.5
@@ -326,11 +327,12 @@ def twine_check(wheels):
     This is the reading PyPI's own upload path makes of the metadata, so a
     field it would refuse fails here instead of after a file name is burned.
     It is skipped, and says so, where twine is not installed: the
-    validator stays standard library only, and the publish action runs the
-    same check before it uploads.
+    validator stays standard library only, and scripts/publish-pypi.sh runs
+    the same check, with the twine it installs from its hash-pinned
+    requirements, before it uploads.
     """
     if importlib.util.find_spec("twine") is None:
-        print("twine: not installed here, skipping twine check (the publish action runs its own)")
+        print("twine: not installed here, skipping twine check (scripts/publish-pypi.sh runs its own)")
         return
     result = subprocess.run([sys.executable, "-m", "twine", "check", "--strict"] + list(wheels),
                             capture_output=True, text=True, check=False)

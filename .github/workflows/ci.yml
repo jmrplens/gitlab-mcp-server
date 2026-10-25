@@ -1115,6 +1115,12 @@ jobs:
       # scripts/publish_npm_sh_test.py holds scripts/publish-npm.sh, run
       # against a stand-in npm, to publishing every package under the
       # dist-tag that decision hands it (issue 1323).
+      # scripts/publish_pypi_sh_test.py runs scripts/publish-pypi.sh against a
+      # stand-in python3, curl, dirname and venv, and holds it to installing
+      # from the hash-pinned requirements, attesting each wheel before it
+      # mints the upload token from the job's identity, handing each
+      # credential to the one process that needs it, and stopping a rehearsal
+      # before the mint (issue 1243).
       # shellcheck, bash, git, jq, zip, unzip and wget come from the runner
       # image.
       # Off CI a test skips when one is missing; here, where GitHub sets CI,
