@@ -191,7 +191,7 @@ where its value comes from, in three ways:
   `RTC-001`'s burst, `ADM-005`, `ADM-008`, `HLD-003`); and a value that does not parse
   and does not refuse startup, warning and keeping the default, skipping the entry or
   reading as off (`INV-017`), which is how the exceptions issue 957 states pass
-  (`HLD-001`, `RQB-004`, `AUT-006`, `DST-003`). The decision is the one the
+  (`HLD-001`, `RQB-004`, `IDN-014`, `AUT-006`, `DST-003`). The decision is the one the
   row's `OffWithBy`, `ZeroBy` or `MalformedBy` names, among those it records: a row
   whose decisions are about something else does not pass that way, a `ZeroBy` on a row
   whose every zero means off decides nothing and is refused, and so is a `MalformedBy`
@@ -309,10 +309,12 @@ where its value comes from, in three ways:
   implicit: the listen ceiling and the stdio line limit warn and keep their default,
   since stdio configuration arrives through the environment of whatever launched the
   process and a mistyped number must not take the client down with the server
-  (`HLD-001`, `RQB-004`); a directory of a local allow-list that does not resolve is
-  skipped and the rest kept, since an entry that names nothing widens nothing
-  (`AUT-006`); and the private-instance opt-out reads a value it does not parse as off,
-  so a typo never turns the destination guard off (`DST-003`).
+  (`HLD-001`, `RQB-004`); the tool name and the action as metric dimensions fall back to
+  `auto`, since telemetry observes the server rather than serving its clients
+  (`IDN-014`); a directory of a local allow-list that does not resolve is skipped and the
+  rest kept, since an entry that names nothing widens nothing (`AUT-006`); and the
+  private-instance opt-out reads a value it does not parse as off, so a typo never turns
+  the destination guard off (`DST-003`).
 - **INV-018 Bound the process on the process.** A bound whose purpose is to protect the
   process, or an upstream budget the whole deployment shares, is keyed on the process.
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state

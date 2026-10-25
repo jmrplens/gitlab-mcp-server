@@ -5,8 +5,8 @@ package tenancy
 // the bucket each address draws on for the documents published without a
 // credential, the listen and watcher ceilings with their process partners, the watch
 // lease, the pool's size, eviction and idle rules, the upstream retry policy,
-// the telemetry identity policy and the lifetime of multi-round-trip request
-// state.
+// the telemetry identity policy, the lifetime of multi-round-trip request
+// state and whether telemetry's metrics carry the tool name.
 //
 // Three of them are class D: keyed on the entry while their own reason is
 // about a GitLab user, so one tenant holding N credentials holds N units
@@ -952,6 +952,27 @@ func allowDecisions() []Decision {
 				alias(pkgElicitation, "stateTTL", "RequestStateTTL"),
 				enforce(pkgElicitation, "decodeState"),
 			},
+		},
+		{
+			// Whether the tool name and the action are metric dimensions is
+			// how many series telemetry gives one metric, and nothing about
+			// who a caller is. No row named its variable until issue 957,
+			// which gave it this one so that the variable and its malformed
+			// value are held as every setting's are. A value it does not know
+			// is logged and auto is used rather than refusing startup (issue
+			// 957): telemetry observes the server rather than serving its
+			// clients, and auto is the default, which keeps both dimensions
+			// where they are cheap and drops them where they would overflow
+			// the metrics SDK's cardinality limit.
+			ID: "IDN-014", Question: Allow, Kind: Rule, Class: ClassP, Disposition: Ruled,
+			Resource: "whether the tool name and the action are dimensions of telemetry's metrics",
+			Key:      KeyProcess, StdioKey: KeyProcess,
+			Source: Configurable, Flags: []string{"--telemetry-tool-name"},
+			Envs:      []string{"GITLAB_MCP_TELEMETRY_TOOL_NAME"},
+			Malformed: WarnKeepDefault, MalformedBy: "issue 957",
+			Decided:  []string{"issue 957"},
+			Findings: []string{"F-13"},
+			Sites:    []Site{enforce(pkgServer, "dropToolNameFromMetrics")},
 		},
 	}
 }

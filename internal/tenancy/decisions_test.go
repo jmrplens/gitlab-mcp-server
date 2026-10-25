@@ -17,7 +17,7 @@ import (
 // row.
 var specRequirementIDs = []string{
 	"IDN-001", "IDN-002", "IDN-003", "IDN-004", "IDN-005", "IDN-006", "IDN-007",
-	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013",
+	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013", "IDN-014",
 	"ADM-001", "ADM-002", "ADM-003", "ADM-004", "ADM-005", "ADM-006", "ADM-007",
 	"ADM-008", "ADM-009", "ADM-010", "ADM-011", "ADM-012", "ADM-013", "ADM-014",
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005", "AUB-006",
@@ -100,7 +100,10 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // latest_pipeline resource runs on every poll of a watch (issue 1242), the
 // twelfth. AUB-006, the /48 aggregate issue 954 added, is the thirty-second
 // valued row, and RTC-008, the discovery documents' bucket issue 1053 added,
-// the thirty-third.
+// the thirty-third. IDN-014, whether the tool name and the action are
+// dimensions of telemetry's metrics, which issue 957 gave a row so that its
+// variable and its malformed value are held as every setting's are, is the
+// thirty-seventh ruled row.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -112,7 +115,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 33},
-		{"ruled", Ruled, 36},
+		{"ruled", Ruled, 37},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 12},
@@ -1018,9 +1021,10 @@ func TestDecisions_GoOptions_AreTheValuesOnlyTestsSet(t *testing.T) {
 // allow-list (AUT-006), and read as off when it is the opt-out of the
 // destination guard, so a typo never turns the guard off (DST-003); the listen
 // ceiling warns and keeps its default, as the stdio line limit does, so that a
-// typo cannot take a client down with the server (HLD-001, RQB-004). Every
-// other row's malformed value refuses startup, or every value of it means
-// something (AcceptsAny), or the row has none, which is what the rule's own
+// typo cannot take a client down with the server (HLD-001, RQB-004); and the
+// tool name as a metric dimension falls back to auto (IDN-014). Every other
+// row's malformed value refuses startup, or every value of it means something
+// (AcceptsAny), or the row has none, which is what the rule's own
 // [malformedDeparts] says.
 func TestDecisions_MalformedExceptions_AreDecidedByIssue957(t *testing.T) {
 	exceptions := []struct {
@@ -1030,6 +1034,7 @@ func TestDecisions_MalformedExceptions_AreDecidedByIssue957(t *testing.T) {
 		{"AUT-006", SkipEntry},
 		{"DST-003", ReadsAsOff},
 		{"HLD-001", WarnKeepDefault},
+		{"IDN-014", WarnKeepDefault},
 		{"RQB-004", WarnKeepDefault},
 	}
 	var want []string
@@ -1053,6 +1058,29 @@ func TestDecisions_MalformedExceptions_AreDecidedByIssue957(t *testing.T) {
 	}
 	if !slices.Equal(departing, want) {
 		t.Errorf("the rows whose malformed value departs from refusing startup, or that name a decision for one, are %v, want %v", departing, want)
+	}
+}
+
+// TestDecisions_TelemetryToolName_IsARowOfItsOwn pins IDN-014, the row issue
+// 957 gave GITLAB_MCP_TELEMETRY_TOOL_NAME, which no row named: a process-wide
+// rule set by its flag and its variable, read around the configuration
+// package until the next layer moves the read, which F-13 records meanwhile,
+// and decided by nothing else the register holds.
+func TestDecisions_TelemetryToolName_IsARowOfItsOwn(t *testing.T) {
+	d, ok := Lookup("IDN-014")
+	if !ok {
+		t.Fatal("IDN-014 names no row")
+	}
+	if d.Source != Configurable || !slices.Equal(d.Flags, []string{"--telemetry-tool-name"}) ||
+		!slices.Equal(d.Envs, []string{"GITLAB_MCP_TELEMETRY_TOOL_NAME"}) || len(d.Config) != 0 {
+		t.Errorf("IDN-014: source %d, flags %v, envs %v, config %v; want the flag and the variable, carried by no internal/config field",
+			d.Source, d.Flags, d.Envs, d.Config)
+	}
+	if !slices.Equal(d.Findings, []string{"F-13"}) || !slices.Equal(d.Decided, []string{"issue 957"}) {
+		t.Errorf("IDN-014: findings %v, decided %v; want F-13 while the variable is read directly, and issue 957", d.Findings, d.Decided)
+	}
+	if want := []Site{enforce(pkgServer, "dropToolNameFromMetrics")}; !slices.Equal(d.Sites, want) {
+		t.Errorf("IDN-014: sites %v, want %v", d.Sites, want)
 	}
 }
 
@@ -1462,6 +1490,7 @@ func rowPins() map[string]rowPin {
 		"POL-005": {Allow, Rule, ClassR, Mechanism, KeyEntry, KeyNone, KeyNone, KeyNone, nil},
 		"IDN-009": {Allow, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, nil},
 		"IDN-011": {Allow, Lifetime, ClassQ, Valued, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
+		"IDN-014": {Allow, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, nil},
 
 		"END-001": {End, Rule, ClassR, Ruled, KeyOwner, KeyNone, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_evicted", StartOver),

@@ -3,7 +3,7 @@ package tenancy
 import "fmt"
 
 // Decisions returns every row of the register: one per requirement of the
-// specification, eighty-nine in all.
+// specification, ninety in all.
 //
 // The rows are grouped by the question they answer (spec: The five questions),
 // in the order the specification asks them (identify, admit, authorize, allow,
@@ -43,7 +43,7 @@ func requirementIDs() []string {
 		prefix string
 		count  int
 	}{
-		{"IDN", 13},
+		{"IDN", 14},
 		{"ADM", 14},
 		{"AUB", 6},
 		{"RTC", 8},

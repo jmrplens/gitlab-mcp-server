@@ -97,8 +97,8 @@ the code; the layers keep enforcing.**
   pool size, the tool-call burst, the credential age ceiling and the watcher ceiling
   state theirs; and, since issue 957, a value that does not parse and does not refuse
   startup (`INV-017`), where the decision is the one the row's `MalformedBy` names, which
-  is how the listen ceiling, the stdio line limit, the local directory allow-lists and
-  the private-instance opt-out state theirs. Only through
+  is how the listen ceiling, the stdio line limit, the metrics' tool-name dimension, the
+  local directory allow-lists and the private-instance opt-out state theirs. Only through
   a finding recorded for the invariant: a
   per-caller number protecting a process resource with no partner, a structure keyed on a
   mintable value with no capacity, an in-band code of the server's own that mirrors no
