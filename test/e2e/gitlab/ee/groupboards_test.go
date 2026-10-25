@@ -7,8 +7,10 @@
 // what only a licensed instance sends on a group board, the assignee and
 // weight it is scoped to and the metric each limited column is counted by,
 // which every answer carrying a board reads off the captured response (issue
-// 1283). The column actions, and the reads and the rename of a board the
-// fixture library built, are Free and live in the common package.
+// 1283), and the text of the board listing, which names each limited column
+// with its ceilings and its metric (issue 1284). The column actions, and the
+// reads and the rename of a board the fixture library built, are Free and
+// live in the common package.
 
 package ee
 
@@ -101,9 +103,11 @@ type groupBoardKeys struct {
 // BoardList no metric, so every one of them reaches the answer only from the
 // captured response (issue 1283). The create can hold only what a new board
 // has, both lists shown and no scope; the two switches differ everywhere
-// after it, so an answer that read one into the other is caught. Scoped
-// boards and work-in-progress limits are licensed, which is why the scenario
-// lives here.
+// after it, so an answer that read one into the other is caught. The
+// listing's text is held as well, to a Column Limits row for each of the two
+// columns, since until issue 1284 it said only how many columns the board
+// has. Scoped boards and work-in-progress limits are licensed, which is why
+// the scenario lives here.
 func TestGroupBoards_ScopedBoardWithLimitedColumns_EveryBoardAnswerCarriesTheCapturedKeys(t *testing.T) {
 	e := harness.New(t)
 
@@ -141,7 +145,8 @@ func TestGroupBoards_ScopedBoardWithLimitedColumns_EveryBoardAnswerCarriesTheCap
 		read := harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardGet, board)
 		assertGroupBoardKeys(e, "group_board_get", read, want)
 
-		listed := harness.Do[groupboards.ListGroupBoardsOutput](s, actionGroupBoardList, params)
+		listed, said := harness.DoAnswer[groupboards.ListGroupBoardsOutput](s, actionGroupBoardList, params)
+		assertColumnLimitRows(e, "group_board_list", said, created.ID, want.metrics)
 		for _, candidate := range listed.Boards {
 			if candidate.ID == created.ID {
 				assertGroupBoardKeys(e, "group_board_list", candidate, want)

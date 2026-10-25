@@ -4,12 +4,16 @@
 // whose work-in-progress limit is set, which only a licensed instance has:
 // every answer carrying a column carries the metric that column is counted
 // by, limit_metric, the one key of a column client-go's BoardList does not
-// model (issue 1256). The board and column lifecycle is Free and lives in the
-// common package.
+// model (issue 1256), and the text of the board listing names each limited
+// column with its ceilings and its metric (issue 1284). The board and column
+// lifecycle is Free and lives in the common package.
 
 package ee
 
 import (
+	"fmt"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/boards"
@@ -42,7 +46,9 @@ const (
 // project board answers published every column without its metric: the board
 // listing, create and update and the column read, create and update. The two
 // create answers cannot be held here, since a new board has no column and a
-// new column no limit; the unit tests hold them.
+// new column no limit; the unit tests hold them. The board listing's text is
+// held as well, to a Column Limits row for each of the two columns, since
+// until issue 1284 it said only how many columns the board has.
 func TestProjectBoards_LimitedColumns_EveryAnswerCarriesTheMetric(t *testing.T) {
 	e := harness.New(t)
 
@@ -64,8 +70,9 @@ func TestProjectBoards_LimitedColumns_EveryAnswerCarriesTheMetric(t *testing.T) 
 		read := harness.Do[boards.BoardOutput](s, actionProjectBoardGet, board)
 		assertColumnMetrics(e, "board_get", read.Lists, both)
 
-		listed := harness.Do[boards.ListBoardsOutput](s, actionProjectBoardList, params)
+		listed, said := harness.DoAnswer[boards.ListBoardsOutput](s, actionProjectBoardList, params)
 		assertColumnMetrics(e, "board_list", boardColumns(e, listed.Boards, created.ID), both)
+		assertColumnLimitRows(e, "board_list", said, created.ID, both)
 
 		renamed := harness.Do[boards.BoardOutput](s, actionProjectBoardUpdate, withParams(board, map[string]any{"name": e.Name("renamed")}))
 		assertColumnMetrics(e, "board_update", renamed.Lists, both)
@@ -133,4 +140,35 @@ func assertColumnMetrics(e *harness.Env, action string, columns []boards.BoardLi
 			e.T.Errorf("%s answered column %d counted by %q, want %q", action, id, published, metric)
 		}
 	}
+}
+
+// assertColumnLimitRows checks that the text of a board listing names each
+// column of want in its Column Limits table: a row opening with the board and
+// the column, the two IDs the column actions take, and closing with the
+// ceilings the scenario set and the metric want gives the column. The scope
+// cell between them is the label the fixture named, which the unit tests hold
+// to its escaping. The project and the group listings write the same table.
+func assertColumnLimitRows(e *harness.Env, action, said string, board int64, want map[int64]string) {
+	e.T.Helper()
+	lines := strings.Split(said, "\n")
+	for column, metric := range want {
+		head := fmt.Sprintf("| %d | %d | ", board, column)
+		tail := columnLimitTail(metric)
+		named := slices.ContainsFunc(lines, func(line string) bool {
+			return strings.HasPrefix(line, head) && strings.HasSuffix(line, tail)
+		})
+		if !named {
+			e.T.Errorf("%s names no Column Limits row for column %d of board %d ending %q:\n%s", action, column, board, tail, said)
+		}
+	}
+}
+
+// columnLimitTail is how a Column Limits row ends for a column the scenario
+// limited by metric: the ceiling it set under the metric's own column, a dash
+// under the other, and the metric.
+func columnLimitTail(metric string) string {
+	if metric == weightMetric {
+		return fmt.Sprintf("| - | %d | %s |", weightCeiling, metric)
+	}
+	return fmt.Sprintf("| %d | - | %s |", countCeiling, metric)
 }
