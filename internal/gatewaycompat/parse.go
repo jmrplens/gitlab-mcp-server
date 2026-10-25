@@ -156,12 +156,11 @@ func Apply(subs []Substitution, text string) string {
 }
 
 // growthLimit is the longest rewritten form of an n-byte string this package
-// will serve.
+// will serve: the larger of the two bounds. Written as max rather than as a
+// comparison, whose boundary mutant returns the same number at the one input
+// where the bounds meet and so is an equivalent mutant no test can kill.
 func growthLimit(n int) int {
-	if scaled := n * growthFactor; scaled > n+growthAllowance {
-		return scaled
-	}
-	return n + growthAllowance
+	return max(n*growthFactor, n+growthAllowance)
 }
 
 // announceClamp reports the first refusal, so an operator whose substitutions
@@ -179,17 +178,24 @@ func announceClamp(rules, original, grown, limit int) {
 
 // splitUnescaped splits on every separator not preceded by a backslash,
 // keeping the escapes in place for unescape to resolve.
+//
+// The loops here are chains of ifs rather than tagless switches: Go's
+// coverage records no block for a case expression, so the mutation gate read
+// every mutant of one as never reached.
 func splitUnescaped(value string, sep byte) []string {
 	var parts []string
 	start := 0
 	escaped := false
 	for i := range len(value) {
-		switch {
-		case escaped:
+		if escaped {
 			escaped = false
-		case value[i] == '\\':
+			continue
+		}
+		if value[i] == '\\' {
 			escaped = true
-		case value[i] == sep:
+			continue
+		}
+		if value[i] == sep {
 			parts = append(parts, value[start:i])
 			start = i + 1
 		}
@@ -202,12 +208,15 @@ func splitUnescaped(value string, sep byte) []string {
 func splitPairUnescaped(value string, sep byte) []string {
 	escaped := false
 	for i := range len(value) {
-		switch {
-		case escaped:
+		if escaped {
 			escaped = false
-		case value[i] == '\\':
+			continue
+		}
+		if value[i] == '\\' {
 			escaped = true
-		case value[i] == sep:
+			continue
+		}
+		if value[i] == sep {
 			return []string{value[:i], value[i+1:]}
 		}
 	}

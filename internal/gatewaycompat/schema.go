@@ -54,32 +54,53 @@ func RewriteSchemaProse(v any, rewrite func(text string) string) bool {
 func rewriteSchemaMap(value map[string]any, rewrite func(text string) string) bool {
 	changed := false
 	for key, inner := range value {
-		switch {
-		case schemaDataKeys[key]:
-			// Data, not schema: never entered.
-		case schemaMapKeys[key]:
-			children, ok := inner.(map[string]any)
-			if !ok {
-				continue
-			}
-			for _, child := range children {
-				if RewriteSchemaProse(child, rewrite) {
-					changed = true
-				}
-			}
-		case key == "description" || key == "title":
-			text, ok := inner.(string)
-			if !ok {
-				continue
-			}
-			if rewritten := rewrite(text); rewritten != text {
-				value[key] = rewritten
-				changed = true
-			}
-		default:
-			if RewriteSchemaProse(inner, rewrite) {
-				changed = true
-			}
+		if rewriteSchemaKeyword(value, key, inner, rewrite) {
+			changed = true
+		}
+	}
+	return changed
+}
+
+// rewriteSchemaKeyword is [rewriteSchemaMap] for one keyword and its value,
+// reporting whether anything below it changed.
+//
+// Written as a chain of returns rather than a tagless switch: Go's coverage
+// records no block for a case expression, so the mutation gate read every
+// mutant of the prose keyword's condition as never reached.
+func rewriteSchemaKeyword(value map[string]any, key string, inner any, rewrite func(text string) string) bool {
+	if schemaDataKeys[key] {
+		// Data, not schema: never entered.
+		return false
+	}
+	if schemaMapKeys[key] {
+		return rewriteSchemaChildren(inner, rewrite)
+	}
+	if key == "description" || key == "title" {
+		text, ok := inner.(string)
+		if !ok {
+			return false
+		}
+		rewritten := rewrite(text)
+		if rewritten == text {
+			return false
+		}
+		value[key] = rewritten
+		return true
+	}
+	return RewriteSchemaProse(inner, rewrite)
+}
+
+// rewriteSchemaChildren descends each subschema of a name→schema map, such as
+// properties or $defs; a value that is not such a map has nothing to descend.
+func rewriteSchemaChildren(inner any, rewrite func(text string) string) bool {
+	children, ok := inner.(map[string]any)
+	if !ok {
+		return false
+	}
+	changed := false
+	for _, child := range children {
+		if RewriteSchemaProse(child, rewrite) {
+			changed = true
 		}
 	}
 	return changed
