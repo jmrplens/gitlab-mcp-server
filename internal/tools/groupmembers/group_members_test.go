@@ -265,14 +265,19 @@ func TestEditMember_MemberRoleID(t *testing.T) {
 	}
 }
 
-// TestAddMember_MissingUserAndUsername verifies that AddMember_MissingUserAndUsername returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestAddMember_MissingUserAndUsername(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+// TestAddMember_MissingUserAndUsername_IsRefusedBeforeTheRequest verifies
+// that a member add naming neither user_id nor username is refused, with both
+// names in the refusal, before anything is sent.
+//
+// GitLab's at_least_one_of refuses such a call, and the individual tool's root
+// anyOf used to say so. No served input schema may carry one, since the
+// Anthropic Messages API refuses a tool list holding it, so this check is what
+// holds every surface to the rule.
+func TestAddMember_MissingUserAndUsername_IsRefusedBeforeTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := AddMember(context.Background(), client, AddInput{GroupID: "5", AccessLevel: 30})
-	if err == nil {
-		t.Fatal("expected error for missing user_id and username")
+	if err == nil || !strings.Contains(err.Error(), "user_id or username is required") {
+		t.Fatalf("AddMember() error = %v, want user_id or username named as required", err)
 	}
 }
 

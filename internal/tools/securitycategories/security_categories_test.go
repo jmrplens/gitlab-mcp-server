@@ -655,7 +655,7 @@ func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
 // blank name. Each case expects the field-specific validation message before any
 // network request is attempted.
 func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	name := " "
 	tests := []struct {
 		name  string

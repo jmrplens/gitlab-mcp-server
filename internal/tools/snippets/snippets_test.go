@@ -261,6 +261,41 @@ func TestCreate_MissingContent(t *testing.T) {
 	}
 }
 
+// TestCreate_NoContentAtAll_IsRefusedNamingBothWays verifies that a personal
+// or project snippet created with no file at all, neither files nor a
+// file_name with content, is refused before anything is sent, with both ways
+// of giving it one named.
+//
+// The individual tools' root anyOf said so, and no served input schema may
+// carry one, so the handler is what tells every surface. It used to answer
+// "file_name is required", which sent a caller to the single-file form GitLab
+// deprecates and left files, the one it prefers, unsaid.
+func TestCreate_NoContentAtAll_IsRefusedNamingBothWays(t *testing.T) {
+	calls := map[string]func(*gitlabclient.Client) error{
+		"personal": func(client *gitlabclient.Client) error {
+			_, err := Create(t.Context(), client, CreateInput{Title: "Test Snippet"})
+			return err
+		},
+		"project": func(client *gitlabclient.Client) error {
+			_, err := ProjectCreate(t.Context(), client, ProjectCreateInput{ProjectID: "42", Title: "Test Snippet"})
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			err := call(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+			if err == nil {
+				t.Fatal("error = nil, want the snippet refused")
+			}
+			for _, field := range []string{"files", "file_name", "content"} {
+				if !strings.Contains(err.Error(), field) {
+					t.Errorf("refusal %q does not name %s", err, field)
+				}
+			}
+		})
+	}
+}
+
 // TestValidateCreateSnippetContent_MultiFileErrors verifies per-file validation.
 func TestValidateCreateSnippetContent_MultiFileErrors(t *testing.T) {
 	tests := []struct {

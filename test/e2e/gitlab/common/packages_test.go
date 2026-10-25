@@ -403,6 +403,48 @@ func TestPackage_RegistryRules_RepositoryAndTagRulesLifecycle(t *testing.T) {
 	})
 }
 
+// TestPackage_RegistryRule_NeitherAccessLevel_IsRefusedBeforeGitLab asks
+// every surface for a repository path rule naming neither minimum access
+// level and checks that the refusal names the two levels and that the
+// project holds no rule on the pattern afterwards.
+//
+// GitLab's at_least_one_of refuses such a rule, and only a schema used to say
+// so: the individual tool's root anyOf, and the meta tool's in full mode. The
+// meta tool under its opaque and compact modes sent it on, as the dynamic
+// execute sent one naming both levels empty, and no tool's served input
+// schema may carry a root anyOf, since the Anthropic Messages API refuses a
+// tool list holding one. The handler refuses it now on every surface, and the
+// dynamic dispatcher refuses it first, naming the same two levels. Each
+// surface is held to the words of what refuses it there, and neither phrase
+// is in GitLab's refusal or in the hint it is wrapped with, so a call that
+// reached GitLab would not pass for one refused here. A level sent empty
+// counts as none, which the handler's own tests hold: here the individual and
+// compact meta schemas would refuse the empty value as no level they list.
+func TestPackage_RegistryRule_NeitherAccessLevel_IsRefusedBeforeGitLab(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("regnone"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		params := map[string]any{"project_id": project.IDParam()}
+		pattern := strings.ToLower(project.Path) + "/e2e-none-" + string(surface) + "*"
+
+		refused := harness.ExpectToolError(s, actionPackageRegistryRuleCreate, withParams(params, map[string]any{"repository_path_pattern": pattern}), "minimum_access_level_for_push")
+		assertMentions(e, "a rule naming neither level refused", refused, "minimum_access_level_for_delete")
+		if surface == harness.SurfaceDynamic {
+			assertMentions(e, "the dynamic dispatcher's own refusal", refused, "Missing one of minimum_access_level_for_push or minimum_access_level_for_delete")
+		} else {
+			assertMentions(e, "the handler's own refusal", refused, "Name at least one of the two levels a rule protects with")
+		}
+
+		rules := harness.Do[containerregistry.ProtectionRuleListOutput](s, actionPackageRegistryRuleList, params)
+		if slices.ContainsFunc(rules.Rules, func(r containerregistry.ProtectionRuleOutput) bool { return r.RepositoryPathPattern == pattern }) {
+			e.T.Errorf("the project holds a registry rule on %q after the refused creates", pattern)
+		}
+	})
+}
+
 // TestPackage_RegistryImages_ReadsAndDeletesTheSeededTags reads the
 // registry seed project provisioned for each surface: its one repository,
 // with its tag count, the two seeded tags and one of them by name; then

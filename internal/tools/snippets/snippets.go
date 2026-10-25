@@ -2,6 +2,7 @@ package snippets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -197,10 +198,19 @@ func createSnippetFiles(files []CreateFileInput) *[]*gl.CreateSnippetFileOptions
 // validateCreateSnippetContent validates the two supported snippet creation
 // modes: single-file snippets require fileName and content when files is empty,
 // while multi-file snippets require FilePath and Content on every file entry.
-// Missing single-file fields return [toolutil.ErrFieldRequired]; invalid
-// multi-file entries include the offending files[index] field in the error.
+// A call with no file at all is told both ways of giving one; a single-file
+// call missing one of its two fields returns [toolutil.ErrFieldRequired]; and
+// invalid multi-file entries include the offending files[index] field in the
+// error.
+//
+// The catalog's anyOf states the choice as data, and no tool's served input
+// schema may carry it at its root, which the Anthropic Messages API refuses
+// for a whole tool list, so this is what tells every surface.
 func validateCreateSnippetContent(fileName, content string, files []CreateFileInput) error {
 	if len(files) == 0 {
+		if fileName == "" && content == "" {
+			return errors.New("files, or file_name with content, is required: give the snippet a list of files, or the one file of a single-file snippet")
+		}
 		if fileName == "" {
 			return toolutil.ErrFieldRequired("file_name")
 		}

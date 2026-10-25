@@ -1,16 +1,8 @@
-// The directive on the package clause below is there because dupl reports this
-// file and tag_protection_rules.go as one block, line 1 to the end of each, so
-// no narrower placement suppresses the finding. The two are parallel by design:
-// GitLab's registry protection rules and tag protection rules are distinct REST
-// surfaces with different field names, option types and endpoints and no shared
-// SDK interface, and every published type here is held 1:1 to its own entity.
-// The cost is that anything added to this file that duplicates a third file is
-// not reported either, so keep additions to this surface.
-
-package containerregistry //nolint:dupl // one dupl block spanning both files; parallel CRUD over a distinct GitLab REST surface, see the comment above
+package containerregistry
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -98,6 +90,14 @@ func CreateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	if input.RepositoryPathPattern == "" {
 		return ProtectionRuleOutput{}, toolutil.ErrFieldRequired("repository_path_pattern")
+	}
+	// GitLab's at_least_one_of refuses a rule with neither level. The
+	// catalog's anyOf states the rule as data, and no tool's served input
+	// schema may carry it at its root, which the Anthropic Messages API
+	// refuses for a whole tool list, so this is what holds every surface to
+	// it. An empty level is none, as the request below leaves it out.
+	if input.MinimumAccessLevelForPush == "" && input.MinimumAccessLevelForDelete == "" {
+		return ProtectionRuleOutput{}, errors.New("registry_protection_create: minimum_access_level_for_push or minimum_access_level_for_delete is required. Name at least one of the two levels a rule protects with: maintainer, owner or admin")
 	}
 	opts := &gl.CreateContainerRegistryProtectionRuleOptions{
 		RepositoryPathPattern: new(input.RepositoryPathPattern),

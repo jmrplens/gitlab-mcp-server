@@ -104,7 +104,11 @@ func TestAttach_FullGIDPassthrough(t *testing.T) {
 	}
 }
 
-// TestAttach_Validation verifies the required-field and target guards.
+// TestAttach_Validation verifies the required-field and target guards: each
+// refuses before any request, in words that name what is missing. The target
+// guard is the one place the rule is held on every surface, since the
+// individual tool no longer serves the root anyOf that used to state it,
+// which the Anthropic Messages API refuses for a whole tool list.
 func TestAttach_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called on validation failure")
@@ -113,14 +117,15 @@ func TestAttach_Validation(t *testing.T) {
 	tests := []struct {
 		name  string
 		input AttachInput
+		want  string
 	}{
-		{"missing profile id", AttachInput{ProjectIDs: []int64{1}}},
-		{"no targets", AttachInput{SecurityScanProfileID: "x"}},
+		{"missing profile id", AttachInput{ProjectIDs: []int64{1}}, "security_scan_profile_id is required"},
+		{"no targets", AttachInput{SecurityScanProfileID: "x"}, "provide at least one of project_ids or group_ids"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := Attach(context.Background(), client, tc.input); err == nil {
-				t.Fatal("Attach() expected validation error, got nil")
+			if _, err := Attach(context.Background(), client, tc.input); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Attach() error = %v, want %q", err, tc.want)
 			}
 		})
 	}
@@ -241,8 +246,8 @@ func TestDetach_Validation(t *testing.T) {
 		t.Error("handler should not be called on validation failure")
 		w.WriteHeader(http.StatusOK)
 	}))
-	if _, err := Detach(context.Background(), client, DetachInput{SecurityScanProfileID: "x"}); err == nil {
-		t.Fatal("Detach() expected validation error, got nil")
+	if _, err := Detach(context.Background(), client, DetachInput{SecurityScanProfileID: "x"}); err == nil || !strings.Contains(err.Error(), "provide at least one of project_ids or group_ids") {
+		t.Fatalf("Detach() error = %v, want project_ids and group_ids named", err)
 	}
 	if _, err := Detach(context.Background(), client, DetachInput{ProjectIDs: []int64{1}}); err == nil {
 		t.Fatal("Detach() expected validation error, got nil")

@@ -132,6 +132,47 @@ func TestCreateProtectionRule_MissingPattern(t *testing.T) {
 	}
 }
 
+// TestCreateProtectionRule_NeitherAccessLevel_IsRefusedBeforeTheRequest
+// verifies that a rule naming neither minimum access level is refused, with
+// both names in the refusal, before anything is sent, on the handler and on
+// the route every surface dispatches to.
+//
+// GitLab's at_least_one_of refuses such a create, and the individual tool's
+// root anyOf was the only thing that held a call to it: the meta and dynamic
+// surfaces handed it over, and no served schema may carry a root anyOf, which
+// the Anthropic Messages API refuses for the whole tool list. An empty level
+// counts as none, since the handler leaves it out of the request.
+func TestCreateProtectionRule_NeitherAccessLevel_IsRefusedBeforeTheRequest(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]any
+	}{
+		{name: "neither level", params: map[string]any{"project_id": "10", "repository_path_pattern": testProdPattern}},
+		{name: "two empty levels", params: map[string]any{"project_id": "10", "repository_path_pattern": testProdPattern, "minimum_access_level_for_push": "", "minimum_access_level_for_delete": ""}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input, err := toolutil.UnmarshalParams[CreateProtectionRuleInput](tc.params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, handlerErr := CreateProtectionRule(t.Context(), client, input)
+			_, routeErr := registrySpecsByTool(t, ActionSpecs(client))[toolRegistryProtCreate].Route.Handler(t.Context(), tc.params)
+			for source, err := range map[string]error{"handler": handlerErr, "route": routeErr} {
+				if err == nil {
+					t.Fatalf("%s error = nil, want the call refused", source)
+				}
+				for _, name := range []string{"minimum_access_level_for_push", "minimum_access_level_for_delete"} {
+					if !strings.Contains(err.Error(), name) {
+						t.Errorf("%s refusal %q does not name %s", source, err, name)
+					}
+				}
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // UpdateProtectionRule
 // ---------------------------------------------------------------------------.
@@ -275,18 +316,14 @@ func TestFormatProtectionRuleMarkdown(t *testing.T) {
 // body. One at a time is what distinguishes them: the two guards can be
 // inverted independently, which sends GitLab the level the caller left out and
 // drops the one they set, and no test that sets both can tell. The pattern is
-// required, so it rides along in every case.
+// required, so it rides along in every case, and a rule with neither level is
+// refused before it is sent, which the test above holds.
 func TestCreateProtectionRule_OneAccessLevelAtATime_SendsThatLevelAndNothingElse(t *testing.T) {
 	tests := []struct {
 		name  string
 		input CreateProtectionRuleInput
 		want  map[string]any
 	}{
-		{
-			"pattern only",
-			CreateProtectionRuleInput{ProjectID: "10", RepositoryPathPattern: testProdPattern},
-			map[string]any{"repository_path_pattern": testProdPattern},
-		},
 		{
 			"push",
 			CreateProtectionRuleInput{ProjectID: "10", RepositoryPathPattern: testProdPattern, MinimumAccessLevelForPush: "owner"},

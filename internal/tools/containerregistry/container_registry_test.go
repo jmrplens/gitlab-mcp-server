@@ -1119,7 +1119,7 @@ func TestListProtectionRules_APIError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CreateProtectionRule — API error, no access levels
+// CreateProtectionRule: API error
 // ---------------------------------------------------------------------------.
 
 // TestCreateProtectionRule_APIError verifies that CreateProtectionRule returns the failure GitLab answered with.
@@ -1130,35 +1130,10 @@ func TestCreateProtectionRule_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
 	}))
 	_, err := CreateProtectionRule(context.Background(), client, CreateProtectionRuleInput{
-		ProjectID: "1", RepositoryPathPattern: "x",
+		ProjectID: "1", RepositoryPathPattern: "x", MinimumAccessLevelForPush: "maintainer",
 	})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
-	}
-}
-
-// TestCreateProtectionRule_NoAccessLevels verifies the CreateProtectionRule_NoAccessLevels handler.
-// The test exercises the POST path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestCreateProtectionRule_NoAccessLevels(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/projects/42/registry/protection/repository/rules", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusCreated, covRuleJSON)
-			return
-		}
-		http.NotFound(w, r)
-	})
-	client := testutil.NewTestClient(t, mux)
-	out, err := CreateProtectionRule(context.Background(), client, CreateProtectionRuleInput{
-		ProjectID:             "42",
-		RepositoryPathPattern: testProdPattern,
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if out.ID != 77 {
-		t.Errorf("expected ID 77, got %d", out.ID)
 	}
 }
 
@@ -1376,7 +1351,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"gitlab_registry_delete_tag", map[string]any{"project_id": "42", "repository_id": 100, "tag_name": "v1.0"}},
 		{"gitlab_registry_delete_tags_bulk", map[string]any{"project_id": "42", "repository_id": 100, "name_regex_delete": ".*"}},
 		{"gitlab_registry_protection_list", map[string]any{"project_id": "42"}},
-		{"gitlab_registry_protection_create", map[string]any{"project_id": "42", "repository_path_pattern": testProdPattern}},
+		{"gitlab_registry_protection_create", map[string]any{"project_id": "42", "repository_path_pattern": testProdPattern, "minimum_access_level_for_push": "maintainer"}},
 		{"gitlab_registry_protection_update", map[string]any{"project_id": "42", "rule_id": 77}},
 		{"gitlab_registry_protection_delete", map[string]any{"project_id": "42", "rule_id": 77}},
 	}
@@ -1681,7 +1656,7 @@ func TestHandlers_RefusedAtTheHintedStatus_CarryTheHint(t *testing.T) {
 			return err
 		}},
 		{"create_protection_rule", "registry_protection_create", http.StatusBadRequest, "repository_path_pattern must be a glob", func(c *gitlabclient.Client) error {
-			_, err := CreateProtectionRule(context.Background(), c, CreateProtectionRuleInput{ProjectID: "1", RepositoryPathPattern: "x"})
+			_, err := CreateProtectionRule(context.Background(), c, CreateProtectionRuleInput{ProjectID: "1", RepositoryPathPattern: "x", MinimumAccessLevelForDelete: "owner"})
 			return err
 		}},
 		{"update_protection_rule", "registry_protection_update", http.StatusNotFound, "pattern uniqueness still applies on rename", func(c *gitlabclient.Client) error {

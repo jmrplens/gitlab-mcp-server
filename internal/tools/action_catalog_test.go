@@ -2070,3 +2070,77 @@ func assertDateInputRefused(t *testing.T, input dateNamedInput, requests *atomic
 		t.Errorf("%s with %s=%q sent %d request(s) before refusing, want none", input.action.ID, input.name, notADate, got)
 	}
 }
+
+// TestEveryRootAlternative_IsRefusedByTheHandlerBeforeAnyRequest drives every
+// action of the Ultimate catalog whose input schema states alternatives at
+// its root, as toolutil.SchemaAnyOfRequired and SchemaOneOfRequired write
+// them, through the action's own catalog handler with a placeholder in every
+// required input and no name of any group, and requires a refusal that names
+// a name of every group before any request reaches GitLab. An action whose
+// groups are exclusive is also sent two of them, and refused the same way.
+//
+// No served input schema carries such a rule at its root, since the
+// Anthropic Messages API refuses a tool list holding one, so on the
+// individual surface and on the meta tool under its opaque and compact
+// modes the handler is the only thing that holds a call to it. The
+// seventeen actions that state one were found by reading every override and
+// the one schema that writes an anyOf by hand, and one of them, the registry
+// protection create, posted the rule GitLab refuses; this enumerates the
+// catalog instead, so the next action that states alternatives is held to
+// the rule the day it is published.
+func TestEveryRootAlternative_IsRefusedByTheHandlerBeforeAnyRequest(t *testing.T) {
+	var requests atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	catalog := mustBuildActionCatalog(t, client, ActionCatalogOptions{Tier: edition.Ultimate})
+	driven := 0
+	for _, action := range catalog.Actions() {
+		groups := actioncatalog.RequiredParamAlternatives(action.Route.InputSchema)
+		if len(groups) == 0 {
+			continue
+		}
+		driven++
+		t.Run(string(action.ID), func(t *testing.T) {
+			props, _ := action.Route.InputSchema["properties"].(map[string]any)
+			withNames := func(params map[string]any, names ...string) map[string]any {
+				params = maps.Clone(params)
+				for _, name := range names {
+					prop, _ := props[name].(map[string]any)
+					params[name] = placeholderParam(name, prop)
+				}
+				return params
+			}
+			required := withNames(map[string]any{}, requiredInputs(action.Route.InputSchema)...)
+			assertAlternativesRefused(t, action, "naming no group", required, groups, &requests)
+			if len(groups) > 1 && actioncatalog.RequiredParamAlternativesExclusive(action.Route.InputSchema) {
+				both := withNames(required, slices.Concat(groups[0], groups[1])...)
+				assertAlternativesRefused(t, action, "naming two groups", both, groups, &requests)
+			}
+		})
+	}
+	if driven == 0 {
+		t.Fatal("no action of the Ultimate catalog states alternatives at its root, so the rule judged nothing")
+	}
+}
+
+// assertAlternativesRefused calls action's catalog handler with params and
+// requires an error that names a name of every one of groups, sent before
+// requests counted any request.
+func assertAlternativesRefused(t *testing.T, action actioncatalog.Action, call string, params map[string]any, groups [][]string, requests *atomic.Int64) {
+	t.Helper()
+	requests.Store(0)
+	result, err := action.Route.Handler(context.Background(), params)
+	if err == nil {
+		t.Fatalf("%s %s with %v answered %v with no error, want a refusal", action.ID, call, params, result)
+	}
+	for _, group := range groups {
+		if !slices.ContainsFunc(group, func(name string) bool { return strings.Contains(err.Error(), name) }) {
+			t.Errorf("%s %s error = %q, want one naming one of %v", action.ID, call, err, group)
+		}
+	}
+	if got := requests.Load(); got != 0 {
+		t.Errorf("%s %s sent %d request(s) before refusing, want none", action.ID, call, got)
+	}
+}

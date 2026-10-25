@@ -810,7 +810,7 @@ func TestUpdate_WithoutAName_SendsOnlyTheFieldsSupplied(t *testing.T) {
 // specific validation message for each failure, ensuring bad requests are
 // rejected locally before GraphQL execution.
 func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	name := " "
 	color := "123456"
 	tests := []struct {
@@ -965,7 +965,7 @@ func TestProjectUpdate_OneDirection_LeavesTheOtherFieldOutOfTheRequest(t *testin
 // Each table case expects a field-specific validation message and uses a
 // not-found handler to prove the request never reaches the GraphQL transport.
 func TestProjectUpdate_ValidatesInputBeforeRequest(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	tests := []struct {
 		name  string
 		input ProjectUpdateInput
@@ -1154,7 +1154,7 @@ func TestBulkUpdate_InvalidMode(t *testing.T) {
 // corresponding validation message. The not-found handler makes an unexpected
 // network call visible as a test failure.
 func TestBulkUpdate_ValidatesInputBeforeRequest(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	tests := []struct {
 		name  string
 		input BulkUpdateInput
