@@ -2467,17 +2467,42 @@ func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons 
 	if server == nil {
 		return
 	}
+	addMetaTool(server, name, MetaToolDescriptionPrefix(name, routes)+desc, DeriveAnnotations(routes), routes, icons, formatResult)
+}
+
+// addMetaTool registers one meta dispatcher with the envelope the active
+// parameter-schema mode serves, and holds a call to that envelope's params
+// definitions where the mode serves any, before the dispatcher runs. The
+// mode is read once, so the envelope and the check always agree.
+//
+// The check is applied here rather than in [MakeMetaHandler], because the
+// dynamic surface dispatches through MakeMetaHandler as well and serves no
+// meta envelope: the setting changes nothing there.
+func addMetaTool(server *mcp.Server, name, description string, annotations *mcp.ToolAnnotations, routes ActionMap, icons []mcp.Icon, formatResult FormatResultFunc) {
+	mode := currentMetaParamSchemaMode()
+	envelope := metaToolSchemaFor(routes, mode)
 	tool := &mcp.Tool{
 		Name:         name,
 		Title:        TitleFromName(name),
-		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
-		Annotations:  DeriveAnnotations(routes),
+		Description:  description,
+		Annotations:  annotations,
 		Icons:        icons,
-		InputSchema:  MetaToolSchema(routes),
+		InputSchema:  envelope,
 		OutputSchema: MetaToolOutputSchema(),
 	}
 	CompileToolSchemas(tool, metaSchemaCompileKey(name, routes))
-	mcp.AddTool(server, tool, MakeMetaHandler(name, routes, formatResult))
+	handler := MakeMetaHandler(name, routes, formatResult)
+	if guard := metaParamsGuard(name, envelope, mode); guard != nil {
+		dispatch := handler
+		handler = func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
+			if refusal := guard(input); refusal != nil {
+				LogToolRefusal(ctx, req, metaCallName(name, input.Action), RefusalInvalidParams)
+				return refusal, nil, nil
+			}
+			return dispatch(ctx, req, input)
+		}
+	}
+	mcp.AddTool(server, tool, handler)
 }
 
 // AddReadOnlyMetaTool registers an action-dispatched meta-tool whose actions
@@ -2486,17 +2511,7 @@ func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap
 	if server == nil {
 		return
 	}
-	tool := &mcp.Tool{
-		Name:         name,
-		Title:        TitleFromName(name),
-		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
-		Annotations:  CopyReadOnlyMetaAnnotations(),
-		Icons:        icons,
-		InputSchema:  MetaToolSchema(routes),
-		OutputSchema: MetaToolOutputSchema(),
-	}
-	CompileToolSchemas(tool, metaSchemaCompileKey(name, routes))
-	mcp.AddTool(server, tool, MakeMetaHandler(name, routes, formatResult))
+	addMetaTool(server, name, MetaToolDescriptionPrefix(name, routes)+desc, CopyReadOnlyMetaAnnotations(), routes, icons, formatResult)
 }
 
 // MakeMetaHandler creates a generic MCP tool handler that dispatches to action routes.
@@ -2705,7 +2720,12 @@ func ValidActionsString(routes ActionMap) string {
 // action's params schema and are served as maps, so they are shared as maps,
 // one per distinct routes map (see [metaEnvelopeFor]).
 func MetaToolSchema(routes ActionMap) map[string]any {
-	mode := currentMetaParamSchemaMode()
+	return metaToolSchemaFor(routes, currentMetaParamSchemaMode())
+}
+
+// metaToolSchemaFor is [MetaToolSchema] under the mode given rather than the
+// active one, for a caller that reads the mode once for more than the schema.
+func metaToolSchemaFor(routes ActionMap, mode string) map[string]any {
 	if mode == MetaParamSchemaOpaque {
 		return BuildMetaToolSchema(routes, mode)
 	}
@@ -2788,14 +2808,32 @@ func currentMetaParamSchemaMode() string {
 // counts.
 const metaToolParamsDescription = "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad. Runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped. For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://tools/{tool}.{action}` (replace placeholders with the tool name and the chosen action)."
 
+// metaToolInlineParamsDescription is the description of the params property
+// under the compact and full modes, which serve each action's params schema
+// under $defs, named after the action, and hold a call to it. No keyword of
+// the envelope refers to the definitions, and a client may drop definitions
+// nothing refers to before its model reads the schema, so the description
+// names the resource that serves the same schema as well.
+const metaToolInlineParamsDescription = "Action-specific parameters as a JSON object, held to the schema under `$defs` named after the chosen action (`$defs.{action}`): a call that does not match it is refused before the action runs. Reserved meta keys like `confirm` go inside params. The MCP resource `gitlab://tools/{tool}.{action}` serves the same schema with its descriptions, and is where to read it if `$defs` is not shown."
+
 // BuildMetaToolSchema returns the input schema for a meta-tool given the
 // chosen mode. Unknown modes silently fall back to MetaParamSchemaOpaque so
 // that callers cannot break the tools/list payload by passing a typo.
 //
 //   - opaque:  legacy {action, params:any} envelope (default).
-//   - full:    one if/then per action under allOf, with the full params
-//     schema [MetaActionSchema] serves.
-//   - compact: the same conditionals, with descriptions and $defs stripped.
+//   - full:    the envelope with the full params schema [MetaActionSchema]
+//     serves for each action under $defs, named after the action.
+//   - compact: the same definitions, with descriptions and $defs stripped
+//     from each.
+//
+// No mode puts a combinator or a conditional at the root (see
+// [rootCombinatorKeywords]). The two inline modes used to hold params to the
+// action's schema through a root allOf of if/then conditionals, one per
+// action, which the Anthropic Messages API refuses for the whole tool list.
+// What the conditional held a call to, the dispatcher holds it to now, against
+// the same definition ([metaParamsGuard]), so the schema still says what is
+// refused and a refusal is still the validator's, which names a field that is
+// missing or of the wrong type and none for a broken oneOf.
 func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 	actions := make([]string, 0, len(routes))
 	for name := range routes {
@@ -2803,6 +2841,11 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 	}
 	sort.Strings(actions)
 
+	inline := mode == MetaParamSchemaFull || mode == MetaParamSchemaCompact
+	paramsDescription := metaToolParamsDescription
+	if inline {
+		paramsDescription = metaToolInlineParamsDescription
+	}
 	base := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -2813,21 +2856,16 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 			},
 			"params": map[string]any{
 				"type":                 "object",
-				"description":          metaToolParamsDescription,
+				"description":          paramsDescription,
 				"additionalProperties": true,
 			},
 		},
 		"required":             []any{"action"},
 		"additionalProperties": false,
 	}
-
-	switch mode {
-	case MetaParamSchemaFull:
-		base["allOf"] = buildMetaActionConditionals(routes, actions, false)
-	case MetaParamSchemaCompact:
-		base["allOf"] = buildMetaActionConditionals(routes, actions, true)
-	default:
-		// MetaParamSchemaOpaque or unknown — return the envelope unchanged.
+	// MetaParamSchemaOpaque, or an unknown mode, is the envelope alone.
+	if inline {
+		base["$defs"] = buildMetaActionDefinitions(routes, actions, mode == MetaParamSchemaCompact)
 	}
 	return base
 }
@@ -2984,45 +3022,95 @@ func StripMetaToolDescriptionPrefix(description string) string {
 	return strings.Join(lines[start:], "\n")
 }
 
-// buildMetaActionConditionals constructs the allOf list for full/compact
-// modes: one conditional per action whose if pins `action` to that action and
-// whose then holds `params` to the action's schema, the one
-// [MetaActionSchema] serves (optionally compacted).
+// buildMetaActionDefinitions constructs the $defs of the full and compact
+// modes: each action's params schema, the one [MetaActionSchema] serves
+// (compacted for compact), under the action's name.
 //
 // The params schema is MetaActionSchema's rather than the route's own because
 // the route's is closed and carries no confirm property, and a destructive
 // meta action is confirmed through params.confirm by a client that cannot
-// answer an elicitation. Inlining the route's schema refused that call on
-// every destructive action in full mode, which left such a client no way to
-// run one (issue 1324).
+// answer an elicitation. Holding a call to the route's schema refused that
+// call on every destructive action in full mode, which left such a client no
+// way to run one (issue 1324).
 //
-// It is a conditional per action rather than a oneOf branch per action
-// because jsonschema-go reports a failed oneOf as "did not validate against
-// any of [<anonymous schema> ...]", naming neither the action nor the field,
-// while a failed then is reported as it is. The if requires `action`: without
-// it every if would hold for a call that omits the action and every then
-// would apply at once. The then requires `params`, so the per-action schema
-// is checked even when a caller leaves params out; an action that needs no
-// arguments still accepts `{}`.
-func buildMetaActionConditionals(routes ActionMap, sortedActions []string, compact bool) []any {
-	conditionals := make([]any, 0, len(sortedActions))
+// The definitions hold nothing by themselves, since no keyword refers to
+// them: [metaParamsGuard] holds a call's params to the one its action names.
+// They are not branches of a oneOf under params either, which would have the
+// SDK refuse a call matching none of them as "did not validate against any of
+// [<anonymous schema> ...]", naming neither the action nor the field.
+func buildMetaActionDefinitions(routes ActionMap, sortedActions []string, compact bool) map[string]any {
+	definitions := make(map[string]any, len(sortedActions))
 	for _, action := range sortedActions {
 		params := MetaActionSchema(routes[action])
 		if compact {
 			params = compactParamsSchema(params)
 		}
-		conditionals = append(conditionals, map[string]any{
-			"if": map[string]any{
-				"properties": map[string]any{"action": map[string]any{"const": action}},
-				"required":   []any{"action"},
-			},
-			"then": map[string]any{
-				"properties": map[string]any{"params": params},
-				"required":   []any{"params"},
-			},
-		})
+		definitions[action] = params
 	}
-	return conditionals
+	return definitions
+}
+
+// metaParamsGuard returns, for the full and compact modes, a check that holds
+// a call's params to the definition the envelope serves for its action under
+// $defs, and nil for every other mode, which holds params to nothing before
+// the action runs. The check answers with the refusal a caller is shown, or
+// nil when the call passes.
+//
+// It is the check the root allOf of if/then conditionals used to make through
+// the SDK's validation of the arguments, and it runs where that did, before
+// anything else of the dispatcher: the action named as the call sent it, its
+// params against that action's definition. A call that leaves params out is
+// held to it as an empty object, which asks it for the action's required
+// fields as the conditional's then did, without also refusing, as that then
+// did, an action needing nothing whose params were left out. An action the
+// envelope defines no schema for, which the action enum refuses before a
+// meta call reaches here, is left to the dispatcher.
+//
+// Each definition is resolved once, the first time a call names its action.
+// One that cannot be resolved holds nothing, as the SDK would have refused
+// to register a tool whose schema it could not resolve.
+func metaParamsGuard(toolName string, envelope map[string]any, mode string) func(MetaToolInput) *mcp.CallToolResult {
+	if mode != MetaParamSchemaFull && mode != MetaParamSchemaCompact {
+		return nil
+	}
+	definitions, _ := envelope["$defs"].(map[string]any)
+	var resolved OnceMap[string, *jsonschema.Resolved]
+	return func(input MetaToolInput) *mcp.CallToolResult {
+		definition, defined := definitions[input.Action].(map[string]any)
+		if !defined {
+			return nil
+		}
+		schema := resolved.Load(input.Action, func() *jsonschema.Resolved { return resolveMetaDefinition(definition) })
+		if schema == nil {
+			return nil
+		}
+		params := input.Params
+		if params == nil {
+			params = map[string]any{}
+		}
+		if err := schema.Validate(params); err != nil {
+			return ErrorResult(fmt.Sprintf("%s/%s: params do not match the schema of this action: %v", toolName, input.Action, err))
+		}
+		return nil
+	}
+}
+
+// resolveMetaDefinition resolves one action's params definition for
+// validation, through its JSON form, and nil when it cannot be.
+func resolveMetaDefinition(definition map[string]any) *jsonschema.Resolved {
+	data, err := json.Marshal(definition)
+	if err != nil {
+		return nil
+	}
+	schema := new(jsonschema.Schema)
+	if json.Unmarshal(data, schema) != nil {
+		return nil
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		return nil
+	}
+	return resolved
 }
 
 // compactParamsSchema returns a reduced copy of a per-action params schema

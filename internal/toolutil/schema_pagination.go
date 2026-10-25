@@ -92,11 +92,18 @@ func enrichPaginationCombinators(node map[string]any) {
 			enrichPaginationArray(arr)
 		}
 	}
-	// The meta envelope holds each action's params under the then of a
-	// conditional, so the bounds reach them only through it.
 	for _, key := range []string{"if", "then", "else"} {
 		if conditional, ok := node[key].(map[string]any); ok {
 			enrichPaginationNode(conditional)
+		}
+	}
+	// The meta envelope's compact and full modes hold each action's params
+	// under $defs, so the bounds reach them only through it.
+	if definitions, ok := node["$defs"].(map[string]any); ok {
+		for _, v := range definitions {
+			if child, isMap := v.(map[string]any); isMap {
+				enrichPaginationNode(child)
+			}
 		}
 	}
 }

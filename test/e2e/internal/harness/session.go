@@ -121,11 +121,11 @@ const (
 	// MetaParamSchemaOpaque publishes params as an object with no properties.
 	// It is the binary's own default, asked for by name.
 	MetaParamSchemaOpaque MetaParamSchema = config.MetaParamSchemaOpaque
-	// MetaParamSchemaCompact publishes an if/then per action carrying the
-	// parameter names without their descriptions.
+	// MetaParamSchemaCompact publishes each action's params under $defs,
+	// carrying the parameter names without their descriptions.
 	MetaParamSchemaCompact MetaParamSchema = config.MetaParamSchemaCompact
-	// MetaParamSchemaFull publishes an if/then per action carrying the whole
-	// of each action's schema.
+	// MetaParamSchemaFull publishes each action's params under $defs,
+	// carrying the whole of each action's schema.
 	MetaParamSchemaFull MetaParamSchema = config.MetaParamSchemaFull
 )
 

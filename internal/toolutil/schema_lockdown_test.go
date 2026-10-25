@@ -166,6 +166,36 @@ func TestLockdownSchemaNode_NestedObjects(t *testing.T) {
 	}
 }
 
+// TestLockdownSchemaNode_Definitions_LockEachDefinedSchema verifies the walk
+// locks down every schema under $defs as it locks down a property: an object
+// that declares nothing is closed, one that declares additionalProperties is
+// left as it declared, and the objects inside each are closed too. The meta
+// envelope holds each action's params there in compact and full mode, where
+// they were reached through a conditional before, and a client is served them
+// closed as it was then.
+func TestLockdownSchemaNode_Definitions_LockEachDefinedSchema(t *testing.T) {
+	t.Parallel()
+	nested := map[string]any{"type": "object"}
+	closed := map[string]any{"type": "object", "properties": map[string]any{"nested": nested}}
+	open := map[string]any{"type": "object", "additionalProperties": true}
+	node := map[string]any{"type": "object", "$defs": map[string]any{"get": closed, "list": open, "flag": true}}
+
+	lockdownSchemaNode(node)
+
+	if closed["additionalProperties"] != false {
+		t.Errorf("$defs.get additionalProperties = %v, want false", closed["additionalProperties"])
+	}
+	if nested["additionalProperties"] != false {
+		t.Errorf("$defs.get.nested additionalProperties = %v, want false", nested["additionalProperties"])
+	}
+	if open["additionalProperties"] != true {
+		t.Errorf("$defs.list additionalProperties = %v, want the true it declared", open["additionalProperties"])
+	}
+	if defs := node["$defs"].(map[string]any); defs["flag"] != true {
+		t.Errorf("$defs.flag = %#v, want the boolean schema left as it is", defs["flag"])
+	}
+}
+
 // TestLockdownSchemaNode_Conditionals_LockWhatTheyNameAndStayOpen verifies the
 // walk reaches the properties an if, then or else names and locks them down,
 // and leaves the conditional itself open. A conditional applies to the same

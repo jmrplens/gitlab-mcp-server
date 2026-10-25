@@ -11,7 +11,8 @@ import (
 // LockdownInputSchemas registers a receiving middleware that rewrites
 // tools/list responses so every tool's inputSchema declares
 // `additionalProperties: false` at the root and on any nested object schema
-// reachable through "properties", "items", "anyOf", "oneOf", or "allOf". It
+// reachable through "properties", "items", "anyOf", "oneOf", "allOf" or
+// "$defs". It
 // also strips jsonschema tag metadata such as ",required" from property
 // descriptions after the SDK generates schemas. Schemas converted from SDK
 // types are stored back as map[string]any values, so callers inspecting tools
@@ -123,6 +124,21 @@ func lockdownSchemaNode(node map[string]any) {
 	for _, key := range []string{"if", "then", "else"} {
 		if conditional, ok := node[key].(map[string]any); ok {
 			lockdownConditionalNode(conditional)
+		}
+	}
+
+	lockdownDefinitions(node)
+}
+
+// lockdownDefinitions locks down every schema node defines under $defs. A
+// definition is a schema of its own, locked down as a property is: the meta
+// envelope's compact and full modes hold each action's params there.
+func lockdownDefinitions(node map[string]any) {
+	if definitions, ok := node["$defs"].(map[string]any); ok {
+		for _, v := range definitions {
+			if child, isMap := v.(map[string]any); isMap {
+				lockdownSchemaNode(child)
+			}
 		}
 	}
 }

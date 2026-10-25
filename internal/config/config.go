@@ -144,11 +144,12 @@ const (
 	// MetaParamSchemaOpaque keeps the legacy `params: object` envelope.
 	// This is the default and produces the smallest tools/list payload.
 	MetaParamSchemaOpaque = "opaque"
-	// MetaParamSchemaCompact emits an if/then per action under `allOf`, the
-	// params of each cut down to property names, types and enums.
+	// MetaParamSchemaCompact serves each action's params under `$defs`, named
+	// after the action, cut down to property names, types and enums.
 	MetaParamSchemaCompact = "compact"
-	// MetaParamSchemaFull emits an if/then per action under `allOf` with the
-	// complete JSON Schema each action's params are served with.
+	// MetaParamSchemaFull serves each action's params under `$defs`, named
+	// after the action, with the complete JSON Schema each action's params are
+	// served with.
 	MetaParamSchemaFull = "full"
 	// DefaultMetaParamSchema is the default mode applied when neither the
 	// META_PARAM_SCHEMA env var nor the --meta-param-schema flag is set.

@@ -1824,38 +1824,27 @@ func TestMetaToolSchema_OpaqueDefault(t *testing.T) {
 	}
 }
 
-// metaConditional returns the action the i-th conditional of a compact or full
-// envelope pins and the params schema its then holds the call to, failing the
-// test when the envelope does not have that shape.
-func metaConditional(t *testing.T, schema map[string]any, i int) (action any, params map[string]any) {
+// metaDefinition returns the params schema a compact or full envelope serves
+// for action under $defs, failing the test when the envelope does not have
+// that shape.
+func metaDefinition(t *testing.T, schema map[string]any, action string) map[string]any {
 	t.Helper()
-	conditionals, ok := schema["allOf"].([]any)
-	if !ok || i >= len(conditionals) {
-		t.Fatalf("allOf = %#v, want at least %d conditionals", schema["allOf"], i+1)
+	definitions, ok := schema["$defs"].(map[string]any)
+	if !ok {
+		t.Fatalf("$defs = %#v, want a definition per action", schema["$defs"])
 	}
-	conditional, _ := conditionals[i].(map[string]any)
-	ifSchema, _ := conditional["if"].(map[string]any)
-	ifProps, _ := ifSchema["properties"].(map[string]any)
-	actionSchema, _ := ifProps["action"].(map[string]any)
-	if required, _ := ifSchema["required"].([]any); !reflect.DeepEqual(required, []any{"action"}) {
-		t.Errorf("conditional[%d].if.required = %#v, want [action]", i, required)
+	params, ok := definitions[action].(map[string]any)
+	if !ok {
+		t.Fatalf("$defs[%q] = %#v, want the params schema of the action", action, definitions[action])
 	}
-	thenSchema, _ := conditional["then"].(map[string]any)
-	thenProps, _ := thenSchema["properties"].(map[string]any)
-	params, _ = thenProps["params"].(map[string]any)
-	if required, _ := thenSchema["required"].([]any); !reflect.DeepEqual(required, []any{"params"}) {
-		t.Errorf("conditional[%d].then.required = %#v, want [params]", i, required)
-	}
-	if params == nil {
-		t.Fatalf("conditional[%d] holds no params schema: %#v", i, conditional)
-	}
-	return actionSchema["const"], params
+	return params
 }
 
-// TestBuildMetaToolSchema_FullEmitsAConditionalPerAction verifies that full
-// mode produces one if/then per action under allOf, the if pinning action to
-// a const and the then holding params to that action's schema, and no oneOf.
-func TestBuildMetaToolSchema_FullEmitsAConditionalPerAction(t *testing.T) {
+// TestBuildMetaToolSchema_FullDefinesEachActionsParams verifies that full mode
+// defines one params schema per action under $defs, named after it, keeping
+// the reflected schema whole, describes params as held to it, and serves no
+// oneOf, whose failure names no field.
+func TestBuildMetaToolSchema_FullDefinesEachActionsParams(t *testing.T) {
 	routes := ActionMap{
 		"create": RouteAction[testInput, testOutput](nil, nil),
 		"get":    RouteAction[testInput, testOutput](nil, nil),
@@ -1865,27 +1854,19 @@ func TestBuildMetaToolSchema_FullEmitsAConditionalPerAction(t *testing.T) {
 	if _, has := schema["oneOf"]; has {
 		t.Error("full mode should not emit a oneOf, whose failure names no field")
 	}
-	conditionals, ok := schema["allOf"].([]any)
-	if !ok {
-		t.Fatalf("allOf missing or wrong type: %T", schema["allOf"])
+	for _, action := range []string{"create", "get"} {
+		t.Run(action, func(t *testing.T) {
+			params := metaDefinition(t, schema, action)
+			_, hasType := params["type"]
+			_, hasProps := params["properties"]
+			if !hasType || !hasProps {
+				t.Errorf("$defs[%q] lacks the reflected type and properties: %v", action, params)
+			}
+		})
 	}
-	if len(conditionals) != 2 {
-		t.Fatalf("allOf len = %d, want 2", len(conditionals))
-	}
-	wantActions := []string{"create", "get"} // sorted
-	for i := range conditionals {
-		action, paramsBranch := metaConditional(t, schema, i)
-		if action != wantActions[i] {
-			t.Errorf("conditional[%d] action const = %v, want %q", i, action, wantActions[i])
-		}
-		// Full mode should preserve the reflected schema, which carries a
-		// type or a $ref pointing into $defs.
-		_, hasType := paramsBranch["type"]
-		_, hasRef := paramsBranch["$ref"]
-		_, hasProps := paramsBranch["properties"]
-		if !hasType && !hasRef && !hasProps {
-			t.Errorf("branch[%d].params lacks type/$ref/properties: %v", i, paramsBranch)
-		}
+	description, _ := schema["properties"].(map[string]any)["params"].(map[string]any)["description"].(string)
+	if description != metaToolInlineParamsDescription {
+		t.Errorf("params.description = %q, want the one naming $defs", description)
 	}
 }
 
@@ -1897,10 +1878,10 @@ func TestBuildMetaToolSchema_CompactStripsDescriptions(t *testing.T) {
 	}
 	schema := BuildMetaToolSchema(routes, MetaParamSchemaCompact)
 
-	if conditionals, _ := schema["allOf"].([]any); len(conditionals) != 1 {
-		t.Fatalf("allOf len = %d, want 1", len(conditionals))
+	if definitions, _ := schema["$defs"].(map[string]any); len(definitions) != 1 {
+		t.Fatalf("$defs = %#v, want one definition", schema["$defs"])
 	}
-	_, paramsBranch := metaConditional(t, schema, 0)
+	paramsBranch := metaDefinition(t, schema, "get")
 	if paramsBranch["additionalProperties"] != true {
 		t.Errorf("compact params.additionalProperties = %v, want true", paramsBranch["additionalProperties"])
 	}
@@ -1916,13 +1897,74 @@ func TestBuildMetaToolSchema_CompactStripsDescriptions(t *testing.T) {
 	}
 }
 
+// TestBuildMetaToolSchema_EveryMode_CarriesNoRootCombinator verifies that the
+// meta envelope carries no combinator and no conditional at its root under
+// any parameter-schema mode.
+//
+// The compact and full modes held each action's params to its schema through
+// a root allOf of if/then conditionals, and the Anthropic Messages API refuses
+// a tool whose input_schema has an allOf at the top level, failing the whole
+// request with it: under either mode every request that carried a meta tool
+// failed, from a client passing its schemas to that API as they are.
+func TestBuildMetaToolSchema_EveryMode_CarriesNoRootCombinator(t *testing.T) {
+	routes := ActionMap{
+		"create": RouteAction[testInput, testOutput](nil, nil),
+		"get":    RouteAction[testInput, testOutput](nil, nil),
+	}
+	for _, mode := range []string{MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull} {
+		t.Run(mode, func(t *testing.T) {
+			schema := BuildMetaToolSchema(routes, mode)
+			for _, keyword := range []string{"allOf", "anyOf", "oneOf", "not", "if", "then", "else"} {
+				if value, present := schema[keyword]; present {
+					t.Errorf("%s envelope carries %s at its root: %#v", mode, keyword, value)
+				}
+			}
+		})
+	}
+}
+
+// TestBuildMetaToolSchema_InlineModes_DefineEachActionsParams verifies that
+// compact and full serve each action's params schema under $defs, named after
+// the action, and opaque serves none: the schema the conditionals used to hold
+// a call to, full as gitlab://tools serves it and compact cut down to names,
+// types and enums.
+func TestBuildMetaToolSchema_InlineModes_DefineEachActionsParams(t *testing.T) {
+	routes := ActionMap{
+		"create": RouteAction[testInput, testOutput](nil, nil),
+		"delete": DestructiveAction[testInput, testOutput](nil, nil),
+	}
+	cases := []struct {
+		mode string
+		want func(ActionRoute) map[string]any
+	}{
+		{mode: MetaParamSchemaFull, want: MetaActionSchema},
+		{mode: MetaParamSchemaCompact, want: func(route ActionRoute) map[string]any { return compactParamsSchema(MetaActionSchema(route)) }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.mode, func(t *testing.T) {
+			defs, ok := BuildMetaToolSchema(routes, tc.mode)["$defs"].(map[string]any)
+			if !ok || len(defs) != len(routes) {
+				t.Fatalf("%s $defs = %#v, want one entry per action", tc.mode, defs)
+			}
+			for name, route := range routes {
+				if got := defs[name]; !reflect.DeepEqual(got, tc.want(route)) {
+					t.Errorf("%s $defs[%q] = %#v, want %#v", tc.mode, name, got, tc.want(route))
+				}
+			}
+		})
+	}
+	if defs, present := BuildMetaToolSchema(routes, MetaParamSchemaOpaque)["$defs"]; present {
+		t.Errorf("opaque envelope $defs = %#v, want none", defs)
+	}
+}
+
 // TestBuildMetaToolSchema_UnknownModeFallsBackToOpaque verifies unknown
 // modes silently degrade to the opaque envelope.
 func TestBuildMetaToolSchema_UnknownModeFallsBackToOpaque(t *testing.T) {
 	routes := ActionMap{"get": Route(nil)}
 	schema := BuildMetaToolSchema(routes, "verbose")
-	if _, has := schema["allOf"]; has {
-		t.Error("unknown mode should not emit the per-action conditionals")
+	if _, has := schema["$defs"]; has {
+		t.Error("unknown mode should not emit the per-action definitions")
 	}
 }
 
@@ -3288,7 +3330,7 @@ func TestDestructiveRoute_OutputSchema_Nil(t *testing.T) {
 //     missing or malformed.
 //   - compactParamsSchema: nil input, missing/non-object properties,
 //     non-map property entries, and $ref resolution.
-//   - buildMetaActionConditionals: per-action InputSchema = nil fallback.
+//   - buildMetaActionDefinitions: per-action InputSchema = nil fallback.
 //   - schemaForType: pointer dereference and cache hit paths.
 //   - stripReservedKeys: presence of reserved keys mixed with real fields
 //     (covers the "out[k] = v" copy branch).
@@ -3500,20 +3542,20 @@ func TestCompactParamsSchema_ResolvesTopLevelRef(t *testing.T) {
 	}
 }
 
-// TestBuildMetaActionConditionals_NilInputSchemaFallsBackToOpenObject
+// TestBuildMetaActionDefinitions_NilInputSchemaFallsBackToOpenObject
 // substitutes a permissive object schema when a route does not declare an
 // InputSchema.
-func TestBuildMetaActionConditionals_NilInputSchemaFallsBackToOpenObject(t *testing.T) {
+func TestBuildMetaActionDefinitions_NilInputSchemaFallsBackToOpenObject(t *testing.T) {
 	routes := ActionMap{
 		"act": {Handler: func(_ context.Context, _ map[string]any) (any, error) {
 			return struct{}{}, nil
 		}},
 	}
-	conditionals := buildMetaActionConditionals(routes, []string{"act"}, false)
-	if len(conditionals) != 1 {
-		t.Fatalf("len(conditionals) = %d, want 1", len(conditionals))
+	definitions := buildMetaActionDefinitions(routes, []string{"act"}, false)
+	if len(definitions) != 1 {
+		t.Fatalf("len(definitions) = %d, want 1", len(definitions))
 	}
-	_, params := metaConditional(t, map[string]any{"allOf": conditionals}, 0)
+	params := metaDefinition(t, map[string]any{"$defs": definitions}, "act")
 	if params["type"] != "object" {
 		t.Errorf("nil InputSchema should fall back to type:object, got %v", params)
 	}
@@ -6263,20 +6305,19 @@ func TestMetaToolParameterGuidanceSummary_RendersEachFacetOnItsOwn(t *testing.T)
 	}
 }
 
-// TestBuildMetaActionConditionals_CompactNilInputSchema_FallsBackToOpenObject
+// TestBuildMetaActionDefinitions_CompactNilInputSchema_FallsBackToOpenObject
 // verifies the compact mode leaves a route with no InputSchema to a
 // permissive object, and that a destructive one keeps its confirm property
 // there, since that is the one place a client without elicitation can confirm
 // it.
-func TestBuildMetaActionConditionals_CompactNilInputSchema_FallsBackToOpenObject(t *testing.T) {
+func TestBuildMetaActionDefinitions_CompactNilInputSchema_FallsBackToOpenObject(t *testing.T) {
 	routes := ActionMap{"act": {}, "drop": {Destructive: true}}
-	conditionals := buildMetaActionConditionals(routes, []string{"act", "drop"}, true)
-	envelope := map[string]any{"allOf": conditionals}
-	_, params := metaConditional(t, envelope, 0)
+	envelope := map[string]any{"$defs": buildMetaActionDefinitions(routes, []string{"act", "drop"}, true)}
+	params := metaDefinition(t, envelope, "act")
 	if want := map[string]any{"type": "object", "additionalProperties": true}; !reflect.DeepEqual(params, want) {
 		t.Errorf("params = %#v, want %#v", params, want)
 	}
-	_, destructive := metaConditional(t, envelope, 1)
+	destructive := metaDefinition(t, envelope, "drop")
 	want := map[string]any{
 		"type":                 "object",
 		"properties":           map[string]any{"confirm": map[string]any{"type": "boolean"}},
@@ -7057,7 +7098,7 @@ func TestBuildMetaToolSchema_FullKeepsWhatCompactStrips(t *testing.T) {
 
 	describedName := func(t *testing.T, mode string) map[string]any {
 		t.Helper()
-		_, params := metaConditional(t, BuildMetaToolSchema(routes, mode), 0)
+		params := metaDefinition(t, BuildMetaToolSchema(routes, mode), "get")
 		fields, ok := resolveTopLevelRef(params)["properties"].(map[string]any)
 		if !ok {
 			t.Fatalf("%s params schema has no properties: %#v", mode, params)
@@ -7092,9 +7133,6 @@ type metaConfirmTestInput struct {
 // call was refused and how many times each route ran.
 func callMetaToolInMode(t *testing.T, mode string, arguments map[string]any) (text string, refused bool, deleted, read int) {
 	t.Helper()
-	restore := SetMetaParamSchemaModeScoped(mode)
-	t.Cleanup(restore)
-
 	routes := ActionMap{
 		"delete": DestructiveAction(nil, func(_ context.Context, _ *gitlabclient.Client, _ metaConfirmTestInput) (testOutput, error) {
 			deleted++
@@ -7105,6 +7143,19 @@ func callMetaToolInMode(t *testing.T, mode string, arguments map[string]any) (te
 			return testOutput{Result: "read"}, nil
 		}),
 	}
+	text, refused = callMetaToolRoutes(t, mode, routes, arguments)
+	return text, refused, deleted, read
+}
+
+// callMetaToolRoutes registers a meta tool over routes under the given
+// parameter schema mode, connects a client that cannot answer an elicitation,
+// calls the tool with arguments, and returns the text a caller is told
+// together with whether the call was refused.
+func callMetaToolRoutes(t *testing.T, mode string, routes ActionMap, arguments map[string]any) (text string, refused bool) {
+	t.Helper()
+	restore := SetMetaParamSchemaModeScoped(mode)
+	t.Cleanup(restore)
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	AddMetaTool(server, "meta_modes", "Test the schema modes.", routes, nil, nil)
 
@@ -7123,7 +7174,7 @@ func callMetaToolInMode(t *testing.T, mode string, arguments map[string]any) (te
 
 	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{Name: "meta_modes", Arguments: arguments})
 	if err != nil {
-		return err.Error(), true, deleted, read
+		return err.Error(), true
 	}
 	var parts []string
 	for _, content := range result.Content {
@@ -7131,7 +7182,7 @@ func callMetaToolInMode(t *testing.T, mode string, arguments map[string]any) (te
 			parts = append(parts, tc.Text)
 		}
 	}
-	return strings.Join(parts, "\n"), result.IsError, deleted, read
+	return strings.Join(parts, "\n"), result.IsError
 }
 
 // TestMetaTool_ParamsConfirm_ReachesTheHandlerInEveryMode verifies that a
@@ -7164,8 +7215,9 @@ func TestMetaTool_ParamsConfirm_ReachesTheHandlerInEveryMode(t *testing.T) {
 // With one oneOf branch per action, every mistake in any field was reported
 // as "oneOf: did not validate against any of [<anonymous schema> ...]", which
 // names neither the action nor the field, so a model had nothing to correct
-// the call by. A conditional per action applies only the chosen action's
-// schema and reports its error as it is.
+// the call by. The dispatcher holds each action's params to its own
+// definition under $defs and reports its error as it is, which names a field
+// that is missing or of the wrong type.
 func TestMetaTool_ValidationError_NamesTheField(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -7193,5 +7245,126 @@ func TestMetaTool_ValidationError_NamesTheField(t *testing.T) {
 				t.Errorf("refusal %q is the oneOf summary that names no field", text)
 			}
 		})
+	}
+}
+
+// TestMetaTool_InlineModes_HoldParamsToTheActionsDefinition verifies what the
+// compact and full modes refuse before an action runs: the call is held to the
+// params schema the envelope serves for its action under $defs, and a call
+// that leaves params out is held to it as an empty object.
+//
+// The root allOf of if/then conditionals that used to do this asked for
+// params as well, so an action that takes no argument was refused when the
+// call left it out, in these two modes alone. The check it was there for, that
+// an action's required fields are asked for when params is missing, is kept:
+// full still refuses such a call and names the field.
+func TestMetaTool_InlineModes_HoldParamsToTheActionsDefinition(t *testing.T) {
+	cases := []struct {
+		name      string
+		mode      string
+		arguments map[string]any
+		refused   bool
+		mentions  string
+	}{
+		{name: "full names the field a left-out params lacks", mode: MetaParamSchemaFull, arguments: map[string]any{"action": "get"}, refused: true, mentions: "name"},
+		{name: "full runs an action needing nothing without params", mode: MetaParamSchemaFull, arguments: map[string]any{"action": "list"}},
+		{name: "compact runs an action needing nothing without params", mode: MetaParamSchemaCompact, arguments: map[string]any{"action": "list"}},
+		{name: "full refuses a parameter the action does not take", mode: MetaParamSchemaFull, arguments: map[string]any{"action": "get", "params": map[string]any{"name": "x", "flavor": "mint"}}, refused: true, mentions: "flavor"},
+		{name: "compact refuses a value of the wrong type", mode: MetaParamSchemaCompact, arguments: map[string]any{"action": "list", "params": map[string]any{"name": 5}}, refused: true, mentions: "name"},
+		{name: "opaque leaves the type to the handler", mode: MetaParamSchemaOpaque, arguments: map[string]any{"action": "get", "params": map[string]any{"name": "x", "count": 2}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ran := 0
+			routes := ActionMap{
+				"get": RouteAction(nil, func(_ context.Context, _ *gitlabclient.Client, _ metaConfirmTestInput) (testOutput, error) {
+					ran++
+					return testOutput{Result: "read"}, nil
+				}),
+				"list": RouteAction(nil, func(_ context.Context, _ *gitlabclient.Client, _ optionalIndividualInput) (testOutput, error) {
+					ran++
+					return testOutput{Result: "listed"}, nil
+				}),
+			}
+			text, refused := callMetaToolRoutes(t, tc.mode, routes, tc.arguments)
+			if refused != tc.refused {
+				t.Fatalf("call refused = %t, text %q, want refused %t", refused, text, tc.refused)
+			}
+			if wantRuns := map[bool]int{true: 0, false: 1}[tc.refused]; ran != wantRuns {
+				t.Errorf("the action ran %d times, want %d", ran, wantRuns)
+			}
+			if !strings.Contains(text, tc.mentions) {
+				t.Errorf("answer %q does not name %q", text, tc.mentions)
+			}
+		})
+	}
+}
+
+// TestMetaParamsGuard_HoldsNothingItCannotRead verifies the three ways the
+// params check of the inline modes stands aside: under a mode that serves no
+// definitions there is no check at all, a call naming an action the envelope
+// defines nothing for passes to the dispatcher, which answers it, and so does
+// one whose definition cannot be resolved, which the SDK would have refused
+// to register. The refusal of a call the definition rejects is worded with the
+// tool, the action and the validator's finding.
+func TestMetaParamsGuard_HoldsNothingItCannotRead(t *testing.T) {
+	envelope := map[string]any{"$defs": map[string]any{
+		"get":    map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}}},
+		"broken": map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string", "pattern": "("}}},
+	}}
+	if guard := metaParamsGuard("gitlab_widget", envelope, MetaParamSchemaOpaque); guard != nil {
+		t.Error("opaque mode has a params check, want none")
+	}
+	guard := metaParamsGuard("gitlab_widget", envelope, MetaParamSchemaFull)
+	if guard == nil {
+		t.Fatal("full mode has no params check")
+	}
+	cases := []struct {
+		name  string
+		input MetaToolInput
+		want  string
+	}{
+		{name: "an action with no definition", input: MetaToolInput{Action: "list", Params: map[string]any{"name": 5}}},
+		{name: "a definition that cannot be resolved", input: MetaToolInput{Action: "broken", Params: map[string]any{"name": 5}}},
+		{name: "params the definition takes", input: MetaToolInput{Action: "get", Params: map[string]any{"name": "x"}}},
+		{name: "params it does not", input: MetaToolInput{Action: "get", Params: map[string]any{"name": 5}}, want: "gitlab_widget/get: params do not match the schema of this action: "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			refusal := guard(tc.input)
+			if tc.want == "" {
+				if refusal != nil {
+					t.Fatalf("guard() = %#v, want the call passed on", refusal)
+				}
+				return
+			}
+			if refusal == nil || !refusal.IsError {
+				t.Fatalf("guard() = %#v, want an error result", refusal)
+			}
+			if text := refusal.Content[0].(*mcp.TextContent).Text; !strings.HasPrefix(text, tc.want) || !strings.Contains(text, "name") {
+				t.Errorf("refusal %q, want it to open with %q and name the field", text, tc.want)
+			}
+		})
+	}
+}
+
+// TestResolveMetaDefinition_RefusesWhatIsNoSchema verifies a definition is
+// resolved only when it is one: a value JSON cannot hold, a keyword of the
+// wrong type and a pattern that does not compile each resolve to nothing.
+func TestResolveMetaDefinition_RefusesWhatIsNoSchema(t *testing.T) {
+	cases := map[string]map[string]any{
+		"a value JSON cannot hold": {"type": "object", "x_hook": func() {}},
+		"a type that is a number":  {"type": 5},
+		"a pattern that is broken": {"type": "string", "pattern": "("},
+	}
+	for name, definition := range cases {
+		t.Run(name, func(t *testing.T) {
+			if resolved := resolveMetaDefinition(definition); resolved != nil {
+				t.Errorf("resolveMetaDefinition(%#v) = %v, want nil", definition, resolved)
+			}
+		})
+	}
+	if resolveMetaDefinition(map[string]any{"type": "object"}) == nil {
+		t.Error("resolveMetaDefinition() of an object schema = nil, want it resolved")
 	}
 }

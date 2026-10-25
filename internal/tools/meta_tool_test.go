@@ -424,19 +424,19 @@ func TestSetMetaParamSchema_PropagatesToMetaToolSchema(t *testing.T) {
 
 	SetMetaParamSchema("full")
 	schema := toolutil.MetaToolSchema(routes)
-	if _, hasConditionals := schema["allOf"]; !hasConditionals {
-		t.Errorf("full mode should emit the per-action conditionals, got keys=%v", keysOf(schema))
+	if _, hasDefinitions := schema["$defs"]; !hasDefinitions {
+		t.Errorf("full mode should emit the per-action definitions, got keys=%v", keysOf(schema))
 	}
 
 	SetMetaParamSchema("opaque")
 	schema = toolutil.MetaToolSchema(routes)
-	if _, hasConditionals := schema["allOf"]; hasConditionals {
-		t.Errorf("opaque mode should not emit the per-action conditionals, got keys=%v", keysOf(schema))
+	if _, hasDefinitions := schema["$defs"]; hasDefinitions {
+		t.Errorf("opaque mode should not emit the per-action definitions, got keys=%v", keysOf(schema))
 	}
 
 	SetMetaParamSchema("garbage")
 	schema = toolutil.MetaToolSchema(routes)
-	if _, hasConditionals := schema["allOf"]; hasConditionals {
+	if _, hasDefinitions := schema["$defs"]; hasDefinitions {
 		t.Errorf("unknown mode should fall back to opaque, got keys=%v", keysOf(schema))
 	}
 }
@@ -519,18 +519,19 @@ func TestMetaSchema_DispatchParity(t *testing.T) {
 	}
 }
 
-// TestMetaSchema_FullModeAdvertisesOneOf verifies that ListTools in compact
-// and full mode emits the per-action conditionals in the meta-tool
-// InputSchema, while opaque mode does not. This is the LLM-facing visible
-// difference.
-func TestMetaSchema_FullModeAdvertisesOneOf(t *testing.T) {
+// TestMetaSchema_InlineModesAdvertiseEachActionsParams verifies that ListTools
+// in compact and full mode emits the per-action params definitions in the
+// meta-tool InputSchema, while opaque mode does not, and that no mode lists a
+// combinator or a conditional at the root, which the Anthropic Messages API
+// refuses for the whole tool list. This is the LLM-facing visible difference.
+func TestMetaSchema_InlineModesAdvertiseEachActionsParams(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
 	})
 
 	cases := []struct {
-		mode      string
-		wantOneOf bool
+		mode            string
+		wantDefinitions bool
 	}{
 		{"opaque", false},
 		{"compact", true},
@@ -539,12 +540,15 @@ func TestMetaSchema_FullModeAdvertisesOneOf(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.mode, func(t *testing.T) {
 			schema := listedInputSchema(t, metaSessionWithMode(t, c.mode, handler), "gitlab_project")
-			_, hasConditionals := schema["allOf"]
-			if hasConditionals != c.wantOneOf {
-				t.Errorf("mode=%s: per-action conditionals present = %v, want %v", c.mode, hasConditionals, c.wantOneOf)
+			definitions, hasDefinitions := schema["$defs"].(map[string]any)
+			if hasDefinitions != c.wantDefinitions {
+				t.Errorf("mode=%s: per-action definitions present = %v, want %v", c.mode, hasDefinitions, c.wantDefinitions)
 			}
-			if _, hasOneOf := schema["oneOf"]; hasOneOf {
-				t.Errorf("mode=%s: oneOf present, whose failure names no field", c.mode)
+			if _, defined := definitions["get"]; c.wantDefinitions && !defined {
+				t.Errorf("mode=%s: no definition of the get action's params among %d", c.mode, len(definitions))
+			}
+			if found := toolutil.RootCombinators(schema); len(found) > 0 {
+				t.Errorf("mode=%s: the envelope lists %v at its root", c.mode, found)
 			}
 		})
 	}

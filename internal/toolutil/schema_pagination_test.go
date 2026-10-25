@@ -230,6 +230,26 @@ func TestEnrichPaginationNode_RecursesConditionals(t *testing.T) {
 	}
 }
 
+// TestEnrichPaginationNode_RecursesDefinitions verifies the walk reaches a
+// per_page inside a schema under $defs, which is where the meta envelope holds
+// each action's params in compact and full mode, and passes over a definition
+// written as a bare boolean.
+func TestEnrichPaginationNode_RecursesDefinitions(t *testing.T) {
+	t.Parallel()
+	perPage := map[string]any{"type": "integer"}
+	node := map[string]any{"$defs": map[string]any{
+		"flag": true,
+		"list": map[string]any{"type": "object", "properties": map[string]any{"per_page": perPage}},
+	}}
+	enrichPaginationNode(node)
+	if perPage["minimum"] != float64(1) || perPage["maximum"] != float64(100) {
+		t.Errorf("$defs.list per_page = %#v, want minimum 1 and maximum 100", perPage)
+	}
+	if node["$defs"].(map[string]any)["flag"] != true {
+		t.Errorf("$defs.flag = %#v, want the boolean schema left as it is", node["$defs"].(map[string]any)["flag"])
+	}
+}
+
 // TestEnrichPaginationNode_SkipsWhatItCannotBound verifies the walk leaves
 // alone what carries no bound: a per_page declared as a string, a property
 // schema written as a bare boolean, and a combinator branch that is one too.

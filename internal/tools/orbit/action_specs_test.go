@@ -490,29 +490,16 @@ func propertySchema(t *testing.T, schema map[string]any, name string) map[string
 	return property
 }
 
-// metaActionParams returns the params schema a meta tool schema's
-// conditionals give action, failing the test when none does.
+// metaActionParams returns the params schema a meta tool schema defines for
+// action under $defs, failing the test when it defines none.
 func metaActionParams(t *testing.T, schema map[string]any, action string) map[string]any {
 	t.Helper()
-	conditionals, _ := schema["allOf"].([]any)
-	for _, entry := range conditionals {
-		conditional, _ := entry.(map[string]any)
-		ifPart, _ := conditional["if"].(map[string]any)
-		ifProperties, _ := ifPart["properties"].(map[string]any)
-		actionSchema, _ := ifProperties["action"].(map[string]any)
-		if actionSchema["const"] != action {
-			continue
-		}
-		thenPart, _ := conditional["then"].(map[string]any)
-		thenProperties, _ := thenPart["properties"].(map[string]any)
-		params, ok := thenProperties["params"].(map[string]any)
-		if !ok {
-			t.Fatalf("conditional for %q = %v, want a params schema", action, conditional)
-		}
-		return params
+	definitions, _ := schema["$defs"].(map[string]any)
+	params, ok := definitions[action].(map[string]any)
+	if !ok {
+		t.Fatalf("meta schema $defs = %v, want a params schema for %q", definitions, action)
 	}
-	t.Fatalf("meta schema allOf = %v, want a conditional for %q", conditionals, action)
-	return nil
+	return params
 }
 
 // TestOrbit_ActionSpecs_Metadata verifies that every canonical Orbit

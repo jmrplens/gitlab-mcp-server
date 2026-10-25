@@ -79,13 +79,22 @@ func SchemaApproverIDsOverride(propertyPath string) InputSchemaOverride {
 	})
 }
 
-// SchemaRootOverride returns an input-schema override applied at the schema root.
+// SchemaRootOverride returns an input-schema override applied at the schema
+// root. A combinator or a conditional it sets there stays in the catalog's
+// schema of the action and is left out of every served tool input schema
+// ([rootCombinatorKeywords]).
 func SchemaRootOverride(values map[string]any) InputSchemaOverride {
 	return InputSchemaOverride{Values: cloneSchemaMap(values)}
 }
 
 // SchemaAnyOfRequired returns a root override that requires at least one of the
 // supplied property names to be present: GitLab's at_least_one_of.
+//
+// The override is catalog data, read by find, the gitlab://tools manifest and
+// the tool reference, and served by no tool's input schema, whose root carries
+// no combinator ([rootCombinatorKeywords]). The handler of an action carrying
+// it refuses a call naming none of the names before it sends anything, which
+// is what holds every surface to the rule.
 func SchemaAnyOfRequired(propertyNames ...string) InputSchemaOverride {
 	return requiredAlternatives("anyOf", propertyNames, presentBranch)
 }
@@ -101,13 +110,17 @@ func SchemaAnyOfRequired(propertyNames ...string) InputSchemaOverride {
 // call with a common name beside an empty filter as naming both, and the
 // handler serves that call by sending the common name.
 //
-// Only a schema validator holds a call to one branch: the SDK's, on the
-// individual tool and on the meta tool when its parameter schema is full. The
-// meta dispatcher checks the root required list alone, and the dynamic one
-// reads the branches as the alternative groups find publishes and refuses a
-// call that completes none of them, not one that completes two. So the
-// handler of an action carrying this override refuses a call naming more than
-// one of the names before it sends anything, as groupldap's do.
+// Only a schema validator holds a call to one branch, and only one surface
+// has one: the meta tool when its parameter schema is full, whose dispatcher
+// holds params to the action's schema. The individual tool is served without
+// the oneOf, since no tool's served input schema carries a combinator at its
+// root ([rootCombinatorKeywords]), the opaque and compact meta dispatchers
+// check the root required list alone, and the dynamic one reads the branches
+// as the alternative groups find publishes and refuses a call that completes
+// none of them, not one that completes two. So the handler of an action
+// carrying this override refuses a call naming none or more than one of the
+// names before it sends anything, as groupldap's do, and the same holds for
+// [SchemaAnyOfRequired]: its handler refuses a call naming none.
 func SchemaOneOfRequired(propertyNames ...string) InputSchemaOverride {
 	return requiredAlternatives("oneOf", propertyNames, valuedBranch)
 }
