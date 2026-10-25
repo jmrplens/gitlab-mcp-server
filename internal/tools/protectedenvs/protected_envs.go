@@ -71,9 +71,9 @@ type UpdateInput struct {
 	ProjectID             toolutil.StringOrInt           `json:"project_id"                        jsonschema:"Project ID or URL-encoded path,required"`
 	Environment           string                         `json:"environment"                       jsonschema:"Environment name,required"`
 	Name                  string                         `json:"name,omitempty"                    jsonschema:"New environment name"`
-	DeployAccessLevels    []UpdateDeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them"`
+	DeployAccessLevels    []UpdateDeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels to add, change or remove: an entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one. An entry names at most one of access_level, user_id or group_id, and one of them when it has no id"`
 	RequiredApprovalCount *int64                         `json:"required_approval_count,omitempty" jsonschema:"Deprecated: GitLab refuses any value but 0. Require approvals with required_approvals on approval_rules instead."`
-	ApprovalRules         []UpdateApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id"`
+	ApprovalRules         []UpdateApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules to add, change or remove: a rule with the id of an existing one changes it, or removes it with _destroy true, and a rule without an id adds one. A rule that is not removed names at least one of access_level, user_id or group_id, and may name more than one"`
 }
 
 // UpdateDeployAccessLevelInput represents an updated access level for

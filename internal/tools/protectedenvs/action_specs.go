@@ -151,7 +151,7 @@ var protectedEnvironmentActionMeta = map[string]protectedEnvironmentActionMetaEn
 		related: []string{actionEnvProtectedGet, actionEnvProtectedUpdate, actionEnvProtectedUnprotect},
 	},
 	"gitlab_protected_environment_update": {
-		usage:   "Change the deploy access levels or approval rules on an already-protected project environment. An entry with an id changes that entry, or removes it with _destroy, and a deploy access level without one is added and names exactly one of access_level, user_id or group_id. A deploy access level never names two of them, and an approval rule names at least one unless _destroy is true. Use when adjusting who can deploy or how many approvals a gated environment needs.",
+		usage:   "Change the deploy access levels or approval rules on an already-protected project environment. An entry is named by its id: one with the id of an existing entry changes it, or removes it with _destroy true, and one without an id adds an entry. A deploy access level never names two of access_level, user_id or group_id, and a new one names exactly one. An approval rule that is not removed names at least one of them and may name several. Use when adjusting who can deploy or how many approvals a gated environment needs.",
 		aliases: []string{"update protected environment rules", "change deployment access levels", "adjust environment approval rules", "edit project deployment gate"},
 		related: []string{actionEnvProtectedGet, actionEnvProtectedProtect, actionEnvProtectedUnprotect},
 	},
@@ -173,7 +173,7 @@ func protectedEnvironmentDescription(individualTool string) string {
 	case "gitlab_protected_environment_protect":
 		return "Protect a single environment or wildcard with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming at least one. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_update, gitlab_protected_environment_unprotect."
 	case "gitlab_protected_environment_update":
-		return "Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect."
+		return "Update a protected environment's deploy access levels and approval rules. An entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one: a new deploy access level names exactly one of access_level, user_id or group_id, and every approval rule but a removal names at least one. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect."
 	case "gitlab_protected_environment_unprotect":
 		return "Unprotect a single environment or wildcard, removing its deployment gates. Returns: a success confirmation naming the unprotected environment. See also: gitlab_protected_environment_list, gitlab_protected_environment_protect."
 	default:
