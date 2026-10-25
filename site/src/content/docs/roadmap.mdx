@@ -1,0 +1,62 @@
+---
+title: Roadmap
+description: What GitLab MCP Server intends to do over the next twelve months, and what it has decided not to do.
+datePublished: "2026-10-25"
+faq:
+  - q: "Does GitLab MCP Server have a roadmap?"
+    a: "Yes. It covers the twelve months to October 2027: keeping up with every monthly GitLab release and keeping one action for every operation GitLab's REST and GraphQL APIs offer, moving with client-go's next major and with each revision of the MCP specification, closing what a fine-grained token cannot reach yet, giving every limit of a shared deployment one default and one rule at capacity, and finishing the documentation's reorganization. It is a statement of direction, not a schedule: the open milestone on GitHub holds what is planned for the next release."
+  - q: "Will GitLab MCP Server accept GitLab webhooks?"
+    a: "No. The server runs no webhook receiver, in any transport mode. Resource subscriptions are honored by polling GitLab with the subscriber's own token, and the event sources GitLab offers that a process could poll or stream instead were surveyed and declined. Both decisions are recorded as architecture decision records, ADR-0016 and ADR-0017."
+---
+
+import FAQ from "../../components/FAQ.astro";
+
+This page says where the project is going over the twelve months to October 2027: what it intends to do, and what it has decided not to do. It is a statement of direction rather than a schedule or a promise. Work lands when it is ready, the open [milestone](https://github.com/jmrplens/gitlab-mcp-server/milestones) on GitHub holds the issues planned for the next release, and the maintainer sets the priorities as [GOVERNANCE.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/GOVERNANCE.md) describes.
+
+Last reviewed on 2026-10-25. The page is reviewed at least once a year, and whenever a major release changes direction.
+
+## What the project intends to do
+
+### Keep up with every GitLab release
+
+GitLab ships a release every month. For each one, the project records again what a running GitLab sends (its REST answers, the permissions a fine-grained token needs per action, its GraphQL schema), runs the end-to-end suite against it, and follows what changed: new endpoints, parameters and response fields become actions, inputs and outputs, released as the [versioning policy](/gitlab-mcp-server/changelog/#what-the-version-number-means) says. Re-recording on GitLab 19.6 is [issue 1492](https://github.com/jmrplens/gitlab-mcp-server/issues/1492).
+
+The aim stays the same: one action for every operation GitLab's REST and GraphQL APIs offer, on every tier from Free to Ultimate and on GitLab.com, with the parameters GitLab accepts and the fields it sends, and an audit that holds the catalog to it.
+
+### Move with client-go and the MCP specification
+
+The server's major version tracks the major of [client-go](https://gitlab.com/gitlab-org/api/client-go), the GitLab API client it is built on. When client-go publishes its next major, the server moves to its own next major in the same dependency update, and every other dependency update ships as a minor or a patch release. client-go sets that date, so this page gives none.
+
+Each revision of the [MCP specification](https://modelcontextprotocol.io/) is adopted as the [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk) supports it. A proposal that would change what the server sends, such as the language a user reads in ([issue 1013](https://github.com/jmrplens/gitlab-mcp-server/issues/1013)), is watched until it is merged into the specification and implemented then.
+
+### Close what a fine-grained token cannot reach
+
+A [fine-grained token](/gitlab-mcp-server/operations/fine-grained-tokens/) is judged action by action from its grant. GitLab still leaves part of its API outside every grant, and the project follows as it extends them: serving an action over REST where a fine-grained token cannot reach its GraphQL ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)), reading the grant from the token's own answer where GitLab sends it there ([issue 1400](https://github.com/jmrplens/gitlab-mcp-server/issues/1400)), and letting the actions that create tokens send the fine-grained permissions GitLab accepts ([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+
+### Give every limit of a shared deployment one rule
+
+In [HTTP mode](/gitlab-mcp-server/operations/http-server/) one process serves many callers, and what each may hold, spend or be told is a limit. Limits are decided in one register that the server's layers read. What is left is to give every limit one documented default, one meaning for zero and one rule for what happens at capacity ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958)), and to bring the settings still read outside the configuration's own naming and parsing rule under it ([issue 957](https://github.com/jmrplens/gitlab-mcp-server/issues/957)).
+
+### Finish the documentation and the tooling
+
+The documentation is being reorganized around five end-to-end paths, from a first local run to an HTTP deployment behind a reverse proxy ([issue 529](https://github.com/jmrplens/gitlab-mcp-server/issues/529)), in English and Spanish together. The repository's own tooling is moving into Go commands, so every check a contributor runs works the same on Linux, macOS and Windows ([issue 1114](https://github.com/jmrplens/gitlab-mcp-server/issues/1114)).
+
+## What the project will not do
+
+### Receive webhooks
+
+The server runs no webhook receiver, in stdio mode or in HTTP mode. [Resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/) are honored by polling GitLab with the subscriber's own token. Receiving deliveries would give the server its first unauthenticated inbound endpoint and a secret to keep across restarts, would make subscribing create a hook in GitLab as a side effect that read-only and safe mode never see, and would still need a read through each subscriber's own token, since a delivery carries none. The decision is [ADR-0016](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0016-no-webhook-ingestion.md).
+
+### Take change notifications from other event sources
+
+The Events API, GraphQL subscriptions over ActionCable and conditional requests were surveyed against running instances and declined. The Events API records nothing for pipelines and jobs, GraphQL subscriptions are undocumented for API consumers and lose what happens during a disconnect, and a conditional request costs as much of GitLab's rate limit as a full read. Polling stays the only source. [ADR-0017](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0017-pull-safe-event-sources-surveyed.md) records the survey and what would reopen it, such as GitLab documenting its GraphQL subscriptions for API consumers.
+
+### Update itself
+
+The server does not check for updates and never replaces its own binary. The self-updater was removed in 3.0.0. A new release is installed through the channel that installed the server (npm, PyPI, NuGet, Homebrew, winget, the container image or the Claude Desktop extension) or downloaded again from the Releases page, as the [installation guide](/gitlab-mcp-server/install/overview/) describes.
+
+## How this roadmap changes
+
+The maintainer updates this page in a pull request when the direction changes, and its Spanish twin in the same pull request. Reversing anything under "What the project will not do" takes an architecture decision record that gives the reason, and that supersedes ADR-0016 or ADR-0017 where it reverses one of them.
+
+<FAQ />

@@ -1,0 +1,62 @@
+---
+title: Hoja de ruta
+description: Qué pretende hacer GitLab MCP Server durante los próximos doce meses, y qué ha decidido no hacer.
+datePublished: "2026-10-25"
+faq:
+  - q: "¿Tiene GitLab MCP Server una hoja de ruta?"
+    a: "Sí. Abarca los doce meses hasta octubre de 2027: seguir cada release mensual de GitLab y mantener una acción por cada operación que ofrecen las API REST y GraphQL de GitLab, acompañar el siguiente major de client-go y cada revisión de la especificación MCP, cerrar lo que un token granular todavía no alcanza, dar a cada límite de un despliegue compartido un valor por defecto y una regla al llegar a su capacidad, y terminar la reorganización de la documentación. Es una declaración de rumbo, no un calendario: el milestone abierto en GitHub reúne lo previsto para la siguiente release."
+  - q: "¿Aceptará GitLab MCP Server webhooks de GitLab?"
+    a: "No. El servidor no ejecuta ningún receptor de webhooks, en ningún modo de transporte. Las suscripciones a recursos se atienden consultando GitLab periódicamente con el token del propio suscriptor, y las fuentes de eventos que ofrece GitLab y que un proceso podría consultar o recibir en su lugar se estudiaron y se descartaron. Las dos decisiones están registradas como registros de decisiones de arquitectura, ADR-0016 y ADR-0017."
+---
+
+import FAQ from "../../../components/FAQ.astro";
+
+Esta página dice hacia dónde va el proyecto durante los doce meses hasta octubre de 2027: qué pretende hacer y qué ha decidido no hacer. Es una declaración de rumbo, no un calendario ni una promesa. El trabajo llega cuando está listo, el [milestone](https://github.com/jmrplens/gitlab-mcp-server/milestones) abierto en GitHub reúne los issues previstos para la siguiente release, y el mantenedor fija las prioridades como describe [GOVERNANCE.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/GOVERNANCE.md).
+
+Revisada por última vez el 2026-10-25. La página se revisa al menos una vez al año, y cada vez que una release mayor cambia el rumbo.
+
+## Qué pretende hacer el proyecto
+
+### Seguir cada release de GitLab
+
+GitLab publica una release cada mes. Para cada una, el proyecto vuelve a registrar lo que envía un GitLab en marcha (sus respuestas REST, los permisos que un token granular necesita para cada acción, su esquema GraphQL), ejecuta contra ella la suite de extremo a extremo y sigue lo que ha cambiado: los endpoints, parámetros y campos de respuesta nuevos pasan a ser acciones, entradas y salidas, publicados como dice la [política de versionado](/gitlab-mcp-server/es/changelog/#qué-significa-el-número-de-versión). Volver a registrar sobre GitLab 19.6 es el [issue 1492](https://github.com/jmrplens/gitlab-mcp-server/issues/1492).
+
+El objetivo no cambia: una acción por cada operación que ofrecen las API REST y GraphQL de GitLab, en todos los niveles de Free a Ultimate y en GitLab.com, con los parámetros que GitLab acepta y los campos que envía, y una auditoría que mantiene el catálogo fiel a ello.
+
+### Acompañar a client-go y a la especificación MCP
+
+La versión mayor del servidor sigue a la de [client-go](https://gitlab.com/gitlab-org/api/client-go), el cliente de la API de GitLab sobre el que está construido. Cuando client-go publique su siguiente major, el servidor pasará a su propio siguiente major en la misma actualización de dependencias, y el resto de actualizaciones de dependencias se publican como releases minor o patch. Esa fecha la marca client-go, así que esta página no da ninguna.
+
+Cada revisión de la [especificación MCP](https://modelcontextprotocol.io/) se adopta a medida que el [SDK de MCP para Go](https://github.com/modelcontextprotocol/go-sdk) la soporta. Una propuesta que cambiaría lo que envía el servidor, como el idioma en el que lee el usuario ([issue 1013](https://github.com/jmrplens/gitlab-mcp-server/issues/1013)), se sigue hasta que se integra en la especificación, y se implementa entonces.
+
+### Cerrar lo que un token granular no alcanza
+
+Un [token granular](/gitlab-mcp-server/es/operations/fine-grained-tokens/) se juzga acción por acción a partir de sus permisos. GitLab todavía deja parte de su API fuera de cualquier permiso, y el proyecto lo sigue a medida que los amplía: servir una acción por REST cuando un token granular no alcanza su GraphQL ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)), leer los permisos de la propia respuesta del token cuando GitLab los envía ahí ([issue 1400](https://github.com/jmrplens/gitlab-mcp-server/issues/1400)), y que las acciones que crean tokens puedan enviar los permisos granulares que GitLab acepta ([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+
+### Dar a cada límite de un despliegue compartido una sola regla
+
+En el [modo HTTP](/gitlab-mcp-server/es/operations/http-server/) un proceso atiende a muchos llamantes, y lo que cada uno puede tener, gastar o recibir es un límite. Los límites se deciden en un único registro que leen las capas del servidor. Lo que falta es dar a cada límite un único valor por defecto documentado, un único significado para el cero y una única regla para lo que ocurre al llegar a su capacidad ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958)), y llevar bajo esa regla los ajustes que todavía se leen fuera de la regla de nombres y lectura de la configuración ([issue 957](https://github.com/jmrplens/gitlab-mcp-server/issues/957)).
+
+### Terminar la documentación y las herramientas
+
+La documentación se está reorganizando en torno a cinco recorridos de principio a fin, desde una primera ejecución local hasta un despliegue HTTP detrás de un proxy inverso ([issue 529](https://github.com/jmrplens/gitlab-mcp-server/issues/529)), en inglés y en español a la vez. Las herramientas propias del repositorio están pasando a órdenes de Go, para que cada comprobación que ejecuta quien contribuye funcione igual en Linux, macOS y Windows ([issue 1114](https://github.com/jmrplens/gitlab-mcp-server/issues/1114)).
+
+## Qué no hará el proyecto
+
+### Recibir webhooks
+
+El servidor no ejecuta ningún receptor de webhooks, ni en modo stdio ni en modo HTTP. Las [suscripciones a recursos](/gitlab-mcp-server/es/capabilities/subscriptions/) se atienden consultando GitLab periódicamente con el token del propio suscriptor. Recibir entregas daría al servidor su primer endpoint de entrada sin autenticar y un secreto que conservar entre reinicios, haría que suscribirse creara un hook en GitLab como efecto secundario que ni el modo de solo lectura ni el modo seguro ven, y seguiría necesitando una lectura con el token de cada suscriptor, porque una entrega no lleva ninguno. La decisión es el [ADR-0016](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0016-no-webhook-ingestion.md).
+
+### Recibir avisos de cambio de otras fuentes de eventos
+
+La Events API, las suscripciones GraphQL sobre ActionCable y las peticiones condicionales se estudiaron contra instancias en marcha y se descartaron. La Events API no registra nada de pipelines ni de jobs, las suscripciones GraphQL no están documentadas para quien consume la API y pierden lo que ocurre durante una desconexión, y una petición condicional cuesta tanto del límite de peticiones de GitLab como una lectura completa. La consulta periódica sigue siendo la única fuente. El [ADR-0017](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0017-pull-safe-event-sources-surveyed.md) recoge el estudio y lo que lo reabriría, como que GitLab documente sus suscripciones GraphQL para quien consume la API.
+
+### Actualizarse a sí mismo
+
+El servidor no busca actualizaciones y nunca sustituye su propio binario. El actualizador automático se retiró en la 3.0.0. Una release nueva se instala por el canal con el que se instaló el servidor (npm, PyPI, NuGet, Homebrew, winget, la imagen de contenedor o la extensión para Claude Desktop) o descargándola de nuevo desde la página de Releases, como describe la [guía de instalación](/gitlab-mcp-server/es/install/overview/).
+
+## Cómo cambia esta hoja de ruta
+
+El mantenedor actualiza esta página en un pull request cuando cambia el rumbo, y su gemela en inglés en el mismo pull request. Dar marcha atrás en cualquier punto de "Qué no hará el proyecto" exige un registro de decisión de arquitectura que dé la razón, y que sustituya al ADR-0016 o al ADR-0017 cuando revierta uno de ellos.
+
+<FAQ />

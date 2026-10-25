@@ -236,7 +236,7 @@ const SECTIONS = [
 	{
 		label: "About",
 		labelEs: "Acerca de",
-		slugs: ["about", "comparison", "glossary", "changelog"],
+		slugs: ["about", "roadmap", "comparison", "glossary", "changelog"],
 	},
 ];
 

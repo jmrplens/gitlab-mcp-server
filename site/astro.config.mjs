@@ -971,6 +971,11 @@ export default defineConfig({
 							translations: { es: "Sobre este proyecto" },
 						},
 						{
+							slug: "roadmap",
+							label: "Roadmap",
+							translations: { es: "Hoja de ruta" },
+						},
+						{
 							slug: "comparison",
 							label: "Compare GitLab MCP servers",
 							translations: { es: "Comparar servidores MCP de GitLab" },
