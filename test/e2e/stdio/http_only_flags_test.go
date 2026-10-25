@@ -4,7 +4,9 @@
 // reads, against the real binary: it names them on stderr and ignores them,
 // quietly under --transport=auto for the ones stdio has no setting for, and
 // refuses to start at all when ignoring one would cost more than a setting
-// (issue 1045).
+// (issue 1045). Variables that configure a setting only HTTP mode has are
+// named the same way and never read, so no value of one refuses the start
+// (issue 1171).
 package stdioe2e
 
 import (
@@ -32,6 +34,93 @@ const (
 		"GITLAB_URL names, https://gitlab.com when it is unset, and sends GITLAB_TOKEN there, so this deployment " +
 		"will not be started with the flag: set GITLAB_URL to the instance and remove the flag"
 )
+
+// The two lines cmd/server writes about variables that configure a setting
+// only HTTP mode has, on a stdio run, spelled here for the same reason.
+const (
+	stdioIgnoredVariablesLine = "these variables configure settings only HTTP mode has, so a stdio server does not " +
+		"read them and they have no effect"
+	stdioAutoIgnoredVariablesLine = "--transport=auto chose stdio, which has none of the settings these variables " +
+		"configure, so they have no effect on this run"
+)
+
+// TestHTTPOnlyVariables_OnStdio_AreNamedAndNotRead is item 2 of issue 1171: a
+// shell that exports the variables of an HTTP deployment beside a stdio
+// server. Each value here used to stop the stdio start, or would have had it
+// been read: GITLAB_MCP_AUTH_MODE=oauth without a public URL refused it naming
+// --public-url, GITLAB_MCP_MAX_HTTP_CLIENTS=0 and a session timeout that is no
+// duration refused it too, and GITLAB_MCP_TRUSTED_ORIGINS, which stdio never
+// read, did not. The server now serves, and names the four at WARN under the
+// names they were exported by, in name order.
+func TestHTTPOnlyVariables_OnStdio_AreNamedAndNotRead(t *testing.T) {
+	env := baseEnv(startFakeGitLab(t).URL)
+	maps.Copy(env, map[string]string{
+		"GITLAB_MCP_AUTH_MODE":        "oauth",
+		"GITLAB_MCP_MAX_HTTP_CLIENTS": "0",
+		"GITLAB_MCP_SESSION_TIMEOUT":  "forever",
+		"GITLAB_MCP_TRUSTED_ORIGINS":  "not an origin",
+	})
+	s := startSession(t, env)
+
+	if got := s.call(t, currentUserCall(1)); !served(got) {
+		t.Fatalf("a stdio server with HTTP-only variables set did not serve: %v\nstderr: %s", got, s.stderrText())
+	}
+	warned := awaitLogRecord(t, s, stdioIgnoredVariablesLine, 10*time.Second)
+	if level, _ := warned["level"].(string); level != "WARN" {
+		t.Errorf("the line naming the ignored variables is at %s, want WARN on a stdio run the operator chose", level)
+	}
+	want := []any{"GITLAB_MCP_AUTH_MODE", "GITLAB_MCP_MAX_HTTP_CLIENTS", "GITLAB_MCP_SESSION_TIMEOUT", "GITLAB_MCP_TRUSTED_ORIGINS"}
+	if got, _ := warned["variables"].([]any); !reflect.DeepEqual(got, want) {
+		t.Errorf("variables named = %v, want %v", got, want)
+	}
+}
+
+// TestHTTPOnlyVariables_UnderTransportAuto_AreNamedAtInfo starts the binary as
+// the container image does, --transport auto over the pipe an MCP client
+// connects, with a variable the same deployment would read in HTTP mode. That
+// operator wrote one configuration for either transport, so the variable is
+// named at INFO, as a listener flag is there, and never at WARN.
+func TestHTTPOnlyVariables_UnderTransportAuto_AreNamedAtInfo(t *testing.T) {
+	env := baseEnv(startFakeGitLab(t).URL)
+	env["GITLAB_MCP_MAX_HTTP_CLIENTS"] = "50"
+	s := startSessionWithArgs(t, env, "--transport", "auto")
+
+	if got := s.call(t, currentUserCall(1)); !served(got) {
+		t.Fatalf("the tool call was not served: %v", got)
+	}
+	informed := awaitLogRecord(t, s, stdioAutoIgnoredVariablesLine, 10*time.Second)
+	if level, _ := informed["level"].(string); level != "INFO" {
+		t.Errorf("the line naming the ignored variables under --transport=auto is at %s, want INFO", level)
+	}
+	if got, want := informed["variables"], []any{"GITLAB_MCP_MAX_HTTP_CLIENTS"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("variables named = %v, want %v", got, want)
+	}
+	if logs := s.stderrText(); strings.Contains(logs, stdioIgnoredVariablesLine) {
+		t.Errorf("the run also warned, which a variable under --transport=auto is exempt from:\n%s", logs)
+	}
+}
+
+// TestHTTPOnlyFlags_OnStdio_TheRevalidationFlagNamesItsVariable covers the one
+// pair whose names differ, since stdio has the setting (issue 1171): a stdio
+// run given --revalidate-interval names the variable it reads instead, and the
+// variable is not named as one it ignores.
+func TestHTTPOnlyFlags_OnStdio_TheRevalidationFlagNamesItsVariable(t *testing.T) {
+	env := baseEnv(startFakeGitLab(t).URL)
+	env["GITLAB_MCP_SESSION_REVALIDATE_INTERVAL"] = "10m"
+	s := startSessionWithArgs(t, env, "--revalidate-interval=5m")
+
+	if got := s.call(t, currentUserCall(1)); !served(got) {
+		t.Fatalf("the tool call was not served: %v", got)
+	}
+	warned := awaitLogRecord(t, s, stdioIgnoredFlagsLine, 10*time.Second)
+	want := []any{"--revalidate-interval (on stdio set GITLAB_MCP_SESSION_REVALIDATE_INTERVAL)"}
+	if got, _ := warned["flags"].([]any); !reflect.DeepEqual(got, want) {
+		t.Errorf("flags named = %v, want %v", got, want)
+	}
+	if logs := s.stderrText(); strings.Contains(logs, stdioIgnoredVariablesLine) {
+		t.Errorf("the revalidation interval, which stdio reads, was named as a variable it ignores:\n%s", logs)
+	}
+}
 
 // TestHTTPOnlyFlags_OnStdio_AreNamedAndIgnored is the case issue 1045 opened
 // with: a stdio user who passes --rate-limit-rps to switch the limiter on.

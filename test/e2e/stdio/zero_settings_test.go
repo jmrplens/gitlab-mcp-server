@@ -14,9 +14,11 @@ import (
 // reader's zero: a duration variable set to zero turns its setting off, as the
 // flag of the same name does, and a zero written as a Go duration means what
 // the bare digit does. GITLAB_MCP_SESSION_TIMEOUT=0 used to refuse a stdio
-// start, and so did 0s in every one of them. GITLAB_MCP_ACTION_TIMEOUT is the
-// one stdio itself applies, so its 0s also leaves the call it serves without a
-// deadline.
+// start, and so did 0s in every one of them. GITLAB_MCP_ACTION_TIMEOUT and
+// GITLAB_MCP_SESSION_REVALIDATE_INTERVAL are the two stdio itself applies, so
+// the first's 0s also leaves the call it serves without a deadline; the rest
+// configure settings only HTTP mode has, which stdio no longer reads at all
+// since issue 1171 and names at startup instead (http_only_flags_test.go).
 func TestZeroSettings_AZeroDurationInTheEnvironment_IsServed(t *testing.T) {
 	for _, tc := range []struct{ name, value string }{
 		{"GITLAB_MCP_SESSION_TIMEOUT", "0"},
