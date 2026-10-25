@@ -4089,17 +4089,19 @@ func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 //
 // The order is the log's: the retired variable names first, since a refusal
 // there ends the run before anything else is worth saying; then the transport,
-// whose choice could not be logged before this handler existed; then the flags
-// a stdio run ignores, after the transport because the line written under
-// --transport=auto refers to that choice. See http_only_flags.go.
+// whose choice could not be logged before this handler existed; then the
+// variables and the flags a stdio run ignores, after the transport because the
+// lines written under --transport=auto refer to that choice, and the flags
+// last, since a refusal of one ends the run. See http_only_flags.go.
 //
-// One function rather than three statements in main, whose body is at the
+// One function rather than four statements in main, whose body is at the
 // limit of what the maintainability check accepts.
 func reportStartupConfiguration(choice transportDecision, hcfg *httpConfig) bool {
 	if !reportRetiredEnvNames() {
 		return false
 	}
 	choice.explain()
+	reportStdioIgnoredVariables(choice)
 	return reportStdioIgnoredFlags(choice, hcfg)
 }
 

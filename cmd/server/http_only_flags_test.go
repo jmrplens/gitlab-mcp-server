@@ -526,11 +526,13 @@ func loggedRecords(t *testing.T) func() []map[string]any {
 	}
 }
 
-// startupLine is one line [reportStdioIgnoredFlags] is expected to write: its
-// level, its message, and the flags it names when it names a list.
+// startupLine is one line [reportStdioIgnoredFlags] or
+// [reportStdioIgnoredVariables] is expected to write: its level, its message,
+// and the flags or the variables it names when it names a list.
 type startupLine struct {
 	level, msg string
 	flags      []any
+	variables  []any
 }
 
 // TestReportStdioIgnoredFlags_SaysWhatARunIgnoresAndRefusesWhatItCannot drives
@@ -622,8 +624,8 @@ func TestReportStdioIgnoredFlags_SaysWhatARunIgnoresAndRefusesWhatItCannot(t *te
 }
 
 // assertStartupLines holds the records a report wrote to the lines expected,
-// one subtest per line: its level, its message, and the flags it names when
-// the expected line names a list.
+// one subtest per line: its level, its message, and the flags or the
+// variables it names when the expected line names a list.
 func assertStartupLines(t *testing.T, logged []map[string]any, want []startupLine) {
 	t.Helper()
 	if len(logged) != len(want) {
@@ -637,12 +639,130 @@ func assertStartupLines(t *testing.T, logged []map[string]any, want []startupLin
 			if msg, _ := logged[i]["msg"].(string); msg != line.msg {
 				t.Errorf("line %d reads %q, want %q", i, msg, line.msg)
 			}
-			if line.flags == nil {
-				return
+			assertNamesList(t, i, logged[i], "flags", line.flags)
+			assertNamesList(t, i, logged[i], "variables", line.variables)
+		})
+	}
+}
+
+// assertNamesList holds the list a logged line carries under key to the one
+// expected, when one is expected.
+func assertNamesList(t *testing.T, i int, record map[string]any, key string, want []any) {
+	t.Helper()
+	if want == nil {
+		return
+	}
+	if got, _ := record[key].([]any); !reflect.DeepEqual(got, want) {
+		t.Errorf("line %d names the %s %v, want %v", i, key, got, want)
+	}
+}
+
+// clearConfigurationEnv leaves the environment setting nothing this project
+// defines, under its prefixed name or the one it had before 3.1.0, so a case
+// sets exactly what it names and the retired-name report says nothing.
+func clearConfigurationEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv(config.EnvFileVar, "")
+	for _, name := range config.PrefixedEnvNames() {
+		t.Setenv(config.EnvPrefix+name, "")
+		// Unset rather than emptied: the retired-name report asks whether
+		// the name is set at all.
+		retired := config.RetiredEnvName(name)
+		t.Setenv(retired, "")
+		if err := os.Unsetenv(retired); err != nil {
+			t.Fatalf("unsetting %s: %v", retired, err)
+		}
+	}
+}
+
+// TestReportStdioIgnoredVariables_NamesWhatAStdioRunDoesNotRead drives the
+// variables' report through each shape of run it distinguishes (issue 1171):
+// an HTTP run reads them all and says nothing; a stdio run the operator chose
+// warns, naming each setting only HTTP mode has that is set, under the name it
+// was exported by and in name order; under --transport=auto the same line is
+// INFO; and nothing is said when none of them is set. A setting stdio reads is
+// never named, the revalidation interval among them.
+//
+// Not parallel: it sets environment variables and replaces the default logger.
+func TestReportStdioIgnoredVariables_NamesWhatAStdioRunDoesNotRead(t *testing.T) {
+	set := map[string]string{
+		"GITLAB_MCP_MAX_HTTP_CLIENTS":            "0",
+		"GITLAB_MCP_AUTH_MODE":                   "oauth",
+		"GITLAB_MCP_TOOL_SURFACE":                config.ToolSurfaceMeta,
+		"GITLAB_MCP_SESSION_REVALIDATE_INTERVAL": "5m",
+	}
+	named := []any{"GITLAB_MCP_AUTH_MODE", "GITLAB_MCP_MAX_HTTP_CLIENTS"}
+	cases := []struct {
+		name   string
+		choice transportDecision
+		env    map[string]string
+		want   []startupLine
+	}{
+		{name: "an HTTP run reads them all", choice: transportDecision{HTTP: true}, env: set},
+		{name: "a stdio run with none of them set", choice: transportDecision{}, env: map[string]string{"GITLAB_MCP_TOOL_SURFACE": config.ToolSurfaceMeta}},
+		{
+			name: "a stdio run the operator chose warns", choice: transportDecision{}, env: set,
+			want: []startupLine{{level: "WARN", msg: stdioIgnoredVariablesLine, variables: named}},
+		},
+		{
+			name: "auto names them at INFO", choice: transportDecision{Inference: "stdin is a pipe"}, env: set,
+			want: []startupLine{{level: "INFO", msg: stdioAutoIgnoredVariablesLine, variables: named}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clearConfigurationEnv(t)
+			for key, value := range tc.env {
+				t.Setenv(key, value)
 			}
-			if got, _ := logged[i]["flags"].([]any); !reflect.DeepEqual(got, line.flags) {
-				t.Errorf("line %d names %v, want %v", i, got, line.flags)
+			records := loggedRecords(t)
+
+			reportStdioIgnoredVariables(tc.choice)
+
+			assertStartupLines(t, records(), tc.want)
+		})
+	}
+}
+
+// TestReportStartupConfiguration_NamesTheVariablesBeforeTheFlags holds the
+// variables' line to its place in what startup says: after the transport,
+// whose choice the line under --transport=auto refers to, and before the
+// flags, whose refusal ends the run. A stdio run with a variable only HTTP
+// mode reads starts, and one also given a flag it cannot ignore is refused
+// with both said.
+//
+// Not parallel: it sets environment variables and replaces the default logger.
+func TestReportStartupConfiguration_NamesTheVariablesBeforeTheFlags(t *testing.T) {
+	cases := []struct {
+		name      string
+		hcfg      httpConfig
+		wantStart bool
+		want      []startupLine
+	}{
+		{
+			name: "named, and the run goes on", wantStart: true,
+			want: []startupLine{{level: "WARN", msg: stdioIgnoredVariablesLine, variables: []any{"GITLAB_MCP_AUTH_MODE"}}},
+		},
+		{
+			name: "named before a flag the run is refused for",
+			hcfg: httpConfig{setFlags: map[string]bool{"read-only": true}, readOnly: true},
+			want: []startupLine{
+				{level: "WARN", msg: stdioIgnoredVariablesLine, variables: []any{"GITLAB_MCP_AUTH_MODE"}},
+				{level: "ERROR", msg: stdioWithheldLine},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clearConfigurationEnv(t)
+			t.Setenv("GITLAB_MCP_AUTH_MODE", "oauth")
+			records := loggedRecords(t)
+
+			if got := reportStartupConfiguration(transportDecision{}, &tc.hcfg); got != tc.wantStart {
+				t.Errorf("reportStartupConfiguration() = %v, want %v", got, tc.wantStart)
 			}
+
+			assertStartupLines(t, records(), tc.want)
 		})
 	}
 }
