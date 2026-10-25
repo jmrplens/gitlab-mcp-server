@@ -30,6 +30,12 @@ func requestDecisions() []Decision {
 		enforce(pkgServer, "defaultMaxStdioLineBytes"),
 		enforce(pkgServer, "stdioMaxLineBytesEnv"))
 	rqb004.Envs = []string{"GITLAB_MCP_STDIO_MAX_LINE_BYTES"}
+	// A value that does not parse warns and keeps the default rather than
+	// refusing startup (issue 957): stdio configuration arrives through the
+	// environment of whatever launched the process, and failing to start over
+	// one mistyped number would take the client down with it.
+	rqb004.Malformed, rqb004.MalformedBy = WarnKeepDefault, "issue 957"
+	rqb004.Decided = []string{"issue 957"}
 	rqb004.Findings = []string{"F-13"}
 
 	rqb005 := bound("RQB-005", "how long one action's handler may run",

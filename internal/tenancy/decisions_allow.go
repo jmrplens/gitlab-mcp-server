@@ -428,9 +428,14 @@ func allowDecisions() []Decision {
 			Reason:   "Per server is per pool entry, which is per token and instance, and bounds fairness",
 			ReasonAt: reasonAt(pkgServer, "maxListenStreamsPerServer"),
 			Values:   []string{"ListenStreamsPerCredential"},
-			Source:   EnvOnly, Envs: []string{"GITLAB_MCP_MAX_LISTEN_STREAMS"}, Malformed: WarnKeepDefault,
+			// A value that does not parse warns and keeps the default rather
+			// than refusing startup (issue 957), for the stdio line limit's
+			// reason (RQB-004): a mistyped number must not take the client
+			// down with the server.
+			Source: EnvOnly, Envs: []string{"GITLAB_MCP_MAX_LISTEN_STREAMS"},
+			Malformed: WarnKeepDefault, MalformedBy: "issue 957",
 			Zero: ZeroOffKeepsCount, AtCapacity: RefuseNewcomer,
-			Decided:  []string{"issue 540", "issue 956"},
+			Decided:  []string{"issue 540", "issue 956", "issue 957"},
 			Findings: []string{"F-04", "F-13", "F-21"},
 			Refusals: []Refusal{
 				{

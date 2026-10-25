@@ -176,8 +176,14 @@ func authorizeDecisions() []Decision {
 			Envs: []string{
 				"GITLAB_MCP_ALLOWED_UPLOAD_DIRS", "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS", "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
 			},
-			Malformed: WarnKeepDefault,
-			Findings:  []string{"F-13"},
+			// A directory that does not resolve is skipped with a warning and
+			// the rest of the list is kept, rather than refusing startup
+			// (issue 957): each entry widens what a tool may touch, so one
+			// that names nothing widens nothing, and the list is read when a
+			// tool resolves a path, after the server has started.
+			Malformed: SkipEntry, MalformedBy: "issue 957",
+			Decided:  []string{"issue 957"},
+			Findings: []string{"F-13"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Answer: AskOperator,
@@ -327,10 +333,17 @@ func authorizeDecisions() []Decision {
 			Resource: "the destinations a client may dial",
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			Source: Configurable, Flags: []string{"--allow-private-instances"},
-			Envs:      []string{"GITLAB_MCP_ALLOW_PRIVATE_INSTANCES"},
-			Malformed: AcceptsAny,
-			Decided:   []string{"ADR-0022"},
-			Findings:  []string{"F-13"},
+			Envs: []string{"GITLAB_MCP_ALLOW_PRIVATE_INSTANCES"},
+			// A value the variable does not parse as a boolean reads as off,
+			// which leaves tier B on, rather than refusing startup (issue
+			// 957): the variable turns a guard off, and a typo that did so
+			// would be the one failure nobody notices (DST-003 stays
+			// fail-safe). The flag writes the variable before anything reads
+			// it (cmd/server:applyEnvBackedFlags), so a flag value that does
+			// not parse reads as off too.
+			Malformed: ReadsAsOff, MalformedBy: "issue 957",
+			Decided:  []string{"ADR-0022", "issue 957"},
+			Findings: []string{"F-13"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError,

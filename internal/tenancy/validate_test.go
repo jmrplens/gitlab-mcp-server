@@ -334,6 +334,63 @@ func TestValidate_ThroughConfig(t *testing.T) {
 	})
 }
 
+// TestValidate_MalformedDecided holds a malformed value that does not refuse
+// startup to a recorded decision or a finding (issue 957): warning and keeping
+// the default, skipping an entry and reading the value as off each pass when
+// the record MalformedBy names decided it and the row records that decision,
+// or when the row carries the finding that records the departure from
+// INV-017, and not when the row records something else. Refusing startup, a
+// switch every value of which means something and a value no operator writes
+// depart from nothing, and a MalformedBy on any of them decides nothing, so it
+// is refused.
+func TestValidate_MalformedDecided(t *testing.T) {
+	policy := func(m Malformed, by string, decided ...string) func(d *Decision) {
+		return func(d *Decision) { d.Malformed, d.MalformedBy, d.Decided = m, by, decided }
+	}
+	runRule(t, checkMalformedDecided, []ruleCase{
+		{"refusing startup", row(policy(RefuseStartup, "")), ""},
+		{"accepting any value", row(policy(AcceptsAny, "")), ""},
+		{"no policy", row(nil), ""},
+		{"warning and keeping the default, undecided", row(policy(WarnKeepDefault, "")), "does not refuse startup, with no decision or finding"},
+		{"skipping an entry, undecided", row(policy(SkipEntry, "")), "does not refuse startup, with no decision or finding"},
+		{"reading as off, undecided", row(policy(ReadsAsOff, "")), "does not refuse startup, with no decision or finding"},
+		{"warning and keeping the default, decided", row(policy(WarnKeepDefault, "issue 957", "issue 957")), ""},
+		{"skipping an entry, decided", row(policy(SkipEntry, "issue 957", "issue 957")), ""},
+		{"reading as off, decided", row(policy(ReadsAsOff, "issue 957", "ADR-0022", "issue 957")), ""},
+		{
+			"warning and keeping the default, by a decision it does not record",
+			row(policy(WarnKeepDefault, "issue 957", "ADR-0022")), "does not refuse startup, with no decision or finding",
+		},
+		{
+			"warning and keeping the default, decided about something else",
+			row(policy(WarnKeepDefault, "", "issue 957")), "does not refuse startup, with no decision or finding",
+		},
+		{
+			"warning and keeping the default, recorded",
+			row(func(d *Decision) { d.Malformed, d.Findings = WarnKeepDefault, []string{"F-13"} }), "",
+		},
+		// F-34 records a departure from INV-015, which says nothing about a
+		// value that does not parse.
+		{
+			"warning and keeping the default, carrying a finding about zero",
+			row(func(d *Decision) { d.Malformed, d.Findings = WarnKeepDefault, []string{"F-34"} }),
+			"does not refuse startup, with no decision or finding",
+		},
+		{
+			"a decision for a value that refuses startup",
+			row(policy(RefuseStartup, "issue 957", "issue 957")), "decided by issue 957, and a malformed value refuses startup or is none",
+		},
+		{
+			"a decision for a switch every value of which means something",
+			row(policy(AcceptsAny, "issue 957", "issue 957")), "decided by issue 957, and a malformed value refuses startup or is none",
+		},
+		{
+			"a decision for no policy",
+			row(policy(MalformedNone, "issue 957", "issue 957")), "decided by issue 957, and a malformed value refuses startup or is none",
+		},
+	})
+}
+
 // TestValidate_FixedReasoned holds a value no operator setting reaches, a
 // constant or a Go option's, to saying why (issue 958), and refuses that
 // reason on a value a setting reaches or one derived from another's.
@@ -487,6 +544,15 @@ func TestValidate_WellFormed(t *testing.T) {
 		{
 			"a zero decided by a record it does not keep",
 			row(func(d *Decision) { d.ZeroBy, d.Decided = "issue 958", []string{"ADR-0020"} }), "decided by issue 958, which it does not record",
+		},
+		{
+			"a malformed-value policy decided by a record it keeps",
+			row(func(d *Decision) { d.MalformedBy, d.Decided = "issue 957", []string{"ADR-0022", "issue 957"} }), "",
+		},
+		{
+			"a malformed-value policy decided by a record it does not keep",
+			row(func(d *Decision) { d.MalformedBy, d.Decided = "issue 957", []string{"ADR-0022"} }),
+			"its malformed-value policy is decided by issue 957, which it does not record",
 		},
 		{
 			"a setting's zero",

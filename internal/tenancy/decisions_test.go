@@ -1011,6 +1011,51 @@ func TestDecisions_GoOptions_AreTheValuesOnlyTestsSet(t *testing.T) {
 	}
 }
 
+// TestDecisions_MalformedExceptions_AreDecidedByIssue957 pins the
+// malformed-value policies issue 957 keeps as exceptions to refusing startup,
+// each recorded through MalformedBy with the issue among the row's decisions:
+// a value that does not parse is skipped when it is one directory of a stdio
+// allow-list (AUT-006), and read as off when it is the opt-out of the
+// destination guard, so a typo never turns the guard off (DST-003); the listen
+// ceiling warns and keeps its default, as the stdio line limit does, so that a
+// typo cannot take a client down with the server (HLD-001, RQB-004). Every
+// other row's malformed value refuses startup, or every value of it means
+// something (AcceptsAny), or the row has none, which is what the rule's own
+// [malformedDeparts] says.
+func TestDecisions_MalformedExceptions_AreDecidedByIssue957(t *testing.T) {
+	exceptions := []struct {
+		id     string
+		policy Malformed
+	}{
+		{"AUT-006", SkipEntry},
+		{"DST-003", ReadsAsOff},
+		{"HLD-001", WarnKeepDefault},
+		{"RQB-004", WarnKeepDefault},
+	}
+	var want []string
+	for _, tc := range exceptions {
+		want = append(want, tc.id)
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if d.Malformed != tc.policy {
+				t.Errorf("%s: malformed policy %d, want %d", tc.id, d.Malformed, tc.policy)
+			}
+			if d.MalformedBy != "issue 957" || !slices.Contains(d.Decided, "issue 957") {
+				t.Errorf("%s: malformed by %q, decided %v; want issue 957 recorded as the decision", tc.id, d.MalformedBy, d.Decided)
+			}
+		})
+	}
+	var departing []string
+	for _, d := range Decisions() {
+		if d.MalformedBy != "" || malformedDeparts(d.Malformed) {
+			departing = append(departing, d.ID)
+		}
+	}
+	if !slices.Equal(departing, want) {
+		t.Errorf("the rows whose malformed value departs from refusing startup, or that name a decision for one, are %v, want %v", departing, want)
+	}
+}
+
 // TestLookup_FindsARowAndRefusesAnUnknownID reads one row back and asks for one
 // that does not exist.
 func TestLookup_FindsARowAndRefusesAnUnknownID(t *testing.T) {

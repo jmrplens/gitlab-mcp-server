@@ -188,13 +188,21 @@ type Malformed uint8
 const (
 	// MalformedNone states none: a value no operator writes.
 	MalformedNone Malformed = iota
-	// RefuseStartup refuses to start.
+	// RefuseStartup refuses to start. It is the policy of a limit (issue
+	// 957), and any other a row names for a value that does not parse is an
+	// exception it records (see [Decision.MalformedBy]).
 	RefuseStartup
 	// WarnKeepDefault warns and keeps the default.
 	WarnKeepDefault
 	// AcceptsAny is a switch every value of which means something (IDN-013:
 	// anything but "off" enables it).
 	AcceptsAny
+	// SkipEntry warns about an entry of a list that does not parse, skips it
+	// and keeps the rest (AUT-006: a directory that does not resolve).
+	SkipEntry
+	// ReadsAsOff reads a value that does not parse as off (DST-003: a typo in
+	// the opt-out leaves the guard it would turn off on).
+	ReadsAsOff
 )
 
 // Era is a protocol revision a refusal applies in.
@@ -493,6 +501,16 @@ type Decision struct {
 	Config []string
 	// Malformed is what a value that does not parse does.
 	Malformed Malformed
+	// MalformedBy is the record that decided a malformed-value policy other
+	// than refusing startup, which is the stated exception INV-017 lets
+	// through in place of a finding: issue 957 decided that a value a limit
+	// cannot parse refuses startup, as internal/config refused for the
+	// settings it read, and kept the policies of the settings it names as
+	// exceptions with their reasons. It decides a value that warns and keeps
+	// the default, an entry skipped or a value read as off, and it is one of
+	// Decided; a row whose malformed value refuses startup, or that has none,
+	// has nothing for it to decide.
+	MalformedBy string
 	// Zero is what a value of zero means.
 	Zero Zero
 	// SettingZeros are the settings whose zero means something other than

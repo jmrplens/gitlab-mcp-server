@@ -92,15 +92,20 @@ the code; the layers keep enforcing.**
   (`POL-001`) and, since issue 950, the OAuth identity cache (`ADM-005`) make room; a
   process partner switched off with the per-key row it stands beside (`INV-015`), where
   the decision is the one the row's `OffWithBy` names, which is how `RTC-007` follows
-  `RTC-003` (issue 951); and, since issue 958, a zero refused at startup or replaced by
+  `RTC-003` (issue 951); since issue 958, a zero refused at startup or replaced by
   the default, where the decision is the one the row's `ZeroBy` names, which is how the
   pool size, the tool-call burst, the credential age ceiling and the watcher ceiling
-  state theirs. Only through a finding recorded for the invariant: a
+  state theirs; and, since issue 957, a value that does not parse and does not refuse
+  startup (`INV-017`), where the decision is the one the row's `MalformedBy` names, which
+  is how the listen ceiling, the stdio line limit, the local directory allow-lists and
+  the private-instance opt-out state theirs. Only through
+  a finding recorded for the invariant: a
   per-caller number protecting a process resource with no partner, a structure keyed on a
   mintable value with no capacity, an in-band code of the server's own that mirrors no
   status the gate answers its class of next action with (`INV-012`), any other zero that does not mean off, a reason
   whose unit differs from its key or misstates its own, a value only an environment
-  variable reaches, and a ceiling nothing bounds.
+  variable reaches or one that does not parse and does not refuse startup with no
+  decision recorded, and a ceiling nothing bounds.
 
 **The gate**, `cmd/audit_tenancy`, loads `./cmd/server` and `./internal/...` through the
 type checker and holds the register to the code: each site aliases, pins or reads what its

@@ -185,19 +185,24 @@ where its value comes from, in three ways:
   (`VAL-009`, issue 958).
 - **With a recorded decision**: a holding taken across keys (`INV-005`); a process
   partner switched off with the per-key limit it stands beside (`INV-015`), which is the
-  one zero another row decides that passes without a finding (`RTC-007`, issue 951); and
-  a zero refused at startup or replaced by the default, the row's own or one of its
+  one zero another row decides that passes without a finding (`RTC-007`, issue 951); a
+  zero refused at startup or replaced by the default, the row's own or one of its
   settings' (`INV-015`), which is how the exceptions issue 958 states pass (`POL-001`,
-  `RTC-001`'s burst, `ADM-005`, `ADM-008`, `HLD-003`). The decision is the one the
-  row's `OffWithBy` or `ZeroBy` names, among those it records: a row whose decisions are
-  about something else does not pass that way, and a `ZeroBy` on a row whose every zero
-  means off decides nothing and is refused.
+  `RTC-001`'s burst, `ADM-005`, `ADM-008`, `HLD-003`); and a value that does not parse
+  and does not refuse startup, warning and keeping the default, skipping the entry or
+  reading as off (`INV-017`), which is how the exceptions issue 957 states pass
+  (`HLD-001`, `RQB-004`, `AUT-006`, `DST-003`). The decision is the one the
+  row's `OffWithBy`, `ZeroBy` or `MalformedBy` names, among those it records: a row
+  whose decisions are about something else does not pass that way, a `ZeroBy` on a row
+  whose every zero means off decides nothing and is refused, and so is a `MalformedBy`
+  on a row whose malformed value refuses startup or that has none.
 - **With a finding recorded for the invariant**: a per-key ceiling on a process resource
   with no partner (`INV-004`); a table keyed on a mintable value with no capacity
   (`INV-010`); an in-band code of the server's own that mirrors no status the gate
   answers its class of next action with (`INV-012`); any other zero that does not mean
   off (`INV-015`); a reason whose unit differs from its key or misstates its own
-  (`INV-016`); a value only an environment variable reaches (`INV-017`);
+  (`INV-016`); a value only an environment variable reaches, and any other malformed
+  value that does not refuse startup (`INV-017`);
   and a ceiling nothing bounds (`INV-018`).
 
 - **INV-001 Identity from the credential.** A limit derives who a caller is from the
@@ -297,7 +302,17 @@ where its value comes from, in three ways:
   merges, and the reason states its own unit correctly.
 - **INV-017 Configuration goes through the configuration package.** A configurable limit
   is read through `config.Getenv` or `config.TrimmedGetenv` with its name in
-  `prefixedNames`, has a flag in HTTP mode, and states its malformed-value policy.
+  `prefixedNames`, has a flag in HTTP mode, and states its malformed-value policy, which
+  refuses startup (issue 957, as `internal/config` already refused a value it could not
+  parse). Where a value that does not parse must not refuse startup, the exception is
+  stated with its reason and the decision that made it (`MalformedBy`), never left
+  implicit: the listen ceiling and the stdio line limit warn and keep their default,
+  since stdio configuration arrives through the environment of whatever launched the
+  process and a mistyped number must not take the client down with the server
+  (`HLD-001`, `RQB-004`); a directory of a local allow-list that does not resolve is
+  skipped and the rest kept, since an entry that names nothing widens nothing
+  (`AUT-006`); and the private-instance opt-out reads a value it does not parse as off,
+  so a typo never turns the destination guard off (`DST-003`).
 - **INV-018 Bound the process on the process.** A bound whose purpose is to protect the
   process, or an upstream budget the whole deployment shares, is keyed on the process.
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state
@@ -544,7 +559,7 @@ exist (`well-formed`).
 | VAL-006 | What happens at capacity, and why                                                                           | `AtCapacity`, held to the capacity rule below, and `Table` for a structure keyed on a caller-chosen value |
 | VAL-007 | Its refusal: channel, code, status, `Retry-After`, message and class, per method and era, and on stdio      | `Refusals`                                                                                                |
 | VAL-008 | What it charges, and that nothing unjudged is charged                                                       | `Refusals[].Charged`, and `Failures` for an admission path                                                |
-| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy, and for a value no setting reaches, why | `Values`, `Source`, `Fixed`, `Zero`, `SettingZeros`, `ZeroBy`, `Malformed`                                |
+| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy, and for a value no setting reaches, why | `Values`, `Source`, `Fixed`, `Zero`, `SettingZeros`, `ZeroBy`, `Malformed`, `MalformedBy`                 |
 | VAL-010 | Its telemetry: the reason only                                                                              | The pull request                                                                                          |
 | VAL-011 | Its behavior on stdio                                                                                       | `StdioKey`                                                                                                |
 | VAL-012 | Its measurement, when it claims to protect one population from another                                      | The pull request, with `make bench-fairness`                                                              |

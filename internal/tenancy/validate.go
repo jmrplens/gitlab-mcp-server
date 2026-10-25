@@ -47,10 +47,12 @@ type setRule struct {
 // with no process partner is refused, and so is a refusal on a channel the
 // method cannot carry. A rule that can be excused passes a row breaking its
 // invariant only through a finding recorded for it (see
-// [Finding.Invariants]); some rules cannot be excused at all, and two are
-// excused by a recorded decision instead: checkAcrossKeys, and the half of
-// checkZeroStated that lets a process partner follow the row it stands
-// beside. The specification's section on invariants says which is which.
+// [Finding.Invariants]); some rules cannot be excused at all, and three are
+// excused by a recorded decision as well or instead: checkAcrossKeys,
+// checkZeroStated for a process partner that follows the row it stands
+// beside and for a zero ZeroBy names, and checkMalformedDecided for a
+// malformed value MalformedBy names. The specification's section on
+// invariants says which is which.
 func Validate(ds []Decision) error {
 	rows := make(map[string]Decision, len(ds))
 	for _, d := range ds {
@@ -84,6 +86,9 @@ const (
 	// invUnitsAgree is INV-016: every limit states its key, mint cost and
 	// reason, and the units agree.
 	invUnitsAgree = "INV-016"
+	// invThroughConfig is INV-017: configuration goes through the
+	// configuration package.
+	invThroughConfig = "INV-017"
 	// invProcessOnProcess is INV-018: bound the process on the process.
 	invProcessOnProcess = "INV-018"
 )
@@ -101,7 +106,8 @@ func rowRules() []rowRule {
 		{"units-agree", invUnitsAgree, checkUnitsAgree},
 		{"stated-unit", invUnitsAgree, checkStatedUnit},
 		{"class-consistent", "VAL-003", checkClassConsistent},
-		{"through-config", "INV-017", checkThroughConfig},
+		{"through-config", invThroughConfig, checkThroughConfig},
+		{"malformed-decided", invThroughConfig, checkMalformedDecided},
 		{"fixed-reasoned", "VAL-009", checkFixedReasoned},
 		{"capacity-stated", "VAL-006", checkCapacityStated},
 		{"capacity-fits", "VAL-006", checkCapacityFits},
@@ -358,11 +364,41 @@ func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 			out = append(out, "configurable with no malformed-value policy")
 		}
 	case EnvOnly:
-		if !d.RecordsDeparture("INV-017") {
+		if !d.RecordsDeparture(invThroughConfig) {
 			out = append(out, "configurable outside the configuration package, with no finding")
 		}
 	}
 	return out
+}
+
+// checkMalformedDecided holds a malformed value that does not refuse startup
+// to a recorded decision or a finding (issue 957). Refusing startup is the
+// policy issue 957 decided for a limit, as internal/config already refused a
+// value it could not parse; a row that warns and keeps the default, skips an
+// entry or reads the value as off passes when the record MalformedBy names
+// decided it and the row records that decision, which is then the stated
+// exception with its reason, or when a finding records the departure from
+// INV-017. A MalformedBy on a row whose malformed value refuses startup, or
+// that states no value that does not parse, decides nothing, and is refused,
+// so a decision cannot stay on a row after its exception has gone.
+func checkMalformedDecided(d Decision, _ map[string]Decision) []string {
+	departs := malformedDeparts(d.Malformed)
+	decided := d.MalformedBy != "" && has(d.Decided, d.MalformedBy)
+	if departs && !decided && !d.RecordsDeparture(invThroughConfig) {
+		return []string{"a malformed value that does not refuse startup, with no decision or finding"}
+	}
+	if d.MalformedBy != "" && !departs {
+		return []string{fmt.Sprintf("its malformed-value policy is decided by %s, and a malformed value refuses startup or is none", d.MalformedBy)}
+	}
+	return nil
+}
+
+// malformedDeparts reports whether a malformed-value policy departs from
+// refusing startup: a value that warns and keeps the default, an entry
+// skipped, or a value read as off. A switch every value of which means
+// something has no malformed value to depart with.
+func malformedDeparts(m Malformed) bool {
+	return m == WarnKeepDefault || m == SkipEntry || m == ReadsAsOff
 }
 
 // checkFixedReasoned holds a value no operator setting reaches, a constant or
@@ -544,8 +580,9 @@ func leavesASetting(settings, stated []string) bool {
 
 // danglingReferences is the half of [checkWellFormed] that follows a row's
 // references: a partner and a zero partner must be rows, a record said to
-// decide its zero must be one it records, a setting whose zero it states must
-// be one of its settings, and a finding must be one of the specification's.
+// decide its zero or its malformed-value policy must be one it records, a
+// setting whose zero it states must be one of its settings, and a finding must
+// be one of the specification's.
 func danglingReferences(d Decision, rows map[string]Decision) []string {
 	var out []string
 	if _, ok := rows[d.Partner]; d.Partner != "" && !ok {
@@ -558,6 +595,9 @@ func danglingReferences(d Decision, rows map[string]Decision) []string {
 		if by != "" && !has(d.Decided, by) {
 			out = append(out, fmt.Sprintf("its zero is decided by %s, which it does not record", by))
 		}
+	}
+	if d.MalformedBy != "" && !has(d.Decided, d.MalformedBy) {
+		out = append(out, fmt.Sprintf("its malformed-value policy is decided by %s, which it does not record", d.MalformedBy))
 	}
 	for _, s := range d.SettingZeros {
 		if fault := settingZeroFault(d, s); fault != "" {
