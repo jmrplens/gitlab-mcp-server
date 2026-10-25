@@ -2,7 +2,7 @@
 #
 # Triggers: tag push matching v*, and a manual dispatch that REHEARSES.
 # Pipeline: Preflight → E2E (e2e.yml) + Race (race.yml) → Docker → GoReleaser →
-#           per-publisher jobs → Winget
+#           per-publisher jobs → Winget, with Reproduce beside the publishers
 # If either gate fails, nothing is released.
 #
 # Rehearsal. Every publisher job below was added after 2.7.5 shipped, so none
@@ -1409,6 +1409,73 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEWEST: ${{ needs.preflight.outputs.newest }}
         run: gh release edit "v${RELEASE_TAG#v}" --draft=false "--latest=${NEWEST}"
+
+  # Every binary the release published, rebuilt from the commit it was built
+  # from and compared with the published one byte for byte
+  # (cmd/reproduce_release, through make check-reproducible). The signature
+  # over checksums.txt says this workflow published those bytes; a rebuild
+  # that comes out identical says they are what the tagged source compiles
+  # to, and it is a check anybody can repeat with the same command, which the
+  # site's binary page describes. It runs on the other architecture, so
+  # nothing the release job's host contributed can pass for the source.
+  #
+  # It reads what the release job left public, fetched and verified the way
+  # the publishers fetch it: on a tag push the published release, in a
+  # rehearsal the rehearsal's own build. It runs beside the publishers rather
+  # than in front of them, because by the time it can read the release the
+  # release is public and immutable, and stopping npm, PyPI and NuGet halfway
+  # would unpublish nothing and leave the channels disagreeing; a failure here
+  # is a release that does not rebuild, which is an issue to open. It holds no
+  # credential beyond reading the release, and setup-go caches nothing, as in
+  # the release job, since a rebuild from a cache another run wrote would
+  # compare that cache rather than the source.
+  reproduce:
+    name: "♻️ Reproduce the binaries"
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    needs: [preflight, release]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+    permissions:
+      contents: read # download the published release assets
+    steps:
+      # The whole history and every tag: the go command stamps a tagged
+      # commit's version from its tag, and an untagged one's pseudo-version
+      # from the tag before it, and the release job built with both there.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
+      - name: Take the rehearsal's own build
+        if: env.REHEARSAL == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: rehearsal-assets
+          path: ${{ runner.temp }}/rehearsal
+
+      - name: Fetch and verify the published binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
+        run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" "${RUNNER_TEMP}/published"
+
+      # HEAD is the tagged commit on a tag push and the dispatched one in a
+      # rehearsal: the commit the release job built either way. Each binary is
+      # rebuilt with the toolchain its own build information records, and the
+      # universal darwin binary is joined from the rebuilt darwin ones in the
+      # order the published one lists them.
+      - name: Rebuild each binary and compare it with the published one
+        run: make check-reproducible TAG="${RELEASE_TAG}" REF=HEAD PUBLISHED="${RUNNER_TEMP}/published"
 
   npm:
     name: "📮 Publish to npm"

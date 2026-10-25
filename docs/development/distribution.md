@@ -315,6 +315,20 @@ steps, since they read the daemon's images and push nothing, and
 `image-vulns.yml` asks the same question of the image `latest` names every
 Monday. `make check-image-vulns` builds, scans and judges locally.
 
+The seven release binaries, which every channel above except the container
+image carries, are rebuilt after each release by the `reproduce` job, on
+`ubuntu-24.04-arm` beside the publishers,
+and compared with the published ones byte for byte by
+[`cmd/reproduce_release`](cmd-utilities.md#reproduce_release)
+(`make check-reproducible`), which is why `.goreleaser.yml` stamps the full
+commit rather than an abbreviation whose length depends on the clone. The
+packages are not rebuilt: they carry those binaries, which the steps above
+hold to `checksums.txt`. The image is not covered, since its build is not
+byte-reproducible (BuildKit's provenance attestation carries timestamps, and
+`apk add` installs the packages of the day) and its binary is a separate musl
+build. [Release Process](release-process.md) has the job's place in the
+workflow.
+
 ### Which release moves "latest"
 
 Only a plain `vX.Y.Z` tag is released, and only the newest of them moves a

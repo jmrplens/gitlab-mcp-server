@@ -970,7 +970,7 @@ REPRODUCE_DIR=dist/reproduce
 
 ## check-reproducible: rebuild the binaries of release TAG from the commit it tags (REF overrides) and compare each with the binary the release published, byte for byte.
 ## Fetches the release's assets and verifies them against its cosign-signed checksums.txt first (scripts/fetch-release-assets.sh, which needs gh and cosign),
-## unless PUBLISHED names a directory that already holds them.
+## unless PUBLISHED names a directory that already holds them, which is how the reproduce job of release.yml runs it.
 ## Every release up to 3.3.0 was stamped with the abbreviated commit, which another clone may abbreviate to another length, so it also needs SHORT_COMMIT, the commit `gitlab-mcp-server --version` prints for it.
 ## A release before 3.2.0 is not covered: it publishes no THIRD_PARTY_NOTICES, which the fetch requires, and names no ELF loader, so its Linux binaries carry whichever one its build host offered.
 ##   make check-reproducible TAG=v3.3.0 SHORT_COMMIT=f8813193

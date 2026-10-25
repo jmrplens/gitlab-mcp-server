@@ -236,3 +236,21 @@ make build
 ```
 
 `make build` writes `dist/gitlab-mcp-server` (`.exe` on Windows) for the machine it runs on, and `make build-all` cross-compiles the six release targets into the same directory. A binary built this way carries no signature and no provenance attestation, since those are made by the release workflow. The [development guide](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/development.md) covers the tests, the analysis gates and the rest of the contributor workflow.
+
+## Reproduce a release binary
+
+A release's binaries can be rebuilt from its tag and compared with the published ones byte for byte, so the file you downloaded can be checked against the source it says it was built from, and not only against the signature of the workflow that built it. The seven binaries of 3.3.0 have been rebuilt this way bit for bit, and from the release after 3.3.0 the release workflow rebuilds and compares every binary of every release. Anybody can repeat the check with git, Go and, to fetch the release and verify its signature, the `gh` CLI and Cosign:
+
+```bash
+git clone https://github.com/jmrplens/gitlab-mcp-server.git
+cd gitlab-mcp-server
+make check-reproducible TAG=v3.3.0 SHORT_COMMIT=f8813193
+```
+
+The target fetches the release's assets and verifies `checksums.txt` against its signature, clones the tagged commit into a temporary directory, reads from the `.goreleaser.yml` of that commit how each binary was built, and rebuilds each one with the Go toolchain the published binary records, which Go downloads when it is not the one installed. It prints a line per binary and ends with `7 of 7 binaries rebuilt bit for bit` when every one matches; the universal macOS binary is joined from the two rebuilt macOS ones in the order the published one lists them. `PUBLISHED=<dir>` compares with assets you downloaded yourself instead, and without `make` the same check is `go run ./cmd/reproduce_release/ -published <dir> -tag v3.3.0 -ref v3.3.0 -short-commit f8813193`.
+
+Every release up to 3.3.0 was stamped with the commit abbreviated to the length the release's own clone needed, which another clone may abbreviate differently, so a rebuild of 3.2.0 or 3.3.0 also needs `SHORT_COMMIT`, the commit `gitlab-mcp-server --version` prints for that release. The releases after 3.3.0 are stamped with the full commit and need only `TAG`, and from the first of them the release workflow runs this check itself for every release, on a runner of the other architecture. Releases before 3.2.0 are outside this procedure: they publish no `THIRD_PARTY_NOTICES`, which the target's download requires, and their configuration names no loader for the Linux binaries, so those carry whichever one the release's build host offered and a rebuild of them depends on the host it runs on.
+
+What this covers is the seven binaries. The SBOMs and `THIRD_PARTY_NOTICES` are generated from them and are not rebuilt; the npm, PyPI and NuGet packages carry these same binaries, checked against `checksums.txt` when they are packed. The container image is not reproducible byte for byte: its build records its own timestamps in its provenance attestation and installs the Alpine packages of the day, and its binary is built separately, for musl and without `-trimpath`.
+
+`make check-repeatable` asks the simpler question of a checkout: it builds every release target twice, the second time with an empty build cache, and fails unless the two builds are the same bytes. It needs no release and no git and, once the module cache holds the modules, no network.

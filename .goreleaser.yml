@@ -29,7 +29,9 @@ builds:
     # f8813193, which a full clone of the repository abbreviates to nine
     # characters today), and a rebuild from any other clone came out
     # different. The image stamps the full commit too (release.yml passes
-    # github.sha).
+    # github.sha). cmd/reproduce_release rebuilds every binary below from the
+    # tag and compares it with the published one (make check-reproducible, and
+    # the reproduce job of release.yml).
     ldflags:
       - &ldflags -s -w -X main.version={{.Version}} -X main.commit={{.FullCommit}}
     # Stamps the file's modification time from the commit, so the binary's

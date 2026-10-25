@@ -1801,7 +1801,7 @@ The tests make a fixture repository tagged as a release, build its binaries with
 
 #### Make targets
 
-- `make check-reproducible TAG=vX.Y.Z`: fetches the release's assets into `dist/reproduce/<tag>` and verifies them against its cosign-signed `checksums.txt` (`scripts/fetch-release-assets.sh`, which needs `gh` and `cosign`), then runs the command with `-ref` set to the tag. `PUBLISHED=<dir>` uses assets fetched already, `REF` another commit, `SHORT_COMMIT` the abbreviation a release up to 3.3.0 was stamped with. A release before 3.2.0 is not covered: it publishes no `THIRD_PARTY_NOTICES`, which the fetch requires, and its configuration names no ELF loader, so its Linux binaries carry whichever one its build host offered. `make analyze` does not run it.
+- `make check-reproducible TAG=vX.Y.Z`: fetches the release's assets into `dist/reproduce/<tag>` and verifies them against its cosign-signed `checksums.txt` (`scripts/fetch-release-assets.sh`, which needs `gh` and `cosign`), then runs the command with `-ref` set to the tag. `PUBLISHED=<dir>` uses assets fetched already, `REF` another commit, `SHORT_COMMIT` the abbreviation a release up to 3.3.0 was stamped with. A release before 3.2.0 is not covered: it publishes no `THIRD_PARTY_NOTICES`, which the fetch requires, and its configuration names no ELF loader, so its Linux binaries carry whichever one its build host offered. The `reproduce` job of `release.yml` runs it after every release and rehearsal, and `make analyze` does not.
 - `make check-repeatable`: the `-twice` run over the checkout.
 
 ## Generators
