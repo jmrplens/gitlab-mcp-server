@@ -625,6 +625,38 @@ func CapturedBoards(capture *gitlabclient.ResponseCapture, decoded int) ([]Board
 	return capturedList[BoardExtra](capture, decoded, "boards")
 }
 
+// GroupBoardExtra is what GitLab's board entity sends on a group's board that
+// client-go's GroupIssueBoard does not carry (register row 101 of
+// docs/development/upstream-bugs.md): the two list switches, exposed on every
+// board; the assignee and the weight the board is scoped to, exposed where
+// scoped boards are licensed and null on a board scoped to neither, the weight
+// kept a pointer because 0 is a scope of its own; and what each of the board's
+// lists carries beside client-go's BoardList, in the order GitLab sent the
+// lists.
+//
+// It is a shape of its own rather than [BoardExtra] because the two structs
+// miss different keys: IssueBoard models the switches and the assignee, and
+// lacks the board's group, which GroupIssueBoard models.
+type GroupBoardExtra struct {
+	HideBacklogList bool             `json:"hide_backlog_list"`
+	HideClosedList  bool             `json:"hide_closed_list"`
+	Assignee        *BoardUserOutput `json:"assignee"`
+	Weight          *int64           `json:"weight"`
+	Lists           []BoardListExtra `json:"lists"`
+}
+
+// CapturedGroupBoard reads it off the captured answer to a request for one
+// group board.
+func CapturedGroupBoard(capture *gitlabclient.ResponseCapture) (GroupBoardExtra, error) {
+	return capturedOne[GroupBoardExtra](capture)
+}
+
+// CapturedGroupBoards reads the same off a list answer, one extra per board in
+// order, the count held to what the SDK decoded.
+func CapturedGroupBoards(capture *gitlabclient.ResponseCapture, decoded int) ([]GroupBoardExtra, error) {
+	return capturedList[GroupBoardExtra](capture, decoded, "group boards")
+}
+
 // BridgeProjectOutput is the project object GitLab renders on a job, which
 // carries one key: whether the job token can reach outside this project.
 type BridgeProjectOutput struct {
