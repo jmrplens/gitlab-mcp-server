@@ -5706,12 +5706,12 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_protected_environment_update
 
-Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.
+Update a group-level protected environment's deploy access levels and approval rules. An entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one: a new deploy access level names exactly one of access_level, user_id or group_id, and every approval rule but a removal names at least one. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.
 
 **Parameters:**
 
-- `approval_rules` (array of objects): Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id
-- `deploy_access_levels` (array of objects): Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them
+- `approval_rules` (array of objects): Approval rules to add, change or remove: a rule with the id of an existing one changes it, or removes it with _destroy true, and a rule without an id adds one. A rule that is not removed names at least one of access_level, user_id or group_id, and may name more than one
+- `deploy_access_levels` (array of objects): Deploy access levels to add, change or remove: an entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one. An entry names at most one of access_level, user_id or group_id, and one of them when it has no id
 - `environment` (string) (required): Environment tier (production, staging, testing, development, other)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `name` (string): New environment tier (production, staging, testing, development, other)
@@ -13178,12 +13178,12 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_protected_environment_update
 
-Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect.
+Update a protected environment's deploy access levels and approval rules. An entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one: a new deploy access level names exactly one of access_level, user_id or group_id, and every approval rule but a removal names at least one. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect.
 
 **Parameters:**
 
-- `approval_rules` (array of objects): Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id
-- `deploy_access_levels` (array of objects): Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them
+- `approval_rules` (array of objects): Approval rules to add, change or remove: a rule with the id of an existing one changes it, or removes it with _destroy true, and a rule without an id adds one. A rule that is not removed names at least one of access_level, user_id or group_id, and may name more than one
+- `deploy_access_levels` (array of objects): Deploy access levels to add, change or remove: an entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one. An entry names at most one of access_level, user_id or group_id, and one of them when it has no id
 - `environment` (string) (required): Environment name
 - `name` (string): New environment name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path

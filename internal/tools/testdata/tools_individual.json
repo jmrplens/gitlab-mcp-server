@@ -5407,18 +5407,6 @@
     "description": "Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: gitlab_detach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "project_ids"
-          ]
-        },
-        {
-          "required": [
-            "group_ids"
-          ]
-        }
-      ],
       "properties": {
         "group_ids": {
           "description": "Numeric IDs of the groups to attach the profile to",
@@ -10188,18 +10176,6 @@
     "description": "Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status, execution mode, and selected target/attribute IDs. See also: gitlab_create_security_attribute, gitlab_project_get, gitlab_group_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "group_ids"
-          ]
-        },
-        {
-          "required": [
-            "project_ids"
-          ]
-        }
-      ],
       "properties": {
         "attribute_ids": {
           "description": "Security attribute IDs to apply",
@@ -29250,18 +29226,6 @@
     "description": "Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: gitlab_attach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "project_ids"
-          ]
-        },
-        {
-          "required": [
-            "group_ids"
-          ]
-        }
-      ],
       "properties": {
         "confirm": {
           "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
@@ -64391,30 +64355,6 @@
     "description": "Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: the created link with its CN/filter, provider, access level, and member role ID. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_sync, gitlab_group_ldap_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
-      "oneOf": [
-        {
-          "additionalProperties": true,
-          "properties": {
-            "cn": {
-              "minLength": 1
-            }
-          },
-          "required": [
-            "cn"
-          ]
-        },
-        {
-          "additionalProperties": true,
-          "properties": {
-            "filter": {
-              "minLength": 1
-            }
-          },
-          "required": [
-            "filter"
-          ]
-        }
-      ],
       "properties": {
         "cn": {
           "description": "LDAP Common Name (CN) of the group to link. Send exactly one of cn or filter, not both.",
@@ -64509,30 +64449,6 @@
     "description": "Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Send exactly one of cn or filter, not both. Returns: a success confirmation. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_ldap_sync.",
     "inputSchema": {
       "additionalProperties": false,
-      "oneOf": [
-        {
-          "additionalProperties": true,
-          "properties": {
-            "cn": {
-              "minLength": 1
-            }
-          },
-          "required": [
-            "cn"
-          ]
-        },
-        {
-          "additionalProperties": true,
-          "properties": {
-            "filter": {
-              "minLength": 1
-            }
-          },
-          "required": [
-            "filter"
-          ]
-        }
-      ],
       "properties": {
         "cn": {
           "description": "LDAP Common Name of the link to delete. Send exactly one of cn or filter, not both.",
@@ -65910,18 +65826,6 @@
     "description": "Add a user as a direct member of a group. Returns: the created membership with access level, custom member role, expiry, and seat usage. See also: gitlab_group_members_list, gitlab_group_member_edit, gitlab_group_member_get.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "user_id"
-          ]
-        },
-        {
-          "required": [
-            "username"
-          ]
-        }
-      ],
       "properties": {
         "access_level": {
           "description": "Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
@@ -71237,12 +71141,12 @@
   },
   {
     "name": "gitlab_group_protected_environment_update",
-    "description": "Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.",
+    "description": "Update a group-level protected environment's deploy access levels and approval rules. An entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one: a new deploy access level names exactly one of access_level, user_id or group_id, and every approval rule but a removal names at least one. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "approval_rules": {
-          "description": "Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id",
+          "description": "Approval rules to add, change or remove: a rule with the id of an existing one changes it, or removes it with _destroy true, and a rule without an id adds one. A rule that is not removed names at least one of access_level, user_id or group_id, and may name more than one",
           "items": {
             "additionalProperties": false,
             "anyOf": [
@@ -71387,7 +71291,7 @@
           ]
         },
         "deploy_access_levels": {
-          "description": "Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them",
+          "description": "Deploy access levels to add, change or remove: an entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one. An entry names at most one of access_level, user_id or group_id, and one of them when it has no id",
           "items": {
             "additionalProperties": false,
             "anyOf": [
@@ -108937,18 +108841,6 @@
     "description": "Delete a project label by ID or name. Destructive: the label is removed from the project and unassigned from issues and merge requests. Returns: a deletion confirmation. See also: gitlab_label_list, gitlab_label_get, gitlab_label_create.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "label_id"
-          ]
-        },
-        {
-          "required": [
-            "name"
-          ]
-        }
-      ],
       "properties": {
         "confirm": {
           "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
@@ -109569,18 +109461,6 @@
     "description": "Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "label_id"
-          ]
-        },
-        {
-          "required": [
-            "name"
-          ]
-        }
-      ],
       "properties": {
         "archived": {
           "description": "Set true to archive, false to unarchive",
@@ -175949,18 +175829,6 @@
     "description": "Create a new GitLab project. Returns: the created project with id, path_with_namespace, default_branch, visibility, and web URL. See also: gitlab_project_get, gitlab_project_update, gitlab_project_create_for_user.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "name"
-          ]
-        },
-        {
-          "required": [
-            "path"
-          ]
-        }
-      ],
       "properties": {
         "allow_merge_on_skipped_pipeline": {
           "description": "Allow merge when pipeline is skipped",
@@ -193881,18 +193749,6 @@
     "description": "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "user_id"
-          ]
-        },
-        {
-          "required": [
-            "username"
-          ]
-        }
-      ],
       "properties": {
         "access_level": {
           "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
@@ -198196,19 +198052,6 @@
     "description": "Create a project snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: gitlab_project_snippet_get, gitlab_project_snippet_update, gitlab_project_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "file_name",
-            "content"
-          ]
-        },
-        {
-          "required": [
-            "files"
-          ]
-        }
-      ],
       "properties": {
         "content": {
           "description": "Content (single-file, deprecated in favor of files)",
@@ -208295,12 +208138,12 @@
   },
   {
     "name": "gitlab_protected_environment_update",
-    "description": "Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). A deploy access level names an existing entry by id or exactly one of access_level, user_id or group_id, and an approval rule at least one of them unless _destroy is true. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect.",
+    "description": "Update a protected environment's deploy access levels and approval rules. An entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one: a new deploy access level names exactly one of access_level, user_id or group_id, and every approval rule but a removal names at least one. Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "approval_rules": {
-          "description": "Approval rules to add, change or remove: unless _destroy is true, each rule names at least one of access_level, user_id or group_id",
+          "description": "Approval rules to add, change or remove: a rule with the id of an existing one changes it, or removes it with _destroy true, and a rule without an id adds one. A rule that is not removed names at least one of access_level, user_id or group_id, and may name more than one",
           "items": {
             "additionalProperties": false,
             "anyOf": [
@@ -208445,7 +208288,7 @@
           ]
         },
         "deploy_access_levels": {
-          "description": "Deploy access levels to add, change or remove: each entry names an existing one by id or exactly one of access_level, user_id or group_id, and never two of them",
+          "description": "Deploy access levels to add, change or remove: an entry with the id of an existing one changes it, or removes it with _destroy true, and an entry without an id adds one. An entry names at most one of access_level, user_id or group_id, and one of them when it has no id",
           "items": {
             "additionalProperties": false,
             "anyOf": [
@@ -210050,18 +209893,6 @@
     "description": "Create a container registry protection rule to restrict push/delete access by minimum access level.\n\nSee also: gitlab_registry_protection_list, gitlab_registry_list_project\n\nReturns: JSON with the created protection rule details.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "minimum_access_level_for_push"
-          ]
-        },
-        {
-          "required": [
-            "minimum_access_level_for_delete"
-          ]
-        }
-      ],
       "properties": {
         "minimum_access_level_for_delete": {
           "description": "Minimum access level for delete (maintainer, owner, admin). Send at least one of the two levels",
@@ -212952,18 +212783,6 @@
     "description": "Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "name"
-          ]
-        },
-        {
-          "required": [
-            "url"
-          ]
-        }
-      ],
       "properties": {
         "direct_asset_path": {
           "description": "New direct asset path for the link. Pass an empty string to remove it. Omit the field to leave it untouched",
@@ -228119,19 +227938,6 @@
     "description": "Create a personal snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: gitlab_snippet_get, gitlab_snippet_update, gitlab_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "file_name",
-            "content"
-          ]
-        },
-        {
-          "required": [
-            "files"
-          ]
-        }
-      ],
       "properties": {
         "content": {
           "description": "Snippet content (single-file, deprecated in favor of files)",
@@ -237640,18 +237446,6 @@
     "description": "Add or remove GitLab security attributes on a project via GraphQL. Requires Premium or Ultimate. Returns: project security attribute assignments. See also: gitlab_create_security_attribute, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "add_attribute_ids"
-          ]
-        },
-        {
-          "required": [
-            "remove_attribute_ids"
-          ]
-        }
-      ],
       "properties": {
         "add_attribute_ids": {
           "description": "Security attribute IDs to add",
@@ -237904,23 +237698,6 @@
     "description": "Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: gitlab_create_security_category, gitlab_project_get, gitlab_group_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "name"
-          ]
-        },
-        {
-          "required": [
-            "description"
-          ]
-        },
-        {
-          "required": [
-            "color"
-          ]
-        }
-      ],
       "properties": {
         "attribute_id": {
           "description": "Numeric security attribute ID",
@@ -238025,18 +237802,6 @@
     "description": "Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate",
     "inputSchema": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "name"
-          ]
-        },
-        {
-          "required": [
-            "description"
-          ]
-        }
-      ],
       "properties": {
         "category_id": {
           "description": "Numeric security category ID",
