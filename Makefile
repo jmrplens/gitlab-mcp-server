@@ -5,7 +5,7 @@
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
-	golangci-lint govulncheck check-binary-vulns image-vulns-images check-image-vulns sonar sonar-status \
+	golangci-lint govulncheck check-binary-vulns image-vulns-images check-image-vulns check-repeatable check-reproducible sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links check-md-tables \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
@@ -958,6 +958,30 @@ govulncheck:
 ## The source scan above answers whether our code calls a vulnerable symbol; this one answers what every published binary carries, and the two diverged for 3.0.0 and 3.1.0 (GO-2026-5932 through golang.org/x/crypto).
 check-binary-vulns:
 	go run ./cmd/audit_binary_vulns/
+
+## check-repeatable: build every release target .goreleaser.yml names twice from this tree, the second time with an empty build cache, and fail unless the two builds are the same bytes.
+## Needs no release and no git, and no network once the module cache holds the modules, so it runs anywhere the tree does, a copy synced without .git included.
+check-repeatable:
+	go run ./cmd/reproduce_release/ -twice
+
+# Where check-reproducible downloads a release's assets when PUBLISHED names
+# none, one directory per tag.
+REPRODUCE_DIR=dist/reproduce
+
+## check-reproducible: rebuild the binaries of release TAG from the commit it tags (REF overrides) and compare each with the binary the release published, byte for byte.
+## Fetches the release's assets and verifies them against its cosign-signed checksums.txt first (scripts/fetch-release-assets.sh, which needs gh and cosign),
+## unless PUBLISHED names a directory that already holds them.
+## Every release up to 3.3.0 was stamped with the abbreviated commit, which another clone may abbreviate to another length, so it also needs SHORT_COMMIT, the commit `gitlab-mcp-server --version` prints for it.
+## A release before 3.2.0 is not covered: it publishes no THIRD_PARTY_NOTICES, which the fetch requires, and names no ELF loader, so its Linux binaries carry whichever one its build host offered.
+##   make check-reproducible TAG=v3.3.0 SHORT_COMMIT=f8813193
+check-reproducible:
+	@test -n "$(TAG)" || { echo "usage: make check-reproducible TAG=vX.Y.Z [REF=<commit>] [PUBLISHED=<dir>] [SHORT_COMMIT=<hash>]" >&2; exit 2; }
+	@set -eu; published="$(PUBLISHED)"; \
+	if [ -z "$$published" ]; then \
+		published="$(REPRODUCE_DIR)/$(TAG)"; rm -rf "$$published"; \
+		bash scripts/fetch-release-assets.sh "$(patsubst v%,%,$(TAG))" "$$published"; \
+	fi; \
+	go run ./cmd/reproduce_release/ -published "$$published" -tag "$(TAG)" -ref "$(or $(REF),$(TAG))" $(if $(SHORT_COMMIT),-short-commit "$(SHORT_COMMIT)")
 
 # Trivy's own image, pinned by digest, at the release the release workflow
 # fetches as a tarball (TRIVY_VERSION and TRIVY_SHA256 in release.yml), so a

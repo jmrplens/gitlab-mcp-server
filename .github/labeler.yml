@@ -53,6 +53,7 @@ security:
           - .github/dependabot.yml
           - cmd/audit_supply_chain/**
           - cmd/audit_image_vulns/**
+          - cmd/reproduce_release/**
           - cmd/server/authgate*.go
           - cmd/server/bearerguard*.go
           - internal/oauth/**
