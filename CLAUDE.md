@@ -199,6 +199,10 @@ rewrite across many files, and the result must be verified to build.
 
 See the [output format reference](https://docs.jmrp.io/gitlab-mcp-server/reference/output-format/) for the complete response format specification.
 
+### Served input schemas
+
+**No tool any surface registers carries a combinator or a conditional at the root of its input schema** (`allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`): the Anthropic Messages API refuses a request whose tool list holds one such tool, so a client that passes the schemas it lists to that API as they are has every request carrying it refused. A rule such as `toolutil.SchemaAnyOfRequired` or `SchemaOneOfRequired` stays catalog data, which find, `gitlab://tools` and the tool reference read, and the handler enforces it before it sends anything, in words that name the parameters, which `TestEveryRootAlternative_IsRefusedByTheHandlerBeforeAnyRequest` holds every such action to. The individual projection drops the root keywords and the meta `compact` and `full` modes serve each action's params under `$defs`; `TestCreateServer_ServedInputSchemas_CarryNoRootCombinator` and `make check-surface-quality` (`input-schema-root`) gate it. See [Served Input Schemas](docs/development/tool-surfaces-and-action-core.md#served-input-schemas).
+
 ### Tool naming convention
 
 A tool's runtime name depends on the surface, and on the individual surface it is **declared**, not derived — `IndividualTool.Name` in the domain's `ActionSpec` — so never infer one from a formula.

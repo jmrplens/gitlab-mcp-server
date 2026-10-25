@@ -64,6 +64,9 @@ func runMetadataAudit(client *gitlabclient.Client) int {
 	violations = append(violations, auditInputSchema(individualTools)...)
 	violations = append(violations, auditAdditionalProperties(individualTools, "individual")...)
 	violations = append(violations, auditAdditionalProperties(metaTools, "meta")...)
+	violations = append(violations, auditRootCombinators(individualTools, "individual")...)
+	violations = append(violations, auditRootCombinators(metaTools, "meta")...)
+	violations = append(violations, auditOtherSurfacesRootCombinators(client)...)
 	violations = append(violations, auditDuplicates(individualTools, "individual")...)
 	violations = append(violations, auditDuplicates(metaTools, "meta")...)
 	violations = append(violations, auditEditionTier(client)...)
@@ -129,26 +132,40 @@ func auditResultEnvelopes() (envelopeAudit, []violation) {
 		for _, state := range []testutil.FixtureState{testutil.FixtureZero, testutil.FixtureMultiPage} {
 			value := testutil.FillFixture(typ, testutil.FixtureOptions{State: state, Text: fixtureText})
 			result, panicked := renderEnvelope(value)
-			switch {
-			case panicked != "":
-				audit.Panicked = append(audit.Panicked, name+" ["+state.String()+"]: "+panicked)
-			case result == nil && state == testutil.FixtureZero:
-				audit.NilOnZero++
-			case result == nil:
-				audit.NilOnPopulated = append(audit.NilOnPopulated, name)
-			default:
-				for i, block := range result.Content {
-					if !blockAnnotated(block) {
-						audit.Unannotated = append(audit.Unannotated, fmt.Sprintf("%s [%s] block %d (%T)", name, state, i, block))
-					}
+			if recordEmptyEnvelope(&audit, name, state, result, panicked) {
+				continue
+			}
+			for i, block := range result.Content {
+				if !blockAnnotated(block) {
+					audit.Unannotated = append(audit.Unannotated, fmt.Sprintf("%s [%s] block %d (%T)", name, state, i, block))
 				}
-				if state == testutil.FixtureMultiPage {
-					constantIndex = append(constantIndex, constantIndexViolations(name, value, result)...)
-				}
+			}
+			if state == testutil.FixtureMultiPage {
+				constantIndex = append(constantIndex, constantIndexViolations(name, value, result)...)
 			}
 		}
 	}
 	return audit, constantIndex
+}
+
+// recordEmptyEnvelope records a render that left no envelope to read, a panic
+// or a nil result, and reports whether it was one. The conditions are early
+// returns rather than the cases of a tagless switch, whose expressions no
+// coverage profile places, which left their mutants unmeasured.
+func recordEmptyEnvelope(audit *envelopeAudit, name string, state testutil.FixtureState, result *mcp.CallToolResult, panicked string) bool {
+	if panicked != "" {
+		audit.Panicked = append(audit.Panicked, name+" ["+state.String()+"]: "+panicked)
+		return true
+	}
+	if result != nil {
+		return false
+	}
+	if state == testutil.FixtureZero {
+		audit.NilOnZero++
+		return true
+	}
+	audit.NilOnPopulated = append(audit.NilOnPopulated, name)
+	return true
 }
 
 // renderEnvelope renders one filled fixture, reporting a panic rather than

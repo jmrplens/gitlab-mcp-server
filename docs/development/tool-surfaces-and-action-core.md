@@ -360,6 +360,79 @@ the direct tool name such as `gitlab_project_get`. Compatibility helpers for
 older `gitlab://schema/*` resources remain isolated in package tests, but they
 are not registered by the production server.
 
+## Served Input Schemas
+
+No tool any surface registers carries a combinator or a conditional at the
+root of its `inputSchema`: no `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then` or
+`else`. The Anthropic Messages API refuses a request whose `tools` array
+holds a tool with `oneOf`, `allOf` or `anyOf` at the top level of its
+`input_schema`, with a 400 that names that tool by its index
+(`tools.N.custom.input_schema: input_schema does not support oneOf, allOf, or
+anyOf at the top level`). A client that passes the schemas it lists to that
+API as they are fails every request carrying one such tool, and one that
+sends its whole tool list with every request can make no call at all; a
+client that drops such a tool instead, as a current Claude Code is reported
+to, loses it without a word. Azure OpenAI and OpenAI's strict mode refuse a
+root `anyOf` as well, and the strict subsets those providers and Gemini accept
+have no `not` or conditionals at all. A combinator nested inside a property or
+an item is no root and is served as it is.
+
+The rule a root combinator stated stays as catalog data, in the action's
+`Route.InputSchema`: `toolutil.SchemaAnyOfRequired` and
+`toolutil.SchemaOneOfRequired` write it there, and find's
+`required_params_any_of` and `required_params_exclusive`, the `gitlab://tools`
+manifest (whose individual entries read it from the catalog action the tool
+runs) and the generated tool reference read it from there. What enforces it is
+the handler, before it sends anything, which is the one place every surface
+reaches: an action with such an override refuses a call naming none of the
+names, or more than one for `SchemaOneOfRequired`, in words that name them.
+`TestEveryRootAlternative_IsRefusedByTheHandlerBeforeAnyRequest` in
+`internal/tools` drives every action of the Ultimate catalog that states
+alternatives at its root through its own handler, with no name of any group
+and, for exclusive groups, with two, and fails on one that sends a request or
+refuses without naming the groups.
+
+Each surface keeps the rule in one place:
+
+- **Individual and standalone tools**: `individualInputSchema` in
+  `internal/toolutil/action_spec_individual.go`, the projection of every one of
+  them, drops the root keywords from the served copy. A destructive action asks
+  for confirmation before its handler runs, so the individual tool refuses a
+  call completing none of the alternatives before it asks, in the words the
+  dynamic execute uses (`actioncatalog.UnmetAlternatives`, which both read),
+  rather than having a user approve a call the handler then refuses. Like the
+  dynamic execute it counts a name by its presence and leaves a call naming two
+  groups of a `oneOf` to the handler. On the meta tool under `opaque` and
+  `compact` such a destructive call is still confirmed before its handler
+  refuses it.
+- **Meta tools**: the `opaque` envelope carries none. The `compact` and `full`
+  envelopes serve each action's params schema under `$defs`, named after the
+  action, and `toolutil.addMetaTool` holds a call's `params` to the definition
+  of its action before the dispatcher runs, which is the check a root `allOf`
+  of `if`/`then` conditionals used to make through the SDK. A call that leaves
+  `params` out is held to it as an empty object. The lockdown and the
+  pagination bounds descend `$defs`, so the served definitions are closed and
+  bounded as the conditionals' were. No keyword of the envelope refers to the
+  definitions, and a client that drops the definitions nothing refers to, as
+  Codex and the LangChain tool adapters do, shows its model the `opaque`
+  envelope in either mode, so the `params` description also names
+  `gitlab://tools/{tool}.{action}`, which serves the same schema. The server
+  holds the call to the definition either way.
+- **Dynamic tools**: `gitlab_find_action` and `gitlab_execute_action` are
+  reflected from structs and carry none. The schema find returns for an action
+  is a tool result, not a tool definition, and keeps the catalog's.
+
+`TestCreateServer_ServedInputSchemas_CarryNoRootCombinator` in `cmd/server`
+lists every surface at every tier, the meta surface under each parameter-schema
+mode, the individual surface under safe mode, and GitLab.com's individual
+surface and meta surface under each mode, through the chain the binary
+installs, and fails on a tool that carries one. `make check-surface-quality`
+gates the same rule as `input-schema-root`, over the individual and meta
+listings, the meta surface under `compact` and `full` on both instance
+classes, the dynamic pair and GitLab.com's individual and default meta
+surfaces. GitLab.com alone serves the Orbit tools, which is why its meta
+surface is read under every mode.
+
 ## Historical Duplication
 
 ADR-0005 consolidated many standalone meta-tools into broader domain meta-tools.

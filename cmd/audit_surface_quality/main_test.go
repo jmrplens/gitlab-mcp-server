@@ -6,6 +6,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -70,6 +72,40 @@ func cleanTool(name string) *mcp.Tool {
 		Annotations:  &mcp.ToolAnnotations{},
 		InputSchema:  map[string]any{"type": "object", "additionalProperties": false},
 		OutputSchema: map[string]any{"type": "object"},
+	}
+}
+
+// TestMain_EndsWithTheCodeRunMainDecides verifies that main ends the process
+// with the code runMain returns for the command line the process was started
+// with, through the osExit seam: a view the command does not know is refused
+// with 2, before anything is listed, and said on standard error.
+func TestMain_EndsWithTheCodeRunMainDecides(t *testing.T) {
+	previousExit, previousArgs, previousStderr := osExit, os.Args, os.Stderr
+	t.Cleanup(func() { osExit, os.Args, os.Stderr = previousExit, previousArgs, previousStderr })
+	var codes []int
+	osExit = func(code int) { codes = append(codes, code) }
+	os.Args = []string{toolName, "-view=nothing"}
+	stderr, err := os.CreateTemp(t.TempDir(), "stderr")
+	if err != nil {
+		t.Fatalf("create the stderr file: %v", err)
+	}
+	os.Stderr = stderr
+
+	main()
+
+	os.Stderr = previousStderr
+	if closeErr := stderr.Close(); closeErr != nil {
+		t.Fatalf("close the stderr file: %v", closeErr)
+	}
+	if !slices.Equal(codes, []int{2}) {
+		t.Errorf("main() exited with %v, want [2]", codes)
+	}
+	written, err := os.ReadFile(stderr.Name())
+	if err != nil {
+		t.Fatalf("read the stderr file: %v", err)
+	}
+	if !strings.Contains(string(written), `invalid -view "nothing"`) {
+		t.Errorf("stderr = %q, want the refused view named", written)
 	}
 }
 

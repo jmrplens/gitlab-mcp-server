@@ -934,6 +934,9 @@ func TestRunMetadataAudit_EveryRule_ReportsItsOwnSurfaceUnderItsOwnLabel(t *test
 		cleanTool("gitlab_widget_list"),
 		spoiled("gitlab_widget_typed", func(tool *mcp.Tool) { tool.InputSchema = map[string]any{"type": "string"} }),
 		spoiled("gitlab_widget_open", func(tool *mcp.Tool) { tool.InputSchema = map[string]any{"type": "object"} }),
+		spoiled("gitlab_widget_choice", func(tool *mcp.Tool) {
+			tool.InputSchema = map[string]any{"type": "object", "additionalProperties": false, "anyOf": []any{map[string]any{"required": []any{"name"}}}}
+		}),
 		cleanTool("gitlab_widget_twice"),
 		cleanTool("gitlab_widget_twice"),
 		licensed,
@@ -955,9 +958,17 @@ func TestRunMetadataAudit_EveryRule_ReportsItsOwnSurfaceUnderItsOwnLabel(t *test
 		spoiled("gitlab_gadget_open", func(tool *mcp.Tool) {
 			tool.InputSchema = map[string]any{"type": "object", "additionalProperties": true}
 		}),
+		spoiled("gitlab_gadget_choice", func(tool *mcp.Tool) {
+			tool.InputSchema = map[string]any{"type": "object", "additionalProperties": false, "allOf": []any{map[string]any{"required": []any{"action"}}}}
+		}),
 		cleanTool("gitlab_gadget_twice"),
 		cleanTool("gitlab_gadget_twice"),
 	}
+	withOtherSurfaces(t, []surfaceListing{{kind: "meta full", tools: []*mcp.Tool{
+		spoiled("gitlab_gizmo", func(tool *mcp.Tool) {
+			tool.InputSchema = map[string]any{"type": "object", "additionalProperties": false, "oneOf": []any{map[string]any{"required": []any{"cn"}}}}
+		}),
+	}}})
 	withSurface(t, func(tier edition.Tier, isMeta bool) []*mcp.Tool {
 		switch {
 		case isMeta:
@@ -999,6 +1010,9 @@ func TestRunMetadataAudit_EveryRule_ReportsItsOwnSurfaceUnderItsOwnLabel(t *test
 		{"gitlab_widget_typed", "input-schema", `InputSchema type="string", expected "object"`},
 		{"gitlab_widget_open", "additional-properties", "individual tool inputSchema missing additionalProperties:false"},
 		{"gitlab_gadget_open", "additional-properties", "meta tool inputSchema additionalProperties=true, want false"},
+		{"gitlab_widget_choice", rootCombinatorCategory, "individual tool inputSchema carries anyOf at its root, which the Anthropic Messages API refuses for the whole tool list"},
+		{"gitlab_gadget_choice", rootCombinatorCategory, "meta tool inputSchema carries allOf at its root, which the Anthropic Messages API refuses for the whole tool list"},
+		{"gitlab_gizmo", rootCombinatorCategory, "meta full tool inputSchema carries oneOf at its root, which the Anthropic Messages API refuses for the whole tool list"},
 		{"gitlab_widget_twice", "duplicate", "duplicate individual tool name"},
 		{"gitlab_gadget_twice", "duplicate", "duplicate meta tool name"},
 		{"gitlab_widget_licensed", editionTierCategory, `the description states "Ultimate" and the surface serves the tool from premium`},

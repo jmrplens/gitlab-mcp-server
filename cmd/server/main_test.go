@@ -2775,6 +2775,94 @@ func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
 	}
 }
 
+// TestCreateServer_ServedInputSchemas_CarryNoRootCombinator verifies that no
+// tool the server lists, on any surface, tier or meta parameter-schema mode,
+// on a self-managed instance and on GitLab.com, and with safe mode wrapping
+// the individual tools, carries a combinator or a conditional at the root of
+// its input schema.
+//
+// The Anthropic Messages API refuses a tool whose input_schema has oneOf,
+// allOf or anyOf at the top level and fails the whole request with it, so
+// every request carrying one such tool failed, from a client passing its
+// schemas to that API as they are. The individual surface served the root
+// anyOf and oneOf of seventeen actions' overrides, and the meta surface's
+// compact and full modes held each action's params under a root allOf of
+// if/then conditionals, the Orbit tool GitLab.com alone serves among them.
+// This lists what a client receives, through the chain the binary installs,
+// so any later tool that brings one back fails here whichever registration
+// it came through. A compact or full listing is also held to the $defs those
+// modes serve, and a GitLab.com meta listing to the Orbit tool, so a case
+// cannot pass on a listing made in another mode or for the other instance
+// class.
+func TestCreateServer_ServedInputSchemas_CarryNoRootCombinator(t *testing.T) {
+	client := newMockGitLabClient(t)
+	type surfaceCase struct {
+		name   string
+		dotcom bool
+		cfg    config.ServerConfig
+	}
+	var cases []surfaceCase
+	for _, tier := range []edition.Tier{edition.Free, edition.Premium, edition.Ultimate} {
+		cases = append(cases,
+			surfaceCase{name: "dynamic " + tier.String(), cfg: config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, Tier: tier}},
+			surfaceCase{name: "individual " + tier.String(), cfg: config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, Tier: tier}},
+		)
+		for _, mode := range []string{config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull} {
+			cases = append(cases, surfaceCase{name: "meta " + mode + " " + tier.String(), cfg: config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, Tier: tier, MetaParamSchema: mode}})
+		}
+	}
+	cases = append(cases, surfaceCase{name: "individual safe mode", cfg: config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, Tier: edition.Ultimate, SafeMode: true}})
+	for _, mode := range []string{config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull} {
+		cases = append(cases, surfaceCase{name: "meta " + mode + " gitlab.com", dotcom: true, cfg: config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, Tier: edition.Ultimate, MetaParamSchema: mode}})
+	}
+	cases = append(cases, surfaceCase{name: "individual gitlab.com", dotcom: true, cfg: config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, Tier: edition.Ultimate}})
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var server *mcp.Server
+			if tc.dotcom {
+				// mustCreateServer's cache key does not tell GitLab.com apart.
+				server = createServerWithin(t, shapeClient(true), &tc.cfg)
+			} else {
+				server = mustCreateServer(t, client, &tc.cfg)
+			}
+			listed, err := newInMemorySession(t, server).ListTools(t.Context(), nil)
+			if err != nil {
+				t.Fatalf("ListTools() error = %v", err)
+			}
+			if len(listed.Tools) == 0 {
+				t.Fatal("ListTools() listed no tool, so nothing was checked")
+			}
+			assertServedInputSchemas(t, &tc.cfg, tc.dotcom, listed.Tools)
+		})
+	}
+}
+
+// assertServedInputSchemas fails on every tool of listed that serves a
+// combinator or a conditional at the root of its input schema, and on a
+// listing that cannot be the one cfg asks for: a compact or full meta listing
+// that serves no $defs, or a GitLab.com meta listing without the Orbit tool
+// that instance class alone serves.
+func assertServedInputSchemas(t *testing.T, cfg *config.ServerConfig, dotcom bool, listed []*mcp.Tool) {
+	t.Helper()
+	defined := false
+	for _, tool := range listed {
+		if found := toolutil.RootCombinators(tool.InputSchema); len(found) > 0 {
+			t.Errorf("%s serves %v at the root of its input schema", tool.Name, found)
+		}
+		schema, _ := tool.InputSchema.(map[string]any)
+		_, hasDefs := schema["$defs"]
+		defined = defined || hasDefs
+	}
+	if inline := cfg.MetaParamSchema == config.MetaParamSchemaCompact || cfg.MetaParamSchema == config.MetaParamSchemaFull; inline && !defined {
+		t.Errorf("no tool serves $defs under %s, so the listing was not made in that mode", cfg.MetaParamSchema)
+	}
+	orbit := slices.ContainsFunc(listed, func(tool *mcp.Tool) bool { return tool.Name == "gitlab_orbit" })
+	if dotcom && cfg.ToolSurface == config.ToolSurfaceMeta && !orbit {
+		t.Error("the GitLab.com meta listing serves no gitlab_orbit, so the one tool it alone serves was not read")
+	}
+}
+
 // TestCreateServer_CapabilitySurfaceParity verifies that resource and prompt
 // exposure follows CAPABILITY_SURFACE consistently across catalog-backed tool
 // surfaces while action schemas are served through gitlab://tools.
