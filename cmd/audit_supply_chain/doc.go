@@ -1,7 +1,7 @@
 // Command audit_supply_chain audits the release supply chain's configuration
 // invariants.
 //
-// Six properties, each of which was false at some point and each of which is
+// Seven properties, each of which was false at some point and each of which is
 // invisible to every other gate in this repository:
 //
 //  1. Every uses: in .github/workflows is pinned to a 40-character commit SHA,
@@ -143,6 +143,20 @@
 //     category this command does not define, gives no reason or names an item
 //     of issue 1114 wrongly is a finding, and so is an item of pendingPorts no
 //     pending port names any longer.
+//  7. The release VERSION names has a written summary,
+//     .github/release-notes/v<VERSION>.md, which the release workflow hands
+//     GoReleaser with --release-header so the GitHub release opens with it.
+//     From 3.0.0 to 3.3.0 a release body was only the commit list GoReleaser
+//     generates, which tells a reader nothing about what breaks or what to do
+//     when upgrading. Every file of that directory is the notes of one
+//     release, named vX.Y.Z.md, and carries the sections Summary, Breaking
+//     changes, Upgrading and Security as level-two headings, once each, in
+//     that order, each with something under it (None. where there is nothing
+//     to say), and nothing above the first; a heading inside a fenced code
+//     block is code. No line carries an em or en dash, a command that makes
+//     GitHub skip workflows, or a credit to an assistant, since the body is
+//     published under the maintainer's name and the text is the one most
+//     likely to be pasted into the pull request that moves VERSION.
 //
 // Rules 1 and 2 do not stop at a uses: line. The action a step names is
 // opened and its steps are judged as though the workflow had written them: a

@@ -2512,7 +2512,8 @@ check-test-file-names:
 ## check-supply-chain: fail when a release-configuration invariant nothing else
 ## in the pipeline can see has broken — an unpinned uses:, a credentialed job
 ## that runs code resolved at run time, a dropped Dependabot cooldown, a stale
-## security policy, or an installer that stopped verifying the signature.
+## security policy, an installer that stopped verifying the signature, or a
+## VERSION whose release has no written summary in .github/release-notes.
 check-supply-chain:
 	go run ./cmd/audit_supply_chain/
 

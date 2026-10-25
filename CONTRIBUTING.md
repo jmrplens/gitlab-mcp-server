@@ -291,6 +291,8 @@ The one exception is the Spanish half of the user documentation: the Spanish twi
 
 A release is cut by a tag. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds every binary with GoReleaser, signs and attests what it publishes, creates the GitHub release and publishes the other channels (container images, npm, PyPI, NuGet, Homebrew, winget, the MCP Registry). `gh workflow run release.yml --ref <branch>` rehearses the whole run without publishing anything.
 
+The pull request that moves `VERSION` also adds `.github/release-notes/vX.Y.Z.md`, the written summary the GitHub release opens with, above the commit list GoReleaser generates. It has four sections, `## Summary`, `## Breaking changes`, `## Upgrading` and `## Security`, in that order, with `None.` under one that has nothing to say, and the Security section names every advisory or CVE the release fixes. `make check-supply-chain` fails without the file, and the release workflow refuses the tag.
+
 `make release` builds the same binaries locally as a GoReleaser snapshot and flattens `dist/` to the release asset names, which is a way to inspect them, not to publish them. [`docs/development/release-process.md`](docs/development/release-process.md) carries the details.
 
 ## Issue Reporting

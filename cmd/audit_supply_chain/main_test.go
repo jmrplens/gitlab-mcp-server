@@ -3213,7 +3213,8 @@ func TestRun_CleanRepository_PrintsTheSuccessLine(t *testing.T) {
 		t.Fatalf("run() = %d, want 0 (stdout %q, stderr %q)", code, stdout.String(), stderr.String())
 	}
 	want := "supply-chain audit passed: pinned actions, locked release jobs, " +
-		"stated cooldowns, current security policy, signature-verifying installers, declared scripts\n"
+		"stated cooldowns, current security policy, signature-verifying installers, declared scripts, " +
+		"written release notes\n"
 	if stdout.String() != want {
 		t.Errorf("run() stdout = %q, want %q", stdout.String(), want)
 	}
@@ -4386,5 +4387,6 @@ func brokenRepository(t *testing.T) string {
 			t.Fatalf("WriteFile %s: %v", relative, err)
 		}
 	}
+	writeReleaseNotes(t, root, "v2.7.5.md", validReleaseNotes)
 	return root
 }

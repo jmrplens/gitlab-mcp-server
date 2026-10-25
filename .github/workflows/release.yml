@@ -53,6 +53,9 @@
 #     and no NuGet package is pushed before all seven are attested;
 #   * release assets are staged under the exact names dist/artifacts.json gives
 #     them, because installers and package managers match names literally;
+#   * the GitHub release opens with the written summary of the tag it
+#     releases, .github/release-notes/<tag>.md, which preflight requires and
+#     GoReleaser is handed with --release-header;
 #   * server.json's OCI entry is stamped with the digest the docker job pushed,
 #     never with a tag alone;
 #   * npm publishes the platform packages before the launcher that pins them,
@@ -180,6 +183,25 @@ jobs:
           fi
           echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "release tag ${TAG}, VERSION ${FILE_V}, rehearsal=${REHEARSAL}"
+
+      # The release body opens with this file: the GoReleaser step passes it
+      # with --release-header, above the commit list GoReleaser generates. It
+      # is written in the pull request that moves VERSION, and
+      # cmd/audit_supply_chain holds what it says. GoReleaser reads it only
+      # outside a snapshot, so this step is what fails a rehearsal of a tree
+      # without one, rather than the tag push failing at GoReleaser after the
+      # image is already pushed. It runs before the E2E gate boots a GitLab.
+      - name: Hold the release to its written summary
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          NOTES=".github/release-notes/${RELEASE_TAG}.md"
+          if [ ! -f "${NOTES}" ] || ! grep -q '[^[:space:]]' "${NOTES}"; then
+            echo "::error file=${NOTES}::${NOTES} is missing or empty: every release opens with a written summary, written in the pull request that moves VERSION (docs/development/release-process.md)"
+            exit 1
+          fi
+          echo "the release opens with ${NOTES}"
 
       # The repository is public, so the tags are listed without a credential,
       # and the list is read from the remote rather than from the checkout,
@@ -1270,7 +1292,15 @@ jobs:
           # the signing identity unused on artifacts nobody will ship. The
           # SBOMs are still generated, so syft's install and the binaries'
           # scan are exercised.
-          args: ${{ env.REHEARSAL == 'true' && 'release --clean --snapshot --skip=publish,sign,announce' || 'release --clean' }}
+          #
+          # --release-header opens the release body with the written summary
+          # preflight checked, above the commit list and the configuration's
+          # footer. It is the flag rather than release.header.from_file,
+          # which is GoReleaser Pro's, and the path is built by an expression
+          # because the action splits args into words and expands no shell
+          # variable. A snapshot generates no changelog and so never reads the
+          # file, which is why preflight checks it in a rehearsal too.
+          args: ${{ env.REHEARSAL == 'true' && format('release --clean --snapshot --skip=publish,sign,announce --release-header .github/release-notes/{0}.md', needs.preflight.outputs.release_tag) || format('release --clean --release-header .github/release-notes/{0}.md', needs.preflight.outputs.release_tag) }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
