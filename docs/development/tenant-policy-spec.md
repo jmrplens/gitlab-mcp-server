@@ -65,6 +65,13 @@ On stdio, process, entry and tenant are one. Over HTTP one tenant maps to one en
 credential per instance, one entry to one tenant or to unknown and to one owner for the
 life of its build, and one address to many tenants.
 
+A stdio process reads none of the settings only HTTP mode has, the pool, the stateful
+session, the drain, the authentication gate with its budgets and the OAuth verifier, so
+a row of one of them has no stdio key, and a stdio start names each such variable it
+finds set instead of refusing a value it would never use (issue 1171). The revalidation
+interval is not one of them: the process re-reads its fine-grained token at that
+interval and stops with it at zero, so `ADM-009` is keyed on the process there.
+
 ### Two axes, and why the tenant does not license a share
 
 Before admission a decision is keyed on the address, the socket or a refused

@@ -794,6 +794,63 @@ func TestRefreshStdioAuthority_AKindLearned_EndsOrStartsTheReReads(t *testing.T)
 	}
 }
 
+// TestPrepareStdioCatalog_ReReadsAtTheConfiguredInterval verifies the stdio
+// re-read of a fine-grained token follows GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
+// (issue 1171): a start configured with a short interval re-reads the instance
+// version round after round. It used to parse the setting and then re-read at
+// the fifteen-minute default whatever it said, so nothing here was re-read
+// inside the test's budget.
+func TestPrepareStdioCatalog_ReReadsAtTheConfiguredInterval(t *testing.T) {
+	g := newPhaseBGitLab(t)
+	cfg := &config.Config{
+		GitLabURL: g.url, GitLabToken: phaseBProjectReader, ToolSurface: config.ToolSurfaceDynamic,
+		Tier: edition.Free, TierExplicit: true, IgnoreScopes: true, DisableRetries: true,
+		RevalidateInterval: 5 * time.Millisecond,
+	}
+	client, serverCfg, shell := newStdioStartupShell(t, cfg)
+
+	if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+		t.Fatalf("prepareStdioCatalog: %v", prepErr)
+	}
+	if client.Authority() == nil {
+		t.Fatal("the fine-grained start was given no authority, so there is nothing to re-read")
+	}
+	started := g.versions.Load()
+	waitFor(t, func() bool { return g.versions.Load() >= started+2 })
+}
+
+// TestRefreshStdioAuthority_AnIntervalOfZero_StartsNoTimer verifies what
+// GITLAB_MCP_SESSION_REVALIDATE_INTERVAL=0 asks of the stdio re-read since
+// issue 1171 gave stdio the setting: no timer, which time.NewTicker would
+// refuse a zero for by panicking, while a degraded start that recovers still
+// has the token's kind asked, and the goroutine still ends with its context.
+func TestRefreshStdioAuthority_AnIntervalOfZero_StartsNoTimer(t *testing.T) {
+	g := newPhaseBGitLab(t)
+	fine, err := gitlabclient.NewClientWithTokenRetries(g.url, phaseBProjectReader, false, true)
+	if err != nil {
+		t.Fatalf("NewClientWithTokenRetries: %v", err)
+	}
+	recovered := make(chan struct{})
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		refreshStdioAuthority(ctx, fine, gitlabclient.TokenFacts{KindUnknown: true}, 0, recovered, nil)
+	}()
+
+	close(recovered)
+	waitFor(t, func() bool { return fine.Authority() != nil })
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the re-read of a zero interval did not end with its context")
+	}
+	if got := fine.Authority(); got.Phase() != finegrained.PhaseGranted {
+		t.Errorf("asked on recovery: phase %v, want phase B", got.Phase())
+	}
+}
+
 // TestVerifiedFacts_CarriesTheVerifiersIDBesideTheScopes verifies the gate
 // hands the pool what the OAuth layer learned: nothing when it learned no
 // scopes, the scopes with the token's id when the verifier read one, and the

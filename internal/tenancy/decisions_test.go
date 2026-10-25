@@ -1240,7 +1240,9 @@ func rowPins() map[string]rowPin {
 		"ADM-008": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_reset", StartOver),
 		}},
-		"ADM-009": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
+		// Keyed on the process on stdio since issue 1171, where the process
+		// re-reads its fine-grained token at the same interval.
+		"ADM-009": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_revoked", Reauthorize),
 		}},
 		"ADM-010": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{

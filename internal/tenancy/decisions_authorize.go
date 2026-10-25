@@ -257,12 +257,12 @@ func authorizeDecisions() []Decision {
 			// varies with the authorization on the request alone (INV-009), so
 			// a re-read that did not answer keeps the authority in place
 			// rather than falling back. An HTTP entry is re-read on each
-			// accepted revalidation, at ADM-009's interval and off with it; the
-			// stdio process is re-read on a timer at ADM-009's default, which
-			// is this row's own use of that value (the Arg site below): stdio
-			// reads no revalidation setting, so nothing moves the timer or
-			// turns it off, and what it costs is the two reads, once per
-			// interval, of the one token the process serves. A token whose kind
+			// accepted revalidation, at ADM-009's interval and off with it, and
+			// the stdio process on a timer at the same setting's interval and
+			// off with it too, which ADM-009 declares on stdio: stdio used to
+			// re-read at the default whatever the setting said, and issue 1171
+			// gave it the setting. What the timer costs is the two reads, once
+			// per interval, of the one token the process serves. A token whose kind
 			// nothing has told yet (the self endpoint did not answer, or the
 			// OAuth verifier's scopes are its assumption) is asked its kind on
 			// those same rounds instead, and on stdio once a degraded start
@@ -307,7 +307,6 @@ func authorizeDecisions() []Decision {
 				enforce(pkgServer, "stdioAuthority"),
 				enforce(pkgServer, "refreshStdioAuthority"),
 				enforce(pkgServer, "redetectStdioToken"),
-				arg(pkgServer, "prepareStdioCatalog", "refreshStdioAuthority", 3, 1, "RevalidateInterval"),
 				enforce(pkgVisibility, "CallMiddleware"),
 				enforce(pkgToolutil, "FineGrainedRefusal"),
 				enforce(pkgVisibility, "ListingMiddleware"),

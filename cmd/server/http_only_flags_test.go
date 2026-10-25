@@ -147,6 +147,9 @@ var stdioVariableValues = map[string][2]string{
 	config.EnvPrefix + "RATE_LIMIT_RPS":     {"5", "6"},
 	config.EnvPrefix + "RATE_LIMIT_BURST":   {"7", "8"},
 	stdioMaxLineBytesEnv:                    {"65536", "131072"},
+	// The fine-grained token's re-read interval, which stdio honors since
+	// issue 1171.
+	config.EnvPrefix + "SESSION_REVALIDATE_INTERVAL": {"5m", "10m"},
 }
 
 // stdioOnlySpellings names the flags whose stdio variable HTTP mode has no
@@ -492,6 +495,9 @@ func TestDescribeIgnoredFlag_NamesTheStdioVariableWhereThereIsOne(t *testing.T) 
 		"gitlab-url":             "--gitlab-url (on stdio set GITLAB_URL)",
 		"max-request-body-bytes": "--max-request-body-bytes (on stdio set GITLAB_MCP_STDIO_MAX_LINE_BYTES)",
 		"http-addr":              "--http-addr (stdio has no such setting)",
+		// The one pair whose names differ, and a setting stdio has since
+		// issue 1171.
+		"revalidate-interval": "--revalidate-interval (on stdio set GITLAB_MCP_SESSION_REVALIDATE_INTERVAL)",
 	}
 	for name, want := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -407,9 +407,15 @@ func admitDecisions() []Decision {
 			},
 		},
 		{
+			// On stdio the process's fine-grained token is re-read at the same
+			// setting, its grant and the instance version, or its kind while
+			// that is unknown, and a zero stops those re-reads as it stops the
+			// pool's. Stdio used to parse the variable and then re-read at the
+			// default whatever it said, so the row had no stdio key; issue 1171
+			// (Q16 of its triage) gave stdio the setting.
 			ID: "ADM-009", Question: Admit, Kind: Lifetime, Class: ClassC, Disposition: Valued,
-			Resource: "how often every entry's credential is re-probed",
-			Key:      KeyEntry, StdioKey: KeyNone,
+			Resource: "how often every entry's credential is re-probed, and on stdio the process's fine-grained token re-read",
+			Key:      KeyEntry, StdioKey: KeyProcess,
 			Values: []string{"RevalidateInterval", "RevalidateIntervalMax"},
 			Source: Configurable, Flags: []string{"--revalidate-interval"},
 			Envs: []string{"GITLAB_MCP_SESSION_REVALIDATE_INTERVAL"}, Config: []string{"RevalidateInterval"},
@@ -417,7 +423,7 @@ func admitDecisions() []Decision {
 			// The pool's own fallback aliases the value as the configuration's
 			// default does, where it used to state it a second time (issue 958,
 			// answering F-16 here).
-			Decided: []string{"issue 958"},
+			Decided: []string{"issue 958", "issue 1171"},
 			Refusals: []Refusal{
 				listenEnd("credential_revoked", Reauthorize, refuse(pkgServer, "endOfCredentialRevocation")),
 			},
@@ -426,6 +432,8 @@ func admitDecisions() []Decision {
 				alias(pkgConfig, "MaxRevalidateInterval", "RevalidateIntervalMax"),
 				alias(pkgPool, "DefaultRevalidateInterval", "RevalidateInterval"),
 				enforce(pkgPool, "ServerPool.revalidateAll"),
+				enforce(pkgServer, "prepareStdioCatalog"),
+				enforce(pkgServer, "refreshStdioAuthority"),
 			},
 		},
 		{

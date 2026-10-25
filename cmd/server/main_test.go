@@ -1648,6 +1648,65 @@ func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(
 	}
 }
 
+// The headers of the help's two environment blocks, and the heading after the
+// second, which [helpBlock] cuts the help at.
+const (
+	helpStdioEnvironmentHeader = "ENVIRONMENT VARIABLES (stdio mode)\n"
+	helpHTTPEnvironmentHeader  = "ENVIRONMENT VARIABLES (HTTP mode)\n"
+	helpExamplesHeader         = "JSON CONFIGURATION EXAMPLES\n"
+)
+
+// helpBlock returns the part of help between the line start and the line end,
+// or the empty string when either is missing.
+func helpBlock(help, start, end string) string {
+	_, rest, found := strings.Cut(help, start)
+	if !found {
+		return ""
+	}
+	block, _, found := strings.Cut(rest, end)
+	if !found {
+		return ""
+	}
+	return block
+}
+
+// TestPrintHelp_RevalidateIntervalVariable_SaysWhatStdioReadsItFor holds the
+// help's entry of GITLAB_MCP_SESSION_REVALIDATE_INTERVAL to both of its
+// readers since issue 1171 gave stdio the setting: it sits in the stdio block
+// marked as both transports' and names the stdio re-read, and the default and
+// the pool's credential ceiling it prints are the constants the two readers
+// use.
+//
+// It stayed in the HTTP block, under "The variables below have no stdio
+// equivalent", after stdio began re-reading a fine-grained token's grant at it,
+// so -h told a stdio operator the variable did nothing there.
+func TestPrintHelp_RevalidateIntervalVariable_SaysWhatStdioReadsItFor(t *testing.T) {
+	stdout := captureStdout(t)
+	printHelp()
+	help := stdout()
+
+	const name = "GITLAB_MCP_SESSION_REVALIDATE_INTERVAL"
+	if entry := helpEntry(helpBlock(help, helpHTTPEnvironmentHeader, helpExamplesHeader), name); entry != "" {
+		t.Errorf("the HTTP block, whose variables have no stdio equivalent, documents %s: %q", name, entry)
+	}
+	entry := helpEntry(helpBlock(help, helpStdioEnvironmentHeader, helpHTTPEnvironmentHeader), name)
+	if entry == "" {
+		t.Fatalf("the stdio environment block does not document %s", name)
+	}
+	for _, want := range []string{
+		"Both transports",
+		"a stdio process re-reads its fine-grained token's grant",
+		fmt.Sprintf("(default %s; 0 stops the periodic", config.DefaultRevalidateInterval),
+		fmt.Sprintf("older than %s is still rebuilt", serverpool.DefaultMaxCredentialAge),
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(entry, want) {
+				t.Errorf("help entry %s = %q, want it to carry %q", name, entry, want)
+			}
+		})
+	}
+}
+
 // TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry holds every value the help
 // formats from a constant to the entry that describes it. They reach one
 // format string as a long list of arguments in which two of the same type can

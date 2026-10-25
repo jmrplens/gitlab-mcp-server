@@ -673,6 +673,12 @@ ENVIRONMENT VARIABLES (stdio mode)
                                     is refused, not buffered
   GITLAB_MCP_MAX_LISTEN_STREAMS     Concurrent subscriptions/listen streams one credential may hold open
                                     (default 64; 0 disables the per-credential ceiling). Both transports
+  GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
+                                    How often a token is read again (default %s; 0 stops the periodic
+                                    read). Both transports: a stdio process re-reads its fine-grained
+                                    token's grant and the instance version at it, and HTTP mode
+                                    re-validates each pooled token at it, where an entry whose
+                                    credential is older than %s is still rebuilt at 0
   GITLAB_MCP_ALLOW_PRIVATE_INSTANCES
                                     Permit a private, loopback or CGNAT address as a destination this
                                     server's operator did not choose: an instance a caller named in
@@ -719,9 +725,6 @@ ENVIRONMENT VARIABLES (HTTP mode)
                                     (default 65m, 0 disables)
   GITLAB_MCP_DRAIN_DELAY            After SIGTERM, answer /health with 503 draining this long before closing
                                     the listener (default 0)
-  GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
-                                    Token re-validation interval (default 15m; 0 stops the periodic
-                                    check, an entry older than 1h is still rebuilt)
   GITLAB_MCP_AUTH_FAILURE_LIMIT     Failed authentications one address, an IPv6 one by its /64, may
                                     produce inside the failure window before it is blocked (default
                                     %d; 0 disables this budget)
@@ -799,6 +802,10 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultAuthFailureLimit, networkFailingPrefixes, config.DefaultAuthFailureWindow,
 		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow,
 		config.DefaultGitLabURL,
+		// The revalidation interval's default and the pool's credential
+		// ceiling, in the stdio block since stdio reads the setting (issue
+		// 1171).
+		config.DefaultRevalidateInterval, serverpool.DefaultMaxCredentialAge,
 		// The ENVIRONMENT block names the same four budgets and the discovery
 		// documents' bucket again, because a reader who arrived at a variable
 		// rather than at its flag is owed the default there too.
@@ -1659,11 +1666,13 @@ func prepareStdioCatalog(
 	// has nothing to say about the token's kind or the admission minimum,
 	// unless the start could not reach GitLab: then the request would spend the
 	// lazy re-initialization's first attempt, and both questions are asked
-	// once the client recovers, or on the 15-minute round, instead. A version
-	// refused for want of a scope reached it, and is what GitLab answers a
-	// token carrying self_rotate or read_repository alone, so the question is
-	// asked then too: a start that waited for a recovery that never comes
-	// would serve such a token the catalog for a round.
+	// once the client recovers, or on the next round of re-reads at
+	// GITLAB_MCP_SESSION_REVALIDATE_INTERVAL (there is none at 0), instead.
+	// A version refused for want of a scope reached it, and is what GitLab
+	// answers a token carrying self_rotate or read_repository alone, so the
+	// question is asked then too: a start that waited for a recovery that
+	// never comes would serve such a token the catalog until the next round,
+	// or for good at 0.
 	facts := gitlabclient.TokenFacts{KindUnknown: true}
 	if scopeRefused {
 		// Asked only to name the token's scopes in the verdict, which an
@@ -1760,11 +1769,12 @@ func prepareStdioCatalog(
 	client.SetAuthority(stdioAuthority(ctx, client, facts))
 	shell.gate.markReady()
 	slog.InfoContext(ctx, "tool catalog ready", "transport", "stdio")
-	// Re-read at the interval an HTTP pool entry is revalidated at by default
-	// (ADM-009's value, read here by register row AUT-008), so the two
-	// transports follow an instance upgraded under a running session alike.
-	// Stdio reads no revalidation setting, so nothing moves it or turns it off.
-	go refreshStdioAuthority(ctx, client, facts, config.DefaultRevalidateInterval, recovered, stdioBelowMinimumRefuser(ctx, shell.gate))
+	// Re-read at the interval an HTTP pool entry is revalidated at
+	// (GITLAB_MCP_SESSION_REVALIDATE_INTERVAL, register row ADM-009), so the
+	// two transports follow an instance upgraded under a running session
+	// alike, and a zero stops the re-reads in both. Stdio used to parse the
+	// setting and then re-read at its default whatever it said (issue 1171).
+	go refreshStdioAuthority(ctx, client, facts, cfg.RevalidateInterval, recovered, stdioBelowMinimumRefuser(ctx, shell.gate))
 	return nil
 }
 
@@ -1802,14 +1812,25 @@ func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitl
 // the arguments the start logs a phase A authority with, and one that kept the
 // authority is logged once, with its reason.
 //
+// An interval of zero, which GITLAB_MCP_SESSION_REVALIDATE_INTERVAL=0 asks
+// for, starts no timer, as it stops the HTTP pool's revalidation: the token is
+// then asked again only once a degraded start recovers, and otherwise keeps
+// what the start judged until ctx ends.
+//
 // A token whose scopes the answer names below the admission minimum is handed
 // to onBelowMinimum, which makes the process refuse every catalog method as a
 // start that learned it would have, and the goroutine returns: a token's
 // scopes cannot change, so there is nothing more to ask. A nil onBelowMinimum
 // only returns.
 func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, interval time.Duration, recovered <-chan struct{}, onBelowMinimum func(scopes []string)) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	// A nil channel is never ready, which is the timer a zero interval asks
+	// for: time.NewTicker refuses one.
+	var rounds <-chan time.Time
+	if interval > 0 {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		rounds = ticker.C
+	}
 	logged := false
 	for facts.GrantReadable || facts.KindUnknown {
 		select {
@@ -1818,7 +1839,7 @@ func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, fac
 		case <-recovered:
 			// Asked once: a nil channel is never ready again.
 			recovered = nil
-		case <-ticker.C:
+		case <-rounds:
 		}
 		readCtx, cancel := context.WithTimeout(ctx, stdioRereadTimeout)
 		if facts.KindUnknown {

@@ -104,7 +104,7 @@ var httpOnlyFlags = map[string]httpOnlyFlag{
 	"rate-limit-rps":             {stdioVariable: "GITLAB_MCP_RATE_LIMIT_RPS"},
 	"rate-limit-burst":           {stdioVariable: "GITLAB_MCP_RATE_LIMIT_BURST"},
 	"max-http-clients":           {},
-	"revalidate-interval":        {},
+	"revalidate-interval":        {stdioVariable: "GITLAB_MCP_SESSION_REVALIDATE_INTERVAL"},
 	"pool-idle-timeout":          {},
 	"auth-mode":                  {},
 	"public-url":                 {},
