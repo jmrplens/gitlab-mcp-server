@@ -111,7 +111,7 @@ func allowDecisions() []Decision {
 				enforce(pkgToolutil, "NewRateLimiter"),
 				enforce(pkgToolutil, "attachRateLimitFunc"),
 				enforce(pkgToolutil, "ValidateRateLimit"),
-				enforce(pkgConfig, "Config.validateDurationsAndRates"),
+				enforce(pkgConfig, "Config.validateRates"),
 				enforce(pkgServer, "serverShell.newCredentialState"),
 				refuse(pkgToolutil, "RateLimitRefusalPrefix"),
 				refuse(pkgToolutil, "rateLimitRetrySuffix"),

@@ -78,6 +78,56 @@ var prefixedNames = []string{
 	"YOLO_MODE",
 }
 
+// httpOnlyNames are the settings only HTTP mode has, named without their
+// prefix and in name order: the listener's drain, the pool and its idle
+// timeout, the stateful session's timeout, the authentication gate with its
+// mode and budgets, the OAuth verifier and the metadata it publishes, the
+// origins a browser may come from, and the discovery documents' bucket.
+//
+// A stdio server has none of these, so [Load] reads none of them, and
+// [HTTPOnlyEnvUses] names the ones an environment sets so a stdio run can say
+// it ignores them, as it says so of an HTTP-only flag (issue 1171). Until then
+// stdio parsed most of them and refused to start on a value it would never
+// have used: a GITLAB_MCP_AUTH_MODE=oauth or a GITLAB_MCP_MAX_HTTP_CLIENTS=0
+// the same shell exported for an HTTP deployment beside it stopped the stdio
+// process, while GITLAB_MCP_TRUSTED_ORIGINS, which it never read, did not.
+//
+// The revalidation interval is not one of them: stdio re-reads a fine-grained
+// token at it. TestHTTPOnlyNames_AreTheSettingsOnlyTheOverlayReads holds the
+// list to the two readers, so a name is here exactly when
+// [LoadHTTPEnvOverlay] reads it and [Load] does not.
+var httpOnlyNames = []string{
+	"AUTH_DISTINCT_TOKEN_LIMIT",
+	"AUTH_DISTINCT_TOKEN_WINDOW",
+	"AUTH_FAILURE_LIMIT",
+	"AUTH_FAILURE_WINDOW",
+	"AUTH_MODE",
+	"DISCOVERY_RATE_LIMIT_BURST",
+	"DISCOVERY_RATE_LIMIT_RPS",
+	"DRAIN_DELAY",
+	"MAX_HTTP_CLIENTS",
+	"OAUTH_CACHE_TTL",
+	"OAUTH_CLIENT_UID",
+	"POOL_IDLE_TIMEOUT",
+	"PUBLIC_URL",
+	"SESSION_TIMEOUT",
+	"TRUSTED_ORIGINS",
+}
+
+// HTTPOnlyEnvUses returns the settings only HTTP mode has that this
+// environment sets, each under the name an operator exports it by, in name
+// order. A value of blanks counts as unset, as it does to the HTTP overlay
+// ([envPresent]), which would not read it either.
+func HTTPOnlyEnvUses() []string {
+	var set []string
+	for _, name := range httpOnlyNames {
+		if envPresent(name) {
+			set = append(set, EnvPrefix+name)
+		}
+	}
+	return set
+}
+
 // hadOldSpelling are the settings that answered to another name as well until
 // 3.1.0 removed it: the ones 3.0.0 read, and the only ones [RetiredEnvUses]
 // looks for.

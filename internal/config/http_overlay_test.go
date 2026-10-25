@@ -75,7 +75,8 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 }
 
 // TestLoadHTTPEnvOverlay_PresentVariablesAreParsed verifies that each variable
-// is read, validated by the same parser the stdio path uses, and reported.
+// is read, validated by the parser its setting is read with wherever it is
+// read, and reported.
 func TestLoadHTTPEnvOverlay_PresentVariablesAreParsed(t *testing.T) {
 	for _, tt := range presentVariableCases() {
 		t.Run(tt.name, func(t *testing.T) {
@@ -352,8 +353,8 @@ func discoveryRatePresentCases() []presentVariableCase {
 // authBudgetPresentCases are the authentication budgets' rows of the table
 // above, kept apart so neither list grows past what a reader takes in at once.
 // Each value and bound of one setting is held by
-// TestReadAuthBudgetEnv_EachValue_AgreesWithTheStdioReader; these rows are
-// about the four settings together.
+// TestReadAuthBudgetEnv_EachValue_IsHeldToItsBound; these rows are about the
+// four settings together.
 func authBudgetPresentCases() []presentVariableCase {
 	return []presentVariableCase{
 		{
@@ -438,8 +439,13 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"GITLAB_MCP_IGNORE_SCOPES", "bogus", "GITLAB_MCP_IGNORE_SCOPES"},
 		{"GITLAB_MCP_MAX_HTTP_CLIENTS", "bogus", "MAX_HTTP_CLIENTS"},
 		{"GITLAB_MCP_SESSION_TIMEOUT", "bogus", "SESSION_TIMEOUT"},
+		// The overlay is the session timeout's one reader since stdio stopped
+		// reading it (issue 1171), so its maximum is held here, where the
+		// stdio test that held it used to be the only case.
+		{"GITLAB_MCP_SESSION_TIMEOUT", "25h", "SESSION_TIMEOUT 25h0m0s exceeds maximum of 24h0m0s"},
 		{"GITLAB_MCP_POOL_IDLE_TIMEOUT", "bogus", "POOL_IDLE_TIMEOUT"},
 		{"GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "bogus", "SESSION_REVALIDATE_INTERVAL"},
+		{"GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "25h", "SESSION_REVALIDATE_INTERVAL 25h0m0s exceeds maximum of 24h0m0s"},
 		{"GITLAB_MCP_OAUTH_CACHE_TTL", "bogus", "OAUTH_CACHE_TTL"},
 		{"GITLAB_MCP_RATE_LIMIT_RPS", "bogus", "RATE_LIMIT_RPS"},
 		{"GITLAB_MCP_RATE_LIMIT_BURST", "bogus", "RATE_LIMIT_BURST"},
@@ -449,9 +455,9 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"GITLAB_MCP_DRAIN_DELAY", "bogus", "DRAIN_DELAY"},
 		{"GITLAB_MCP_DRAIN_DELAY", "10m", "exceeds maximum"},
 		// The four authentication budgets, each refused both ways: a value
-		// that does not parse, and one past the bound the stdio path holds it
-		// to. Until these rows no case here set any of the four, so the
-		// overlay's refusals of them ran in no test at all.
+		// that does not parse, and one past the bound its flag is held to.
+		// Until these rows no case here set any of the four, so the overlay's
+		// refusals of them ran in no test at all.
 		{"GITLAB_MCP_AUTH_FAILURE_LIMIT", "bogus", "AUTH_FAILURE_LIMIT"},
 		{"GITLAB_MCP_AUTH_FAILURE_LIMIT", "100001", "AUTH_FAILURE_LIMIT exceeds maximum"},
 		{"GITLAB_MCP_AUTH_FAILURE_WINDOW", "bogus", "AUTH_FAILURE_WINDOW"},
@@ -526,9 +532,13 @@ func TestLoadHTTPEnvOverlay_AZeroDuration_TurnsItsSettingOffHoweverWritten(t *te
 	}
 }
 
-// TestLoadHTTPEnvOverlay_OAuthCacheTTL_ZeroOrNegative_IsRefused is the HTTP
-// reader's half of TestLoad_OAuthCacheTTL_ZeroOrNegative_IsRefused: the zero
-// issue 958 keeps refused, however it is written, and anything below it.
+// TestLoadHTTPEnvOverlay_OAuthCacheTTL_ZeroOrNegative_IsRefused pins the zero
+// issue 958 keeps refused, however it is written, and anything below it: an
+// OAuth cache TTL of zero is no setting an operator could want, since the
+// verifier stamps the TTL into every token's expiration, so a zero expires
+// each token the moment it is verified. Only HTTP mode verifies an OAuth
+// token, and since issue 1171 a stdio server does not read the setting at
+// all, so the overlay is its one reader.
 func TestLoadHTTPEnvOverlay_OAuthCacheTTL_ZeroOrNegative_IsRefused(t *testing.T) {
 	for _, value := range append(slices.Clone(zeroDurationSpellings), "-5m") {
 		t.Run(strconv.Quote(value), func(t *testing.T) {
@@ -557,10 +567,9 @@ func TestLoadHTTPEnvOverlay_AuthModeIsValidatedDownstream(t *testing.T) {
 	assertStr(t, "AuthMode", overlay.AuthMode, "bogus")
 }
 
-// TestLoadHTTPEnvOverlay_AuthModeSurfacesCacheTTLErrors verifies the branch
-// where AUTH_MODE is present and OAUTH_CACHE_TTL is not parseable. Both read
-// through the same loader, so an invalid TTL has to fail the load even when it
-// is the mode that triggered it.
+// TestLoadHTTPEnvOverlay_AuthModeSurfacesCacheTTLErrors verifies the case
+// where AUTH_MODE is present and OAUTH_CACHE_TTL is not parseable: the mode
+// passing through unparsed must not let an invalid TTL beside it through.
 func TestLoadHTTPEnvOverlay_AuthModeSurfacesCacheTTLErrors(t *testing.T) {
 	clearOverlayEnv(t)
 	t.Setenv("GITLAB_MCP_AUTH_MODE", "oauth")
@@ -571,42 +580,36 @@ func TestLoadHTTPEnvOverlay_AuthModeSurfacesCacheTTLErrors(t *testing.T) {
 	}
 }
 
-// TestReadAuthBudgetEnv_EachValue_AgreesWithTheStdioReader holds the promise
-// readAuthBudgetEnv makes: every authentication-budget variable is read with
-// the parser and the bound the stdio path applies, so one exported value with
-// something in it starts both transports or refuses both, with the same words.
+// TestReadAuthBudgetEnv_EachValue_IsHeldToItsBound holds every
+// authentication-budget variable to the bound its flag is held to: zero, an
+// ordinary value and the maximum itself are read, and one step past the
+// maximum, a negative value and one that does not parse refuse the start
+// naming the variable. Every limit is tried at exactly its maximum and one
+// above, and every window at its maximum and one second over, so a bound that
+// starts refusing the published maximum fails here too.
 //
-// A value of only whitespace is outside that promise and outside this table.
-// The overlay counts it as absent (envPresent trims first, which
-// TestLoadHTTPEnvOverlay_PresentVariablesAreParsed pins), while the stdio
-// parsers test for the empty string before they trim and so refuse it. Every
-// typed setting of the package shares that divergence, and which of the two
-// readings is right is a decision still to be made, so nothing here asserts
-// either reading for the stdio half.
-//
-// The two readers are written out separately, which is how the HTTP half came
-// to be read by code no test ran. Each case sets one variable and asks both,
-// so a bound that drifts in either copy fails here, including one that starts
-// refusing the published maximum itself: every limit is tried at exactly its
-// maximum and one above, and every window at its maximum and one second over.
-func TestReadAuthBudgetEnv_EachValue_AgreesWithTheStdioReader(t *testing.T) {
+// It used to hold the overlay to a second reader of the same four, the one
+// stdio ran, in the same words. Only HTTP mode has an authentication gate, and
+// since issue 1171 a stdio server reads none of the four, so the overlay is
+// their one reader.
+func TestReadAuthBudgetEnv_EachValue_IsHeldToItsBound(t *testing.T) {
 	for _, tc := range authBudgetAgreementCases() {
 		t.Run(tc.setting.env+"="+tc.value, func(t *testing.T) {
 			clearOverlayEnv(t)
 			t.Setenv(EnvPrefix+tc.setting.env, tc.value)
 
-			stdio, stdioErr := loadAuthBudgetEnv()
-			overlay, httpErr := LoadHTTPEnvOverlay()
+			overlay, err := LoadHTTPEnvOverlay()
 			if tc.refuse {
-				assertRefusedAlike(t, tc.setting.env, stdioErr, httpErr)
+				if err == nil {
+					t.Fatalf("LoadHTTPEnvOverlay() accepted %s=%q, want a refusal", EnvPrefix+tc.setting.env, tc.value)
+				}
+				if !strings.Contains(err.Error(), tc.setting.env) {
+					t.Errorf("error = %q, want it to name %s", err, tc.setting.env)
+				}
 				return
 			}
-			if stdioErr != nil || httpErr != nil {
-				t.Fatalf("stdio error = %v, HTTP error = %v; want both to accept %s=%q",
-					stdioErr, httpErr, EnvPrefix+tc.setting.env, tc.value)
-			}
-			if got := tc.setting.stdio(stdio); got != tc.want {
-				t.Errorf("stdio read %s, want %s", got, tc.want)
+			if err != nil {
+				t.Fatalf("LoadHTTPEnvOverlay() error = %v, want it to accept %s=%q", err, EnvPrefix+tc.setting.env, tc.value)
 			}
 			if got := tc.setting.http(overlay); got != tc.want {
 				t.Errorf("HTTP read %s, want %s", got, tc.want)
@@ -615,16 +618,15 @@ func TestReadAuthBudgetEnv_EachValue_AgreesWithTheStdioReader(t *testing.T) {
 	}
 }
 
-// authBudgetSetting is one authentication-budget variable and where each
-// reader reports it, rendered as text so a limit and a window compare alike.
+// authBudgetSetting is one authentication-budget variable and where the
+// overlay reports it, rendered as text so a limit and a window compare alike.
 type authBudgetSetting struct {
-	env   string
-	stdio func(authBudgetEnv) string
-	http  func(*HTTPEnvOverlay) string
+	env  string
+	http func(*HTTPEnvOverlay) string
 }
 
-// authBudgetAgreementCase is one value of one setting, and what both readers
-// have to make of it.
+// authBudgetAgreementCase is one value of one setting, and what the overlay
+// has to make of it.
 type authBudgetAgreementCase struct {
 	setting authBudgetSetting
 	value   string
@@ -642,17 +644,15 @@ func authBudgetAgreementCases() []authBudgetAgreementCase {
 	}{
 		{
 			setting: authBudgetSetting{
-				env:   "AUTH_FAILURE_LIMIT",
-				stdio: func(b authBudgetEnv) string { return strconv.Itoa(b.failureLimit) },
-				http:  func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthFailureLimit) },
+				env:  "AUTH_FAILURE_LIMIT",
+				http: func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthFailureLimit) },
 			},
 			maxValue: MaxAuthFailureLimit,
 		},
 		{
 			setting: authBudgetSetting{
-				env:   "AUTH_DISTINCT_TOKEN_LIMIT",
-				stdio: func(b authBudgetEnv) string { return strconv.Itoa(b.distinctLimit) },
-				http:  func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthDistinctTokenLimit) },
+				env:  "AUTH_DISTINCT_TOKEN_LIMIT",
+				http: func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthDistinctTokenLimit) },
 			},
 			maxValue: MaxAuthDistinctTokenLimit,
 		},
@@ -663,17 +663,15 @@ func authBudgetAgreementCases() []authBudgetAgreementCase {
 	}{
 		{
 			setting: authBudgetSetting{
-				env:   "AUTH_FAILURE_WINDOW",
-				stdio: func(b authBudgetEnv) string { return fmt.Sprint(b.failureWindow) },
-				http:  func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthFailureWindow) },
+				env:  "AUTH_FAILURE_WINDOW",
+				http: func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthFailureWindow) },
 			},
 			maxValue: MaxAuthFailureWindow,
 		},
 		{
 			setting: authBudgetSetting{
-				env:   "AUTH_DISTINCT_TOKEN_WINDOW",
-				stdio: func(b authBudgetEnv) string { return fmt.Sprint(b.distinctWindow) },
-				http:  func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthDistinctWindow) },
+				env:  "AUTH_DISTINCT_TOKEN_WINDOW",
+				http: func(o *HTTPEnvOverlay) string { return overlayReading(o.AuthDistinctWindow) },
 			},
 			maxValue: MaxAuthDistinctWindow,
 		},
@@ -705,28 +703,13 @@ func authBudgetAgreementCases() []authBudgetAgreementCase {
 	return cases
 }
 
-// overlayReading renders an overlay field the way the stdio reader's value is
-// rendered, and an unreported one as a marker no reading can equal.
+// overlayReading renders an overlay field as text, and an unreported one as a
+// marker no reading can equal.
 func overlayReading[T int | time.Duration](v *T) string {
 	if v == nil {
 		return "<unset>"
 	}
 	return fmt.Sprint(*v)
-}
-
-// assertRefusedAlike holds the two readers to one refusal of name: both
-// refuse, in the same words, and the words name the variable.
-func assertRefusedAlike(t *testing.T, name string, stdioErr, httpErr error) {
-	t.Helper()
-	if stdioErr == nil || httpErr == nil {
-		t.Fatalf("stdio error = %v, HTTP error = %v; want both to refuse %s", stdioErr, httpErr, name)
-	}
-	if stdioErr.Error() != httpErr.Error() {
-		t.Errorf("the two transports refuse in different words:\n stdio: %s\n HTTP:  %s", stdioErr, httpErr)
-	}
-	if !strings.Contains(httpErr.Error(), name) {
-		t.Errorf("error = %q, want it to name %s", httpErr, name)
-	}
 }
 
 // clearOverlayEnv unsets every variable the overlay reads, so a case only sees

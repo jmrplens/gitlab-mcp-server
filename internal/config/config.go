@@ -234,9 +234,15 @@ type Config struct {
 
 	UploadMaxFileSize int64
 
-	MaxHTTPClients     int           // Maximum unique tokens in the server pool (HTTP mode only)
-	SessionTimeout     time.Duration // Idle MCP session timeout (HTTP mode only)
-	RevalidateInterval time.Duration // Token re-validation interval (HTTP mode only)
+	MaxHTTPClients int           // Maximum unique tokens in the server pool (HTTP mode only)
+	SessionTimeout time.Duration // Idle MCP session timeout (HTTP mode only)
+	// RevalidateInterval is how often a credential is read again, in both
+	// transports: each HTTP pool entry's token is re-probed at it, and a stdio
+	// process re-reads its fine-grained token's grant and the instance version
+	// at it, or asks again what its token is while that is unknown. 0 stops
+	// the periodic read (issue 1171 gave stdio the setting, which it used to
+	// parse and then ignore for the default).
+	RevalidateInterval time.Duration
 	// ActionTimeout bounds one action's handler in both transports: a call
 	// still running after this long is cancelled and answered with the
 	// deadline error. 0 disables the bound.
@@ -466,10 +472,19 @@ func (s *ServerConfig) Enterprise() bool {
 // DefaultGitLabURL is the GitLab instance used when GITLAB_URL is unset.
 const DefaultGitLabURL = "https://gitlab.com"
 
-// Load reads configuration from environment variables, after populating that
-// environment from the dotenv files [LoadEnvFiles] accepts: the file
-// [EnvFileVar] names and ~/.gitlab-mcp-server.env, in that order, neither of
-// them overwriting a variable the client already passed.
+// Load reads a stdio server's configuration from environment variables, after
+// populating that environment from the dotenv files [LoadEnvFiles] accepts:
+// the file [EnvFileVar] names and ~/.gitlab-mcp-server.env, in that order,
+// neither of them overwriting a variable the client already passed.
+//
+// It reads only what a stdio server uses. The settings only HTTP mode has, the
+// pool, the stateful session, the drain, the authentication gate and its
+// budgets, the OAuth verifier and its metadata, are not read at all, and their
+// fields stay zero ([HTTPOnlyEnvUses] names the ones the environment sets, so
+// the caller can say it ignores them). It used to parse most of them and refuse
+// to start on a value it would never have used, so a variable the same shell
+// exported for an HTTP deployment beside it stopped the stdio process (issue
+// 1171).
 func Load() (*Config, error) {
 	LoadEnvFiles()
 
@@ -497,10 +512,6 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	auth, err := loadAuthEnv()
-	if err != nil {
-		return nil, err
-	}
 
 	rateLimitRPS, err := parseFloatNonNegative(Getenv("RATE_LIMIT_RPS"), tenancy.ToolCallRateEnvDefault) // register row RTC-001
 	if err != nil {
@@ -509,11 +520,6 @@ func Load() (*Config, error) {
 	rateLimitBurst, err := parseIntNonNegative(Getenv("RATE_LIMIT_BURST"), DefaultRateLimitBurst)
 	if err != nil {
 		return nil, fmt.Errorf("invalid RATE_LIMIT_BURST value: %w", err)
-	}
-
-	authBudgets, err := loadAuthBudgetEnv()
-	if err != nil {
-		return nil, err
 	}
 
 	metaParamSchema, err := parseMetaParamSchema(Getenv("META_PARAM_SCHEMA"), DefaultMetaParamSchema)
@@ -533,26 +539,13 @@ func Load() (*Config, error) {
 		SafeMode:           bools.safeMode,
 		EmbeddedResources:  bools.embeddedResources,
 		UploadMaxFileSize:  limits.maxFileSize,
-		MaxHTTPClients:     limits.maxHTTPClients,
-		SessionTimeout:     limits.sessionTimeout,
 		RevalidateInterval: limits.revalidateInterval,
-		PoolIdleTimeout:    limits.poolIdleTimeout,
 		ActionTimeout:      limits.actionTimeout,
-		DrainDelay:         limits.drainDelay,
-		AuthMode:           auth.mode,
-		PublicURL:          auth.publicURL,
-		OAuthCacheTTL:      auth.oauthCacheTTL,
-		OAuthClientUIDs:    auth.oauthClientUIDs,
 		ExcludeTools:       ParseCSV(Getenv("EXCLUDE_TOOLS")),
 		IgnoreScopes:       bools.ignoreScopes,
 		RateLimitRPS:       rateLimitRPS,
 		RateLimitBurst:     rateLimitBurst,
-
-		AuthFailureLimit:       authBudgets.failureLimit,
-		AuthFailureWindow:      authBudgets.failureWindow,
-		AuthDistinctTokenLimit: authBudgets.distinctLimit,
-		AuthDistinctWindow:     authBudgets.distinctWindow,
-		MetaParamSchema:        metaParamSchema,
+		MetaParamSchema:    metaParamSchema,
 	}
 
 	if validateErr := cfg.validate(); validateErr != nil {
@@ -570,21 +563,12 @@ type booleanEnv struct {
 	ignoreScopes      bool
 }
 
+// limitEnv is the limits a stdio server reads: the HTTP-only ones are not
+// read at all ([httpOnlyNames]).
 type limitEnv struct {
 	maxFileSize        int64
-	maxHTTPClients     int
-	sessionTimeout     time.Duration
 	revalidateInterval time.Duration
-	poolIdleTimeout    time.Duration
 	actionTimeout      time.Duration
-	drainDelay         time.Duration
-}
-
-type authEnv struct {
-	mode            string
-	oauthCacheTTL   time.Duration
-	publicURL       string
-	oauthClientUIDs []string
 }
 
 func loadBooleanEnv() (booleanEnv, error) {
@@ -657,22 +641,10 @@ func loadLimitEnv() (limitEnv, error) {
 	if values.maxFileSize, err = UploadMaxFileSizeFromEnv(); err != nil {
 		return limitEnv{}, fmt.Errorf("invalid UPLOAD_MAX_FILE_SIZE value: %w", err)
 	}
-	if values.maxHTTPClients, err = parseInt(Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients); err != nil {
-		return limitEnv{}, fmt.Errorf("invalid MAX_HTTP_CLIENTS value: %w", err)
-	}
-	if values.sessionTimeout, err = parseDisableableDurationEnv("SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout); err != nil {
-		return limitEnv{}, err
-	}
-	if values.poolIdleTimeout, err = parseDisableableDurationEnv("POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout); err != nil {
-		return limitEnv{}, err
-	}
 	if values.revalidateInterval, err = parseDisableableDurationEnv("SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval); err != nil {
 		return limitEnv{}, err
 	}
 	if values.actionTimeout, err = parseDisableableDurationEnv("ACTION_TIMEOUT", DefaultActionTimeout, MaxActionTimeout); err != nil {
-		return limitEnv{}, err
-	}
-	if values.drainDelay, err = parseDisableableDurationEnv("DRAIN_DELAY", DefaultDrainDelay, MaxDrainDelay); err != nil {
 		return limitEnv{}, err
 	}
 	return values, nil
@@ -704,23 +676,6 @@ func parseDisableableDurationEnv(name string, defaultValue, maxValue time.Durati
 	return value, nil
 }
 
-func loadAuthEnv() (authEnv, error) {
-	mode := Getenv("AUTH_MODE")
-	if mode == "" {
-		mode = "legacy"
-	}
-	oauthCacheTTL, err := parseDuration(Getenv("OAUTH_CACHE_TTL"), DefaultOAuthCacheTTL)
-	if err != nil {
-		return authEnv{}, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
-	}
-	return authEnv{
-		mode:            mode,
-		oauthCacheTTL:   oauthCacheTTL,
-		publicURL:       TrimmedGetenv("PUBLIC_URL"),
-		oauthClientUIDs: ParseCSV(Getenv("OAUTH_CLIENT_UID")),
-	}, nil
-}
-
 func gitLabURLFromEnv() string {
 	gitLabURL := strings.TrimSpace(os.Getenv("GITLAB_URL"))
 	if gitLabURL == "" {
@@ -729,18 +684,20 @@ func gitLabURLFromEnv() string {
 	return gitLabURL
 }
 
-// validate checks that all required configuration fields are present and valid.
+// validate checks that every setting [Load] reads is present and valid. HTTP
+// mode builds its configuration from flags and validates it there, so nothing
+// here judges a setting only HTTP mode has.
 func (c *Config) validate() error {
 	if err := c.validateURLAndToken(); err != nil {
 		return err
 	}
-	if err := c.validateLimits(); err != nil {
+	if c.UploadMaxFileSize > MaxFileSize {
+		return fmt.Errorf("UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB (got %d bytes)", c.UploadMaxFileSize)
+	}
+	if err := c.validateSurfaces(); err != nil {
 		return err
 	}
-	if err := c.validateModeEnums(); err != nil {
-		return err
-	}
-	return c.validateDurationsAndRates()
+	return c.validateRates()
 }
 
 func (c *Config) validateURLAndToken() error {
@@ -763,28 +720,7 @@ func (c *Config) validateURLAndToken() error {
 	return nil
 }
 
-func (c *Config) validateLimits() error {
-	if c.UploadMaxFileSize > MaxFileSize {
-		return fmt.Errorf("UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB (got %d bytes)", c.UploadMaxFileSize)
-	}
-	if c.MaxHTTPClients <= 0 {
-		return fmt.Errorf("MAX_HTTP_CLIENTS must be positive (got %d)", c.MaxHTTPClients)
-	}
-	if c.MaxHTTPClients > MaxHTTPClients {
-		return fmt.Errorf("MAX_HTTP_CLIENTS exceeds maximum of %d (got %d)", MaxHTTPClients, c.MaxHTTPClients)
-	}
-	return nil
-}
-
-func (c *Config) validateModeEnums() error {
-	if c.AuthMode != "" && c.AuthMode != AuthModeLegacy && c.AuthMode != AuthModeOAuth {
-		return fmt.Errorf("AUTH_MODE must be 'legacy' or 'oauth' (got %q)", c.AuthMode)
-	}
-	if c.AuthMode == AuthModeOAuth {
-		if err := validatePublicURL(c.PublicURL); err != nil {
-			return err
-		}
-	}
+func (c *Config) validateSurfaces() error {
 	if err := validateToolSurface(c.ToolSurface); err != nil {
 		return err
 	}
@@ -815,10 +751,7 @@ func validateCapabilitySurface(capabilitySurface string) error {
 	}
 }
 
-func (c *Config) validateDurationsAndRates() error {
-	if err := validateDurationRange("OAUTH_CACHE_TTL", c.OAuthCacheTTL, MinOAuthCacheTTL, MaxOAuthCacheTTL); err != nil {
-		return err
-	}
+func (c *Config) validateRates() error {
 	if c.RateLimitRPS < 0 {
 		return fmt.Errorf("RATE_LIMIT_RPS must be >= 0 (got %g)", c.RateLimitRPS)
 	}
@@ -830,19 +763,6 @@ func (c *Config) validateDurationsAndRates() error {
 	}
 	if c.RateLimitBurst > MaxRateLimitBurst {
 		return fmt.Errorf("RATE_LIMIT_BURST exceeds maximum of %d (got %d)", MaxRateLimitBurst, c.RateLimitBurst)
-	}
-	return nil
-}
-
-func validateDurationRange(name string, value, minValue, maxValue time.Duration) error {
-	if value == 0 {
-		return nil
-	}
-	if value < minValue {
-		return fmt.Errorf("%s %s is below minimum of %s", name, value, minValue)
-	}
-	if value > maxValue {
-		return fmt.Errorf("%s %s exceeds maximum of %s", name, value, maxValue)
 	}
 	return nil
 }
