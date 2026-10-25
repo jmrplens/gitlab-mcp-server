@@ -27,6 +27,9 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/jmrplens/gitlab-mcp-server/ci.yml?branch=main&style=flat&logo=githubactions&logoColor=white&label=CI)](https://github.com/jmrplens/gitlab-mcp-server/actions/workflows/ci.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
 
+**Security**
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15879/badge)](https://www.bestpractices.dev/projects/15879)
+
 **Directories**
 [![Glama MCP Score](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server)
 [![MCP Badge](https://lobehub.com/badge/mcp/jmrplens-gitlab-mcp-server?v=2)](https://lobehub.com/mcp/jmrplens-gitlab-mcp-server)
@@ -118,7 +121,7 @@ Everything else is at **[docs.jmrp.io/gitlab-mcp-server](https://docs.jmrp.io/gi
 
 ## Contributing, security and licence
 
-Contributions are welcome here on GitHub; [CONTRIBUTING.md](CONTRIBUTING.md) describes the workflow, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) applies. Report a vulnerability privately, as [SECURITY.md](SECURITY.md) describes. The server is MIT licensed ([LICENSE](LICENSE)).
+Contributions are welcome here on GitHub; [CONTRIBUTING.md](CONTRIBUTING.md) describes the workflow and how a change is reviewed, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) applies. [GOVERNANCE.md](GOVERNANCE.md) says how decisions are made and who holds which role, and the [roadmap](https://docs.jmrp.io/gitlab-mcp-server/roadmap/) says where the project is going. Report a vulnerability privately, as [SECURITY.md](SECURITY.md) describes. The server is MIT licensed ([LICENSE](LICENSE)).
 
 ---
 
