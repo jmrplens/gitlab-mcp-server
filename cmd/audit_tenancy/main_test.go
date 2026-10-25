@@ -100,6 +100,11 @@ func fixtureRules() rules {
 	r.chargeCallers = []string{siteDir + ":gate.charge"}
 	r.server = siteDir
 	r.envNames = tenancy.Site{Pkg: siteDir, Name: "prefixedNames"}
+	r.envListReaders = []string{sitePath + ".Getenv"}
+	// The fixture reads none of the variables the production tables declare,
+	// each of which would otherwise be a declaration answering nothing.
+	r.envDeclared = nil
+	r.envBare = nil
 	// No register file is held to a reader unless a case says so, since
 	// the fixture's rows rarely alias the whole leaf.
 	r.valueFiles = nil

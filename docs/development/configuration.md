@@ -23,6 +23,17 @@ and `MAX_LISTEN_STREAMS` (`cmd/server`), `DESCRIPTION_SUBSTITUTIONS`
 `config.TrimmedGetenv` under its full name (`internal/gitlab/destination.go`),
 which the helper reads verbatim because the list does not hold it. Moving them
 onto the list, or recording which are exempt and why, is issue 957.
+`make check-tenancy` holds the thirteen in place meanwhile (rule G14): every
+`GITLAB_MCP_` variable the server reads any other way is answered by the
+register row that names it, which carries F-13 until its read moves, or by a
+declaration in `cmd/audit_tenancy/declarations.go` with its reason, which is
+how `ENV_FILE`, `TELEMETRY` and `DESCRIPTION_SUBSTITUTIONS`, the three no row
+names, are answered. A variable read that way that no row names and no
+declaration answers fails the gate, and so does one a row without F-13 names.
+So does a name handed to `config.Getenv` that the list does not hold, which it
+reads bare, unless a declaration there says the name is somebody else's, as
+the one for `GITLAB_URL` does: a setting moved onto `config.Getenv` and left
+off the list would otherwise be read under a name no operator sets.
 
 Every variable this server defines carries the prefix, with no exception for
 a name that already began with `GITLAB_`: the switches that did (`GITLAB_TIER`,

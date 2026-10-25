@@ -1,9 +1,11 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -84,6 +86,40 @@ func TestProductionRules_NameWhatTheTreeSpells(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if len(r.retryAfterReads[source]) == 0 {
 				t.Fatalf("Retry-After source %d names nothing to read", source)
+			}
+		})
+	}
+}
+
+// TestProductionRules_DeclareTheReadsNoRowNames: G14 is pointed at the
+// configuration package's reader, and at its two declaration tables: the
+// three variables no row names that the server reads around the
+// configuration package, and the one name it reads bare through it, each
+// with its reason.
+func TestProductionRules_DeclareTheReadsNoRowNames(t *testing.T) {
+	r := productionRules()
+	if want := []string{goprogram.ModulePath + "/internal/config.Getenv"}; !slices.Equal(r.envListReaders, want) {
+		t.Errorf("the configuration package's readers = %v, want %v", r.envListReaders, want)
+	}
+	for table, tc := range map[string]struct {
+		declared map[string]string
+		want     []string
+	}{
+		"read around": {r.envDeclared, []string{"GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS", "GITLAB_MCP_ENV_FILE", "GITLAB_MCP_TELEMETRY"}},
+		"read bare":   {r.envBare, []string{"GITLAB_URL"}},
+	} {
+		t.Run(table, func(t *testing.T) {
+			if got := sortedKeys(tc.declared); !slices.Equal(got, tc.want) {
+				t.Errorf("declared = %v, want %v", got, tc.want)
+			}
+			var unreasoned []string
+			for _, name := range tc.want {
+				if strings.TrimSpace(tc.declared[name]) == "" {
+					unreasoned = append(unreasoned, name)
+				}
+			}
+			if len(unreasoned) > 0 {
+				t.Errorf("declared with no reason: %v", unreasoned)
 			}
 		})
 	}

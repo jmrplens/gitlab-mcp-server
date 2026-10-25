@@ -85,9 +85,18 @@
 //     as fair, a quota or an entitlement, unless its row carries the finding
 //     that records it.
 //   - G14 config. Every variable a row names is on the configuration
-//     package's list of prefixed names and read by nothing else (os.Getenv,
-//     os.LookupEnv, their syscall twins, and a template os.ExpandEnv
-//     expands), unless its row carries the finding that records it.
+//     package's list of prefixed names and read by nothing else, unless its
+//     row carries the finding that records it; every variable carrying the
+//     prefix that the program reads directly is answered, by the row that
+//     names it or by a declaration (issue 957); and every name without the
+//     prefix that config.Getenv reads bare, because the list does not hold
+//     it, is declared as somebody else's. A variable is read directly by
+//     os.Getenv, os.LookupEnv, their syscall twins and a template
+//     os.ExpandEnv expands, and by any function that hands one of its own
+//     parameters on to one of those as the name, config.Getenv among them
+//     for a name outside its list, which it reads verbatim. Each parameter
+//     is followed on its own, so a function that hands two of its parameters
+//     to readers reads through both.
 //
 // Where a finding excuses a rule (G13, G14), a row carrying that finding
 // while the rule would pass has a finding that no longer describes the tree,
@@ -95,22 +104,28 @@
 //
 // # Declarations
 //
-// declarations.go holds what the rules match the code against and the table a
-// reviewer judges. notADecision is the exemption table: each entry names a
+// declarations.go holds what the rules match the code against and the tables
+// a reviewer judges. notADecision is the exemption table: each entry names a
 // declaration shaped like a limit that decides nothing about a caller, keyed
 // `package:Name` the way the register names a site, with a category and a
-// reason. A declaration that answers nothing is a finding on the terms every
-// declaration table here is held to: an exemption nothing needed, and one
-// naming a category nobody defined. Every rule applies to every row; the
-// deferral of G2, G3 and G6 that the migration of issue 565 needed while the
-// values moved into the register is gone, so from the day a row is written an
-// alias that is not a reference to its constant, an Arg call that does not
-// pass it and an alias nothing but alias initializers read are findings. A
-// layer that reads the row's value as a literal somewhere else, while its
-// alias is still read, is a finding only where a rule reads that place: a
-// literal written straight into a listed limit constructor or options literal
-// (G10), a declared Alias (G2), the call a declared Arg names for that
-// constant (G3), or an Enforce site declared to read it (G5).
+// reason. readAroundConfig and readBare are G14's: an entry of the first
+// names a variable carrying the prefix that the server reads directly and no
+// row names, and one of the second a name without the prefix that the server
+// reads bare through config.Getenv, each with why. A declaration that answers
+// nothing is a finding on the terms every declaration table here is held to:
+// an exemption nothing needed, one naming a category nobody defined, a
+// variable nothing reads directly any more, one a row names, which is its
+// row's to answer, and a name nothing reads bare any more. Every rule applies
+// to every row; the deferral of G2, G3 and G6 that the migration of issue 565
+// needed while the values moved into the register is gone, so from the day a
+// row is written an alias that is not a reference to its constant, an Arg
+// call that does not pass it and an alias nothing but alias initializers
+// read are findings. A layer that reads the row's value as a literal
+// somewhere else, while its alias is still read, is a finding only where a
+// rule reads that place: a literal written straight into a listed limit
+// constructor or options literal (G10), a declared Alias (G2), the call a
+// declared Arg names for that constant (G3), or an Enforce site declared to
+// read it (G5).
 //
 // # What it reads, and what it cannot see
 //
@@ -164,12 +179,20 @@
 // a branch or a loop that keeps a later switch from running for the
 // sentinel.
 //
-// G14 cannot trace a variable read through a name that does not fold. G7
-// binds a charge to a return by position, so a charge moved into a helper the
-// table does not name fails rather than passing, and the finding names the
-// position rather than the policy. A rule row's logic is declared by symbol,
-// so G1 fails when the symbol disappears and nothing fails when its logic
-// changes; that is what promoting a rule into the register exists for.
+// G14 cannot trace a variable read through a name that does not fold: one
+// built at run time or taken from a loop over a list. Nor does it follow a
+// read made through a function value, or a name handed to a reader by a
+// function literal's own parameter rather than by a declared function's.
+// Whether a name read bare is somebody else's, rather than a setting the
+// list left out, is the declaration's to say: G14 holds only that one says
+// it, and a name read bare with no reader of the configuration package in
+// between carries no prefix to attribute it by.
+//
+// G7 binds a charge to a return by position, so a charge moved into a helper
+// the table does not name fails rather than passing, and the finding names
+// the position rather than the policy. A rule row's logic is declared by
+// symbol, so G1 fails when the symbol disappears and nothing fails when its
+// logic changes; that is what promoting a rule into the register exists for.
 //
 // # Code identity
 //
