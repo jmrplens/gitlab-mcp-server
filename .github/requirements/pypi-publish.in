@@ -1,0 +1,24 @@
+# What scripts/publish-pypi.sh installs to upload the wheels to PyPI (issue
+# 1243): twine for the upload, and pypi-attestations, with the sigstore client
+# it brings, for the PEP 740 attestation of each wheel.
+#
+# pypi-publish.txt is the lock pip installs from, in --require-hashes mode, and
+# is generated from this file rather than edited. To change a pin, edit it here
+# and regenerate from this directory with the command the lock's header names:
+#
+#     pip-compile --generate-hashes --output-file=pypi-publish.txt --strip-extras pypi-publish.in
+#
+# Dependabot's pip entry for .github/requirements reads that header and does
+# the same, under the Python version the header names.
+#
+# The script runs it under the runner's python3, since the release's pypi job
+# sets up no Python of its own: 3.12 on ubuntu-latest, which is Ubuntu 24.04.
+# pip-compile leaves out a requirement whose marker the interpreter compiling
+# it does not meet, so the lock is compiled with that same 3.12, and is
+# recompiled with the runner's next python3 when ubuntu-latest moves. Today it
+# resolves alike on every CPython from 3.12 on, Linux x86_64: no pin carries a
+# marker that tells 3.12 from a newer release, and every compiled one has a
+# wheel for each (the script installs with --only-binary :all:, so nothing is
+# built).
+twine==7.0.0
+pypi-attestations==0.0.30
