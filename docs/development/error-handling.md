@@ -613,7 +613,7 @@ Counted on 2026-10-06 over the non-test Go files under `internal/`, with
 | `WrapErr`               | 262                                 |
 | `NotFoundResult`        | 22, one shared formatter per domain |
 
-164 of the 180 packages under `internal/tools` carry at least one hint, in 193
+164 of the 181 packages under `internal/tools` carry at least one hint, in 193
 files. A `WrapErrWithMessage` that stays unhinted is usually one whose error
 did not come from GitLab: input validation (`ErrFieldRequired`,
 `ErrRequiredInt64`, `ErrRequiredString`), body parsing (`json.Unmarshal`,

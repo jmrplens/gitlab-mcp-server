@@ -11,12 +11,14 @@ import (
 // EnvironmentAccess is one entry of a protected environment's
 // deploy_access_levels or approval_rules, reduced to the fields GitLab's
 // rules about an entry read. The project and the group protected environment
-// packages each model the four entry shapes their client-go options take, a
-// deploy access level and an approval rule to protect with and to update
-// with, and every shape answers itself through [EnvironmentAccessEntry], so
-// the rules are written once: GitLab serves the project and the group routes
-// from the same param blocks (ee/lib/api/protected_environments.rb). A field
-// a shape does not carry stays nil.
+// packages send the same four entry shapes, a deploy access level and an
+// approval rule to protect with and to update with, which
+// internal/tools/protectedenvdata declares once, since GitLab serves the
+// project and the group routes from the same param blocks
+// (ee/lib/api/protected_environments.rb). Every shape answers itself through
+// [EnvironmentAccesser], which is how the rules are written once here without
+// importing that package, which imports this one. A field a shape does not
+// carry stays nil.
 type EnvironmentAccess struct {
 	ID                   *int64
 	AccessLevel          *int
@@ -27,9 +29,9 @@ type EnvironmentAccess struct {
 	Destroy              *bool
 }
 
-// EnvironmentAccessEntry is an entry shape the protected environment checks
-// read.
-type EnvironmentAccessEntry interface {
+// EnvironmentAccesser is an entry shape the protected environment checks
+// read: one that answers its fields as an [EnvironmentAccess].
+type EnvironmentAccesser interface {
 	// EnvironmentAccess answers the entry with the fields it carries.
 	EnvironmentAccess() EnvironmentAccess
 }
@@ -81,7 +83,7 @@ const (
 // reaches the handler as it came, and find's example used to send a deploy
 // access level naming nothing (issue 1271). Refusing here words the refusal
 // the same wherever no schema refused it first, and saves the round trip.
-func CheckEnvironmentProtect[D, A EnvironmentAccessEntry](operation string, deploy []D, approval []A, requiredApprovalCount *int64) error {
+func CheckEnvironmentProtect[D, A EnvironmentAccesser](operation string, deploy []D, approval []A, requiredApprovalCount *int64) error {
 	if len(deploy) == 0 {
 		return fmt.Errorf("%s: deploy_access_levels needs at least one entry, each naming exactly one of access_level, user_id or group_id", operation)
 	}
@@ -97,14 +99,14 @@ func CheckEnvironmentProtect[D, A EnvironmentAccessEntry](operation string, depl
 // given block on _destroy demands. The values are held as on a protect but
 // for the approvals of a rule _destroy removes, which Rails never validates,
 // and either list may be absent, since an update need not touch it.
-func CheckEnvironmentUpdate[D, A EnvironmentAccessEntry](operation string, deploy []D, approval []A, requiredApprovalCount *int64) error {
+func CheckEnvironmentUpdate[D, A EnvironmentAccesser](operation string, deploy []D, approval []A, requiredApprovalCount *int64) error {
 	return checkEnvironmentAccess(operation, deploy, approval, requiredApprovalCount, true)
 }
 
 // checkEnvironmentAccess holds the deprecated count and every entry of both
 // lists to their rules, reporting the first entry that breaks one by its
 // list and index.
-func checkEnvironmentAccess[D, A EnvironmentAccessEntry](operation string, deploy []D, approval []A, requiredApprovalCount *int64, update bool) error {
+func checkEnvironmentAccess[D, A EnvironmentAccesser](operation string, deploy []D, approval []A, requiredApprovalCount *int64, update bool) error {
 	if requiredApprovalCount != nil && *requiredApprovalCount != 0 {
 		return fmt.Errorf("%s: required_approval_count is deprecated and GitLab takes only 0, so require approvals with required_approvals on approval_rules", operation)
 	}

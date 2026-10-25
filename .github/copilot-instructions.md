@@ -71,7 +71,7 @@ gitlab-mcp-server/
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── graphqlschema/      # Pinned GitLab GraphQL schema (SDL embedded as text + provenance) and Validate()
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema; netfixture/ is the dead endpoint and the stoppable server a test uses instead of a closed httptest server
-│   ├── tools/              # Tool orchestration layer + 180 sub-packages
+│   ├── tools/              # Tool orchestration layer + 181 sub-packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── actiongrants/   # The generated fine-grained table (table_gen.go, never edited) the catalog reads each action's requirement from
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
@@ -84,7 +84,7 @@ gitlab-mcp-server/
 │   │   ├── issues/         # Issue CRUD tools
 │   │   ├── mergerequests/  # Merge request CRUD tools
 │   │   ├── projects/       # Project CRUD tools
-│   │   └── ...             # 180 sub-packages (181 packages with the root)
+│   │   └── ...             # 181 sub-packages (182 packages with the root)
 │   ├── resources/          # MCP resource implementations
 │   ├── prompts/            # MCP prompt implementations
 │   ├── completions/        # Argument completion handler

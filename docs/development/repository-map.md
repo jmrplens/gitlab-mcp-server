@@ -80,7 +80,7 @@ gitlab-mcp-server/
 │   ├── telemetry/               # The one place that knows the OpenTelemetry SDK: exporters, identity policy, metric views
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON); `netfixture/` beside them holds `DeadEndpoint`, a loopback address that hangs up on every connection and keeps its port for the whole test, and `NewStoppableServer`, which answers until `Stop` and then hangs up, keeping its port. It sits apart because `internal/gitlab`'s tests use it and `testutil` imports `internal/gitlab`
-│   ├── tools/                   # Tool orchestration layer + 180 sub-packages
+│   ├── tools/                   # Tool orchestration layer + 181 sub-packages
 │   │   ├── action_catalog.go    # Builds the canonical action catalog from domain ActionSpecs (pruneSchemaFieldsByTier)
 │   │   ├── actiongrants/        # The generated fine-grained table (`table_gen.go`, written by `cmd/gen_action_grants`, never edited) and its two readers, `Table()` and `Requirement(id)`; the catalog sets each action's `FineGrained` from it by canonical ID, and a test holds that the table compiles to data with no init work
 │   │   ├── catalog_filter.go    # FilterActionCatalog: read-only, token-scope and --exclude-tools filters, with what each removed

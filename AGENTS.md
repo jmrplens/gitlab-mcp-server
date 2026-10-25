@@ -2,7 +2,7 @@
 
 > MCP server in Go that exposes GitLab REST + GraphQL as MCP tools, resources,
 > and prompts. Communicates via stdio (default) or HTTP. Catalog-first tool
-> registration: 180 sub-packages under `internal/tools/`, with three runtime
+> registration: 181 sub-packages under `internal/tools/`, with three runtime
 > surfaces (`dynamic` default, `meta`, `individual`).
 
 ## Read first

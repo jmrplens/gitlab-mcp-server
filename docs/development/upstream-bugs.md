@@ -8049,13 +8049,15 @@ structs, and a test that each decodes it.
 - **Merged**: no. All four option structs carry the field at v3.30.0, the
   version `go.mod` pins.
 - **Blocking**: no.
-- **Workaround**: yes. The four approval rule inputs of
+- **Workaround**: yes. The two approval rule inputs
   `internal/tools/protectedenvs` and `internal/tools/groupprotectedenvs`
-  (`ApprovalRuleInput` and `UpdateApprovalRuleInput` in each) no longer
-  offer `access_level_description`, so `environment.protected_protect`,
-  `environment.protected_update`, `group.protected_env_protect` and
-  `group.protected_env_update` never send it, and the individual tools'
-  item schemas, which are closed, refuse a call that names it
+  both send, `ApprovalRuleInput` and `UpdateApprovalRuleInput`, which
+  `internal/tools/protectedenvdata` declares once for the four option
+  structs, no longer offer `access_level_description`, so
+  `environment.protected_protect`, `environment.protected_update`,
+  `group.protected_env_protect` and `group.protected_env_update` never
+  send it, and the individual tools' item schemas, which are closed,
+  refuse a call that names it
   (`TestApprovalRuleInputs_OfferNoAccessLevelDescription`, and a case of
   `TestProtectedEnvironmentSchemas_IndividualTool_HoldsEachEntry` and of
   `TestGroupProtectedEnvSchemas_IndividualTool_HoldsEachEntry`). Until then

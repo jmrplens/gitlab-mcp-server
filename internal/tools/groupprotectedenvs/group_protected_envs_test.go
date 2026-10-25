@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -865,49 +864,6 @@ func TestUpdate_EntriesGitLabRefuses_AreRefusedBeforeAnythingIsSent(t *testing.T
 			}
 			if got := requests.Load(); got != 0 {
 				t.Errorf("Update() sent %d requests, want none", got)
-			}
-		})
-	}
-}
-
-// TestEntryShapes_AnswerEveryFieldTheChecksRead verifies that each of the
-// four entry shapes hands the checks every field it carries, under the field
-// it is: a shape that answered a user as a group would pass an entry naming a
-// user and a group, which GitLab refuses, and one that dropped the id would
-// refuse an existing entry named by it alone.
-func TestEntryShapes_AnswerEveryFieldTheChecksRead(t *testing.T) {
-	id, user, group, inheritance, approvals, destroy := new(int64(1)), new(int64(2)), new(int64(3)), new(int64(1)), new(int64(4)), new(true)
-	level := new(30)
-	cases := []struct {
-		name string
-		got  toolutil.EnvironmentAccess
-		want toolutil.EnvironmentAccess
-	}{
-		{
-			name: "a deploy access level to protect with",
-			got:  DeployAccessLevelInput{AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance}.EnvironmentAccess(),
-			want: toolutil.EnvironmentAccess{AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance},
-		},
-		{
-			name: "an approval rule to protect with",
-			got:  ApprovalRuleInput{AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, RequiredApprovalCount: approvals}.EnvironmentAccess(),
-			want: toolutil.EnvironmentAccess{AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, RequiredApprovals: approvals},
-		},
-		{
-			name: "a deploy access level to update with",
-			got:  UpdateDeployAccessLevelInput{ID: id, AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, Destroy: destroy}.EnvironmentAccess(),
-			want: toolutil.EnvironmentAccess{ID: id, AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, Destroy: destroy},
-		},
-		{
-			name: "an approval rule to update with",
-			got:  UpdateApprovalRuleInput{ID: id, AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, RequiredApprovalCount: approvals, Destroy: destroy}.EnvironmentAccess(),
-			want: toolutil.EnvironmentAccess{ID: id, AccessLevel: level, UserID: user, GroupID: group, GroupInheritanceType: inheritance, RequiredApprovals: approvals, Destroy: destroy},
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if !reflect.DeepEqual(tc.got, tc.want) {
-				t.Errorf("EnvironmentAccess() = %+v, want %+v", tc.got, tc.want)
 			}
 		})
 	}

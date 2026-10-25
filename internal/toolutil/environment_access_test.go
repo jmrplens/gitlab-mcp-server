@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// entry is an entry type the checks read, as the protected environment
-// packages' four entry shapes are.
+// entry is an entry type the checks read, as the four entry shapes of
+// internal/tools/protectedenvdata are.
 type entry EnvironmentAccess
 
 // EnvironmentAccess answers the entry as it is.

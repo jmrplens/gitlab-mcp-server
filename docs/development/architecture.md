@@ -150,9 +150,9 @@ A wrapper around `gitlab.com/gitlab-org/api/client-go/v3`, imported as
 
 ## Tools (`internal/tools`)
 
-The largest package family: 180 sub-packages under `internal/tools/`, 149 of
-them with an `action_specs.go`. `go list ./internal/tools/...` lists 181, the
-180 plus the root package. Each sub-package owns its types, handlers, Markdown
+The largest package family: 181 sub-packages under `internal/tools/`, 149 of
+them with an `action_specs.go`. `go list ./internal/tools/...` lists 182, the
+181 plus the root package. Each sub-package owns its types, handlers, Markdown
 formatters and `ActionSpecs`; registration is catalog-backed and lives in the
 root package. Current tool and action counts per tier and surface come from
 `go run ./cmd/audit_metrics/`; `make gen-site-stats` runs it with
