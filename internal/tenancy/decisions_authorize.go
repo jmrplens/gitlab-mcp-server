@@ -187,8 +187,7 @@ func authorizeDecisions() []Decision {
 			// that names nothing widens nothing, and the list is read when a
 			// tool resolves a path, after the server has started.
 			Malformed: SkipEntry, MalformedBy: "issue 957",
-			Decided:  []string{"issue 957"},
-			Findings: []string{"F-13"},
+			Decided: []string{"issue 957"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Answer: AskOperator,

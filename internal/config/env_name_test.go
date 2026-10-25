@@ -271,6 +271,9 @@ func TestHadOldSpelling_HoldsTheSettings300ReadAndNoOthers(t *testing.T) {
 // GITLAB_MCP_ENV_FILE stays off the list, the one read issue 957 keeps: it
 // names the dotenv file to load and is read once, before any file is.
 var movedByIssue957 = []string{
+	"ALLOWED_DOWNLOAD_DIRS",
+	"ALLOWED_IMPORT_DIRS",
+	"ALLOWED_UPLOAD_DIRS",
 	"MAX_LISTEN_STREAMS",
 	"STDIO_MAX_LINE_BYTES",
 	"TELEMETRY",

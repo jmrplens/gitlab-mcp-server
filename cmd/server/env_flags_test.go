@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,6 +15,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // withFreshFlagSet swaps in a clean flag set, so a test can register and parse
@@ -264,6 +267,9 @@ type settingCase struct {
 	// malformed is a value the reader cannot use, "" for a setting every
 	// value of which means something, and wellFormed one it can.
 	malformed, wellFormed string
+	// values makes the two values in place of the fields, for a setting whose
+	// values name something the test has to create first; nil for the rest.
+	values func(t *testing.T) (malformed, wellFormed string)
 	// policy is what malformed does, which is its row's when a row names it.
 	policy tenancy.Malformed
 	// flagPolicy is what malformed does as the flag's value, when that is not
@@ -422,7 +428,82 @@ func settingsMovedByIssue957() []settingCase {
 				return outcomeUnread
 			},
 		},
+		allowListCase("ALLOWED_UPLOAD_DIRS", func(t *testing.T, dir string) error {
+			t.Helper()
+			path := filepath.Join(dir, "upload.txt")
+			if err := os.WriteFile(path, []byte("payload"), 0o600); err != nil {
+				t.Fatalf("WriteFile(%s): %v", path, err)
+			}
+			_, err := toolutil.CanonicalLocalFilePath(path)
+			return err
+		}),
+		allowListCase("ALLOWED_DOWNLOAD_DIRS", func(t *testing.T, dir string) error {
+			t.Helper()
+			_, err := toolutil.WriteDownloadOutputFile(filepath.Join(dir, "download.bin"), func(w io.Writer) error {
+				_, writeErr := io.WriteString(w, "payload")
+				return writeErr
+			})
+			return err
+		}),
+		allowListCase("ALLOWED_IMPORT_DIRS", func(t *testing.T, dir string) error {
+			t.Helper()
+			path := filepath.Join(dir, "project-export.tar.gz")
+			if err := os.WriteFile(path, []byte("archive"), 0o600); err != nil {
+				t.Fatalf("WriteFile(%s): %v", path, err)
+			}
+			_, err := toolutil.CanonicalImportArchivePath(path)
+			return err
+		}),
 	}
+}
+
+// allowListCase is the row of one of the three local allow-lists (register
+// row AUT-006), which only stdio reads and which have no flag. admit asks the
+// tool path the list guards to accept something in dir, the last directory
+// the value names.
+//
+// The working directory and the temporary directory are always allowed, so
+// [allowListValues] moves both away from the directory the value names, and
+// the local filesystem is opened for the test, as a stdio process opens it.
+// The value that does not parse is a list whose first directory does not
+// exist: that entry is skipped with a warning and the second one is honored.
+func allowListCase(setting string, admit func(t *testing.T, dir string) error) settingCase {
+	return settingCase{
+		setting: setting, row: "AUT-006", policy: tenancy.SkipEntry, values: allowListValues,
+		observe: func(t *testing.T, value string) settingOutcome {
+			t.Helper()
+			previous := toolutil.LocalFilesystemAccessAllowed()
+			toolutil.SetLocalFilesystemAccess(true)
+			t.Cleanup(func() { toolutil.SetLocalFilesystemAccess(previous) })
+			warned := captureLogMessages(t)
+			entries := filepath.SplitList(value)
+			if err := admit(t, entries[len(entries)-1]); err != nil {
+				return outcomeUnread
+			}
+			if len(entries) > 1 && warned("skipping invalid allowlist directory") {
+				return outcomeSkipped
+			}
+			return outcomeApplied
+		},
+	}
+}
+
+// allowListValues confines the roots every allow-list keeps to a directory
+// of the test's own and returns a list naming a missing directory and then a
+// real one, and the real one alone.
+func allowListValues(t *testing.T) (malformed, wellFormed string) {
+	t.Helper()
+	root := t.TempDir()
+	work, temporary, configured := filepath.Join(root, "work"), filepath.Join(root, "tmp"), filepath.Join(root, "configured")
+	for _, dir := range []string{work, temporary, configured} {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", dir, err)
+		}
+	}
+	testutil.IsolateTempDir(t, temporary)
+	t.Chdir(work)
+	missing := filepath.Join(root, "missing")
+	return missing + string(os.PathListSeparator) + configured, configured
 }
 
 // setFlag passes value to tc's flag on a fresh flag set, the way an operator
@@ -461,6 +542,9 @@ func setFlag(t *testing.T, tc settingCase, value string) error {
 func TestSettingsMovedByIssue957_AValueOfEach_GetsItsPolicyAtTheEnvironmentAndTheFlag(t *testing.T) {
 	for _, tc := range settingsMovedByIssue957() {
 		t.Run(tc.setting, func(t *testing.T) {
+			if tc.values != nil {
+				tc.malformed, tc.wellFormed = tc.values(t)
+			}
 			if !slices.Contains(config.PrefixedEnvNames(), tc.setting) {
 				t.Errorf("%s is not on the configuration package's list", tc.setting)
 			}
