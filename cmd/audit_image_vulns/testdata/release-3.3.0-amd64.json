@@ -1,0 +1,904 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.76.1"
+  },
+  "ReportID": "01a172ba-3707-7aaa-8974-bfb472dabbad",
+  "ArtifactID": "sha256:d4374f6bac29531c503288babfd79f7be772c9a30c9f2b0b9312fc7968dfa03c",
+  "ArtifactName": "ghcr.io/jmrplens/gitlab-mcp-server:3.3.0",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 77747712,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.24.2"
+    },
+    "ImageID": "sha256:1f4c18bc835754dda536f82048d1d68776008439313354efb02677072a03ced7",
+    "DiffIDs": [
+      "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711",
+      "sha256:16d1d8f7d1fcf55e8b7095103697c32d910a0133aa74fd0b1814ac53fa3ca795",
+      "sha256:deda52c1eddbfda349bbed5dfc0b6f669646982dfb823e69c83a95a9967b47a9",
+      "sha256:66b7cffdd97ea2b65f8ea453a1e50f5e4be593964238af7f619326eebe77f5f6",
+      "sha256:cf23c66cc5362834861490c50bdf6f01578e35b0a4a2eea3470964c2d89ebfd3"
+    ],
+    "RepoTags": [
+      "ghcr.io/jmrplens/gitlab-mcp-server:3.3.0"
+    ],
+    "RepoDigests": [
+      "ghcr.io/jmrplens/gitlab-mcp-server@sha256:88784f176a65d934c4a181eb832a525e94f106f49189cb9c6fde907dd00cf19c"
+    ],
+    "Reference": "ghcr.io/jmrplens/gitlab-mcp-server:3.3.0",
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-10-20T06:29:47.788569383Z",
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711",
+          "sha256:16d1d8f7d1fcf55e8b7095103697c32d910a0133aa74fd0b1814ac53fa3ca795",
+          "sha256:deda52c1eddbfda349bbed5dfc0b6f669646982dfb823e69c83a95a9967b47a9",
+          "sha256:66b7cffdd97ea2b65f8ea453a1e50f5e4be593964238af7f619326eebe77f5f6",
+          "sha256:cf23c66cc5362834861490c50bdf6f01578e35b0a4a2eea3470964c2d89ebfd3"
+        ]
+      },
+      "config": {
+        "Entrypoint": [
+          "gitlab-mcp-server"
+        ],
+        "User": "appuser"
+      }
+    }
+  },
+  "Results": [
+    {
+      "Target": "ghcr.io/jmrplens/gitlab-mcp-server:3.3.0 (alpine 3.24.2)",
+      "Class": "os-pkgs",
+      "Type": "alpine",
+      "Packages": [
+        {
+          "ID": "alpine-baselayout@3.7.2-r1",
+          "Name": "alpine-baselayout",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-baselayout@3.7.2-r1?arch=x86_64&distro=3.24.2",
+            "UID": "1b9c543300f8073e"
+          },
+          "Version": "3.7.2-r1",
+          "Arch": "x86_64",
+          "SrcName": "alpine-baselayout",
+          "SrcVersion": "3.7.2-r1",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "alpine-baselayout-data@3.7.2-r1",
+          "Name": "alpine-baselayout-data",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-baselayout-data@3.7.2-r1?arch=x86_64&distro=3.24.2",
+            "UID": "fcc3cd90122d8aa7"
+          },
+          "Version": "3.7.2-r1",
+          "Arch": "x86_64",
+          "SrcName": "alpine-baselayout",
+          "SrcVersion": "3.7.2-r1",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "alpine-keys@2.6-r0",
+          "Name": "alpine-keys",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-keys@2.6-r0?arch=x86_64&distro=3.24.2",
+            "UID": "cb1f6c8fa74713e0"
+          },
+          "Version": "2.6-r0",
+          "Arch": "x86_64",
+          "SrcName": "alpine-keys",
+          "SrcVersion": "2.6-r0",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "alpine-release@3.24.2-r0",
+          "Name": "alpine-release",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-release@3.24.2-r0?arch=x86_64&distro=3.24.2",
+            "UID": "c8c46806ee8e6495"
+          },
+          "Version": "3.24.2-r0",
+          "Arch": "x86_64",
+          "SrcName": "alpine-base",
+          "SrcVersion": "3.24.2-r0",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "apk-tools@3.0.8-r0",
+          "Name": "apk-tools",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/apk-tools@3.0.8-r0?arch=x86_64&distro=3.24.2",
+            "UID": "b263128765588ada"
+          },
+          "Version": "3.0.8-r0",
+          "Arch": "x86_64",
+          "SrcName": "apk-tools",
+          "SrcVersion": "3.0.8-r0",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "busybox@1.37.0-r31",
+          "Name": "busybox",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/busybox@1.37.0-r31?arch=x86_64&distro=3.24.2",
+            "UID": "771020c43c8440bf"
+          },
+          "Version": "1.37.0-r31",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r31",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel <soeren+alpine@soeren-tempel.net>"
+        },
+        {
+          "ID": "busybox-binsh@1.37.0-r31",
+          "Name": "busybox-binsh",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/busybox-binsh@1.37.0-r31?arch=x86_64&distro=3.24.2",
+            "UID": "1ec8a3d5d2b63297"
+          },
+          "Version": "1.37.0-r31",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r31",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel <soeren+alpine@soeren-tempel.net>"
+        },
+        {
+          "ID": "ca-certificates@20260909-r0",
+          "Name": "ca-certificates",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/ca-certificates@20260909-r0?arch=x86_64&distro=3.24.2",
+            "UID": "a48963e6a175ea46"
+          },
+          "Version": "20260909-r0",
+          "Arch": "x86_64",
+          "SrcName": "ca-certificates",
+          "SrcVersion": "20260909-r0",
+          "Licenses": [
+            "MPL-2.0",
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "ca-certificates-bundle@20260909-r0",
+          "Name": "ca-certificates-bundle",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/ca-certificates-bundle@20260909-r0?arch=x86_64&distro=3.24.2",
+            "UID": "4769f08c913e6b6c"
+          },
+          "Version": "20260909-r0",
+          "Arch": "x86_64",
+          "SrcName": "ca-certificates",
+          "SrcVersion": "20260909-r0",
+          "Licenses": [
+            "MPL-2.0",
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "libapk@3.0.8-r0",
+          "Name": "libapk",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libapk@3.0.8-r0?arch=x86_64&distro=3.24.2",
+            "UID": "3bc45fb01b4ba719"
+          },
+          "Version": "3.0.8-r0",
+          "Arch": "x86_64",
+          "SrcName": "apk-tools",
+          "SrcVersion": "3.0.8-r0",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "libcrypto3@3.5.8-r0",
+          "Name": "libcrypto3",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.8-r0?arch=x86_64&distro=3.24.2",
+            "UID": "4299bba2ba9c96aa"
+          },
+          "Version": "3.5.8-r0",
+          "Arch": "x86_64",
+          "SrcName": "openssl",
+          "SrcVersion": "3.5.8-r0",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "libssl3@3.5.8-r0",
+          "Name": "libssl3",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.8-r0?arch=x86_64&distro=3.24.2",
+            "UID": "f290ab59b88b1c4a"
+          },
+          "Version": "3.5.8-r0",
+          "Arch": "x86_64",
+          "SrcName": "openssl",
+          "SrcVersion": "3.5.8-r0",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "musl@1.2.6-r2",
+          "Name": "musl",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/musl@1.2.6-r2?arch=x86_64&distro=3.24.2",
+            "UID": "1f8cb44befe503d4"
+          },
+          "Version": "1.2.6-r2",
+          "Arch": "x86_64",
+          "SrcName": "musl",
+          "SrcVersion": "1.2.6-r2",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "musl-utils@1.2.6-r2",
+          "Name": "musl-utils",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/musl-utils@1.2.6-r2?arch=x86_64&distro=3.24.2",
+            "UID": "4497482ec1d943e1"
+          },
+          "Version": "1.2.6-r2",
+          "Arch": "x86_64",
+          "SrcName": "musl",
+          "SrcVersion": "1.2.6-r2",
+          "Licenses": [
+            "MIT",
+            "BSD-2-Clause",
+            "GPL-2.0-or-later"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "scanelf@1.3.9-r1",
+          "Name": "scanelf",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/scanelf@1.3.9-r1?arch=x86_64&distro=3.24.2",
+            "UID": "936394657a1626fb"
+          },
+          "Version": "1.3.9-r1",
+          "Arch": "x86_64",
+          "SrcName": "pax-utils",
+          "SrcVersion": "1.3.9-r1",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "ssl_client@1.37.0-r31",
+          "Name": "ssl_client",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/ssl_client@1.37.0-r31?arch=x86_64&distro=3.24.2",
+            "UID": "d42e31f15a4ce47a"
+          },
+          "Version": "1.37.0-r31",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r31",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel <soeren+alpine@soeren-tempel.net>"
+        },
+        {
+          "ID": "tzdata@2026e-r0",
+          "Name": "tzdata",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/tzdata@2026e-r0?arch=x86_64&distro=3.24.2",
+            "UID": "915df5c2bcf1aaa1"
+          },
+          "Version": "2026e-r0",
+          "Arch": "x86_64",
+          "SrcName": "tzdata",
+          "SrcVersion": "2026e-r0",
+          "Licenses": [
+            "Public-Domain"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        },
+        {
+          "ID": "zlib@1.3.2-r0",
+          "Name": "zlib",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/zlib@1.3.2-r0?arch=x86_64&distro=3.24.2",
+            "UID": "e37054a2982d6c16"
+          },
+          "Version": "1.3.2-r0",
+          "Arch": "x86_64",
+          "SrcName": "zlib",
+          "SrcVersion": "1.3.2-r0",
+          "Licenses": [
+            "Zlib"
+          ],
+          "Maintainer": "Natanael Copa <ncopa@alpinelinux.org>"
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-107891",
+          "PkgID": "musl@1.2.6-r2",
+          "PkgName": "musl",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/musl@1.2.6-r2?arch=x86_64&distro=3.24.2",
+            "UID": "1f8cb44befe503d4"
+          },
+          "InstalledVersion": "1.2.6-r2",
+          "FixedVersion": "1.2.6-r3",
+          "Status": "fixed",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Severity": "UNKNOWN"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-107891",
+          "PkgID": "musl-utils@1.2.6-r2",
+          "PkgName": "musl-utils",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/musl-utils@1.2.6-r2?arch=x86_64&distro=3.24.2",
+            "UID": "4497482ec1d943e1"
+          },
+          "InstalledVersion": "1.2.6-r2",
+          "FixedVersion": "1.2.6-r3",
+          "Status": "fixed",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Severity": "UNKNOWN"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-85091",
+          "PkgID": "zlib@1.3.2-r0",
+          "PkgName": "zlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/zlib@1.3.2-r0?arch=x86_64&distro=3.24.2",
+            "UID": "e37054a2982d6c16"
+          },
+          "InstalledVersion": "1.3.2-r0",
+          "FixedVersion": "1.3.2-r1",
+          "Status": "fixed",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-85091",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Title": "zlib versions 1.3.1.2 through 1.3.2 contain a heap buffer overflow vul ...",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-787"
+          ],
+          "VendorSeverity": {
+            "ubuntu": 2
+          },
+          "PublishedDate": "2026-09-03T13:06:20.573Z",
+          "LastModifiedDate": "2026-09-09T20:41:07.123Z"
+        }
+      ]
+    },
+    {
+      "Target": "usr/local/bin/gitlab-mcp-server",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Packages": [
+        {
+          "ID": "github.com/jmrplens/gitlab-mcp-server/v3@v3.3.0",
+          "Name": "github.com/jmrplens/gitlab-mcp-server/v3",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/jmrplens/gitlab-mcp-server/v3@3.3.0",
+            "UID": "af3ca35f5c043d16"
+          },
+          "Version": "3.3.0",
+          "Relationship": "root"
+        },
+        {
+          "ID": "stdlib@v1.27.2",
+          "Name": "stdlib",
+          "Identifier": {
+            "PURL": "pkg:golang/stdlib@v1.27.2",
+            "UID": "9436b2fc97178389"
+          },
+          "Version": "v1.27.2",
+          "Relationship": "direct"
+        },
+        {
+          "ID": "github.com/cenkalti/backoff/v5@v5.0.3",
+          "Name": "github.com/cenkalti/backoff/v5",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/cenkalti/backoff/v5@v5.0.3",
+            "UID": "67c0814d5bfe019f"
+          },
+          "Version": "v5.0.3"
+        },
+        {
+          "ID": "github.com/cespare/xxhash/v2@v2.3.0",
+          "Name": "github.com/cespare/xxhash/v2",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/cespare/xxhash/v2@v2.3.0",
+            "UID": "45245369ad273949"
+          },
+          "Version": "v2.3.0"
+        },
+        {
+          "ID": "github.com/go-logr/logr@v1.4.4",
+          "Name": "github.com/go-logr/logr",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/go-logr/logr@v1.4.4",
+            "UID": "2410145b1726f7e2"
+          },
+          "Version": "v1.4.4"
+        },
+        {
+          "ID": "github.com/go-logr/stdr@v1.2.2",
+          "Name": "github.com/go-logr/stdr",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/go-logr/stdr@v1.2.2",
+            "UID": "267597ecf13d4a78"
+          },
+          "Version": "v1.2.2"
+        },
+        {
+          "ID": "github.com/google/go-querystring@v1.2.0",
+          "Name": "github.com/google/go-querystring",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/google/go-querystring@v1.2.0",
+            "UID": "4aa6141103c7e016"
+          },
+          "Version": "v1.2.0"
+        },
+        {
+          "ID": "github.com/google/jsonschema-go@v0.4.3",
+          "Name": "github.com/google/jsonschema-go",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/google/jsonschema-go@v0.4.3",
+            "UID": "e15ac141d2c85a72"
+          },
+          "Version": "v0.4.3"
+        },
+        {
+          "ID": "github.com/google/uuid@v1.6.0",
+          "Name": "github.com/google/uuid",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/google/uuid@v1.6.0",
+            "UID": "263656225cfe7526"
+          },
+          "Version": "v1.6.0"
+        },
+        {
+          "ID": "github.com/grpc-ecosystem/grpc-gateway/v2@v2.31.0",
+          "Name": "github.com/grpc-ecosystem/grpc-gateway/v2",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.31.0",
+            "UID": "ae73a1d092f106fa"
+          },
+          "Version": "v2.31.0"
+        },
+        {
+          "ID": "github.com/hashicorp/go-cleanhttp@v0.5.2",
+          "Name": "github.com/hashicorp/go-cleanhttp",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/hashicorp/go-cleanhttp@v0.5.2",
+            "UID": "20dbd47fad5ec0ce"
+          },
+          "Version": "v0.5.2"
+        },
+        {
+          "ID": "github.com/hashicorp/go-retryablehttp@v0.7.8",
+          "Name": "github.com/hashicorp/go-retryablehttp",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/hashicorp/go-retryablehttp@v0.7.8",
+            "UID": "10416f566c5d3fa9"
+          },
+          "Version": "v0.7.8"
+        },
+        {
+          "ID": "github.com/joho/godotenv@v1.5.1",
+          "Name": "github.com/joho/godotenv",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/joho/godotenv@v1.5.1",
+            "UID": "f8cbc0b9adad2163"
+          },
+          "Version": "v1.5.1"
+        },
+        {
+          "ID": "github.com/mattn/go-isatty@v0.0.24",
+          "Name": "github.com/mattn/go-isatty",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/mattn/go-isatty@v0.0.24",
+            "UID": "8194493565b4c80e"
+          },
+          "Version": "v0.0.24"
+        },
+        {
+          "ID": "github.com/modelcontextprotocol/go-sdk@v1.8.0",
+          "Name": "github.com/modelcontextprotocol/go-sdk",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/modelcontextprotocol/go-sdk@v1.8.0",
+            "UID": "24fa2bd244dc881f"
+          },
+          "Version": "v1.8.0"
+        },
+        {
+          "ID": "github.com/segmentio/asm@v1.2.1",
+          "Name": "github.com/segmentio/asm",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/segmentio/asm@v1.2.1",
+            "UID": "e347880f4d364f36"
+          },
+          "Version": "v1.2.1"
+        },
+        {
+          "ID": "github.com/segmentio/encoding@v0.5.4",
+          "Name": "github.com/segmentio/encoding",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/segmentio/encoding@v0.5.4",
+            "UID": "ce6f299bca1bde0c"
+          },
+          "Version": "v0.5.4"
+        },
+        {
+          "ID": "github.com/shirou/gopsutil/v4@v4.26.9",
+          "Name": "github.com/shirou/gopsutil/v4",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/shirou/gopsutil/v4@v4.26.9",
+            "UID": "9ff62fb63629018e"
+          },
+          "Version": "v4.26.9"
+        },
+        {
+          "ID": "github.com/tklauser/go-sysconf@v0.4.0",
+          "Name": "github.com/tklauser/go-sysconf",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/tklauser/go-sysconf@v0.4.0",
+            "UID": "c9b79722b16eaa58"
+          },
+          "Version": "v0.4.0"
+        },
+        {
+          "ID": "github.com/tklauser/numcpus@v0.12.0",
+          "Name": "github.com/tklauser/numcpus",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/tklauser/numcpus@v0.12.0",
+            "UID": "b622aec23f99d402"
+          },
+          "Version": "v0.12.0"
+        },
+        {
+          "ID": "github.com/yosida95/uritemplate/v3@v3.0.2",
+          "Name": "github.com/yosida95/uritemplate/v3",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/yosida95/uritemplate/v3@v3.0.2",
+            "UID": "d8f5aa4f8b19f237"
+          },
+          "Version": "v3.0.2"
+        },
+        {
+          "ID": "gitlab.com/gitlab-org/api/client-go/v3@v3.29.0",
+          "Name": "gitlab.com/gitlab-org/api/client-go/v3",
+          "Identifier": {
+            "PURL": "pkg:golang/gitlab.com/gitlab-org/api/client-go/v3@v3.29.0",
+            "UID": "8b6c9b90e7e4ed2f"
+          },
+          "Version": "v3.29.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/auto/sdk@v1.2.1",
+          "Name": "go.opentelemetry.io/auto/sdk",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/auto/sdk@v1.2.1",
+            "UID": "5be807306786ce1c"
+          },
+          "Version": "v1.2.1"
+        },
+        {
+          "ID": "go.opentelemetry.io/contrib/bridges/otelslog@v0.20.1",
+          "Name": "go.opentelemetry.io/contrib/bridges/otelslog",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/contrib/bridges/otelslog@v0.20.1",
+            "UID": "22756cd3bae23c9a"
+          },
+          "Version": "v0.20.1"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel@v1.46.0",
+          "Name": "go.opentelemetry.io/otel",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel@v1.46.0",
+            "UID": "de18cdcae0be5de9"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc@v0.22.0",
+          "Name": "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc@v0.22.0",
+            "UID": "fb74e89069feca3a"
+          },
+          "Version": "v0.22.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp@v0.22.0",
+          "Name": "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp@v0.22.0",
+            "UID": "564c6feaf0c511da"
+          },
+          "Version": "v0.22.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc@v1.46.0",
+            "UID": "6747b03331e14532"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp@v1.46.0",
+            "UID": "5471948001e0e0f"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.46.0",
+            "UID": "1aa1b9f917ec97a2"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.46.0",
+            "UID": "8e1c52c7b9917e4d"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.46.0",
+            "UID": "4476f9310cd231c1"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/log@v0.22.0",
+          "Name": "go.opentelemetry.io/otel/log",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/log@v0.22.0",
+            "UID": "d6f02eaf62e2444a"
+          },
+          "Version": "v0.22.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/metric@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/metric",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/metric@v1.46.0",
+            "UID": "571b4bb0b84765cb"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/sdk@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/sdk",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0",
+            "UID": "5068b625f83bbb8d"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/sdk/log@v0.22.0",
+          "Name": "go.opentelemetry.io/otel/sdk/log",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/sdk/log@v0.22.0",
+            "UID": "91f89357bc7d3a4e"
+          },
+          "Version": "v0.22.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/sdk/metric@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/sdk/metric",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/sdk/metric@v1.46.0",
+            "UID": "ab76c205e4b4e4ea"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/otel/trace@v1.46.0",
+          "Name": "go.opentelemetry.io/otel/trace",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0",
+            "UID": "99e9432e02477e3a"
+          },
+          "Version": "v1.46.0"
+        },
+        {
+          "ID": "go.opentelemetry.io/proto/otlp@v1.11.1",
+          "Name": "go.opentelemetry.io/proto/otlp",
+          "Identifier": {
+            "PURL": "pkg:golang/go.opentelemetry.io/proto/otlp@v1.11.1",
+            "UID": "45ae29e859fa03c1"
+          },
+          "Version": "v1.11.1"
+        },
+        {
+          "ID": "golang.org/x/net@v0.60.0",
+          "Name": "golang.org/x/net",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/net@v0.60.0",
+            "UID": "d2452c6010c163da"
+          },
+          "Version": "v0.60.0"
+        },
+        {
+          "ID": "golang.org/x/oauth2@v0.37.0",
+          "Name": "golang.org/x/oauth2",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/oauth2@v0.37.0",
+            "UID": "6dd9b548d0e9bc29"
+          },
+          "Version": "v0.37.0"
+        },
+        {
+          "ID": "golang.org/x/sync@v0.24.0",
+          "Name": "golang.org/x/sync",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/sync@v0.24.0",
+            "UID": "aec2b9de756ef740"
+          },
+          "Version": "v0.24.0"
+        },
+        {
+          "ID": "golang.org/x/sys@v0.48.0",
+          "Name": "golang.org/x/sys",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/sys@v0.48.0",
+            "UID": "8a378f1f68df0c2b"
+          },
+          "Version": "v0.48.0"
+        },
+        {
+          "ID": "golang.org/x/text@v0.42.0",
+          "Name": "golang.org/x/text",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/text@v0.42.0",
+            "UID": "8b4723c61b62d1a6"
+          },
+          "Version": "v0.42.0"
+        },
+        {
+          "ID": "golang.org/x/time@v0.16.0",
+          "Name": "golang.org/x/time",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/time@v0.16.0",
+            "UID": "48bf89a99b29d34f"
+          },
+          "Version": "v0.16.0"
+        },
+        {
+          "ID": "google.golang.org/genproto/googleapis/api@v0.0.0-20260928230214-8a89bd6388cc",
+          "Name": "google.golang.org/genproto/googleapis/api",
+          "Identifier": {
+            "PURL": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260928230214-8a89bd6388cc",
+            "UID": "dcc1d16da28ab60d"
+          },
+          "Version": "v0.0.0-20260928230214-8a89bd6388cc"
+        },
+        {
+          "ID": "google.golang.org/genproto/googleapis/rpc@v0.0.0-20260928230214-8a89bd6388cc",
+          "Name": "google.golang.org/genproto/googleapis/rpc",
+          "Identifier": {
+            "PURL": "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260928230214-8a89bd6388cc",
+            "UID": "9b1c44e89ce6dc43"
+          },
+          "Version": "v0.0.0-20260928230214-8a89bd6388cc"
+        },
+        {
+          "ID": "google.golang.org/grpc@v1.84.0",
+          "Name": "google.golang.org/grpc",
+          "Identifier": {
+            "PURL": "pkg:golang/google.golang.org/grpc@v1.84.0",
+            "UID": "1d2a6fa3818b6133"
+          },
+          "Version": "v1.84.0"
+        },
+        {
+          "ID": "google.golang.org/protobuf@v1.36.12",
+          "Name": "google.golang.org/protobuf",
+          "Identifier": {
+            "PURL": "pkg:golang/google.golang.org/protobuf@v1.36.12",
+            "UID": "ed1d520d33a33847"
+          },
+          "Version": "v1.36.12"
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-111943",
+          "VendorIDs": [
+            "GO-2026-6809"
+          ],
+          "PkgID": "stdlib@v1.27.2",
+          "PkgName": "stdlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/stdlib@v1.27.2",
+            "UID": "9436b2fc97178389"
+          },
+          "InstalledVersion": "v1.27.2",
+          "FixedVersion": "1.26.10, 1.27.3",
+          "Status": "fixed",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-111943",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Title": "crypto/x509: golang: crypto/x509: Man-in-the-middle attacks via untrusted intermediate certificates",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "alma": 4,
+            "amazon": 2,
+            "oracle-oval": 4,
+            "redhat": 3,
+            "rocky": 4
+          },
+          "PublishedDate": "2026-10-21T01:17:20.797Z",
+          "LastModifiedDate": "2026-10-22T16:18:19.04Z"
+        }
+      ]
+    }
+  ]
+}
