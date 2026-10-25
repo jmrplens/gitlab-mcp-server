@@ -108,10 +108,10 @@ func TestAuditWorkflows_PinnedAction_IsUnjudgedWithoutARecord(t *testing.T) {
 }
 
 // TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord verifies that an
-// action whose code is the bundle committed at its pin, or a container, is
-// recorded and read no further, so it passes with its metadata in the record
-// and nothing else, and that a docker:// image named by its digest is not
-// opened either.
+// action whose code is the bundle committed at its pin, or a container built
+// from the Dockerfile committed there, is recorded and read no further, so it
+// passes with its metadata in the record and nothing else, and that a
+// docker:// image named by its digest is not opened either.
 func TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord(t *testing.T) {
 	t.Parallel()
 
@@ -217,6 +217,340 @@ func TestAuditWorkflows_DockerImageOnACommitSHA_IsLeftToRuleOne(t *testing.T) {
 	want := ".github/workflows/ci.yml:4: uses: docker://example/image@" + testSHA + " is not pinned to a sha256 image digest"
 	if len(problems) != 1 || problems[0] != want {
 		t.Errorf("auditWorkflows() =\n%s\nwant only\n%s", strings.Join(problems, "\n"), want)
+	}
+}
+
+// The findings a container action's image draws, after the label of the
+// metadata that names it.
+const (
+	undigestedImage = " is not pinned to a sha256 image digest, and " + declarationsFile + " gives no reason to accept it"
+	noImage         = ": runs.image names no image, so what the container action runs cannot be judged"
+	neitherImage    = " is neither a Dockerfile nor a docker:// image, which the runner refuses, so what the container action runs cannot be judged"
+)
+
+// TestAuditWorkflows_ContainerActionImage_IsHeldToItsDigest verifies that the
+// image a container action runs is held to rule 1 as a docker:// step is: an
+// image named by its sha256 digest, a tag before it or not, and a Dockerfile
+// the action's commit holds pass; an image named by a tag, or by its name
+// alone, is a finding, made once however many jobs and actions reach it, in a
+// pinned action, in one an action of the record names and in one of this
+// repository; and metadata that names no image cannot be judged.
+//
+// runs.image is told apart as the runner tells it apart: the docker:// scheme
+// in any case is an image the runner pulls, the scheme alone included, a path
+// whose last segment ends in Dockerfile or starts with Dockerfile., in any
+// case, is one it builds, and any other value, a directory named like a
+// Dockerfile and white space around one included, is one it refuses. A scheme
+// the audit read in lower case alone let DOCKER://img:tag pass as though it
+// were a Dockerfile, while the runner pulled the tag.
+//
+// ossf/scorecard-action is the case that made the audit read it: pinned to a
+// commit, its action.yaml runs docker://ghcr.io/ossf/scorecard-action:v2.5.0,
+// which a push to that tag replaces, and the audit returned at runs.using.
+func TestAuditWorkflows_ContainerActionImage_IsHeldToItsDigest(t *testing.T) {
+	t.Parallel()
+
+	const (
+		builtKey       = "example/built@" + testSHA
+		lowerKey       = "example/built-lower@" + testSHA
+		suffixedKey    = "example/built-suffixed@" + testSHA
+		digestKey      = "example/digested@" + testSHA
+		upperDigestKey = "example/digested-upper@" + testSHA
+		taggedKey      = "example/tagged@" + testSHA
+		upperKey       = "example/tagged-upper@" + testSHA
+		bareKey        = "example/bare-image@" + testSHA
+		schemeOnlyKey  = "example/scheme-only@" + testSHA
+		neitherKey     = "example/no-scheme@" + testSHA
+		shortKey       = "example/short@" + testSHA
+		directoryKey   = "example/dockerfile-directory@" + testSHA
+		paddedKey      = "example/padded@" + testSHA
+		emptyKey       = "example/no-image@" + testSHA
+		nestedKey      = "example/nested@" + testSHA
+		innerKey       = "example/inner@" + testSHA
+	)
+	root := t.TempDir()
+	writeFile(t, root, ".github/actions/box/action.yml", "runs:\n  using: docker\n  image: docker://alpine:3\n")
+	writeFile(t, root, ".github/actions/shouted/action.yml", "runs:\n  using: docker\n  image: Docker://alpine:3\n")
+	writeWorkflow(t, root, "ci.yml", `jobs:
+  lint:
+    steps:
+      - uses: `+builtKey+`
+      - uses: `+lowerKey+`
+      - uses: `+suffixedKey+`
+      - uses: `+digestKey+`
+      - uses: `+upperDigestKey+`
+      - uses: `+taggedKey+`
+      - uses: `+upperKey+`
+      - uses: `+bareKey+`
+      - uses: `+schemeOnlyKey+`
+      - uses: `+neitherKey+`
+      - uses: `+shortKey+`
+      - uses: `+directoryKey+`
+      - uses: `+paddedKey+`
+      - uses: `+emptyKey+`
+      - uses: ./.github/actions/box
+      - uses: ./.github/actions/shouted
+      - uses: `+nestedKey+`
+  test:
+    steps:
+      - uses: `+taggedKey+`
+      - uses: `+upperKey+`
+      - uses: ./.github/actions/box
+`)
+	writeRecord(t, root, recordOf(map[string]string{
+		builtKey:       "runs:\n  using: docker\n  image: Dockerfile\n",
+		lowerKey:       "runs:\n  using: docker\n  image: docker/app.dockerfile\n",
+		suffixedKey:    "runs:\n  using: docker\n  image: build/DOCKERFILE.ci\n",
+		digestKey:      "runs:\n  using: docker\n  image: docker://ghcr.io/example/tool:v1@" + testDigest + "\n",
+		upperDigestKey: "runs:\n  using: docker\n  image: Docker://alpine@" + testDigest + "\n",
+		taggedKey:      "runs:\n  using: 'docker'\n  image: 'docker://ghcr.io/example/tool:v1'\n",
+		upperKey:       "runs:\n  using: docker\n  image: DOCKER://ghcr.io/example/tool:v1\n",
+		bareKey:        "runs:\n  using: docker\n  image: docker://alpine\n",
+		schemeOnlyKey:  "runs:\n  using: docker\n  image: docker://\n",
+		neitherKey:     "runs:\n  using: docker\n  image: ghcr.io/example/tool:v1\n",
+		shortKey:       "runs:\n  using: docker\n  image: alpine:3\n",
+		directoryKey:   "runs:\n  using: docker\n  image: Dockerfile.d/entrypoint\n",
+		paddedKey:      "runs:\n  using: docker\n  image: ' Dockerfile '\n",
+		emptyKey:       "runs:\n  using: docker\n  image: 7\n",
+		nestedKey:      "runs:\n  using: composite\n  steps:\n    - uses: " + taggedKey + "\n    - uses: " + innerKey + "\n",
+		innerKey:       "runs:\n  using: docker\n",
+	}))
+
+	problems, err := auditTree(root, tables{})
+	if err != nil {
+		t.Fatalf("auditWorkflows: %v", err)
+	}
+	want := []string{
+		taggedKey + "/action.yml: runs.image docker://ghcr.io/example/tool:v1" + undigestedImage,
+		upperKey + "/action.yml: runs.image DOCKER://ghcr.io/example/tool:v1" + undigestedImage,
+		bareKey + "/action.yml: runs.image docker://alpine" + undigestedImage,
+		schemeOnlyKey + "/action.yml: runs.image docker://" + undigestedImage,
+		neitherKey + `/action.yml: runs.image "ghcr.io/example/tool:v1"` + neitherImage,
+		shortKey + `/action.yml: runs.image "alpine:3"` + neitherImage,
+		directoryKey + `/action.yml: runs.image "Dockerfile.d/entrypoint"` + neitherImage,
+		paddedKey + `/action.yml: runs.image " Dockerfile "` + neitherImage,
+		emptyKey + "/action.yml" + noImage,
+		".github/actions/box/action.yml: runs.image docker://alpine:3" + undigestedImage,
+		".github/actions/shouted/action.yml: runs.image Docker://alpine:3" + undigestedImage,
+		innerKey + "/action.yml" + noImage,
+	}
+	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
+		t.Errorf("auditWorkflows() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestAuditWorkflows_DeclaredTaggedImage_IsHeldToAJobThatWritesNothing
+// verifies what a declaration of a tag-named image accepts: that image, run by
+// that action, in a job whose token writes nothing but its OIDC identity, whose
+// cache-mode is none and which reads no secret, since whatever the registry
+// serves for the tag runs with the token, the Actions cache and the secrets.
+// Every job that runs it is held to that, what it inherits from the workflow
+// included (the token, the cache-mode and the env block), a job's own
+// cache-mode overriding the workflow's either way, and the same action naming
+// an image the declaration does not name is not excused.
+//
+// The cache is held apart from the token because permissions: does not reach
+// it: the runner hands every container action the job's runtime token, and on
+// a push or a schedule a job that sets no cache-mode can save an entry that a
+// later job restores and runs, on main or under a release tag.
+func TestAuditWorkflows_DeclaredTaggedImage_IsHeldToAJobThatWritesNothing(t *testing.T) {
+	t.Parallel()
+
+	const (
+		taggedKey = "example/tagged@" + testSHA
+		movedKey  = "example/tagged@" + "0123456789012345678901234567890123456789"
+		image     = "docker://ghcr.io/example/tool:v1"
+	)
+	root := t.TempDir()
+	writeWorkflow(t, root, "inherit.yml", `permissions:
+  contents: write
+cache-mode: write
+env:
+  TOKEN: ${{ secrets.READ_TOKEN }}
+jobs:
+  inheriting:
+    steps:
+      - uses: `+taggedKey+`
+  overriding:
+    permissions: {}
+    cache-mode: none
+    steps:
+      - uses: `+taggedKey+`
+`)
+	writeWorkflow(t, root, "plain.yml", `jobs:
+  unset:
+    permissions: {}
+    steps:
+      - uses: `+taggedKey+`
+`)
+	writeWorkflow(t, root, "scorecard.yml", `permissions:
+  contents: read
+cache-mode: none
+jobs:
+  analysis:
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: `+taggedKey+`
+  upload:
+    permissions:
+      security-events: write
+      id-token: write
+    steps:
+      - uses: `+taggedKey+`
+  everything:
+    permissions: write-all
+    steps:
+      - uses: `+taggedKey+`
+  inherited:
+    steps:
+      - uses: `+taggedKey+`
+        with:
+          token: ${{ secrets.read_token }}
+  wholesale:
+    permissions: {}
+    env:
+      ALL: ${{ toJSON(secrets) }}
+    steps:
+      - uses: `+taggedKey+`
+  cached:
+    permissions: {}
+    cache-mode: read
+    steps:
+      - uses: `+taggedKey+`
+  moved:
+    permissions: {}
+    steps:
+      - uses: `+movedKey+`
+`)
+	writeRecord(t, root, recordOf(map[string]string{
+		taggedKey: "runs:\n  using: docker\n  image: " + image + "\n",
+		movedKey:  "runs:\n  using: docker\n  image: docker://ghcr.io/elsewhere/tool:v1\n",
+	}))
+	declared := tables{
+		secrets: map[string]secretDeclaration{"READ_TOKEN": {where: "reads the repository", writes: false}},
+		taggedImages: map[string]declaration{
+			"example/tagged docker://ghcr.io/example/tool": {category: categoryWriteFreeJob, reason: "the job writes nothing"},
+		},
+	}
+
+	problems, err := auditTree(root, declared)
+	if err != nil {
+		t.Fatalf("auditWorkflows: %v", err)
+	}
+	const inherit = ".github/workflows/inherit.yml: job "
+	const plain = ".github/workflows/plain.yml: job "
+	const job = ".github/workflows/scorecard.yml: job "
+	const accepted = ": step 0: uses: " + taggedKey + " runs " + image + ", which " + declarationsFile + " accepts by its tag only in a job "
+	const writes = accepted + "whose token writes nothing but id-token, and this job's can write "
+	const cache = accepted + "whose cache-mode is none, and this job's is "
+	const secrets = accepted + "that reads no secret, and this job reads "
+	want := []string{
+		inherit + "inheriting" + writes + "contents",
+		inherit + "inheriting" + cache + `"write"`,
+		inherit + "inheriting" + secrets + "secrets.READ_TOKEN",
+		inherit + "overriding" + secrets + "secrets.READ_TOKEN",
+		plain + "unset" + cache + "unset, so a push or a schedule can save to the Actions cache",
+		job + "upload" + writes + "security-events",
+		job + "everything" + writes + "contents, packages",
+		job + "inherited" + secrets + "secrets.READ_TOKEN",
+		job + "wholesale: reads ${{ toJSON(secrets) }}, which hands over every secret at once and cannot be judged against the secret table",
+		job + "wholesale" + secrets + "${{ toJSON(secrets) }}",
+		job + "cached" + cache + `"read"`,
+		movedKey + "/action.yml: runs.image docker://ghcr.io/elsewhere/tool:v1" + undigestedImage,
+	}
+	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
+		t.Errorf("auditWorkflows() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestAuditWorkflows_TaggedImageDeclarations_AreHeldToTheTree verifies the
+// tag-named image table's rules: a key that is not an action without its
+// commit and a docker:// image without its tag or digest separated by one
+// space, which leaves a declaration for an action of this repository unwritable
+// since its image can be pinned where it is written; a category this command
+// does not define for one; no reason; and an entry that excused nothing, which
+// is how a declaration outlives a bump of the action that moved its image.
+func TestAuditWorkflows_TaggedImageDeclarations_AreHeldToTheTree(t *testing.T) {
+	t.Parallel()
+
+	const taggedKey = "example/tagged@" + testSHA
+	root := t.TempDir()
+	writeWorkflow(t, root, "ci.yml", "jobs:\n  scan:\n    cache-mode: none\n    steps:\n      - uses: "+taggedKey+"\n")
+	writeRecord(t, root, recordOf(map[string]string{taggedKey: "runs:\n  using: docker\n  image: docker://ghcr.io/example/tool:v1\n"}))
+	valid := declaration{category: categoryWriteFreeJob, reason: "the job writes nothing"}
+	declared := tables{taggedImages: map[string]declaration{
+		"example/tagged docker://ghcr.io/example/tool":  valid,
+		"example/tagged docker://ghcr.io/example/other": valid,
+		"example/tagged": valid,
+		"example/tagged@" + testSHA + " docker://ghcr.io/example/tool": valid,
+		"./.github/actions/box docker://alpine":                        valid,
+		"lonely docker://alpine":                                       valid,
+		"example/tagged ghcr.io/example/tool":                          valid,
+		"example/tagged alpine":                                        valid,
+		"example/tagged docker://ghcr.io/example/tool:v1":              valid,
+		"example/tagged docker://ghcr.io/example/tool@" + testDigest:   valid,
+		"example/tagged docker://":                                     valid,
+		"example/tagged  docker://alpine":                              valid,
+		"example/tagged docker://alpine ":                              valid,
+		"example/tagged docker://localhost:5000/tool":                  {category: "trust-me", reason: " "},
+	}}
+
+	problems, err := auditTree(root, declared)
+	if err != nil {
+		t.Fatalf("auditWorkflows: %v", err)
+	}
+	const label = declarationsFile + ": "
+	const malformed = " is not an action without its commit and a docker:// image without its tag or digest, separated by one space"
+	const stale = " excuses nothing: no step runs that action naming that image by a tag"
+	want := []string{
+		label + `"./.github/actions/box docker://alpine"` + malformed,
+		label + `"example/tagged"` + malformed,
+		label + `"example/tagged  docker://alpine"` + malformed,
+		label + `"example/tagged alpine"` + malformed,
+		label + `"example/tagged docker://"` + malformed,
+		label + `"example/tagged docker://alpine "` + malformed,
+		label + `"example/tagged docker://ghcr.io/example/other"` + stale,
+		label + `"example/tagged docker://ghcr.io/example/tool:v1"` + malformed,
+		label + `"example/tagged docker://ghcr.io/example/tool@` + testDigest + `"` + malformed,
+		label + `"example/tagged docker://localhost:5000/tool": the category "trust-me" is not one this command defines for a tag-named image`,
+		label + `"example/tagged docker://localhost:5000/tool" gives no reason`,
+		label + `"example/tagged docker://localhost:5000/tool"` + stale,
+		label + `"example/tagged ghcr.io/example/tool"` + malformed,
+		label + `"example/tagged@` + testSHA + ` docker://ghcr.io/example/tool"` + malformed,
+		label + `"lonely docker://alpine"` + malformed,
+	}
+	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
+		t.Errorf("auditWorkflows() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestUntaggedImage_Reference_DropsTheTagAndTheDigestOnly verifies what a
+// declaration of a tag-named image names: the reference without its digest and
+// without the tag of its last path segment, a registry's port kept, and a name
+// with neither a colon nor a slash left as it is.
+func TestUntaggedImage_Reference_DropsTheTagAndTheDigestOnly(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"docker://ghcr.io/ossf/scorecard-action:v2.5.0": "docker://ghcr.io/ossf/scorecard-action",
+		"docker://alpine":                       "docker://alpine",
+		"docker://alpine:3@" + testDigest:       "docker://alpine",
+		"docker://localhost:5000/tool":          "docker://localhost:5000/tool",
+		"docker://localhost:5000/team/tool:1.2": "docker://localhost:5000/team/tool",
+		"alpine":                                "alpine",
+		"alpine:3":                              "alpine",
+		"docker://ghcr.io/example/tool@" + testDigest + ":ignored": "docker://ghcr.io/example/tool",
+	}
+	for reference, want := range cases {
+		t.Run(reference, func(t *testing.T) {
+			t.Parallel()
+
+			if got := untaggedImage(reference); got != want {
+				t.Errorf("untaggedImage(%q) = %q, want %q", reference, got, want)
+			}
+		})
 	}
 }
 

@@ -77,7 +77,7 @@ func repositoryTables() tables {
 	return tables{
 		secrets: declaredSecrets, declarations: declaredRunTimeCode,
 		unjudged: declaredUnjudgedActions, guarded: declaredGuardedMatches,
-		scripts: declaredScripts, ports: pendingPorts,
+		taggedImages: declaredTaggedImages, scripts: declaredScripts, ports: pendingPorts,
 	}
 }
 

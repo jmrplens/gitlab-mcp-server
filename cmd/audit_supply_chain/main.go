@@ -612,6 +612,7 @@ type tables struct {
 	declarations map[string]declaration
 	unjudged     map[string]declaration
 	guarded      map[string]guardedMatch
+	taggedImages map[string]declaration
 	scripts      map[string]scriptDeclaration
 	ports        map[int]string
 }
@@ -619,42 +620,44 @@ type tables struct {
 // supplyChainAudit is one audit of one repository root: the tables it judges
 // by and what it learns about them across every workflow.
 //
-// secretsRead, excused, unjudgedUsed and guardedUsed are what the table rules
-// are judged on once every workflow has been read: a secret no workflow reads
-// and a declaration that excused nothing are both stale. makefiles holds each
-// Makefile parsed once, keyed by its repository-relative path, since every job
-// that runs make reads the same rules. store answers what a pinned action's
-// commit holds, and is nil in an audit built for one job rule's unit test;
-// reported holds the findings about an action that are made once however many
-// steps reach it. toolFor names, for a job held only because it builds a tool
-// a credentialed job runs, that job, keyed by the workflow's label and the
-// job's id.
+// secretsRead, excused, unjudgedUsed, guardedUsed and taggedImagesUsed are
+// what the table rules are judged on once every workflow has been read: a
+// secret no workflow reads and a declaration that excused nothing are both
+// stale. makefiles holds each Makefile parsed once, keyed by its
+// repository-relative path, since every job that runs make reads the same
+// rules. store answers what a pinned action's commit holds, and is nil in an
+// audit built for one job rule's unit test; reported holds the findings about
+// an action that are made once however many steps reach it. toolFor names,
+// for a job held only because it builds a tool a credentialed job runs, that
+// job, keyed by the workflow's label and the job's id.
 type supplyChainAudit struct {
 	tables
 
-	store        *actionStore
-	secretsRead  map[string]bool
-	excused      map[string]bool
-	unjudgedUsed map[string]bool
-	guardedUsed  map[string]bool
-	reported     map[string]bool
-	toolFor      map[string]string
-	makefiles    map[string]map[string]*makeRule
-	root         string
+	store            *actionStore
+	secretsRead      map[string]bool
+	excused          map[string]bool
+	unjudgedUsed     map[string]bool
+	guardedUsed      map[string]bool
+	taggedImagesUsed map[string]bool
+	reported         map[string]bool
+	toolFor          map[string]string
+	makefiles        map[string]map[string]*makeRule
+	root             string
 }
 
 // newAudit starts an audit of root against the given tables.
 func newAudit(root string, declared tables) *supplyChainAudit {
 	return &supplyChainAudit{
-		tables:       declared,
-		secretsRead:  map[string]bool{},
-		excused:      map[string]bool{},
-		unjudgedUsed: map[string]bool{},
-		guardedUsed:  map[string]bool{},
-		reported:     map[string]bool{},
-		toolFor:      map[string]string{},
-		makefiles:    map[string]map[string]*makeRule{},
-		root:         root,
+		tables:           declared,
+		secretsRead:      map[string]bool{},
+		excused:          map[string]bool{},
+		unjudgedUsed:     map[string]bool{},
+		guardedUsed:      map[string]bool{},
+		taggedImagesUsed: map[string]bool{},
+		reported:         map[string]bool{},
+		toolFor:          map[string]string{},
+		makefiles:        map[string]map[string]*makeRule{},
+		root:             root,
 	}
 }
 

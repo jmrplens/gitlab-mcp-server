@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	yaml "go.yaml.in/yaml/v3"
@@ -63,12 +65,14 @@ type openedAction struct {
 }
 
 // actionWalk is one job's walk through the actions its steps name: the job,
-// whether rule 2 holds it, the workflow it is in, and what it has read
-// already, shared with the job's own rule-2 reading so a script both reach is
-// judged once. toolOnly says the job is held only because it builds a tool a
-// credentialed job runs, so the token it holds writes nothing.
+// as a finding names it and as the workflow declares it, whether rule 2 holds
+// it, the workflow it is in, and what it has read already, shared with the
+// job's own rule-2 reading so a script both reach is judged once. toolOnly
+// says the job is held only because it builds a tool a credentialed job runs,
+// so the token it holds writes nothing.
 type actionWalk struct {
 	doc          map[string]any
+	definition   map[string]any
 	seen         map[string]bool
 	job          string
 	credentialed bool
@@ -87,7 +91,10 @@ func (a *supplyChainAudit) checkJobActions(pathLabel, jobID string, job, doc map
 		return nil
 	}
 	_, toolOnly := a.toolFor[jobKey(pathLabel, jobID)]
-	walk := actionWalk{doc: doc, seen: seen, job: a.jobLabel(pathLabel, jobID), credentialed: credentialed, toolOnly: toolOnly}
+	walk := actionWalk{
+		doc: doc, definition: job, seen: seen, job: a.jobLabel(pathLabel, jobID),
+		credentialed: credentialed, toolOnly: toolOnly,
+	}
 	steps, _ := job["steps"].([]any)
 	var problems []string
 	for index, rawStep := range steps {
@@ -259,11 +266,11 @@ func (a *supplyChainAudit) judgeLocalAction(walk actionWalk, where, uses, writer
 	))
 }
 
-// judgeAction reads an opened action's metadata and judges what it runs. Only
-// a composite action has steps to read: a JavaScript action runs the bundle
-// committed at its pin, and a container action an image or a Dockerfile this
-// audit does not open, which doc.go states as a limit. Metadata that does not
-// parse, and a runs.using this audit does not know, are reported once.
+// judgeAction reads an opened action's metadata and judges what it runs. A
+// composite action has steps to read, and a container action the image it
+// runs; a JavaScript action runs the bundle committed at its pin, which is as
+// fixed as the metadata that names it. Metadata that does not parse, and a
+// runs.using this audit does not know, are reported once.
 func (a *supplyChainAudit) judgeAction(walk actionWalk, where string, action openedAction) []string {
 	var metadata map[string]any
 	if err := yaml.Unmarshal([]byte(action.text), &metadata); err != nil {
@@ -272,7 +279,10 @@ func (a *supplyChainAudit) judgeAction(walk actionWalk, where string, action ope
 	runs, _ := metadata["runs"].(map[string]any)
 	declared, _ := runs["using"].(string)
 	using := strings.ToLower(strings.TrimSpace(declared))
-	if strings.HasPrefix(using, "node") || using == "docker" {
+	if using == "docker" {
+		return a.judgeContainerImage(walk, where, action, runs["image"])
+	}
+	if strings.HasPrefix(using, "node") {
 		return nil
 	}
 	if using != "composite" {
@@ -345,6 +355,153 @@ func (a *supplyChainAudit) excusedByGuard(action openedAction, index int, rule s
 	}
 	a.guardedUsed[key] = true
 	return true
+}
+
+// judgeContainerImage judges the image a container action runs, which rule 1
+// holds to its digest as it holds a docker:// step: the runner pulls it when
+// the job starts, so an image named by a tag, or by its name alone, is
+// whatever its registry serves for it then, and a push to the tag replaces
+// what a pinned action runs with no pull request, no cooldown and no review. A
+// Dockerfile is built from the action's own files at its pin, and passes; the
+// images its FROM lines name are not opened, which doc.go states as a limit.
+//
+// The value is told apart as the runner tells it apart, white space and all
+// (actions/runner, ActionManager and DockerUtil.IsDockerfile): the docker://
+// scheme in any case is an image it pulls, a value whose last path segment
+// ends in Dockerfile or starts with Dockerfile., in any case, is one it
+// builds, and any other value is one it refuses, which is reported once
+// rather than read as either.
+//
+// A tag-named image is a finding, made once however many jobs reach it,
+// unless declarations.go accepts that image for that action; every job that
+// runs an accepted one is then held to what the declaration promises. Metadata
+// that names no image cannot be judged, and is reported once.
+func (a *supplyChainAudit) judgeContainerImage(walk actionWalk, where string, action openedAction, raw any) []string {
+	image, _ := raw.(string)
+	// Whatever is wrong with the image, an action is told about once.
+	reportKey := "image " + action.label
+	if image == "" {
+		return a.once(reportKey, action.label+": runs.image names no image, so what the container action runs cannot be judged")
+	}
+	pulled, isPulled := pulledImage(image)
+	if !isPulled {
+		if isDockerfile(image) {
+			return nil
+		}
+		return a.once(reportKey, fmt.Sprintf(
+			"%s: runs.image %q is neither a Dockerfile nor a docker:// image, which the runner refuses, so what the container action runs cannot be judged",
+			action.label, image,
+		))
+	}
+	if pinnedImage.MatchString(pulled) {
+		return nil
+	}
+	key := action.writer + " " + untaggedImage(pulled)
+	if _, declared := a.taggedImages[key]; !declared {
+		return a.once(reportKey, fmt.Sprintf("%s: runs.image %s is not pinned to a sha256 image digest, and %s gives no reason to accept it",
+			action.label, image, declarationsFile))
+	}
+	a.taggedImagesUsed[key] = true
+	return writeFreeJobProblems(walk, where, action.name, image)
+}
+
+// pulledImage reports whether a container action's runs.image is one the
+// runner pulls, which it decides by the docker:// scheme in any case, and
+// returns it with the scheme spelled in lower case, the spelling rule 1 and
+// a declaration's key are written in.
+func pulledImage(image string) (string, bool) {
+	if len(image) < len(dockerScheme) || !strings.EqualFold(image[:len(dockerScheme)], dockerScheme) {
+		return "", false
+	}
+	return dockerScheme + image[len(dockerScheme):], true
+}
+
+// isDockerfile reports whether the runner builds a container action's
+// runs.image rather than refusing it, once it is known not to be a docker://
+// image: the last segment of the path ends in Dockerfile or starts with
+// Dockerfile., in any case, as actions/runner's DockerUtil.IsDockerfile reads
+// it.
+func isDockerfile(image string) bool {
+	name := strings.ToLower(image[strings.LastIndex(image, "/")+1:])
+	return strings.HasSuffix(name, "dockerfile") || strings.HasPrefix(name, "dockerfile.")
+}
+
+// cacheModeNone is the cache-mode that keeps a job from the Actions cache
+// altogether: the cache service refuses both a save and a restore under it.
+const cacheModeNone = "none"
+
+// cacheMode is the cache-mode a job runs under, as text: its own, else the
+// workflow's, which a job's overrides either way; empty when neither sets one,
+// which leaves the event's default, saves and restores on a push or a
+// schedule.
+func cacheMode(doc, job map[string]any) string {
+	mode := job["cache-mode"]
+	if mode == nil {
+		mode = doc["cache-mode"]
+	}
+	return inputText(mode)
+}
+
+// writeFreeJobProblems holds a job that runs an accepted tag-named image to
+// what [categoryWriteFreeJob] promises, since whatever the registry serves for
+// the tag runs with the job's token, its runtime token and the secrets it
+// reads: the token writes nothing but the job's OIDC identity, the job runs
+// with cache-mode none, so the runtime token the runner hands every container
+// action can neither save to the Actions cache nor restore from it, and the
+// job reads no secret. What a job inherits from the workflow counts, as it
+// does everywhere this audit reads permissions.
+func writeFreeJobProblems(walk actionWalk, where, action, image string) []string {
+	accepted := fmt.Sprintf("%s: uses: %s runs %s, which %s accepts by its tag only in a job ", where, action, image, declarationsFile)
+	var problems []string
+	if writes := tokenWrites(walk.doc, walk.definition); len(writes) > 0 {
+		problems = append(problems, accepted+"whose token writes nothing but id-token, and this job's can write "+strings.Join(writes, ", "))
+	}
+	if mode := cacheMode(walk.doc, walk.definition); mode != cacheModeNone {
+		shown := "unset, so a push or a schedule can save to the Actions cache"
+		if mode != "" {
+			shown = strconv.Quote(mode)
+		}
+		problems = append(problems, accepted+"whose cache-mode is none, and this job's is "+shown)
+	}
+	names, wholesale := jobSecrets(walk.doc, walk.definition)
+	read := make([]string, 0, len(names)+len(wholesale))
+	for _, name := range names {
+		read = append(read, "secrets."+name)
+	}
+	for _, expression := range wholesale {
+		read = append(read, "${{ "+expression+" }}")
+	}
+	if len(read) > 0 {
+		problems = append(problems, accepted+"that reads no secret, and this job reads "+strings.Join(read, ", "))
+	}
+	return problems
+}
+
+// tokenWrites returns, sorted, every permission a job's token can write other
+// than id-token, which mints the job's OIDC identity and writes nothing of the
+// repository.
+func tokenWrites(doc, job map[string]any) []string {
+	var writes []string
+	for permission, value := range jobPermissions(doc, job) {
+		if value == "write" && permission != "id-token" {
+			writes = append(writes, permission)
+		}
+	}
+	sort.Strings(writes)
+	return writes
+}
+
+// untaggedImage is a docker:// reference without its digest and without the
+// tag of its last path segment, which is the image a declaration of a
+// tag-named image names: a bump of the action that moves the tag keeps the
+// declaration, and one that moves the image to another repository does not. A
+// colon in an earlier segment is a registry's port, and stays.
+func untaggedImage(reference string) string {
+	name, _, _ := strings.Cut(reference, "@")
+	if colon := strings.LastIndex(name, ":"); colon > strings.LastIndex(name, "/") {
+		return name[:colon]
+	}
+	return name
 }
 
 // once returns problem the first time key is reported in this audit and

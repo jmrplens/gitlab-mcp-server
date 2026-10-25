@@ -5,15 +5,16 @@
 // invisible to every other gate in this repository:
 //
 //  1. Every uses: in .github/workflows is pinned to a 40-character commit SHA,
-//     and every docker:// image a step names to the sha256 digest of its
-//     manifest. A mutable tag is resolved by the runner at job start, so a
-//     hijacked v7 is consumed with no pull request, no cooldown and no review,
-//     and an image tag moves the same way. Every uses: is read as text, line
-//     by line, and again as YAML, every key named uses at any depth, so a
-//     step written as a flow mapping or a flow sequence, behind a quoted key,
-//     with a space before the colon, with its value on the next line or
-//     through an anchor or an alias is held to the rule as well as the block
-//     spelling is (issue 1320).
+//     and every docker:// image a step names, or a container action's
+//     runs.image, to the sha256 digest of its manifest. A mutable tag is
+//     resolved by the runner at job start, so a hijacked v7 is consumed with no
+//     pull request, no cooldown and no review, and an image tag moves the same
+//     way, under the pin of the action that names it as much as in a step.
+//     Every uses: is read as text, line by line, and again as YAML, every key
+//     named uses at any depth, so a step written as a flow mapping or a flow
+//     sequence, behind a quoted key, with a space before the colon, with its
+//     value on the next line or through an anchor or an alias is held to the
+//     rule as well as the block spelling is (issue 1320).
 //  2. A credentialed job runs no code resolved at run time. A job is
 //     credentialed when its permissions grant contents: write, id-token: write
 //     or packages: write, or when it reads a secret the secret table
@@ -158,6 +159,24 @@
 // main. A run block of a workflow, or of an action in this repository, is
 // never declared.
 //
+// A container action's runs.image is held to rule 1 wherever it runs, and is
+// read as the runner reads it: the docker:// scheme, in any case, names an
+// image it pulls, which passes when named by its digest and is a finding when
+// named by a tag or by its name alone; a value whose last path segment ends in
+// Dockerfile or starts with Dockerfile., in any case, is built from the
+// action's files at its pin, and passes; and any other value, which the runner
+// refuses, is a finding, as is metadata that names no image. One that
+// somebody else's action names can be accepted under write-free-job in
+// declarations.go, keyed by the action and the image without its tag, so a
+// bump that moves the tag keeps the declaration and one that moves the image
+// elsewhere does not; every job that runs it is then held to a token that
+// writes nothing but id-token, to cache-mode none and to reading no secret,
+// what the workflow hands down included, since whatever a push to the tag
+// puts there runs with the job's token, its secrets and the runtime token the
+// runner hands every container action, which permissions: does not reach and
+// which saves to the Actions cache on a push or a schedule unless cache-mode
+// is none.
+//
 // The record holds, for every pinned action a step reaches, the metadata file
 // at its commit, and the files of its directory a credentialed job's steps
 // read, each as its lines and in ASCII. It is written by -record, which runs
@@ -175,10 +194,10 @@
 //
 // What opening an action does not reach, by construction: a JavaScript action
 // runs the bundle committed at its pin, which is as pinned as its metadata and
-// is not read; a container action runs an image named by a tag, or a
-// Dockerfile whose base is, which a registry can move and this audit does not
-// open; and a reusable workflow named by a job's uses: is not an action and is
-// not opened.
+// is not read; a container action built from a Dockerfile pulls the images its
+// FROM lines name, which a registry can move and this audit does not open; and
+// a reusable workflow named by a job's uses: is not an action and is not
+// opened.
 //
 // Usage:
 //
