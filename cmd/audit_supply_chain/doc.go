@@ -36,9 +36,20 @@
 //     behind variable assignments and the wrappers env, exec, command, nohup,
 //     time, nice, timeout and sudo, inside the string sh -c is handed, and as
 //     $(MAKE) wherever it is written. actions/checkout leaves no credential in
-//     .git/config; and a tool the job downloads (GoReleaser, syft) is pinned
-//     to an exact version, because SHA-pinning the action that fetches a
-//     binary does not pin the binary.
+//     .git/config. SHA-pinning the action that fetches a binary does not pin
+//     the binary, so goreleaser/goreleaser-action names GoReleaser's exact
+//     version, and the actions that fetch syft and Trivy do not run there at
+//     all: anchore/sbom-action runs an install script from syft's main
+//     branch; aquasecurity/setup-trivy installs the release its version input
+//     names, latest by default, through an install script that checks the
+//     tarball only against the checksum file of the same release;
+//     aquasecurity/trivy-action runs setup-trivy with cache: true by default,
+//     which restores the binary from an Actions cache another run saved; and
+//     in March 2026 (GHSA-69fq-xp46-6x23) the tags of both were force-pushed
+//     to commits that stole the job's credentials. A job fetches syft or
+//     Trivy by hand instead, the release tarball pinned by SHA-256 and its
+//     checksum file verified with cosign: the digest pins the bytes, and this
+//     rule does not read the version the job names.
 //
 // Of a Go command a credentialed job runs (go run, go build, go install or go
 // test, wherever rule 2 reads a command), rule 2 demands that every package

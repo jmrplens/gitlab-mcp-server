@@ -749,10 +749,21 @@ func defaultRunDirectory(holder map[string]any) (string, bool) {
 	return directory, ok
 }
 
+// trivyActions are Aqua's two actions that install Trivy, neither of which a
+// credentialed job may run (see [checkStepAction]).
+var trivyActions = []string{"aquasecurity/trivy-action", "aquasecurity/setup-trivy"}
+
+// actionRepository is the owner and repository of an action named without
+// its commit, in lower case, since GitHub resolves both whatever their case.
+func actionRepository(name string) string {
+	parts := strings.SplitN(strings.ToLower(name), "/", 3)
+	return strings.Join(parts[:min(len(parts), 2)], "/")
+}
+
 // checkStepAction applies the per-action rules: the checkout that must not
 // persist a credential in a job whose token writes, the Go setup that must not
 // restore a cache, the GoReleaser binary that must be pinned, and the SBOM
-// action that must not be here at all.
+// and Trivy actions that must not be here at all.
 func checkStepAction(where, uses string, with, doc map[string]any, writes bool) []string {
 	var problems []string
 	if writes && uses == checkoutAction && !inputFalse(with, "persist-credentials") {
@@ -784,6 +795,14 @@ func checkStepAction(where, uses string, with, doc map[string]any, writes bool) 
 			"runs it with sh, so the code executing here comes from a branch head. syft-version "+
 			"only selects the tarball that mutable script fetches. Download the release tarball "+
 			"directly, pinned by SHA256 and verified with cosign, as the Install syft step does")
+	}
+	if slices.Contains(trivyActions, actionRepository(uses)) {
+		problems = append(problems, where+": aquasecurity/trivy-action and aquasecurity/setup-trivy must not run in a credentialed job. "+
+			"Even SHA-pinned, setup-trivy, which trivy-action runs to install Trivy, installs the release its version input names, "+
+			"latest by default, through an install script that checks the tarball only against the checksum file of the same release, "+
+			"and with cache: true restores the binary from an Actions cache another run saved; in March 2026 (GHSA-69fq-xp46-6x23) "+
+			"76 of trivy-action's 77 tags and all seven of setup-trivy's were force-pushed to commits that stole the job's credentials. "+
+			"Download the release tarball directly, pinned by SHA256 and verified with cosign, as the Install syft step does for syft")
 	}
 	return problems
 }

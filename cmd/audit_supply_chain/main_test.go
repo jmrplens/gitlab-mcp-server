@@ -700,6 +700,75 @@ func TestCheckCredentialedJob_SetupGo_MustNotRestoreACache(t *testing.T) {
 	})
 }
 
+// TestCheckCredentialedJob_TrivyActions_AreRefused verifies that neither of
+// Aqua's actions that install Trivy runs in a job holding a credential,
+// whatever commit pins it.
+//
+// setup-trivy, which trivy-action runs to install Trivy, installs the release
+// its version input names, latest by default, through an install script that
+// checks the tarball only against the checksum file of the same release, and
+// with cache: true restores the binary from an Actions cache another run
+// saved. In March 2026 (GHSA-69fq-xp46-6x23) 76 of trivy-action's 77 tags and
+// all seven of setup-trivy's were force-pushed to commits that stole the job's
+// credentials. A job fetches Trivy by hand instead, pinned by SHA-256 and
+// verified with cosign, as the release workflow fetches syft. GitHub resolves
+// an owner and a repository whatever their case, so the rule does too, and a
+// directory of either repository is the same code; a repository whose name
+// only begins the same way is another one.
+func TestCheckCredentialedJob_TrivyActions_AreRefused(t *testing.T) {
+	t.Parallel()
+
+	const why = ": aquasecurity/trivy-action and aquasecurity/setup-trivy must not run in a credentialed job. " +
+		"Even SHA-pinned, setup-trivy, which trivy-action runs to install Trivy, installs the release its version input names, " +
+		"latest by default, through an install script that checks the tarball only against the checksum file of the same release, " +
+		"and with cache: true restores the binary from an Actions cache another run saved; in March 2026 (GHSA-69fq-xp46-6x23) " +
+		"76 of trivy-action's 77 tags and all seven of setup-trivy's were force-pushed to commits that stole the job's credentials. " +
+		"Download the release tarball directly, pinned by SHA256 and verified with cosign, as the Install syft step does for syft"
+	cases := []struct {
+		name   string
+		action string
+		want   bool
+	}{
+		{name: "trivy-action", action: "aquasecurity/trivy-action", want: true},
+		{name: "setup-trivy", action: "aquasecurity/setup-trivy", want: true},
+		{name: "another case", action: "AquaSecurity/Trivy-Action", want: true},
+		{name: "a directory of the repository", action: "aquasecurity/setup-trivy/sub", want: true},
+		{name: "a repository named alike", action: "aquasecurity/trivy-action-fork"},
+		{name: "another owner", action: "example/trivy-action"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			job := map[string]any{
+				"permissions": map[string]any{"packages": "write"},
+				"steps":       []any{map[string]any{"uses": testCase.action + "@" + testSHA, "with": map[string]any{"version": "v0.76.1"}}},
+			}
+			problems := newAudit(".", tables{}).checkCredentialedJob("wf.yml", "docker", job, nil)
+			var want []string
+			if testCase.want {
+				want = []string{"wf.yml: job docker: step 0" + why}
+			}
+			if strings.Join(problems, "\n") != strings.Join(want, "\n") {
+				t.Errorf("checkCredentialedJob() = %q, want %q", problems, want)
+			}
+		})
+	}
+
+	t.Run("a job holding no credential", func(t *testing.T) {
+		t.Parallel()
+
+		doc := map[string]any{"jobs": map[string]any{"scan": map[string]any{
+			"permissions": map[string]any{"contents": "read"},
+			"steps":       []any{map[string]any{"uses": "aquasecurity/trivy-action@" + testSHA}},
+		}}}
+		if problems := newAudit(".", tables{}).checkWorkflowJobs("wf.yml", doc, nil); len(problems) != 0 {
+			t.Errorf("checkWorkflowJobs() = %v, want nothing for a job holding no credential", problems)
+		}
+	})
+}
+
 // TestCheckCredentialedJob_GoreleaserVersion_IsQuotedLikePython verifies the
 // exact finding text for an unpinned GoReleaser, including the Python-style
 // quoting of the offending version. That quoting is what makes this program's
