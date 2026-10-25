@@ -97,6 +97,7 @@ gotestsum --version
 | `make fmt`                | Apply configured Go formatters through `golangci-lint fmt`                                    |
 | `make govulncheck`        | Scan Go dependencies and reachable calls for known CVEs                                       |
 | `make check-binary-vulns` | Build every release target and hold each binary to the vulnerability database at module grain |
+| `make check-image-vulns`  | Build the image per platform and hold its Alpine packages to Trivy's database (needs Docker)  |
 | `make mdlint`             | Lint all Markdown and MDX files, excluding `plan/` and `node_modules/`, with CI's globs       |
 | `make mdlint-fix`         | Auto-fix Markdown and MDX lint issues                                                         |
 
@@ -321,6 +322,46 @@ anything, a `before` key other than `hooks`, and a hook other than
 `go mod download`. It needs the network
 for the database and builds six binaries: one full run took 2m52s on five
 cores, about thirty seconds of it per build.
+
+#### The image's Alpine packages
+
+`make check-image-vulns` ([`cmd/audit_image_vulns`](cmd-utilities.md#audit_image_vulns))
+asks of the image what the gate above asks of the binaries. The runtime stage
+is `alpine` pinned by digest plus `ca-certificates` and `tzdata`, and nothing
+held those packages to an advisory database before the tag was public, when a
+user's `trivy image` reported whatever applied to them. Trivy is the reference
+because that is what a user runs against the published tag.
+
+The release workflow's docker job saves both smoke images after the smoke test
+and scans each with Trivy, fetched by hand (the tarball pinned by SHA-256, its
+checksum file verified with cosign) rather than through `aquasecurity/trivy-action`
+or `aquasecurity/setup-trivy`, which `make check-supply-chain` refuses in a job
+holding a credential. The database is fetched once, by tag, from
+`mirror.gcr.io` and then `ghcr.io`, and a fetch that fails on both three times
+fails the job, so nothing is pushed unscanned. The command then fails the run
+on a finding against an Alpine package that has a fixed version and is rated
+`HIGH` or `CRITICAL`, with the rating Trivy selects by default
+(`--vuln-severity-source auto`: the advisory's own source, which for Alpine is
+the secdb and rates nothing, then NVD, then other vendors), unless
+[`cmd/audit_image_vulns/declarations.go`](../../cmd/audit_image_vulns/declarations.go)
+accepts it. Its two categories are `fix-not-yet-adoptable`, for a package of
+the base image, which names the day the alpine bump carrying the fix can land
+and fails the run from the day after, and `not-affected`. `ca-certificates` and
+`tzdata` are installed from Alpine's repository when the image is built, so a
+build that does not reuse the cached layer takes their fix and they are no
+candidates for the first. A declaration that accepts nothing in a run of every
+platform the release pushes is stale and fails the run too, and the table is
+empty. Findings against the server binary are printed and left to the gate
+above, so each question keeps one oracle.
+
+The same steps run in a rehearsal, since they read the daemon's images and
+push nothing. `image-vulns.yml` asks the question of the image `latest` names
+every Monday, which is where an advisory published after a release and a
+declaration that went stale between releases show; it only reports, and a
+failed run is the notice. `make check-image-vulns` builds, scans and judges
+locally; it needs Docker, so `make analyze` does not run it, and a run of one
+platform lists a declaration that accepts nothing as unjudged rather than
+stale.
 
 ### markdownlint-cli2
 

@@ -119,6 +119,10 @@ env:
   # SHA-pinning the action alone leaves the code that actually runs unpinned.
   GORELEASER_VERSION: "v2.18.3"
   SYFT_VERSION: "v1.55.0"
+  # Fetched by hand in the docker job, never through an action (see Install
+  # Trivy there). A test of cmd/audit_image_vulns holds it to the weekly scan
+  # in image-vulns.yml and to the image make check-image-vulns runs.
+  TRIVY_VERSION: "v0.76.1"
 
 jobs:
   # The one check that has to run before anything else spends a runner. The
@@ -402,6 +406,137 @@ jobs:
         env:
           EXPECTED_VERSION: ${{ steps.version.outputs.version }}
         run: bash scripts/smoke-test-image.sh "${EXPECTED_VERSION}" gitlab-mcp-server:smoke-amd64=linux/amd64 gitlab-mcp-server:smoke-arm64=linux/arm64
+
+      # The image's Alpine packages against Trivy's vulnerability database,
+      # after the smoke test and before anything is pushed (issue 1129). The
+      # binary-vulns job holds the server binary to the Go vulnerability
+      # database; nothing held what the runtime stage carries (alpine pinned
+      # by digest, plus ca-certificates and tzdata, with no apk upgrade) until
+      # the tag was public and a user's scanner reported it. Trivy is the
+      # reference because `trivy image` on the published tag is what a user
+      # runs.
+      #
+      # Fetched by hand rather than through aquasecurity/trivy-action or
+      # aquasecurity/setup-trivy, which make check-supply-chain refuses in a
+      # job holding a credential: setup-trivy installs the release its version
+      # input names, latest by default, checked against no signature, and in
+      # March 2026 (GHSA-69fq-xp46-6x23) both actions had their tags
+      # force-pushed to commits that stole the job's credentials, while Trivy
+      # v0.69.4 itself was a malicious release. The tarball is pinned by
+      # SHA256, and cosign proves the checksum file that lists it came from
+      # Aqua's release workflow at that tag. The identity names
+      # reusable-release.yaml, the workflow release.yaml calls, at
+      # refs/tags/<version>, since Trivy releases from its tag. 0.76.1 is an
+      # immutable release, published seven months after the compromise.
+      #
+      # Not gated on the rehearsal switch: this step and the four after it
+      # read the two smoke images the daemon already holds and push nothing,
+      # so a rehearsal runs every one a release does.
+      - name: Install Trivy
+        env:
+          TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+        run: |
+          set -euo pipefail
+          TARBALL="trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz"
+          CHECKSUMS="trivy_${TRIVY_VERSION#v}_checksums.txt"
+          BASE="https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${BASE}/${TARBALL}"
+          echo "${TRIVY_SHA256}  ${TARBALL}" | sha256sum -c -
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${CHECKSUMS}" "${BASE}/${CHECKSUMS}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o trivy-checksums.sigstore.json "${BASE}/${CHECKSUMS}.sigstore.json"
+          cosign verify-blob \
+            --bundle trivy-checksums.sigstore.json \
+            --certificate-identity "https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/${TRIVY_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${CHECKSUMS}"
+          grep " ${TARBALL}\$" "${CHECKSUMS}" | sha256sum -c -
+          tar xzf "${TARBALL}" trivy
+          install -m 0755 trivy /usr/local/bin/trivy
+          rm -f "${TARBALL}" "${CHECKSUMS}" trivy-checksums.sigstore.json trivy
+          trivy --version
+
+      # Fetched once, by tag, so both scans are judged against one database
+      # and the verdict can name it. It is current by design: an advisory
+      # published since the last release is what this scan is for. Trivy
+      # tries mirror.gcr.io and then ghcr.io; a fetch that fails on both three
+      # times fails the job, in a rehearsal too, rather than letting the push
+      # go ahead unscanned.
+      - name: Fetch Trivy's vulnerability database
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/image-vulns"
+          mkdir -p "${dir}"
+          for attempt in 1 2 3; do
+            if trivy image --download-db-only --cache-dir "${dir}/cache" \
+                --db-repository mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2 \
+                --no-progress --disable-telemetry --skip-version-check --config ""; then
+              break
+            fi
+            if [ "${attempt}" = 3 ]; then
+              echo "::error::Trivy fetched no vulnerability database from either repository, so the image is not pushed unscanned"
+              exit 1
+            fi
+            sleep $((attempt * 30))
+          done
+          trivy version --format json --cache-dir "${dir}/cache" --config "" > "${dir}/trivy-version.json"
+          jq . "${dir}/trivy-version.json"
+
+      # Each smoke image is saved from the daemon and scanned as a tarball, so
+      # nothing is pulled and the bytes scanned are the ones the smoke test
+      # ran. Both package types are read: the gate judges the Alpine packages,
+      # and the log prints what trivy image reports for the server binary too,
+      # which the binary-vulns job judges. --config "" and --ignorefile "", on
+      # the scan and on the convert that prints its table, keep a trivy.yaml
+      # or a .trivyignore in the checkout from changing what is reported, since
+      # cmd/audit_image_vulns/declarations.go is the one place a finding is
+      # accepted. The rating is Trivy's default, named here:
+      # --vuln-severity-source auto takes the advisory's own source first,
+      # which for Alpine is the secdb and rates nothing, then NVD, then the
+      # rating Trivy's database merges from other vendors.
+      - name: Scan the smoke images' packages
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/image-vulns"
+          for arch in amd64 arm64; do
+            docker save -o "${dir}/smoke-${arch}.tar" "gitlab-mcp-server:smoke-${arch}"
+            trivy image --input "${dir}/smoke-${arch}.tar" --cache-dir "${dir}/cache" --skip-db-update \
+              --scanners vuln --vuln-severity-source auto --list-all-pkgs \
+              --format json --output "${dir}/report-${arch}.json" \
+              --no-progress --disable-telemetry --skip-version-check --config "" --ignorefile ""
+            trivy convert --format table --scanners vuln --config "" --ignorefile "" "${dir}/report-${arch}.json"
+            rm -f "${dir}/smoke-${arch}.tar"
+          done
+
+      # Go set up as the release job sets it up, without the Actions cache,
+      # since this job holds the registry push; cmd/audit_image_vulns imports
+      # nothing outside the standard library, which make check-supply-chain
+      # holds a Go command in this job to.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # A fixable HIGH or CRITICAL advisory against an Alpine package fails the
+      # job, and nothing below it runs, unless declarations.go accepts it; so
+      # does a declaration that accepts nothing or is past its day, and a
+      # report or a database the command cannot vouch for. The verdict goes to
+      # the job summary as well, naming the database and every finding.
+      - name: Judge the image's Alpine packages
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/image-vulns"
+          status=0
+          go run ./cmd/audit_image_vulns/ -db "${dir}/trivy-version.json" \
+            "${dir}/report-amd64.json" "${dir}/report-arm64.json" > "${dir}/verdict.txt" 2>&1 || status=$?
+          cat "${dir}/verdict.txt"
+          {
+            echo "### Image packages against Trivy's vulnerability database"
+            echo
+            echo '```text'
+            cat "${dir}/verdict.txt"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+          exit "${status}"
 
       # In a rehearsal the same multi-platform build, with the same provenance,
       # SBOM and annotations, is exported to an OCI layout on the runner

@@ -1,6 +1,7 @@
 // main_test.go drives the command end to end: the reports and the database
 // read from disk, the verdict reached and the exit code the gate turns on, and
-// holds the platforms it expects to the release workflow.
+// holds the platforms and the Trivy it is run with to the workflows and the
+// Makefile that run it.
 package main
 
 import (
@@ -196,7 +197,10 @@ func repositoryFile(t *testing.T, path string) string {
 // TestDefaultPlatforms_AreTheOnesTheReleasePushes holds the platforms the
 // command expects a report for, by default, to the multi-platform build the
 // release workflow pushes, so a platform added to the push is a platform the
-// gate refuses to pass unscanned rather than one it never hears of.
+// gate refuses to pass unscanned rather than one it never hears of. The
+// platforms make check-image-vulns builds and names to -platforms by default
+// are held to the same, or the local target would go on judging the old set
+// and pass.
 func TestDefaultPlatforms_AreTheOnesTheReleasePushes(t *testing.T) {
 	t.Parallel()
 
@@ -207,6 +211,90 @@ func TestDefaultPlatforms_AreTheOnesTheReleasePushes(t *testing.T) {
 		}
 	}
 	if !slices.Equal(pushed, []string{defaultPlatforms}) {
-		t.Fatalf("release.yml pushes %q, and the command expects a report for %q by default", pushed, defaultPlatforms)
+		t.Errorf("release.yml pushes %q, and the command expects a report for %q by default", pushed, defaultPlatforms)
 	}
+	var local []string
+	for _, m := range regexp.MustCompile(`(?m)^IMAGE_VULNS_PLATFORMS\s*\?=\s*(\S+)\s*$`).FindAllStringSubmatch(repositoryFile(t, "Makefile"), -1) {
+		local = append(local, m[1])
+	}
+	if !slices.Equal(local, []string{defaultPlatforms}) {
+		t.Errorf("the Makefile's IMAGE_VULNS_PLATFORMS defaults to %q, and the command expects a report for %q by default", local, defaultPlatforms)
+	}
+}
+
+// TestTrivy_OneReleaseRunsEverywhere holds the Trivy the release workflow
+// installs, the one the weekly scan installs and the image the local target
+// runs to one release, and the two installs to one tarball digest: a verdict
+// is only comparable to another reached by the same scanner.
+func TestTrivy_OneReleaseRunsEverywhere(t *testing.T) {
+	t.Parallel()
+
+	version := regexp.MustCompile(`(?m)^\s*TRIVY_VERSION:\s*"(v\d+\.\d+\.\d+)"\s*$`)
+	digest := regexp.MustCompile(`(?m)^\s*TRIVY_SHA256:\s*"([0-9a-f]{64})"\s*$`)
+	release, weekly := repositoryFile(t, ".github/workflows/release.yml"), repositoryFile(t, ".github/workflows/image-vulns.yml")
+	releaseVersion, weeklyVersion := version.FindAllStringSubmatch(release, -1), version.FindAllStringSubmatch(weekly, -1)
+	releaseDigest, weeklyDigest := digest.FindAllStringSubmatch(release, -1), digest.FindAllStringSubmatch(weekly, -1)
+	image := regexp.MustCompile(`(?m)^TRIVY_IMAGE\s*=\s*\S+:(\d+\.\d+\.\d+)@sha256:[0-9a-f]{64}\s*$`).FindAllStringSubmatch(repositoryFile(t, "Makefile"), -1)
+	if len(releaseVersion) != 1 || len(weeklyVersion) != 1 || len(releaseDigest) != 1 || len(weeklyDigest) != 1 || len(image) != 1 {
+		t.Fatalf("TRIVY_VERSION is stated %d and %d times and TRIVY_SHA256 %d and %d times in release.yml and image-vulns.yml, "+
+			"and TRIVY_IMAGE %d times by tag and digest in the Makefile; want once each",
+			len(releaseVersion), len(weeklyVersion), len(releaseDigest), len(weeklyDigest), len(image))
+	}
+	if releaseVersion[0][1] != weeklyVersion[0][1] || releaseVersion[0][1] != "v"+image[0][1] || releaseDigest[0][1] != weeklyDigest[0][1] {
+		t.Fatalf("release.yml runs Trivy %s (%s), image-vulns.yml %s (%s) and the Makefile %s; want one release and one tarball",
+			releaseVersion[0][1], releaseDigest[0][1], weeklyVersion[0][1], weeklyDigest[0][1], image[0][1])
+	}
+}
+
+// TestTrivy_TheCheckoutConfiguresNoScan holds every trivy image scan and
+// every trivy convert that the release workflow, the weekly scan and the
+// local target run to --config "" and --ignorefile "". Without them Trivy
+// reads trivy.yaml and .trivyignore from the directory it runs in, which is
+// the checkout, and convert filters by the ignore file as a scan does, so a
+// .trivyignore there would drop a finding from the table the log prints,
+// while declarations.go is the one place a finding is accepted. A command is
+// read across its continuation lines, and the database fetch, which judges
+// nothing, is left out.
+func TestTrivy_TheCheckoutConfiguresNoScan(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{".github/workflows/release.yml", ".github/workflows/image-vulns.yml", "Makefile"} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
+			found := map[string]int{}
+			for _, command := range trivyCommands(repositoryFile(t, path)) {
+				kind := trivyCommand.FindStringSubmatch(command)[1]
+				found[kind]++
+				if !strings.Contains(command, `--config ""`) || !strings.Contains(command, `--ignorefile ""`) {
+					t.Errorf("%s runs trivy %s without --config \"\" and --ignorefile \"\": %s", path, kind, command)
+				}
+			}
+			if found["image"] == 0 || found["convert"] == 0 {
+				t.Errorf("%s runs %d trivy image scans and %d trivy convert calls; want one of each at least", path, found["image"], found["convert"])
+			}
+		})
+	}
+}
+
+// trivyCommand names a trivy image or trivy convert command, and which.
+var trivyCommand = regexp.MustCompile(`\btrivy (image|convert)\b`)
+
+// trivyCommands is every trivy image and trivy convert command a workflow or
+// a makefile runs, each read across its continuation lines and cut at the
+// semicolons that end shell commands, with comments and the database fetch
+// left out.
+func trivyCommands(body string) []string {
+	var commands []string
+	for line := range strings.SplitSeq(regexp.MustCompile(`\\\n\s*`).ReplaceAllString(body, " "), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		for command := range strings.SplitSeq(line, ";") {
+			if trivyCommand.MatchString(command) && !strings.Contains(command, "--download-db-only") {
+				commands = append(commands, strings.TrimSpace(command))
+			}
+		}
+	}
+	return commands
 }

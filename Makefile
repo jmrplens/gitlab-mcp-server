@@ -5,7 +5,7 @@
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
-	golangci-lint govulncheck check-binary-vulns sonar sonar-status \
+	golangci-lint govulncheck check-binary-vulns image-vulns-images check-image-vulns sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links check-md-tables \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
@@ -958,6 +958,50 @@ govulncheck:
 ## The source scan above answers whether our code calls a vulnerable symbol; this one answers what every published binary carries, and the two diverged for 3.0.0 and 3.1.0 (GO-2026-5932 through golang.org/x/crypto).
 check-binary-vulns:
 	go run ./cmd/audit_binary_vulns/
+
+# Trivy's own image, pinned by digest, at the release the release workflow
+# fetches as a tarball (TRIVY_VERSION and TRIVY_SHA256 in release.yml), so a
+# verdict here is reached by the scanner a release reaches its verdict with;
+# a test of cmd/audit_image_vulns holds the two to one version. Its signature
+# verifies against Aqua's release workflow at that tag:
+#   cosign verify $(TRIVY_IMAGE) --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     --certificate-identity https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.1
+TRIVY_IMAGE=ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+IMAGE_VULNS_PLATFORMS ?= linux/amd64,linux/arm64
+IMAGE_VULNS_DIR=dist/image-vulns
+
+## image-vulns-images: build the image for each platform of IMAGE_VULNS_PLATFORMS and save it to dist/image-vulns, as the release saves its smoke images for the scan.
+## A platform the host cannot run needs QEMU binfmt (docker run --privileged tonistiigi/binfmt --install all).
+image-vulns-images:
+	@command -v docker >/dev/null || { echo "ERROR: Docker is required"; exit 1; }
+	@set -eu; dir="$(CURDIR)/$(IMAGE_VULNS_DIR)"; mkdir -p "$$dir"; \
+	for platform in $$(echo "$(IMAGE_VULNS_PLATFORMS)" | tr ',' ' '); do \
+		name=$$(echo "$$platform" | tr '/' '-'); \
+		docker buildx build --platform "$$platform" --load \
+			--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) -t "$(BINARY_NAME):scan-$$name" .; \
+		docker save -o "$$dir/$$name.tar" "$(BINARY_NAME):scan-$$name"; \
+	done
+
+## check-image-vulns: scan the images image-vulns-images saved with the Trivy release the release workflow pins, and hold their Alpine packages to its database with cmd/audit_image_vulns, as the release does between the smoke test and the push.
+## Fails on a fixable HIGH or CRITICAL advisory cmd/audit_image_vulns/declarations.go does not accept, on a declaration past its day or one that accepts nothing in a run of every platform the release pushes, and on a report or a database the command cannot vouch for.
+## A run of fewer platforms (IMAGE_VULNS_PLATFORMS=linux/amd64) lists a declaration that accepts nothing as unjudged rather than stale, since it may accept another platform's finding.
+## Needs Docker, so make analyze does not run it.
+##   make check-image-vulns [IMAGE_VULNS_PLATFORMS=linux/amd64]
+check-image-vulns: image-vulns-images
+	@set -eu; dir="$(CURDIR)/$(IMAGE_VULNS_DIR)"; mkdir -p "$$dir/cache"; \
+	trivy() { docker run --rm --user "$$(id -u):$$(id -g)" -v "$$dir:/scan" "$(TRIVY_IMAGE)" "$$@"; }; \
+	trivy image --download-db-only --cache-dir /scan/cache --no-progress --disable-telemetry --skip-version-check --config ""; \
+	trivy version --format json --cache-dir /scan/cache --config "" > "$$dir/trivy-version.json"; \
+	set --; \
+	for platform in $$(echo "$(IMAGE_VULNS_PLATFORMS)" | tr ',' ' '); do \
+		name=$$(echo "$$platform" | tr '/' '-'); \
+		trivy image --input "/scan/$$name.tar" --cache-dir /scan/cache --skip-db-update \
+			--scanners vuln --vuln-severity-source auto --list-all-pkgs --format json --output "/scan/report-$$name.json" \
+			--no-progress --disable-telemetry --skip-version-check --config "" --ignorefile ""; \
+		trivy convert --format table --scanners vuln --config "" --ignorefile "" "/scan/report-$$name.json"; \
+		set -- "$$@" "$$dir/report-$$name.json"; \
+	done; \
+	go run ./cmd/audit_image_vulns/ -platforms "$(IMAGE_VULNS_PLATFORMS)" -db "$$dir/trivy-version.json" "$$@"
 
 ## sonar: run the full SonarCloud pipeline like CI — unit tests with coverage,
 ## upload via sonar-scanner, poll the Compute Engine task, then print the quality

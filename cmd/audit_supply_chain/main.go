@@ -802,7 +802,7 @@ func checkStepAction(where, uses string, with, doc map[string]any, writes bool) 
 			"latest by default, through an install script that checks the tarball only against the checksum file of the same release, "+
 			"and with cache: true restores the binary from an Actions cache another run saved; in March 2026 (GHSA-69fq-xp46-6x23) "+
 			"76 of trivy-action's 77 tags and all seven of setup-trivy's were force-pushed to commits that stole the job's credentials. "+
-			"Download the release tarball directly, pinned by SHA256 and verified with cosign, as the Install syft step does for syft")
+			"Download the release tarball directly, pinned by SHA256 and verified with cosign, as the Install Trivy step does")
 	}
 	return problems
 }

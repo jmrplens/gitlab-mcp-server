@@ -1,0 +1,141 @@
+# The published image's Alpine packages against Trivy's vulnerability
+# database, every week (issue 1129).
+#
+# The release workflow asks this of the two smoke images before it pushes
+# them, with cmd/audit_image_vulns. Between releases nothing asks it: an
+# Alpine advisory published after a release would reach a user's scanner
+# first, and a declaration in cmd/audit_image_vulns/declarations.go could go
+# stale or pass its day unnoticed. This run asks the same question of the
+# image ghcr.io's latest tag names, the same way, so either shows within a
+# week.
+#
+# It only reports. No job needs it, no release waits on it and nothing is
+# published from it. The judge fails it on what would stop a release, which
+# is how the report reaches anyone: a failed scheduled run is the notice
+# GitHub sends, and a passing one leaves its verdict in the job summary.
+#
+# The job holds contents: read and no secret, so the rules
+# make check-supply-chain holds a credentialed job to do not reach it; Trivy
+# is still fetched by hand, pinned and verified as the release fetches it,
+# since the verdict is only comparable to the release's when the same bytes
+# reach it. A test of cmd/audit_image_vulns holds TRIVY_VERSION and
+# TRIVY_SHA256 here to release.yml's.
+name: Image vulnerabilities
+
+on:
+  schedule:
+    # Mondays at 05:17 UTC, the day .github/dependabot.yml has Dependabot
+    # propose the week's docker bumps, the alpine one among them.
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  IMAGE: ghcr.io/jmrplens/gitlab-mcp-server
+  TRIVY_VERSION: "v0.76.1"
+
+jobs:
+  scan:
+    name: "🛡️ Image vulnerability scan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
+      # The release's Install Trivy step, word for word.
+      - name: Install Trivy
+        env:
+          TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+        run: |
+          set -euo pipefail
+          TARBALL="trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz"
+          CHECKSUMS="trivy_${TRIVY_VERSION#v}_checksums.txt"
+          BASE="https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${BASE}/${TARBALL}"
+          echo "${TRIVY_SHA256}  ${TARBALL}" | sha256sum -c -
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${CHECKSUMS}" "${BASE}/${CHECKSUMS}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o trivy-checksums.sigstore.json "${BASE}/${CHECKSUMS}.sigstore.json"
+          cosign verify-blob \
+            --bundle trivy-checksums.sigstore.json \
+            --certificate-identity "https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/${TRIVY_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${CHECKSUMS}"
+          grep " ${TARBALL}\$" "${CHECKSUMS}" | sha256sum -c -
+          tar xzf "${TARBALL}" trivy
+          install -m 0755 trivy /usr/local/bin/trivy
+          rm -f "${TARBALL}" "${CHECKSUMS}" trivy-checksums.sigstore.json trivy
+          trivy --version
+
+      - name: Fetch Trivy's vulnerability database
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/image-vulns"
+          mkdir -p "${dir}"
+          for attempt in 1 2 3; do
+            if trivy image --download-db-only --cache-dir "${dir}/cache" \
+                --db-repository mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2 \
+                --no-progress --disable-telemetry --skip-version-check --config ""; then
+              break
+            fi
+            if [ "${attempt}" = 3 ]; then
+              echo "::error::Trivy fetched no vulnerability database from either repository"
+              exit 1
+            fi
+            sleep $((attempt * 30))
+          done
+          trivy version --format json --cache-dir "${dir}/cache" --config "" > "${dir}/trivy-version.json"
+          jq . "${dir}/trivy-version.json"
+
+      # latest is resolved to its index once, so both platforms are read from
+      # one release even if another lands during the run, and each platform is
+      # scanned from the registry the way a user's trivy image reads it, with
+      # the flags the release scans the smoke images with.
+      - name: Scan the published image's packages
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/image-vulns"
+          digest=$(docker buildx imagetools inspect "${IMAGE}:latest" --format '{{json .Manifest}}' | jq -r '.digest')
+          if ! [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::${IMAGE}:latest resolved to no index digest (got '${digest}')"
+            exit 1
+          fi
+          echo "${IMAGE}:latest is ${IMAGE}@${digest}"
+          for arch in amd64 arm64; do
+            trivy image --image-src remote --platform "linux/${arch}" --cache-dir "${dir}/cache" --skip-db-update \
+              --scanners vuln --vuln-severity-source auto --list-all-pkgs \
+              --format json --output "${dir}/report-${arch}.json" \
+              --no-progress --disable-telemetry --skip-version-check --config "" --ignorefile "" \
+              "${IMAGE}@${digest}"
+            trivy convert --format table --scanners vuln --config "" --ignorefile "" "${dir}/report-${arch}.json"
+          done
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Judge the image's Alpine packages
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/image-vulns"
+          status=0
+          go run ./cmd/audit_image_vulns/ -db "${dir}/trivy-version.json" \
+            "${dir}/report-amd64.json" "${dir}/report-arm64.json" > "${dir}/verdict.txt" 2>&1 || status=$?
+          cat "${dir}/verdict.txt"
+          {
+            echo "### ${IMAGE}:latest against Trivy's vulnerability database"
+            echo
+            echo '```text'
+            cat "${dir}/verdict.txt"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+          exit "${status}"

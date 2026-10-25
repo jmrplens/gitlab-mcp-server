@@ -283,6 +283,7 @@ from a model that may have read attacker-influenced content.
 - Dependencies are tracked in `go.sum` with cryptographic checksums.
 - Regular dependency updates are performed to address known vulnerabilities (`govulncheck` runs in CI).
 - The release binaries are also checked at module grain, the way scanners that read a binary or an image SBOM check them: every target the release configuration names is built from the tree and scanned, and an advisory against any module a binary links fails the check unless a reviewed declaration accepts it (`make check-binary-vulns`). CI runs it on every pull request and every push to main, and the release workflow runs it again on the tagged tree before anything is published.
+- The container image's Alpine packages are held to Trivy's vulnerability database before the image is pushed: the release workflow scans both platforms after the smoke test, and an advisory with a fixed package rated HIGH or CRITICAL stops the release unless a reviewed declaration accepts it (`make check-image-vulns`). A weekly run asks the same of the published `latest` image.
 - Automated dependency scanning via Dependabot.
 
 ### Release Integrity

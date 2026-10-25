@@ -48,9 +48,11 @@ security:
           - .gitguardian.yaml
           - .github/workflows/codeql.yml
           - .github/workflows/scorecard.yml
+          - .github/workflows/image-vulns.yml
           - .github/scripts/**
           - .github/dependabot.yml
           - cmd/audit_supply_chain/**
+          - cmd/audit_image_vulns/**
           - cmd/server/authgate*.go
           - cmd/server/bearerguard*.go
           - internal/oauth/**

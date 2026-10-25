@@ -301,6 +301,20 @@ attestation states PyPI's publish predicate for the wheel's file name at the
 SHA-256 of the bytes downloaded, so a release uploaded without attestations,
 through another publisher or of other bytes fails there.
 
+The container image is pushed by the `docker` job, which builds each platform
+on its own, runs it (`scripts/smoke-test-image.sh`) and, before the
+multi-platform push, scans both smoke images' packages with Trivy and holds
+their Alpine packages to its database with
+[`cmd/audit_image_vulns`](cmd-utilities.md#audit_image_vulns) (issue 1129): a
+fixable `HIGH` or `CRITICAL` advisory that `declarations.go` does not accept
+stops the job, so nothing is pushed, signed or attested. Trivy is fetched by
+hand, its tarball pinned by SHA-256 and its checksum file verified with cosign,
+never through `aquasecurity/trivy-action` or `aquasecurity/setup-trivy`, which
+`make check-supply-chain` refuses there. A rehearsal runs every one of those
+steps, since they read the daemon's images and push nothing, and
+`image-vulns.yml` asks the same question of the image `latest` names every
+Monday. `make check-image-vulns` builds, scans and judges locally.
+
 ### Which release moves "latest"
 
 Only a plain `vX.Y.Z` tag is released, and only the newest of them moves a

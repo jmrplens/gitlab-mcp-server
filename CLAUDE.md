@@ -82,6 +82,7 @@ gitlab-mcp-server/
 │   ├── audit_graphql_shapes/         # GraphQL documents against the structs they decode into (make check-graphql-shapes)
 │   ├── audit_install_buttons/        # One-click install payloads (make check-install-buttons)
 │   ├── audit_binary_vulns/           # Release binaries against the Go vulnerability database (make check-binary-vulns)
+│   ├── audit_image_vulns/            # The image's Alpine packages against Trivy's database, before the push (make check-image-vulns)
 │   ├── godoc_tool/                   # Go doc auditor and fixer (make check-godocs)
 │   ├── audit_md_escaping/            # GitLab-authored values reaching Markdown unescaped (make check-md-escaping)
 │   ├── audit_metrics/                # Tool, resource and prompt metrics
