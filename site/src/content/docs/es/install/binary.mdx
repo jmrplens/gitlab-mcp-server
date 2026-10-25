@@ -26,6 +26,7 @@ Antes de descargar nada resuelve `latest` a la etiqueta que nombra en ese moment
 | Variable            | Por defecto                  | Efecto                                                                                                                             |
 | ------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `INSTALL_DIR`       | `$HOME/.local/bin`           | Directorio de destino                                                                                                              |
+| `DESTDIR`           | sin definir                  | Prepara la instalación bajo esta raíz: el archivo va a `$DESTDIR$INSTALL_DIR`, y entonces `INSTALL_DIR` tiene que ser absoluto     |
 | `VERSION`           | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v%%VERSION%%`                                                                      |
 | `REPO`              | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub desde el que descargar                                                                                       |
 | `REQUIRE_SIGNATURE` | sin definir                  | `1` aborta salvo que se verifique una firma o una atestación                                                                       |
@@ -37,6 +38,12 @@ Definir a la vez `REQUIRE_SIGNATURE=1` y `ALLOW_UNVERIFIED=1` se rechaza en luga
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v%%VERSION%% INSTALL_DIR=/usr/local/bin sh
+```
+
+Para empaquetar o para cualquier otra instalación preparada en otro sitio, `DESTDIR` se antepone al destino igual que lo antepone `make install`: `DESTDIR=/tmp/stage` por sí sola escribe `/tmp/stage$HOME/.local/bin/gitlab-mcp-server`, con `INSTALL_DIR=/usr/local/bin` al lado (abajo) escribe `/tmp/stage/usr/local/bin/gitlab-mcp-server`, y en ambos casos no toca nada fuera de `/tmp/stage`. `INSTALL_DIR` es entonces la ruta desde la que se ejecutará el archivo cuando el árbol preparado se copie a su sitio, así que tiene que ser absoluta, y una relativa se rechaza antes de descargar nada. Una instalación preparada no da consejos sobre el PATH, porque el PATH de la máquina que la prepara no dice nada del sistema en el que acabará el archivo.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | DESTDIR=/tmp/stage INSTALL_DIR=/usr/local/bin sh
 ```
 
 </TabItem>

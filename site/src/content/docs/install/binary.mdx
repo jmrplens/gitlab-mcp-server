@@ -26,6 +26,7 @@ Before downloading anything it resolves `latest` to the tag it currently names, 
 | Variable            | Default                      | Effect                                                                                                                         |
 | ------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `INSTALL_DIR`       | `$HOME/.local/bin`           | Target directory                                                                                                               |
+| `DESTDIR`           | unset                        | Stages the install under this root: the file goes to `$DESTDIR$INSTALL_DIR`, and `INSTALL_DIR` must then be absolute           |
 | `VERSION`           | `latest`                     | Release tag to install, for example `v%%VERSION%%`                                                                             |
 | `REPO`              | `jmrplens/gitlab-mcp-server` | GitHub repository to download from                                                                                             |
 | `REQUIRE_SIGNATURE` | unset                        | `1` aborts unless a signature or attestation verifies                                                                          |
@@ -37,6 +38,12 @@ Setting both `REQUIRE_SIGNATURE=1` and `ALLOW_UNVERIFIED=1` is refused rather th
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v%%VERSION%% INSTALL_DIR=/usr/local/bin sh
+```
+
+For a package build or any other staged install, `DESTDIR` is put in front of the target the way `make install` puts it: `DESTDIR=/tmp/stage` alone writes `/tmp/stage$HOME/.local/bin/gitlab-mcp-server`, with `INSTALL_DIR=/usr/local/bin` beside it (below) it writes `/tmp/stage/usr/local/bin/gitlab-mcp-server`, and either way nothing outside `/tmp/stage` is touched. `INSTALL_DIR` is then the path the file runs from once the staged tree is copied into place, so it has to be absolute, and a relative one is refused before anything is downloaded. A staged install prints no PATH advice, since the PATH of the machine doing the staging says nothing about the system the file ends up on.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | DESTDIR=/tmp/stage INSTALL_DIR=/usr/local/bin sh
 ```
 
 </TabItem>

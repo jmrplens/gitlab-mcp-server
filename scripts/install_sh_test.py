@@ -220,6 +220,11 @@ class InstallShTest(unittest.TestCase):
             os.remove(path)
 
     def run_installer(self, **env):
+        """Run install.sh with env on top of the fixture's environment.
+
+        A variable given as None is left out entirely, which is how a case
+        reaches the script's own default for it.
+        """
         environment = {
             "PATH": self.bin_dir,
             "HOME": self.work,
@@ -231,6 +236,7 @@ class InstallShTest(unittest.TestCase):
             "FETCH_RETRY_DELAY": "0",
         }
         environment.update(env)
+        environment = {name: value for name, value in environment.items() if value is not None}
         return subprocess.run(
             ["sh", INSTALLER], env=environment, capture_output=True, text=True, check=False, cwd=self.work
         )
@@ -505,6 +511,88 @@ class InstallShTest(unittest.TestCase):
         self.assertTrue(os.access(installed, os.X_OK))
         with open(installed, "rb") as fh:
             self.assertEqual(fh.read(), self.payload)
+
+    def assert_installed_at(self, path):
+        """The fixture binary is at path, executable and byte for byte."""
+        self.assertTrue(os.path.isfile(path), f"nothing was installed at {path}")
+        self.assertTrue(os.access(path, os.X_OK), f"{path} is not executable")
+        with open(path, "rb") as fh:
+            self.assertEqual(fh.read(), self.payload)
+
+    def test_destdir_stages_the_install_under_it(self):
+        """DESTDIR is prepended to the target directory and nothing lands outside it.
+
+        That is the convention GNU make and every package build follow: a
+        packager stages the files under a scratch root and copies the tree
+        into place later, so the install must not touch INSTALL_DIR itself,
+        and whether INSTALL_DIR is on this machine's PATH says nothing about
+        the system the tree is copied to.
+        """
+        self.write_checksums()
+        stage = os.path.join(self.work, "stage")
+        staged = stage + self.install_dir + "/gitlab-mcp-server"
+        for name, destdir in [("plain", stage), ("with a trailing slash", stage + "/")]:
+            with self.subTest(name):
+                shutil.rmtree(stage, ignore_errors=True)
+                result = self.run_installer(DESTDIR=destdir)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assert_installed_at(staged)
+                self.assertFalse(os.path.exists(self.install_dir), "the install wrote outside DESTDIR")
+                self.assertIn(f"installed {staged}", result.stderr)
+                self.assertIn(f"staged under DESTDIR for {self.install_dir}/gitlab-mcp-server", result.stderr)
+                self.assertNotIn("is not on your PATH", result.stderr)
+
+    def test_destdir_prefixes_the_default_install_dir(self):
+        """With INSTALL_DIR left alone, the staged path is DESTDIR$HOME/.local/bin."""
+        self.write_checksums()
+        stage = os.path.join(self.work, "stage")
+        result = self.run_installer(DESTDIR=stage, INSTALL_DIR=None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_installed_at(stage + self.work + "/.local/bin/gitlab-mcp-server")
+        self.assertFalse(os.path.exists(os.path.join(self.work, ".local")), "the install wrote outside DESTDIR")
+
+    def test_destdir_of_the_root_installs_in_install_dir_itself(self):
+        """DESTDIR=/ is the root, not a second slash in front of INSTALL_DIR.
+
+        The script drops one trailing slash, so the file lands at INSTALL_DIR
+        and is reported there. DESTDIR is still set, so the install is a
+        staged one and prints no PATH advice.
+        """
+        self.write_checksums()
+        installed = os.path.join(self.install_dir, "gitlab-mcp-server")
+        result = self.run_installer(DESTDIR="/")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_installed_at(installed)
+        self.assertIn(f"installed {installed}\n", result.stderr)
+        self.assertIn(f"staged under DESTDIR for {installed}", result.stderr)
+        self.assertNotIn("is not on your PATH", result.stderr)
+
+    def test_destdir_refuses_a_relative_install_dir(self):
+        """DESTDIR prefixes an absolute path; joined to a relative one it names neither.
+
+        The refusal comes before anything is downloaded, so a packaging
+        mistake costs no request and leaves no file behind.
+        """
+        self.write_checksums()
+        stage = os.path.join(self.work, "stage")
+        result = self.run_installer(DESTDIR=stage, INSTALL_DIR="relative/bin")
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn("INSTALL_DIR must be an absolute path when DESTDIR is set", result.stderr)
+        self.assertFalse(os.path.exists(stage), "a refused install created the staging root")
+        self.assertEqual(self.release.count(f"/{self.asset}"), 0, "the refused install still downloaded the binary")
+
+    def test_without_destdir_the_install_lands_in_install_dir_and_names_the_path(self):
+        """An unset or empty DESTDIR is the ordinary install, PATH advice included."""
+        self.write_checksums()
+        for name, destdir in [("unset", None), ("empty", "")]:
+            with self.subTest(name):
+                shutil.rmtree(self.install_dir, ignore_errors=True)
+                result = self.run_installer(DESTDIR=destdir)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assert_installed_at(os.path.join(self.install_dir, "gitlab-mcp-server"))
+                self.assertIn(f"installed {self.install_dir}/gitlab-mcp-server", result.stderr)
+                self.assertIn(f"NOTE: {self.install_dir} is not on your PATH", result.stderr)
+                self.assertNotIn("staged under DESTDIR", result.stderr)
 
 
 if __name__ == "__main__":

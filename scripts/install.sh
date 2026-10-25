@@ -6,6 +6,8 @@
 #
 # Environment overrides:
 #   INSTALL_DIR        target directory (default: $HOME/.local/bin)
+#   DESTDIR            stage the install under this root: the binary is written
+#                      to ${DESTDIR}${INSTALL_DIR}, which must then be absolute
 #   VERSION            release tag to install (default: latest)
 #   REPO               owner/repo (default: jmrplens/gitlab-mcp-server)
 #   REQUIRE_SIGNATURE  set to 1 to abort when no signature can be verified
@@ -32,6 +34,21 @@ err() {
 	printf 'error: %s\n' "$1" >&2
 	exit 1
 }
+
+# DESTDIR stages the install under another root, the convention GNU make and
+# package builds follow: the file is written to ${DESTDIR}${INSTALL_DIR} and
+# runs as ${INSTALL_DIR} once the staged tree is copied into place. It prefixes
+# an absolute path, so a relative INSTALL_DIR beside it names neither place and
+# is refused before anything is downloaded. One trailing slash is dropped, so
+# DESTDIR=/ is the root itself.
+DESTDIR="${DESTDIR:-}"
+if [ -n "$DESTDIR" ]; then
+	case "$INSTALL_DIR" in
+	/*) ;;
+	*) err "INSTALL_DIR must be an absolute path when DESTDIR is set (INSTALL_DIR=$INSTALL_DIR, DESTDIR=$DESTDIR)" ;;
+	esac
+fi
+target_dir="${DESTDIR%/}$INSTALL_DIR"
 
 # --- detect platform -------------------------------------------------------
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -346,18 +363,25 @@ else
 fi
 
 # --- install ---------------------------------------------------------------
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$target_dir"
 # Unlink an existing binary first so re-installing over a running server does not
 # fail with "Text file busy".
-rm -f "$INSTALL_DIR/$BIN_NAME" 2>/dev/null || true
-install -m 0755 "$tmp/$asset" "$INSTALL_DIR/$BIN_NAME" 2>/dev/null ||
-	{ cp "$tmp/$asset" "$INSTALL_DIR/$BIN_NAME" && chmod 0755 "$INSTALL_DIR/$BIN_NAME"; }
+rm -f "$target_dir/$BIN_NAME" 2>/dev/null || true
+install -m 0755 "$tmp/$asset" "$target_dir/$BIN_NAME" 2>/dev/null ||
+	{ cp "$tmp/$asset" "$target_dir/$BIN_NAME" && chmod 0755 "$target_dir/$BIN_NAME"; }
 
-info "installed $INSTALL_DIR/$BIN_NAME"
-case ":$PATH:" in
-*":$INSTALL_DIR:"*) on_path=1 ;;
-*) on_path=0 ;;
-esac
+info "installed $target_dir/$BIN_NAME"
+# A staged install is copied to another system, or to this one later, so this
+# machine's PATH says nothing about where it will run.
+if [ -n "$DESTDIR" ]; then
+	info "staged under DESTDIR for $INSTALL_DIR/$BIN_NAME; it runs from there once the tree is copied into place"
+	on_path=1
+else
+	case ":$PATH:" in
+	*":$INSTALL_DIR:"*) on_path=1 ;;
+	*) on_path=0 ;;
+	esac
+fi
 if [ "$on_path" -eq 0 ]; then
 	info "NOTE: $INSTALL_DIR is not on your PATH. Add it, e.g.:"
 	# The literal $PATH must reach the user verbatim, so it stays single-quoted.
