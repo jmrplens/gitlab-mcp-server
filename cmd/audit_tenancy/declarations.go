@@ -185,17 +185,15 @@ func productionRules() rules {
 // a declaration whose variable nothing reads that way any more is a finding,
 // so the table cannot outlive what it describes.
 //
-// Neither is a limit, which is why no row names them (issue 957). The
-// substitutions are read where they are used until the commit of issue 957
-// that moves their read puts them on the list, and their entry goes with that
-// move, as the telemetry switch's did; the env file's read is the one issue
-// 957 keeps.
+// It holds the one read issue 957 keeps, which is not a limit and so has no
+// row: the env file's. The telemetry switch and the description
+// substitutions were declared here too until issue 957 put them on the list
+// and read them through the configuration package.
 //
 // Each reason is one literal rather than a concatenation, which mutation
 // testing would read as arithmetic no test could reach.
 var readAroundConfig = map[string]string{
-	"GITLAB_MCP_ENV_FILE":                  "names the one dotenv file to load beside the home file, so it is read once per process from the process environment before any file is loaded, which is what keeps a file this server declines to load from nominating itself (config.explicitEnvFile)",
-	"GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS": "the rewrites a strict gateway needs in the served text, which bound nothing a caller holds; read where it is used until issue 957 moves it onto the list",
+	"GITLAB_MCP_ENV_FILE": "names the one dotenv file to load beside the home file, so it is read once per process from the process environment before any file is loaded, which is what keeps a file this server declines to load from nominating itself (config.explicitEnvFile)",
 }
 
 // readBare is G14's second declaration table: the names without the prefix

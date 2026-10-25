@@ -32,11 +32,16 @@ const EnvPrefix = "GITLAB_MCP_"
 // quietly reconfigured. Only the settings 3.0.0 read had one
 // ([hadOldSpelling]); a setting added since carries the prefix from the start.
 //
-// Every variable this server defines is on this list; the rule has no
-// exception for a name that already began with GITLAB_. Two names stay bare
-// on purpose: GITLAB_URL and GITLAB_TOKEN are GitLab's own convention, every
-// existing configuration sets them, and a user who already has them in the
-// environment must not have to spell them twice. OTEL_* stays bare for a
+// Every variable this server defines is on this list but one; the rule has no
+// exception for a name that already began with GITLAB_. The twelve issue 957
+// put here had been read where they were used, under their prefixed name, so
+// none has another spelling. GITLAB_MCP_ENV_FILE is the one left off: it
+// names the dotenv file to load beside the home file and is read once from
+// the process environment before any file is loaded ([explicitEnvFile]), so
+// a file this server declines to load cannot nominate itself. Two names stay
+// bare on purpose: GITLAB_URL and GITLAB_TOKEN are GitLab's own convention,
+// every existing configuration sets them, and a user who already has them in
+// the environment must not have to spell them twice. OTEL_* stays bare for a
 // stronger reason: those names belong to the OpenTelemetry specification and
 // the exporters read them directly, so a prefixed spelling would not be seen.
 // AUTOPILOT is not ours either; it is a convention other agent tooling sets,
@@ -54,6 +59,7 @@ var prefixedNames = []string{
 	"AUTH_MODE",
 	"CAPABILITY_SURFACE",
 	"CLIENT_COMPAT",
+	"DESCRIPTION_SUBSTITUTIONS",
 	"DISCOVERY_RATE_LIMIT_BURST",
 	"DISCOVERY_RATE_LIMIT_RPS",
 	"DRAIN_DELAY",

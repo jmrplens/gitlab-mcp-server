@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // EnvVar configures the substitutions in both stdio and HTTP modes. The value
@@ -19,6 +20,11 @@ import (
 // Whitespace is significant: "; = " substitutes "; " (semicolon, space) with
 // " " (a single space). An empty or unset value disables the middleware.
 const EnvVar = "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS"
+
+// envSetting is EnvVar without its prefix, the name [config.Getenv] reads it
+// under, on the configuration package's list since issue 957. EnvVar is what
+// an error and the announcement name, as an operator exports it.
+const envSetting = "DESCRIPTION_SUBSTITUTIONS"
 
 // MaxSubstitutions and MaxSubstitutionBytes bound the configuration, and
 // growthFactor and growthAllowance bound its effect.
@@ -70,7 +76,7 @@ type Substitution struct {
 // which makes "the descriptions the model reads are not the ones this build
 // ships" a fact with no local evidence.
 func FromEnv() ([]Substitution, error) {
-	subs, err := ParseSubstitutions(os.Getenv(EnvVar))
+	subs, err := ParseSubstitutions(config.Getenv(envSetting))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", EnvVar, err)
 	}

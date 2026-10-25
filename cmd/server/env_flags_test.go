@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
@@ -297,7 +298,30 @@ func numberOutcome(got int, value string, def int, warned bool) settingOutcome {
 // settingsMovedByIssue957 are the settings issue 957 moved onto the
 // configuration package's list, each with how the server reads it.
 func settingsMovedByIssue957() []settingCase {
-	return slices.Concat(ceilingSettings(), telemetrySettings(), guardSettings())
+	return slices.Concat(ceilingSettings(), telemetrySettings(), guardSettings(), servedTextSettings())
+}
+
+// servedTextSettings are the rewrites a strict gateway needs in the served
+// text, which no row names since they bound nothing a caller holds. A rule
+// that does not parse refuses startup, the default issue 957 decided.
+func servedTextSettings() []settingCase {
+	return []settingCase{
+		{
+			setting: "DESCRIPTION_SUBSTITUTIONS", flag: "description-substitutions",
+			malformed: "=x", wellFormed: "old=new", policy: tenancy.RefuseStartup,
+			observe: func(t *testing.T, _ string) settingOutcome {
+				t.Helper()
+				subs, err := gatewaycompat.FromEnv()
+				if err != nil {
+					return outcomeRefused
+				}
+				if slices.Equal(subs, []gatewaycompat.Substitution{{Old: "old", New: "new"}}) {
+					return outcomeApplied
+				}
+				return outcomeUnread
+			},
+		},
+	}
 }
 
 // ceilingSettings are the two ceilings issue 957 moved, which warn and keep

@@ -104,7 +104,7 @@ func TestProductionRules_DeclareTheReadsNoRowNames(t *testing.T) {
 		declared map[string]string
 		want     []string
 	}{
-		"read around": {r.envDeclared, []string{"GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS", "GITLAB_MCP_ENV_FILE"}},
+		"read around": {r.envDeclared, []string{"GITLAB_MCP_ENV_FILE"}},
 		"read bare":   {r.envBare, []string{"GITLAB_URL"}},
 	} {
 		t.Run(table, func(t *testing.T) {
