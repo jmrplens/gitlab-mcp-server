@@ -130,10 +130,50 @@ func TestUserAccount_CountsFeedAndAvatar_AnswerForTheRunUser(t *testing.T) {
 	})
 }
 
+// membershipPageLimit bounds the pages findNamespaceMembership reads, at 100
+// memberships a page. Every scenario that makes a group makes the run user
+// its owner, so by the time this file runs in a complete run the run user's
+// groups fill more than one page; a twentieth page would mean two thousand
+// groups, which no run makes, so reaching it means the listing is going round
+// rather than on.
+const membershipPageLimit = 20
+
+// findNamespaceMembership reads the user's group memberships page by page,
+// following each page's next_page, and returns the one on the group with the
+// given ID, or nil when the last page has gone by without it, together with
+// how many memberships it read. It fails the test when a page says more
+// follow without naming a later page, or when the listing has not ended
+// within [membershipPageLimit] pages.
+func findNamespaceMembership(e *harness.Env, s *harness.Session, userID, groupID int64) (*users.UserMembershipOutput, int) {
+	e.T.Helper()
+	read := 0
+	page := int64(1)
+	for range membershipPageLimit {
+		got := harness.Do[users.UserMembershipsOutput](s, actionUserMemberships, map[string]any{"user_id": userID, "type": "Namespace", "per_page": 100, "page": page})
+		read += len(got.Memberships)
+		for _, membership := range got.Memberships {
+			if membership.SourceID == groupID && membership.SourceType == "Namespace" {
+				return &membership, read
+			}
+		}
+		if !got.Pagination.HasMore {
+			return nil, read
+		}
+		if got.Pagination.NextPage <= page {
+			e.T.Fatalf("page %d of the memberships of user %d says more follow and names next page %d", page, userID, got.Pagination.NextPage)
+		}
+		page = got.Pagination.NextPage
+	}
+	e.T.Fatalf("the memberships of user %d were still naming a next page after %d pages (%d memberships read)", userID, membershipPageLimit, read)
+	return nil, read
+}
+
 // TestUserAccount_AdminReads_MembershipsAndActivities reads the run user's
 // memberships, which the shared World's group is one of, and the instance's
 // user activity feed, which the run user is in after building the World.
-// Both endpoints answer administrators only.
+// Both endpoints answer administrators only. The World's group is looked
+// for on every page of the memberships: the run user owns every group the
+// run has made, and in a complete run those are more than one page holds.
 //
 // Replaces: TestMeta_UserSelf
 func TestUserAccount_AdminReads_MembershipsAndActivities(t *testing.T) {
@@ -144,18 +184,12 @@ func TestUserAccount_AdminReads_MembershipsAndActivities(t *testing.T) {
 	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
 		s := e.On(surface)
 
-		memberships := harness.Do[users.UserMembershipsOutput](s, actionUserMemberships, map[string]any{"user_id": rt.UserID, "type": "Namespace", "per_page": 100})
-		owned := false
-		for _, membership := range memberships.Memberships {
-			if membership.SourceID == world.Group.ID && membership.SourceType == "Namespace" {
-				owned = true
-				if membership.AccessLevel != int64(gl.OwnerPermissions) {
-					e.T.Errorf("the run user holds access level %d on the World's group %d, want owner (%d)", membership.AccessLevel, world.Group.ID, gl.OwnerPermissions)
-				}
-			}
-		}
-		if !owned {
-			e.T.Errorf("the memberships of user %d do not name the World's group %d: %+v", rt.UserID, world.Group.ID, memberships.Memberships)
+		membership, read := findNamespaceMembership(e, s, rt.UserID, world.Group.ID)
+		switch {
+		case membership == nil:
+			e.T.Errorf("none of the %d group memberships of user %d names the World's group %d", read, rt.UserID, world.Group.ID)
+		case membership.AccessLevel != int64(gl.OwnerPermissions):
+			e.T.Errorf("the run user holds access level %d on the World's group %d, want owner (%d)", membership.AccessLevel, world.Group.ID, gl.OwnerPermissions)
 		}
 
 		activities := harness.Do[users.UserActivitiesOutput](s, actionUserActivities, map[string]any{"per_page": 100})
