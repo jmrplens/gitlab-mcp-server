@@ -296,9 +296,11 @@ var curatedRefSubsets = &declarationTable{name: "curatedRefSubsets", entries: ma
 	"groupmarkdownuploads.UploadedByOutput": "group_markdown_uploads.md",
 
 	// groupboards — nested refs of the group-board responses (doc/api/group_boards.md).
+	// The board's assignee is not among them: it is read off the captured
+	// answer straight into its documented shape, so no converter pairs it with
+	// a client-go struct (docAddedFields below).
 	"groupboards.GroupRefOutput":  docGroupBoards,
 	"groupboards.MilestoneOutput": docGroupBoards,
-	"groupboards.BasicUserOutput": docGroupBoards,
 	"groupboards.LabelOutput":     docGroupBoards,
 
 	// groupepicboards — nested refs of the epic-board responses (doc/api/group_epic_boards.md).
@@ -373,6 +375,16 @@ var docOmittedFields = &declarationTable{name: "docOmittedFields", entries: map[
 // expression and no test can execute a constant to catch it.
 const docApprovalsBeforeMergeNeverSent = "lib/api/entities/merge_request_approvals.rb (the four keys present_approval renders on Community Edition) and ee/lib/api/entities/approval_state.rb (what ee/lib/ee/api/merge_request_approvals.rb renders on every Enterprise build instead) expose no approvals_before_merge; the key is the merge request's, exposed by ee/lib/ee/api/entities/merge_request_basic.rb"
 
+// docGroupBoardUpdate cites the update example of the group board page, the
+// one that prints all four board keys gl.GroupIssueBoard leaves out with a
+// value: the two list switches, the assignee and the weight. The create
+// example prints the four as well, its assignee and weight as null.
+const docGroupBoardUpdate = "group_boards.md#update-a-group-issue-board"
+
+// docGroupBoardListMetric cites the project page for a group column's
+// limit_metric, since the group page prints no column that carries one.
+const docGroupBoardListMetric = "boards.md#list-all-board-lists-in-an-issue-board (ee/lib/ee/api/entities/list.rb exposes limit_metric on every column whose board has work-in-progress limits available, a group's included; group_boards.md prints no such column)"
+
 // docApprovalStateInvalidRules cites the entity that sends the one key of the
 // Enterprise approval state client-go does not declare.
 const docApprovalStateInvalidRules = "ee/lib/api/entities/approval_state.rb exposes invalid_approvers_rules (Entities::ApprovalRuleShort: id, name, rule_type), which every Enterprise build answers the approvals GET, the approve and the unapprove with; gl.MergeRequestApprovals does not declare it, so it is read off the captured answer (ADR-0021)"
@@ -420,6 +432,19 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// on every board and list answer (ADR-0021, toolutil.BoardExtra and
 	// CapturedBoardList).
 	"boards.BoardListOutput.limit_metric": "boards.md#list-all-board-lists-in-an-issue-board",
+
+	// groupboards: the four board keys gl.GroupIssueBoard does not declare,
+	// which the update page prints, and each column's limit_metric, which
+	// gl.BoardList does not declare either. Every group board answer reads
+	// them off the captured response beside the SDK's decode (ADR-0021,
+	// toolutil.GroupBoardExtra, issue 1283), and the column answers read the
+	// metric the same way (toolutil.CapturedBoardList). Recorded in
+	// docs/development/upstream-bugs.md (row 101).
+	"groupboards.GroupBoardOutput.hide_backlog_list": docGroupBoardUpdate,
+	"groupboards.GroupBoardOutput.hide_closed_list":  docGroupBoardUpdate,
+	"groupboards.GroupBoardOutput.assignee":          docGroupBoardUpdate,
+	"groupboards.GroupBoardOutput.weight":            docGroupBoardUpdate,
+	"groupboards.BoardListOutput.limit_metric":       docGroupBoardListMetric,
 
 	// deployments — deployable.project {ci_job_token_scope_enabled} is documented in
 	// doc/api/deployments.md but absent from gl.DeploymentDeployable; fetched via raw
