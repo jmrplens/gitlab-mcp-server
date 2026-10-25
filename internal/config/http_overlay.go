@@ -179,32 +179,25 @@ func loadOverlayLimits(o *HTTPEnvOverlay) error {
 		o.MaxHTTPClients = &value
 	}
 
+	// A zero turns each of these off, as it does to the flag of the same name:
+	// the session timeout's used to be refused here (issue 958).
 	durations := []struct {
 		name     string
 		fallback time.Duration
 		maxValue time.Duration
-		zeroOK   bool
 		target   **time.Duration
 	}{
-		{"SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout, false, &o.SessionTimeout},
-		{"POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout, true, &o.PoolIdleTimeout},
-		{"SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval, true, &o.RevalidateInterval},
-		{"ACTION_TIMEOUT", DefaultActionTimeout, MaxActionTimeout, true, &o.ActionTimeout},
-		{"DRAIN_DELAY", DefaultDrainDelay, MaxDrainDelay, true, &o.DrainDelay},
+		{"SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout, &o.SessionTimeout},
+		{"POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout, &o.PoolIdleTimeout},
+		{"SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval, &o.RevalidateInterval},
+		{"ACTION_TIMEOUT", DefaultActionTimeout, MaxActionTimeout, &o.ActionTimeout},
+		{"DRAIN_DELAY", DefaultDrainDelay, MaxDrainDelay, &o.DrainDelay},
 	}
 	for _, d := range durations {
 		if !envPresent(d.name) {
 			continue
 		}
-		var (
-			value time.Duration
-			err   error
-		)
-		if d.zeroOK {
-			value, err = parseDisableableDurationEnv(d.name, d.fallback, d.maxValue)
-		} else {
-			value, err = parseBoundedDurationEnv(d.name, d.fallback, d.maxValue)
-		}
+		value, err := parseDisableableDurationEnv(d.name, d.fallback, d.maxValue)
 		if err != nil {
 			return err
 		}

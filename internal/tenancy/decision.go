@@ -510,8 +510,9 @@ type Decision struct {
 	// a row whose every zero means off has nothing for it to decide.
 	ZeroBy string
 	// OffWith is the ID of another row which, switched off, switches this one
-	// off too: AUB-003's step is AUB-001's window (F-34, issue 958), and
-	// RTC-007 follows the row it is the process partner of (issue 951).
+	// off too: RTC-007 follows the row it is the process partner of (issue
+	// 951). AUB-003 followed AUB-001, whose window was its escalation step,
+	// until issue 958 gave the step the default window when AUB-001's is zero.
 	//
 	// It names the row the code consults, which need not be the row an
 	// operator sets to zero: RTC-007 is consulted where RTC-003's bucket

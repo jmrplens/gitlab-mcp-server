@@ -301,7 +301,7 @@ func main() {
 	flag.IntVar(&hcfg.authFailureLimit, "auth-failure-limit", config.DefaultAuthFailureLimit,
 		"Failed authentications one address, an IPv6 one by its /64, may produce inside --auth-failure-window before it is blocked for the rest of it (0 disables this budget)")
 	flag.DurationVar(&hcfg.authFailureWindow, "auth-failure-window", config.DefaultAuthFailureWindow,
-		"Window the failure budget counts in, and the step the distinct-token escalation is built from: one window, then ten, then sixty")
+		"Window the failure budget counts in, and the step the distinct-token escalation is built from: one window, then ten, then sixty (0 disables the failure budget alone; the escalation then steps by the default)")
 	flag.IntVar(&hcfg.authDistinctLimit, "auth-distinct-token-limit", config.DefaultAuthDistinctTokenLimit,
 		"Distinct credentials one address, an IPv6 one by its /64, may have refused inside --auth-distinct-token-window before it is blocked, for longer each time (0 disables this budget)")
 	flag.DurationVar(&hcfg.authDistinctWindow, "auth-distinct-token-window", config.DefaultAuthDistinctWindow,
@@ -606,7 +606,8 @@ FLAGS
                             disables this budget). Separately, %d /64s of one IPv6 /48 with a credential
                             refused inside -auth-distinct-token-window block the /48, not configurable
   -auth-failure-window dur  Window the failure budget counts in, and the step the distinct-credential
-                            escalation below is built from: one window, then ten, then sixty (default %s)
+                            escalation below is built from: one window, then ten, then sixty (default %s;
+                            0 disables the failure budget alone, and the escalation steps by the default)
   -auth-distinct-token-limit int
                             Distinct credentials one address, an IPv6 one by its /64, may have refused
                             inside -auth-distinct-token-window before it is blocked, for longer each
@@ -711,7 +712,8 @@ ENVIRONMENT VARIABLES (HTTP mode)
   GITLAB_MCP_MAX_HTTP_CLIENTS       Maximum unique (token, GitLab URL) pool entries; not sessions
                                     (default 100)
   GITLAB_MCP_SESSION_TIMEOUT        Idle MCP session timeout; --stateless=false only (default 30m). A session
-                                    no client deletes keeps one of the process's session slots until it expires
+                                    no client deletes keeps one of the process's session slots until it expires,
+                                    and with 0 until its credential's pool entry is evicted
   GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
   GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long, both transports
                                     (default 65m, 0 disables)
@@ -724,7 +726,9 @@ ENVIRONMENT VARIABLES (HTTP mode)
                                     produce inside the failure window before it is blocked (default
                                     %d; 0 disables this budget)
   GITLAB_MCP_AUTH_FAILURE_WINDOW    Window the failure budget counts in, and the step the
-                                    distinct-credential escalation is built from (default %s)
+                                    distinct-credential escalation is built from (default %s; 0
+                                    disables the failure budget alone, and the escalation steps by
+                                    the default)
   GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT
                                     Distinct credentials one address, an IPv6 one by its /64, may have
                                     refused inside the distinct-credential window before it is
@@ -1336,6 +1340,9 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 			return err
 		}
 	}
+	if err := refuseNonPositiveOAuthCacheTTL(cfg.OAuthCacheTTL); err != nil {
+		return err
+	}
 	if cfg.AuthMode != "oauth" {
 		// In legacy mode --public-url is optional, but when set it now has
 		// an effect (its origin seeds the trusted-origins list), so a
@@ -1391,14 +1398,37 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	return validateOAuthCacheTTL(cfg.OAuthCacheTTL)
 }
 
-// validateOAuthCacheTTL bounds an explicitly configured TTL. A non-positive
-// value is not rejected here — see [oauthCacheTTL], which normalizes it at
-// the point of use so no construction path can produce the broken server a
-// zero would otherwise cause.
-func validateOAuthCacheTTL(ttl time.Duration) error {
-	if ttl <= 0 {
+// refuseNonPositiveOAuthCacheTTL refuses a TTL of zero or less, in either
+// authentication mode, as its variable is refused (register row ADM-005,
+// issue 958).
+//
+// A zero is not a TTL an operator could mean: the verifier stamps the TTL into
+// every token's expiration, so a token cached for no time expires as it is
+// verified and every request carrying it is refused. This used to let a zero
+// or a negative value through, and [oauthCacheTTL] replaced it with the
+// default and a warning, so the deployment ran at 15 minutes that no page
+// described (D7 of the 2026-09 documentation audit). That replacement stays
+// for a Config no validation saw.
+//
+// Legacy mode verifies no OAuth token and is refused the zero all the same,
+// because the HTTP overlay refuses GITLAB_MCP_OAUTH_CACHE_TTL=0 whatever the
+// mode: a flag that let it through there would read the zero apart from its
+// variable, which is what F-34 recorded. The range is a property of the TTL
+// in use, and only oauth mode checks it ([validateOAuthCacheTTL]), for the
+// flag and the variable alike.
+func refuseNonPositiveOAuthCacheTTL(ttl time.Duration) error {
+	if ttl > 0 {
 		return nil
 	}
+	return fmt.Errorf("--oauth-cache-ttl must be positive, got %s: it is the lifetime the verifier stamps into every token, from %s to %s",
+		ttl, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL)
+}
+
+// validateOAuthCacheTTL bounds the TTL oauth mode uses. A zero or a negative
+// one never reaches it from validateHTTPAuthConfig, which
+// [refuseNonPositiveOAuthCacheTTL] refused first, and is below the minimum
+// here too.
+func validateOAuthCacheTTL(ttl time.Duration) error {
 	if ttl < config.MinOAuthCacheTTL {
 		return fmt.Errorf("--oauth-cache-ttl %s is below minimum of %s", ttl, config.MinOAuthCacheTTL)
 	}
@@ -3055,22 +3085,23 @@ func httpStartupAttrs(cfg *config.Config, httpAddr string) []any {
 // warnStatefulSessions tells the operator of a deployment that keeps sessions
 // what that costs.
 //
-// The transport itself is a legacy mode. And with --session-timeout=0 the SDK
-// never closes an idle session, so one no client deletes keeps its slot of the
-// session ceiling (HLD-010) until the pool evicts its credential's entry: after
-// --pool-idle-timeout without a request (never with 0), or to make room at
-// --max-http-clients. A client that opens sessions, deletes none and keeps its
-// credential in use then takes the slots one by one until no tenant can open
-// another. Zero still means off (END-005); the line is
-// what tells the operator who chose it.
+// The transport itself is a legacy mode. And with a session timeout of zero
+// the SDK never closes an idle session, so one no client deletes keeps its
+// slot of the session ceiling (HLD-010) until the pool evicts its credential's
+// entry: after --pool-idle-timeout without a request (never with 0), or to make
+// room at --max-http-clients. A client that opens sessions, deletes none and
+// keeps its credential in use then takes the slots one by one until no tenant
+// can open another. Zero still means off (END-005), through the flag and the
+// variable alike since issue 958, so the line names both: it is what tells the
+// operator who chose it.
 func warnStatefulSessions(ctx context.Context, cfg *config.Config) {
 	if cfg.Stateless {
 		return
 	}
 	slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
 	if cfg.SessionTimeout == 0 {
-		slog.WarnContext(ctx, "--session-timeout=0: a stateful session no client deletes never expires, and keeps one of the "+
-			"process's session slots until its credential's pool entry is evicted",
+		slog.WarnContext(ctx, "--session-timeout=0 (or GITLAB_MCP_SESSION_TIMEOUT=0): a stateful session no client deletes "+
+			"never expires, and keeps one of the process's session slots until its credential's pool entry is evicted",
 			"stateful_sessions_per_process", processStatefulSessions.limit)
 	}
 }
@@ -3938,10 +3969,11 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 // token the instant it is verified, and the server answers 401 to every
 // request carrying a perfectly valid credential.
 //
-// Normalizing here rather than rejecting at config validation keeps the
-// invariant at the point that depends on it: a Config built by any path — the
-// flag layer, the environment overlay, a test constructing a zero value —
-// cannot produce that server.
+// The flag and the variable both refuse such a value at startup, in either
+// authentication mode ([refuseNonPositiveOAuthCacheTTL]). Normalizing here as
+// well keeps the invariant at the point that depends on it: a Config built by
+// a path that skipped that validation, a test constructing a zero value among
+// them, cannot produce that server either.
 func oauthCacheTTL(configured time.Duration) time.Duration {
 	if configured > 0 {
 		return configured

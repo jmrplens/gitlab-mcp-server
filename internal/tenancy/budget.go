@@ -25,12 +25,12 @@ func BudgetOn(limit int, window time.Duration) bool {
 // AUB-003).
 //
 // The step is not a setting of its own. The server passes AUB-001's window, so
-// that the ladder is one fast window, then ten, then sixty, and a window of
-// zero, which switches AUB-001 off, switches this budget off with it. That
-// coupling departs from INV-015's clause that switching one limit off does not
-// switch off another, and is recorded as a finding (issue 958); it is stated
-// here rather than changed, since this function decides exactly what the
-// condition it replaced decided.
+// that the ladder is one fast window, then ten, then sixty, and when that
+// window is zero, which switches AUB-001 off, it passes the default window
+// instead, so switching one limit off does not switch off another (INV-015,
+// issue 958). A zero step still switches the budget off here, since a ladder
+// of blocks that last no time is no budget, but the server no longer hands one
+// over.
 func EscalationOn(limit int, window, step time.Duration) bool {
 	return BudgetOn(limit, window) && step > 0
 }

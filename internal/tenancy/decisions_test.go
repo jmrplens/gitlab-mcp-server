@@ -335,13 +335,14 @@ func heldIsDecidedByIssue951(held Decision) bool {
 // decided for the keys before admission. The address (IDN-004) and the
 // transport source (IDN-005) are derived at budgetKey, the whole IPv4 address
 // or the IPv6 /64, and the budgets keyed on them (AUB-001 to AUB-003) record
-// the decision and carry F-14 and F-25 no longer, F-34 staying on the two that
-// carry it for issue 958. AUB-006 is the /48 aggregate the decision added: a
-// constant on a key of its own, charged with the refused credentials the
-// distinct-credential budget is charged with, refused in the words every
-// budget refuses with, its zero not an operator's to set, and its table capped
-// with the others by AUB-004. Both findings stay in the register's list, filed
-// as issue 954's.
+// the decision and carry F-14 and F-25 no longer, nor F-34 on the two that
+// carried it, which issue 958 answered when a zero failure window stopped
+// switching the distinct-credential budget off. AUB-006 is the /48 aggregate
+// the decision added: a constant on a key of its own, charged with the refused
+// credentials the distinct-credential budget is charged with, refused in the
+// words every budget refuses with, its zero not an operator's to set, and its
+// table capped with the others by AUB-004. Both findings stay in the
+// register's list, filed as issue 954's.
 func TestDecisions_AuthenticationKeys_AreDecidedByIssue954(t *testing.T) {
 	for _, id := range []string{"IDN-004", "IDN-005", "AUB-001", "AUB-002", "AUB-003", "AUB-006"} {
 		t.Run(id, func(t *testing.T) {
@@ -360,9 +361,10 @@ func TestDecisions_AuthenticationKeys_AreDecidedByIssue954(t *testing.T) {
 		})
 	}
 	for _, id := range []string{"AUB-001", "AUB-003"} {
-		t.Run(id+" keeps F-34", func(t *testing.T) {
-			if d, _ := Lookup(id); !slices.Equal(d.Findings, []string{"F-34"}) {
-				t.Errorf("%s carries %v, want F-34 alone, which issue 958 answers", id, d.Findings)
+		t.Run(id+" carries no finding", func(t *testing.T) {
+			if d, _ := Lookup(id); len(d.Findings) != 0 || d.OffWith != "" || !slices.Contains(d.Decided, "issue 958") {
+				t.Errorf("%s carries %v, follows %q off and records %v; want no finding, no row it follows off, "+
+					"and issue 958, which answered the F-34 it carried", id, d.Findings, d.OffWith, d.Decided)
 			}
 		})
 	}
@@ -799,8 +801,11 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // distinct-credential budget's reason as GitLab 19.5 answered it, and F-35 did
 // when issue 982 bounded the transport-source budget's record of charged pairs
 // per source and to the sources its limiter recorded, and F-11 did when issue
-// 958 stated the rule for what a row does at capacity, and F-16 did when issue
-// 958 wrote each default and fallback once.
+// 958 stated the rule for what a row does at capacity, and F-16 and F-34 did
+// when issue 958 stated each zero it kept from meaning off, made the zeros a
+// flag and its variable read apart mean one thing, stopped a zero failure
+// window switching the distinct-credential budget off, and wrote each default
+// and fallback once.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -828,7 +833,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-11,F-14,F-16,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-11,F-14,F-16,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -839,17 +844,20 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 // (POL-001), the tool-call bucket's burst refused beside a positive rate
 // while a zero rate still switches the bucket off (RTC-001), and the
 // credential age ceiling and the watcher ceiling, two Go options whose zero
-// selects the default (ADM-008, HLD-003). The rows that carry F-34 still are
-// the four whose zero a change of code answers next: the OAuth cache TTL's
-// flag, which selects the default where its variable refuses, the failure
-// window that switches the distinct-credential budget off with it, and the
-// session timeout's variable, which refuses the zero its flag reads as off.
+// selects the default (ADM-008, HLD-003), and the OAuth cache TTL's zero
+// refused at startup by its flag as by its variable (ADM-005), where the flag
+// used to replace it with the default. No row carries F-34 any longer: the
+// other three that did had a zero that meant off and was read apart, the
+// failure window's, which switched the distinct-credential budget off with it
+// (AUB-001, AUB-003), and the session timeout's, whose variable refused what
+// its flag reads as off (END-005), and each now records issue 958.
 func TestDecisions_ZeroExceptions_AreDecidedByIssue958(t *testing.T) {
 	for _, tc := range []struct {
 		id       string
 		zero     Zero
 		settings []SettingZero
 	}{
+		{"ADM-005", ZeroRefused, nil},
 		{"POL-001", ZeroRefused, nil},
 		{"RTC-001", ZeroOff, []SettingZero{{Config: "RateLimitBurst", Zero: ZeroRefused}}},
 		{"ADM-008", ZeroSelectsDefault, nil},
@@ -866,14 +874,19 @@ func TestDecisions_ZeroExceptions_AreDecidedByIssue958(t *testing.T) {
 			}
 		})
 	}
-	var carrying []string
+	for _, id := range []string{"AUB-001", "AUB-003", "END-005"} {
+		t.Run(id, func(t *testing.T) {
+			d, _ := Lookup(id)
+			if d.Zero != ZeroOff || d.ZeroBy != "" || d.OffWith != "" || !slices.Contains(d.Decided, "issue 958") {
+				t.Errorf("%s: zero %d, zero by %q, off with %q, decided %v; want a zero that switches it off alone, "+
+					"and issue 958 recorded", id, d.Zero, d.ZeroBy, d.OffWith, d.Decided)
+			}
+		})
+	}
 	for _, d := range Decisions() {
 		if d.Carries("F-34") {
-			carrying = append(carrying, d.ID)
+			t.Errorf("%s carries F-34, which issue 958 answered", d.ID)
 		}
-	}
-	if want := []string{"ADM-005", "AUB-001", "AUB-003", "END-005"}; !slices.Equal(carrying, want) {
-		t.Errorf("F-34 is carried by %v, want %v", carrying, want)
 	}
 }
 

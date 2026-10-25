@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -487,6 +488,54 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 			// would leave an operator hunting for which variable is wrong.
 			if !strings.Contains(err.Error(), tt.wantMsg) {
 				t.Errorf("error = %q, want it to mention %q", err, tt.wantMsg)
+			}
+		})
+	}
+}
+
+// TestLoadHTTPEnvOverlay_AZeroDuration_TurnsItsSettingOffHoweverWritten is
+// the HTTP reader's half of TestLoad_AZeroDuration_TurnsItsSettingOffHoweverWritten:
+// every duration variable a zero turns off is overlaid as zero, written as the
+// bare digit or as a Go duration, so the variable means what the flag of the
+// same name means by it (issue 958). The session timeout used to refuse it,
+// and every one of them refused 0s. A negative duration is still refused.
+func TestLoadHTTPEnvOverlay_AZeroDuration_TurnsItsSettingOffHoweverWritten(t *testing.T) {
+	for _, setting := range zeroOffDurations() {
+		t.Run(setting.name, func(t *testing.T) {
+			for _, spelling := range zeroDurationSpellings {
+				t.Run(strconv.Quote(spelling), func(t *testing.T) {
+					clearOverlayEnv(t)
+					t.Setenv(EnvPrefix+setting.name, spelling)
+					overlay, err := LoadHTTPEnvOverlay()
+					if err != nil {
+						t.Fatalf("LoadHTTPEnvOverlay() with %s=%q error = %v, want the setting off", setting.name, spelling, err)
+					}
+					if got := setting.overlay(overlay); got == nil || *got != 0 {
+						t.Errorf("%s=%q overlaid as %v, want 0", setting.name, spelling, got)
+					}
+				})
+			}
+			t.Run("negative", func(t *testing.T) {
+				clearOverlayEnv(t)
+				t.Setenv(EnvPrefix+setting.name, "-1s")
+				if _, err := LoadHTTPEnvOverlay(); err == nil || !strings.Contains(err.Error(), setting.name) {
+					t.Errorf("LoadHTTPEnvOverlay() with %s=-1s error = %v, want a refusal naming it", setting.name, err)
+				}
+			})
+		})
+	}
+}
+
+// TestLoadHTTPEnvOverlay_OAuthCacheTTL_ZeroOrNegative_IsRefused is the HTTP
+// reader's half of TestLoad_OAuthCacheTTL_ZeroOrNegative_IsRefused: the zero
+// issue 958 keeps refused, however it is written, and anything below it.
+func TestLoadHTTPEnvOverlay_OAuthCacheTTL_ZeroOrNegative_IsRefused(t *testing.T) {
+	for _, value := range append(slices.Clone(zeroDurationSpellings), "-5m") {
+		t.Run(strconv.Quote(value), func(t *testing.T) {
+			clearOverlayEnv(t)
+			t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", value)
+			if _, err := LoadHTTPEnvOverlay(); err == nil || !strings.Contains(err.Error(), "OAUTH_CACHE_TTL") {
+				t.Errorf("LoadHTTPEnvOverlay() with OAUTH_CACHE_TTL=%q error = %v, want a refusal naming the variable", value, err)
 			}
 		})
 	}

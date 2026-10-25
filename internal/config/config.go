@@ -660,7 +660,7 @@ func loadLimitEnv() (limitEnv, error) {
 	if values.maxHTTPClients, err = parseInt(Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients); err != nil {
 		return limitEnv{}, fmt.Errorf("invalid MAX_HTTP_CLIENTS value: %w", err)
 	}
-	if values.sessionTimeout, err = parseBoundedDurationEnv("SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout); err != nil {
+	if values.sessionTimeout, err = parseDisableableDurationEnv("SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout); err != nil {
 		return limitEnv{}, err
 	}
 	if values.poolIdleTimeout, err = parseDisableableDurationEnv("POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout); err != nil {
@@ -678,20 +678,22 @@ func loadLimitEnv() (limitEnv, error) {
 	return values, nil
 }
 
-// parseDisableableDurationEnv parses a bounded duration whose zero value is a
-// meaningful setting rather than an error: both POOL_IDLE_TIMEOUT and
-// SESSION_REVALIDATE_INTERVAL document "0" as "turn this off", and their
-// consumers already treat a non-positive value that way. The shared
-// [parseDuration] rejects "0" outright, so routing these through
-// [parseBoundedDurationEnv] made a documented setting fail at startup.
+// parseDisableableDurationEnv parses a bounded duration whose zero turns its
+// setting off, which is what a zero means to every duration variable this
+// package reads but the OAuth cache TTL, whose zero is refused (register row
+// ADM-005).
+//
+// Zero is read as a duration, so 0s, 0m and the bare digit mean the same
+// thing, as they do to the flag of the same name (issue 958, and items 1 and 3
+// of issue 1171). Only the bare digit used to: the shared [parseDuration]
+// refuses anything that is not positive, so a zero written any other way
+// refused the start, and the session timeout's refused even the digit its
+// flag reads as off. Anything else, a negative duration included, goes on to
+// that parser and its bound.
 func parseDisableableDurationEnv(name string, defaultValue, maxValue time.Duration) (time.Duration, error) {
-	if TrimmedGetenv(name) == "0" {
+	if d, err := time.ParseDuration(TrimmedGetenv(name)); err == nil && d == 0 {
 		return 0, nil
 	}
-	return parseBoundedDurationEnv(name, defaultValue, maxValue)
-}
-
-func parseBoundedDurationEnv(name string, defaultValue, maxValue time.Duration) (time.Duration, error) {
 	value, err := parseDuration(Getenv(name), defaultValue)
 	if err != nil {
 		return 0, fmt.Errorf("invalid %s value: %w", name, err)

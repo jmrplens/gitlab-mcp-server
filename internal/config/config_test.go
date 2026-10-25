@@ -6,6 +6,7 @@ package config
 import (
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1699,46 +1700,114 @@ func TestConfigEnterprise_NilReceivers(t *testing.T) {
 	}
 }
 
-// TestLoad_DisableableDurations_AcceptZero verifies that the two settings
-// documented as "0 disables" actually accept 0 from the environment.
-//
-// Both route through parseDisableableDurationEnv rather than the shared
-// parseDuration, which rejects any non-positive value. Without that split the
-// documented way to switch these off failed at startup, while the equivalent
-// CLI flags accepted it. SESSION_TIMEOUT is covered as a control: it documents
-// no zero behavior, so zero must still be an error there.
-func TestLoad_DisableableDurations_AcceptZero(t *testing.T) {
+// zeroOffDuration is a duration variable whose zero turns its setting off, with
+// the field each of the two readers fills from it: [Load] for stdio and
+// [LoadHTTPEnvOverlay] for HTTP mode.
+type zeroOffDuration struct {
+	name    string
+	loaded  func(*Config) time.Duration
+	overlay func(*HTTPEnvOverlay) *time.Duration
+}
+
+// zeroOffDurations are every duration variable a zero turns off. The session
+// timeout is the one issue 958 added: its variable used to refuse the zero its
+// flag reads as off (issue 1171, item 1).
+func zeroOffDurations() []zeroOffDuration {
+	return []zeroOffDuration{
+		{
+			"SESSION_TIMEOUT",
+			func(c *Config) time.Duration { return c.SessionTimeout },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.SessionTimeout },
+		},
+		{
+			"POOL_IDLE_TIMEOUT",
+			func(c *Config) time.Duration { return c.PoolIdleTimeout },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.PoolIdleTimeout },
+		},
+		{
+			"SESSION_REVALIDATE_INTERVAL",
+			func(c *Config) time.Duration { return c.RevalidateInterval },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.RevalidateInterval },
+		},
+		{
+			"ACTION_TIMEOUT",
+			func(c *Config) time.Duration { return c.ActionTimeout },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.ActionTimeout },
+		},
+		{
+			"DRAIN_DELAY",
+			func(c *Config) time.Duration { return c.DrainDelay },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.DrainDelay },
+		},
+		{
+			"AUTH_FAILURE_WINDOW",
+			func(c *Config) time.Duration { return c.AuthFailureWindow },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.AuthFailureWindow },
+		},
+		{
+			"AUTH_DISTINCT_TOKEN_WINDOW",
+			func(c *Config) time.Duration { return c.AuthDistinctWindow },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.AuthDistinctWindow },
+		},
+	}
+}
+
+// zeroDurationSpellings are ways an operator writes a zero duration: the bare
+// digit the variables documented first, and the Go duration forms the flag of
+// the same name accepts, which the variables used to refuse (issue 1171, item
+// 3), padded too, since every variable is read trimmed.
+var zeroDurationSpellings = []string{"0", "0s", "0ms", "0h0m0s", " 0s "}
+
+// TestLoad_AZeroDuration_TurnsItsSettingOffHoweverWritten pins what zero means
+// for every duration variable that has a zero to mean, at the stdio reader's
+// environment layer: the setting is off, written as the bare digit or as a Go
+// duration (issue 958). A negative duration is still refused, since zero
+// already says off and a minus sign is a typo.
+func TestLoad_AZeroDuration_TurnsItsSettingOffHoweverWritten(t *testing.T) {
 	t.Setenv("GITLAB_URL", testHTTPExampleURL)
 	t.Setenv("GITLAB_TOKEN", "test")
 
-	t.Run("POOL_IDLE_TIMEOUT=0 disables idle eviction", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_POOL_IDLE_TIMEOUT", "0")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.PoolIdleTimeout != 0 {
-			t.Errorf("PoolIdleTimeout = %v, want 0", cfg.PoolIdleTimeout)
-		}
-	})
+	for _, setting := range zeroOffDurations() {
+		t.Run(setting.name, func(t *testing.T) {
+			for _, spelling := range zeroDurationSpellings {
+				t.Run(strconv.Quote(spelling), func(t *testing.T) {
+					t.Setenv(EnvPrefix+setting.name, spelling)
+					cfg, err := Load()
+					if err != nil {
+						t.Fatalf("Load() with %s=%q error = %v, want the setting off", setting.name, spelling, err)
+					}
+					if got := setting.loaded(cfg); got != 0 {
+						t.Errorf("%s=%q loaded as %v, want 0", setting.name, spelling, got)
+					}
+				})
+			}
+			t.Run("negative", func(t *testing.T) {
+				t.Setenv(EnvPrefix+setting.name, "-1s")
+				if _, err := Load(); err == nil {
+					t.Errorf("Load() with %s=-1s error = nil, want a refusal", setting.name)
+				}
+			})
+		})
+	}
+}
 
-	t.Run("SESSION_REVALIDATE_INTERVAL=0 disables revalidation", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "0")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.RevalidateInterval != 0 {
-			t.Errorf("RevalidateInterval = %v, want 0", cfg.RevalidateInterval)
-		}
-	})
+// TestLoad_OAuthCacheTTL_ZeroOrNegative_IsRefused pins the zero issue 958 keeps
+// refused: an OAuth cache TTL of zero is no setting an operator could want,
+// since the verifier stamps the TTL into every token's expiration, so a zero
+// expires each token the moment it is verified. However it is written, and
+// below zero, the variable refuses the start.
+func TestLoad_OAuthCacheTTL_ZeroOrNegative_IsRefused(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
 
-	t.Run("zero stays invalid where it is not documented", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "0")
-		if _, err := Load(); err == nil {
-			t.Error("Load() error = nil, want an error for SESSION_TIMEOUT=0")
-		}
-	})
+	for _, value := range append(slices.Clone(zeroDurationSpellings), "-5m") {
+		t.Run(strconv.Quote(value), func(t *testing.T) {
+			t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", value)
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), "OAUTH_CACHE_TTL") {
+				t.Errorf("Load() with OAUTH_CACHE_TTL=%q error = %v, want a refusal naming the variable", value, err)
+			}
+		})
+	}
 }
 
 // TestValidate_OAuthRequiresPublicURL verifies oauth mode refuses to start
@@ -2254,9 +2323,9 @@ func TestUploadSizeConstants_HoldTheDefaultBelowTheCeilingItNames(t *testing.T) 
 // parsed Config against the very constant that supplied its default, and the
 // bound tests hand a maximum back to the parser that enforces it, so a constant
 // that collapsed to zero would move both sides of every one of them. Zero is
-// what this arithmetic collapses to, and neither parser here has a floor to
-// catch it: parseBoundedDurationEnv only refuses a value above the maximum, and
-// parseDisableableDurationEnv reads zero as the operator asking for no bound at
+// what this arithmetic collapses to, and the parser here has no floor to catch
+// it: parseDisableableDurationEnv only refuses a value above the maximum, and
+// reads zero as the operator asking for no bound at
 // all — so a DefaultActionTimeout that lost its multiplication would leave
 // every handler unbounded and say nothing, which is the opposite of what the
 // constant is for.

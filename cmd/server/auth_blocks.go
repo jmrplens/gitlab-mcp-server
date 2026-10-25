@@ -119,10 +119,13 @@ func authFailureLimiter(cfg *config.Config) *serverpool.AuthRateLimiter {
 // A window of zero switches off the budget that owns it and no other
 // (INV-015). The budgets that read another one's window keep the default in
 // its place rather than inheriting a zero, which would make every record lapse
-// the moment it is kept: the transport-source budget reads the failure window
-// (AUB-002), and the /48 aggregate reads both windows (AUB-006). It replaces
-// the copies in transportFailureBudget and newTransportBudget and the two in
-// authNetworkBudget (issue 958).
+// the moment it is kept or, for the distinct-credential budget's escalation
+// step, switch that budget off with the failure budget: the transport-source
+// budget and the escalation read the failure window (AUB-002, AUB-003), and
+// the /48 aggregate reads both windows (AUB-006). It replaces the copies in
+// transportFailureBudget and newTransportBudget and the two in
+// authNetworkBudget, and gives the escalation step the fallback it lacked
+// (issue 958).
 func windowOrDefault(configured, fallback time.Duration) time.Duration {
 	if configured > 0 {
 		return configured
@@ -136,9 +139,12 @@ func windowOrDefault(configured, fallback time.Duration) time.Duration {
 // The escalation step is the fast window rather than a setting of its own, so
 // the ladder is one window, then ten, then sixty, and a deployment that
 // shortens the window to watch the behavior shortens the whole ladder with
-// it. At the defaults that is a minute, ten minutes and an hour.
+// it. At the defaults that is a minute, ten minutes and an hour. A fast window
+// of zero switches the fast budget off and leaves this one on, climbing from
+// the default window (issue 958), so only its own limit or window turns it off.
 func authSprayBudget(cfg *config.Config) *serverpool.DistinctTokenBudget {
-	return serverpool.NewDistinctTokenBudget(cfg.AuthDistinctTokenLimit, cfg.AuthDistinctWindow, cfg.AuthFailureWindow)
+	step := windowOrDefault(cfg.AuthFailureWindow, config.DefaultAuthFailureWindow)
+	return serverpool.NewDistinctTokenBudget(cfg.AuthDistinctTokenLimit, cfg.AuthDistinctWindow, step)
 }
 
 // networkFailingPrefixes is how many distinct IPv6 /64s of one /48 may have a

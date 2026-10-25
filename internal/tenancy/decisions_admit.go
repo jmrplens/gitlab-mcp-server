@@ -239,6 +239,19 @@ func admitDecisions() []Decision {
 			Sites: []Site{enforce(pkgOAuth, "acceptedRecipient"), enforce(pkgOAuth, "pinnedRefusalOf"), unaccepted, classify},
 		},
 		{
+			// A zero, or less, is refused at startup by the flag and the
+			// variable alike, in either authentication mode, which issue 958
+			// decided rather than reading it as off: the verifier stamps the
+			// TTL into every token's expiration, so a token cached for no time
+			// expires as it is verified and every request is refused, and a
+			// cache with no lifetime would keep a revoked token's identity for
+			// the life of the process. Neither is a deployment an operator
+			// asking for zero could want. The flag used to pass a zero through,
+			// in oauth mode to the point of use, which replaced it with the
+			// default, and in legacy mode unread, while the variable refused it
+			// in both (F-34); the replacement stays for a Config no validation
+			// saw. The range is checked in oauth mode only, where the TTL is
+			// used, through the flag and the variable alike.
 			ID: "ADM-005", Question: Admit, Kind: Lifetime, Class: ClassC, Disposition: Valued,
 			Resource: "how long, and how many, verified OAuth tokens are reused",
 			Key:      KeyVerified, StdioKey: KeyNone, Table: true,
@@ -247,7 +260,7 @@ func admitDecisions() []Decision {
 				"OAuthCacheCapacity",
 			},
 			Source: Configurable, Flags: []string{"--oauth-cache-ttl"}, Envs: []string{"GITLAB_MCP_OAUTH_CACHE_TTL"},
-			Config: []string{"OAuthCacheTTL"}, Malformed: RefuseStartup, Zero: ZeroSelectsDefault,
+			Config: []string{"OAuthCacheTTL"}, Malformed: RefuseStartup, Zero: ZeroRefused, ZeroBy: "issue 958",
 			// Full, the cache drops an expired identity or, when none has
 			// expired, the one used least recently, to hold the one GitLab has
 			// just verified, which issue 950 decided (answering F-29): refusing
@@ -258,8 +271,7 @@ func admitDecisions() []Decision {
 			// pool an operator may configure (POL-001's PoolSizeMax, held equal
 			// by the values test).
 			AtCapacity: EvictAcrossKeys,
-			Decided:    []string{"issue 950"},
-			Findings:   []string{"F-34"},
+			Decided:    []string{"issue 950", "issue 958"},
 			Sites: []Site{
 				alias(pkgConfig, "DefaultOAuthCacheTTL", "OAuthCacheTTL"),
 				alias(pkgConfig, "MinOAuthCacheTTL", "OAuthCacheTTLFloor"),
@@ -268,6 +280,8 @@ func admitDecisions() []Decision {
 				alias(pkgServer, "tokenCacheSweepMinInterval", "OAuthCacheSweepFloor"),
 				alias(pkgOAuth, "identityCacheCapacity", "OAuthCacheCapacity"),
 				enforce(pkgOAuth, "effectiveCacheTTL"),
+				enforce(pkgServer, "refuseNonPositiveOAuthCacheTTL"),
+				enforce(pkgServer, "validateOAuthCacheTTL"),
 				enforce(pkgServer, "oauthCacheTTL"),
 				enforce(pkgOAuth, "NewTokenCache"),
 				enforce(pkgOAuth, "TokenCache.Put"),
@@ -505,6 +519,13 @@ func admitDecisions() []Decision {
 		{
 			// Keyed on IDN-004's address, an IPv6 one by its /64 (issue 954,
 			// which answered F-14 and F-25 here and on AUB-003).
+			//
+			// A zero window switches this budget off and no other, which issue
+			// 958 decided (answering F-34): the distinct-credential budget's
+			// escalation steps by this window and used to be switched off with
+			// it, and steps by the default window instead, as the
+			// transport-source budget and the /48 aggregate already counted in
+			// it (windowOrDefault).
 			ID: "AUB-001", Question: Admit, Kind: Budget, Class: ClassA, Disposition: Valued,
 			Resource: "failed authentications one address may produce in a window",
 			Key:      KeyAddress, StdioKey: KeyNone,
@@ -514,8 +535,7 @@ func admitDecisions() []Decision {
 			Source:    Configurable, Flags: []string{"--auth-failure-limit", "--auth-failure-window"},
 			Envs:   []string{"GITLAB_MCP_AUTH_FAILURE_LIMIT", "GITLAB_MCP_AUTH_FAILURE_WINDOW"},
 			Config: []string{"AuthFailureLimit", "AuthFailureWindow"}, Malformed: RefuseStartup, Zero: ZeroOff,
-			Decided:  []string{"issue 790", "issue 954"},
-			Findings: []string{"F-34"},
+			Decided:  []string{"issue 790", "issue 954", "issue 958"},
 			Refusals: blockedRefusals,
 			// The gate's own codes are declared here, with the budget row whose
 			// layer moves them: they mirror the statuses every gate refusal
@@ -597,6 +617,10 @@ func admitDecisions() []Decision {
 			},
 		},
 		{
+			// The escalation steps by AUB-001's window, or by the default when
+			// that window is zero, which switches AUB-001 off and leaves this
+			// budget on (issue 958, answering F-34): only its own limit or
+			// window turns it off. It used to be switched off with AUB-001.
 			ID: "AUB-003", Question: Admit, Kind: Budget, Class: ClassA, Disposition: Valued,
 			Resource: "distinct refused credentials one address may have in a window",
 			Key:      KeyAddress, StdioKey: KeyNone,
@@ -610,9 +634,8 @@ func admitDecisions() []Decision {
 			Source:    Configurable, Flags: []string{"--auth-distinct-token-limit", "--auth-distinct-token-window"},
 			Envs:   []string{"GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", "GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW"},
 			Config: []string{"AuthDistinctTokenLimit", "AuthDistinctWindow"}, Malformed: RefuseStartup,
-			Zero: ZeroOff, OffWith: "AUB-001",
-			Decided:  []string{"issue 790", "issue 954"},
-			Findings: []string{"F-34"},
+			Zero:     ZeroOff,
+			Decided:  []string{"issue 790", "issue 954", "issue 958"},
 			Refusals: blockedRefusals,
 			Sites: []Site{
 				alias(pkgConfig, "DefaultAuthDistinctTokenLimit", "AuthDistinctTokenLimit"),
@@ -624,6 +647,7 @@ func admitDecisions() []Decision {
 				ladderStep(2, "AuthEscalationThird"),
 				enforce(pkgPool, "NewDistinctTokenBudget"),
 				enforce(pkgServer, "authSprayBudget"),
+				enforce(pkgServer, "windowOrDefault"),
 				resolve, check,
 			},
 		},

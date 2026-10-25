@@ -1056,6 +1056,7 @@ func TestRunWithContext_SuccessHTTPIndividualTools(t *testing.T) {
 			toolSurface:    config.ToolSurfaceIndividual,
 			maxHTTPClients: config.DefaultMaxHTTPClients,
 			sessionTimeout: config.DefaultSessionTimeout,
+			oauthCacheTTL:  config.DefaultOAuthCacheTTL,
 		})
 	}()
 
@@ -1088,6 +1089,7 @@ func TestRunWithContext_SuccessHTTPMetaTools(t *testing.T) {
 			toolSurface:    config.ToolSurfaceMeta,
 			maxHTTPClients: config.DefaultMaxHTTPClients,
 			sessionTimeout: config.DefaultSessionTimeout,
+			oauthCacheTTL:  config.DefaultOAuthCacheTTL,
 		})
 	}()
 
@@ -1233,6 +1235,7 @@ func TestRunWithContext_HTTPMissingURL(t *testing.T) {
 				allowAnyGitLabURL: tc.allowAny,
 				maxHTTPClients:    config.DefaultMaxHTTPClients,
 				sessionTimeout:    config.DefaultSessionTimeout,
+				oauthCacheTTL:     config.DefaultOAuthCacheTTL,
 			})
 			if tc.wantsStart {
 				if err != nil {
@@ -1674,11 +1677,16 @@ func TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry(t *testing.T) {
 		{entry: "-pool-idle-timeout dur", want: fmt.Sprintf("(default %s, 0 to disable)", config.DefaultPoolIdleTimeout)},
 		{entry: "-rate-limit-burst int", want: fmt.Sprintf("(default %d)", config.DefaultRateLimitBurst)},
 		{entry: "-auth-failure-limit int", want: fmt.Sprintf("(default %d;", config.DefaultAuthFailureLimit)},
-		{entry: "-auth-failure-window dur", want: fmt.Sprintf("(default %s)", config.DefaultAuthFailureWindow)},
+		{entry: "-auth-failure-window dur", want: fmt.Sprintf("(default %s;", config.DefaultAuthFailureWindow)},
+		// A zero failure window switches the failure budget off and nothing
+		// else (issue 958), in both blocks.
+		{entry: "-auth-failure-window dur", want: "0 disables the failure budget alone, and the escalation steps by the default"},
+		{entry: "GITLAB_MCP_AUTH_FAILURE_WINDOW", want: "0 disables the failure budget alone, and the escalation steps by the default"},
+		{entry: "GITLAB_MCP_SESSION_TIMEOUT", want: "and with 0 until its credential's pool entry is evicted"},
 		{entry: "-auth-distinct-token-limit int", want: fmt.Sprintf("(default %d;", config.DefaultAuthDistinctTokenLimit)},
 		{entry: "-auth-distinct-token-window dur", want: fmt.Sprintf("(default %s)", config.DefaultAuthDistinctWindow)},
 		{entry: "GITLAB_MCP_AUTH_FAILURE_LIMIT", want: fmt.Sprintf("(default %d;", config.DefaultAuthFailureLimit)},
-		{entry: "GITLAB_MCP_AUTH_FAILURE_WINDOW", want: fmt.Sprintf("(default %s)", config.DefaultAuthFailureWindow)},
+		{entry: "GITLAB_MCP_AUTH_FAILURE_WINDOW", want: fmt.Sprintf("(default %s;", config.DefaultAuthFailureWindow)},
 		{entry: "GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT", want: fmt.Sprintf("(default %d;", config.DefaultAuthDistinctTokenLimit)},
 		{entry: "GITLAB_MCP_AUTH_DISTINCT_TOKEN_WINDOW", want: fmt.Sprintf("(default %s)", config.DefaultAuthDistinctWindow)},
 		// The discovery documents' bucket (RTC-008), in both blocks.
@@ -7689,6 +7697,7 @@ func TestRunHTTP_SessionTimeoutExceedsMax(t *testing.T) {
 		gitlabURL:      "https://gitlab.example.com",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: 48 * time.Hour,
+		oauthCacheTTL:  config.DefaultOAuthCacheTTL,
 	})
 	if err == nil {
 		t.Fatal("expected error for session-timeout exceeding max")
@@ -7706,6 +7715,7 @@ func TestRunHTTP_RevalidateIntervalExceedsMax(t *testing.T) {
 		maxHTTPClients:     config.DefaultMaxHTTPClients,
 		sessionTimeout:     config.DefaultSessionTimeout,
 		revalidateInterval: 48 * time.Hour,
+		oauthCacheTTL:      config.DefaultOAuthCacheTTL,
 	})
 	if err == nil {
 		t.Fatal("expected error for revalidate-interval exceeding max")
@@ -9790,9 +9800,18 @@ func TestServeHTTP_ToolsList_ExecuteActionCarriesXMCPHeader(t *testing.T) {
 // refuses negative --max-request-body-bytes: the SDK would interpret it as
 // "no limit", which must be unreachable from configuration.
 func TestValidateHTTPRuntimeConfig_NegativeBodyLimit_Rejected(t *testing.T) {
-	cfg := &config.Config{MaxRequestBodyBytes: -1}
-	if err := validateHTTPRuntimeConfig(cfg); err == nil {
+	cfg := &config.Config{
+		MaxRequestBodyBytes: -1,
+		// Valid, so the refusal is the body limit's and not one of theirs.
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+	}
+	err := validateHTTPRuntimeConfig(cfg)
+	if err == nil {
 		t.Fatal("expected error for negative --max-request-body-bytes")
+	}
+	if !strings.Contains(err.Error(), "--max-request-body-bytes") {
+		t.Errorf("error = %q, want it to name --max-request-body-bytes", err)
 	}
 }
 
@@ -9816,9 +9835,10 @@ func TestValidateHTTPAuthConfig_OAuthPublicURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &config.Config{
-				AuthMode:  "oauth",
-				GitLabURL: "https://gitlab.example.com",
-				PublicURL: tt.publicURL,
+				AuthMode:      "oauth",
+				GitLabURL:     "https://gitlab.example.com",
+				PublicURL:     tt.publicURL,
+				OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 			}
 			err := validateHTTPAuthConfig(cfg)
 			if (err != nil) != tt.wantErr {
@@ -9826,6 +9846,48 @@ func TestValidateHTTPAuthConfig_OAuthPublicURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateHTTPAuthConfig_ANonPositiveOAuthCacheTTL_IsRefused pins the zero
+// issue 958 keeps refused for --oauth-cache-ttl, the flag now refusing at
+// startup what its variable refuses (D7 of the 2026-09 documentation audit,
+// issue 529). It used to pass a zero or a negative TTL through, and the point
+// of use then replaced it with the default and a warning, so a deployment
+// started at 15 minutes that no page described. A zero TTL means nothing an
+// operator could want: the verifier stamps it into every token's expiration,
+// so each token would expire the moment it is verified.
+//
+// Legacy mode is refused too. It verifies no OAuth token, but the HTTP
+// overlay refuses GITLAB_MCP_OAUTH_CACHE_TTL=0 whatever the mode, so a flag
+// that let the same zero through there would read it apart from its variable,
+// the shape of F-34. The range is checked only where the TTL is used, which
+// the last case holds: a legacy deployment is not refused a TTL below it.
+func TestValidateHTTPAuthConfig_ANonPositiveOAuthCacheTTL_IsRefused(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{"oauth", "legacy"} {
+		for _, ttl := range []time.Duration{0, -5 * time.Minute} {
+			t.Run(mode+"/"+ttl.String(), func(t *testing.T) {
+				t.Parallel()
+				cfg := &config.Config{
+					AuthMode:      mode,
+					GitLabURL:     "https://gitlab.example.com",
+					PublicURL:     "https://mcp.example.com",
+					OAuthCacheTTL: ttl,
+				}
+				err := validateHTTPAuthConfig(cfg)
+				if err == nil || !strings.Contains(err.Error(), "--oauth-cache-ttl must be positive") {
+					t.Errorf("validateHTTPAuthConfig(%s, oauth-cache-ttl=%v) error = %v, want the refusal of a TTL that is not positive", mode, ttl, err)
+				}
+			})
+		}
+	}
+	t.Run("legacy/below the minimum", func(t *testing.T) {
+		t.Parallel()
+		cfg := &config.Config{AuthMode: "legacy", OAuthCacheTTL: config.MinOAuthCacheTTL - time.Second}
+		if err := validateHTTPAuthConfig(cfg); err != nil {
+			t.Errorf("validateHTTPAuthConfig(legacy, oauth-cache-ttl=%v) error = %v, want nil", cfg.OAuthCacheTTL, err)
+		}
+	})
 }
 
 // TestServeHTTP_Stateless_BodyLimitReturns413 verifies that
@@ -10681,9 +10743,10 @@ func TestValidateHTTPAuthConfig_OAuthRequiresHTTPSGitLabURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &config.Config{
-				AuthMode:  "oauth",
-				GitLabURL: tt.gitlabURL,
-				PublicURL: "https://mcp.example.com",
+				AuthMode:      "oauth",
+				GitLabURL:     tt.gitlabURL,
+				PublicURL:     "https://mcp.example.com",
+				OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 			}
 			err := validateHTTPAuthConfig(cfg)
 			if (err != nil) != tt.wantErr {
@@ -11676,6 +11739,7 @@ func TestValidateHTTPAuthConfig_OAuthRefusesSkipTLSVerify(t *testing.T) {
 				GitLabURLs:    tt.instances,
 				SkipTLSVerify: tt.skipTLS,
 				PublicURL:     "https://mcp.example.com",
+				OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 			}
 			err := validateHTTPAuthConfig(cfg)
 			if tt.wantErr {
@@ -12046,6 +12110,7 @@ func TestRunHTTP_InvalidDescriptionSubstitutions(t *testing.T) {
 		gitlabURL:      "https://gitlab.example.com",
 		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
+		oauthCacheTTL:  config.DefaultOAuthCacheTTL,
 	})
 	if err == nil {
 		t.Fatal("runHTTP accepted a malformed substitution value")
@@ -12369,10 +12434,10 @@ func TestServerCardMediaType_FollowsThePathTheCardWasFetchedFrom(t *testing.T) {
 // TestOAuthCacheTTL_ANonPositiveValueFallsBackAndSaysSo covers the guard in
 // front of the identity cache's lifetime.
 //
-// A zero TTL would mean every request re-verifies upstream, which is a load
-// multiplier on the GitLab instance rather than a security setting; the flag
-// validation rejects such a value, and this is the second line of defense for a
-// Config assembled directly.
+// A zero TTL would expire every token as it is verified, since the verifier
+// stamps the TTL into its expiration; the flag and the variable refuse such a
+// value at startup (TestValidateHTTPAuthConfig_ANonPositiveOAuthCacheTTL_IsRefused),
+// and this is the second line of defense for a Config assembled directly.
 func TestOAuthCacheTTL_ANonPositiveValueFallsBackAndSaysSo(t *testing.T) {
 	t.Parallel()
 
@@ -12886,8 +12951,10 @@ func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
 			RateLimitBurst:    1,
 			// A pool size is part of a usable configuration: the size bound is
 			// checked here too, and a zero would make every case in this table
-			// fail on the pool rather than on the setting it is about.
+			// fail on the pool rather than on the setting it is about. So is
+			// an OAuth cache TTL, whose zero is refused in either mode.
 			MaxHTTPClients: config.DefaultMaxHTTPClients,
+			OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
 		}
 	}
 
@@ -13849,6 +13916,7 @@ func TestRunHTTP_HandsTheToolLayerItsSettings(t *testing.T) {
 		gitlabURL:         "https://gitlab.example.com",
 		maxHTTPClients:    config.DefaultMaxHTTPClients,
 		sessionTimeout:    config.DefaultSessionTimeout,
+		oauthCacheTTL:     config.DefaultOAuthCacheTTL,
 		actionTimeout:     7 * time.Minute,
 		embeddedResources: false,
 	})
@@ -13916,6 +13984,7 @@ func TestRunWithContext_ReportsTheBuildAsTheTelemetryServiceVersion(t *testing.T
 			toolSurface:    config.ToolSurfaceIndividual,
 			maxHTTPClients: config.DefaultMaxHTTPClients,
 			sessionTimeout: config.DefaultSessionTimeout,
+			oauthCacheTTL:  config.DefaultOAuthCacheTTL,
 		})
 	}()
 
@@ -15124,6 +15193,7 @@ func TestRunHTTP_AllowAnyGitLabURLStarts(t *testing.T) {
 		allowAnyGitLabURL: true,
 		maxHTTPClients:    config.DefaultMaxHTTPClients,
 		sessionTimeout:    config.DefaultSessionTimeout,
+		oauthCacheTTL:     config.DefaultOAuthCacheTTL,
 	})
 	if err != nil {
 		t.Fatalf("runHTTP with --allow-any-gitlab-url: %v", err)
@@ -16362,13 +16432,14 @@ func TestHTTPStartupAttrs_AnnounceTheSessionCeilingOnlyWhereSessionsAreKept(t *t
 
 // TestWarnStatefulSessions_TellsWhatTheTransportAndAZeroTimeoutCost holds the
 // startup warnings of a deployment that keeps sessions: the transport is a
-// legacy mode, and with --session-timeout=0 a session no client deletes keeps
-// its slot of the ceiling until its credential is evicted. A stateless
-// deployment is told neither.
+// legacy mode, and with a session timeout of zero a session no client deletes
+// keeps its slot of the ceiling until its credential is evicted. The warning
+// names both spellings of that zero, since the variable means by it what the
+// flag does (issue 958). A stateless deployment is told neither.
 //
 // Not parallel: it replaces the process-wide default logger.
 func TestWarnStatefulSessions_TellsWhatTheTransportAndAZeroTimeoutCost(t *testing.T) {
-	const legacy, zero = "legacy compatibility mode", "--session-timeout=0"
+	const legacy, zero = "legacy compatibility mode", "--session-timeout=0 (or GITLAB_MCP_SESSION_TIMEOUT=0)"
 	for _, tc := range []struct {
 		name      string
 		stateless bool
