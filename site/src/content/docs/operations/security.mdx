@@ -599,12 +599,12 @@ From the [Releases page](https://github.com/jmrplens/gitlab-mcp-server/releases)
 ```bash
 cosign verify-blob \
   --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
+  --certificate-identity-regexp "^https://github\.com/jmrplens/gitlab-mcp-server/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   checksums.txt
 ```
 
-A successful verification prints `Verified OK`. The `--certificate-identity-regexp` constraint ensures the signature was produced by a GitHub Actions workflow running in this repository, and `--certificate-oidc-issuer` pins the identity to GitHub's official OIDC issuer.
+A successful verification prints `Verified OK`. The `--certificate-identity-regexp` constraint accepts only a signature the release workflow made at a release tag, and `--certificate-oidc-issuer` pins the identity to GitHub's official OIDC issuer. A constraint naming the repository alone would also accept a signature made under the identity of any other workflow in it, such as the Scorecard workflow, which runs a third-party container image with `id-token: write`. To hold the signature to the one release you downloaded, pass `--certificate-identity` with that release's tag instead, as the install scripts do.
 
 :::caution
 If verification fails, **do not run the binary**. A failure indicates the checksums file was tampered with or did not originate from this repository's release pipeline.
@@ -642,11 +642,11 @@ The image is published to two registries, and the same index is pushed to both, 
 ```bash
 # Signature: who pushed this index. Either registry, same answer.
 cosign verify ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%% \
-  --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
+  --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v%%VERSION%%" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 cosign verify docker.io/jmrplens/gitlab-mcp-server:%%VERSION%% \
-  --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
+  --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v%%VERSION%%" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # Build provenance: which commit and which workflow run produced it

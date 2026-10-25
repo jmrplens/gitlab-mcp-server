@@ -137,7 +137,7 @@ Los scripts de instalación ya comparan la descarga con `checksums.txt`, y compr
      checksums.txt
    ```
 
-   `--certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/"` en lugar de la identidad exacta acepta cualquier etiqueta firmada por los workflows de este repositorio. En ambos casos la salida esperada es `Verified OK`.
+   `--certificate-identity-regexp "^https://github\.com/jmrplens/gitlab-mcp-server/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$"` en lugar de la identidad exacta acepta el workflow de release en cualquier etiqueta de release. Un patrón que nombrara solo el repositorio aceptaría también una firma hecha con la identidad de cualquier otro workflow suyo, y por eso ninguna de las dos formas deja fuera `release.yml`. En ambos casos la salida esperada es `Verified OK`.
 
 3. Comprueba el binario contra la lista firmada:
 

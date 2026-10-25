@@ -137,7 +137,7 @@ The install scripts already compare the download with `checksums.txt`, and check
      checksums.txt
    ```
 
-   `--certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/"` in place of the exact identity accepts any tag signed by this repository's workflows. Either way the expected output is `Verified OK`.
+   `--certificate-identity-regexp "^https://github\.com/jmrplens/gitlab-mcp-server/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$"` in place of the exact identity accepts the release workflow at any release tag. A pattern naming the repository alone would also accept a signature made under the identity of any other workflow in it, which is why neither form leaves `release.yml` out. Either way the expected output is `Verified OK`.
 
 3. Check the binary against the signed list:
 
