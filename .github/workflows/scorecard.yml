@@ -1,0 +1,123 @@
+# OpenSSF Scorecard for gitlab-mcp-server (issue 1269)
+#
+# Runs ossf/scorecard-action on every push to main and once a week. The result
+# is published to the OpenSSF results API (publish_results), which is what the
+# Scorecard badge and scorecard.dev/viewer read, and uploaded to code scanning
+# as SARIF beside CodeQL's alerts.
+#
+# Publishing binds this file to the restrictions the results API checks before
+# it accepts a run (https://github.com/ossf/scorecard-action#workflow-restrictions):
+# no top-level env or defaults, no workflow-level write, id-token: write in the
+# Scorecard job alone, and in that job no env, defaults, container or
+# services, one Ubuntu hosted runner, and only steps that use one of the
+# actions the API approves (among them actions/checkout,
+# actions/upload-artifact, github/codeql-action/upload-sarif and
+# ossf/scorecard-action), so no run: step there. The API parses the whole file
+# and refuses a key its parser does not know, cache-mode: none being the one
+# exception it reviewed. A run the API refuses does not fail the analysis job:
+# v2.5.0 leaves a warning annotation once its retries fail and the step passes
+# (fail_on_publish_error comes with a later release), so whether a run
+# published is read on scorecard.dev/viewer. Only pushes to the default branch
+# and the schedule can publish, which is why nothing here runs on a pull
+# request.
+#
+# The action's action.yaml runs docker://ghcr.io/ossf/scorecard-action at its
+# release tag, which a push to that tag replaces under the commit pinned here.
+# The API takes that image only as the action or by a tag: a step naming it by
+# digest is not one it approves. cmd/audit_supply_chain refuses such an image
+# unless declarations.go accepts it, and its declaration (write-free-job) holds
+# every job that runs it to a token that writes nothing but id-token, to
+# cache-mode: none and to reading no secret; its reason also says which
+# verifiers accept the OIDC identity the job can mint.
+#
+# cache-mode: none is set for the whole workflow because permissions: does not
+# reach the Actions cache: the runner hands a container action the job's
+# runtime token, and on a push or the schedule a job that sets no cache-mode
+# can save an entry that pages.yml, on main, or the release's image build,
+# under a tag, restores and runs. Neither job here reads or writes the cache.
+#
+# The SARIF upload runs in a job of its own, so security-events: write, which
+# can also dismiss code scanning alerts, is never held where the image runs.
+# What it uploads is still what the image wrote, and upload-sarif keeps each
+# run's tool name and automationDetails.id, which also decides the analysis it
+# replaces (the category input applies only to a run without one, which
+# Scorecard never writes, so it is not set). The upload job therefore refuses a
+# SARIF whose runs are not Scorecard's own supply-chain category before
+# upload-sarif reads it, so the image cannot replace CodeQL's analysis.
+#
+# The analysis job does not check the repository out: on a push or the
+# schedule the action reads the repository through GitHub's API, and checks
+# out nothing of its own. The upload job does, persisting no credential,
+# because upload-sarif reads the files an alert names to fingerprint it.
+
+name: Scorecard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Thursdays, 04:41 UTC, off the hour as the other scheduled runs are,
+    # since GitHub delays runs that pile up on round times.
+    - cron: "41 4 * * 4"
+
+permissions:
+  contents: read
+
+cache-mode: none
+
+jobs:
+  analysis:
+    name: "🔐 Scorecard analysis"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # The results API takes a run's results only with the job's OIDC token.
+      id-token: write
+    steps:
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - name: Keep the SARIF for the upload job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+          if-no-files-found: error
+
+  code-scanning:
+    name: "🔐 Scorecard to code scanning"
+    needs: analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: scorecard-sarif
+      # Scorecard names its tool "Scorecard" and writes every run's
+      # automationDetails.id as supply-chain/<run>/<commit>-<date>
+      # (pkg/scorecard/sarif.go in ossf/scorecard).
+      - name: Refuse a SARIF that is not Scorecard's
+        run: |
+          jq -e '
+            (.runs | type == "array" and length > 0) and
+            all(.runs[];
+              .tool.driver.name == "Scorecard" and
+              (.automationDetails.id | type == "string" and startswith("supply-chain/")))
+          ' results.sarif > /dev/null || {
+            echo "::error file=results.sarif::a run is not Scorecard's supply-chain category, so it is not uploaded"
+            exit 1
+          }
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: results.sarif

@@ -160,7 +160,12 @@ var imageCategories = map[string]string{
 // repository is never declared, since its image can be pinned where it is
 // written. An entry that excuses nothing is reported, on the terms every
 // declaration table in this repository is held to.
-var declaredTaggedImages = map[string]declaration{}
+var declaredTaggedImages = map[string]declaration{
+	"ossf/scorecard-action docker://ghcr.io/ossf/scorecard-action": {
+		category: categoryWriteFreeJob,
+		reason:   "scorecard.yml publishes its results to the OpenSSF results API, which takes a run's results only when every step of the Scorecard job is one it approves, and a step naming the image by its digest is not: the API's verify_workflow.go reads a step's name as everything before its @, so docker://ghcr.io/ossf/scorecard-action:v2.5.0@sha256:... is an unapproved step and leaves the API finding no Scorecard job at all, and it takes the image directly only by a tag, which pins nothing the action's commit does not. This action pinned by its commit is therefore the one form that publishes; it is also the form the action's README documents and the one Dependabot proposes a bump of, after the github-actions cooldown and with the tag the new commit names in the record's diff, while it does not update a docker:// step. The analysis job holds contents: read and id-token: write, runs with cache-mode: none, reads no secret and runs on pushes to main and on the weekly schedule only. The identity it can mint names scorecard.yml at refs/heads/main: npm, PyPI and nuget.org refuse it, since each trusted publisher names release.yml and the release environment, and so does every signature or attestation check this repository runs or documents, each of which names release.yml, every one it runs at a release tag; the MCP Registry accepts it, since its GitHub OIDC login grants io.github.jmrplens/* to a token from any workflow of any repository of the owner, which nothing on this side can narrow. The SARIF it writes reaches code scanning through a job of its own, which runs no code of the image and refuses a SARIF whose runs are not Scorecard's supply-chain category before upload-sarif reads it",
+	},
+}
 
 // The reasons a script in another language than Go may be declared for. Each
 // but the last is a reason it has to stay; the last is a reason it is still

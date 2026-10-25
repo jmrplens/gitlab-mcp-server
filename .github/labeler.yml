@@ -47,6 +47,7 @@ security:
           - PRIVACY.md
           - .gitguardian.yaml
           - .github/workflows/codeql.yml
+          - .github/workflows/scorecard.yml
           - .github/scripts/**
           - .github/dependabot.yml
           - cmd/audit_supply_chain/**

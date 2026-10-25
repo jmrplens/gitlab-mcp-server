@@ -175,7 +175,8 @@
 // puts there runs with the job's token, its secrets and the runtime token the
 // runner hands every container action, which permissions: does not reach and
 // which saves to the Actions cache on a push or a schedule unless cache-mode
-// is none.
+// is none. Its one entry is ossf/scorecard-action, whose action.yaml runs
+// docker://ghcr.io/ossf/scorecard-action at its release tag.
 //
 // The record holds, for every pinned action a step reaches, the metadata file
 // at its commit, and the files of its directory a credentialed job's steps
