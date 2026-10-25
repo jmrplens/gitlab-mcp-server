@@ -694,6 +694,16 @@ go run golang.org/x/vuln/cmd/govulncheck@latest -mode binary -scan module ./gitl
 
 Releases 3.0.0 and 3.1.0 carry `golang.org/x/crypto` in their build information, so those scanners report `GO-2026-5932` against them, although neither links the openpgp packages the advisory concerns: the module was there for one HKDF function, which later releases take from the Go standard library, so they do not carry the module at all. Releases before 3.0.0 did link openpgp, through the self-update subsystem 3.0.0 removed.
 
+## Known vulnerabilities in the image's packages
+
+The image runs on Alpine Linux, pinned by digest, with `ca-certificates` and `tzdata` added. From the first release after 3.3.0, the release workflow scans the image's packages for both platforms with [Trivy](https://trivy.dev), the scanner you would run against the published tag, after the smoke test and before anything is pushed. An advisory against an Alpine package that has a fixed version and is rated `HIGH` or `CRITICAL` stops the release unless a reviewed declaration in the repository accepts it, and a declaration that no longer matches anything, or whose date for taking the fix has passed, stops it too. The rating is the one Trivy selects by default: Alpine's own security database rates nothing, so it comes from NVD or, until NVD has rated the advisory, from other vendors' ratings, and an advisory nobody has rated yet is reported as `UNKNOWN` without stopping the release. Advisories against the server binary's Go modules are left to the check in the previous section. A weekly run asks the same question of the image `latest` names, which is how an Alpine advisory published after a release shows up.
+
+A fixed package of the base image reaches the image with the next update of the pinned base image. `ca-certificates` and `tzdata` are installed from Alpine's repository when the image is built, so their fix arrives with the next build that installs them afresh rather than from the build cache. Either way, a published image can carry an advisory fixed since it was built. You can scan the version you run:
+
+```bash
+trivy image ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%
+```
+
 ## Does the token appear in logs?
 
 The server does not log the token. Tool-call logging is structured and writes a fixed set of fields to stderr: the tool name, the call duration, the error when one occurs, and, when the request carries an authenticated identity, the GitLab username and user ID for audit purposes. The token is not one of those fields, and it is sent to GitLab as a request header rather than in a URL, so it does not appear in logged request paths.

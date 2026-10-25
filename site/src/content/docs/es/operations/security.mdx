@@ -694,6 +694,16 @@ go run golang.org/x/vuln/cmd/govulncheck@latest -mode binary -scan module ./gitl
 
 Los releases 3.0.0 y 3.1.0 llevan `golang.org/x/crypto` en su información de compilación, así que esos escáneres informan de `GO-2026-5932` sobre ellos, aunque ninguno enlaza los paquetes openpgp a los que se refiere el aviso: el módulo estaba ahí por una única función HKDF, que los releases posteriores toman de la biblioteca estándar de Go, de modo que ya no llevan el módulo. Los releases anteriores al 3.0.0 sí enlazaban openpgp, a través del subsistema de autoactualización que el 3.0.0 eliminó.
 
+## Vulnerabilidades conocidas en los paquetes de la imagen
+
+La imagen se ejecuta sobre Alpine Linux, fijado por digest, con `ca-certificates` y `tzdata` añadidos. Desde el primer release posterior al 3.3.0, el workflow de release analiza los paquetes de la imagen de las dos plataformas con [Trivy](https://trivy.dev), el escáner que usarías contra la etiqueta publicada, después de la prueba de humo y antes de publicar nada. Un aviso contra un paquete de Alpine que tenga versión corregida y esté calificado como `HIGH` o `CRITICAL` detiene el release salvo que lo acepte una declaración revisada del repositorio, y también lo detiene una declaración que ya no coincida con nada o cuya fecha para adoptar la corrección haya pasado. La calificación es la que Trivy elige por defecto: la base de datos de seguridad de Alpine no califica nada, así que procede de NVD o, mientras NVD no haya calificado el aviso, de las calificaciones de otros proveedores, y un aviso que nadie ha calificado todavía se informa como `UNKNOWN` sin detener el release. Los avisos contra los módulos de Go del binario del servidor quedan para la comprobación de la sección anterior. Una ejecución semanal hace la misma pregunta a la imagen que nombra `latest`, que es como aparece un aviso de Alpine publicado después de un release.
+
+Un paquete corregido de la imagen base llega a la imagen con la siguiente actualización de la imagen base fijada. `ca-certificates` y `tzdata` se instalan desde el repositorio de Alpine al construir la imagen, así que su corrección llega con la siguiente construcción que los instale de nuevo en lugar de tomarlos de la caché. En los dos casos, una imagen publicada puede llevar un aviso corregido después de construirse. Puedes analizar la versión que ejecutas:
+
+```bash
+trivy image ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%
+```
+
 ## ¿El token aparece en los logs?
 
 El servidor no registra el token. El logging de llamadas a herramientas es estructurado y escribe un conjunto fijo de campos en stderr: el nombre de la herramienta, la duración de la llamada, el error cuando lo hay y, si la petición lleva una identidad autenticada, el nombre de usuario y el ID de GitLab con fines de auditoría. El token no es uno de esos campos, y se envía a GitLab como cabecera de la petición y no en la URL, así que tampoco aparece en las rutas registradas.
