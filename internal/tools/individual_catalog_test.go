@@ -657,14 +657,20 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 }
 
 // TestMustIndividualToolFromCatalogAction_DescriptionFallbacks verifies
-// individual tool descriptions use the individual snapshot's description,
-// then callbacks, usage text, then title fallback.
+// individual tool descriptions use the action's own description, then the
+// individual snapshot's description for the tool's name, then callbacks,
+// usage text, then title fallback.
 //
 // Each table case constructs a catalog action with different description inputs
 // and expects the projected MCP tool description to follow the fallback order
-// used by generated individual tools. The snapshot case names a tool the
-// embedded individual snapshot describes and also carries a callback and a
-// usage line, so the snapshot's description is held to win over both.
+// used by generated individual tools. The first two cases name a tool the
+// embedded individual snapshot describes and also carry a callback and a usage
+// line beside the description they expect, so a projection that let the
+// snapshot override the action's own description, or looked the snapshot up
+// only when the action had one, would answer with a later step instead. Every
+// real action's description matches its snapshot row whenever the snapshot is
+// fresh, so without these two cases no test could tell the first two steps
+// apart.
 func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) {
 	newAction := func(name, usage string) actioncatalog.Action {
 		return actioncatalog.Action{
@@ -687,6 +693,12 @@ func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) 
 	if snapshotDescription == "" {
 		t.Fatalf("the embedded individual snapshot holds no description for %s", snapshotTool)
 	}
+	generated := IndividualCatalogRegisterOptions{DescriptionForTool: func(actioncatalog.Action) string {
+		return "Generated description."
+	}}
+	explicitAction := newAction("explicit", "Use this catalog action.")
+	explicitAction.IndividualTool.Name = snapshotTool
+	explicitAction.IndividualTool.Description = "Explicit description."
 	snapshotAction := newAction("snapshot", "Use this catalog action.")
 	snapshotAction.IndividualTool.Name = snapshotTool
 
@@ -697,12 +709,16 @@ func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) 
 		want string
 	}{
 		{
+			name:   "explicit description before the snapshot",
+			Action: explicitAction,
+			opts:   generated,
+			want:   "Explicit description.",
+		},
+		{
 			name:   "snapshot description before the callback",
 			Action: snapshotAction,
-			opts: IndividualCatalogRegisterOptions{DescriptionForTool: func(actioncatalog.Action) string {
-				return "Generated description."
-			}},
-			want: snapshotDescription,
+			opts:   generated,
+			want:   snapshotDescription,
 		},
 		{
 			name:   "custom description callback",
