@@ -4,7 +4,6 @@ import (
 	"flag"
 	"os"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
@@ -50,22 +49,22 @@ var envBackedFlags = []struct {
 }{
 	{
 		flagName: "log-level",
-		envName:  config.EnvPrefix + "LOG_LEVEL",
+		envName:  "GITLAB_MCP_LOG_LEVEL",
 		usage:    "Logging verbosity: debug, info, warn or error",
 	},
 	{
 		flagName: "client-compat",
-		envName:  config.EnvPrefix + "CLIENT_COMPAT",
+		envName:  "GITLAB_MCP_CLIENT_COMPAT",
 		usage:    "Per-client response compatibility: auto (default) or off",
 	},
 	{
 		flagName: "upload-max-file-size",
-		envName:  config.EnvPrefix + "UPLOAD_MAX_FILE_SIZE",
+		envName:  "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
 		usage:    "Largest local file the upload and file-read tools accept: a byte count, or one with a KB, MB or GB suffix (default 2GB, at most 1024GB)",
 	},
 	{
 		flagName: "yolo-mode",
-		envName:  config.EnvPrefix + "YOLO_MODE",
+		envName:  "GITLAB_MCP_YOLO_MODE",
 		usage:    "Skip the confirmation prompt on destructive actions: true or false",
 	},
 	{
@@ -80,7 +79,7 @@ var envBackedFlags = []struct {
 	},
 	{
 		flagName: "pprof-addr",
-		envName:  config.EnvPrefix + "PPROF_ADDR",
+		envName:  "GITLAB_MCP_PPROF_ADDR",
 		usage:    "Serve Go's profiling handlers (net/http/pprof) on this loopback address, e.g. 127.0.0.1:6060; empty serves nothing. Refused unless the host is loopback",
 	},
 	{
