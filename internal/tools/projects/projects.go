@@ -1199,9 +1199,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	// GitLab requires at least one of the two (at_least_one_of in
-	// lib/api/projects.rb). The schema says so with an anyOf, which the meta
-	// surface does not check, so without this the call would reach GitLab and
-	// come back as a 400 read as a name already taken.
+	// lib/api/projects.rb). The catalog's schema says so with an anyOf, which
+	// no surface serves at the root of a tool's input schema, since the
+	// Anthropic Messages API refuses a tool list holding one, so without this
+	// the call would reach GitLab and come back as a 400 read as a name
+	// already taken.
 	if input.Name == "" && input.Path == "" {
 		return Output{}, errors.New("projectCreate: name or path is required. Give the project a name, a path or both, and GitLab derives the one left out")
 	}

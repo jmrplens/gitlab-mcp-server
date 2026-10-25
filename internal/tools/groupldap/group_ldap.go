@@ -34,10 +34,13 @@ const (
 // (ee/lib/api/ldap_group_links.rb) and refuses the first call with "cn, filter
 // are mutually exclusive" and the second with "cn, filter are missing, exactly
 // one parameter must be provided". Refusing here saves the round trip and
-// words the refusal the same on every surface: the meta surface reaches it
-// with both calls and the dynamic one with a call naming both, which neither
-// dispatcher refuses, while the individual tool's oneOf and the dynamic
-// dispatcher refuse the rest first.
+// words the refusal the same on every surface: the individual tool and the
+// meta tool reach it with both calls and the dynamic one with a call naming
+// both, which none of their dispatchers refuses, while the dynamic dispatcher
+// refuses a call naming neither first, and so does the meta tool's full
+// parameter-schema mode both, against the catalog's oneOf. The individual
+// tool is served without that oneOf, since the Anthropic Messages API
+// refuses a tool list holding one at the root.
 //
 // A selector counts as named when it is not empty, which is also when the
 // handlers send it. GitLab counts a key it is sent whatever its value, and it

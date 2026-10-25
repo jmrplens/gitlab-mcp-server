@@ -240,3 +240,120 @@ func TestRequiredParamAlternativesExclusive_OnlyAOneOfAlone(t *testing.T) {
 		})
 	}
 }
+
+// TestUnmetAlternatives_DemandsWhatFindPublishes verifies that a dispatcher
+// refusing a call before its handler runs demands of the alternatives exactly
+// what find and the manifest publish, since all of them read
+// [RequiredParamAlternatives]: an anyOf that declares no alternatives leaves
+// oneOf to answer, and an alternative that requires nothing satisfies its
+// keyword. A call that completes none of the groups is answered with all of
+// them, as find lists them, and one completing any group, of one name or of
+// several, is answered with none. A name counts by its presence, so an empty
+// value completes its group here and is left to the handler.
+//
+// The second used to be read the other way. The validator skipped a branch
+// that required nothing and demanded the remaining one, so it refused a call
+// the schema accepts, and, once find stopped publishing a group no call has to
+// meet, it would have refused find's own example for such a schema.
+func TestUnmetAlternatives_DemandsWhatFindPublishes(t *testing.T) {
+	snippet := map[string]any{"anyOf": []any{
+		map[string]any{"required": []any{"file_name", "content"}},
+		map[string]any{"required": []any{"files"}},
+	}}
+	tests := []struct {
+		name   string
+		schema map[string]any
+		params map[string]any
+		want   [][]string
+	}{
+		{
+			name:   "an empty anyOf leaves oneOf to answer",
+			schema: map[string]any{"anyOf": []any{}, "oneOf": []any{map[string]any{"required": []any{"files"}}}},
+			want:   [][]string{{"files"}},
+		},
+		{
+			name:   "every group is named when none is complete",
+			schema: snippet,
+			params: map[string]any{"file_name": "a.md"},
+			want:   [][]string{{"file_name", "content"}, {"files"}},
+		},
+		{
+			name:   "a group of several names completed whole asks nothing",
+			schema: snippet,
+			params: map[string]any{"file_name": "a.md", "content": "text"},
+			want:   nil,
+		},
+		{
+			name: "an alternative requiring nothing satisfies its keyword",
+			schema: map[string]any{"anyOf": []any{
+				map[string]any{"required": []any{}},
+				map[string]any{"required": []any{"files"}},
+			}},
+			want: nil,
+		},
+		{
+			name: "an alternative the root list satisfies satisfies its keyword",
+			schema: map[string]any{
+				"required": []any{"project_id"},
+				"anyOf":    []any{map[string]any{"required": []any{"project_id"}}, map[string]any{"required": []any{"name"}}},
+			},
+			want: nil,
+		},
+		{
+			name:   "a branch that is not an object is skipped",
+			schema: map[string]any{"anyOf": []any{"invalid", map[string]any{"required": []any{"file_path"}}}},
+			want:   [][]string{{"file_path"}},
+		},
+		{
+			name:   "a satisfied alternative asks nothing",
+			schema: map[string]any{"anyOf": []any{map[string]any{"required": []any{"name"}}, map[string]any{"required": []any{"color"}}}},
+			params: map[string]any{"color": "#1F75CB"},
+			want:   nil,
+		},
+		{
+			name:   "a name sent empty counts by its presence",
+			schema: map[string]any{"oneOf": []any{map[string]any{"required": []any{"cn"}}, map[string]any{"required": []any{"filter"}}}},
+			params: map[string]any{"filter": ""},
+			want:   nil,
+		},
+		{name: "no schema asks nothing", schema: nil, want: nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := UnmetAlternatives(tc.schema, tc.params); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("UnmetAlternatives() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAlternativesPhrase_JoinsTheGroups verifies how alternative groups are
+// written for a reader, for every count of groups the phrase distinguishes,
+// each name through the span it is given. A single group is no choice, since
+// a call needs every name of it, so it is written without "one of", which
+// would read as a choice among its names, exclusive or not. Exclusive groups,
+// of which a call completes exactly one, say so.
+func TestAlternativesPhrase_JoinsTheGroups(t *testing.T) {
+	backtick := func(name string) string { return "`" + name + "`" }
+	phrases := []struct {
+		name      string
+		groups    [][]string
+		exclusive bool
+		want      string
+	}{
+		{name: "no groups", groups: nil, want: ""},
+		{name: "one group of one name", groups: [][]string{{"files"}}, want: "`files`"},
+		{name: "one group of several names", groups: [][]string{{"file_name", "content"}}, want: "`file_name` + `content`"},
+		{name: "two groups", groups: [][]string{{"project_ids"}, {"group_ids"}}, want: "one of `project_ids` or `group_ids`"},
+		{name: "three groups", groups: [][]string{{"name"}, {"description"}, {"color"}}, want: "one of `name`, `description` or `color`"},
+		{name: "two exclusive groups", groups: [][]string{{"cn"}, {"filter"}}, exclusive: true, want: "exactly one of `cn` or `filter`"},
+		{name: "one exclusive group", groups: [][]string{{"cn"}}, exclusive: true, want: "`cn`"},
+	}
+	for _, tc := range phrases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := AlternativesPhrase(tc.groups, tc.exclusive, backtick); got != tc.want {
+				t.Errorf("AlternativesPhrase() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

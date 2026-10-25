@@ -1058,7 +1058,7 @@ func validateDynamicExecuteParams(entry actionEntry, params map[string]any) *mcp
 		parts = append(parts, fmt.Sprintf("Missing required params: %s.", strings.Join(missing, ", ")))
 	}
 	if len(alternatives) > 0 {
-		parts = append(parts, fmt.Sprintf("Missing %s.", alternativesPhrase(alternatives, entry.ExclusiveGroups, plainParamName)))
+		parts = append(parts, fmt.Sprintf("Missing %s.", actioncatalog.AlternativesPhrase(alternatives, entry.ExclusiveGroups, plainParamName)))
 	}
 	parts = append(parts, fmt.Sprintf("Valid params: %s.", strings.Join(validParams, ", ")))
 	return toolutil.ErrorResult(strings.Join(parts, " "))
@@ -1108,27 +1108,12 @@ func unknownDynamicParamNames(params map[string]any, validParams []string) []str
 // required param (issue 1175).
 func missingDynamicRequiredParams(schema, params map[string]any) (missing []string, alternatives [][]string) {
 	missing = missingParamNames(actioncatalog.RequiredParams(schema), params)
-	alternatives = unmetAlternatives(schema, params)
+	alternatives = actioncatalog.UnmetAlternatives(schema, params)
 	if len(alternatives) == 1 {
 		missing = append(missing, missingParamNames(alternatives[0], params)...)
 		alternatives = nil
 	}
 	return dedupeSortedStrings(missing), alternatives
-}
-
-// unmetAlternatives returns the alternative groups of a schema when params
-// complete none of them, and nil when they complete one or the schema has
-// none. Every group is returned, not the nearest: the refusal names the
-// choice find published, and a call that sent part of one group still has
-// all of them open to it.
-func unmetAlternatives(schema, params map[string]any) [][]string {
-	groups := actioncatalog.RequiredParamAlternatives(schema)
-	for _, group := range groups {
-		if len(missingParamNames(group, params)) == 0 {
-			return nil
-		}
-	}
-	return groups
 }
 
 // missingParamNames returns the names params does not carry, in order.
@@ -2911,7 +2896,7 @@ func whyThisActionForEntry(entry actionEntry) string {
 	if usage := usageHintForEntry(entry); usage != "" {
 		return usage
 	}
-	requirements := withAlternatives(strings.Join(entry.RequiredParams, ", "), alternativesPhrase(entry.RequiredParamsAnyOf, entry.ExclusiveGroups, plainParamName))
+	requirements := withAlternatives(strings.Join(entry.RequiredParams, ", "), actioncatalog.AlternativesPhrase(entry.RequiredParamsAnyOf, entry.ExclusiveGroups, plainParamName))
 	if requirements == "" {
 		return fmt.Sprintf("Matches canonical action %s, which has no required params.", entry.ID)
 	}
@@ -4656,7 +4641,7 @@ func searchNextStep(results []SearchResult, confirmationSkipped bool) string {
 	if top.LowConfidence || len(top.AmbiguousWith) > 0 {
 		return fmt.Sprintf("Top result %s needs confirmation; choose the intended canonical action ID before executing.", backtickString(top.ID))
 	}
-	requirements := withAlternatives(compactParamList(top.RequiredParams, 8), alternativesPhrase(top.RequiredParamsAnyOf, top.ExclusiveGroups, backtickString))
+	requirements := withAlternatives(compactParamList(top.RequiredParams, 8), actioncatalog.AlternativesPhrase(top.RequiredParamsAnyOf, top.ExclusiveGroups, backtickString))
 	if requirements == "" {
 		return fmt.Sprintf("Top result %s has no required params. Execute with params:{} unless optional params are needed.", backtickString(top.ID))
 	}
@@ -4687,34 +4672,6 @@ func compactParamList(params []string, limit int) string {
 	}
 	shown := strings.Join(backtickStrings(params[:limit]), ", ")
 	return fmt.Sprintf("%s, and %d more", shown, len(params)-limit)
-}
-
-// alternativesPhrase renders alternative requirement groups as "one of a, b
-// or c", or "exactly one of a, b or c" when they are exclusive, a group of
-// several names joined with " + ", each name written by span. A single group
-// is no choice, since a call needs all of it, so it is written as the group
-// alone. It is empty when there are no groups.
-func alternativesPhrase(groups [][]string, exclusive bool, span func(string) string) string {
-	rendered := make([]string, 0, len(groups))
-	for _, group := range groups {
-		names := make([]string, 0, len(group))
-		for _, name := range group {
-			names = append(names, span(name))
-		}
-		rendered = append(rendered, strings.Join(names, " + "))
-	}
-	last := len(rendered) - 1
-	if last < 0 {
-		return ""
-	}
-	if last == 0 {
-		return rendered[0]
-	}
-	choice := "one of "
-	if exclusive {
-		choice = "exactly one of "
-	}
-	return choice + strings.Join(rendered[:last], ", ") + " or " + rendered[last]
 }
 
 // withAlternatives joins what every call needs and the alternatives phrase
@@ -4848,7 +4805,7 @@ func requiredParamsCell(params []string, alternatives [][]string, exclusive bool
 	for _, param := range params {
 		spans = append(spans, toolutil.MdCodeSpanCell(param))
 	}
-	cell := withAlternatives(strings.Join(spans, ", "), alternativesPhrase(alternatives, exclusive, toolutil.MdCodeSpanCell))
+	cell := withAlternatives(strings.Join(spans, ", "), actioncatalog.AlternativesPhrase(alternatives, exclusive, toolutil.MdCodeSpanCell))
 	if cell == "" {
 		return dashCell
 	}
@@ -5021,7 +4978,7 @@ func writeActionDescription(c *toolutil.Card, action ActionDescription) {
 	c.Code("Action", action.Action)
 	c.Warn("Destructive", action.Destructive)
 	c.Field("Usage", action.Usage)
-	c.Field("Required params", withAlternatives(codeSpanList(action.RequiredParams), alternativesPhrase(action.RequiredParamsAnyOf, action.ExclusiveGroups, backtickString)))
+	c.Field("Required params", withAlternatives(codeSpanList(action.RequiredParams), actioncatalog.AlternativesPhrase(action.RequiredParamsAnyOf, action.ExclusiveGroups, backtickString)))
 	c.Field("Related actions", codeSpanList(action.RelatedActions))
 	c.Field("Parameter guidance", compactParameterGuidance(action.ParamGuidance, len(action.ParamGuidance), action.RequiredParams...))
 	c.Code("Schema URI", action.SchemaURI)

@@ -158,17 +158,21 @@ func TestLDAPLinkSelectors_Schema_StatesExactlyOneOfCNOrFilter(t *testing.T) {
 	}
 }
 
-// TestLDAPLinkSelectors_IndividualSchema_CountsASelectorWithAValue verifies
-// the input schema the individual tools of the add and the delete by CN or
-// filter are served with, put to the validator the SDK holds their arguments
-// to: one selector passes, both or neither are refused, and a selector with
-// an empty value counts as none, as the handler counts it.
+// TestLDAPLinkSelectors_ActionSchema_CountsASelectorWithAValue verifies the
+// catalog's input schema of the add and the delete by CN or filter, as the
+// meta tool's full parameter-schema mode holds a call's params to it: one
+// selector passes, both or neither are refused, and a selector with an empty
+// value counts as none, as the handler counts it. It also verifies that the
+// individual tools are served that schema without its oneOf.
 //
 // The oneOf counted a selector by its key alone, so the individual tool
 // refused a common name beside an empty filter as naming both, a call the
 // handler serves by sending the common name, and the meta and dynamic
-// surfaces served it: one call had two answers.
-func TestLDAPLinkSelectors_IndividualSchema_CountsASelectorWithAValue(t *testing.T) {
+// surfaces served it: one call had two answers. The individual tool now
+// serves no oneOf at all, since the Anthropic Messages API refuses a tool
+// list holding a root oneOf, and its calls are answered by the handler as the
+// other surfaces' are.
+func TestLDAPLinkSelectors_ActionSchema_CountsASelectorWithAValue(t *testing.T) {
 	byTool := groupLDAPSpecsByTool(t, ActionSpecs(okClient(t)))
 	calls := []struct {
 		name      string
@@ -195,7 +199,10 @@ func TestLDAPLinkSelectors_IndividualSchema_CountsASelectorWithAValue(t *testing
 			if err != nil {
 				t.Fatalf("IndividualToolFromActionSpec(%s) error = %v", tool.name, err)
 			}
-			resolved := resolvedInputSchema(t, projected.InputSchema)
+			if served := toolutil.RootCombinators(projected.InputSchema); len(served) > 0 {
+				t.Errorf("%s is served %v at the root of its input schema", tool.name, served)
+			}
+			resolved := resolvedInputSchema(t, toolutil.MetaActionSchema(byTool[tool.name].Route))
 			for _, call := range calls {
 				t.Run(call.name, func(t *testing.T) {
 					arguments := maps.Clone(tool.base)

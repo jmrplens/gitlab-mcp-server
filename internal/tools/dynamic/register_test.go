@@ -3592,76 +3592,6 @@ func assertAlternativesRow(t *testing.T, answer, text, cell string, exclusive bo
 	t.Errorf("%s answer = %q, want a row starting %q", answer, text, cell)
 }
 
-// TestUnmetAlternatives_DemandsWhatFindPublishes verifies that execute
-// demands of the alternatives exactly what find and the manifest publish,
-// since all three read actioncatalog.RequiredParamAlternatives: an anyOf that
-// declares no alternatives leaves oneOf to answer, and an alternative that
-// requires nothing satisfies its keyword. A call that completes none of the
-// groups is answered with all of them, as find lists them.
-//
-// The second used to be read the other way. The validator skipped a branch
-// that required nothing and demanded the remaining one, so it refused a call
-// the schema accepts, and, once find stopped publishing a group no call has to
-// meet, it would have refused find's own example for such a schema.
-func TestUnmetAlternatives_DemandsWhatFindPublishes(t *testing.T) {
-	tests := []struct {
-		name   string
-		schema map[string]any
-		params map[string]any
-		want   [][]string
-	}{
-		{
-			name:   "an empty anyOf leaves oneOf to answer",
-			schema: map[string]any{"anyOf": []any{}, "oneOf": []any{map[string]any{"required": []any{"files"}}}},
-			want:   [][]string{{"files"}},
-		},
-		{
-			name: "every group is named when none is complete",
-			schema: map[string]any{"anyOf": []any{
-				map[string]any{"required": []any{"file_name", "content"}},
-				map[string]any{"required": []any{"files"}},
-			}},
-			params: map[string]any{"file_name": "a.md"},
-			want:   [][]string{{"file_name", "content"}, {"files"}},
-		},
-		{
-			name: "an alternative requiring nothing satisfies its keyword",
-			schema: map[string]any{"anyOf": []any{
-				map[string]any{"required": []any{}},
-				map[string]any{"required": []any{"files"}},
-			}},
-			want: nil,
-		},
-		{
-			name: "an alternative the root list satisfies satisfies its keyword",
-			schema: map[string]any{
-				"required": []any{"project_id"},
-				"anyOf":    []any{map[string]any{"required": []any{"project_id"}}, map[string]any{"required": []any{"name"}}},
-			},
-			want: nil,
-		},
-		{
-			name:   "a branch that is not an object is skipped",
-			schema: map[string]any{"anyOf": []any{"invalid", map[string]any{"required": []any{"file_path"}}}},
-			want:   [][]string{{"file_path"}},
-		},
-		{
-			name:   "a satisfied alternative asks nothing",
-			schema: map[string]any{"anyOf": []any{map[string]any{"required": []any{"name"}}, map[string]any{"required": []any{"color"}}}},
-			params: map[string]any{"color": "#1F75CB"},
-			want:   nil,
-		},
-		{name: "no schema asks nothing", schema: nil, want: nil},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := unmetAlternatives(tc.schema, tc.params); !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("unmetAlternatives() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
 // TestExecute_UnknownActionSuggestsCanonicalIDs verifies that an action ID
 // the registry does not hold is refused with a tool error, no output, and a
 // "did you mean" suggestion naming the nearest canonical ID.
@@ -12255,35 +12185,10 @@ func TestFormatFindOutput_RequiredParamsCell(t *testing.T) {
 	})
 }
 
-// TestAlternativesPhrase_JoinsTheGroups verifies how alternative groups are
-// written for a reader, for every count of groups the phrase distinguishes,
-// and how the phrase joins the params every call needs. A single group is no
-// choice, since a call needs every name of it, so it is written without "one
-// of", which would read as a choice among its names, exclusive or not.
-// Exclusive groups, of which a call completes exactly one, say so.
-func TestAlternativesPhrase_JoinsTheGroups(t *testing.T) {
-	phrases := []struct {
-		name      string
-		groups    [][]string
-		exclusive bool
-		want      string
-	}{
-		{name: "no groups", groups: nil, want: ""},
-		{name: "one group of one name", groups: [][]string{{"files"}}, want: "`files`"},
-		{name: "one group of several names", groups: [][]string{{"file_name", "content"}}, want: "`file_name` + `content`"},
-		{name: "two groups", groups: [][]string{{"project_ids"}, {"group_ids"}}, want: "one of `project_ids` or `group_ids`"},
-		{name: "three groups", groups: [][]string{{"name"}, {"description"}, {"color"}}, want: "one of `name`, `description` or `color`"},
-		{name: "two exclusive groups", groups: [][]string{{"cn"}, {"filter"}}, exclusive: true, want: "exactly one of `cn` or `filter`"},
-		{name: "one exclusive group", groups: [][]string{{"cn"}}, exclusive: true, want: "`cn`"},
-	}
-	for _, tc := range phrases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := alternativesPhrase(tc.groups, tc.exclusive, backtickString); got != tc.want {
-				t.Fatalf("alternativesPhrase() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-
+// TestWithAlternatives_JoinsTheRequiredParamsAndTheChoice verifies how the
+// phrase of the alternative groups, which actioncatalog.AlternativesPhrase
+// writes, joins the params every call needs, either of which may be empty.
+func TestWithAlternatives_JoinsTheRequiredParamsAndTheChoice(t *testing.T) {
 	joins := []struct {
 		name         string
 		required     string

@@ -1,6 +1,9 @@
 package actioncatalog
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // RequiredParamNames reads a JSON Schema "required" list. The list is a []any
 // when the schema was decoded from JSON and a []string where an override wrote
@@ -92,6 +95,71 @@ func RequiredParamAlternativesExclusive(schema map[string]any) bool {
 	anyOf, _ := schema["anyOf"].([]any)
 	oneOf, _ := schema["oneOf"].([]any)
 	return len(keywordAlternatives(oneOf, root)) > 0 && len(keywordAlternatives(anyOf, root)) == 0
+}
+
+// UnmetAlternatives returns the alternative groups of an action's input
+// schema, as [RequiredParamAlternatives] reads them, when params complete
+// none of them, and nil when params complete one or the schema has none. A
+// call completes a group when it carries every name of it. Every group is
+// returned, not the nearest: a refusal names the choice find published, and a
+// call that sent part of one group still has all of them open to it.
+//
+// It is what the two dispatchers that refuse such a call before its handler
+// runs read: the dynamic execute, for every action, and the individual tool,
+// for a destructive action, before it asks for the call to be confirmed. It
+// counts a name by its presence, so it refuses no call that completes two
+// groups of a oneOf: a branch of toolutil.SchemaOneOfRequired counts a name by
+// its value, and a common name beside an empty filter is a call that branch
+// serves. The handler refuses that call and every other this one lets
+// through.
+func UnmetAlternatives(schema, params map[string]any) [][]string {
+	groups := RequiredParamAlternatives(schema)
+	for _, group := range groups {
+		if carriesEvery(params, group) {
+			return nil
+		}
+	}
+	return groups
+}
+
+// carriesEvery reports whether params carries every one of names.
+func carriesEvery(params map[string]any, names []string) bool {
+	for _, name := range names {
+		if _, carried := params[name]; !carried {
+			return false
+		}
+	}
+	return true
+}
+
+// AlternativesPhrase renders alternative requirement groups as "one of a, b
+// or c", or "exactly one of a, b or c" when they are exclusive, a group of
+// several names joined with " + ", each name written by span. A single group
+// is no choice, since a call needs all of it, so it is written as the group
+// alone. It is empty when there are no groups. find, search and describe
+// write the groups a result carries with it, and the dispatchers that refuse
+// a call completing none of them name the choice with it.
+func AlternativesPhrase(groups [][]string, exclusive bool, span func(string) string) string {
+	rendered := make([]string, 0, len(groups))
+	for _, group := range groups {
+		names := make([]string, 0, len(group))
+		for _, name := range group {
+			names = append(names, span(name))
+		}
+		rendered = append(rendered, strings.Join(names, " + "))
+	}
+	last := len(rendered) - 1
+	if last < 0 {
+		return ""
+	}
+	if last == 0 {
+		return rendered[0]
+	}
+	choice := "one of "
+	if exclusive {
+		choice = "exactly one of "
+	}
+	return choice + strings.Join(rendered[:last], ", ") + " or " + rendered[last]
 }
 
 // combineAlternatives returns the groups that meet the alternatives of two

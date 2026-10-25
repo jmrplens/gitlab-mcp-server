@@ -94,9 +94,15 @@ func IndividualToolFromActionSpec(spec ActionSpec, opts IndividualToolProjection
 // individualInputSchema returns the input schema the individual surface
 // serves for a route: the route's own schema, required list included, with the
 // destructive confirmation property, normalized descriptions and the
-// additionalProperties lockdown. It is derived from the route's schema rather
-// than applied to it, once per process for a shared route (see
+// additionalProperties lockdown, and with no combinator or conditional at its
+// root (see [rootCombinatorKeywords]). It is derived from the route's schema
+// rather than applied to it, once per process for a shared route (see
 // [DeriveSchema]).
+//
+// This is the projection of every individual and standalone tool, so it is
+// the one place the root keywords are dropped. The route keeps them: the
+// catalog, the meta and dynamic surfaces' gitlab://tools details and find
+// read the rule they state as data, and the handler enforces it.
 //
 // The required list is the route's and nothing else's, because the meta and
 // dynamic surfaces serve the route's schema too: one parameter has one answer
@@ -112,6 +118,7 @@ func individualInputSchema(route ActionRoute) map[string]any {
 	transform := "individual|destructive=" + strconv.FormatBool(route.Destructive)
 	derived := DeriveSchema(route.InputSchema, transform, func() any {
 		schema := cloneSchemaMap(route.InputSchema)
+		dropRootCombinators(schema)
 		schema = enrichDestructiveSchema(schema, route.Destructive)
 		normalizeSchemaDescriptions(schema)
 		lockdownSchemaNode(schema)

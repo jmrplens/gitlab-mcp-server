@@ -425,6 +425,71 @@ func TestIndividualToolFromActionSpec_RejectsIncompleteMetadata(t *testing.T) {
 	}
 }
 
+// TestIndividualToolFromActionSpec_RootCombinators_StayInTheCatalogSchema
+// verifies that an individual tool is served with no combinator and no
+// conditional at the root of its input schema, while the action's own schema,
+// which the catalog holds, keeps every one of them.
+//
+// The Anthropic Messages API refuses a tool whose input_schema has oneOf,
+// allOf or anyOf at the top level and fails the whole request over it, so one
+// such tool broke every request that carried it from a client passing its
+// schemas to that API as they are.
+// The rule the keyword stated is read from the catalog by find, the
+// gitlab://tools manifest and the tool reference, so it is the served copy
+// alone that drops it, and a keyword nested inside a property is no root and
+// is left where it is.
+func TestIndividualToolFromActionSpec_RootCombinators_StayInTheCatalogSchema(t *testing.T) {
+	keywords := []string{"allOf", "anyOf", "oneOf", "not", "if", "then", "else"}
+	branch := map[string]any{"required": []string{"cn"}}
+	cases := []struct {
+		name      string
+		overrides []InputSchemaOverride
+		want      []string
+	}{
+		{name: "exactly one of", overrides: []InputSchemaOverride{SchemaOneOfRequired("cn", "filter")}, want: []string{"oneOf"}},
+		{name: "at least one of", overrides: []InputSchemaOverride{SchemaAnyOfRequired("cn", "filter")}, want: []string{"anyOf"}},
+		{name: "every combinator and conditional", overrides: []InputSchemaOverride{SchemaRootOverride(map[string]any{
+			"allOf": []any{branch}, "anyOf": []any{branch}, "oneOf": []any{branch},
+			"not": branch, "if": branch, "then": branch, "else": branch,
+		})}, want: keywords},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			schema := testActionSpecSchema("cn", "filter")
+			schema["properties"].(map[string]any)["scope"] = map[string]any{"anyOf": []any{map[string]any{"type": "string"}}}
+			spec := NewActionSpec("add", ActionRoute{InputSchema: schema, OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{
+				OpenWorld:            true,
+				OwnerPackage:         "groupldap",
+				IndividualTool:       IndividualToolSpec{Name: "gitlab_group_ldap_link_add", Description: "Add an LDAP link."},
+				InputSchemaOverrides: tc.overrides,
+			})
+
+			tool, err := IndividualToolFromActionSpec(spec, IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+			}
+			served, ok := tool.InputSchema.(map[string]any)
+			if !ok {
+				t.Fatalf("served input schema = %T, want a map", tool.InputSchema)
+			}
+			for _, keyword := range keywords {
+				if value, present := served[keyword]; present {
+					t.Errorf("served input schema carries %s at its root: %#v", keyword, value)
+				}
+			}
+			for _, keyword := range tc.want {
+				if _, kept := spec.Route.InputSchema[keyword]; !kept {
+					t.Errorf("the catalog's input schema lost %s, which find, the manifest and the reference read", keyword)
+				}
+			}
+			scope, _ := served["properties"].(map[string]any)["scope"].(map[string]any)
+			if _, nested := scope["anyOf"]; !nested {
+				t.Errorf("served scope property = %#v, want its own anyOf kept", scope)
+			}
+		})
+	}
+}
+
 // testActionSpecSchema supports test action spec schema assertions in toolutil tests.
 func testActionSpecSchema(properties ...string) map[string]any {
 	props := make(map[string]any, len(properties))

@@ -323,10 +323,12 @@ func actionSpecFromCatalogAction(action actioncatalog.Action) toolutil.ActionSpe
 // individualCatalogHandler returns the handler bound to one individual
 // tool. The handler enforces safe-mode previews for mutating actions,
 // destructive-action confirmation via [toolutil.ConfirmDestructiveAction],
-// and finishes the result through [toolutil.FinishToolResult], the tail the
-// meta and standalone dispatchers apply too. The catalog route's handler is
-// invoked with the request context enhanced by [toolutil.ContextWithRequest]
-// so logging and request metadata propagate.
+// before which it refuses a destructive call that completes none of its
+// action's alternatives ([unmetAlternativesRefusal]), and finishes the
+// result through [toolutil.FinishToolResult], the tail the meta and
+// standalone dispatchers apply too. The catalog route's handler is invoked
+// with the request context enhanced by [toolutil.ContextWithRequest] so
+// logging and request metadata propagate.
 func individualCatalogHandler(toolName string, action actioncatalog.Action, formatResult toolutil.FormatResultFunc, opts IndividualCatalogRegisterOptions) mcp.ToolHandlerFor[map[string]any, any] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
 		// Before safe mode and the confirmation, as every dispatcher does: a
@@ -342,6 +344,10 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 			return result, nil, err
 		}
 		if action.Route.Destructive {
+			if refused := unmetAlternativesRefusal(toolName, action.Route.InputSchema, input); refused != nil {
+				toolutil.LogToolRefusal(ctx, req, toolName, toolutil.RefusalInvalidParams)
+				return refused, nil, nil
+			}
 			message := fmt.Sprintf("Confirm %s? This action may be irreversible.", toolName)
 			guard, guardErr := toolutil.ConfirmDestructiveAction(ctx, req, input, message)
 			if guardErr != nil {
@@ -373,6 +379,27 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		}
 		return callResult, structured, nil
 	}
+}
+
+// unmetAlternativesRefusal answers a call that completes none of the
+// alternative groups of its action's catalog schema, and nil for any other.
+//
+// The served schema of an individual tool carries no root anyOf or oneOf,
+// which the Anthropic Messages API refuses, so the SDK no longer refuses such
+// a call before the handler runs, and the handler refuses it. A destructive
+// action asks for confirmation before that, so this answers first, in the
+// words the dynamic execute refuses the call with, rather than asking a user
+// to approve a call that cannot run. It reads the groups as
+// [actioncatalog.UnmetAlternatives] does, by presence, and so leaves a call
+// completing two groups of a oneOf to the handler, as the dynamic execute
+// does.
+func unmetAlternativesRefusal(toolName string, schema, input map[string]any) *mcp.CallToolResult {
+	groups := actioncatalog.UnmetAlternatives(schema, input)
+	if len(groups) == 0 {
+		return nil
+	}
+	phrase := actioncatalog.AlternativesPhrase(groups, actioncatalog.RequiredParamAlternativesExclusive(schema), func(name string) string { return name })
+	return toolutil.ErrorResult(fmt.Sprintf("%s: invalid params. Missing %s.", toolName, phrase))
 }
 
 // individualCatalogActionReadOnly reports whether the action is read-only for

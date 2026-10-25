@@ -307,6 +307,37 @@ type toolSnapshot struct {
 	InputSchema any
 	ReadOnly    bool
 	Destructive bool
+	// Requirements is the catalog's input schema of the one action the tool
+	// runs, which the alternative groups of its entry are read from, and nil
+	// for a tool that runs none or several. A served input schema carries no
+	// combinator at its root, since the Anthropic Messages API refuses a tool
+	// list holding one, so the anyOf or oneOf an action's rule is written as
+	// is in the catalog's schema alone.
+	Requirements map[string]any
+}
+
+// requirementsSchema is the schema the tool's alternative groups are read
+// from: its action's in the catalog when it runs one, and its own input
+// schema otherwise.
+func (tool toolSnapshot) requirementsSchema() any {
+	if tool.Requirements != nil {
+		return tool.Requirements
+	}
+	return tool.InputSchema
+}
+
+// withCatalogRequirements gives each tool that runs exactly one action of
+// catalog, by toolActions, that action's input schema as its requirements.
+func withCatalogRequirements(tools []toolSnapshot, catalog *actioncatalog.Catalog, toolActions map[string][]string) {
+	for i := range tools {
+		ids := toolActions[tools[i].Name]
+		if len(ids) != 1 {
+			continue
+		}
+		if action, ok := catalog.Action(actioncatalog.ActionID(ids[0])); ok {
+			tools[i].Requirements = action.Route.InputSchema
+		}
+	}
 }
 
 // RegisterToolSurfaceResources wires a surface-aware tool manifest
@@ -484,6 +515,7 @@ func registerToolManifestTemplate(server *mcp.Server, snapshot *toolSurfaceSnaps
 
 func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot {
 	visibleTools, toolDetails := visibleToolSnapshots(opts.Tools)
+	withCatalogRequirements(toolDetails, opts.Catalog, opts.ToolActions)
 	snapshot := toolSurfaceSnapshot{
 		manifest: ToolSurfaceManifest{
 			Surface:          normalizeToolSurface(opts.Surface),
@@ -878,8 +910,8 @@ func directToolEntry(tool toolSnapshot, kind string) ToolSurfaceEntry {
 		Destructive:         tool.Destructive,
 		ReadOnly:            tool.ReadOnly,
 		RequiredParams:      requiredParamsFromInputSchema(tool.InputSchema),
-		RequiredParamsAnyOf: alternativeRequiredParamsFromInputSchema(tool.InputSchema),
-		ExclusiveGroups:     exclusiveGroupsFromInputSchema(tool.InputSchema),
+		RequiredParamsAnyOf: alternativeRequiredParamsFromInputSchema(tool.requirementsSchema()),
+		ExclusiveGroups:     exclusiveGroupsFromInputSchema(tool.requirementsSchema()),
 	}
 }
 

@@ -1233,12 +1233,18 @@ func TestManifestRequiredParams_SplitsUnconditionalFromAlternatives(t *testing.T
 // every manifest entry naming alternative groups says when a call completes
 // exactly one of them, on each surface and for each way an entry is built: a
 // dynamic action, a meta action from the catalog, a meta action its route
-// alone publishes, and an individual tool read from its own input schema.
+// alone publishes, an individual tool read from the catalog action it runs,
+// and one that runs no catalog action, read from its own input schema.
 // Groups from a oneOf, GitLab's exactly_one_of, are exclusive; groups from an
 // anyOf are not and carry no flag. The groups alone were documented as a
 // choice of which a call satisfies at least one, which told a client reading
 // the manifest that an LDAP link could be added by a common name and a filter
 // together, and GitLab refuses that call.
+//
+// An individual tool is served with no combinator at the root of its input
+// schema, since the Anthropic Messages API refuses a tool list holding one, so
+// its groups are read from the catalog's schema of the action, where the rule
+// is kept as data.
 func TestToolManifest_ExclusiveGroups_ArePublishedOnEverySurface(t *testing.T) {
 	selector := func(keyword string) map[string]any {
 		return map[string]any{
@@ -1246,6 +1252,10 @@ func TestToolManifest_ExclusiveGroups_ArePublishedOnEverySurface(t *testing.T) {
 			"properties": map[string]any{"cn": map[string]any{"type": "string"}, "filter": map[string]any{"type": "string"}},
 			keyword:      []any{map[string]any{"required": []any{"cn"}}, map[string]any{"required": []any{"filter"}}},
 		}
+	}
+	served := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"cn": map[string]any{"type": "string"}, "filter": map[string]any{"type": "string"}},
 	}
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
@@ -1282,13 +1292,31 @@ func TestToolManifest_ExclusiveGroups_ArePublishedOnEverySurface(t *testing.T) {
 			want: map[string]bool{"gitlab_widget.link": true, "gitlab_widget.tag": false, "gitlab_widget.unlink": true},
 		},
 		{
-			name: "individual",
+			name: "individual from the catalog",
+			opts: ToolSurfaceResourceOptions{
+				Surface: toolSurfaceIndividual,
+				Tools: []*mcp.Tool{
+					{Name: "gitlab_widget_link", InputSchema: served},
+					{Name: "gitlab_widget_tag", InputSchema: served},
+				},
+				Catalog:     catalog,
+				ToolActions: map[string][]string{"gitlab_widget_link": {"widget.link"}, "gitlab_widget_tag": {"widget.tag"}},
+			},
+			want: map[string]bool{"gitlab_widget_link": true, "gitlab_widget_tag": false},
+		},
+		{
+			// One runs an action the catalog does not hold, the other runs two,
+			// so neither has one action to read, and each is read from its own
+			// input schema.
+			name: "individual outside the catalog",
 			opts: ToolSurfaceResourceOptions{
 				Surface: toolSurfaceIndividual,
 				Tools: []*mcp.Tool{
 					{Name: "gitlab_widget_link", InputSchema: selector("oneOf")},
 					{Name: "gitlab_widget_tag", InputSchema: selector("anyOf")},
 				},
+				Catalog:     catalog,
+				ToolActions: map[string][]string{"gitlab_widget_link": {"widget.missing"}, "gitlab_widget_tag": {"widget.link", "widget.tag"}},
 			},
 			want: map[string]bool{"gitlab_widget_link": true, "gitlab_widget_tag": false},
 		},

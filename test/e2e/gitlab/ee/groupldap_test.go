@@ -104,15 +104,18 @@ func TestGroupLDAPLinks_Lifecycle_AddListDeleteAndDeleteForProvider(t *testing.T
 // which the other two surfaces served.
 //
 // Each surface refuses at the first place that checks, and the test holds
-// each to its own. The individual tool's input schema states the constraint
-// as a oneOf, so the SDK refuses the arguments before the handler runs. The
-// meta dispatcher checks the required list alone and hands both calls to the
-// handler, which refuses a link naming both as well as one naming neither.
-// The dynamic dispatcher refuses a call naming neither itself, since it
-// completes none of the alternatives find publishes, and hands one naming
-// both to the handler. The words asserted are the server's own and none of
-// them is in the hint a GitLab refusal is wrapped with, so a call that
-// reached GitLab would not pass for one refused here.
+// each to its own. The individual tool is served without the oneOf the
+// catalog states the constraint with, since the Anthropic Messages API
+// refuses a tool list holding a root oneOf, so its arguments reach the
+// handler as the meta dispatcher's do: it checks the required list alone and
+// hands both calls to the handler, which refuses a link naming both as well
+// as one naming neither. The dynamic dispatcher refuses a call naming neither
+// itself, since it completes none of the alternatives find publishes, and
+// hands one naming both to the handler, and so does the individual tool for
+// the delete, which is destructive and refuses such a call in the same words
+// before it asks for the delete to be confirmed. The words asserted are the
+// server's own and none of them is in the hint a GitLab refusal is wrapped
+// with, so a call that reached GitLab would not pass for one refused here.
 func TestGroupLDAPLinks_BothOrNeitherSelector_AreRefusedBeforeGitLab(t *testing.T) {
 	e := harness.New(t)
 
@@ -139,10 +142,10 @@ func TestGroupLDAPLinks_BothOrNeitherSelector_AreRefusedBeforeGitLab(t *testing.
 			{name: "a delete naming neither", id: actionGroupLDAPLinkDelete, params: target, handler: "exactly one of cn or filter is required"},
 		}
 		for _, call := range calls {
+			dispatcherRefuses := surface == harness.SurfaceDynamic ||
+				surface == harness.SurfaceIndividual && call.id == actionGroupLDAPLinkDelete
 			switch {
-			case surface == harness.SurfaceIndividual:
-				harness.Refused(s, call.id, call.params, harness.FailureInvalidParams)
-			case surface == harness.SurfaceDynamic && call.handler != "not both":
+			case dispatcherRefuses && call.handler != "not both":
 				harness.ExpectToolError(s, call.id, call.params, "missing exactly one of cn or filter")
 			default:
 				refused := harness.ExpectToolError(s, call.id, call.params, call.handler)

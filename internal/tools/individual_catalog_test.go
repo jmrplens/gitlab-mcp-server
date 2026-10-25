@@ -2025,6 +2025,85 @@ func TestIndividualCatalogHandler_FineGrained_WithholdsBeforeSafeModeAndConfirma
 	}
 }
 
+// alternativesInput is the input of the test actions whose schema states a
+// choice of alternatives: label_id or name, and cn or filter.
+type alternativesInput struct {
+	LabelID string `json:"label_id,omitempty"`
+	Name    string `json:"name,omitempty"`
+	CN      string `json:"cn,omitempty"`
+	Filter  string `json:"filter,omitempty"`
+}
+
+// TestIndividualCatalogHandler_DestructiveCallCompletingNoAlternative_IsRefusedBeforeConfirmation
+// verifies that an individual tool whose action is destructive refuses a call
+// completing none of the action's alternative groups before it asks for the
+// call to be confirmed, naming the choice in the words the dynamic execute
+// refuses it with, and still asks for the confirmation of a call that
+// completes a group.
+//
+// The served schema carries no root anyOf or oneOf, which the Anthropic
+// Messages API refuses, so the SDK no longer refuses such a call before the
+// handler runs, and the confirmation came first: a user was asked to approve
+// a call its handler then refused, or a client that cannot prompt was told to
+// send it again with confirm=true. A call completing two groups of a oneOf is
+// left to the handler, as the dynamic execute leaves it, since the branches
+// count a name by its value and this check by its presence. An action that is
+// not destructive asks for no confirmation, so its handler refuses first, in
+// its own words; safe mode previews before either.
+func TestIndividualCatalogHandler_DestructiveCallCompletingNoAlternative_IsRefusedBeforeConfirmation(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "false")
+	var ran atomic.Bool
+	handlerFor := func(t *testing.T, destructive bool, override toolutil.InputSchemaOverride, opts IndividualCatalogRegisterOptions) mcp.ToolHandlerFor[map[string]any, any] {
+		t.Helper()
+		spec := toolutil.NewActionSpec("delete", toolutil.RouteFunc(func(context.Context, alternativesInput) (string, error) {
+			ran.Store(true)
+			return "deleted", nil
+		}), toolutil.ActionSpecOptions{
+			Destructive:          destructive,
+			OwnerPackage:         "tools",
+			InputSchemaOverrides: []toolutil.InputSchemaOverride{override},
+			IndividualTool:       toolutil.IndividualToolSpec{Name: "gitlab_test_delete", Title: "Test Delete", Description: "Test delete."},
+		})
+		return individualCatalogHandler("gitlab_test_delete", testIndividualCatalog(t, spec).Actions()[0], markdownForResult, opts)
+	}
+	const confirmation = "Confirm gitlab_test_delete? This action may be irreversible."
+	tests := []struct {
+		name        string
+		destructive bool
+		override    toolutil.InputSchemaOverride
+		opts        IndividualCatalogRegisterOptions
+		input       map[string]any
+		want        string
+		wantRan     bool
+	}{
+		{name: "none of an anyOf", destructive: true, override: toolutil.SchemaAnyOfRequired("label_id", "name"), input: map[string]any{}, want: "gitlab_test_delete: invalid params. Missing one of label_id or name."},
+		{name: "none of a oneOf", destructive: true, override: toolutil.SchemaOneOfRequired("cn", "filter"), input: map[string]any{}, want: "gitlab_test_delete: invalid params. Missing exactly one of cn or filter."},
+		{name: "one of an anyOf is confirmed", destructive: true, override: toolutil.SchemaAnyOfRequired("label_id", "name"), input: map[string]any{"name": "bug"}, want: confirmation},
+		{name: "two of a oneOf are confirmed", destructive: true, override: toolutil.SchemaOneOfRequired("cn", "filter"), input: map[string]any{"cn": "admins", "filter": "(uid=a)"}, want: confirmation},
+		{name: "none of an anyOf under safe mode is previewed", destructive: true, override: toolutil.SchemaAnyOfRequired("label_id", "name"), opts: IndividualCatalogRegisterOptions{SafeMode: true}, input: map[string]any{}, want: "Safe mode"},
+		{name: "none of an anyOf on an action that is not destructive reaches its handler", override: toolutil.SchemaAnyOfRequired("label_id", "name"), input: map[string]any{}, want: "deleted", wantRan: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ran.Store(false)
+			handler := handlerFor(t, tc.destructive, tc.override, tc.opts)
+			result, _, err := handler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "gitlab_test_delete", Arguments: json.RawMessage(`{}`)}}, tc.input)
+			if err != nil || result == nil || len(result.Content) == 0 {
+				t.Fatalf("handler() = (%+v, %v), want a result", result, err)
+			}
+			if text := result.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, tc.want) {
+				t.Errorf("handler() text = %q, want it to carry %q", text, tc.want)
+			}
+			if result.IsError == tc.wantRan {
+				t.Errorf("handler() IsError = %t, want %t", result.IsError, !tc.wantRan)
+			}
+			if got := ran.Load(); got != tc.wantRan {
+				t.Errorf("the route ran = %t, want %t", got, tc.wantRan)
+			}
+		})
+	}
+}
+
 // TestIndividualCatalogHandler_FineGrained_NotesAGraphQLNotFound verifies the
 // individual dispatcher hands a fine-grained session a GraphQL action's
 // not-found error with the note that the token may be what cannot see the

@@ -278,9 +278,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	// GitLab requires at least one of the two (at_least_one_of in
 	// lib/api/release/links.rb) and answers any other update 400 "name, url
-	// are missing". The schema says so with an anyOf, which the meta surface
-	// does not check, so an update changing only a path or the type is
-	// refused here with the way through rather than sent.
+	// are missing". The catalog's schema says so with an anyOf, which no
+	// surface serves at the root of a tool's input schema, since the
+	// Anthropic Messages API refuses a tool list holding one, so an update
+	// changing only a path or the type is refused here with the way through
+	// rather than sent.
 	if input.Name == "" && input.URL == "" {
 		return Output{}, errors.New("Update: name or url is required, since GitLab updates a release link only when the request carries at least one of them. " +
 			"To change only a path or the link type, pass the link's current name from " + actionLinkGet + " beside the change")
