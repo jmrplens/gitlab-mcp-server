@@ -9171,7 +9171,10 @@
           "class": "mandatory",
           "classic": "api",
           "sites": [
-            "groupboards.newRawRequest"
+            "groupboards.CreateGroupBoard"
+          ],
+          "sdk_methods": [
+            "GroupIssueBoards.CreateGroupIssueBoard"
           ]
         }
       ],
@@ -9272,7 +9275,10 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "groupboards.newRawRequest"
+            "groupboards.GetGroupBoard"
+          ],
+          "sdk_methods": [
+            "GroupIssueBoards.GetGroupIssueBoard"
           ]
         }
       ],
@@ -9321,7 +9327,10 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "groupboards.newRawRequest"
+            "groupboards.ListGroupBoards"
+          ],
+          "sdk_methods": [
+            "GroupIssueBoards.ListGroupIssueBoards"
           ]
         }
       ],

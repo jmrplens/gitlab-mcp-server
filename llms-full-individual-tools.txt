@@ -4713,13 +4713,15 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_board_update
 
-Update a group issue board's name, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.
+Update a group issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.
 
 **Parameters:**
 
 - `assignee_id` (integer): User ID of the assignee the board is scoped to. Pass 0 to remove the assignee from the scope. Omit the field to leave it untouched
 - `board_id` (integer) (required): Board ID
 - `group_id` (string or integer) (required): Group ID or path
+- `hide_backlog_list` (boolean): Hide the board's Open list (true) or show it (false). Omit the field to leave it untouched
+- `hide_closed_list` (boolean): Hide the board's Closed list (true) or show it (false). Omit the field to leave it untouched
 - `labels` (array of strings): Label names the board is scoped to. Pass [] to remove every label from the scope. Omit the field to leave it untouched
 - `milestone_id` (integer): Milestone ID the board is scoped to: 0 for issues with no milestone, -1 to remove the milestone from the scope, -2 for upcoming and -3 for started milestones. Omit the field to leave it untouched
 - `name` (string): Board name

@@ -1256,7 +1256,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `group.group_board_update`
 
-> Update a group issue board's name, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: [`group.group_board_get`](#groupgroup_board_get), [`group.group_board_list`](#groupgroup_board_list).
+> Update a group issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: [`group.group_board_get`](#groupgroup_board_get), [`group.group_board_list`](#groupgroup_board_list).
 
 - **Meta-herramienta**: `gitlab_group`, acción `group_board_update`
 - **Herramienta individual**: `gitlab_group_board_update`
@@ -1270,6 +1270,8 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `board_id`               | `integer`        | sí        | Board ID                                                                                                                                                                                            |
 | `group_id`               | `string/integer` | sí        | Group ID or path                                                                                                                                                                                    |
 | `assignee_id` (Premium)  | `integer`        | no        | User ID of the assignee the board is scoped to. Pass 0 to remove the assignee from the scope. Omit the field to leave it untouched                                                                  |
+| `hide_backlog_list`      | `boolean`        | no        | Hide the board's Open list (true) or show it (false). Omit the field to leave it untouched                                                                                                          |
+| `hide_closed_list`       | `boolean`        | no        | Hide the board's Closed list (true) or show it (false). Omit the field to leave it untouched                                                                                                        |
 | `labels` (Premium)       | `string[]`       | no        | Label names the board is scoped to. Pass \[\] to remove every label from the scope. Omit the field to leave it untouched                                                                            |
 | `milestone_id` (Premium) | `integer`        | no        | Milestone ID the board is scoped to: 0 for issues with no milestone, -1 to remove the milestone from the scope, -2 for upcoming and -3 for started milestones. Omit the field to leave it untouched |
 | `name`                   | `string`         | no        | Board name                                                                                                                                                                                          |

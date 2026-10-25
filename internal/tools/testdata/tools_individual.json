@@ -57292,7 +57292,7 @@
   },
   {
     "name": "gitlab_group_board_update",
-    "description": "Update a group issue board's name, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.",
+    "description": "Update a group issue board's name or list visibility, and on Premium and Ultimate its scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -57312,6 +57312,20 @@
           "type": [
             "string",
             "integer"
+          ]
+        },
+        "hide_backlog_list": {
+          "description": "Hide the board's Open list (true) or show it (false). Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "hide_closed_list": {
+          "description": "Hide the board's Closed list (true) or show it (false). Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "labels": {

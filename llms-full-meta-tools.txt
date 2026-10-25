@@ -2758,7 +2758,7 @@ Action guidance:
 - group_board_get_list: Inspect one column of a group issue board, including its label, assignee, and iteration scope.
 - group_board_list: Browse the issue boards configured for a group to see how the group plans and tracks work.
 - group_board_list_lists: Enumerate the columns of a group issue board to see how its workflow stages are arranged.
-- group_board_update: Rename a group issue board, and on Premium and Ultimate retune its assignee, milestone, label, and weight scope.
+- group_board_update: Rename a group issue board or toggle its Open and Closed columns, and on Premium and Ultimate retune its assignee, milestone, label, and weight scope.
 - group_board_update_list: Move a column to a new position in a group issue board to reorder its workflow stages.
 - group_export_download: Download the finished export archive for a group as a base64-encoded .tar.gz. Use this only after group_export_schedule has completed. The call fails until the archive is ready.
 - group_export_schedule: Start an asynchronous export of a whole group (subgroups, projects, and metadata) into a downloadable archive. Use this first, then poll and download with group_export_download once GitLab finishes building the archive.

@@ -7529,6 +7529,8 @@
       "path": "/groups/:group_id/boards/:board_id",
       "body": [
         "assignee_id",
+        "hide_backlog_list",
+        "hide_closed_list",
         "labels",
         "milestone_id",
         "name",
