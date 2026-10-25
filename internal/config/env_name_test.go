@@ -266,14 +266,17 @@ func TestHadOldSpelling_HoldsTheSettings300ReadAndNoOthers(t *testing.T) {
 }
 
 // movedByIssue957 are the settings issue 957 put on the list, which the
-// server read around this package until then: under their prefixed name, with
-// os.Getenv where they were used, so none ever answered to another spelling.
+// server read around it until then, under their prefixed name alone: with
+// os.Getenv or os.LookupEnv where they were used, or, for
+// ALLOW_PRIVATE_INSTANCES, through [TrimmedGetenv] handed the full name,
+// which it reads verbatim. None ever answered to another spelling.
 // GITLAB_MCP_ENV_FILE stays off the list, the one read issue 957 keeps: it
 // names the dotenv file to load and is read once, before any file is.
 var movedByIssue957 = []string{
 	"ALLOWED_DOWNLOAD_DIRS",
 	"ALLOWED_IMPORT_DIRS",
 	"ALLOWED_UPLOAD_DIRS",
+	"ALLOW_PRIVATE_INSTANCES",
 	"MAX_LISTEN_STREAMS",
 	"STDIO_MAX_LINE_BYTES",
 	"TELEMETRY",

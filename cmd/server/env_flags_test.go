@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -295,6 +297,12 @@ func numberOutcome(got int, value string, def int, warned bool) settingOutcome {
 // settingsMovedByIssue957 are the settings issue 957 moved onto the
 // configuration package's list, each with how the server reads it.
 func settingsMovedByIssue957() []settingCase {
+	return slices.Concat(ceilingSettings(), telemetrySettings(), guardSettings())
+}
+
+// ceilingSettings are the two ceilings issue 957 moved, which warn and keep
+// their default (HLD-001, RQB-004).
+func ceilingSettings() []settingCase {
 	return []settingCase{
 		{
 			setting: "MAX_LISTEN_STREAMS", row: "HLD-001", flag: "max-listen-streams",
@@ -316,6 +324,13 @@ func settingsMovedByIssue957() []settingCase {
 				return numberOutcome(got, value, defaultMaxStdioLineBytes, warned("stdio line limit could not be parsed"))
 			},
 		},
+	}
+}
+
+// telemetrySettings are telemetry's switch, its identity settings
+// (IDN-009) and its tool-name dimension (IDN-014).
+func telemetrySettings() []settingCase {
+	return []settingCase{
 		{
 			// No row names the switch, which is not a limit. Its variable is
 			// parsed by the OpenTelemetry boolean grammar, under which a value
@@ -425,6 +440,33 @@ func settingsMovedByIssue957() []settingCase {
 				if warned("telemetry tool-name policy is unusable; using auto") {
 					return outcomeKeptDefault
 				}
+				return outcomeUnread
+			},
+		},
+	}
+}
+
+// guardSettings are the settings that widen what a guard lets through: the
+// private-instance opt-out (DST-003) and the three local allow-lists
+// (AUT-006).
+func guardSettings() []settingCase {
+	return []settingCase{
+		{
+			// The opt-out turns a guard off, so a value it does not parse
+			// reads as off and the guard stays on. A caller-named instance on
+			// a private address is what the guard refuses.
+			setting: "ALLOW_PRIVATE_INSTANCES", row: "DST-003", flag: "allow-private-instances",
+			malformed: "ture", wellFormed: "true", policy: tenancy.ReadsAsOff,
+			observe: func(t *testing.T, _ string) settingOutcome {
+				t.Helper()
+				err := gitlabclient.CheckCallerNamedInstance("https://10.1.2.3")
+				if err == nil {
+					return outcomeApplied
+				}
+				if errors.Is(err, gitlabclient.ErrDestinationRefused) {
+					return outcomeReadAsOff
+				}
+				t.Errorf("CheckCallerNamedInstance() = %v, want nil or a refusal of the destination", err)
 				return outcomeUnread
 			},
 		},

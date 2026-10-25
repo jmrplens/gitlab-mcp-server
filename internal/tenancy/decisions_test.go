@@ -808,7 +808,9 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // when issue 958 stated each zero it kept from meaning off, made the zeros a
 // flag and its variable read apart mean one thing, stopped a zero failure
 // window switching the distinct-credential budget off, and wrote each default
-// and fallback once.
+// and fallback once, and F-13 did when issue 957 moved every variable a row
+// names onto the configuration package's list, read through it, and gave
+// the listen ceiling its flag.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -836,7 +838,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-11,F-14,F-16,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-34,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }

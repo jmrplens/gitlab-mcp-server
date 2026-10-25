@@ -346,8 +346,7 @@ func authorizeDecisions() []Decision {
 			// it (cmd/server:applyEnvBackedFlags), so a flag value that does
 			// not parse reads as off too.
 			Malformed: ReadsAsOff, MalformedBy: "issue 957",
-			Decided:  []string{"ADR-0022", "issue 957"},
-			Findings: []string{"F-13"},
+			Decided: []string{"ADR-0022", "issue 957"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError,
