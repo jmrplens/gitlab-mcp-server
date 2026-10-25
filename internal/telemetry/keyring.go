@@ -132,6 +132,21 @@ const DefaultKeyRotation = time.Duration(0)
 // at startup rather than discovered a month later.
 const MaxKeyRotation = 30 * 24 * time.Hour
 
+// CheckKeyRotation reports whether a generated key may live for rotation:
+// zero, which keeps it for the life of the process, up to [MaxKeyRotation]
+// inclusive.
+//
+// Exported so the server refuses an interval at startup by the rule
+// [NewKeyring] builds the keyring by, rather than by a copy of it that could
+// come to disagree about which interval is usable (issue 957).
+func CheckKeyRotation(rotation time.Duration) error {
+	if rotation < 0 || rotation > MaxKeyRotation {
+		return fmt.Errorf("telemetry identity key rotation %s is out of range (0 disables it, maximum %s)",
+			rotation, MaxKeyRotation)
+	}
+	return nil
+}
+
 // NewKeyring builds the keyring for a secret and a rotation interval.
 //
 // An empty secret generates keys instead. A rotation interval is honored only
@@ -150,9 +165,8 @@ func NewKeyring(secret string, rotation time.Duration) (*Keyring, error) {
 		return ring, nil
 	}
 
-	if rotation < 0 || rotation > MaxKeyRotation {
-		return nil, fmt.Errorf("telemetry identity key rotation %s is out of range (0 disables it, maximum %s)",
-			rotation, MaxKeyRotation)
+	if err := CheckKeyRotation(rotation); err != nil {
+		return nil, err
 	}
 
 	ring := &Keyring{rotation: rotation, now: time.Now}

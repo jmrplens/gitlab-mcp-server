@@ -598,6 +598,75 @@ func TestStart_RefusesAnUnhonorableProtocolBeforeBuildingAnything(t *testing.T) 
 	}
 }
 
+// TestStart_ACheckThatRefuses_StopsTheStartBeforeAnythingIsBuilt pins the
+// caller's last word on a start: what Config.Check returns is what Start
+// returns, unwrapped so the caller can tell its own refusal from a failure of
+// the exporters, and no provider is built and no snapshot published, so a
+// server that refuses to start over a setting of its own exported nothing
+// under it (issue 957).
+func TestStart_ACheckThatRefuses_StopsTheStartBeforeAnythingIsBuilt(t *testing.T) {
+	setCurrent(Snapshot{})
+	refusal := errors.New("an identity setting this server cannot use")
+
+	p, err := Start(context.Background(), Config{
+		Enabled: true,
+		Signals: Signals{Traces: true},
+		Check:   func() error { return refusal },
+	})
+	if !errors.Is(err, refusal) || err.Error() != refusal.Error() {
+		t.Errorf("Start() error = %v, want the check's own error, unwrapped", err)
+	}
+	if p != nil {
+		_ = p.Shutdown(boundedShutdown(t))
+		t.Error("Start built a provider although the check refused the start")
+	}
+	if snapshot := CurrentSnapshot(); snapshot.Enabled {
+		t.Errorf("a refused start published a snapshot: %+v", snapshot)
+	}
+}
+
+// TestStart_TheCheck_RunsOnlyOnceTelemetryIsOn pins when Config.Check is
+// asked: once, on a start that is going to build something, and never when
+// telemetry is off or OTEL_SDK_DISABLED vetoes it. A check that ran on every
+// start would let a setting nothing is exported under refuse a server that runs
+// without telemetry, which is the deployment almost every operator has, and
+// one that ran under the veto would refuse a fleet whose telemetry was turned
+// off precisely so that nothing about it matters.
+func TestStart_TheCheck_RunsOnlyOnceTelemetryIsOn(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+	for _, tc := range []struct {
+		name    string
+		enabled bool
+		vetoed  string
+		calls   int
+	}{
+		{name: "telemetry off", enabled: false},
+		{name: "telemetry vetoed by OTEL_SDK_DISABLED", enabled: true, vetoed: "true"},
+		{name: "telemetry on", enabled: true, calls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("OTEL_SDK_DISABLED", tc.vetoed)
+			calls := 0
+			p, err := Start(context.Background(), Config{
+				Enabled: tc.enabled,
+				Signals: Signals{Traces: true},
+				Check:   func() error { calls++; return nil },
+			})
+			if err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			t.Cleanup(func() { _ = p.Shutdown(boundedShutdown(t)) })
+			if calls != tc.calls {
+				t.Errorf("the check ran %d times, want %d", calls, tc.calls)
+			}
+			if p.Enabled() != (tc.calls == 1) {
+				t.Errorf("provider enabled = %v after a check that refused nothing", p.Enabled())
+			}
+		})
+	}
+}
+
 // boundedShutdown returns a context a test can safely pass to Shutdown.
 //
 // Never context.Background(). The provider-level Shutdown honors only the

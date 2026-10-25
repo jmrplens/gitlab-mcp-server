@@ -74,6 +74,16 @@ type Config struct {
 	DropToolNameFromMetrics bool
 	// Signals selects what is exported. A zero value means all three.
 	Signals Signals
+	// Check, when set, is asked once Start knows telemetry is on, before
+	// anything is built or installed. An error it returns is what Start
+	// returns, unwrapped, with nothing started.
+	//
+	// It is how the caller refuses a start over a setting of its own that
+	// telemetry reads, at the one point that knows whether telemetry will run:
+	// neither when it is off nor under OTEL_SDK_DISABLED, so a setting nothing
+	// is exported under refuses nothing, and with the switch and the veto each
+	// read once. The server's identity settings are the case (issue 957).
+	Check func() error
 }
 
 // Signals selects which OTel signals are exported.
@@ -133,6 +143,11 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	if SDKDisabledByEnv() {
 		slog.InfoContext(ctx, "telemetry suppressed by OTEL_SDK_DISABLED", "component", "telemetry")
 		return &Provider{}, nil
+	}
+	if cfg.Check != nil {
+		if err := cfg.Check(); err != nil {
+			return nil, err
+		}
 	}
 
 	// Before anything can fail, so that whatever the SDK says about the

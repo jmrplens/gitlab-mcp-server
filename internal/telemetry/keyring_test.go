@@ -153,6 +153,40 @@ func TestKeyring_RefusesAnIntervalOutOfRange(t *testing.T) {
 	}
 }
 
+// TestCheckKeyRotation_HoldsTheRangeAGeneratedKeyMayLive pins the rule the
+// server refuses a start with and the keyring is built by, at both of its
+// edges and either side of them: zero keeps the key for the life of the
+// process, the documented maximum is a legal value, and a nanosecond past
+// either end is refused. The server reads its setting through this function
+// rather than a copy of the comparison, so the two cannot disagree about which
+// interval is usable (issue 957).
+func TestCheckKeyRotation_HoldsTheRangeAGeneratedKeyMayLive(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		rotation time.Duration
+		usable   bool
+	}{
+		{name: "a nanosecond below zero", rotation: -time.Nanosecond},
+		{name: "zero, the life of the process", rotation: 0, usable: true},
+		{name: "the documented maximum", rotation: MaxKeyRotation, usable: true},
+		{name: "a nanosecond past the maximum", rotation: MaxKeyRotation + time.Nanosecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := CheckKeyRotation(tc.rotation)
+			if tc.usable && err != nil {
+				t.Errorf("CheckKeyRotation(%s) = %v, want nil", tc.rotation, err)
+			}
+			if !tc.usable && (err == nil || !strings.Contains(err.Error(), "out of range")) {
+				t.Errorf("CheckKeyRotation(%s) = %v, want an out-of-range refusal", tc.rotation, err)
+			}
+		})
+	}
+}
+
 // TestKeyring_EmptyInputIsNotADigest covers the case that would otherwise
 // produce a bucket meaning "several different things that were all absent".
 func TestKeyring_EmptyInputIsNotADigest(t *testing.T) {
