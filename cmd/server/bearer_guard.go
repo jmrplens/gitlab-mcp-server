@@ -36,11 +36,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
@@ -82,21 +80,12 @@ const (
 type bearerGuard struct {
 	verify   auth.TokenVerifier
 	rejected *oauth.RejectedTokens
-	limiter  *serverpool.AuthRateLimiter
-	// sourceBudget is the coarse secondary budget charged to the transport
-	// source, set only when trustedProxyHeader makes the primary key
-	// caller-controlled. Shared with [mcpServerGate], and shared as the budget
-	// rather than as its limiter: the accounting is the point of it, and this
-	// guard is the layer that spends it first.
-	sourceBudget *transportBudget
-	// spray is the slow budget: distinct credentials refused per address over
-	// a longer window, answered with a block that lengthens each time. Shared
-	// with [mcpServerGate], like limiter and sourceBudget, since this guard is
-	// the layer that sees a refused credential first.
-	spray *serverpool.DistinctTokenBudget
-	// network is the /48 aggregate (AUB-006), shared with [mcpServerGate]
-	// like spray. Nil only in tests that build a guard without it.
-	network *serverpool.DistinctTokenBudget
+	// authBudgets are the four budgets consulted before a credential is read,
+	// the ones [mcpServerGate] holds: this guard is the layer that sees a
+	// refused credential first and spends them first, and the transport-source
+	// budget is shared as the budget rather than as its limiter, since the
+	// accounting is the point of it.
+	authBudgets
 	// blocks counts the refusals each budget produced, for telemetry. Shared
 	// with [mcpServerGate].
 	blocks *authBlockCounters
@@ -635,26 +624,6 @@ func (g *bearerGuard) credentialAlreadyVerified(r *http.Request) bool {
 		return false
 	}
 	return oauth.SatisfiesMinimum(info.Scopes, g.minimumScope)
-}
-
-// blockedByBudget reports whether any budget is exhausted, for how much longer,
-// and which one refused. It is [mcpServerGate.blockedByBudget] at this layer,
-// consulting the same four budgets in the same order with the keys read off
-// address the same way, and the two must agree: a caller refused here and one
-// refused there was refused by the same rule.
-func (g *bearerGuard) blockedByBudget(address, source string) (blocked bool, retryAfter time.Duration, reason string) {
-	key := budgetKey(address)
-	lockout := authBlock{reason: mcpotel.AuthBlockFailureLockout}
-	if g.limiter != nil {
-		lockout.active, lockout.remaining = g.limiter.BlockedFor(key)
-	}
-	sourceBlock := authBlock{reason: mcpotel.AuthBlockTransportSource}
-	sourceBlock.active, sourceBlock.remaining = g.sourceBudget.blockedFor(source)
-	spray := authBlock{reason: mcpotel.AuthBlockDistinctTokens}
-	spray.active, spray.remaining = g.spray.Blocked(key)
-	network := authBlock{reason: mcpotel.AuthBlockNetworkAggregate}
-	network.active, network.remaining = g.network.Blocked(networkKey(address))
-	return longestAuthBlock(lockout, sourceBlock, spray, network)
 }
 
 // challenge builds the WWW-Authenticate value, appending the given key/value
