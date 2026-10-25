@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -42,13 +42,24 @@ var (
 // every line.
 type Keyring = telemetry.Keyring
 
+// The identity settings without their prefix, the names [config.Getenv] reads
+// them under (issue 957). The telemetry package exports each in full:
+// telemetry.EnvIdentityRotationName is the one a message gives, the error of a
+// rotation that does not parse, and telemetry.EnvIdentityName and
+// telemetry.EnvIdentityKeyName are the spelling the tests set.
+const (
+	telemetryIdentitySetting         = "TELEMETRY_IDENTITY"
+	telemetryIdentityKeySetting      = "TELEMETRY_IDENTITY_KEY"
+	telemetryIdentityRotationSetting = "TELEMETRY_IDENTITY_ROTATION"
+)
+
 // telemetryIdentityKey resolves the operator's pseudonymisation secret.
 //
 // Empty means none was supplied, which is the default and generates one
 // instead. Environment only; see the note on telemetryIdentityRotationFlag for
 // why this secret has no command-line form.
 func telemetryIdentityKey() string {
-	return os.Getenv(telemetry.EnvIdentityKeyName)
+	return config.Getenv(telemetryIdentityKeySetting)
 }
 
 // telemetryIdentityRotation resolves how long a generated key lives.
@@ -57,7 +68,7 @@ func telemetryIdentityKey() string {
 // operator who typed "24" meaning hours should be told, not given a key that
 // rotates every twenty-four nanoseconds.
 func telemetryIdentityRotation() (time.Duration, error) {
-	value := os.Getenv(telemetry.EnvIdentityRotationName)
+	value := config.Getenv(telemetryIdentityRotationSetting)
 	if telemetryIdentityRotationFlag != nil && isFlagPassed("telemetry-identity-rotation") {
 		value = *telemetryIdentityRotationFlag
 	}
@@ -195,7 +206,7 @@ var telemetryIdentityFlag *string
 // per-user correlation, looking at an empty dashboard, with nothing anywhere
 // saying why.
 func telemetryIdentityPolicy() (telemetry.IdentityPolicy, error) {
-	value := os.Getenv(telemetry.EnvIdentityName)
+	value := config.Getenv(telemetryIdentitySetting)
 	if telemetryIdentityFlag != nil && isFlagPassed("telemetry-identity") {
 		value = *telemetryIdentityFlag
 	}

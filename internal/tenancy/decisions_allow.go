@@ -942,7 +942,6 @@ func allowDecisions() []Decision {
 				"GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION",
 			},
 			Malformed: RefuseStartup,
-			Findings:  []string{"F-13"},
 			Sites:     []Site{enforce(pkgServer, "telemetryIdentityPolicy")},
 		},
 		{
@@ -963,7 +962,8 @@ func allowDecisions() []Decision {
 			// how many series telemetry gives one metric, and nothing about
 			// who a caller is. No row named its variable until issue 957,
 			// which gave it this one so that the variable and its malformed
-			// value are held as every setting's are. A value it does not know
+			// value are held as every setting's are, and moved its read onto
+			// the configuration package's list. A value it does not know
 			// is logged and auto is used rather than refusing startup (issue
 			// 957): telemetry observes the server rather than serving its
 			// clients, and auto is the default, which keeps both dimensions
@@ -975,9 +975,8 @@ func allowDecisions() []Decision {
 			Source: Configurable, Flags: []string{"--telemetry-tool-name"},
 			Envs:      []string{"GITLAB_MCP_TELEMETRY_TOOL_NAME"},
 			Malformed: WarnKeepDefault, MalformedBy: "issue 957",
-			Decided:  []string{"issue 957"},
-			Findings: []string{"F-13"},
-			Sites:    []Site{enforce(pkgServer, "dropToolNameFromMetrics")},
+			Decided: []string{"issue 957"},
+			Sites:   []Site{enforce(pkgServer, "dropToolNameFromMetrics")},
 		},
 	}
 }

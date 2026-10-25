@@ -93,9 +93,8 @@ func TestProductionRules_NameWhatTheTreeSpells(t *testing.T) {
 
 // TestProductionRules_DeclareTheReadsNoRowNames: G14 is pointed at the
 // configuration package's reader, and at its two declaration tables: the
-// three variables no row names that the server reads around the
-// configuration package, and the one name it reads bare through it, each
-// with its reason.
+// variables no row names that the server reads around the configuration
+// package, and the one name it reads bare through it, each with its reason.
 func TestProductionRules_DeclareTheReadsNoRowNames(t *testing.T) {
 	r := productionRules()
 	if want := []string{goprogram.ModulePath + "/internal/config.Getenv"}; !slices.Equal(r.envListReaders, want) {
@@ -105,7 +104,7 @@ func TestProductionRules_DeclareTheReadsNoRowNames(t *testing.T) {
 		declared map[string]string
 		want     []string
 	}{
-		"read around": {r.envDeclared, []string{"GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS", "GITLAB_MCP_ENV_FILE", "GITLAB_MCP_TELEMETRY"}},
+		"read around": {r.envDeclared, []string{"GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS", "GITLAB_MCP_ENV_FILE"}},
 		"read bare":   {r.envBare, []string{"GITLAB_URL"}},
 	} {
 		t.Run(table, func(t *testing.T) {

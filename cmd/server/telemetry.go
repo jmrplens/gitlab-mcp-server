@@ -4,8 +4,8 @@ import (
 	"context"
 	"flag"
 	"log/slog"
-	"os"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
@@ -208,12 +208,16 @@ var baseLogHandler slog.Handler
 // telemetryToolNameFlag holds --telemetry-tool-name.
 var telemetryToolNameFlag *string
 
+// telemetryToolNameSetting is telemetry.EnvToolNameName without its prefix,
+// the name [config.Getenv] reads it under (issue 957).
+const telemetryToolNameSetting = "TELEMETRY_TOOL_NAME"
+
 // dropToolNameFromMetrics resolves whether the tool name is a metric
 // dimension, for the surface the caller resolved from the inputs its mode
 // really uses. Reading TOOL_SURFACE here regardless of mode is the defect this
 // parameter replaced.
 func dropToolNameFromMetrics(toolSurface string) bool {
-	value := os.Getenv(telemetry.EnvToolNameName)
+	value := config.Getenv(telemetryToolNameSetting)
 	if telemetryToolNameFlag != nil && isFlagPassed("telemetry-tool-name") {
 		value = *telemetryToolNameFlag
 	}

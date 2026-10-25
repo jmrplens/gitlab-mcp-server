@@ -185,16 +185,16 @@ func productionRules() rules {
 // a declaration whose variable nothing reads that way any more is a finding,
 // so the table cannot outlive what it describes.
 //
-// None of the three is a limit, which is why no row names them (issue 957).
-// The switch and the substitutions are read where they are used until the
-// layer of issue 957 that moves the reads puts them on the list, and their
-// entries go with that move; the env file's read is the one issue 957 keeps.
+// Neither is a limit, which is why no row names them (issue 957). The
+// substitutions are read where they are used until the commit of issue 957
+// that moves their read puts them on the list, and their entry goes with that
+// move, as the telemetry switch's did; the env file's read is the one issue
+// 957 keeps.
 //
 // Each reason is one literal rather than a concatenation, which mutation
 // testing would read as arithmetic no test could reach.
 var readAroundConfig = map[string]string{
 	"GITLAB_MCP_ENV_FILE":                  "names the one dotenv file to load beside the home file, so it is read once per process from the process environment before any file is loaded, which is what keeps a file this server declines to load from nominating itself (config.explicitEnvFile)",
-	"GITLAB_MCP_TELEMETRY":                 "the switch that turns telemetry on, parsed by the OpenTelemetry boolean grammar the package reads OTEL_SDK_DISABLED with; read where it is used until issue 957 moves it onto the list",
 	"GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS": "the rewrites a strict gateway needs in the served text, which bound nothing a caller holds; read where it is used until issue 957 moves it onto the list",
 }
 

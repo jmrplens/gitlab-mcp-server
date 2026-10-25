@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -259,7 +261,8 @@ type settingCase struct {
 	// register declares flag on a fresh flag set, for a flag that is not one
 	// of envBackedFlags; nil for one that is, or for no flag.
 	register func(t *testing.T)
-	// malformed is a value the reader cannot use, and wellFormed one it can.
+	// malformed is a value the reader cannot use, "" for a setting every
+	// value of which means something, and wellFormed one it can.
 	malformed, wellFormed string
 	// policy is what malformed does, which is its row's when a row names it.
 	policy tenancy.Malformed
@@ -305,6 +308,118 @@ func settingsMovedByIssue957() []settingCase {
 				warned := captureLogMessages(t)
 				got := stdioLimitsFromEnv().maxLineBytes
 				return numberOutcome(got, value, defaultMaxStdioLineBytes, warned("stdio line limit could not be parsed"))
+			},
+		},
+		{
+			// No row names the switch, which is not a limit. Its variable is
+			// parsed by the OpenTelemetry boolean grammar, under which a value
+			// that is not true or false is a warning and false, and its flag
+			// by Go's, which refuses one.
+			setting: "TELEMETRY", flag: "telemetry",
+			register: func(t *testing.T) {
+				t.Helper()
+				previous := telemetryFlag
+				t.Cleanup(func() { telemetryFlag = previous })
+				telemetryFlag = flag.Bool("telemetry", false, "")
+			},
+			malformed: "ture", wellFormed: "true", policy: tenancy.ReadsAsOff, flagPolicy: tenancy.RefuseStartup,
+			observe: func(t *testing.T, _ string) settingOutcome {
+				t.Helper()
+				warned := captureLogMessages(t)
+				if telemetryEnabled() {
+					return outcomeApplied
+				}
+				if warned("ignoring unrecognized boolean environment variable") {
+					return outcomeReadAsOff
+				}
+				return outcomeUnread
+			},
+		},
+		{
+			// The reader's error is what this row observes, and it is not
+			// yet the refused start IDN-009 states: the server logs it and
+			// records nothing about callers, which issue 1170 and the last
+			// layer of issue 957 turn into a refusal. The rotation's row
+			// below is the same.
+			setting: "TELEMETRY_IDENTITY", row: "IDN-009", flag: "telemetry-identity",
+			register: func(t *testing.T) {
+				t.Helper()
+				previous := telemetryIdentityFlag
+				t.Cleanup(func() { telemetryIdentityFlag = previous })
+				telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy), "")
+			},
+			malformed: "pseudonimous", wellFormed: string(telemetry.IdentityFull), policy: tenancy.RefuseStartup,
+			observe: func(t *testing.T, value string) settingOutcome {
+				t.Helper()
+				policy, err := telemetryIdentityPolicy()
+				if err != nil {
+					return outcomeRefused
+				}
+				if string(policy) == value {
+					return outcomeApplied
+				}
+				return outcomeUnread
+			},
+		},
+		{
+			// A key is any text, so no value of it fails to parse; the row's
+			// policy is its two siblings'. It has no flag on purpose, since
+			// process arguments are readable through /proc.
+			setting: "TELEMETRY_IDENTITY_KEY", row: "IDN-009",
+			wellFormed: "a deployment-wide secret", policy: tenancy.RefuseStartup,
+			observe: func(t *testing.T, value string) settingOutcome {
+				t.Helper()
+				if telemetryIdentityKey() == value {
+					return outcomeApplied
+				}
+				return outcomeUnread
+			},
+		},
+		{
+			// As for the policy above, the reader's error is observed, and
+			// the server does not refuse to start over it yet (issue 1170).
+			setting: "TELEMETRY_IDENTITY_ROTATION", row: "IDN-009", flag: "telemetry-identity-rotation",
+			register: func(t *testing.T) {
+				t.Helper()
+				previous := telemetryIdentityRotationFlag
+				t.Cleanup(func() { telemetryIdentityRotationFlag = previous })
+				telemetryIdentityRotationFlag = flag.String("telemetry-identity-rotation", "", "")
+			},
+			malformed: "24", wellFormed: "6h", policy: tenancy.RefuseStartup,
+			observe: func(t *testing.T, value string) settingOutcome {
+				t.Helper()
+				rotation, err := telemetryIdentityRotation()
+				if err != nil {
+					return outcomeRefused
+				}
+				if want, parseErr := time.ParseDuration(value); parseErr == nil && rotation == want && rotation != telemetry.DefaultKeyRotation {
+					return outcomeApplied
+				}
+				return outcomeUnread
+			},
+		},
+		{
+			setting: "TELEMETRY_TOOL_NAME", row: "IDN-014", flag: "telemetry-tool-name",
+			register: func(t *testing.T) {
+				t.Helper()
+				previous := telemetryToolNameFlag
+				t.Cleanup(func() { telemetryToolNameFlag = previous })
+				telemetryToolNameFlag = flag.String("telemetry-tool-name", "", "")
+			},
+			// Off drops the dimensions on the dynamic surface, where auto, the
+			// default, keeps them.
+			malformed: "sometimes", wellFormed: string(telemetry.ToolNameOff), policy: tenancy.WarnKeepDefault,
+			observe: func(t *testing.T, _ string) settingOutcome {
+				t.Helper()
+				warned := captureLogMessages(t)
+				dropped := dropToolNameFromMetrics(config.ToolSurfaceDynamic)
+				if dropped {
+					return outcomeApplied
+				}
+				if warned("telemetry tool-name policy is unusable; using auto") {
+					return outcomeKeptDefault
+				}
+				return outcomeUnread
 			},
 		},
 	}
@@ -389,6 +504,9 @@ func (tc settingCase) checkEnvironment(t *testing.T) {
 		{"the environment, well formed", tc.wellFormed, outcomeApplied},
 		{"the environment, malformed", tc.malformed, outcomeOf[tc.policy]},
 	} {
+		if layer.value == "" {
+			continue
+		}
 		t.Run(layer.name, func(t *testing.T) {
 			t.Setenv(env, layer.value)
 			if got := tc.observe(t, layer.value); got != layer.want {
@@ -417,6 +535,9 @@ func (tc settingCase) checkFlag(t *testing.T) {
 		{"the flag, well formed over a malformed variable", tc.wellFormed, tc.malformed, outcomeApplied},
 		{"the flag, malformed over a well-formed variable", tc.malformed, tc.wellFormed, malformedWant},
 	} {
+		if layer.value == "" {
+			continue
+		}
 		t.Run(layer.name, func(t *testing.T) {
 			t.Setenv(env, layer.beside)
 			if err := setFlag(t, tc, layer.value); err != nil {

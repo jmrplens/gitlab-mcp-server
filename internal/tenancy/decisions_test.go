@@ -1089,9 +1089,9 @@ func TestDecisions_LocalAllowLists_AreReadFromStdiosEnvironmentAlone(t *testing.
 
 // TestDecisions_TelemetryToolName_IsARowOfItsOwn pins IDN-014, the row issue
 // 957 gave GITLAB_MCP_TELEMETRY_TOOL_NAME, which no row named: a process-wide
-// rule set by its flag and its variable, read around the configuration
-// package until the next layer moves the read, which F-13 records meanwhile,
-// and decided by nothing else the register holds.
+// rule set by its flag and its variable, read through the configuration
+// package since issue 957 moved the read, so it carries no finding, and
+// decided by nothing else the register holds.
 func TestDecisions_TelemetryToolName_IsARowOfItsOwn(t *testing.T) {
 	d, ok := Lookup("IDN-014")
 	if !ok {
@@ -1102,8 +1102,8 @@ func TestDecisions_TelemetryToolName_IsARowOfItsOwn(t *testing.T) {
 		t.Errorf("IDN-014: source %d, flags %v, envs %v, config %v; want the flag and the variable, carried by no internal/config field",
 			d.Source, d.Flags, d.Envs, d.Config)
 	}
-	if !slices.Equal(d.Findings, []string{"F-13"}) || !slices.Equal(d.Decided, []string{"issue 957"}) {
-		t.Errorf("IDN-014: findings %v, decided %v; want F-13 while the variable is read directly, and issue 957", d.Findings, d.Decided)
+	if len(d.Findings) != 0 || !slices.Equal(d.Decided, []string{"issue 957"}) {
+		t.Errorf("IDN-014: findings %v, decided %v; want none, the variable being read through the configuration package, and issue 957", d.Findings, d.Decided)
 	}
 	if want := []Site{enforce(pkgServer, "dropToolNameFromMetrics")}; !slices.Equal(d.Sites, want) {
 		t.Errorf("IDN-014: sites %v, want %v", d.Sites, want)

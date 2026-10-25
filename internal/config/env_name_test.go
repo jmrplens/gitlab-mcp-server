@@ -273,6 +273,11 @@ func TestHadOldSpelling_HoldsTheSettings300ReadAndNoOthers(t *testing.T) {
 var movedByIssue957 = []string{
 	"MAX_LISTEN_STREAMS",
 	"STDIO_MAX_LINE_BYTES",
+	"TELEMETRY",
+	"TELEMETRY_IDENTITY",
+	"TELEMETRY_IDENTITY_KEY",
+	"TELEMETRY_IDENTITY_ROTATION",
+	"TELEMETRY_TOOL_NAME",
 }
 
 // TestPrefixedEnvNames_HoldTheSettingsIssue957Moved verifies that each setting
