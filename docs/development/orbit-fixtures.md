@@ -216,8 +216,10 @@ old prefix again. No description edit was needed this time. A minute or
 so after the transfers, `graph_status` of the subgroup still counted 0
 of its 2 projects indexed; within three minutes of them it counted 2,
 and the query below listed both. By then each project had also taken its
-`LICENSE` push and been made public, so which of those changes moved the
-nodes is not known.
+`LICENSE` push and been made public. More than an hour after the change
+to public both nodes still read `visibility_level: private`, so that
+change had not reached them and did not move them; the transfer or the
+`LICENSE` push did, and which of the two is not known.
 
 After a rename or a transfer, check two things before running the suite
 or recording, since they follow different columns and did not move
