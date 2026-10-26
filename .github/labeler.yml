@@ -45,6 +45,7 @@ security:
       - any-glob-to-any-file:
           - SECURITY.md
           - PRIVACY.md
+          - docs/development/security-review-*.md
           - .gitguardian.yaml
           - .github/workflows/codeql.yml
           - .github/workflows/scorecard.yml

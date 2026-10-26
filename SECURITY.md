@@ -95,6 +95,12 @@ tries to widen what the token already allows; the host running the server is not
 already compromised. Reports resting on breaking one of those assumptions fall
 under *Out of scope* below.
 
+**Security review.** The October 2026 security review of these requirements
+and boundaries is recorded in
+[Security Review, October 2026](docs/development/security-review-2026-10.md):
+what was checked against the code, with which tools, what was found, and where
+each finding is tracked.
+
 ## Scope
 
 ### In scope

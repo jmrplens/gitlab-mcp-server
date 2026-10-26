@@ -14,4 +14,6 @@ internal architecture, the gates and generators, and the
 records why the user documentation lives only on the site. Start with
 [CONTRIBUTING.md](../CONTRIBUTING.md) for how a change is proposed and reviewed,
 and [GOVERNANCE.md](../GOVERNANCE.md) for how the project makes decisions and who
-holds which role.
+holds which role. [SECURITY.md](../SECURITY.md) holds the threat model, and the
+[Security Review, October 2026](development/security-review-2026-10.md) records
+how its requirements and boundaries were last checked against the code.
