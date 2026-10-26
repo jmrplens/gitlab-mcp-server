@@ -617,13 +617,18 @@ orbit-ensure-token:
 ## orbit-setup-fixtures: idempotently provision the fixture projects.
 ## Passes the resolved namespace and optional --mirror-cli through to
 ## the script. Pre-existing resources are detected and skipped.
+## ORBIT_FIXTURES_VISIBILITY is read from the make command line, then the
+## environment, then .env: the recipe sources .env after make has handed
+## the shell its value, so make's value is passed on explicitly, and an
+## empty one leaves the script its public default.
 orbit-setup-fixtures: orbit-ensure-token
 	@. ./.env && { \
 		mirror_flag=""; \
 		if [ "$(ORBIT_FIXTURES_MIRROR)" = "true" ]; then mirror_flag="--mirror-cli"; fi; \
 		echo ""; \
 		echo "=== Provisioning Orbit fixtures in $(ORBIT_FIXTURES_NAMESPACE) on $(ORBIT_FIXTURES_GITLAB_URL) ==="; \
-		export GITLAB_COM_TOKEN ORBIT_FIXTURES_VISIBILITY \
+		export GITLAB_COM_TOKEN \
+			ORBIT_FIXTURES_VISIBILITY="$(if $(filter command line environment,$(origin ORBIT_FIXTURES_VISIBILITY)),$(ORBIT_FIXTURES_VISIBILITY),$${ORBIT_FIXTURES_VISIBILITY:-})" \
 			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE) \
 			ORBIT_FIXTURES_GITLAB_URL=$(ORBIT_FIXTURES_GITLAB_URL); \
 		./scripts/setup-orbit-fixtures.sh $$mirror_flag; \

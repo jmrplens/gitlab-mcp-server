@@ -131,7 +131,8 @@ full path with every slash encoded. It creates the projects public, as
 `jmrp-oss` requires; set `ORBIT_FIXTURES_VISIBILITY=private` for a
 private group of your own, since GitLab refuses a public project in a
 private group. `make orbit-setup-fixtures` and `make test-e2e-gitlab-com`
-hand the setting on from their command line or from `.env`.
+hand the setting on from their command line, else the environment, else
+`.env`.
 
 ### What the script creates
 
