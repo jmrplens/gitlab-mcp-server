@@ -21,8 +21,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		inviteReadSpec("invite_list_project", toolutil.RouteAction(client, ListPendingProjectInvitations), "gitlab_project_invite_list_pending"),
 		inviteReadSpec("invite_list_group", toolutil.RouteAction(client, ListPendingGroupInvitations), "gitlab_group_invite_list_pending"),
-		inviteCreateSpec("invite_project", toolutil.RouteAction(client, ProjectInvites), "gitlab_project_invite"),
-		inviteCreateSpec("invite_group", toolutil.RouteAction(client, GroupInvites), "gitlab_group_invite"),
+		inviteCreateSpec("invite_project", toolutil.RouteAction(client, ProjectInvites), "gitlab_project_invite", toolutil.ProjectAccessLevels),
+		inviteCreateSpec("invite_group", toolutil.RouteAction(client, GroupInvites), "gitlab_group_invite", toolutil.GroupAccessLevels),
 	}
 }
 
@@ -35,11 +35,15 @@ func inviteReadSpec(name string, route toolutil.ActionRoute, individualTool stri
 // inviteCreateSpec builds an invitation, whose email takes one address or
 // several separated by commas (GitLab splits the value and checks each one),
 // so it is published with none of the email format every other endpoint's
-// email carries, which names a single address (issue 1272).
-func inviteCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+// email carries, which names a single address (issue 1272), and whose
+// access_level is published as the levels the scope grants (issue 1280).
+func inviteCreateSpec(name string, route toolutil.ActionRoute, individualTool string, levels toolutil.AccessLevelSet) toolutil.ActionSpec {
 	options := inviteOptions(individualTool)
 	decorateInviteMeta(&options, individualTool)
-	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.SchemaNoFormatOverride("email")}
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaNoFormatOverride("email"),
+		levels.SchemaOverride("access_level"),
+	}
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
@@ -84,8 +88,8 @@ type inviteActionMetaEntry struct {
 // inviteGuidance builds the guidance map for an invite action: the
 // scope-specific entry (project_id or group_id) plus the email, user_id,
 // access_level, and expires_at entries that are identical for the project
-// and group invite surfaces.
-func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[string]toolutil.ParameterGuidance {
+// and group invite surfaces but for the levels the scope grants.
+func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance, levels toolutil.AccessLevelSet) map[string]toolutil.ParameterGuidance {
 	return map[string]toolutil.ParameterGuidance{
 		scopeParam: scope,
 		"email": {
@@ -102,7 +106,7 @@ func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[str
 		},
 		"access_level": {
 			SemanticRole:     "access_level",
-			ValueSource:      "Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.",
+			ValueSource:      "Role to grant: " + levels.Choices() + ".",
 			ExampleBinding:   "params.access_level:30",
 			CommonConfusions: []string{"Pass the numeric access level, not a role name like 'developer'."},
 		},
@@ -138,7 +142,7 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 			ValueSource:      "Project ID or full namespace path the user is being invited to.",
 			ExampleBinding:   `params.project_id:"group/project"`,
 			CommonConfusions: []string{"Use the target project here. Use group_id only with access.invite_group."},
-		}),
+		}, toolutil.ProjectAccessLevels),
 	},
 	"gitlab_group_invite": {
 		usage:       "Invite a user to a group by email address or user_id with a chosen access_level. Use when adding someone who is not yet a group member, including external users invited by email. For users who already have an account prefer group.group_member_add.",
@@ -150,7 +154,7 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 			ValueSource:      "Group ID or full group path the user is being invited to.",
 			ExampleBinding:   `params.group_id:"platform/backend"`,
 			CommonConfusions: []string{"Use group_id for the group scope. Use project_id only with access.invite_project."},
-		}),
+		}, toolutil.GroupAccessLevels),
 	},
 	"gitlab_project_invite_list_pending": {
 		usage:       "List the pending (not yet accepted) invitations for a project. Use to audit outstanding email invitations before resending or revoking them. This lists invitations, not current members.",

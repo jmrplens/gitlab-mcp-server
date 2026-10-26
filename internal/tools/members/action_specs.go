@@ -146,7 +146,8 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 		// GitLab declares user_id and username optional and requires at least
 		// one of them (at_least_one_of in lib/api/members.rb), which is what
 		// the anyOf says and a required list cannot.
-		opts.InputSchemaOverrides = append(opts.InputSchemaOverrides, toolutil.SchemaAnyOfRequired(paramUserID, "username"))
+		opts.InputSchemaOverrides = append(opts.InputSchemaOverrides, toolutil.SchemaAnyOfRequired(paramUserID, "username"),
+			toolutil.ProjectAccessLevels.SchemaOverride(paramAccessLevel))
 		opts.Usage = "Add a user to a project team by user_id or username with an access_level. Optionally set expires_at and member_role_id (Premium/Ultimate custom role). Idempotent for already-existing members."
 		opts.Aliases = []string{individualTool, "add project member", "grant project access", "add existing user to project", "give user access"}
 		opts.RelatedActions = []string{actionMembersList, actionMemberGet, actionMemberEdit, actionUserGet}
@@ -160,13 +161,14 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 			},
 			paramAccessLevel: {
 				SemanticRole:     paramAccessLevel,
-				ValueSource:      "Numeric access level: 10 Guest, 20 Reporter, 30 Developer, 40 Maintainer, 50 Owner (plus 5/15/25/60 on supported tiers).",
+				ValueSource:      "Numeric access level: " + toolutil.ProjectAccessLevels.Choices() + ". A project grants no other level.",
 				ExampleBinding:   "params.access_level:30",
 				CommonConfusions: []string{"Use the numeric level, not a role name. Set member_role_id for a custom role."},
 			},
 		}
 		opts.IndividualTool.Description = "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users."
 	case "gitlab_project_member_edit":
+		opts.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.ProjectAccessLevels.SchemaOverride(paramAccessLevel)}
 		opts.Usage = "Edit an existing project member's access_level, expires_at, or member_role_id. Requires at least the same access level as the target member."
 		opts.Aliases = []string{individualTool, "edit project member", "change member access level", "promote member", "update membership"}
 		opts.RelatedActions = []string{actionMembersList, actionMemberGet, actionMemberAdd, actionMemberDelete}
@@ -175,7 +177,7 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 			paramUserID:    userIDGuidance,
 			paramAccessLevel: {
 				SemanticRole:     paramAccessLevel,
-				ValueSource:      "New numeric access level: 10 Guest, 20 Reporter, 30 Developer, 40 Maintainer, 50 Owner (plus 5/15/25/60 on supported tiers).",
+				ValueSource:      "New numeric access level: " + toolutil.ProjectAccessLevels.Choices() + ". A project grants no other level.",
 				ExampleBinding:   "params.access_level:40",
 				CommonConfusions: []string{"Use the numeric level, not a role name. You must hold at least the same level as the target."},
 			},

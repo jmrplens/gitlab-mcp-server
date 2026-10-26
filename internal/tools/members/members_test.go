@@ -1775,8 +1775,7 @@ func TestMembers_RefusalsCarryTheirOwnOperationAndHint(t *testing.T) {
 		},
 		{
 			name: "edit rejected as a bad request", status: http.StatusBadRequest, operation: "memberEdit",
-			hint: "access_level must be one of 5/10/15/20/25/30/40/50/60 " +
-				"(Minimal/Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner/Admin where supported); " +
+			hint: "access_level must be one of 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; " +
 				"expires_at must be YYYY-MM-DD format; member_role_id (if provided) must exist for the namespace (Premium/Ultimate)",
 			call: edit,
 		},

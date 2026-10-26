@@ -474,7 +474,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "List a project's starrers. Returns: users with their starred_since date, plus pagination metadata. See also: gitlab_project_star, gitlab_project_list_user_starred.",
 	},
 	"gitlab_project_share_with_group": {
-		usage:       "Share a project with a group at a chosen access level. Send project_id, group_id, and group_access (10 Guest, 20 Reporter, 30 Developer, 40 Maintainer). Optionally expires_at (YYYY-MM-DD).",
+		usage:       "Share a project with a group at a chosen access level. Send project_id, group_id, and group_access, Guest (10) to Owner (50). Optionally expires_at (YYYY-MM-DD).",
 		aliases:     []string{"share project with group", "grant group access to project", "add group to project"},
 		related:     []string{"project.delete_shared_group", actionProjectListInvGroups, actionGroupGet},
 		description: "Share a project with a group. Returns: a confirmation with the group ID and granted access role. See also: gitlab_project_delete_shared_group, gitlab_project_list_invited_groups.",
@@ -785,6 +785,7 @@ var projectActionSchemaOverrides = map[string][]toolutil.InputSchemaOverride{
 	"gitlab_project_list_user_projects":    {projectListOrderByOverride},
 	"gitlab_project_list_user_contributed": {projectListOrderByOverride},
 	"gitlab_project_list_user_starred":     {projectListOrderByOverride},
+	"gitlab_project_share_with_group":      {toolutil.ProjectAccessLevels.SchemaOverride("group_access")},
 }
 
 // decorateProjectSchemaOverrides appends input-schema enum overrides for

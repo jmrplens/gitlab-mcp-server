@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -2926,5 +2927,40 @@ func TestProjectRotateSelf_MovedProjectOldPath_IsNotTheWrongKind(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), hintResourceTokenRotateSelfWrongKind) {
 		t.Errorf("error = %q, must not say the token is the wrong kind", err)
+	}
+}
+
+// TestProjectCreate_PlannerFromAMaintainer_IsExplainedAsOwnersToGrant verifies
+// that a project access token level refused for its creator's role is
+// explained with the rule GitLab applies, which is not "no higher than your
+// own" for two of the levels.
+//
+// ResourceAccessTokens::CreateService asks can_assign_role?, and
+// Gitlab::Access.level_encompasses? lets only an Owner, or a member who holds
+// the same role, assign Planner (15) or Security Manager (25): a Maintainer,
+// who can create a project token, is refused both, though both are below
+// Maintainer. The refusal is a 400 (bad_request! in
+// lib/api/resource_access_tokens.rb), so the validation hint is what follows
+// it, and the parameter's own description is what a caller reads before
+// asking. A group token needs no such sentence, since only an Owner creates
+// one.
+func TestProjectCreate_PlannerFromAMaintainer_IsExplainedAsOwnersToGrant(t *testing.T) {
+	const rule = "Planner (15) and Security Manager (25) are granted only by an Owner of the project or by a member who holds that role"
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Access level of the token contains permissions not held by the creating user"}`)
+	}))
+
+	_, err := ProjectCreate(t.Context(), client, ProjectCreateInput{
+		ProjectID: "42", Name: testTokenName, Scopes: []string{"api"}, AccessLevel: 15,
+	})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), rule) {
+		t.Errorf(fmtExpErrContaining, rule, err)
+	}
+	field, _ := reflect.TypeFor[ProjectCreateInput]().FieldByName("AccessLevel")
+	if desc := field.Tag.Get("jsonschema"); !strings.Contains(desc, rule) {
+		t.Errorf("access_level description = %q, want it to carry %q", desc, rule)
 	}
 }

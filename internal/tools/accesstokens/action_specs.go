@@ -119,6 +119,11 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 				"last_used_asc", "last_used_desc", "name_asc", "name_desc"),
 		}
 	}
+	if operation == "create" {
+		// Both create routes declare access_level with values:
+		// options_with_owner, Guest to Owner (issue 1280).
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.AccessTokenAccessLevels.SchemaOverride("access_level")}
+	}
 	options.RelatedActions = accessTokenRelatedActions(scope)
 	if accessTokenNeedsTokenID(operation) {
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

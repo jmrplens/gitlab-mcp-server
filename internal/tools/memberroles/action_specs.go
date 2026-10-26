@@ -88,6 +88,9 @@ func memberRoleOptions(name, individualTool string) toolutil.ActionSpecOptions {
 		OwnerPackage:   "memberroles",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if name == "create_instance" || name == "create_group" {
+		opts.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.CustomRoleBaseAccessLevels.SchemaOverride("base_access_level")}
+	}
 	decorateMemberRoleMeta(&opts, name)
 	return opts
 }
@@ -136,11 +139,15 @@ const (
 )
 
 // baseAccessLevelConfusion is the shared CommonConfusions note for the
-// base_access_level parameter on the create actions. The set is the one
-// doc/api/member_roles.md publishes for the attribute: 10, 15, 20, 25, 30, 40
-// and 50. Minimal access (5) is a membership level and not a level a custom
-// role may extend, so offering it here sent a value GitLab refuses.
-var baseAccessLevelConfusion = []string{"Use a valid numeric level (10/15/20/25/30/40/50). 0, 5=Minimal access and 60=Admin are not accepted, and do not pass role names like Developer."}
+// base_access_level parameter on the create actions. The set is
+// [toolutil.CustomRoleBaseAccessLevels], Guest to Maintainer: what the route's
+// values: and MemberRole's own validation both accept. Minimal access (5) and
+// Owner (50) are each refused by one of the two, so offering either sent a
+// value GitLab refuses.
+var baseAccessLevelConfusion = []string{"Use a valid numeric level (10/15/20/25/30/40). 0, 5=Minimal access, 50=Owner and 60=Admin are not accepted, and do not pass role names like Developer."}
+
+// baseAccessLevelSource is the shared ValueSource of the same parameter.
+var baseAccessLevelSource = fmt.Sprintf("Numeric base access level the custom role extends: %s.", toolutil.CustomRoleBaseAccessLevels.Choices())
 
 // memberRoleActionMeta maps each canonical member role action name to its
 // non-generic Usage, natural-language Aliases, canonical RelatedActions,
@@ -179,7 +186,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 			},
 			"base_access_level": {
 				SemanticRole:     "access_level",
-				ValueSource:      "Numeric base access level the custom role extends (10/15/20/25/30/40/50).",
+				ValueSource:      baseAccessLevelSource,
 				ExampleBinding:   "params.base_access_level:30",
 				CommonConfusions: baseAccessLevelConfusion,
 			},
@@ -204,7 +211,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 			},
 			"base_access_level": {
 				SemanticRole:     "access_level",
-				ValueSource:      "Numeric base access level the custom role extends (10/15/20/25/30/40/50).",
+				ValueSource:      baseAccessLevelSource,
 				ExampleBinding:   "params.base_access_level:30",
 				CommonConfusions: baseAccessLevelConfusion,
 			},

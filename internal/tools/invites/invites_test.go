@@ -236,8 +236,8 @@ func TestGroupInvites_BadRequest(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "valid access_level") {
-		t.Fatalf("error = %v, want access level hint", err)
+	if !strings.Contains(err.Error(), "valid access_level: 5=Minimal access (only on a top-level group") {
+		t.Fatalf("error = %v, want the access level hint naming what a group grants, Minimal access included", err)
 	}
 }
 
@@ -422,8 +422,8 @@ func TestProjectInvites_BadRequest(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "valid access_level") {
-		t.Fatalf("error = %v, want access level hint", err)
+	if !strings.Contains(err.Error(), "valid access_level: 10=Guest,") || strings.Contains(err.Error(), "Minimal access") {
+		t.Fatalf("error = %v, want the access level hint naming what a project grants, which leaves Minimal access out", err)
 	}
 }
 

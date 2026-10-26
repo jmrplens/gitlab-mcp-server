@@ -31,7 +31,7 @@ import (
 type ShareGroupInput struct {
 	GroupID       toolutil.StringOrInt `json:"group_id"      jsonschema:"Group ID or URL-encoded path of the group being shared,required"`
 	SharedGroupID int64                `json:"shared_group_id" jsonschema:"ID of the group to share with,required"`
-	GroupAccess   int                  `json:"group_access"  jsonschema:"Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares,required"`
+	GroupAccess   int                  `json:"group_access"  jsonschema:"Access level the members of the group shared with gain (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group share takes no other level,required"`
 	ExpiresAt     string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the share (YYYY-MM-DD)"`
 	MemberRoleID  int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role the share grants (Ultimate only). Its base access level must equal group_access" tier:"ultimate"`
 }
@@ -57,7 +57,7 @@ func ShareGroupWithGroup(ctx context.Context, client *gitlabclient.Client, input
 		return ShareGroupOutput{}, errors.New("groupShareWithGroup: shared_group_id is required. Use group.list to find the group ID to share with")
 	}
 	if input.GroupAccess == 0 {
-		return ShareGroupOutput{}, errors.New("groupShareWithGroup: group_access is required. Valid levels: 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner), and 5 (Minimal access) on Premium or Ultimate")
+		return ShareGroupOutput{}, errors.New("groupShareWithGroup: group_access is required. Valid levels: " + toolutil.GroupAccessLevels.Choices())
 	}
 	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
 	if err != nil {
@@ -152,7 +152,7 @@ func UnshareGroupFromGroup(ctx context.Context, client *gitlabclient.Client, inp
 type ListSharedProjectsInput struct {
 	GroupID                  toolutil.StringOrInt `json:"group_id"                  jsonschema:"Group ID or URL-encoded path,required"`
 	Archived                 *bool                `json:"archived,omitempty"        jsonschema:"Filter archived projects"`
-	MinAccessLevel           int                  `json:"min_access_level,omitempty" jsonschema:"Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)"`
+	MinAccessLevel           int                  `json:"min_access_level,omitempty" jsonschema:"Limit to projects where the caller has at least this access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
 	OrderBy                  string               `json:"order_by,omitempty"        jsonschema:"Order by field: id, name, path, created_at, updated_at, star_count, or last_activity_at. Default is created_at"`
 	Search                   string               `json:"search,omitempty"          jsonschema:"Filter projects by name"`
 	Simple                   *bool                `json:"simple,omitempty"          jsonschema:"Return limited fields"`

@@ -164,11 +164,32 @@ func groupMemberDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 func groupMemberOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute groupmembers domain action.", Tags: []string{"group", "member"},
-		RelatedActions: []string{actionGroupGet, actionGroupMembers},
-		OpenWorld:      true,
-		OwnerPackage:   "groupmembers",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		RelatedActions:       []string{actionGroupGet, actionGroupMembers},
+		OpenWorld:            true,
+		OwnerPackage:         "groupmembers",
+		IndividualTool:       toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		InputSchemaOverrides: groupAccessLevelOverrides(individualTool),
 	}
+}
+
+// groupAccessLevelParams names the parameter each action grants a level of
+// group membership with, which its schema holds to
+// [toolutil.GroupAccessLevels] (issue 1280).
+var groupAccessLevelParams = map[string]string{
+	"gitlab_group_member_add":  "access_level",
+	"gitlab_group_member_edit": "access_level",
+	"gitlab_group_share":       "group_access",
+}
+
+// groupAccessLevelOverrides returns the override that publishes an action's
+// group membership level as the levels a group grants, or none for an action
+// that takes no level.
+func groupAccessLevelOverrides(individualTool string) []toolutil.InputSchemaOverride {
+	param, ok := groupAccessLevelParams[individualTool]
+	if !ok {
+		return nil
+	}
+	return []toolutil.InputSchemaOverride{toolutil.GroupAccessLevels.SchemaOverride(param)}
 }
 
 // decorateGroupMemberMeta fills non-generic Usage, natural-language Aliases,
@@ -246,10 +267,16 @@ func userIDGuidance(valueSource string) toolutil.ParameterGuidance {
 func accessLevelGuidance() toolutil.ParameterGuidance {
 	return toolutil.ParameterGuidance{
 		SemanticRole:     "access_level",
-		ValueSource:      "Numeric role level for the membership.",
+		ValueSource:      groupAccessLevelChoices("Numeric role level for the membership: "),
 		ExampleBinding:   "params.access_level:30",
-		CommonConfusions: []string{"Use the numeric level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner), not the role name."},
+		CommonConfusions: []string{"Use the numeric level, not the role name."},
 	}
+}
+
+// groupAccessLevelChoices returns lead followed by the levels a group grants,
+// as the parameter guidance offers them.
+func groupAccessLevelChoices(lead string) string {
+	return lead + toolutil.GroupAccessLevels.Choices() + "."
 }
 
 // shareGroupIDGuidance returns parameter guidance for the share_group_id
@@ -341,7 +368,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		description: "Remove a direct member from a group (destructive, requires confirmation). Returns: a delete confirmation. See also: gitlab_group_members_list, gitlab_group_member_get, gitlab_group_member_edit.",
 	},
 	"gitlab_group_share": {
-		usage:   "Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration. Supply group_id (the group to share) and share_group_id (the recipient group), and optionally expires_at or member_role_id for a custom role (Ultimate). Group shares accept Guest through Owner, and Minimal access on Premium/Ultimate.",
+		usage:   "Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration. Supply group_id (the group to share) and share_group_id (the recipient group), and optionally expires_at or member_role_id for a custom role (Ultimate). Group shares accept Guest through Owner, and Minimal access only on a top-level group with a Premium or Ultimate license.",
 		aliases: []string{"share group with group", "grant group access to another group", "add group share"},
 		related: []string{actionMemberUnshare, actionGroupGet, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -349,7 +376,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 			"share_group_id": shareGroupIDGuidance("Numeric ID of the recipient group that should gain access."),
 			"group_access": {
 				SemanticRole:     "access_level",
-				ValueSource:      "Access level granted to the recipient group's members: 10, 15, 20, 25, 30, 40 or 50, and 5 on Premium/Ultimate.",
+				ValueSource:      groupAccessLevelChoices("Access level granted to the recipient group's members: "),
 				ExampleBinding:   "params.group_access:30",
 				CommonConfusions: []string{"60 (Admin) is not a share level and is rejected. With member_role_id, group_access must equal the custom role's base access level."},
 			},

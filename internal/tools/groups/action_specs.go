@@ -490,6 +490,8 @@ func applyGroupInputEnums(individualTool string, options *toolutil.ActionSpecOpt
 		options.InputSchemaOverrides = append(options.InputSchemaOverrides, groupCreateUpdateEnumOverrides(false)...)
 	case "gitlab_group_update":
 		options.InputSchemaOverrides = append(options.InputSchemaOverrides, groupCreateUpdateEnumOverrides(true)...)
+	case "gitlab_group_share_with_group":
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides, toolutil.GroupAccessLevels.SchemaOverride("group_access"))
 	}
 }
 
@@ -542,7 +544,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				CommonConfusions: []string{"group_id is the group being shared. shared_group_id is the group receiving access."},
 			},
 			"group_access": {
-				ValueSource:    "Access level 10, 15, 20, 25, 30, 40 or 50 (Guest, Planner, Reporter, Security Manager, Developer, Maintainer, Owner), and 5 (Minimal access) on Premium/Ultimate.",
+				ValueSource:    "Access level: " + toolutil.GroupAccessLevels.Choices() + ".",
 				ExampleBinding: `params.group_access:30`,
 			},
 			"member_role_id": {

@@ -656,9 +656,9 @@ func TestFind_PublishedAlternativesAreCopies(t *testing.T) {
 // passed the schema and failed at GitLab, which is issue 1175's own case on
 // another action; and an access level is an integer whose schema lists the
 // levels in its description, where 1 is none of them. Developer, 30, is a
-// level every one of these routes accepts, the member roles' 10 to 50
+// level every one of these routes accepts, the member roles' 10 to 40
 // included, and an enum that holds it is answered with it rather than with
-// its first value, No access.
+// its first value, which for an LDAP group link is Minimal access.
 //
 // The rest are the strings of issue 1272, whose form GitLab checks and which
 // the example filled with "value": an email address, a redirect or site URL,

@@ -501,7 +501,7 @@ func TestShareGroup_BadRequestHint(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 400 response")
 	}
-	for _, want := range []string{"group_access must be one of 10/15/20/25/30/40/50", "5 (Minimal access) on a Premium or Ultimate instance", "expires_at must be YYYY-MM-DD", "does not have a valid value"} {
+	for _, want := range []string{"group_access must be one of 5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest", "50=Owner", "expires_at must be YYYY-MM-DD", "does not have a valid value"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("400 error %q does not carry %q", err, want)
@@ -2042,8 +2042,9 @@ func TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven(t *tes
 // rest of the tests happen to use. lib/api/groups.rb validates group_access
 // against Gitlab::Access.values_with_minimal_access: Guest, Planner, Reporter,
 // Security Manager, Developer, Maintainer and Owner on every build, and
-// Minimal access on an Enterprise one. The switch names them as one case, so a
-// level dropped from that list would refuse a share the endpoint supports.
+// Minimal access on an Enterprise one. The handler holds group_access to
+// toolutil.GroupAccessLevels, so a level dropped from that set would refuse a
+// share the endpoint supports.
 func TestShareGroup_AcceptsEveryValidGroupAccess(t *testing.T) {
 	for _, level := range []int{5, 10, 15, 20, 25, 30, 40, 50} {
 		t.Run(toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), func(t *testing.T) {

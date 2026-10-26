@@ -148,10 +148,10 @@ func exampleValue(name string, schema map[string]any) any {
 
 // enumExample returns the value an example takes from a schema's enum: the
 // parameter's placeholder when the enum holds it, as the enum spells it, and
-// otherwise the enum's first value. An access level's enum starts at 0, No
-// access, which a group link refuses, and holds Developer, which the
-// placeholder names. It reports false for a schema with no enum or an empty
-// one.
+// otherwise the enum's first value. A group link's access level enum starts at
+// Minimal access, which only a licensed top-level group grants on most of
+// them, and every access level enum holds Developer, which the placeholder
+// names. It reports false for a schema with no enum or an empty one.
 func enumExample(name string, schema map[string]any) (any, bool) {
 	values := enumValues(schema)
 	if len(values) == 0 {

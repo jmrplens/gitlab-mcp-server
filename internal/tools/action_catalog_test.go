@@ -2149,3 +2149,226 @@ func assertAlternativesRefused(t *testing.T, action actioncatalog.Action, call s
 		t.Errorf("%s %s sent %d request(s) before refusing, want none", action.ID, call, got)
 	}
 }
+
+// membershipLevelLabels is the role GitLab's Gitlab::Access names for each
+// membership access level, read at v19.5.0-ee. Planner and Security Manager
+// are in Gitlab::Access.options on Community Edition too, so neither label
+// carries a tier.
+var membershipLevelLabels = map[int]string{
+	5: "Minimal access", 10: "Guest", 15: "Planner", 20: "Reporter",
+	25: "Security Manager", 30: "Developer", 40: "Maintainer", 50: "Owner",
+}
+
+// membershipLevels is a set of membership access levels a family of GitLab
+// routes accepts, read from v19.5.0-ee, and the level of it, when there is
+// one, that the routes accept only on a top-level group with a license that
+// includes it, which a description offering it has to say.
+type membershipLevels struct {
+	levels      []int
+	conditional int
+}
+
+// The sets GitLab accepts at v19.5.0-ee, independent of the code under test.
+var (
+	// every role from Guest to Owner: Gitlab::Access.all_values, which every
+	// min_access_level and shared_min_access_level filter declares as its
+	// values, which a project member, invitation, share and access request
+	// approval are validated against, and which a project or group access
+	// token's access_level declares (options_with_owner).
+	membershipEveryRole = membershipLevels{levels: []int{10, 15, 20, 25, 30, 40, 50}}
+	// a group grants Minimal access as well, only on a top-level group whose
+	// license includes the role (EE GroupMember#access_level_inclusion).
+	membershipGroupLevels = membershipLevels{levels: []int{5, 10, 15, 20, 25, 30, 40, 50}, conditional: 5}
+	// an LDAP group link takes Minimal access on any group
+	// (values_with_minimal_access, and no model check beside it).
+	membershipLDAPLevels = membershipLevels{levels: []int{5, 10, 15, 20, 25, 30, 40, 50}}
+	// a broadcast message targets System::BroadcastMessage::
+	// ALLOWED_TARGET_ACCESS_LEVELS, which has no Security Manager.
+	membershipBroadcastLevels = membershipLevels{levels: []int{10, 15, 20, 30, 40, 50}}
+	// a custom role extends what Grape's all_values and the model's
+	// options_for_custom_roles both hold, which leaves Owner out.
+	membershipCustomRoleLevels = membershipLevels{levels: []int{10, 15, 20, 25, 30, 40}}
+)
+
+// membershipLevelParamNames are the names GitLab gives a parameter that takes
+// a membership access level. A property of one of these names whose type is
+// not an integer or a list of integers is something else (a runner's
+// access_level is ref_protected or not_protected) and is not judged.
+var membershipLevelParamNames = []string{
+	"access_level", "group_access", "min_access_level", "shared_min_access_level",
+	"base_access_level", "target_access_levels",
+}
+
+// membershipLevelParams is which set each action's membership level
+// parameter is held to. An action publishing such a parameter that is not
+// here fails, and so does an entry no action publishes any more.
+var membershipLevelParams = map[string]map[string]membershipLevels{
+	"project.list":                   {"min_access_level": membershipEveryRole},
+	"project.list_forks":             {"min_access_level": membershipEveryRole},
+	"project.list_groups":            {"shared_min_access_level": membershipEveryRole},
+	"project.list_invited_groups":    {"min_access_level": membershipEveryRole},
+	"project.list_user_contributed":  {"min_access_level": membershipEveryRole},
+	"project.list_user_projects":     {"min_access_level": membershipEveryRole},
+	"project.list_user_starred":      {"min_access_level": membershipEveryRole},
+	"group.list":                     {"min_access_level": membershipEveryRole},
+	"group.subgroups":                {"min_access_level": membershipEveryRole},
+	"group.projects":                 {"min_access_level": membershipEveryRole},
+	"group.shared_projects":          {"min_access_level": membershipEveryRole},
+	"group.shared_with":              {"min_access_level": membershipEveryRole},
+	"group.invited_groups":           {"min_access_level": membershipEveryRole},
+	"project.member_add":             {"access_level": membershipEveryRole},
+	"project.member_edit":            {"access_level": membershipEveryRole},
+	"project.share_with_group":       {"group_access": membershipEveryRole},
+	"access.invite_project":          {"access_level": membershipEveryRole},
+	"access.approve_project":         {"access_level": membershipEveryRole},
+	"group.group_member_add":         {"access_level": membershipGroupLevels},
+	"group.group_member_edit":        {"access_level": membershipGroupLevels},
+	"group.group_member_share":       {"group_access": membershipGroupLevels},
+	"group.share_with_group":         {"group_access": membershipGroupLevels},
+	"group.saml_link_add":            {"access_level": membershipGroupLevels},
+	"access.invite_group":            {"access_level": membershipGroupLevels},
+	"access.approve_group":           {"access_level": membershipGroupLevels},
+	"group.ldap_link_add":            {"group_access": membershipLDAPLevels},
+	"access.token_project_create":    {"access_level": membershipEveryRole},
+	"access.token_group_create":      {"access_level": membershipEveryRole},
+	"admin.broadcast_message_create": {"target_access_levels": membershipBroadcastLevels},
+	"admin.broadcast_message_update": {"target_access_levels": membershipBroadcastLevels},
+	"member_role.create_instance":    {"base_access_level": membershipCustomRoleLevels},
+	"member_role.create_group":       {"base_access_level": membershipCustomRoleLevels},
+}
+
+// TestBuildActionCatalog_MembershipAccessLevels_OfferOnlyWhatTheRouteAccepts
+// holds every membership access level parameter of the Ultimate catalog to
+// the levels its GitLab route accepts (issue 1280): its enum is that set, its
+// description names each level of it as N=Role and no other, a level the
+// route accepts only on a top-level group says so, and Planner and Security
+// Manager carry no tier, since Community Edition grants both.
+//
+// Before it, the schemas offered 0, which no route accepts, 5 on a project,
+// where no edition accepts it, 60 on filters and on the group member update,
+// which refuse it, and an approval answered 0 by granting Developer.
+func TestBuildActionCatalog_MembershipAccessLevels_OfferOnlyWhatTheRouteAccepts(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, UnboundClient(false), ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	catalog, err := dynamictools.AddStandaloneCatalog(catalog, UnboundClient(false), dynamictools.StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog() error = %v", err)
+	}
+	judged := map[string]bool{}
+	for _, action := range catalog.Actions() {
+		props, _ := action.Route.InputSchema["properties"].(map[string]any)
+		for _, name := range membershipLevelParamNames {
+			prop, ok := props[name].(map[string]any)
+			if !ok || !membershipLevelProperty(prop) {
+				continue
+			}
+			want, mapped := membershipLevelParams[string(action.ID)][name]
+			if !mapped {
+				t.Errorf("%s publishes %s, which this test holds to no set: name the levels its GitLab route accepts in membershipLevelParams", action.ID, name)
+				continue
+			}
+			judged[string(action.ID)+" "+name] = true
+			t.Run(string(action.ID)+"/"+name, func(t *testing.T) {
+				for _, problem := range membershipLevelProblems(prop, want) {
+					t.Error(problem)
+				}
+			})
+		}
+	}
+	for id, params := range membershipLevelParams {
+		for name := range params {
+			if !judged[id+" "+name] {
+				t.Errorf("membershipLevelParams names %s %s, which no action of the catalog publishes as a membership level", id, name)
+			}
+		}
+	}
+}
+
+// membershipLevelProperty reports whether a property takes an integer, or a
+// list of integers, which is what a membership access level is.
+func membershipLevelProperty(prop map[string]any) bool {
+	if items, ok := prop["items"].(map[string]any); ok && schemaTypeIncludes(prop["type"], "array") {
+		return schemaTypeIncludes(items["type"], "integer")
+	}
+	return schemaTypeIncludes(prop["type"], "integer")
+}
+
+// schemaTypeIncludes reports whether a JSON Schema type, a name or a list of
+// names, includes want.
+func schemaTypeIncludes(typ any, want string) bool {
+	switch v := typ.(type) {
+	case string:
+		return v == want
+	case []any:
+		return slices.Contains(v, any(want))
+	case []string:
+		return slices.Contains(v, want)
+	}
+	return false
+}
+
+var (
+	// membershipLevelChoice is one level a description offers, as N=Role.
+	membershipLevelChoice = regexp.MustCompile(`\b(\d+)=([A-Za-z][A-Za-z ]*[A-Za-z])`)
+	// membershipLevelTiered is Planner or Security Manager labeled with a
+	// tier, which GitLab grants on every tier.
+	membershipLevelTiered = regexp.MustCompile(`\b(15=Planner|25=Security Manager)\s*\(\s*(Premium|Ultimate)`)
+)
+
+// membershipLevelProblems says what is wrong with one property against the
+// set its route accepts: an enum other than the set, a level offered in the
+// description outside it or with the wrong role, a level of it the
+// description leaves out, a tier on Planner or Security Manager, and a level
+// accepted only on a top-level group offered without saying so.
+func membershipLevelProblems(prop map[string]any, want membershipLevels) []string {
+	var problems []string
+	enumOf := prop
+	if items, ok := prop["items"].(map[string]any); ok {
+		enumOf = items
+	}
+	if got := schemaIntegers(enumOf["enum"]); !slices.Equal(got, want.levels) {
+		problems = append(problems, fmt.Sprintf("enum = %v, want %v", got, want.levels))
+	}
+	desc, _ := prop["description"].(string)
+	offered := map[int]bool{}
+	for _, match := range membershipLevelChoice.FindAllStringSubmatch(desc, -1) {
+		level, _ := strconv.Atoi(match[1])
+		offered[level] = true
+		if !slices.Contains(want.levels, level) {
+			problems = append(problems, fmt.Sprintf("the description offers %s, which the route refuses: %q", match[0], desc))
+			continue
+		}
+		if match[2] != membershipLevelLabels[level] {
+			problems = append(problems, fmt.Sprintf("the description calls %d %q, want %q: %q", level, match[2], membershipLevelLabels[level], desc))
+		}
+	}
+	for _, level := range want.levels {
+		if !offered[level] {
+			problems = append(problems, fmt.Sprintf("the description does not offer %d=%s, which the route accepts: %q", level, membershipLevelLabels[level], desc))
+		}
+	}
+	if tiered := membershipLevelTiered.FindString(desc); tiered != "" {
+		problems = append(problems, fmt.Sprintf("the description puts a tier on %q, which every tier grants: %q", tiered, desc))
+	}
+	if want.conditional != 0 && !strings.Contains(desc, "top-level group") {
+		problems = append(problems, fmt.Sprintf("the description offers %d without saying it is granted only on a top-level group: %q", want.conditional, desc))
+	}
+	return problems
+}
+
+// schemaIntegers reads an enum as the integers it lists, in order, whether it
+// was built in Go or decoded from JSON.
+func schemaIntegers(enum any) []int {
+	values, _ := enum.([]any)
+	out := make([]int, 0, len(values))
+	for _, value := range values {
+		switch v := value.(type) {
+		case int:
+			out = append(out, v)
+		case int64:
+			out = append(out, int(v))
+		case float64:
+			out = append(out, int(v))
+		}
+	}
+	return out
+}

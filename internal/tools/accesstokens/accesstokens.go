@@ -372,9 +372,16 @@ type ProjectCreateInput struct {
 	Name        string               `json:"name"                    jsonschema:"Token name,required"`
 	Description string               `json:"description,omitempty"   jsonschema:"Token description"`
 	Scopes      []string             `json:"scopes"                  jsonschema:"Token scopes: api, read_api, read_repository, write_repository, etc.,required"`
-	AccessLevel int                  `json:"access_level,omitempty"  jsonschema:"Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer). 50=Owner and 60=Admin are not valid for project access tokens"`
+	AccessLevel int                  `json:"access_level,omitempty"  jsonschema:"Access level of the token (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Planner (15) and Security Manager (25) are granted only by an Owner of the project or by a member who holds that role, and any other level no higher than the caller's own. GitLab grants Maintainer when it is left out"`
 	ExpiresAt   string               `json:"expires_at,omitempty"    jsonschema:"Expiry date in YYYY-MM-DD format"`
 }
+
+// projectTokenLevelRule is who may give a project access token which level,
+// as ResourceAccessTokens::CreateService decides it through
+// Gitlab::Access.level_encompasses?: Planner and Security Manager sit outside
+// the role hierarchy, so a Maintainer is refused both. A group token needs no
+// such rule, since only an Owner creates one.
+const projectTokenLevelRule = "Planner (15) and Security Manager (25) are granted only by an Owner of the project or by a member who holds that role, and any other level no higher than the caller's own"
 
 // ProjectCreate creates a new project access token.
 func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input ProjectCreateInput) (Output, error) {
@@ -382,7 +389,7 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 		scopeID:        input.ProjectID,
 		requiredField:  "project_id",
 		operation:      "create project access token",
-		validationHint: "validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (5|10|15|20|25|30|40 for project tokens; 50=Owner and 60=Admin are not valid for project access tokens), and expires_at format (YYYY-MM-DD, must be within instance-configured maximum lifetime)",
+		validationHint: "validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (one of " + toolutil.AccessTokenAccessLevels.Choices() + "; " + projectTokenLevelRule + "), and expires_at format (YYYY-MM-DD, must be within instance-configured maximum lifetime)",
 		forbiddenHint:  "creating project access tokens requires Maintainer or Owner role; the requested access_level cannot exceed the caller's role",
 		req:            accessTokenCreateRequest{Name: input.Name, Description: input.Description, Scopes: input.Scopes, AccessLevel: input.AccessLevel, ExpiresAt: input.ExpiresAt},
 		create: func(scopeID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
@@ -704,7 +711,7 @@ type GroupCreateInput struct {
 	Name        string               `json:"name"                    jsonschema:"Token name,required"`
 	Description string               `json:"description,omitempty"   jsonschema:"Token description"`
 	Scopes      []string             `json:"scopes"                  jsonschema:"Token scopes: api, read_api, read_repository, write_repository, etc.,required"`
-	AccessLevel int                  `json:"access_level,omitempty"  jsonschema:"Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner). 60=Admin is not valid for group access tokens"`
+	AccessLevel int                  `json:"access_level,omitempty"  jsonschema:"Access level of the token (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner), no higher than the caller's own. GitLab grants Maintainer when it is left out"`
 	ExpiresAt   string               `json:"expires_at,omitempty"    jsonschema:"Expiry date in YYYY-MM-DD format"`
 }
 
@@ -714,7 +721,7 @@ func GroupCreate(ctx context.Context, client *gitlabclient.Client, input GroupCr
 		scopeID:        input.GroupID,
 		requiredField:  "group_id",
 		operation:      "create group access token",
-		validationHint: "validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (5|10|15|20|25|30|40|50 for group tokens; 60=Admin is not valid for group access tokens), and expires_at format (YYYY-MM-DD)",
+		validationHint: "validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (one of " + toolutil.AccessTokenAccessLevels.Choices() + "), and expires_at format (YYYY-MM-DD)",
 		forbiddenHint:  "creating group access tokens requires Owner role; the requested access_level cannot exceed the caller's role",
 		req:            accessTokenCreateRequest{Name: input.Name, Description: input.Description, Scopes: input.Scopes, AccessLevel: input.AccessLevel, ExpiresAt: input.ExpiresAt},
 		create: func(scopeID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {

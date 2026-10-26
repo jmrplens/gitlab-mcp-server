@@ -80,6 +80,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 		options.Usage = "Add a SAML group link mapping a SAML group name to an access level (Premium/Ultimate)."
 		options.Aliases = []string{"add saml link", "create group saml mapping", "link saml group"}
 		options.RelatedActions = []string{actionGroupSAMLLinkList, actionGroupSAMLUsersList, "group.saml_link_delete"}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.GroupAccessLevels.SchemaOverride("access_level")}
 	case "gitlab_group_saml_link_delete":
 		options.Usage = "Delete a SAML group link from a group by its SAML group name (Premium/Ultimate). Removes the mapping between a SAML SSO group and its access level. Existing members are not removed."
 		options.Aliases = []string{"delete saml link", "remove group saml mapping", "unlink saml group", "drop saml sso mapping"}

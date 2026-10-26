@@ -449,9 +449,12 @@ func adminInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOver
 		// Docs: https://docs.gitlab.com/api/broadcast_messages/
 		// API: lib/api/admin/broadcast_messages.rb restricts both to the
 		// System::BroadcastMessage enums; the docs list the themes, and
-		// dark/light were missing from the struct tag.
+		// dark/light were missing from the struct tag. target_access_levels
+		// is held to ALLOWED_TARGET_ACCESS_LEVELS, which has no Security
+		// Manager (issue 1280).
 		return []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("broadcast_type", "banner", "notification"),
+			toolutil.BroadcastTargetAccessLevels.SchemaItemsOverride("target_access_levels"),
 			toolutil.SchemaPropertyOverride("theme", map[string]any{
 				"enum":        []any{"indigo", "light-indigo", "blue", "light-blue", "green", "light-green", "red", "light-red", "dark", "light"},
 				"description": "Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.",

@@ -112,6 +112,38 @@ func TestAccessTokens_Project_Lifecycle_ThroughSelfRotation(t *testing.T) {
 	})
 }
 
+// TestAccessTokens_Project_OwnerLevel_IsGrantedToAnOwnersToken probes the one
+// level the project token's description used to call invalid (issue 1280):
+// the route declares Guest to Owner (options_with_owner), and a creator who
+// holds Owner on the project may give its token Owner, which GitLab's own
+// service spec asserts. The run user owns the project it creates, so each
+// surface mints an Owner token there, finds it at that level, and revokes it.
+func TestAccessTokens_Project_OwnerLevel_IsGrantedToAnOwnersToken(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("ptok-owner"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		scope := map[string]any{"project_id": project.IDParam()}
+		name := e.Name("ptok-owner")
+
+		created := harness.Do[accesstokens.Output](s, actionAccessTokenProjectCreate, withParams(scope, map[string]any{
+			"name": name, "scopes": []string{accessTokenScope}, "access_level": int(gl.OwnerPermissions), "expires_at": accessTokenExpiry(),
+		}))
+		if created.ID == 0 {
+			e.T.Fatalf("token_project_create at Owner answered %+v, want a token", created)
+		}
+		e.Defer("project token "+name, func(ctx context.Context) error {
+			_, err := e.Client().GL().ProjectAccessTokens.RevokeProjectAccessToken(project.ID, created.ID, gl.WithContext(ctx))
+			return tolerateGoneToken(err)
+		})
+		if created.AccessLevel != int(gl.OwnerPermissions) {
+			e.T.Errorf("token_project_create at Owner answered level %d, want Owner (%d)", created.AccessLevel, gl.OwnerPermissions)
+		}
+	})
+}
+
 // TestAccessTokens_Group_Lifecycle_ThroughSelfRotation is the project
 // lifecycle on a group of the test's own: mint, read, list, rotate, rotate
 // from the token's own session, revoke and check the active listing.

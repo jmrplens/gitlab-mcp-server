@@ -39,13 +39,16 @@ type ListGroupInput struct {
 // consumes, so the SDK Options literal is attributed here rather than to the
 // permission-only [Permissions] fragment.
 //
-// base_access_level accepts 10, 15, 20, 25, 30, 40 and 50, which is the set
-// doc/api/member_roles.md publishes for the attribute. Minimal access (5) is a
-// membership level and not one a custom role may extend: the served prose used
-// to offer it, and GitLab refuses it.
+// base_access_level accepts 10, 15, 20, 25, 30 and 40,
+// [toolutil.CustomRoleBaseAccessLevels]: the route declares
+// Gitlab::Access.all_values and MemberRole validates the level against
+// options_for_custom_roles, which has no Owner, so a role on Owner is refused
+// though doc/api/member_roles.md lists it (issue 1280). Minimal access (5) is
+// in the model's set and not in the route's: the served prose used to offer
+// it, and GitLab refuses it.
 type CreateInstanceInput struct {
 	Name            string `json:"name,omitempty"    jsonschema:"Name of the custom role. GitLab names a role created without one"`
-	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid,required"`
+	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer). A custom role extends no other level,required"`
 	Description     string `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
 }
@@ -54,7 +57,7 @@ type CreateInstanceInput struct {
 type CreateGroupInput struct {
 	GroupID         toolutil.StringOrInt `json:"group_id"          jsonschema:"Group ID or URL-encoded path,required"`
 	Name            string               `json:"name,omitempty"    jsonschema:"Name of the custom role. GitLab names a role created without one"`
-	BaseAccessLevel int                  `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid,required"`
+	BaseAccessLevel int                  `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer). A custom role extends no other level,required"`
 	Description     string               `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
 }
@@ -403,7 +406,7 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 	role, _, err := client.GL().MemberRolesService.CreateInstanceMemberRole(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create instance member role", err, http.StatusBadRequest,
-			"requires admin + self-managed Ultimate; base_access_level must be 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner); 0, 5=Minimal access and 60=Admin are not valid; name must be unique; permissions are a list of valid permission strings")
+			"requires admin + self-managed Ultimate; base_access_level must be one of "+toolutil.CustomRoleBaseAccessLevels.Choices()+"; name must be unique; permissions are a list of valid permission strings")
 	}
 	return capturedRoleOne("create instance member role", role, captured)
 }
@@ -434,7 +437,7 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 			return Output{}, toolutil.WrapErrWithHint(opCreateGroupMemberRole, err, groupMemberRoleSelfManagedHint)
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opCreateGroupMemberRole, err, http.StatusBadRequest,
-			"requires Owner + Ultimate; base_access_level 10/15/20/25/30/40/50 (0, 5=Minimal access and 60=Admin are not valid); name unique within group; permissions must be valid; group_id must reference a top-level group")
+			"requires Owner + Ultimate; base_access_level must be one of "+toolutil.CustomRoleBaseAccessLevels.Choices()+"; name unique within group; permissions must be valid; group_id must reference a top-level group")
 	}
 	return capturedRoleOne(opCreateGroupMemberRole, role, captured)
 }

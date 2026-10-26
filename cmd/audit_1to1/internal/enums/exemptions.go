@@ -9,30 +9,33 @@ import "maps"
 // while GitLab documents what each endpoint accepts, so the same type-wide
 // constant is excused on many fields for the same documented reason.
 const (
+	// The membership reasons below cite the routes and models at v19.5.0-ee,
+	// which register row 110 of docs/development/upstream-bugs.md records,
+	// rather than the API pages, which listed levels the routes refuse until
+	// the documentation change that row names. The schemas offer what
+	// toolutil.AccessLevelSet holds (issue 1280).
+	//
 	// membershipNoAdmin: 60 (Admin) is a constant on AccessLevelValue because
 	// a protected ref can be restricted to administrators, not because a
 	// membership can carry it.
-	membershipNoAdmin = "60 (Admin) is not a level a membership can carry: doc/api/project_members.md, group_members.md, invitations.md and access_requests.md list 0 (No access) through 50 (Owner) for adding, editing, inviting and approving; only the group member edit endpoint documents 60, and that field offers it"
+	membershipNoAdmin = "60 (Admin) is not a level a membership can carry: no member, invitation, access request, share or group link route accepts it at v19.5.0-ee, the group member update included (docs/development/upstream-bugs.md row 110)"
 	// membershipNoAccessGrant: 0 (No access) is a level a membership reads
 	// back with, not one any write grants.
 	membershipNoAccessGrant = "0 (No access) is read back on a membership but never granted: no write route accepts it at v19.5.0-ee, and an access request approval answers it with 201 while the request stays pending, so the approvals refuse it before the request (docs/development/upstream-bugs.md row 110)"
 	// projectNoMinimalAccess: Minimal access is a group level.
 	projectNoMinimalAccess = "5 (Minimal access) is refused on a project in every edition at v19.5.0-ee: a project member, invitation, share and approval are held to Gitlab::Access.all_values, Guest (10) to Owner (50) (docs/development/upstream-bugs.md row 110)"
+	// groupLinkNoAccess: a SAML or LDAP group link grants a role.
+	groupLinkNoAccess = "the SAML and LDAP group link routes declare values_with_minimal_access at v19.5.0-ee, Minimal access (5) to Owner (50), so 0 (No access) is refused though doc/api/saml.md and group_ldap_links.md list it (docs/development/upstream-bugs.md row 110)"
 	// memberRoleBaseLevels: a custom role is based on a role a member can
-	// hold, which leaves out both ends of AccessLevelValue and the minimal
-	// access level in between.
-	memberRoleBaseLevels = "doc/api/member_roles.md#add-a-member-role-to-an-instance lists 10 (Guest) through 50 (Owner) as the valid base access levels"
-	// broadcastTargetLevels: the roles a banner can target are the membership
-	// roles proper, without the two ends of AccessLevelValue.
-	broadcastTargetLevels = "doc/api/broadcast_messages.md lists target_access_levels as 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer) and 50 (Owner); 5 (Minimal access) and 60 (Admin) are AccessLevelValue constants outside that set"
+	// hold, below Owner.
+	memberRoleBaseLevels = "the create route declares Gitlab::Access.all_values and MemberRole validates the level against options_for_custom_roles at v19.5.0-ee, so Guest (10) to Maintainer (40) is what both accept: 0, 5 (Minimal access), 50 (Owner) and 60 (Admin) are each refused by one of the two, though doc/api/member_roles.md lists 50 (docs/development/upstream-bugs.md row 110)"
+	// broadcastTargetLevels: the roles a banner can target.
+	broadcastTargetLevels = "the routes declare target_access_levels with values: System::BroadcastMessage::ALLOWED_TARGET_ACCESS_LEVELS at v19.5.0-ee, Guest, Planner, Reporter, Developer, Maintainer and Owner; 0, 5 (Minimal access), 25 (Security Manager) and 60 (Admin) are AccessLevelValue constants outside it, though doc/api/broadcast_messages.md lists 25 (docs/development/upstream-bugs.md row 110)"
 	// minAccessLevelFilter: the list filters take the membership roles a
-	// caller can hold. It cites the routes at v19.5.0-ee, which register row
-	// 110 of docs/development/upstream-bugs.md records, rather than the API
-	// pages, which listed 5 until the documentation change that row names;
-	// the schemas offer toolutil.FilterAccessLevels (issue 1280).
+	// caller can hold.
 	minAccessLevelFilter = "every min_access_level and shared_min_access_level route declares values: Gitlab::Access.all_values at v19.5.0-ee, Guest (10) to Owner (50) in every edition: 0 filters nothing, 5 (Minimal access) is refused and 60 (Admin) is not a membership level (docs/development/upstream-bugs.md row 110)"
 	// shareAccessLevel covers the two share endpoints, which grant a role.
-	shareAccessLevel = "doc/api/groups.md#share-groups-with-groups and projects.md#share-a-project-with-a-group list 5 (Minimal access) through 50 (Owner); 0 grants nothing and 60 (Admin) is not a membership level"
+	shareAccessLevel = "a group share declares values_with_minimal_access and a project share Gitlab::Access.all_values at v19.5.0-ee: 0 grants nothing, 60 (Admin) is not a membership level, and a project share refuses 5 (Minimal access) as well (docs/development/upstream-bugs.md row 110)"
 	// protectedBranchLevels is the four-value set every protection level
 	// parameter documents, against the membership-wide AccessLevelValue.
 	protectedBranchLevels      = "doc/api/protected_branches.md#valid-access-levels lists 0 (No access, push and merge only), 30, 40 and 60 (GitLab Self-Managed only); AccessLevelValue is the membership-wide set, and the other levels are not protection levels"
@@ -68,7 +71,8 @@ const (
 //     a subset of the SDK's type-wide constants.
 //   - "<pkg>.<MCPType>.<tag>=<value>"  — one value, missing or extra.
 //
-// Each entry carries a reason that cites the GitLab API doc, and an entry
+// Each entry carries a reason that cites the GitLab API doc, or the route
+// and model where the doc lists a value they refuse, and an entry
 // that excuses nothing (the field is gone, or the gap closed) is a finding,
 // so the table cannot outlive what it describes.
 var acceptedEnumGaps = buildAcceptedEnumGaps()
@@ -85,26 +89,37 @@ func buildAcceptedEnumGaps() map[string]string {
 		"accessrequests.ApproveProjectInput.access_level=5":  projectNoMinimalAccess,
 		"accessrequests.ApproveProjectInput.access_level=60": membershipNoAdmin,
 		"groupmembers.AddInput.access_level=60":              membershipNoAdmin,
+		"groupmembers.EditInput.access_level=60":             membershipNoAdmin,
+		"invites.GroupInvitesInput.access_level=0":           membershipNoAccessGrant,
 		"invites.GroupInvitesInput.access_level=60":          membershipNoAdmin,
+		"invites.ProjectInvitesInput.access_level=0":         membershipNoAccessGrant,
+		"invites.ProjectInvitesInput.access_level=5":         projectNoMinimalAccess,
 		"invites.ProjectInvitesInput.access_level=60":        membershipNoAdmin,
+		"members.AddInput.access_level=5":                    projectNoMinimalAccess,
 		"members.AddInput.access_level=60":                   membershipNoAdmin,
+		"members.EditInput.access_level=5":                   projectNoMinimalAccess,
 		"members.EditInput.access_level=60":                  membershipNoAdmin,
 		"members.AddInput.access_level=0":                    membershipNoAccessGrant,
 		"members.EditInput.access_level=0":                   membershipNoAccessGrant,
 		"groupmembers.AddInput.access_level=0":               membershipNoAccessGrant,
 		"groupmembers.EditInput.access_level=0":              membershipNoAccessGrant,
-		"groupldap.AddInput.group_access=60":                 "doc/api/group_ldap_links.md#add-an-ldap-group-link lists 0 (No access) through 50 (Owner); " + membershipNoAdmin,
-		"groupsaml.AddInput.access_level=60":                 "doc/api/saml.md#add-a-saml-group-link lists 0 (No access) through 50 (Owner); " + membershipNoAdmin,
+		"groupldap.AddInput.group_access=0":                  groupLinkNoAccess,
+		"groupldap.AddInput.group_access=60":                 membershipNoAdmin,
+		"groupsaml.AddInput.access_level=0":                  groupLinkNoAccess,
+		"groupsaml.AddInput.access_level=60":                 membershipNoAdmin,
 
 		"memberroles.CreateInstanceInput.base_access_level=0":  memberRoleBaseLevels,
 		"memberroles.CreateInstanceInput.base_access_level=5":  memberRoleBaseLevels,
+		"memberroles.CreateInstanceInput.base_access_level=50": memberRoleBaseLevels,
 		"memberroles.CreateInstanceInput.base_access_level=60": memberRoleBaseLevels,
 
 		"broadcastmessages.CreateInput.target_access_levels=0":  broadcastTargetLevels,
 		"broadcastmessages.CreateInput.target_access_levels=5":  broadcastTargetLevels,
+		"broadcastmessages.CreateInput.target_access_levels=25": broadcastTargetLevels,
 		"broadcastmessages.CreateInput.target_access_levels=60": broadcastTargetLevels,
 		"broadcastmessages.UpdateInput.target_access_levels=0":  broadcastTargetLevels,
 		"broadcastmessages.UpdateInput.target_access_levels=5":  broadcastTargetLevels,
+		"broadcastmessages.UpdateInput.target_access_levels=25": broadcastTargetLevels,
 		"broadcastmessages.UpdateInput.target_access_levels=60": broadcastTargetLevels,
 
 		"groups.InvitedListInput.min_access_level=0":                 minAccessLevelFilter,
@@ -137,6 +152,7 @@ func buildAcceptedEnumGaps() map[string]string {
 		"groupmembers.ShareInput.group_access=0":     shareAccessLevel,
 		"groupmembers.ShareInput.group_access=60":    shareAccessLevel,
 		"projects.ShareProjectInput.group_access=0":  shareAccessLevel,
+		"projects.ShareProjectInput.group_access=5":  shareAccessLevel,
 		"projects.ShareProjectInput.group_access=60": shareAccessLevel,
 
 		// --- Protection levels (AccessLevelValue) ---

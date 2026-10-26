@@ -59,12 +59,11 @@ func groupLDAPOptions(individualTool string) toolutil.ActionSpecOptions {
 		options.Aliases = []string{"add ldap link", "create group ldap mapping", "link ldap group"}
 		options.RelatedActions = []string{actionGroupLDAPLinkList, actionGroupLDAPSync, "group.ldap_link_delete"}
 		// group_access is numeric only here (the handler passes the integer
-		// through unchanged), and the LDAP group links API documents exactly
-		// these levels, so a closed integer enum is accurate.
+		// through unchanged), and the route declares
+		// values_with_minimal_access, so a closed integer enum is accurate.
+		// It offered 0 as well, which the route refuses (issue 1280).
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("group_access", map[string]any{
-				"enum": []any{0, 5, 10, 15, 20, 25, 30, 40, 50},
-			}),
+			toolutil.LDAPGroupLinkAccessLevels.SchemaOverride("group_access"),
 			// GitLab declares exactly_one_of :cn, :filter on this route.
 			toolutil.SchemaOneOfRequired("cn", "filter"),
 		}

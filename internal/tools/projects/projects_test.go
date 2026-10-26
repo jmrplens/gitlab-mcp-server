@@ -9559,7 +9559,7 @@ func TestShareProjectWithGroup_RefusedShare_GetsTheLevelHint(t *testing.T) {
 				testutil.RespondJSON(w, status, `{"message":"group_access is not valid"}`)
 			}))
 			_, err := ShareProjectWithGroup(t.Context(), client, ShareProjectInput{ProjectID: "42", GroupID: 7, GroupAccess: 25})
-			if err == nil || !strings.Contains(err.Error(), "group_access must be 10/20/30/40") {
+			if err == nil || !strings.Contains(err.Error(), "group_access must be one of 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner") {
 				t.Errorf("error = %v, want the access level hint", err)
 			}
 		})

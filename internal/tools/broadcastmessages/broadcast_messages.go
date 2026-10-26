@@ -146,7 +146,7 @@ type CreateInput struct {
 	StartsAt           string  `json:"starts_at,omitempty" jsonschema:"Start time in ISO 8601 format"`
 	EndsAt             string  `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
 	Font               string  `json:"font,omitempty" jsonschema:"Font for the message"`
-	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)"`
+	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest, 15=Planner, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). A broadcast message cannot target Security Manager"`
 	TargetPath         string  `json:"target_path,omitempty" jsonschema:"Target path to show message on"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
@@ -208,7 +208,7 @@ type UpdateInput struct {
 	StartsAt           string  `json:"starts_at,omitempty" jsonschema:"Start time in ISO 8601 format"`
 	EndsAt             string  `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
 	Font               string  `json:"font,omitempty" jsonschema:"Font for the message"`
-	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner). Pass [] to show the message to every role. Omit the field to leave them untouched"`
+	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest, 15=Planner, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). A broadcast message cannot target Security Manager. Pass [] to show the message to every role. Omit the field to leave them untouched"`
 	TargetPath         *string `json:"target_path,omitempty" jsonschema:"Target path to show message on. Pass an empty string to remove it, so the message shows on every page. Omit the field to leave it untouched"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`

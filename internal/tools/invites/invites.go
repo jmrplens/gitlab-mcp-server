@@ -44,7 +44,7 @@ type ProjectInvitesInput struct {
 	ID           toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)"`
 	Email        string               `json:"email,omitempty" jsonschema:"Email address to invite, or several separated by commas to invite each of them (either email or user_id required)"`
 	UserID       int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
-	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
+	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level,required"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the invitation (YYYY-MM-DD)"`
 	InviteSource string               `json:"invite_source,omitempty" jsonschema:"Source of the invitation that starts the member creation process"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom role to assign the new member (Ultimate only)" tier:"ultimate"`
@@ -56,7 +56,7 @@ type GroupInvitesInput struct {
 	ID           toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)"`
 	Email        string               `json:"email,omitempty" jsonschema:"Email address to invite, or several separated by commas to invite each of them (either email or user_id required)"`
 	UserID       int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
-	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner),required"`
+	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level,required"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the invitation (YYYY-MM-DD)"`
 	InviteSource string               `json:"invite_source,omitempty" jsonschema:"Source of the invitation that starts the member creation process"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom role to assign the new member (Ultimate only)" tier:"ultimate"`
@@ -306,10 +306,21 @@ func runInvitation(ctx context.Context, client *gitlabclient.Client, args sendIn
 			return InviteResultOutput{}, toolutil.WrapErrWithHint(args.operation, err, args.forbiddenHint)
 		}
 		return InviteResultOutput{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusBadRequest,
-			"valid access_level: 5 (Minimal access), 10 (Guest), 15 (Planner Premium/Ultimate), 20 (Reporter), 25 (Security Manager Premium/Ultimate), 30 (Developer), 40 (Maintainer), 50 (Owner), 60 (Admin where supported); expires_at format: YYYY-MM-DD; user may already be a member")
+			"valid access_level: "+inviteLevels(args.requiredField).Choices()+"; expires_at format: YYYY-MM-DD; user may already be a member")
 	}
 
 	return toInviteResultOutputAPI(result), nil
+}
+
+// inviteLevels returns the levels the scope an invitation names grants an
+// invitee, which a refusal lists: a project grants Guest to Owner, and a
+// group Minimal access as well, on a top-level group with a license that
+// includes it (issue 1280). The scope is told by the field that names it.
+func inviteLevels(requiredField string) toolutil.AccessLevelSet {
+	if requiredField == "project_id" {
+		return toolutil.ProjectAccessLevels
+	}
+	return toolutil.GroupAccessLevels
 }
 
 // ProjectInvites invites a user to a project by email or user ID.

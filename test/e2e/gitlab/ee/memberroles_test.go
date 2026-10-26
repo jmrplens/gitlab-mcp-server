@@ -78,6 +78,28 @@ func TestMemberRoles_InstanceLevel_CreatesListsAndDeletes(t *testing.T) {
 	})
 }
 
+// TestMemberRoles_InstanceLevel_OwnerBase_IsRefused probes the level the
+// schema used to offer and GitLab refuses (issue 1280): the create route
+// declares Guest to Owner, and MemberRole validates the base level against
+// options_for_custom_roles, which has no Owner, so an Owner-based role is
+// answered 400 and nothing is created. The individual surface's schema no
+// longer lists 50, so the SDK refuses the call there as invalid params; on
+// the other two GitLab refuses it.
+func TestMemberRoles_InstanceLevel_OwnerBase_IsRefused(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.Tier(edition.Ultimate)))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		params := map[string]any{"name": e.Name("owner-role"), "base_access_level": int(gl.OwnerPermissions), "read_code": true}
+		if surface == harness.SurfaceIndividual {
+			harness.Refused(s, actionMemberRoleCreateInstance, params, harness.FailureInvalidParams)
+			return
+		}
+		refused := harness.ExpectToolError(s, actionMemberRoleCreateInstance, params, "base_access_level")
+		assertMentions(e, "the Owner-based role create", refused, "40=Maintainer")
+	})
+}
+
 // TestMemberRoles_GroupLevel_IsRefusedAsDeprecatedOnSelfManaged asks for
 // the group-level roles of a fresh group on every surface and checks that
 // all three group actions are refused with the hint naming the instance

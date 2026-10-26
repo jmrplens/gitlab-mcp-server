@@ -129,7 +129,7 @@ type AddInput struct {
 	GroupID      string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	CN           string `json:"cn,omitempty" jsonschema:"LDAP Common Name (CN) of the group to link. Send exactly one of cn or filter, not both."`
 	Filter       string `json:"filter,omitempty" jsonschema:"LDAP filter selecting the users to link. Send exactly one of cn or filter, not both."`
-	GroupAccess  int    `json:"group_access" jsonschema:"Default access level for members of the LDAP group: 0 (No access), 5 (Minimal access), 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner),required"`
+	GroupAccess  int    `json:"group_access" jsonschema:"Default access level for members of the LDAP group (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). An LDAP group link takes Minimal access on a subgroup as well, and no other level,required"`
 	Provider     string `json:"provider" jsonschema:"LDAP provider name,required"`
 	MemberRoleID *int64 `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
 }

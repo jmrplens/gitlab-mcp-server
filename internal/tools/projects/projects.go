@@ -474,7 +474,7 @@ type ListInput struct {
 	Sort                     string `json:"sort,omitempty"       jsonschema:"Sort direction (asc, desc)"`
 	Topic                    string `json:"topic,omitempty"      jsonschema:"Filter by topic name"`
 	Simple                   bool   `json:"simple,omitempty"     jsonschema:"Return only limited fields (faster for large result sets)"`
-	MinAccessLevel           int    `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	MinAccessLevel           int    `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
 	LastActivityAfter        string `json:"last_activity_after,omitempty"  jsonschema:"Return projects with last activity after date (ISO 8601 format)"`
 	LastActivityBefore       string `json:"last_activity_before,omitempty" jsonschema:"Return projects with last activity before date (ISO 8601 format)"`
 	Starred                  *bool  `json:"starred,omitempty"              jsonschema:"Limit to projects starred by the current user"`
@@ -1982,7 +1982,7 @@ type ListForksInput struct {
 	Archived                 *bool             `json:"archived,omitempty"                    jsonschema:"Filter by archived status (true=only archived, false=only active)"`
 	Topic                    string            `json:"topic,omitempty"                       jsonschema:"Filter by topic name"`
 	Simple                   bool              `json:"simple,omitempty"                      jsonschema:"Return only limited fields (faster for large result sets)"`
-	MinAccessLevel           int               `json:"min_access_level,omitempty"            jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	MinAccessLevel           int               `json:"min_access_level,omitempty"            jsonschema:"Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
 	LastActivityAfter        string            `json:"last_activity_after,omitempty"         jsonschema:"Return forks with last activity after date (ISO 8601 format)"`
 	LastActivityBefore       string            `json:"last_activity_before,omitempty"        jsonschema:"Return forks with last activity before date (ISO 8601 format)"`
 	Starred                  *bool             `json:"starred,omitempty"                     jsonschema:"Limit to forks starred by the current user"`
@@ -2809,7 +2809,7 @@ type ListProjectGroupsInput struct {
 	WithShared           *bool                `json:"with_shared,omitempty"         jsonschema:"Include shared groups (default true)"`
 	SharedVisibleOnly    *bool                `json:"shared_visible_only,omitempty" jsonschema:"Only show shared groups visible to the current user"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"         jsonschema:"Array of group IDs to exclude"`
-	SharedMinAccessLevel int                  `json:"shared_min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	SharedMinAccessLevel int                  `json:"shared_min_access_level,omitempty" jsonschema:"Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
 	OrderBy              string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
 	Sort                 string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -2931,7 +2931,7 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 type ShareProjectInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id"   jsonschema:"Project ID or URL-encoded path,required"`
 	GroupID     int64                `json:"group_id"     jsonschema:"Group ID to share with,required"`
-	GroupAccess int                  `json:"group_access" jsonschema:"Access level for the group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner),required"`
+	GroupAccess int                  `json:"group_access" jsonschema:"Access level the members of the group gain on the project (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level,required"`
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the share (YYYY-MM-DD)"`
 }
 
@@ -2973,7 +2973,7 @@ func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, inp
 		return ShareProjectOutput{}, errors.New("projectShareWithGroup: group_id is required. Use group.list to find the group ID")
 	}
 	if input.GroupAccess == 0 {
-		return ShareProjectOutput{}, errors.New("projectShareWithGroup: group_access is required. Valid levels: 10 (Guest), 20 (Reporter), 30 (Developer), 40 (Maintainer). Level 25 (Security Manager) is not valid for project shares")
+		return ShareProjectOutput{}, errors.New("projectShareWithGroup: group_access is required. Valid levels: " + toolutil.ProjectAccessLevels.Choices())
 	}
 	// The expiry used to be forwarded as written, so a value that is not a
 	// date reached GitLab and came back as its 400 (issue 1308).
@@ -2991,7 +2991,7 @@ func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, inp
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return ShareProjectOutput{}, toolutil.WrapErrWithHint("projectShareWithGroup", err,
-				"group_access must be 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 25 (Security Manager) is not valid for project shares; the project may already be shared with this group. Use project.list_groups to verify")
+				"group_access must be one of "+toolutil.ProjectAccessLevels.Choices()+"; the project may already be shared with this group. Use project.list_groups to verify")
 		}
 		return ShareProjectOutput{}, toolutil.WrapErrWithStatusHint("projectShareWithGroup", err, http.StatusNotFound,
 			"verify project_id and group_id with project.get and group.get")
@@ -3047,7 +3047,7 @@ func DeleteSharedProjectFromGroup(ctx context.Context, client *gitlabclient.Clie
 type ListInvitedGroupsInput struct {
 	ProjectID            toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Search               string               `json:"search,omitempty"          jsonschema:"Search by group name"`
-	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
 	Relation             []string             `json:"relation,omitempty"            jsonschema:"Filter by group relation to the project (e.g. direct, inherited)"`
 	WithCustomAttributes *bool                `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response (admin only)"`
 	OrderBy              string               `json:"order_by,omitempty"            jsonschema:"Keyset ordering column (for keyset pagination)"`
@@ -3152,7 +3152,7 @@ type userProjectFilterInput struct {
 	Simple                   bool              `json:"simple,omitempty"             jsonschema:"Return only limited fields (faster)"`
 	Owned                    bool              `json:"owned,omitempty"              jsonschema:"Limit to projects explicitly owned by the current user"`
 	Topic                    string            `json:"topic,omitempty"              jsonschema:"Filter by topic name"`
-	MinAccessLevel           int               `json:"min_access_level,omitempty"   jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	MinAccessLevel           int               `json:"min_access_level,omitempty"   jsonschema:"Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
 	Starred                  *bool             `json:"starred,omitempty"            jsonschema:"Limit to projects starred by the current user"`
 	Membership               *bool             `json:"membership,omitempty"         jsonschema:"Limit to projects where the current user is a member"`
 	WithIssuesEnabled        *bool             `json:"with_issues_enabled,omitempty"         jsonschema:"Filter by projects with issues feature enabled"`
