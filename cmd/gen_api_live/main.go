@@ -550,16 +550,18 @@ func dockerRun(image string, keep bool) ([]byte, origin, error) {
 // and reporting the status alone leaves a reader with a boot to repeat and
 // nothing to go on. Bounded because a Rails backtrace is long and the last
 // lines are the ones that name the failure.
+//
+// The tail is cut with max rather than under a length test: at exactly
+// runnerStderrLines lines the cut and the whole are the same text, so a test
+// on the boundary could not tell `>` from `>=` and the mutation run would
+// report a survivor no test can kill.
 func runnerDetail(err error) string {
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || len(exit.Stderr) == 0 {
 		return ""
 	}
-	detail := strings.TrimSpace(string(exit.Stderr))
-	if lines := strings.Split(detail, "\n"); len(lines) > runnerStderrLines {
-		detail = strings.Join(lines[len(lines)-runnerStderrLines:], "\n")
-	}
-	return ": " + detail
+	lines := strings.Split(strings.TrimSpace(string(exit.Stderr)), "\n")
+	return ": " + strings.Join(lines[max(0, len(lines)-runnerStderrLines):], "\n")
 }
 
 // runnerStderrLines is how much of the runner's stderr a failure reports.
@@ -607,11 +609,16 @@ func (d dockerPath) command(ctx context.Context, args ...string) *exec.Cmd {
 // the one branch here that says something a maintainer will read at three in
 // the morning: the container is up and the application is not answering. The
 // test that moves it puts it back.
-var bootTimeout = 20 * time.Minute
+//
+// Parsed rather than multiplied: a package-level initializer sits outside
+// every block a coverage profile records, so the mutation run reports any
+// operator in it as not covered, although the test of the shipped defaults
+// reads the value.
+var bootTimeout = cmdutil.Must(time.ParseDuration("20m"))
 
 // pollInterval is how long the wait sleeps between attempts, for the same
 // reason and with the same shape.
-var pollInterval = 10 * time.Second
+var pollInterval = cmdutil.Must(time.ParseDuration("10s"))
 
 // waitForRails polls until gitlab-rails runner answers, which is a stricter
 // readiness than the container's own health check: the health check passes
