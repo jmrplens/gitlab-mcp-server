@@ -722,8 +722,10 @@ gh workflow run conditions.yml -f tree=true -f systems=ubuntu-latest -f gate=all
 ```
 
 Taken on 26 October 2026 on linux/amd64, on the branch of the pull request
-that added this section once its Go code was final (only documentation
-changed on it afterwards), with
+that added this section once its Go code was final, when it sat on `main` at
+`ed18d7d12`. The branch was rebased onto a later `main` afterwards, so the
+packages `main` gained since are in neither total, and the figures are those
+of the tree as it was measured. They were taken with
 `go run ./cmd/measure_conditions tree -parallel 4` and each `-mode` (the
 target above), four packages at a time on ten cores of a machine other work
 was loading too: the branch run took one hour and twelve minutes, and the
