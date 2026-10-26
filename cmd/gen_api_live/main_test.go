@@ -45,16 +45,21 @@ func wholeEnough() dumped {
 		payload.Entities[entityName(i)] = apilive.Entity{Fields: fields}
 	}
 	for i := range minRoutes + 1 {
-		payload.Routes = append(payload.Routes, apilive.Route{
+		route := apilive.Route{
 			Method: "GET", Path: routePath(i), Entity: entityName(i % 7),
 			Authorization: &apilive.RouteAuthorization{Permissions: []string{rawName(i % 3)}, BoundaryType: "project"},
-		})
+		}
+		if i <= minKeysetRoutes {
+			route.Keyset = []apilive.KeysetSite{keysetSite(i)}
+		}
+		payload.Routes = append(payload.Routes, route)
 	}
 	for i := range minFeatures + 1 {
 		payload.Features[featureName(i)] = apilive.TierPremium
 	}
 	payload.Granular = wholeVocabulary(minAssignablePermissions + 1)
 	payload.GraphQLAuthz = wholeGraphQL(minGraphQLDeclaredTypes + 1)
+	payload.KeysetPaginators = wholePaginators()
 	return payload
 }
 
@@ -159,10 +164,11 @@ func writeRecordEdited(t *testing.T, dir string, payload dumped, retrievedAt str
 			Entities:    len(payload.Entities), Routes: len(payload.Routes), Features: len(payload.Features),
 		},
 		Entities: payload.Entities, Routes: payload.Routes, Features: payload.Features,
-		Granular: payload.Granular, GraphQLAuthz: payload.GraphQLAuthz,
+		Granular: payload.Granular, GraphQLAuthz: payload.GraphQLAuthz, KeysetPaginators: payload.KeysetPaginators,
 	}
 	doc.Source.Fields = doc.FieldCount()
 	doc.Source.AuthorizationCounts = doc.CountAuthorization()
+	doc.Source.KeysetRoutes = doc.KeysetRoutes()
 	edit(&doc.Source)
 	if err := apilive.Write(dir, doc); err != nil {
 		t.Fatalf("write the fixture: %v", err)
@@ -648,9 +654,9 @@ func TestRunGenerate_AFineGrainedShapeNothingReads_IsRefusedAfterTheConditions(t
 	}
 }
 
-// TestReport_ARecordWithNoPublicSet_SaysWhyOnALineOfItsOwn verifies the third
-// line a regeneration or a gate prints, and that it is printed only when the
-// public set is missing.
+// TestReport_ARecordWithNoPublicSet_SaysWhyOnALineOfItsOwn verifies the fourth
+// line a regeneration or a gate prints, after the three figures lines, and
+// that it is printed only when the public set is missing.
 //
 // A record without one is legitimate, so nothing refuses it; the line is the
 // only place a person learns that every reader will then let GitLab judge a
@@ -662,15 +668,17 @@ func TestReport_ARecordWithNoPublicSet_SaysWhyOnALineOfItsOwn(t *testing.T) {
 		Granular: payload.Granular,
 	}
 	doc.Source.AuthorizationCounts = apilive.AuthorizationCounts{AuthorizedRoutes: 2, SkippedRoutes: 1}
-	twoLines := "gen_api_live: " + doc.Source.String() + "\n" +
-		"gen_api_live: " + doc.Source.AuthorizationCounts.String() + "\n"
+	doc.Source.KeysetRoutes = 1
+	figures := "gen_api_live: " + doc.Source.String() + "\n" +
+		"gen_api_live: " + doc.Source.AuthorizationCounts.String() + "\n" +
+		"gen_api_live: 1 routes reach a keyset paginator, 0 of them only behind a feature flag GitLab ships off\n"
 
 	for _, testCase := range []struct {
 		name   string
 		mutate func(*apilive.Document)
 		want   string
 	}{
-		{name: "a record with a public set prints two lines", mutate: func(*apilive.Document) {}, want: twoLines},
+		{name: "a record with a public set prints its figures", mutate: func(*apilive.Document) {}, want: figures},
 		{
 			name: "a record whose public set could not be evaluated says why",
 			mutate: func(d *apilive.Document) {
@@ -679,14 +687,14 @@ func TestReport_ARecordWithNoPublicSet_SaysWhyOnALineOfItsOwn(t *testing.T) {
 				granular.PublicAnonymousError = "ActiveRecord::RecordInvalid: Path has already been taken"
 				d.Granular = &granular
 			},
-			want: twoLines + "gen_api_live: no public anonymous set: ActiveRecord::RecordInvalid: Path has already been taken\n",
+			want: figures + "gen_api_live: no public anonymous set: ActiveRecord::RecordInvalid: Path has already been taken\n",
 		},
 		{
 			// The missing block is the gate's to refuse; the report has
 			// nothing of it to say a second time.
 			name:   "a record with no vocabulary at all says nothing of a public set",
 			mutate: func(d *apilive.Document) { d.Granular = nil },
-			want:   twoLines,
+			want:   figures,
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -804,17 +812,18 @@ func TestRunCheck_AStaleOrTruncatedRecord_IsRefused(t *testing.T) {
 // TestRunCheck_ASourceBlockThatDisagreesWithWhatTheRecordHolds_IsRefused
 // verifies that the figures a passing gate prints are the record's own.
 //
-// Every figure is held, the four the provenance always carried and each of the
-// fine-grained ones, and the refusal names each that differs, in the order the
-// source block holds them, with what it says and what the content gives. A
-// figure is set one above the truth rather than to zero, so a check that only
-// noticed a missing figure would pass it.
+// Every figure is held, the four the provenance always carried, each of the
+// fine-grained ones and the keyset count, and the refusal names each that
+// differs, in the order the source block holds them, with what it says and
+// what the content gives. A figure is set one above the truth rather than to
+// zero, so a check that only noticed a missing figure would pass it.
 func TestRunCheck_ASourceBlockThatDisagreesWithWhatTheRecordHolds_IsRefused(t *testing.T) {
 	payload := wholeEnough()
 	counted := documentOf(payload)
 	entities, fields := len(payload.Entities), counted.FieldCount()
 	routes, features := len(payload.Routes), len(payload.Features)
 	authorization := counted.CountAuthorization()
+	keysetRoutes := counted.KeysetRoutes()
 	refusal := func(differing string) string {
 		return "the live API record cannot be rested on:\n  its source block disagrees with what it holds (" + differing +
 			"): the figures this gate reports would not be the record's, and only a regeneration writes them (make gen-api-live)"
@@ -852,13 +861,20 @@ func TestRunCheck_ASourceBlockThatDisagreesWithWhatTheRecordHolds_IsRefused(t *t
 				authorization.GraphQLUndeclaredMutations+1, authorization.GraphQLUndeclaredMutations)),
 		},
 		{
+			name: "the routes reaching a keyset paginator", edit: func(s *apilive.Source) { s.KeysetRoutes++ },
+			want: refusal(fmt.Sprintf("keyset_routes says %d and it holds %d", keysetRoutes+1, keysetRoutes)),
+		},
+		{
 			name: "every figure that differs is named, in the source block's order",
 			edit: func(s *apilive.Source) {
+				s.KeysetRoutes--
 				s.GraphQLUndeclaredTypes += 2
 				s.Routes--
 			},
-			want: refusal(fmt.Sprintf("routes says %d and it holds %d; graphql_undeclared_types says %d and it holds %d",
-				routes-1, routes, authorization.GraphQLUndeclaredTypes+2, authorization.GraphQLUndeclaredTypes)),
+			want: refusal(fmt.Sprintf("routes says %d and it holds %d; graphql_undeclared_types says %d and it holds %d; "+
+				"keyset_routes says %d and it holds %d",
+				routes-1, routes, authorization.GraphQLUndeclaredTypes+2, authorization.GraphQLUndeclaredTypes,
+				keysetRoutes-1, keysetRoutes)),
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -2284,7 +2300,8 @@ func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
 					t.Fatalf("read the record back: %v", err)
 				}
 				wantStdout = "gen_api_live: " + doc.Source.String() + "\n" +
-					"gen_api_live: " + doc.Source.AuthorizationCounts.String() + "\n"
+					"gen_api_live: " + doc.Source.AuthorizationCounts.String() + "\n" +
+					"gen_api_live: " + keysetSummary(doc) + "\n"
 			}
 			if said := stdout(); said != wantStdout {
 				t.Errorf("stdout = %q, want %q", said, wantStdout)

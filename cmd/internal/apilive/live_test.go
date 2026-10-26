@@ -46,6 +46,7 @@ func fullRecord() Document {
 				GraphQLDeclaredMutations:        110,
 				GraphQLUndeclaredMutations:      111,
 			},
+			KeysetRoutes: 112,
 		},
 		Entities: map[string]Entity{
 			"API::Entities::Project": {Fields: []Field{
@@ -97,6 +98,12 @@ func fullRecord() Document {
 				AssignableWhen: []string{"admin"},
 				UnknownKeys:    []string{"future_option"},
 			},
+			Keyset: []KeysetSite{{
+				Paginator: PaginatorStrategies, File: "lib/api/projects.rb", Line: 248,
+				Text: "records, options = paginate_with_strategies(projects)", Via: []string{"present_projects"},
+				Cursor: []string{"id_after", "id_before"},
+				Flags:  []KeysetFlag{{Name: "projects_keyset", DefaultEnabled: new(false)}, {Name: "undefined_flag"}},
+			}},
 		}},
 		Features: map[string]string{"merge_request_approvers": TierPremium},
 		Granular: &Granular{
@@ -139,6 +146,7 @@ func fullRecord() Document {
 				UnknownEntries: []string{"widget:Thing"},
 			},
 		},
+		KeysetPaginators: map[string][]string{ProbedCursorPager: {"cursor"}, ProbedGitalyKeysetPager: {"page_token"}},
 	}
 }
 
@@ -603,7 +611,7 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
 	}
 
 	want := `{
- "schema_version": 4,
+ "schema_version": 5,
  "note": "taken from a booted instance, not from its source",
  "source": {
   "image": "gitlab/gitlab-ee:19.3.1-ee.0",
@@ -626,7 +634,8 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
   "graphql_undeclared_types": 108,
   "graphql_unchecked_undeclared_types": 109,
   "graphql_declared_mutations": 110,
-  "graphql_undeclared_mutations": 111
+  "graphql_undeclared_mutations": 111,
+  "keyset_routes": 112
  },
  "entities": {
   "API::Entities::Broken": {
@@ -727,7 +736,31 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
     "unknown_keys": [
      "future_option"
     ]
-   }
+   },
+   "keyset": [
+    {
+     "paginator": "paginate_with_strategies",
+     "file": "lib/api/projects.rb",
+     "line": 248,
+     "text": "records, options = paginate_with_strategies(projects)",
+     "via": [
+      "present_projects"
+     ],
+     "cursor": [
+      "id_after",
+      "id_before"
+     ],
+     "flags": [
+      {
+       "name": "projects_keyset",
+       "default_enabled": false
+      },
+      {
+       "name": "undefined_flag"
+      }
+     ]
+    }
+   ]
   }
  ],
  "features": {
@@ -881,6 +914,14 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
     "widget:Thing"
    ]
   }
+ },
+ "keyset_paginators": {
+  "cursor_pager": [
+   "cursor"
+  ],
+  "gitaly_keyset_pager": [
+   "page_token"
+  ]
  }
 }
 `

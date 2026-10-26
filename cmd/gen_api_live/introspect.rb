@@ -26,6 +26,10 @@
 #   graphql_authz - what each GraphQL object type, mutation and field demands
 #               of a fine-grained token, and the shape of every object-typed
 #               field, which decides what a denial does to an answer.
+#   keyset    - for every route, where the code it reaches calls a keyset
+#               paginator and which parameter its next page is asked by, and for
+#               each of GitLab's keyset paginators the parameter its next link
+#               names, evaluated rather than read.
 #
 # Why evaluation beats parsing, concretely: GeoSiteStatus exposes its fields by
 # iterating a constant assembled from two method calls, so its source says
@@ -49,6 +53,7 @@
 
 require "digest"
 require "json"
+require "set"
 
 # Version 2 marks a merged exposure. Version 1 spelled it exactly like a nested
 # one, which read as the opposite of what GitLab sends.
@@ -64,7 +69,13 @@ require "json"
 # while in version 3 the same absence meant "not recorded"; a reader taking one
 # for the other would deny every route, which is the silent inversion the
 # version exists to stop.
-SCHEMA_VERSION = 4
+#
+# Version 5 records keyset pagination: a route's `keyset` and the
+# `keyset_paginators` block. In version 5 a route without a `keyset` reaches no
+# keyset paginator, so GitLab ignores pagination=keyset there and answers an
+# offset page, while in version 4 the same absence meant "not recorded"; a
+# reader taking one for the other would call every keyset route an offset one.
+SCHEMA_VERSION = 5
 
 # ---------------------------------------------------------------------------
 # Entities
@@ -461,7 +472,7 @@ def authorization_of(settings)
   out.empty? ? nil : out
 end
 
-def routes_document
+def routes_document(paginators)
   ::API::API.routes.map do |route|
     settings =
       begin
@@ -488,8 +499,368 @@ def routes_document
     entry["params"] = params if params
     authorization = authorization_of(settings)
     entry["authorization"] = authorization if authorization
+    keyset = keyset_of(route, paginators)
+    entry["keyset"] = keyset if keyset
     entry
   end
+end
+
+# ---------------------------------------------------------------------------
+# Keyset pagination
+# ---------------------------------------------------------------------------
+
+# GitLab reads pagination=keyset without declaring it: of the 53 routes whose
+# code reaches a keyset paginator at 19.5.0, four declare `pagination` and 22
+# declare no cursor either, because the helper or the pager that serves the
+# page reads both from params on its own. So a route's declaration cannot say
+# whether it pages by keyset, and this section asks the code instead: it walks
+# what each route's block reaches through the helpers it is served with, and
+# records every place that calls a keyset paginator. That is where a keyset
+# page can be served, not a promise that one is: see paginate_with_strategies
+# below.
+#
+# Five shapes call one, each recorded under its own name:
+#
+#   paginate_with_strategies - the helper (lib/api/helpers/pagination_strategies.rb)
+#       that pages by keyset when pagination=keyset: CursorPager, asked by
+#       `cursor`, when the relation's model declares keyset orderings, and
+#       Keyset::Pager, asked by `id_after` and `id_before`, when the call passes
+#       `use_cursor: false` or the model declares none; anything but Project
+#       ordered by id then answers 405. The model is the relation's, built when
+#       a request is served, and the walk reads code, so a site is recorded
+#       with CursorPager's cursor unless the call passes `use_cursor: false`:
+#       on a model declaring no keyset orderings, PersonalAccessToken on the
+#       service account token lists among them, GitLab answers every keyset
+#       request there with 405 and never reads that cursor.
+#   gitaly_keyset_pager - Gitlab::Pagination::GitalyKeysetPager, asked by
+#       `page_token`, for branches, tags, the tree and commits.
+#   gitaly_pagination - a finder executed with `gitaly_pagination: true`,
+#       which pages through Gitaly by the same `page_token` without the pager.
+#   keyset_header_builder - a route writing its own keyset next link or cursor
+#       headers through Gitlab::Pagination::Keyset::HeaderBuilder.
+#   keyset_paginate - a relation paged with `keyset_paginate(cursor: ...)`.
+#
+# The walk follows calls on the endpoint itself, which is what a helper call
+# is, and never calls on another object: a finder or a service that pages by
+# keyset on its own, and writes no next link through the route, is not seen.
+# That is the gap the -check rule over declared cursors exists for. A method is
+# walked once per route, so a site reached along two paths is recorded along
+# the first.
+
+# ISEQ_FORMAT is the marker an instruction sequence's array form starts with,
+# which is how a block nested in an operand is told from any other array.
+ISEQ_FORMAT = "YARVInstructionSequence/SimpleDataFormat"
+
+# VM_CALL_FCALL is the call flag Ruby sets on a call with no receiver, a call
+# on self: a helper call, as opposed to a call on a finder or a relation.
+VM_CALL_FCALL = 1 << 2
+
+# NON_POSITIONAL_KEYS are the keys a next link carries beside its cursor: the
+# page size and the order, which repeat the request rather than position it.
+NON_POSITIONAL_KEYS = %w[per_page page sort order_by pagination].freeze
+
+# CursorProbe is the request context a paginator is handed when it is asked,
+# below, which parameter its next link names: it answers params as a request
+# would and keeps the headers the paginator writes.
+class CursorProbe
+  attr_reader :params, :headers
+
+  def initialize(params)
+    @params = ActiveSupport::HashWithIndifferentAccess.new(params)
+    @headers = {}
+  end
+
+  def header(name, value)
+    @headers[name] = value
+  end
+
+  def request
+    Struct.new(:url).new("http://probe.invalid/api/v4/probe")
+  end
+end
+
+# next_link_of is the query of the next link a probe was given.
+def next_link_of(probe)
+  link = probe.headers["Link"].to_s[/<([^>]+)>;\s*rel="next"/, 1]
+  raise "the paginator wrote no next link: #{probe.headers.inspect}" unless link
+
+  Rack::Utils.parse_query(URI.parse(link).query)
+end
+
+# cursor_of names the parameters a next link adds to the request it answers,
+# which is what the next page is asked by.
+def cursor_of(probe)
+  next_link_of(probe).keys - probe.params.keys.map(&:to_s)
+end
+
+# keyset_paginators_document asks each of GitLab's keyset paginators which
+# parameter its next link names, by having it write one.
+#
+# Evaluated rather than written down here, for the reason this script exists:
+# the parameter is a value of GitLab's code, and a table copied from it would
+# keep the old name after a release renamed it. Each probe goes through the
+# method GitLab itself calls once a page is served, so one that raises fails
+# the run where somebody sees it. cursor_headers is the parameter the
+# X-NEXT-CURSOR header is sent back as, read off the same CursorPager answer,
+# which writes both.
+def keyset_paginators_document
+  cursor_probe = CursorProbe.new(per_page: 1)
+  ::Gitlab::Pagination::Keyset::CursorBasedRequestContext.new(cursor_probe).apply_headers("probe-next", nil)
+  next_cursor = cursor_probe.headers["X-NEXT-CURSOR"]
+  cursor_headers = next_link_of(cursor_probe).select { |_name, value| value == next_cursor }.keys
+
+  pager = %w[desc asc].flat_map do |sort|
+    probe = CursorProbe.new(per_page: 1, order_by: "id", sort: sort)
+    context = ::Gitlab::Pagination::Keyset::RequestContext.new(probe)
+    context.apply_headers(context.page.next(id: 1))
+    cursor_of(probe)
+  end
+
+  gitaly_probe = CursorProbe.new(per_page: 1)
+  ::Gitlab::Pagination::GitalyKeysetPager.new(gitaly_probe, nil).send(:apply_headers, [nil], "probe-next")
+
+  {
+    "cursor_pager" => cursor_of(cursor_probe).sort,
+    "pager" => pager.uniq.sort,
+    "gitaly_keyset_pager" => cursor_of(gitaly_probe).sort,
+    "cursor_headers" => cursor_headers.sort,
+  }
+end
+
+def iseq_array?(value)
+  value.is_a?(Array) && value.first == ISEQ_FORMAT
+end
+
+# gitlab_method? is whether a method is GitLab's own code rather than a gem's,
+# which bounds the walk: Grape's present or ActiveSupport's helpers serve no
+# keyset page, and walking them would multiply the run for nothing.
+def gitlab_method?(method)
+  file, = method.source_location
+  return false unless file
+
+  file.start_with?(Rails.root.to_s + "/") && !file.include?("/vendor/") && !file.include?("/gems/")
+end
+
+# literal_before is the literal pushed by the instruction before index, the
+# last argument of the call at index, as [true, value], or [false, nil] when
+# that argument is not a literal.
+def literal_before(body, index)
+  (index - 1).downto(0) do |at|
+    instruction = body[at]
+    next unless instruction.is_a?(Array)
+
+    return instruction[0] == :putobject ? [true, instruction[1]] : [false, nil]
+  end
+  [false, nil]
+end
+
+# method_text is the source of a method or a block, from the line it starts on
+# to the line it ends on, read back from the image.
+def method_text(path, iseq)
+  first, _, last, = iseq[4][:code_location]
+  return nil unless path && first && last && File.readable?(path)
+
+  File.readlines(path)[(first - 1)..(last - 1)].to_a.join
+end
+
+def line_text(path, line)
+  return "" unless path && File.readable?(path)
+
+  File.readlines(path)[line - 1].to_s
+end
+
+# balanced_from is the bracketed text that opens at open_at.
+def balanced_from(text, open_at)
+  depth = 0
+  text[open_at..].each_char.with_index do |char, offset|
+    depth += 1 if "({[".include?(char)
+    depth -= 1 if ")}]".include?(char)
+    return text[open_at, offset + 1] if depth.zero?
+  end
+  ""
+end
+
+def hash_keys(text)
+  text.scan(/(?<![:\w])(\w+):(?!:)/).flatten.uniq - NON_POSITIONAL_KEYS
+end
+
+# next_link_keys names the cursor of a next link a route writes itself, from
+# the hash it hands add_next_page_header: written at the call, or assigned to
+# the variable the call passes earlier in the same method.
+def next_link_keys(text, line)
+  call_at = line.index("add_next_page_header(")
+  return [] unless call_at
+
+  argument = balanced_from(line, call_at + "add_next_page_header".length)[1..-2].to_s.strip
+  return hash_keys(argument) if argument.start_with?("{") || argument.match?(/\A\w+:/)
+  return [] unless text && argument.match?(/\A\w+\z/)
+
+  assigned_at = text.index(/\b#{Regexp.escape(argument)}\s*=\s*\{/)
+  return [] unless assigned_at
+
+  hash_keys(balanced_from(text, text.index("{", assigned_at)))
+end
+
+# KeysetWalk collects the keyset sites one route's block reaches.
+class KeysetWalk
+  attr_reader :sites
+
+  def initialize(helpers, paginators)
+    @helpers = helpers
+    @paginators = paginators
+    @seen = Set.new
+    @sites = []
+  end
+
+  def walk(method, via, flags)
+    iseq = RubyVM::InstructionSequence.of(method)
+    return unless iseq
+
+    key = [method.source_location, method.name]
+    return if @seen.include?(key)
+
+    @seen << key
+    form = iseq.to_a
+    scan(form, method, via, flags, method_text(form[7], form))
+  end
+
+  private
+
+  # helper is the method a call on the endpoint resolves to, through the
+  # helpers the route is served with, or nil when they define none of that
+  # name.
+  def helper(name)
+    return nil unless @helpers.method_defined?(name) || @helpers.private_method_defined?(name)
+
+    @helpers.instance_method(name)
+  end
+
+  # flag_of describes a feature flag a site is behind, with whether GitLab
+  # turns it on unless an administrator turns it off.
+  def flag_of(name)
+    entry = { "name" => name }
+    definition = ::Feature::Definition.get(name.to_sym)
+    entry["default_enabled"] = definition.default_enabled unless definition.nil?
+    entry
+  end
+
+  def site(paginator, path, line, via, flags, cursor)
+    entry = { "paginator" => paginator, "file" => repo_relative(path), "line" => line }
+    # The one line the call is on rather than read_source's balanced span: a
+    # call is not a lambda, and the span runs on into the line after it.
+    text = squeeze(line_text(path, line))
+    entry["text"] = text unless text.empty?
+    entry["via"] = via unless via.empty?
+    entry["cursor"] = cursor unless cursor.empty?
+    entry["flags"] = flags.uniq.map { |name| flag_of(name) } unless flags.empty?
+    @sites << entry
+  end
+
+  # scan reads one instruction sequence, and every block nested in it, for
+  # keyset sites and for the helpers it calls.
+  #
+  # A feature flag is recorded on the sites it guards in the one shape that
+  # reads unambiguously from the instructions, `if Feature.enabled?(:flag)` or
+  # `unless Feature.disabled?(:flag)`: the branch that skips the guarded code
+  # jumps to a label after it, and every site met before that label is behind
+  # the flag. A flag tested any other way, an early return among them, is not
+  # recorded.
+  def scan(form, method, via, inherited, text)
+    path = form[7]
+    line = form[8]
+    body = form[13]
+    guards = []
+    feature = false
+    flag = nil
+    flag_call = nil
+    body.each_with_index do |instruction, index|
+      if instruction.is_a?(Integer)
+        line = instruction
+        next
+      end
+      if instruction.is_a?(Symbol)
+        guards.reject! { |guard| guard[1] == instruction }
+        next
+      end
+      next unless instruction.is_a?(Array)
+
+      active = inherited + guards.map(&:first)
+      instruction.each { |operand| scan(operand, method, via, active, text) if iseq_array?(operand) }
+      operation = instruction[0]
+      tested, flag_call = flag_call, nil
+      if (operation == :branchunless && tested&.first == :enabled?) ||
+          (operation == :branchif && tested&.first == :disabled?)
+        guards << [tested.last, instruction[1]]
+      end
+      if operation == :opt_getconstant_path
+        name = instruction[1].reject { |segment| segment.to_s.empty? }.join("::")
+        feature = name == "Feature"
+        flag = nil
+        if name.end_with?("Gitlab::Pagination::GitalyKeysetPager")
+          site("gitaly_keyset_pager", path, line, via, active, @paginators["gitaly_keyset_pager"])
+        end
+      elsif operation == :putobject && feature && flag.nil? && instruction[1].is_a?(Symbol)
+        flag = instruction[1].to_s
+      end
+
+      calldata = instruction[1]
+      next unless calldata.is_a?(Hash) && calldata[:mid]
+
+      called = calldata[:mid]
+      on_self = (calldata[:flag].to_i & VM_CALL_FCALL) != 0
+      if %i[enabled? disabled?].include?(called) && feature && flag
+        flag_call = [called, flag]
+        feature = false
+        flag = nil
+      end
+      record_site(called, calldata, on_self, body, index, path, line, via, active, text)
+      if operation == :invokesuper
+        parent = method.super_method
+        walk(parent, via, active) if parent && gitlab_method?(parent)
+      elsif on_self
+        callee = helper(called)
+        walk(callee, via + [called.to_s], active) if callee && gitlab_method?(callee)
+      end
+    end
+  end
+
+  def record_site(called, calldata, on_self, body, index, path, line, via, flags, text)
+    last_keyword = Array(calldata[:kw_arg]).last
+    # paginate_with_strategies is given CursorPager's cursor whenever the call
+    # does not pass `use_cursor: false`, which assumes a relation whose model
+    # declares keyset orderings: the model is not in the instructions, and on
+    # one declaring none GitLab answers 405 instead (see the section above).
+    if called == :paginate_with_strategies && on_self
+      without_cursor = last_keyword == :use_cursor && literal_before(body, index) == [true, false]
+      site("paginate_with_strategies", path, line, via, flags,
+        without_cursor ? @paginators["pager"] : @paginators["cursor_pager"])
+    elsif called == :execute && last_keyword == :gitaly_pagination && literal_before(body, index) == [true, true]
+      site("gitaly_pagination", path, line, via, flags, @paginators["gitaly_keyset_pager"])
+    elsif called == :add_next_page_header
+      site("keyset_header_builder", path, line, via, flags, next_link_keys(text, line_text(path, line)))
+    elsif called == :add_prev_and_next_cursor_headers
+      site("keyset_header_builder", path, line, via, flags, @paginators["cursor_headers"])
+    elsif called == :keyset_paginate
+      cursor = line_text(path, line)[/keyset_paginate\(\s*cursor:\s*params\[:(\w+)\]/, 1]
+      site("keyset_paginate", path, line, via, flags, cursor ? [cursor] : [])
+    end
+  end
+end
+
+# keyset_of is where a route's code calls a keyset paginator, or nil when the
+# code it reaches calls none.
+#
+# The helpers are built the way Grape builds them when it mounts the endpoint,
+# because a runner never serves a request and so never mounts one: the
+# endpoint's own copy is still unset here.
+def keyset_of(route, paginators)
+  endpoint = route.app
+  source = endpoint.respond_to?(:source) ? endpoint.source : nil
+  return nil unless source
+
+  walk = KeysetWalk.new(endpoint.send(:build_helpers) || Module.new, paginators)
+  walk.walk(source, [], [])
+  walk.sites.empty? ? nil : walk.sites.uniq
 end
 
 # ---------------------------------------------------------------------------
@@ -950,7 +1321,8 @@ end
 # ---------------------------------------------------------------------------
 
 entities = entities_document
-routes = routes_document
+keyset_paginators = keyset_paginators_document
+routes = routes_document(keyset_paginators)
 features = features_document
 granular = granular_document
 graphql_authz = graphql_authz_document
@@ -967,4 +1339,5 @@ puts JSON.generate(
   "features" => features,
   "granular" => granular,
   "graphql_authz" => graphql_authz,
+  "keyset_paginators" => keyset_paginators,
 )

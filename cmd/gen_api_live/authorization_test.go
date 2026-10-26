@@ -18,7 +18,7 @@ func documentOf(payload dumped) apilive.Document {
 	return apilive.Document{
 		SchemaVersion: apilive.SchemaVersion,
 		Entities:      payload.Entities, Routes: payload.Routes, Features: payload.Features,
-		Granular: payload.Granular, GraphQLAuthz: payload.GraphQLAuthz,
+		Granular: payload.Granular, GraphQLAuthz: payload.GraphQLAuthz, KeysetPaginators: payload.KeysetPaginators,
 	}
 }
 
@@ -117,7 +117,7 @@ func TestAuthorizationProblems_AWholeRecord_HasNone(t *testing.T) {
 }
 
 // TestAuthorizationProblems_AMissingBlock_IsReportedOnceAsMissing verifies the
-// first refusal of a version 4 record: a block that is not there. Each is
+// first refusal of the fine-grained half: a block that is not there. Each is
 // named once, as missing, and not again as a block holding too little, which
 // would send a reader to the walk when it is the block that is gone.
 func TestAuthorizationProblems_AMissingBlock_IsReportedOnceAsMissing(t *testing.T) {

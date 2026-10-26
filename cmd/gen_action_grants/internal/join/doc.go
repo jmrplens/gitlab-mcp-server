@@ -6,7 +6,7 @@
 //
 // The derivation (package derive) says which REST routes and GraphQL
 // documents an action sends and how they combine; the live record
-// (docs/development/gitlab-api-live.json, schema 4) says, for the GitLab
+// (docs/development/gitlab-api-live.json, schema 5) says, for the GitLab
 // release it was taken from, which permissions at which boundary each route
 // declares, which each GraphQL object type and mutation declares, and the
 // vocabulary a token is granted in. This package reads both and writes a

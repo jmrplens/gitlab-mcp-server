@@ -72,7 +72,7 @@
 //     computed with GitLab's own todo rule beside the authorization_todo.txt
 //     the image ships.
 //
-// -check refuses a version 4 record that lacks either block, falls below the
+// -check refuses a record that lacks either block, falls below the
 // fine-grained floors, maps a raw permission to an assignable that is not its
 // own or offers one no token can hold, declares a permission GitLab does not
 // define or no assignable expands to, declares permissions with no boundary,
@@ -86,6 +86,48 @@
 // whose figures, the four the provenance always carried and the fine-grained
 // ones, are not what the content gives, since a passing run prints them as
 // the record's own.
+//
+// # Keyset pagination
+//
+// Since schema version 5 the boot also records which routes reach a keyset
+// paginator and by which parameter their next page is asked, which is what
+// issue 1165 needs to hold a list action's page_token to its route. GitLab
+// reads pagination=keyset without declaring it: at 19.5.0 four of the 53
+// routes whose code reaches a keyset paginator declare `pagination`, and 22
+// declare no cursor either, because the helper or the pager serving the page
+// reads both from params on its own. So the script walks the instruction
+// sequence of each route's block, and of every helper of GitLab's own it
+// calls on the endpoint, and records each place that calls one:
+//
+//   - paginate_with_strategies, asked by `cursor` or, where the call passes
+//     `use_cursor: false`, by `id_after` and `id_before`. Which of its two
+//     paginators GitLab takes, and whether it serves a keyset page at all,
+//     depends on the model of the relation it is handed, which the walk
+//     cannot see: `cursor` is what a model declaring keyset orderings is
+//     asked by, and on one declaring none GitLab answers every keyset
+//     request with 405 (the service account token lists at 19.5.0), so the
+//     record says where a keyset page can be served rather than that it is;
+//   - GitalyKeysetPager, and a finder executed with `gitaly_pagination: true`,
+//     both asked by `page_token`;
+//   - a route writing its own next link or cursor headers through
+//     Gitlab::Pagination::Keyset::HeaderBuilder, asked by what the hash it
+//     hands the builder names (`last` on the registry tags);
+//   - keyset_paginate, asked by the param it is handed as its cursor.
+//
+// Each site is located, quoted, and named with the helpers the walk went
+// through to reach it and the feature flags it is behind, with their defaults:
+// the commit list pages by keyset only behind commits_keyset_pagination, which
+// GitLab ships off. The parameter each library paginator names is not copied
+// into the script: it has each one write a next link and reads the parameter
+// back, so a release that renames one changes the record rather than leaving
+// it wrong.
+//
+// -check refuses a version 5 record without the probe of the paginators, which
+// is what a version 4 script labeled 5 produces, one below the keyset floor,
+// a site naming a paginator nothing reads, no location or no cursor, and,
+// since the walk never follows a call on another object, a route that
+// declares a cursor parameter and records no site asked by it. The generator
+// refuses to write the same record, and the source block carries the count.
 //
 // # What it cannot give
 //

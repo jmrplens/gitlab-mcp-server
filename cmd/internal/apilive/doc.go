@@ -35,4 +35,10 @@
 // How a request this server sends is found among the record's routes, and
 // what the route is called once found, is routes.go: the fine-grained
 // derivation and R-GRANT both place requests by it, and must agree.
+//
+// Since schema version 5 it says as well which routes reach a keyset
+// paginator, and by which parameter their next page is asked when it serves
+// one (keyset.go): GitLab reads pagination=keyset without declaring it, so
+// only the code a route reaches can say, and the introspection walks that
+// code inside the booted image.
 package apilive

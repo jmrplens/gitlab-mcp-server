@@ -2368,7 +2368,10 @@ gen-api-live:
 ## source figures its content does not give, has a fine-grained half (route
 ## authorization, the permission vocabulary, the public set, GraphQL
 ## authorization) that is missing, too small or holds a shape a reader would
-## misread, or is past the shared staleness window (cmd/internal/provenance).
+## misread, has a keyset half (where each route serves a keyset page, by which
+## parameter, and the probe of GitLab's paginators) that is missing, too small,
+## unreadable or silent on a route declaring a cursor, or is past the shared
+## staleness window (cmd/internal/provenance).
 ## No Docker and no network, so it is a gate.
 check-api-live:
 	go run ./cmd/gen_api_live/ -check

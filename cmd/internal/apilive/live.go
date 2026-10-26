@@ -35,7 +35,14 @@ import (
 // in version 3 the same absence meant "not recorded". A reader taking a
 // version 3 record for version 4 would deny every route, which is the silent
 // inversion the version exists to stop.
-const SchemaVersion = 4
+//
+// Version 5 records keyset pagination: [Route.Keyset] and
+// [Document.KeysetPaginators]. In version 5 a route with no keyset reaches no
+// keyset paginator, so GitLab answers it with an offset page whatever
+// pagination says; in version 4 the same absence meant "not recorded". A
+// reader taking a version 4 record for version 5 would call every keyset
+// route an offset one.
+const SchemaVersion = 5
 
 // DefaultDir is where the record lives, beside the other pinned records.
 const DefaultDir = "docs/development"
@@ -74,6 +81,12 @@ type Document struct {
 	// and the gate refuses it.
 	Granular     *Granular     `json:"granular,omitempty"`
 	GraphQLAuthz *GraphQLAuthz `json:"graphql_authz,omitempty"`
+	// KeysetPaginators maps each of GitLab's keyset paginators, one of
+	// [Probed], to the parameters its next link names, as the paginator
+	// answered when the introspection had it write one. A version 5 record
+	// without it was written by an introspection that does not walk keyset
+	// pagination, and the gate refuses it.
+	KeysetPaginators map[string][]string `json:"keyset_paginators,omitempty"`
 }
 
 // Source is the instance the record was taken from.
@@ -100,6 +113,9 @@ type Source struct {
 	// AuthorizationCounts are the fine-grained figures, counted from the
 	// record when it is written.
 	AuthorizationCounts
+	// KeysetRoutes counts the routes whose code reaches a keyset paginator,
+	// from the record when it is written.
+	KeysetRoutes int `json:"keyset_routes"`
 }
 
 // Entity is one Grape entity as the loaded class describes itself.
@@ -230,6 +246,13 @@ type Route struct {
 	// means it declares nothing, which GitLab answers a fine-grained token by
 	// refusing it.
 	Authorization *RouteAuthorization `json:"authorization,omitempty"`
+	// Keyset is every place the code the route reaches calls a keyset
+	// paginator, which is where GitLab can serve the route a keyset page:
+	// whether it does also depends on the relation's model and the order
+	// asked for, which the record does not say ([KeysetSite]). Empty means it
+	// reaches none, so GitLab ignores pagination=keyset there and answers an
+	// offset page.
+	Keyset []KeysetSite `json:"keyset,omitempty"`
 }
 
 // Param is one declared parameter.

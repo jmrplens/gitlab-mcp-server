@@ -43,9 +43,9 @@ func named(names []string) string {
 	return fmt.Sprintf("%s and %d more", strings.Join(sorted[:namedLimit], ", "), len(sorted)-namedLimit)
 }
 
-// authorizationProblems reports the ways the fine-grained half of a version 4
-// record cannot be rested on: each is a shape a reader would misread, and
-// every rule below names the reading it protects.
+// authorizationProblems reports the ways the fine-grained half of a record,
+// which every version since 4 carries, cannot be rested on: each is a shape a
+// reader would misread, and every rule below names the reading it protects.
 func authorizationProblems(doc apilive.Document) []string {
 	var problems []string
 	if doc.Granular == nil {
