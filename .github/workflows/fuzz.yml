@@ -1,0 +1,116 @@
+# Fuzzing for gitlab-mcp-server
+#
+# The module carries fuzz targets (FuzzMeterFor, FuzzEvaluate_IsSoundAgainstGitLab,
+# FuzzRefuseUnreadable and the rest), and go test runs each one's seed corpus
+# as one more test: it varies no input unless it is given -fuzz, and until this
+# workflow nothing here gave it. This runs every target with go test -fuzz for
+# a fixed time, so the inputs the targets exist to vary are varied.
+#
+# Where it runs, and where it does not:
+#
+#   * once a week on main, on Wednesdays, which no other weekly workflow
+#     runs on;
+#   * when dispatched, from the Actions tab or with `gh workflow run fuzz.yml`;
+#   * on a pull request that changes this file or cmd/fuzz_targets, and on no
+#     other, with one minute per target rather than ten. GitHub offers a
+#     workflow for dispatch only once its file is on the default branch, so
+#     the pull request that adds this file can run it through this trigger
+#     alone; a later change could be dispatched from its branch, and this
+#     runs it without anybody having to.
+#
+# It is a workflow of its own for the reason race.yml is: ci.yml converges on
+# one job, "CI", the single check branch protection requires, and a job added
+# there would gate every pull request. A failure here is a defect a fuzzer
+# found, to be fixed, and is not wired into the release.
+#
+# Shape: plan lists the targets with cmd/fuzz_targets, which reads the test
+# files the go command builds and prints one matrix cell per target, so a
+# target added to any package is fuzzed from the next run on without an edit
+# here, and a plan that found none fails rather than passing with nothing
+# fuzzed. fuzz runs each cell. A failing input is what the go command writes
+# under the package's testdata/fuzz/<target>; it is uploaded as the cell's
+# artifact, and copying it into that directory of a checkout makes it a seed
+# that `go test` replays from then on (docs/development/static-analysis.md,
+# Fuzzing). The cmd/fuzz_targets tests hold this file to the matrix it prints.
+
+name: Fuzz
+
+on:
+  schedule:
+    # Wednesdays, 05:43 UTC: no other weekly workflow runs on that day (the
+    # one every day is gitlab-mirror.yml, every six hours at 17 past), and off
+    # the hour for the reason recorded in e2e.yml, since GitHub delays runs
+    # that pile up on round times.
+    - cron: "43 5 * * 3"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/fuzz.yml
+      - cmd/fuzz_targets/**
+
+# Read only. Nothing here writes to the repository, comments, or mints an
+# identity: the default token reads the checkout and this run's artifacts.
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: "📋 Plan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - name: List the fuzz targets
+        id: plan
+        run: go run ./cmd/fuzz_targets >> "$GITHUB_OUTPUT"
+
+  fuzz:
+    name: "🎲 ${{ matrix.target }} (${{ matrix.package }})"
+    needs: plan
+    runs-on: ubuntu-latest
+    # Ten minutes of fuzzing, and the build of a test binary instrumented for
+    # it around them, which for cmd/server and internal/tools/search is a few
+    # minutes cold. The bound ends a hang; it is not how long a run should take.
+    timeout-minutes: 30
+    strategy:
+      # Every target reports. Stopping at the first failure would hide a
+      # second, different one.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: go mod download
+      # One target of one package, anchored so it matches no other, and no
+      # test beside it: the target's seeds run first as part of fuzzing. The
+      # inputs reach go test through the environment, so a value is data
+      # whatever it holds. On a failure go test prints the input, writes it
+      # under testdata/fuzz/<target> and exits non-zero, which fails the job.
+      - name: Fuzz
+        env:
+          PACKAGE: ${{ matrix.package }}
+          TARGET: ${{ matrix.target }}
+          FUZZTIME: ${{ github.event_name == 'pull_request' && '1m' || '10m' }}
+        run: go test -run '^$' -fuzz "^${TARGET}\$" -fuzztime "$FUZZTIME" "$PACKAGE"
+      # The directory holds the target's committed seeds as well when it has
+      # any, which a reader tells apart by name: the go command names a
+      # failing input after its hash, and the log of the step above names it.
+      - name: Upload the failing input
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.package }}/testdata/fuzz/${{ matrix.target }}
+          retention-days: 30
+          if-no-files-found: ignore

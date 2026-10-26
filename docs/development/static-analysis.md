@@ -430,6 +430,28 @@ Every one of those runs carries an explicit `-timeout`, and so does `make test-r
 
 Nothing here reaches the `CI` workflow's graph, so the single required check is unchanged.
 
+### Fuzzing
+
+`go test` runs a fuzz target's seed corpus as one more test and varies no input unless it is given `-fuzz`, so until `.github/workflows/fuzz.yml` existed every target here (`FuzzMeterFor`, `FuzzEvaluate_IsSoundAgainstGitLab`, `FuzzRefuseUnreadable` and the rest, eleven in five packages today) ran on its seeds alone. The workflow fuzzes each one with `go test -run '^$' -fuzz '^<target>$' -fuzztime 10m`, one job per target, in three places:
+
+| When                                                         | How                                                                    | Fuzzing time per target |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------- | ----------------------- |
+| Wednesdays, weekly                                           | the workflow's own `schedule`, on a day no other weekly workflow takes | 10 minutes              |
+| When dispatched                                              | the Actions tab, or `gh workflow run fuzz.yml`                         | 10 minutes              |
+| A pull request that changes `fuzz.yml` or `cmd/fuzz_targets` | the `pull_request` trigger, limited to those two paths                 | 1 minute                |
+
+The last row is there because GitHub offers a workflow for dispatch only once its file is on the default branch, so the pull request that adds `fuzz.yml` can run it no other way; a later change to either path could be dispatched from its branch, and the trigger runs it without anybody having to. No other pull request runs it, and it is a workflow of its own for the reason the race detector is: a job in `ci.yml` would gate every pull request through the one required check.
+
+The targets are not written into the workflow. Its plan job runs [`fuzz_targets`](cmd-utilities.md#fuzz_targets), which lists every package with the go command, reads the test files it builds for each and prints one matrix cell per target, so a target added anywhere is fuzzed from the next run on, and a plan that found none fails rather than passing with nothing fuzzed.
+
+A failure is a defect the fuzzer found. `go test` prints the failing input, writes it under the package's `testdata/fuzz/<target>/` and fails the job, and the job uploads that directory as the artifact `fuzz-<package>-<target>` (with the target's committed seeds beside it when it has any; the log names the new file). To reproduce it, put the file in the same directory of a checkout and run the target on it alone:
+
+```bash
+go test -run '^FuzzMeterFor/<file name>$' ./internal/tenancy
+```
+
+Committed there with the fix, the input stays a seed that every `go test` replays from then on, which is the regression test the fix needs. The same fuzzing runs locally with `go test -run '^$' -fuzz '^FuzzMeterFor$' -fuzztime 1m ./internal/tenancy`.
+
 ## GitLab CI Example
 
 ```yaml

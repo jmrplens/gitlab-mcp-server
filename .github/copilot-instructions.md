@@ -48,6 +48,7 @@ gitlab-mcp-server/
 │   ├── godoc_tool/         # Godoc auditor + fixer (audit/fix; was audit_godocs + add_docs; make check-godocs)
 │   ├── format_md_tables/   # Markdown pipe-table normalizer
 │   ├── measure_conditions/ # Plan, measuring loop and job summary of the on-demand condition coverage workflow (conditions.yml, dispatched by hand), and the whole-tree figure (make coverage-conditions-tree)
+│   ├── fuzz_targets/       # The fuzz targets the weekly fuzzing workflow (fuzz.yml) runs with go test -fuzz
 │   ├── gen_action_catalog_manifest/ # ActionSpec group-builder manifest
 │   ├── gen_brand/          # Every vector brand asset from one parametric geometry
 │   ├── gen_icon_webp/      # Light/dark WebP icon fallbacks from icons.go

@@ -103,6 +103,7 @@ gitlab-mcp-server/
 │   ├── gen_model_results/            # Folds model evaluation shards into the committed record and results page
 │   ├── format_md_tables/             # Markdown pipe table formatter (make check-md-tables)
 │   ├── measure_conditions/           # The cross-OS condition coverage workflow and the whole-tree figure (make coverage-conditions-tree)
+│   ├── fuzz_targets/                 # The fuzz targets the weekly fuzz.yml runs with go test -fuzz
 │   ├── gen_action_catalog_manifest/  # Audited action catalog manifest
 │   ├── gen_api_live/                 # REST oracle evaluated from a booted GitLab: gitlab-api-live.json (make gen-api-live)
 │   ├── gen_action_grants/            # What each action sends and what a token needs for it (make gen-action-grants)
