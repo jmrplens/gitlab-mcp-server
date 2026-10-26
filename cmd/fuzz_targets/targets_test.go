@@ -227,7 +227,7 @@ func TestFindTargets_Repository_FindsItsTargetsWithTheRealToolchain(t *testing.T
 		{pkg: "./internal/tenancy", name: "FuzzBudgetOn"},
 		{pkg: "./internal/tenancy", name: "FuzzMeterFor"},
 		{pkg: "./internal/tools/search", name: "FuzzFormatCodeMarkdown"},
-		{pkg: "./internal/toolutil", name: "FuzzLogMarkupRawOffset"},
+		{pkg: "./internal/toolutil", name: "FuzzScanLogMarkup_RawOffset"},
 	} {
 		t.Run(known.pkg+" "+known.name, func(t *testing.T) {
 			t.Parallel()
