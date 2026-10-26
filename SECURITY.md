@@ -4,7 +4,7 @@
 
 > **Do NOT open a public issue for security vulnerabilities.**
 
-The preferred channel is **[GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new)**, which keeps the report private until a coordinated fix is published.
+The preferred channel is **[GitHub's private vulnerability reporting](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new)**. It opens a draft security advisory that only you and the maintainer can read, and keeps the report private until a coordinated fix is published.
 
 Please include:
 
@@ -14,7 +14,7 @@ Please include:
 - Environment (OS, GitLab version, transport: stdio or HTTP, MCP client).
 - Any suggested mitigation, if known.
 
-If GitHub Security Advisories is unavailable to you, contact the maintainer privately via direct message on GitHub (`@jmrplens`). Do not send sensitive details over public channels.
+If you cannot use it, for instance because you have no GitHub account, email the same information to the maintainer at **[mail@jmrp.io](mailto:mail@jmrp.io)**. Email is not encrypted on its own, so to keep the report private on its way, encrypt it if you can to the maintainer's OpenPGP key, published at <https://github.com/jmrplens.gpg> with the fingerprint `0A99 3B26 8654 DBBA 52B7 E8D3 FCF6 5339 1E2C 91FC`, which carries that address. A report by email goes through the same process as one through GitHub. Do not send details over any public channel.
 
 ### Preferred Languages
 
@@ -22,15 +22,21 @@ English (preferred) or Spanish.
 
 ## Response SLA
 
-| Stage                          | Target                                         |
-| ------------------------------ | ---------------------------------------------- |
-| Acknowledgement of report      | within **48 hours**                            |
-| Initial triage and severity    | within **7 days**                              |
-| Fix for **Critical / High**    | within **30 days** of confirmation             |
-| Fix for **Medium / Low**       | within **90 days** of confirmation             |
-| Public disclosure / advisory   | after a fix is released, with a typical **7-day embargo** so users can update |
+| Stage                       | Target                                                                       |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| Acknowledgement of report   | within **48 hours**                                                          |
+| Initial triage and severity | within **7 days**                                                            |
+| Fix for **Critical / High** | within **30 days** of confirmation                                           |
+| Fix for **Medium / Low**    | within **90 days** of confirmation                                           |
+| Public advisory             | a few days after the release that carries the fix, so users can update first |
 
 These targets are best-effort for a maintainer-driven open-source project. We will keep you informed of progress and any expected delay.
+
+One advisory has been published so far.
+[GHSA-fcj2-hj27-hj26](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/GHSA-fcj2-hj27-hj26),
+rated High, was reported on 12 June 2026 and fixed in 3.0.0, released on
+10 September 2026: 90 days after the report, where the target for a High is 30
+days from confirmation. Its advisory was published on 14 September.
 
 ## Threat model
 
@@ -40,7 +46,7 @@ a model, and it relays content written by other people — issue titles, MR
 descriptions, commit messages, file contents, job logs — back to that model.
 That shape is what determines whether something counts as a vulnerability here.
 
-**Trust boundaries.** Three of them matter:
+**Trust boundaries.** Four of them matter:
 
 1. **Model → server.** Tool arguments arrive from a model that may have been
    influenced by content it read earlier. The server must not treat an argument
@@ -138,13 +144,13 @@ We strongly recommend running the most recent release. Updates arrive through wh
 
 We follow a **coordinated disclosure** model aligned with [ISO/IEC 29147](https://www.iso.org/standard/72311.html) and the [OWASP Vulnerability Disclosure Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Vulnerability_Disclosure_Cheat_Sheet.html):
 
-1. You report privately via GitHub Security Advisories.
-2. We acknowledge, triage, and confirm the issue.
-3. We develop and test a fix in a private fork.
-4. We release the fix and publish a GitHub Security Advisory (and request a CVE when applicable).
-5. After a typical **7-day embargo**, full technical details may be disclosed publicly.
+1. You report privately, through GitHub's private vulnerability reporting or by email, as [above](#reporting-a-vulnerability).
+2. We acknowledge the report, triage it, and confirm the issue.
+3. We develop and test the fix in this repository, as pull requests that run the same CI as any other change, while the report itself stays private. The fix of GHSA-fcj2-hj27-hj26 was developed that way, in [#479](https://github.com/jmrplens/gitlab-mcp-server/pull/479) and [#645](https://github.com/jmrplens/gitlab-mcp-server/pull/645).
+4. We release the fix, and request a CVE through GitHub when applicable.
+5. A few days after the release, so users can update first, we publish the GitHub Security Advisory with the full technical details, crediting you as you choose. For GHSA-fcj2-hj27-hj26 that was four days.
 
-If a vulnerability is being actively exploited in the wild, we may shorten or skip the embargo to protect users.
+If a vulnerability is being actively exploited in the wild, we may publish the advisory sooner to protect users.
 
 ## Safe Harbor
 

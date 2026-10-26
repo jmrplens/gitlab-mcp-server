@@ -59,8 +59,8 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement via direct message
-to [@jmrplens](https://github.com/jmrplens).
+reported to the community leaders responsible for enforcement by email to
+[mail@jmrp.io](mailto:mail@jmrp.io).
 
 All complaints will be reviewed and investigated promptly and fairly.
 
