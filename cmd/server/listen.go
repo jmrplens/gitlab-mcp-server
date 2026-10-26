@@ -280,7 +280,8 @@ const (
 // only (-p 127.0.0.1:8080:8080) is one of them: on a bridge network it binds
 // every interface inside the container and is warned about like any other.
 // Refusing would stop every such deployment at the upgrade that brought the
-// refusal, which is a decision of its own.
+// refusal, which is a decision of its own, weighed in
+// docs/development/plaintext-http-refusal-analysis.md.
 //
 // allowed is the operator's statement that such a proxy is there
 // (--allow-plaintext-http, or GITLAB_MCP_ALLOW_PLAINTEXT_HTTP through the
