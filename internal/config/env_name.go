@@ -97,10 +97,11 @@ var prefixedNames = []string{
 }
 
 // httpOnlyNames are the settings only HTTP mode has, named without their
-// prefix and in name order: the listener's drain, the pool and its idle
-// timeout, the stateful session's timeout, the authentication gate with its
-// mode and budgets, the OAuth verifier and the metadata it publishes, the
-// origins a browser may come from, and the discovery documents' bucket.
+// prefix and in name order: the listener's drain and its plain HTTP opt-in,
+// the pool and its idle timeout, the stateful session's timeout, the
+// authentication gate with its mode and budgets, the OAuth verifier and the
+// metadata it publishes, the origins a browser may come from, and the
+// discovery documents' bucket.
 //
 // A stdio server has none of these, so [Load] reads none of them, and
 // [HTTPOnlyEnvUses] names the ones an environment sets so a stdio run can say
@@ -115,6 +116,7 @@ var prefixedNames = []string{
 // list to the two readers, so a name is here exactly when
 // [LoadHTTPEnvOverlay] reads it and [Load] does not.
 var httpOnlyNames = []string{
+	"ALLOW_PLAINTEXT_HTTP",
 	"AUTH_DISTINCT_TOKEN_LIMIT",
 	"AUTH_DISTINCT_TOKEN_WINDOW",
 	"AUTH_FAILURE_LIMIT",

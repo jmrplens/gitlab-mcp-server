@@ -65,8 +65,8 @@ On stdio, process, entry and tenant are one. Over HTTP one tenant maps to one en
 credential per instance, one entry to one tenant or to unknown and to one owner for the
 life of its build, and one address to many tenants.
 
-A stdio process reads none of the settings only HTTP mode has, the pool, the stateful
-session, the drain, the authentication gate with its budgets, the OAuth verifier, the
+A stdio process reads none of the settings only HTTP mode has, the listener's plain
+HTTP opt-in, the pool, the stateful session, the drain, the authentication gate with its budgets, the OAuth verifier, the
 trusted origins and the discovery documents' bucket, so
 a row of one of them has no stdio key, and a stdio start names each such variable it
 finds set instead of refusing a value it would never use (issue 1171). The revalidation

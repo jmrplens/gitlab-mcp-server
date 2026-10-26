@@ -608,6 +608,7 @@ func TestParseDuration(t *testing.T) {
 // list, so it is given one. A stdio start used to refuse most of these values
 // too, on settings it never used (issue 1171).
 var httpOnlyValuesAStartRefuses = map[string]string{
+	"ALLOW_PLAINTEXT_HTTP":       "maybe",
 	"AUTH_DISTINCT_TOKEN_LIMIT":  "many",
 	"AUTH_DISTINCT_TOKEN_WINDOW": "soon",
 	"AUTH_FAILURE_LIMIT":         "-1",

@@ -15461,6 +15461,7 @@ func TestRunHTTP_AnnouncesThePlaintextListenerItWasConfiguredFor(t *testing.T) {
 				gitlabURL:          "https://gitlab.example.com",
 				maxHTTPClients:     config.DefaultMaxHTTPClients,
 				sessionTimeout:     config.DefaultSessionTimeout,
+				oauthCacheTTL:      config.DefaultOAuthCacheTTL,
 				allowPlaintextHTTP: tc.flag,
 				tlsCert:            tc.tlsCert,
 				tlsKey:             tc.tlsKey,

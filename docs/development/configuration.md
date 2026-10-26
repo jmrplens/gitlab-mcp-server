@@ -76,9 +76,9 @@ is refused, by the flag and the variable alike and in either authentication
 mode (register row `ADM-005`, `refuseNonPositiveOAuthCacheTTL`); its range is
 checked in oauth mode only, where the TTL is used.
 
-A stdio server reads only the variables of the settings it has. The fifteen of
-a setting only HTTP mode has, the pool, the stateful session, the drain, the
-authentication gate with its budgets, the OAuth verifier and its metadata, the
+A stdio server reads only the variables of the settings it has. The sixteen of
+a setting only HTTP mode has, the listener's plain HTTP opt-in, the pool, the
+stateful session, the drain, the authentication gate with its budgets, the OAuth verifier and its metadata, the
 trusted origins and the discovery bucket, are listed in `config.httpOnlyNames`:
 `config.Load` reads none of them and leaves their fields zero, the HTTP overlay
 is their one reader, and a stdio run names each one its environment sets in one
