@@ -714,6 +714,14 @@ built, and a rotation lying outside what a generated key may live is refused wit
 with telemetry off nothing is exported under either, and beside a configured key the
 rotation is ignored.
 
+Issue 1170 reported the other half of that departure. `RQB-007`, the upload limit, named
+its flag and its variable and stated no malformed-value policy, and HTTP mode warned and
+used the default for a value it could not parse and the maximum for one above the 1 TB
+ceiling, where stdio refused both. Both transports refuse all of them now, through the
+one reader stdio's `Load` and HTTP mode's overlay call, which also refuses a count whose
+bytes do not fit in 64 bits (it used to wrap, so `17179869185GB` was read as 1 GiB) and
+reads a blank value as unset on both, and the row states the refused start.
+
 F-36 ([issue 1053](https://github.com/jmrplens/gitlab-mcp-server/issues/1053)) is the one
 finding a decision recorded rather than a reading of the code found. The three documents
 the server publishes without a credential, the SEP-2127 card at every path it is mounted
