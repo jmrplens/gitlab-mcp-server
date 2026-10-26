@@ -147,8 +147,9 @@ export E2E_COMMIT
 REQUEST_INVENTORY_SHARDS=dist/request-inventory
 
 # GitLab.com Orbit live-test fixtures. All overridable on the command line
-# or via .env. Defaults are designed for the canonical plens1 namespace.
-ORBIT_FIXTURES_NAMESPACE ?= plens1
+# or via .env. Defaults are designed for the canonical fixture group,
+# gitlab-mcp-server-orbit-fixtures.
+ORBIT_FIXTURES_NAMESPACE ?= gitlab-mcp-server-orbit-fixtures
 ORBIT_FIXTURES_GITLAB_URL ?= https://gitlab.com
 # How long to wait for the indexer to catch up after provisioning fixtures
 # (in seconds, polled every 15s). When this elapses the make target
@@ -564,23 +565,23 @@ e2e-clean-orphans:
 ## test-e2e-gitlab-com: end-to-end live test of the Orbit knowledge graph
 ## handlers against https://gitlab.com. Reads GITLAB_COM_TOKEN from .env,
 ## provisions the kg-fixtures and security-fixtures projects in
-## $(ORBIT_FIXTURES_NAMESPACE) (default: plens1), polls the indexer
-## until it has caught up, runs the orbitlive-tagged live tests, and
-## re-records what the six Orbit routes answer (gen-orbit-record), which
-## fails every run while the recorded key tree differs from the one
-## committed at HEAD. Idempotent: the setup script skips already-existing
-## resources, so re-running is safe.
+## $(ORBIT_FIXTURES_NAMESPACE) (default: gitlab-mcp-server-orbit-fixtures),
+## polls the indexer until it has caught up, runs the orbitlive-tagged
+## live tests, and re-records what the six Orbit routes answer
+## (gen-orbit-record), which fails every run while the recorded key tree
+## differs from the one committed at HEAD. Idempotent: the setup script
+## skips already-existing resources, so re-running is safe.
 ##
 ## Overridable variables (command line or .env):
-##   ORBIT_FIXTURES_NAMESPACE      default: plens1
+##   ORBIT_FIXTURES_NAMESPACE      default: gitlab-mcp-server-orbit-fixtures
 ##   ORBIT_FIXTURES_GITLAB_URL     default: https://gitlab.com
-##   ORBIT_FIXTURES_INDEXER_TIMEOUT  default: 240s
+##   ORBIT_FIXTURES_INDEXER_TIMEOUT  default: 600s
 ##   ORBIT_FIXTURES_MIRROR         default: false  (set to "true" to
 ##                                                  mirror gitlab-org/cli
-##                                                  as plens1/glab-mirror)
+##                                                  as <namespace>/glab-mirror)
 ##
 ## Examples:
-##   make test-e2e-gitlab-com                                # default plens1
+##   make test-e2e-gitlab-com                                # default group
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme
 ##   make test-e2e-gitlab-com ORBIT_FIXTURES_MIRROR=true     # also mirror
 test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests gen-orbit-record check-graphql-documents-live

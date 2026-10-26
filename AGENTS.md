@@ -213,7 +213,8 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~17 lines) to
   Pipeline/Job tools **only** work in Docker mode (CI runner required).
 - **Orbit live tests** are a separate package at `test/e2e/orbit/`
   with the `orbitlive` tag. They hit real `https://gitlab.com/api/v4/orbit/*`
-  with `GITLAB_COM_TOKEN` from `.env` (default namespace `plens1`):
+  with `GITLAB_COM_TOKEN` from `.env` (default namespace
+  `gitlab-mcp-server-orbit-fixtures`):
 
   ```bash
   make test-e2e-gitlab-com                       # full orchestration

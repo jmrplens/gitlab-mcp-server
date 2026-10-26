@@ -277,7 +277,7 @@ func sortedCopy(names []string) []string {
 // code names a key. It refuses a key that cannot be a name (a path, a dotted
 // or dashed string, a number), which is what most data spells, and nothing
 // more: a map keyed by identifier-shaped data (node type names, metric names,
-// a namespace such as plens1) passes it and would spell its keys as paths.
+// a namespace such as acme) passes it and would spell its keys as paths.
 // Such a subtree is kept out only by naming its path verbatim where the call
 // is recorded, which is a reading of GitLab's source and not a check.
 var keyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

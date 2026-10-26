@@ -5,19 +5,19 @@
 #
 # Usage:
 #   GITLAB_COM_TOKEN=glpat-... \
-#   ORBIT_FIXTURES_NAMESPACE=plens1 \
+#   ORBIT_FIXTURES_NAMESPACE=gitlab-mcp-server-orbit-fixtures \
 #   ./scripts/setup-orbit-fixtures.sh [--mirror-cli]
 #
 # Environment:
 #   GITLAB_COM_TOKEN (required)        — personal access token with api+write_repository
-#   ORBIT_FIXTURES_NAMESPACE (default: plens1)
+#   ORBIT_FIXTURES_NAMESPACE (default: gitlab-mcp-server-orbit-fixtures)
 #                                       — group path under which to create projects
 #   ORBIT_FIXTURES_VISIBILITY (default: private)
 #   ORBIT_FIXTURES_GITLAB_URL (default: https://gitlab.com)
 #
 # Flags:
 #   --mirror-cli    additionally mirror gitlab-org/cli (the glab CLI) as
-#                   plens1/glab-mirror. The mirror brings real-world data:
+#                   <namespace>/glab-mirror. The mirror brings real data:
 #                   real MRs, real CI, real code, real branches. Skipped
 #                   on re-runs.
 #   --skip-mirror   do not mirror gitlab-org/cli even if it does not
@@ -62,7 +62,7 @@ done
 
 : "${GITLAB_COM_TOKEN:?GITLAB_COM_TOKEN is required}"
 GITLAB_URL="${ORBIT_FIXTURES_GITLAB_URL:-https://gitlab.com}"
-NAMESPACE="${ORBIT_FIXTURES_NAMESPACE:-plens1}"
+NAMESPACE="${ORBIT_FIXTURES_NAMESPACE:-gitlab-mcp-server-orbit-fixtures}"
 VISIBILITY="${ORBIT_FIXTURES_VISIBILITY:-private}"
 
 API="$GITLAB_URL/api/v4"

@@ -22,7 +22,7 @@ const (
 	regenerate = "make gen-orbit-record"
 	// defaultNamespace is the fixture namespace scripts/setup-orbit-fixtures.sh
 	// provisions when ORBIT_FIXTURES_NAMESPACE names none.
-	defaultNamespace = "plens1"
+	defaultNamespace = "gitlab-mcp-server-orbit-fixtures"
 )
 
 // genRun is one configured run.

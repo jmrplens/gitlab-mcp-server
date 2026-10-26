@@ -27,9 +27,10 @@
 //   - GITLAB_COM_READ_API_TOKEN: optional. A GitLab.com personal access
 //     token carrying read_api and not api; with it, one more test measures
 //     that the query route accepts that scope.
-//   - ORBIT_FIXTURES_NAMESPACE — optional. Overrides the default `plens1`
-//     namespace against which the fixture-driven subtests run. Set this
-//     when developing against your own GitLab.com namespace.
+//   - ORBIT_FIXTURES_NAMESPACE: optional. Overrides the default
+//     `gitlab-mcp-server-orbit-fixtures` namespace against which the
+//     fixture-driven subtests run. Set this when developing against your
+//     own GitLab.com namespace.
 //
 // # The query language
 //
@@ -217,13 +218,13 @@ func projectPath(namespace, project string) string {
 
 // orbitFixturesNamespace returns the namespace under which
 // scripts/setup-orbit-fixtures.sh provisioned the fixtures. Defaults
-// to "plens1" but can be overridden by the developer running the test
-// against their own GitLab.com namespace via the
-// ORBIT_FIXTURES_NAMESPACE environment variable.
+// to "gitlab-mcp-server-orbit-fixtures" but can be overridden by the
+// developer running the test against their own GitLab.com namespace via
+// the ORBIT_FIXTURES_NAMESPACE environment variable.
 func orbitFixturesNamespace() string {
 	ns := os.Getenv("ORBIT_FIXTURES_NAMESPACE")
 	if ns == "" {
-		ns = "plens1"
+		ns = "gitlab-mcp-server-orbit-fixtures"
 	}
 	return ns
 }
@@ -765,8 +766,8 @@ func TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNex
 
 // TestOrbitLiveGitLabCom_Fixtures exercises the query types GitLab infers
 // from GQL against the live fixture data the setup script provisions in any
-// GitLab namespace (defaults to plens1, configurable via
-// ORBIT_FIXTURES_NAMESPACE). All subtests bound their nodes by path or by a
+// GitLab namespace (defaults to gitlab-mcp-server-orbit-fixtures, configurable
+// via ORBIT_FIXTURES_NAMESPACE). All subtests bound their nodes by path or by a
 // literal property instead of hardcoded project ids so the test is portable
 // across namespaces: any developer who runs `scripts/setup-orbit-fixtures.sh`
 // with their own token gets a working test surface.
@@ -892,9 +893,10 @@ func TestRefusedForScope_ThroughTheQueryHandler_ReadsGitLabsAnswer(t *testing.T)
 
 // testOrbitLiveFixtures exercises the query types GitLab infers from GQL
 // against the live fixture data the setup script provisions in any GitLab
-// namespace (defaults to plens1, configurable via ORBIT_FIXTURES_NAMESPACE).
-// All subtests bound their nodes by path or by a literal property instead of
-// hardcoded project ids so the test is portable across namespaces.
+// namespace (defaults to gitlab-mcp-server-orbit-fixtures, configurable via
+// ORBIT_FIXTURES_NAMESPACE). All subtests bound their nodes by path or by a
+// literal property instead of hardcoded project ids so the test is portable
+// across namespaces.
 //
 // The Orbit indexer is eventually consistent: if a fresh push has not
 // been indexed yet, the affected subtest will log row_count=0 without

@@ -4,7 +4,8 @@
 
 The Orbit handler live tests in `test/e2e/orbit/live_test.go`
 exercise the real `https://gitlab.com/api/v4/orbit/*` endpoints against
-the `plens1` group on gitlab.com. Those tests are gated behind the
+the `gitlab-mcp-server-orbit-fixtures` group on gitlab.com, which was
+named `plens1` until 2026-10-26. Those tests are gated behind the
 `orbitlive` build tag and require `GITLAB_COM_TOKEN` in the environment.
 This document explains the data they expect and how to re-provision
 it.
@@ -22,9 +23,10 @@ subtest that sends it holds what a caller is told about it.
 
 `TestOrbitLiveGitLabCom` and `TestOrbitLiveGitLabCom_ShapeDiscovery`
 are self-contained: they bound their projects by path
-(`WHERE p.full_path STARTS WITH 'plens1/'`) and use no hardcoded project
-ids; the ids a statement carries are read from the graph first. They
-will return rows against any namespace that has at least:
+(`WHERE p.full_path STARTS WITH 'gitlab-mcp-server-orbit-fixtures/'`) and
+use no hardcoded project ids; the ids a statement carries are read from
+the graph first. They will return rows against any namespace that has at
+least:
 
 - a `Project` matching `{full_path: '<namespace>/kg-fixtures'}`
 - a `Project` matching `{full_path: '<namespace>/security-fixtures'}`
@@ -123,6 +125,22 @@ indexer has not yet linked the resource. Re-run the test after a
 few minutes, or check `GET /api/v4/orbit/graph_status?full_path=<ns>`
 to see what the indexer knows.
 
+Renaming or moving the group does not reach the projects' nodes. When
+`plens1` became `gitlab-mcp-server-orbit-fixtures` on 2026-10-26, the
+`Group` node carried the new path and `graph_status` answered for the
+new path when they were first checked, but every `Project` node kept
+`plens1/...` as its `full_path` four hours later, so each query that
+bounds a project by path found nothing under the new name. A rename
+changes the group's row and the routes, not the projects' rows, and a
+node moved only once its project's own row changed: editing each fixture
+project's description, and then restoring it, moved both nodes to the
+new path within two minutes, while the project scheduled for deletion,
+whose row nobody changed, was still the node
+`plens1/orbit-review-2026-10-deletion_scheduled-87502032` that
+afternoon. After a rename, check that
+`MATCH (p:Project) WHERE p.full_path STARTS WITH '<ns>/' RETURN p.full_path`
+lists both fixture projects before running the suite or recording.
+
 ## Project layout
 
 ```text
@@ -208,7 +226,7 @@ After the live tests the target re-records the answers with `make gen-orbit-reco
 
 ## Recording the answers: `make gen-orbit-record`
 
-The six Orbit routes have no response schema anywhere GitLab publishes one, and no self-managed GitLab serves them, so what they answer is recorded here instead and committed as `docs/development/orbit-responses.json`. `cmd/gen_orbit_record` calls each Orbit handler through a proxy on the loopback interface that forwards to GitLab.com with `GITLAB_COM_TOKEN`, so the requests recorded are the ones the server builds. Every call is a read. It asks about the fixture namespace (`ORBIT_FIXTURES_NAMESPACE`, `plens1` by default): the indexing status of the namespace and a traversal of `<namespace>/kg-fixtures`, which is why the fixtures above have to be indexed before a recording means anything.
+The six Orbit routes have no response schema anywhere GitLab publishes one, and no self-managed GitLab serves them, so what they answer is recorded here instead and committed as `docs/development/orbit-responses.json`. `cmd/gen_orbit_record` calls each Orbit handler through a proxy on the loopback interface that forwards to GitLab.com with `GITLAB_COM_TOKEN`, so the requests recorded are the ones the server builds. Every call is a read. It asks about the fixture namespace (`ORBIT_FIXTURES_NAMESPACE`, `gitlab-mcp-server-orbit-fixtures` by default): the indexing status of the namespace and a traversal of `<namespace>/kg-fixtures`, which is why the fixtures above have to be indexed before a recording means anything.
 
 The record holds, per call, the action and variant, the output type the handler returned, the parameter names the request carried, and the key tree of the answer with the JSON kinds seen at each path. Its source names the Orbit version and the query grammar GitLab.com published beside the answers, a SHA-256 of the description and input schema of the `query_graph` command `orbit.dsl` returns (schema version 3 of the record, since GitLab.com reads GQL; version 2 named the JSON query DSL by its `$id` and `version`, and the check refuses a version 2 record by its version and a version 3 record still naming it as one not in the form the generator writes), and a re-recording that finds a different grammar fails until the record is committed, which is the prompt to read `orbit.query`'s guidance against the new language. The query calls send a GQL statement, the fixture project by its path. It holds no value: a subtree whose keys are data (the query command's input schema, a tool's parameter schema, the rows a query returns, a status component's metrics) is kept as its root and marked verbatim, and a key outside one that is not an identifier fails the recording. That second rule stops data that cannot be a name, not data shaped like one: a map keyed by identifier-shaped data would be recorded as keys, which is why such a subtree has to be named verbatim in `cmd/gen_orbit_record/calls.go`. `make audit-1to1-paths` holds the Orbit output types to it (see the Orbit paragraph of the audit_1to1 section in [cmd utilities](cmd-utilities.md#audit_1to1)).
 
