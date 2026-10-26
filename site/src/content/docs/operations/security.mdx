@@ -684,6 +684,20 @@ oras discover --format tree ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%
 Image provenance and SBOM attestations start with the first release after 3.0.0. Pointed at 3.0.0 itself, the `gh attestation verify` commands above answer that no attestation was found: that release was signed but not attested. The signature command works on 3.0.0.
 :::
 
+### Verify a release tag
+
+A build from source starts from a tag rather than from a release asset, and the tag is signed too. Every release tag from v2.7.0 on is an annotated tag signed with the maintainer's OpenPGP key, as are those before v2.1.0; seventeen tags between v2.1.2 and v2.6.6 carry no signature. No tag on the repository can be moved or deleted, so a signed tag still names the commit it was signed on. The key is published on the maintainer's GitHub account:
+
+```bash
+# Import the maintainer's public key from GitHub
+curl -fsSL https://github.com/jmrplens.gpg | gpg --import
+
+# In a clone of the repository, verify the tag of the release you build
+git verify-tag v%%VERSION%%
+```
+
+A good signature prints `Good signature from "José Manuel Requena Plens (jmrplens) <mail@jmrp.io>"` and the primary key fingerprint, which gpg writes in ten groups of four with a double space after the fifth: `0A99 3B26 8654 DBBA 52B7  E8D3 FCF6 5339 1E2C 91FC`. Compare its 40 hexadecimal characters with this page, not its spacing; the `using EDDSA key` line above it prints the same 40 with no spaces. gpg also warns that the key is not certified with a trusted signature, which says only that you have not certified the key yourself; the fingerprint is what ties it to the maintainer. A `BAD signature`, or a signature by any other key, means the tag is not one the maintainer signed: do not build from it. GitHub runs the same check and shows the tag as verified.
+
 ## Known vulnerabilities in a binary
 
 Scanners that read a binary or an image SBOM (Trivy, Grype, osv-scanner, Docker Scout) report every advisory against any Go module the binary names in its build information, whether or not the vulnerable code is linked. CI now asks the same question of every binary the release builds, on every pull request and every push to main, and the release workflow asks it again of the tagged tree before anything is published: each one is built and checked against the Go vulnerability database at module grain, and a finding fails the build unless a reviewed declaration in the repository accepts it. You can ask it of a binary you downloaded:

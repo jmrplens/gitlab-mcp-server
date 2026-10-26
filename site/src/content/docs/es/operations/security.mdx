@@ -684,6 +684,20 @@ oras discover --format tree ghcr.io/jmrplens/gitlab-mcp-server:%%VERSION%%
 Las atestaciones de procedencia y de SBOM de la imagen empiezan en el primer release posterior al 3.0.0. Apuntados al propio 3.0.0, los comandos `gh attestation verify` de arriba responden que no encuentran atestación: ese release está firmado pero no atestado. El comando de firma sí funciona sobre 3.0.0.
 :::
 
+### Verificar una etiqueta de release
+
+Una compilación desde el código fuente parte de una etiqueta y no de un artefacto del release, y la etiqueta también va firmada. Cada etiqueta de release desde v2.7.0 es una etiqueta anotada firmada con la clave OpenPGP del mantenedor, igual que las anteriores a v2.1.0; diecisiete etiquetas entre v2.1.2 y v2.6.6 no llevan firma. Ninguna etiqueta del repositorio se puede mover ni borrar, así que una etiqueta firmada sigue nombrando el commit sobre el que se firmó. La clave está publicada en la cuenta de GitHub del mantenedor:
+
+```bash
+# Importa la clave pública del mantenedor desde GitHub
+curl -fsSL https://github.com/jmrplens.gpg | gpg --import
+
+# En un clon del repositorio, verifica la etiqueta del release que compilas
+git verify-tag v%%VERSION%%
+```
+
+Una firma válida imprime `Good signature from "José Manuel Requena Plens (jmrplens) <mail@jmrp.io>"` y la huella de la clave primaria, que gpg escribe en diez grupos de cuatro con un espacio doble después del quinto: `0A99 3B26 8654 DBBA 52B7  E8D3 FCF6 5339 1E2C 91FC`. Compara sus 40 caracteres hexadecimales con los de esta página, no sus espacios; la línea `using EDDSA key` que va encima imprime los mismos 40 sin espacios. gpg avisa además de que la clave no está certificada con una firma de confianza, lo que solo dice que no la has certificado tú; la huella es lo que la ata al mantenedor. Un `BAD signature`, o una firma de cualquier otra clave, significa que la etiqueta no la firmó el mantenedor: no compiles a partir de ella. GitHub hace la misma comprobación y muestra la etiqueta como verificada.
+
 ## Vulnerabilidades conocidas en un binario
 
 Los escáneres que leen un binario o el SBOM de una imagen (Trivy, Grype, osv-scanner, Docker Scout) informan de cada aviso contra cualquier módulo de Go que el binario nombre en su información de compilación, se enlace o no el código vulnerable. La CI hace ahora esa misma pregunta a cada binario que compila el release, en cada pull request y en cada push a main, y el workflow de release la repite sobre el árbol etiquetado antes de publicar nada: compila cada uno y lo contrasta con la base de datos de vulnerabilidades de Go a nivel de módulo, y un hallazgo hace fallar la compilación salvo que lo acepte una declaración revisada del repositorio. Puedes hacérsela a un binario que hayas descargado:

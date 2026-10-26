@@ -302,6 +302,7 @@ from a model that may have read attacker-influenced content.
 
 - Release binaries are built from tagged commits and published via GoReleaser.
 - Checksums (`checksums.txt`) and a Cosign/Sigstore signature bundle (`checksums.txt.sigstore.json`) are attached to every GitHub Release. Verify with [`cosign`](https://docs.sigstore.dev/cosign/installation/) using the keyless GitHub OIDC identity of this repository.
+- Every release tag from v2.7.0 on is an annotated tag signed with the maintainer's OpenPGP key, and no tag on the repository can be moved or deleted. [Verify a release tag](https://docs.jmrp.io/gitlab-mcp-server/operations/security/#verify-a-release-tag) shows how to check one with `git verify-tag`.
 - Some release-integrity controls are GitHub repository settings rather than files, so no commit or CI gate can apply them. They are tracked as a maintainer checklist in [Repository Settings](docs/development/repository-settings.md).
 
 ## Security Best Practices for Deployment
