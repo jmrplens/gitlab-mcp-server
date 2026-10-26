@@ -31,8 +31,8 @@ correctly.
 
 Statement coverage is at or near 100% across `cmd/` and `internal/`, so it no
 longer answers the question it is usually asked. Two tools answer what it
-cannot, and both are run by hand on the package being worked on rather than
-over the tree:
+cannot, and both are run by hand on the package being worked on; gobco is also
+run over the whole tree, for the figures [recorded below](#the-whole-tree):
 
 | Tool                                    | Command                                         | What it finds                                                                                           |
 | --------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -192,15 +192,25 @@ builds, which today are `cmd/server`, `internal/toolutil` and
 `macos-latest` and `ubuntu-latest`, the last for comparison. `gate` is the
 `GOBCO_GATE` the script runs with, `all` or `beyond:linux/amd64`; the figures
 are the same under either, and it decides only which of the conditions not
-evaluated both ways the summary marks as held. The job summary has one row per
-package and system with gobco's figure (outcomes evaluated of outcomes there
-are, two per condition), then every condition not evaluated both ways with its
-file and line, then, for a run that could not measure, the lines the script
-said why in. Each run's raw output and record are uploaded as an artifact named
-`gobco-<system>-<package>`. No figure fails the workflow; a run that cannot
-measure at all, such as a failing test, a package go cannot load or a Go
-runtime crash of issue 467, fails its own job and says why. The plan and the
-summary are `cmd/measure_conditions`.
+evaluated both ways the summary marks as held. `mode` is the `GOBCO_MODE` the
+script runs with, `condition` or `branch` (above), and `tree` measures every
+package below `cmd/` and `internal/` instead of the packages named, in twenty
+shards per system ([below](#the-whole-tree)). The job summary, headed by the
+mode, has one row per package and system with gobco's figure (outcomes
+evaluated of outcomes there are, two per condition or decision), then each
+system's total over the packages it measured, then every condition not
+evaluated both ways with its file and line, then, for a package that could
+not be measured, the lines of its output that say why: the script's own and
+what gobco or its `go test` printed before them (a panic, a failing test, a
+test package that did not build or set up, a compiler position). Each job's
+raw outputs and records are uploaded as an artifact, named
+`gobco-<system>-<package>` for a job of a named package and
+`gobco-<system>-tree-NN` for a shard of the tree, with one directory per
+package inside it. No figure fails the workflow; a package that cannot be
+measured at all, such as one with a failing test, one go cannot load or one
+hit by a Go runtime crash of issue 467, fails the job that ran it once the
+job's other packages are measured, and says why. The plan, the loop each job
+runs and the summary are `cmd/measure_conditions`.
 
 The figures it reports are measured, not inferred: each comes from gobco on
 the runner the row names, and a row without a measurement says so instead of
@@ -223,11 +233,12 @@ left to test.
 **Nor a package whose `export_test.go` hands a symbol to its external test
 package.** It resolves the `_test` package against the non-test files alone,
 so `internal/tools/todos` dies with `action_specs_test.go:49:27: undefined:
-todos.PublishedActionIDs` before instrumenting anything. Twenty-five of the
-169 packages that carry an `action_specs.go` are in that state today. The
-limitation is the tool's rather than the package's, which is why
-`make check-spec-conditions` reports such a package as not measured instead
-of failing on it.
+todos.PublishedActionIDs` before instrumenting anything. The whole-tree
+measurement [below](#the-whole-tree) found twenty-seven packages in that
+state, twenty-two of them among the 149 sub-packages of `internal/tools` that
+carry an `action_specs.go`. The limitation is the tool's rather than the
+package's, which is why `make check-spec-conditions`, which reads those 149,
+reports such a package as not measured instead of failing on it.
 
 **`PKG` names one package and gremlins reads it as a directory to walk.** It
 mutates everything below the path it is given, so a package with anything under
@@ -657,8 +668,8 @@ anything. The condition is then a decoration, and the mapping from action to
 metadata is stated nowhere a reader can check.
 
 It is narrow on purpose. gobco costs 60 to 80 seconds per package and caches
-nothing, so the 169 packages carrying an `action_specs.go` would be about
-three hours; a condition anywhere else in a package stays the sweep's subject
+nothing, so the 149 packages it reads would be about three hours one after
+another; a condition anywhere else in a package stays the sweep's subject
 and is read with `make coverage-conditions`. It runs gobco through the same
 `scripts/coverage-conditions.sh`, so a package with a file per platform is
 staged and measured rather than reported as not measured. A condition that
@@ -668,6 +679,109 @@ declaration that answers nothing fails:
 ```go
 if meta.usage != "" { // gobco: always true because every entry sets it
 ```
+
+### The whole tree
+
+The OpenSSF Best Practices gold criterion test_branch_coverage80 asks what
+share of the code's branches the automated tests cover, measured with a FLOSS
+tool. gobco is that tool here, and the figures are taken over every package
+below `cmd/` and `internal/`; `test/` is left out, since every file of the e2e
+suite sits behind a build tag and gobco cannot measure it (above). The tree is
+measured in both of gobco's modes (`GOBCO_MODE`, above), which count different
+things:
+
+- **Branch coverage** (`branch`, gobco's `-branch`) counts each decision
+  twice, once per outcome: the whole controlling condition of each `if` and
+  each `for`, and each case of a `switch`. That is what the criterion names.
+- **Condition coverage** (`condition`, gobco's default, and the mode the gate
+  a touched package passes is held in) counts each atomic condition twice
+  instead: each operand of `&&`, `||` and `!` on its own, and each comparison
+  wherever it is written, a `return` statement or an assignment as much as an
+  `if`. It counts expressions no decision holds, so its total is the larger.
+
+Go evaluates `&&` and `||` from the left and stops once the outcome is known,
+so the last condition a decision evaluates is the one that decides it, and a
+decision whose every condition went both ways has gone both ways itself. Each
+outcome branch coverage finds untaken therefore leaves a condition outcome
+untaken in the same decision, and over the same packages the branch figure
+can leave out no more outcomes than the condition figure does. The converse
+does not hold: `if a && b` can take both branches while `b` is never false.
+
+The figures are taken one of two ways, through the same script and the same
+summary:
+
+```bash
+# On any machine, without a dispatch: the summary goes to stdout and to
+# dist/conditions-tree/summary.md, beside one record per package
+make coverage-conditions-tree CONDITIONS_PARALLEL=4 CONDITIONS_MODE=branch
+make coverage-conditions-tree CONDITIONS_PARALLEL=4 CONDITIONS_MODE=condition
+
+# On GitHub's runners, twenty shards per runner, with the summary in the run
+gh workflow run conditions.yml -f tree=true -f systems=ubuntu-latest -f gate=all -f mode=branch
+gh workflow run conditions.yml -f tree=true -f systems=ubuntu-latest -f gate=all -f mode=condition
+```
+
+Taken on 26 October 2026 on linux/amd64, on the branch of the pull request
+that added this section once its Go code was final (only documentation
+changed on it afterwards), with
+`go run ./cmd/measure_conditions tree -parallel 4` and each `-mode` (the
+target above), four packages at a time on ten cores of a machine other work
+was loading too: the branch run took one hour and twelve minutes, and the
+condition run one hour and twenty-four.
+
+| Mode      | Packages below `cmd/` and `internal/` | Measured | Outcomes evaluated | Share |
+| --------- | ------------------------------------: | -------: | -----------------: | ----: |
+| Branch    |                                   296 |      265 |     44936 of 44954 | 99.9% |
+| Condition |                                   296 |      265 |     53412 of 53432 | 99.9% |
+
+Each share is rounded down to a tenth of a percent, so it never reads higher
+than it is.
+
+The eighteen branch outcomes not taken are eighteen decisions that went one
+way only, in nine packages: `cmd/audit_install_buttons` (1),
+`cmd/format_md_tables` (2), `cmd/gen_lhm_manifest` (1),
+`cmd/gen_model_corpus` (1), `internal/elicitation` (5),
+`internal/tools/enterpriseusers` (1), `internal/tools/features` (4),
+`internal/tools/groupepicboards` (2) and `internal/tools/groupsaml` (1).
+Thirteen are the error branch of a call no test makes fail: three on a random
+read, two on a request build, a stat, a write, a schema build, a catalog
+build, a marshal, an encode, an unmarshal and a marshal back. Two are the
+per-action metadata decorations `make check-spec-conditions` exists to find.
+The other three are cases no test reaches: a decoding with no candidate to
+try, a URL elicitation in a session negotiated at 2026-07-28 or later, and an
+input schema without its `value` property.
+
+The twenty condition outcomes not evaluated are twenty conditions taken one
+way only, in ten packages: the same eighteen places, the elicitation one
+counted at its second operand, and two in `cmd/audit_edition_tier` that no
+decision holds whole, a path segment with a placeholder on one side only (an
+operand in a `return`) and a documented parameter the action does not offer
+(the first operand of an `&&` whose decision goes both ways). The summary
+names each with its file and line, and each is a test case to write or a
+condition to declare.
+
+The 31 packages that were not measured are in neither total. None of them
+fails under `go test`; each meets a limit of gobco's, and one a limit of its
+own tests as well.
+
+- Twenty-seven hand symbols from an `export_test.go` to their external test
+  package, which gobco type-checks against the non-test files alone (above):
+  `cmd/internal/graphqlintrospect`, `internal/clientcompat`,
+  `internal/gatewaycompat`, `internal/testutil/serialtypecheck` and
+  twenty-three packages under `internal/tools`.
+- Three, `internal/tools/awardemoji`, `internal/tools/freezeperiods` and
+  `internal/tools/groupmarkdownuploads`, have an external test package that
+  does not import the package it tests, and gobco writes the bridge it adds
+  for such a package with an empty import path, which `go test` refuses at
+  setup.
+- One, `internal/completions`, has tests that read its own source for the
+  case labels of two switches, and gobco's instrumented copy has rewritten
+  those switches, so those tests fail in the copy and pass everywhere else.
+  That one can be fixed on the side of its tests.
+
+Their decisions and conditions are counted neither way, so each share is of
+the 265 packages measured, and the share of the tree as a whole is not known
+until gobco can read those 31.
 
 ## When To Use Each Layer
 
