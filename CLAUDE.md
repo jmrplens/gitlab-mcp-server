@@ -23,6 +23,13 @@
 > documents, or a skip-checks trailer), not even quoted in backticks: the squash commit of #1094 carried one, and
 > main ran no CI and the v3.1.0 tag on it no release. `make check-pr-description`
 > refuses it.
+>
+> **Every commit is signed off** (`git commit -s`): a `Signed-off-by:` trailer naming
+> its author certifies the Developer Certificate of Origin, and the `dco` job of CI
+> fails a pull request with a commit that lacks one. A sign-off is a person's, so it is
+> not AI attribution and the rule above still holds. `make check-dco` judges the
+> branch before a push, and [CONTRIBUTING](CONTRIBUTING.md#developer-certificate-of-origin)
+> says what it certifies and how to sign off commits already made.
 
 **This file is loaded into every session, so it holds the rules and an index, and the long-form references live in `docs/development/`**, read when a task needs them: [Repository Map](docs/development/repository-map.md) (the annotated tree of commands and packages), [Environment Variables and Flags](docs/development/configuration.md), [Test Infrastructure](docs/development/test-infrastructure.md), [Request Paths and Fine-Grained Grants](docs/development/request-paths.md) (R-PATH, R-PAGE and R-GRANT), [Adding or Changing a Limit](docs/development/adding-a-limit.md), [Release Process](docs/development/release-process.md), [Tier Gating](docs/development/tier-gating.md), [HTTP Mode Invariants](docs/development/http-invariants.md) and [Resource Subscriptions](docs/development/resource-subscriptions.md). Keep it that way: what a new section adds here is the rule and a link, and its explanation goes to the page that owns the topic. Claude Code warns at every start once this file passes a size limit that scales with the model's context window and never falls below 40,000 characters (150,000 for current models in a one-million-token window).
 
@@ -54,7 +61,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 788 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 488 test files under `internal/tools/`                                                                       |
-| Go packages               | 308 in the module (`go list ./...`); 335 directories hold tracked `.go` files, the twenty-seven more being what `go list` leaves out: twenty-six `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
+| Go packages               | 309 in the module (`go list ./...`); 336 directories hold tracked `.go` files, the twenty-seven more being what `go list` leaves out: twenty-six `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
 
 ### Orbit live tests
 
@@ -85,6 +92,7 @@ gitlab-mcp-server/
 │   ├── audit_image_vulns/            # The image's Alpine packages against Trivy's database, before the push (make check-image-vulns)
 │   ├── reproduce_release/            # Release binaries rebuilt from the tag and compared byte for byte (make check-reproducible, check-repeatable)
 │   ├── audit_site_headers/           # The documentation site's security headers, after each deploy (make check-site-headers)
+│   ├── audit_dco/                    # Every commit of a pull request signed off by its author, the DCO (make check-dco)
 │   ├── godoc_tool/                   # Go doc auditor and fixer (make check-godocs)
 │   ├── audit_md_escaping/            # GitLab-authored values reaching Markdown unescaped (make check-md-escaping)
 │   ├── audit_metrics/                # Tool, resource and prompt metrics

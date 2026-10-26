@@ -16,8 +16,8 @@
 #   docker (×2) ─── docker-build
 #   cross_platform (×3) ─── cross_platform_summary
 #   generated · golangci-lint · govulncheck · markdown · site-lint · site-build
-#   hadolint · supply-chain · docs-audit · em-dash ─── checks
-#                                              └──► ci
+#   hadolint · supply-chain · docs-audit · em-dash · dco ─── checks
+#                                                    └──► ci
 #
 # Every edge joins neighbouring columns, and that is deliberate. GitHub draws
 # a job with no parent and no child at the end of the first column, in one box
@@ -1171,10 +1171,10 @@ jobs:
           fetch-depth: 0
       - name: Check the lines this change adds
         env:
-          # On a pull request, the commit the branch grew from, which for a
-          # stacked pull request is the stack's base rather than the layer
-          # below, since GitHub tests a stacked layer as the stack merged into
-          # that base. On a push to main, the commit that was there before.
+          # On a pull request, the base commit its event names, which for a
+          # stacked pull request is the head of the layer below, so each
+          # layer is checked for the lines it adds itself. On a push to main,
+          # the commit that was there before.
           EM_DASH_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: make check-em-dash
       # plan/ is ignored by git, so a file there is tracked only when it was
@@ -1182,6 +1182,44 @@ jobs:
       # It needs the same checkout and nothing else, so it rides in this job.
       - name: Check nothing under plan/ is tracked
         run: make check-plan-untracked
+
+  # The Developer Certificate of Origin: every commit a pull request brings
+  # carries a Signed-off-by trailer naming its author, which is how the author
+  # certifies the certificate for it (CONTRIBUTING.md, Developer Certificate of
+  # Origin). The commits judged are the ones between the base and the head the
+  # event names, the range the em dash job reads. A stacked pull request's
+  # event names the head of the layer below as the base, so each layer's
+  # pull request judges that layer's commits and no others. A merge commit
+  # that brings no change of its own is not judged, and Dependabot's commits
+  # are exempt in a pull request Dependabot opened, which is why the job is
+  # told who opened it.
+  #
+  # A push to main has nothing for it to judge, so the job skips itself there
+  # and the verdict below counts the skip as a pass: main receives the squash
+  # commit, into which GitHub copies the sign-offs of the pull request's
+  # commits, and the release workflow's version stamp, which never sits in a
+  # pull request.
+  dco:
+    name: "✍️ DCO sign-off"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # The whole history, like the em dash job: the range runs from the
+          # pull request's base, which a shallow clone does not hold.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - name: Check every commit is signed off by its author
+        env:
+          DCO_BASE: ${{ github.event.pull_request.base.sha }}
+          DCO_HEAD: ${{ github.event.pull_request.head.sha }}
+          DCO_OPENED_BY: ${{ github.event.pull_request.user.login }}
+        run: make check-dco DCO_FLAGS=-annotate
 
   # One node for the jobs that depend on nothing. They are fanned in here
   # rather than straight into "ci" for the graph's sake, explained at the top
@@ -1218,6 +1256,7 @@ jobs:
       - supply-chain
       - docs-audit
       - em-dash
+      - dco
       - coverage
       - compile
       - typecheck
@@ -1236,9 +1275,9 @@ jobs:
         env:
           RESULTS: ${{ toJSON(needs) }}
           INFORMATIONAL: docs-audit
-          # The image build only runs for a pull request; on a push it is
-          # skipped by design rather than failed.
-          MAY_SKIP: docker-build
+          # The image build and the sign-off check only run for a pull
+          # request; on a push they are skipped by design rather than failed.
+          MAY_SKIP: docker-build dco
         run: bash .github/scripts/needs-verdict.sh
       # The other half of the em dash gate, and the half no later commit can
       # fix: this repository squash merges, so the pull request title and body

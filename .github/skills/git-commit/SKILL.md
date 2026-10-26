@@ -94,10 +94,10 @@ Analyze the diff to determine:
 
 ```bash
 # Single line
-git commit -m "<type>[scope]: <description>"
+git commit -s -m "<type>[scope]: <description>"
 
 # Multi-line with body/footer
-git commit -m "$(cat <<'EOF'
+git commit -s -m "$(cat <<'EOF'
 <type>[scope]: <description>
 
 <optional body>
@@ -114,6 +114,7 @@ EOF
 - Imperative mood: "fix bug" not "fixes bug"
 - Reference issues: `Closes #123`, `Refs #456`
 - Keep description under 72 characters
+- Sign off every commit (`-s`), which certifies the [Developer Certificate of Origin](../../../CONTRIBUTING.md#developer-certificate-of-origin) for it; CI's `dco` job fails a pull request with a commit that lacks the sign-off, and `make check-dco` lists any before a push. A sign-off is the author's, not AI attribution
 
 ## Git Safety Protocol
 

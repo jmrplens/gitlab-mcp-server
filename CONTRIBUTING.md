@@ -13,6 +13,7 @@ How the project makes decisions, who holds which role and what it depends on to 
 - [Development Setup](#development-setup)
 - [Branch Naming](#branch-naming)
 - [Commit Messages](#commit-messages)
+- [Developer Certificate of Origin](#developer-certificate-of-origin)
 - [Pull Requests](#pull-requests)
 - [Code Review](#code-review)
 - [Code Standards](#code-standards)
@@ -132,6 +133,26 @@ test(branches): increase coverage to 90%
 docs(site): describe the wiki tools in English and Spanish
 ```
 
+## Developer Certificate of Origin
+
+Every commit in a pull request is signed off: its message ends with a `Signed-off-by:` trailer naming the commit's author, with the name and email the commit is authored under. The sign-off is how the author certifies the [Developer Certificate of Origin](https://developercertificate.org/) 1.1 for that commit, which in short says that the contribution is theirs to submit under the project's [MIT license](LICENSE): they wrote it, or it is based on earlier work under a compatible open source license that they may submit with their changes, or it was given to them by somebody who certified one of those and they have not changed it; and that the contribution and its sign-off are public and kept, and may be redistributed under the license. The certificate's own text is the one that applies.
+
+```bash
+git commit -s -m "fix(config): handle empty GITLAB_URL gracefully"
+```
+
+`-s` (`--signoff`) writes the trailer from your git identity, so it names you when you are the author:
+
+```text
+Signed-off-by: Jane Doe <jane@example.org>
+```
+
+To sign off commits already on your branch where they stand, rebase it on its own base and push it again: `git rebase --keep-base --signoff origin/main`, then `git push --force-with-lease`. A commit somebody else authored is signed off by that person. A sign-off is not a signature: signing commits with a GPG or SSH key is welcome, and it does not replace the trailer.
+
+`make check-dco` judges the commits of your branch against `origin/main` before you push, and the `✍️ DCO sign-off` job of CI judges every pull request the same way, from the base commit its event names to its head; for a stacked pull request that base is the head of the layer below, so each layer's pull request judges that layer's commits. It reads the trailer the way git does, and passes a commit when one of its `Signed-off-by` trailers names its author, the name and the email compared without regard to case. A merge commit that brings no change of its own, such as the one GitHub's Update branch button writes, is not judged; a merge that resolves a conflict or changes anything while merging is judged like any other commit, so conclude it with `git commit -s`. Dependabot's commits are exempt in the pull requests Dependabot opens, because an app cannot certify anything and what it commits is a dependency bump; the same commit in a pull request somebody else opened is judged like any other. The release workflow's version stamp reaches `main` without a pull request, so nothing judges it. The [command's reference](docs/development/cmd-utilities.md#audit_dco) says what else it refuses.
+
+GitHub signs off a commit made in its web interface, such as an applied review suggestion, when the repository requires sign-off for web commits; that setting is not on yet ([Repository Settings](docs/development/repository-settings.md#web-commit-sign-off)), so until it is, such a commit needs the trailer typed into its message. The squash commit that lands on `main` needs nothing more: GitHub copies the sign-offs of the pull request's commits into it, below the description, so the description carries no trailer of its own.
+
 ## Pull Requests
 
 ### Before Submitting
@@ -142,6 +163,7 @@ docs(site): describe the wiki tools in English and Spanish
 - [ ] New tools have tests, and total coverage stays at or above the 90% CI enforces
 - [ ] Documentation is updated where the change shows: the site page for user-facing behavior (English and Spanish), `docs/development/` for contributor-facing changes (see [Documentation](#documentation))
 - [ ] Commit messages follow conventional commits
+- [ ] Every commit is signed off by its author (`git commit -s`), which certifies the [Developer Certificate of Origin](#developer-certificate-of-origin); `make check-dco` says which are not
 
 ### PR Process
 
@@ -176,11 +198,11 @@ Every change reaches `main` through a pull request, except the version stamp the
 - **The published surface.** Tool and action names, input and output schemas, annotations and descriptions are deliberate, and what a model reads names only actions and tools the server serves.
 - **Code standards.** The change follows [Code Standards](#code-standards), and any exception the linters allow is marked where it occurs with the reason.
 - **Documentation.** A change a user can see updates its site page in English and Spanish together, a change to how the repository works updates `docs/development/`, and every generated artifact is regenerated rather than edited (see [Documentation](#documentation)).
-- **History.** Commit messages follow [Commit Messages](#commit-messages), and the description, which becomes the squash commit's message, carries no skip command and no block a review bot injected.
+- **History.** Commit messages follow [Commit Messages](#commit-messages), every commit is signed off by its author as [Developer Certificate of Origin](#developer-certificate-of-origin) requires, and the description, which becomes the squash commit's message, carries no skip command and no block a review bot injected.
 
 ### What a change needs to be accepted
 
-- The required `✅ CI` check passes. It aggregates the build, the tests on Linux, macOS and Windows, the 90% coverage floor, the linters and the repository's own gates, `make check-pr-description` among them.
+- The required `✅ CI` check passes. It aggregates the build, the tests on Linux, macOS and Windows, the 90% coverage floor, the linters and the repository's own gates, `make check-pr-description` and the sign-off check among them.
 - Every review thread is resolved. The branch rules refuse the merge otherwise, except to the repository admin role, which is on their bypass list; the maintainer, who holds that role, merges a pull request only once this item and the one above hold.
 - A contributor's pull request completes the template's checklist, with any item that does not apply marked so. The maintainer's own pull requests carry the same information in the description's account of what was run.
 - The maintainer agrees the change belongs in the project. A correct change can still be declined when it falls outside the [roadmap](https://docs.jmrp.io/gitlab-mcp-server/roadmap/) or a recorded decision; the reason is given in the pull request.

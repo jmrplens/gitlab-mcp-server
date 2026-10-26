@@ -50,7 +50,10 @@ depends on, and it is recorded here because
 describes it and no file in the tree can show it. The documentation site's
 response headers are a Cloudflare setting, and the release does not depend on
 them either; they are here because the OpenSSF Best Practices answer for the
-project's website rests on them and only the maintainer can set them.
+project's website rests on them and only the maintainer can set them. The web
+commit sign-off is not a release setting, and it is here because the sign-off
+check every pull request runs depends on it for the commits GitHub makes in its
+web interface.
 
 ## SC-04: enable immutable releases
 
@@ -540,6 +543,43 @@ lost or turns permissive, and warns with the value to set while one is
 pending. A change in Cloudflare between deploys shows at the next deploy, or
 at once with `make check-site-headers`.
 
+## Web commit sign-off
+
+**What to set.** Repository → Settings → General, **Require contributors to
+sign off on web-based commits**, which the API calls
+`web_commit_signoff_required`:
+
+```bash
+gh api -X PATCH repos/jmrplens/gitlab-mcp-server -F web_commit_signoff_required=true
+```
+
+**Why.** Every commit a pull request brings has to carry a `Signed-off-by`
+trailer naming its author, the sign-off of the
+[Developer Certificate of Origin](../../CONTRIBUTING.md#developer-certificate-of-origin),
+and the `✍️ DCO sign-off` job of `ci.yml` fails a pull request with a commit
+that does not ([`audit_dco`](cmd-utilities.md#audit_dco)). A commit made in
+GitHub's web interface, an applied review suggestion or a file edited in the
+browser, cannot be made with `git commit --signoff`. With this setting on,
+GitHub signs such a commit off with its author's identity, as GitHub's
+documentation of the setting says, so it passes the job like one made with
+`git commit -s`; without it, the trailer has to be typed into the commit
+message by hand. The setting reaches only commits made in the web interface:
+a commit made with git still needs `--signoff`.
+
+**Current state.** Not applied. Read on 2026-10-26, the repository answers
+`web_commit_signoff_required: false`.
+
+**How to check.**
+
+```bash
+gh api repos/jmrplens/gitlab-mcp-server --jq '{web_commit_signoff_required}'
+```
+
+It answers `true` once the setting is on.
+
+**What tells you it drifted.** The `✍️ DCO sign-off` job fails the first pull
+request that carries a web commit without the trailer.
+
 ## Checking all of it at once
 
 ```bash
@@ -548,6 +588,7 @@ gh api repos/jmrplens/gitlab-mcp-server/rulesets --jq '.[] | "ruleset=\(.name) t
 gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.bypass_actors[] | "bypass=\(.actor_type)"'
 gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.rules[] | "main_rule=\(.type) approvals=\(.parameters.required_approving_review_count) threads=\(.parameters.required_review_thread_resolution) checks=\([.parameters.required_status_checks[]?.context] | join(","))"'
 gh api repos/jmrplens/gitlab-mcp-server --jq '"squash=\(.allow_squash_merge) merge_commit=\(.allow_merge_commit) rebase=\(.allow_rebase_merge)"'
+gh api repos/jmrplens/gitlab-mcp-server --jq '"web_commit_signoff=\(.web_commit_signoff_required)"'
 gh api repos/jmrplens/gitlab-mcp-server/environments/release --jq '"release_policy=\(.deployment_branch_policy) admins_bypass=\(.can_admins_bypass)"'
 gh api repos/jmrplens/gitlab-mcp-server/environments/release/deployment-branch-policies --jq '.branch_policies[] | "release_ref=\(.type):\(.name)"'
 gh api repos/jmrplens/gitlab-mcp-server/environments/release-rehearsal/secrets --jq '"rehearsal_secrets=\(.total_count)"'

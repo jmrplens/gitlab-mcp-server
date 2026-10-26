@@ -14,7 +14,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
-	check-em-dash check-pr-description check-plan-untracked \
+	check-em-dash check-pr-description check-plan-untracked check-dco \
 	audit-action-ids check-action-ids \
 	audit-dead-consts check-dead-consts \
 	audit-sdk-context check-sdk-context \
@@ -2599,6 +2599,19 @@ check-em-dash:
 ## disk instead, which needs no gh and is how the gate is rehearsed.
 check-pr-description:
 	scripts/check-em-dash.sh description
+
+## check-dco: fail when a commit of DCO_BASE..DCO_HEAD (origin/main..HEAD by
+## default) carries no Signed-off-by trailer naming its author, the sign-off
+## that certifies the Developer Certificate of Origin for it. A merge commit
+## that brings no change of its own is not judged, and a declared bot's commits
+## (cmd/audit_dco/bots.go) are exempt in a pull request that bot opened, which
+## DCO_OPENED_BY names by its GitHub login. It reads git and nothing else, so run it before pushing; CI's dco job
+## runs it on every pull request with the event's base and head, and
+## DCO_FLAGS=-annotate.
+DCO_BASE ?= origin/main
+DCO_HEAD ?= HEAD
+check-dco:
+	go run ./cmd/audit_dco/ -base "$(DCO_BASE)" -head "$(DCO_HEAD)" -opened-by "$(DCO_OPENED_BY)" $(DCO_FLAGS)
 
 ## check-plan-untracked: fail when git tracks a file under plan/, a working area
 ## .gitignore excludes, so a file there is tracked only if it was force-added.

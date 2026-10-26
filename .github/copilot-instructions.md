@@ -31,6 +31,7 @@ gitlab-mcp-server/
 │   ├── audit_image_vulns/ # The image's Alpine packages against Trivy's vulnerability database before the push (make check-image-vulns)
 │   ├── reproduce_release/ # Release binaries rebuilt from the tag and compared byte for byte (make check-reproducible, make check-repeatable)
 │   ├── audit_site_headers/ # The documentation site's security headers, judged after each deploy (make check-site-headers)
+│   ├── audit_dco/          # Every commit of a pull request signed off by its author, the Developer Certificate of Origin (make check-dco)
 │   ├── audit_surface_quality/ # MCP surface metadata + output quality (-view; was audit_tools + audit_output)
 │   ├── audit_supply_chain/ # Release-configuration invariants (SHA-pinned uses:, Dependabot cooldowns, SECURITY.md, installers)
 │   ├── audit_tokens/       # Token overhead; -footprint, --compare-schemas (was audit_meta_schema); cl100k_base tokenizer (tokens.go)

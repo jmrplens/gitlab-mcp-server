@@ -66,6 +66,7 @@ What a review checks and what a merge requires are in [Code Review](https://gith
 - [ ] Contributor-facing change (a gate, a generator, a convention): `docs/development/` or `CLAUDE.md` updated
 - [ ] If introducing/removing a tool: tool reference regenerated (`make gen-tool-reference`), the site's counts refreshed (`make gen-site-stats`) and the fine-grained table regenerated (`make gen-action-grants`); generated pages are never edited by hand (`make update-all` runs every generator that needs no measurement, GitLab instance or paid run)
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
+- [ ] Every commit is signed off by its author (`git commit -s`), which certifies the [Developer Certificate of Origin](https://github.com/jmrplens/gitlab-mcp-server/blob/main/CONTRIBUTING.md#developer-certificate-of-origin) for it; `make check-dco` lists any that is not
 
 ### Security
 
