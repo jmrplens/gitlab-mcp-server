@@ -42,7 +42,8 @@
 // its id or a literal property, a relationship type after a colon, WHERE with
 // AND and NOT, aggregates aliased to be sorted by, and ANY SHORTEST for a
 // path. Each was answered 200 by GitLab.com against the fixture namespace,
-// then plens1, on 2026-10-17, and GitLab.com has refused two since: PAGE
+// then plens1, on 2026-10-17, and each was again on 2026-10-26 against
+// jmrp-oss/orbit-fixtures but two, which GitLab.com has refused since: PAGE
 // (issue 1527) and a shortest path that names no relationship type (issue
 // 1528). A query GitLab cannot compile fails its subtest by name
 // ([liveQuery]), and TestOrbitLiveGitLabCom_DSL fails when GitLab.com stops

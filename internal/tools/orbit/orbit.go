@@ -139,7 +139,7 @@ type DSLOutput struct {
 // RETURN path. CALL db.schema() and CALL db.schema('Node') answer the ontology.
 // The query type of the answer is inferred from the statement.
 //
-// Examples, written against the fixture namespace the live tests use:
+// Examples, each answered 200 by GitLab.com on 2026-10-26:
 //
 //	MATCH (p:Project {full_path: 'jmrp-oss/orbit-fixtures/kg-fixtures'}) RETURN p.id, p.full_path, p.name
 //	MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'jmrp-oss/orbit-fixtures/' RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC

@@ -5,7 +5,7 @@
     "instance": "https://gitlab.com",
     "orbit_version": "0.159.0",
     "query_grammar": "sha256:219ec2e7f6d18d345e9440c1eec96625a2b53a83530aa1f5c31dce315528c6cc",
-    "namespace": "gitlab-mcp-server-orbit-fixtures",
+    "namespace": "jmrp-oss/orbit-fixtures",
     "retrieved_at": "2026-10-26"
   },
   "calls": [

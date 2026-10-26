@@ -18,8 +18,8 @@ The file holds 10 tests and 66 subtests, and every query they send but one is wr
 
 The fixtures are the two projects of `jmrp-oss/orbit-fixtures`, a public
 subgroup of the top-level group `jmrp-oss` ("jmrp open source", id
-134059988). That group is the namespace the maintainer holds in the
-GitLab for Open Source program, which gives the whole top-level
+134059988). That group is the namespace the maintainer is taking into
+the GitLab for Open Source program, which gives the whole top-level
 namespace Ultimate, and it is meant for any of the maintainer's open
 source work on gitlab.com, not for the fixtures alone. Orbit keys its
 enrollment and its index by the group's id, so both survived each
@@ -62,17 +62,20 @@ The subscription is not renewed on its own: the program asks for its
 form to be submitted again every year. The project that sat in the group
 scheduled for deletion since 2026-10-19
 (`orbit-review-2026-10-deletion_scheduled-87502032`) was removed for good
-before the group applied, because the program counts every project in
-the namespace and that one was private and carried no license.
+on 2026-10-26, before anything else in the group changed, because the
+program counts every project in the namespace and that one was private
+and carried no license.
 
 ## What the tests need
 
 Every query the tests send but one is written in GQL, the read-only
 language based on openCypher 9 that GitLab.com compiles every query in
 since 2026-10-15, and each of those was answered `200` against the
-fixture namespace, then `plens1`, on 2026-10-17. GitLab.com has refused
-two of them since: `PAGE` (issue 1527) and a shortest path that names no
-relationship type (issue 1528). The one that is not is written as a JSON object,
+fixture namespace, then `plens1`, on 2026-10-17. On 2026-10-26, against
+`jmrp-oss/orbit-fixtures`, every one of them was answered `200` again
+but two, which GitLab.com has refused since: `PAGE` (issue 1527) and a
+shortest path that names no relationship type (issue 1528). The one that
+is not is written as a JSON object,
 the query DSL the suite used before, which GitLab.com refuses now, and the
 subtest that sends it holds what a caller is told about it.
 
@@ -199,12 +202,17 @@ whose row nobody changed, was still the node
 `plens1/orbit-review-2026-10-deletion_scheduled-87502032` that
 afternoon.
 
-The move into `jmrp-oss/orbit-fixtures` was ordered around that: the
-top-level group was renamed first, and only then were both
-projects transferred into the new subgroup, because a transfer changes
-each project's own row and its traversal path, which a rename of the
-group above them does not. Transferring first would have left the nodes
-on the old prefix again.
+The move into `jmrp-oss/orbit-fixtures` on 2026-10-26 was ordered
+around that: the top-level group was renamed before both projects were
+transferred into the new subgroup, because a transfer changes each
+project's own row and its traversal path, which a rename of the group
+above them does not. Transferring first would have left the nodes on the
+old prefix again. No description edit was needed this time. A minute or
+so after the transfers, `graph_status` of the subgroup still counted 0
+of its 2 projects indexed; within three minutes of them it counted 2,
+and the query below listed both. By then each project had also taken its
+`LICENSE` push and been made public, so which of those changes moved the
+nodes is not known.
 
 After a rename or a transfer, check two things before running the suite
 or recording, since they follow different columns and did not move
