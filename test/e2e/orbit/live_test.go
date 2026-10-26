@@ -28,7 +28,7 @@
 //     token carrying read_api and not api; with it, one more test measures
 //     that the query route accepts that scope.
 //   - ORBIT_FIXTURES_NAMESPACE: optional. Overrides the default
-//     `gitlab-mcp-server-orbit-fixtures` namespace against which the
+//     `jmrp-oss/orbit-fixtures` namespace against which the
 //     fixture-driven subtests run. Set this when developing against your
 //     own GitLab.com namespace.
 //
@@ -41,8 +41,10 @@
 // MATCH ... RETURN statement, every node labeled and at least one bounded by
 // its id or a literal property, a relationship type after a colon, WHERE with
 // AND and NOT, aggregates aliased to be sorted by, and ANY SHORTEST for a
-// path. Each was answered 200 by GitLab.com against the fixture namespace on
-// 2026-10-17. A query GitLab cannot compile fails its subtest by name
+// path. Each was answered 200 by GitLab.com against the fixture namespace,
+// then plens1, on 2026-10-17, and GitLab.com has refused two since: PAGE
+// (issue 1527) and a shortest path that names no relationship type (issue
+// 1528). A query GitLab cannot compile fails its subtest by name
 // ([liveQuery]), and TestOrbitLiveGitLabCom_DSL fails when GitLab.com stops
 // describing the query command as GQL (issue 1414). A query written as a
 // JSON object, the JSON DSL this suite used until then, is refused, and a
@@ -218,13 +220,15 @@ func projectPath(namespace, project string) string {
 
 // orbitFixturesNamespace returns the namespace under which
 // scripts/setup-orbit-fixtures.sh provisioned the fixtures. Defaults
-// to "gitlab-mcp-server-orbit-fixtures" but can be overridden by the
-// developer running the test against their own GitLab.com namespace via
-// the ORBIT_FIXTURES_NAMESPACE environment variable.
+// to "jmrp-oss/orbit-fixtures", the subgroup that holds only the two
+// fixture projects, so a query bounded by the namespace's path counts no
+// other project of jmrp-oss. It can be overridden by the developer running
+// the test against their own GitLab.com namespace via the
+// ORBIT_FIXTURES_NAMESPACE environment variable.
 func orbitFixturesNamespace() string {
 	ns := os.Getenv("ORBIT_FIXTURES_NAMESPACE")
 	if ns == "" {
-		ns = "gitlab-mcp-server-orbit-fixtures"
+		ns = "jmrp-oss/orbit-fixtures"
 	}
 	return ns
 }
@@ -766,7 +770,7 @@ func TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNex
 
 // TestOrbitLiveGitLabCom_Fixtures exercises the query types GitLab infers
 // from GQL against the live fixture data the setup script provisions in any
-// GitLab namespace (defaults to gitlab-mcp-server-orbit-fixtures, configurable
+// GitLab namespace (defaults to jmrp-oss/orbit-fixtures, configurable
 // via ORBIT_FIXTURES_NAMESPACE). All subtests bound their nodes by path or by a
 // literal property instead of hardcoded project ids so the test is portable
 // across namespaces: any developer who runs `scripts/setup-orbit-fixtures.sh`
@@ -893,7 +897,7 @@ func TestRefusedForScope_ThroughTheQueryHandler_ReadsGitLabsAnswer(t *testing.T)
 
 // testOrbitLiveFixtures exercises the query types GitLab infers from GQL
 // against the live fixture data the setup script provisions in any GitLab
-// namespace (defaults to gitlab-mcp-server-orbit-fixtures, configurable via
+// namespace (defaults to jmrp-oss/orbit-fixtures, configurable via
 // ORBIT_FIXTURES_NAMESPACE). All subtests bound their nodes by path or by a
 // literal property instead of hardcoded project ids so the test is portable
 // across namespaces.

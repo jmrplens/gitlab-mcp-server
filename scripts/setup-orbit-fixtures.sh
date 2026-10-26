@@ -5,14 +5,15 @@
 #
 # Usage:
 #   GITLAB_COM_TOKEN=glpat-... \
-#   ORBIT_FIXTURES_NAMESPACE=gitlab-mcp-server-orbit-fixtures \
+#   ORBIT_FIXTURES_NAMESPACE=jmrp-oss/orbit-fixtures \
 #   ./scripts/setup-orbit-fixtures.sh [--mirror-cli]
 #
 # Environment:
 #   GITLAB_COM_TOKEN (required)        — personal access token with api+write_repository
-#   ORBIT_FIXTURES_NAMESPACE (default: gitlab-mcp-server-orbit-fixtures)
-#                                       — group path under which to create projects
-#   ORBIT_FIXTURES_VISIBILITY (default: private)
+#   ORBIT_FIXTURES_NAMESPACE (default: jmrp-oss/orbit-fixtures)
+#                                       full path of the group or subgroup under which to create projects
+#   ORBIT_FIXTURES_VISIBILITY (default: public)
+#                                       every project in jmrp-oss is public; set private for a private group
 #   ORBIT_FIXTURES_GITLAB_URL (default: https://gitlab.com)
 #
 # Flags:
@@ -25,11 +26,13 @@
 #
 # What it creates:
 #   <namespace>/kg-fixtures
+#     - the repository's MIT LICENSE
 #     - Python package (acme.orders) with cross-module imports
 #     - .gitlab-ci.yml (4 stages, 5 jobs, SAST, Secret Detection)
 #     - 1 squash-merged MR (feature/restock-helper)
 #     - 5 issues, 1 milestone, 7 labels
 #   <namespace>/security-fixtures
+#     - the repository's MIT LICENSE
 #     - Intentionally vulnerable code (AWS keys, SQLi, weak hash, eval)
 #     - SAST, Secret-Detection, Dependency-Scanning, Container-Scanning
 #     - 5 vulnerabilities emitted by the analyzers
@@ -51,7 +54,7 @@ for arg in "$@"; do
     --mirror-cli) MIRROR_CLI=true ;;
     --skip-mirror) SKIP_MIRROR=true ;;
     -h|--help)
-      sed -n '2,40p' "$0"
+      sed -n '2,44p' "$0"
       exit 0
       ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
@@ -62,8 +65,11 @@ done
 
 : "${GITLAB_COM_TOKEN:?GITLAB_COM_TOKEN is required}"
 GITLAB_URL="${ORBIT_FIXTURES_GITLAB_URL:-https://gitlab.com}"
-NAMESPACE="${ORBIT_FIXTURES_NAMESPACE:-gitlab-mcp-server-orbit-fixtures}"
-VISIBILITY="${ORBIT_FIXTURES_VISIBILITY:-private}"
+NAMESPACE="${ORBIT_FIXTURES_NAMESPACE:-jmrp-oss/orbit-fixtures}"
+# Public by default because the fixtures live in jmrp-oss, a GitLab for Open
+# Source program namespace whose every project has to be public and carry an
+# OSI license: a project re-provisioned private there would break the rule.
+VISIBILITY="${ORBIT_FIXTURES_VISIBILITY:-public}"
 
 API="$GITLAB_URL/api/v4"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
@@ -150,8 +156,12 @@ create_or_skip_project() {
   local description="$4"
   local mirror_from="${5:-}"  # remote URL to push as origin instead of default
 
+  # The namespace is encoded as the group lookup above encodes it: under a
+  # subgroup a raw slash would send /projects/jmrp-oss/orbit-fixtures%2F...,
+  # which GitLab answers 404, and the script would then try to create a
+  # project that already exists and stop when GitLab refuses it.
   local existing_id
-  existing_id=$(api_get "/projects/$NAMESPACE%2F$path" \
+  existing_id=$(api_get "/projects/$NAMESPACE_ENC%2F$path" \
     | python3 -c 'import sys,json
 try:
     print(json.load(sys.stdin).get("id",""))

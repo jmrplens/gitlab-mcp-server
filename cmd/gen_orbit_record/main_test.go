@@ -9,6 +9,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -601,7 +602,9 @@ func TestRunMain_ReadsTheFlagsAndTheEnvironment(t *testing.T) {
 			if doc.Source.Namespace != tc.want {
 				t.Errorf("namespace = %q, want %q", doc.Source.Namespace, tc.want)
 			}
-			if want := "full_path=" + tc.want; !slices.ContainsFunc(fake.snapshot(), func(asked string) bool { return strings.Contains(asked, want) }) {
+			// The query string carries the namespace encoded, so a subgroup's
+			// slash, the default's among them, is asked about as %2F.
+			if want := "full_path=" + url.QueryEscape(tc.want); !slices.ContainsFunc(fake.snapshot(), func(asked string) bool { return strings.Contains(asked, want) }) {
 				t.Errorf("asked = %q, want the graph status asked about %s", fake.snapshot(), tc.want)
 			}
 		})

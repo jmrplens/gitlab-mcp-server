@@ -4,26 +4,81 @@
 
 The Orbit handler live tests in `test/e2e/orbit/live_test.go`
 exercise the real `https://gitlab.com/api/v4/orbit/*` endpoints against
-the `gitlab-mcp-server-orbit-fixtures` group on gitlab.com, which was
-named `plens1` until 2026-10-26. Those tests are gated behind the
-`orbitlive` build tag and require `GITLAB_COM_TOKEN` in the environment.
-This document explains the data they expect and how to re-provision
-it.
+the `jmrp-oss/orbit-fixtures` group on gitlab.com, a subgroup of the
+top-level group that was named `plens1` and then
+`gitlab-mcp-server-orbit-fixtures` before it became `jmrp-oss` (see
+[The fixture namespace](#the-fixture-namespace)). Those tests are gated
+behind the `orbitlive` build tag and require `GITLAB_COM_TOKEN` in the
+environment. This document explains the data they expect and how to
+re-provision it.
 
 The file holds 10 tests and 66 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written as a JSON object, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network.
+
+## The fixture namespace
+
+The fixtures are the two projects of `jmrp-oss/orbit-fixtures`, a public
+subgroup of the top-level group `jmrp-oss` ("jmrp open source", id
+134059988). That group is the namespace the maintainer holds in the
+GitLab for Open Source program, which gives the whole top-level
+namespace Ultimate, and it is meant for any of the maintainer's open
+source work on gitlab.com, not for the fixtures alone. Orbit keys its
+enrollment and its index by the group's id, so both survived each
+rename. The program's Ultimate does not by itself entitle the group to
+Orbit after Orbit's general availability, which grants Orbit only to a
+group holding Orbit's own add-on or running an Orbit trial, whatever its
+plan. The suite and the recorder need one of the two, and issue 1516
+tracks which the group has.
+
+The default namespace is the subgroup rather than `jmrp-oss` because of
+what the suite and the recorder count: they bound their projects with
+`STARTS WITH '<namespace>/'`, read the ids of the projects that match,
+and ask `graph_status` how many projects of the namespace are indexed.
+Under `jmrp-oss` itself each of those would also take in every other
+project the group comes to hold.
+
+The program's terms bind everything in the top-level namespace,
+subgroups included, so every project added to `jmrp-oss` follows them:
+
+- **Every project carries an OSI-approved license.** Both fixture
+  projects carry this repository's MIT `LICENSE`, and
+  `test/fixtures/orbit/{kg,security}-fixtures/LICENSE` is the same file,
+  so a project the setup script provisions again carries it too. GitLab
+  reports the license it detects as `license.key` of
+  `GET /projects/:id?license=true`; check it before moving a project in,
+  a fork above all, since a repository that mixes licenses may not be
+  detected as one.
+- **Every project and every group is public.** The setup script creates
+  its projects public unless `ORBIT_FIXTURES_VISIBILITY` says otherwise,
+  and every subgroup has to be created with `visibility: public`, which
+  is not necessarily the create call's default.
+- **The namespace may hold one private project**, which the program
+  allows for a project that holds sensitive data. Neither fixture is that
+  project: `security-fixtures` holds only fake secrets, every file in it
+  is already public in this repository, and its vulnerability report
+  stays visible to members alone, so the allowance stays free for a real
+  need. Other private work stays in the maintainer's personal namespace.
+
+The subscription is not renewed on its own: the program asks for its
+form to be submitted again every year. The project that sat in the group
+scheduled for deletion since 2026-10-19
+(`orbit-review-2026-10-deletion_scheduled-87502032`) was removed for good
+before the group applied, because the program counts every project in
+the namespace and that one was private and carried no license.
 
 ## What the tests need
 
 Every query the tests send but one is written in GQL, the read-only
 language based on openCypher 9 that GitLab.com compiles every query in
-since 2026-10-15, and each of those was answered `200` against this
-namespace on 2026-10-17. The one that is not is written as a JSON object,
+since 2026-10-15, and each of those was answered `200` against the
+fixture namespace, then `plens1`, on 2026-10-17. GitLab.com has refused
+two of them since: `PAGE` (issue 1527) and a shortest path that names no
+relationship type (issue 1528). The one that is not is written as a JSON object,
 the query DSL the suite used before, which GitLab.com refuses now, and the
 subtest that sends it holds what a caller is told about it.
 
 `TestOrbitLiveGitLabCom` and `TestOrbitLiveGitLabCom_ShapeDiscovery`
 are self-contained: they bound their projects by path
-(`WHERE p.full_path STARTS WITH 'gitlab-mcp-server-orbit-fixtures/'`) and
+(`WHERE p.full_path STARTS WITH 'jmrp-oss/orbit-fixtures/'`) and
 use no hardcoded project ids; the ids a statement carries are read from
 the graph first. They will return rows against any namespace that has at
 least:
@@ -63,14 +118,19 @@ ORBIT_FIXTURES_NAMESPACE=mynamespace \
 
 The script is **idempotent**: it checks for existing resources via the
 API and skips them. Re-running it on an already-provisioned namespace
-is a no-op.
+is a no-op. The namespace may be a subgroup, as the default
+`jmrp-oss/orbit-fixtures` is: the script looks each project up by its
+full path with every slash encoded. It creates the projects public, as
+`jmrp-oss` requires; set `ORBIT_FIXTURES_VISIBILITY=private` for a
+private group of your own, since GitLab refuses a public project in a
+private group.
 
 ### What the script creates
 
-| Project                  | Content                                                                                                                                                                                             | Why                                                                                                                                                                                      |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<ns>/kg-fixtures`       | Python package `acme.orders` (7 source files, 2 test files) + `.gitlab-ci.yml` (4 stages, 5 jobs, SAST, Secret-Detection) + 7 labels + 1 milestone + 5 issues + 2 environments + 1 squash-merged MR | Populates File, Definition, Directory, ImportedSymbol, Branch, MergeRequest, MergeRequestDiff, MergeRequestDiffFile, Note, Label, Milestone, WorkItem, Pipeline, Job, Stage, Environment |
-| `<ns>/security-fixtures` | Intentionally vulnerable code (hard-coded AWS keys, SQL injection, weak MD5 hashing, `eval()`) + 4 GitLab-managed security scanning templates                                                       | Populates Vulnerability, Finding, SecurityScan, VulnerabilityIdentifier, VulnerabilityOccurrence, VulnerabilityScanner                                                                   |
+| Project                  | Content                                                                                                                                                                                                             | Why                                                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<ns>/kg-fixtures`       | MIT `LICENSE` + Python package `acme.orders` (7 source files, 2 test files) + `.gitlab-ci.yml` (4 stages, 5 jobs, SAST, Secret-Detection) + 7 labels + 1 milestone + 5 issues + 2 environments + 1 squash-merged MR | Populates File, Definition, Directory, ImportedSymbol, Branch, MergeRequest, MergeRequestDiff, MergeRequestDiffFile, Note, Label, Milestone, WorkItem, Pipeline, Job, Stage, Environment |
+| `<ns>/security-fixtures` | MIT `LICENSE` + intentionally vulnerable code (hard-coded AWS keys, SQL injection, weak MD5 hashing, `eval()`) + 4 GitLab-managed security scanning templates                                                       | Populates Vulnerability, Finding, SecurityScan, VulnerabilityIdentifier, VulnerabilityOccurrence, VulnerabilityScanner                                                                   |
 
 The script provisions everything from `test/fixtures/orbit/{kg,security}-fixtures/`
 in this repo. The fixture content is committed and reproducible, so
@@ -137,15 +197,33 @@ project's description, and then restoring it, moved both nodes to the
 new path within two minutes, while the project scheduled for deletion,
 whose row nobody changed, was still the node
 `plens1/orbit-review-2026-10-deletion_scheduled-87502032` that
-afternoon. After a rename, check that
-`MATCH (p:Project) WHERE p.full_path STARTS WITH '<ns>/' RETURN p.full_path`
-lists both fixture projects before running the suite or recording.
+afternoon.
+
+The move into `jmrp-oss/orbit-fixtures` was ordered around that: the
+top-level group was renamed first, and only then were both
+projects transferred into the new subgroup, because a transfer changes
+each project's own row and its traversal path, which a rename of the
+group above them does not. Transferring first would have left the nodes
+on the old prefix again.
+
+After a rename or a transfer, check two things before running the suite
+or recording, since they follow different columns and did not move
+together after the first rename:
+
+- `GET /api/v4/orbit/graph_status?full_path=<ns>` reports
+  `projects.indexed` equal to the number of fixture projects. It counts
+  by traversal path, and a recording refuses a namespace it counts no
+  indexed project in.
+- `MATCH (p:Project) WHERE p.full_path STARTS WITH '<ns>/' RETURN p.full_path`
+  lists both fixture projects, which is what every subtest that bounds a
+  project by path relies on.
 
 ## Project layout
 
 ```text
 test/fixtures/orbit/
 ├── kg-fixtures/
+│   ├── LICENSE
 │   ├── README.md
 │   ├── pyproject.toml
 │   ├── .gitlab-ci.yml
@@ -160,6 +238,7 @@ test/fixtures/orbit/
 │       ├── test_fulfillment.py
 │       └── test_pricing.py
 └── security-fixtures/
+    ├── LICENSE
     ├── README.md
     ├── pyproject.toml
     ├── .gitlab-ci.yml
@@ -226,7 +305,7 @@ After the live tests the target re-records the answers with `make gen-orbit-reco
 
 ## Recording the answers: `make gen-orbit-record`
 
-The six Orbit routes have no response schema anywhere GitLab publishes one, and no self-managed GitLab serves them, so what they answer is recorded here instead and committed as `docs/development/orbit-responses.json`. `cmd/gen_orbit_record` calls each Orbit handler through a proxy on the loopback interface that forwards to GitLab.com with `GITLAB_COM_TOKEN`, so the requests recorded are the ones the server builds. Every call is a read. It asks about the fixture namespace (`ORBIT_FIXTURES_NAMESPACE`, `gitlab-mcp-server-orbit-fixtures` by default): the indexing status of the namespace and a traversal of `<namespace>/kg-fixtures`, which is why the fixtures above have to be indexed before a recording means anything.
+The six Orbit routes have no response schema anywhere GitLab publishes one, and no self-managed GitLab serves them, so what they answer is recorded here instead and committed as `docs/development/orbit-responses.json`. `cmd/gen_orbit_record` calls each Orbit handler through a proxy on the loopback interface that forwards to GitLab.com with `GITLAB_COM_TOKEN`, so the requests recorded are the ones the server builds. Every call is a read. It asks about the fixture namespace (`ORBIT_FIXTURES_NAMESPACE`, `jmrp-oss/orbit-fixtures` by default): the indexing status of the namespace and a traversal of `<namespace>/kg-fixtures`, which is why the fixtures above have to be indexed before a recording means anything.
 
 The record holds, per call, the action and variant, the output type the handler returned, the parameter names the request carried, and the key tree of the answer with the JSON kinds seen at each path. Its source names the Orbit version and the query grammar GitLab.com published beside the answers, a SHA-256 of the description and input schema of the `query_graph` command `orbit.dsl` returns (schema version 3 of the record, since GitLab.com reads GQL; version 2 named the JSON query DSL by its `$id` and `version`, and the check refuses a version 2 record by its version and a version 3 record still naming it as one not in the form the generator writes), and a re-recording that finds a different grammar fails until the record is committed, which is the prompt to read `orbit.query`'s guidance against the new language. The query calls send a GQL statement, the fixture project by its path. It holds no value: a subtree whose keys are data (the query command's input schema, a tool's parameter schema, the rows a query returns, a status component's metrics) is kept as its root and marked verbatim, and a key outside one that is not an identifier fails the recording. That second rule stops data that cannot be a name, not data shaped like one: a map keyed by identifier-shaped data would be recorded as keys, which is why such a subtree has to be named verbatim in `cmd/gen_orbit_record/calls.go`. `make audit-1to1-paths` holds the Orbit output types to it (see the Orbit paragraph of the audit_1to1 section in [cmd utilities](cmd-utilities.md#audit_1to1)).
 

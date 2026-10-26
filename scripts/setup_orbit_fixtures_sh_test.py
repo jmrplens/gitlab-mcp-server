@@ -9,7 +9,10 @@ collection, so the milestone, the five issues and the two environments of
 kg-fixtures were never created, and the script said it had made them, because
 a POST answered without an id was printed as created. Both halves are tested
 here: what each POST is sent to, and that a POST answered without an id stops
-the script instead of passing.
+the script instead of passing. So is a namespace nested in a subgroup, the
+shape of the default jmrp-oss/orbit-fixtures: the project lookup sent the
+namespace's own slash unencoded, which GitLab answers 404, so the script tried
+to create a project that already existed and stopped when GitLab refused it.
 
 Each case runs the real script with a stand-in curl first on PATH. It logs
 every request as its method and path, answers each from a table of routes
@@ -68,8 +71,14 @@ def route_file(key):
     return key.replace(" ", "_").replace("/", "!")
 
 
-def existing_fixtures():
-    """The routes of a namespace whose two projects and seven labels exist and nothing else."""
+def existing_fixtures(namespace="plens1"):
+    """The routes of a namespace whose two projects and seven labels exist and nothing else.
+
+    GitLab finds a group or a project by its full path with every slash in it
+    percent-encoded, a nested namespace's own slashes included, so those are
+    the only paths the routes answer.
+    """
+    encoded = namespace.replace("/", "%2F")
     labels = [
         {"id": n, "name": name}
         for n, name in enumerate(
@@ -77,9 +86,9 @@ def existing_fixtures():
         )
     ]
     return {
-        "GET " + API + "/groups/plens1": {"id": 1},
-        "GET " + API + "/projects/plens1%2Fkg-fixtures": {"id": KG_ID},
-        "GET " + API + "/projects/plens1%2Fsecurity-fixtures": {"id": SEC_ID},
+        "GET " + API + "/groups/" + encoded: {"id": 1},
+        "GET " + API + "/projects/" + encoded + "%2Fkg-fixtures": {"id": KG_ID},
+        "GET " + API + "/projects/" + encoded + "%2Fsecurity-fixtures": {"id": SEC_ID},
         "GET " + API + "/projects/%d/labels" % KG_ID: labels,
         "GET " + API + "/projects/%d/milestones" % KG_ID: [],
         "GET " + API + "/projects/%d/issues" % KG_ID: [],
@@ -162,6 +171,22 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertNotIn("milestone id=", result.stdout)
         posted = [r["path"] for r in self.requests("POST")]
         self.assertNotIn(API + "/projects/%d/issues" % KG_ID, posted)
+
+    def test_a_nested_namespace_finds_its_existing_projects(self):
+        namespace = "jmrp-oss/orbit-fixtures"
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = namespace
+        routes = existing_fixtures(namespace)
+        routes["GET " + API + "/projects/%d/milestones" % KG_ID] = [{"id": 500}]
+        routes["GET " + API + "/projects/%d/issues" % KG_ID] = [{"id": 600}]
+        routes["GET " + API + "/projects/%d/environments" % KG_ID] = [{"id": 700}]
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        looked_up = [r["path"] for r in self.requests("GET")]
+        self.assertIn(API + "/groups/jmrp-oss%2Forbit-fixtures", looked_up)
+        self.assertIn(API + "/projects/jmrp-oss%2Forbit-fixtures%2Fkg-fixtures", looked_up)
+        self.assertIn(API + "/projects/jmrp-oss%2Forbit-fixtures%2Fsecurity-fixtures", looked_up)
+        self.assertEqual(self.requests("POST"), [])
+        self.assertIn("project exists: jmrp-oss/orbit-fixtures/kg-fixtures (id=%d)" % KG_ID, result.stderr)
 
 
 if __name__ == "__main__":

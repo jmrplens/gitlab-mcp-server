@@ -1,6 +1,6 @@
 # kg-fixtures
 
-Knowledge Graph fixture project for the [`gitlab-mcp-server`](https://gitlab.com/jmrplens/gitlab-mcp-server) Orbit tools.
+Knowledge Graph fixture project for the [`gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server) Orbit tools.
 
 This project is intentionally simple but multi-layered to populate as many Orbit entity types as possible:
 

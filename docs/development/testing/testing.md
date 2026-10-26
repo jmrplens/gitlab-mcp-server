@@ -959,7 +959,7 @@ To run the full flow:
 # Add a Personal Access Token (api scope) to .env first
 echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
 
-# Default namespace is gitlab-mcp-server-orbit-fixtures; override with ORBIT_FIXTURES_NAMESPACE
+# Default namespace is jmrp-oss/orbit-fixtures; override with ORBIT_FIXTURES_NAMESPACE
 make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
 ```
 
