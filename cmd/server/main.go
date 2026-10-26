@@ -928,7 +928,13 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 	// The auto tool-name policy decides per surface, and reading TOOL_SURFACE
 	// here regardless of mode gave an HTTP deployment started with
 	// --tool-surface=individual the dynamic default's decision.
-	_, stopTelemetry := startTelemetry(ctx, version, resolveToolSurfaceForTelemetry(hcfg))
+	// A refusal is an identity setting telemetry cannot use, and ends the
+	// start on either transport before it reads anything else (register row
+	// IDN-009, issue 957); nothing was started, so there is nothing to stop.
+	_, stopTelemetry, telemetryRefusal := startTelemetry(ctx, version, resolveToolSurfaceForTelemetry(hcfg))
+	if telemetryRefusal != nil {
+		return telemetryRefusal
+	}
 
 	mcpotel.SetMetricServerAddresses(metricHostsFor(hcfg, os.Getenv("GITLAB_URL")))
 	// The routes a GitLab call's span may name are the ones the binary's own

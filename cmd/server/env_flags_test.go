@@ -381,11 +381,12 @@ func telemetrySettings() []settingCase {
 			},
 		},
 		{
-			// The reader's error is what this row observes, and it is not
-			// yet the refused start IDN-009 states: the server logs it and
-			// records nothing about callers, which issue 1170 and the last
-			// layer of issue 957 turn into a refusal. The rotation's row
-			// below is the same.
+			// The startup check is what this row observes, the refused start
+			// IDN-009 states: telemetry.Start asks validateTelemetryIdentity
+			// once telemetry is on, and startTelemetry returns its error as
+			// the one that ends the start, which the tests of that function
+			// and of runWithContext hold. The rotation's row below is the
+			// same.
 			setting: "TELEMETRY_IDENTITY", row: "IDN-009", flag: "telemetry-identity",
 			register: func(t *testing.T) {
 				t.Helper()
@@ -396,11 +397,10 @@ func telemetrySettings() []settingCase {
 			malformed: "pseudonimous", wellFormed: string(telemetry.IdentityFull), policy: tenancy.RefuseStartup,
 			observe: func(t *testing.T, value string) settingOutcome {
 				t.Helper()
-				policy, err := telemetryIdentityPolicy()
-				if err != nil {
+				if validateTelemetryIdentity() != nil {
 					return outcomeRefused
 				}
-				if string(policy) == value {
+				if policy, err := telemetryIdentityPolicy(); err == nil && string(policy) == value {
 					return outcomeApplied
 				}
 				return outcomeUnread
@@ -421,8 +421,8 @@ func telemetrySettings() []settingCase {
 			},
 		},
 		{
-			// As for the policy above, the reader's error is observed, and
-			// the server does not refuse to start over it yet (issue 1170).
+			// As for the policy above, the startup check is observed, with no
+			// key configured, the case in which it reads the rotation.
 			setting: "TELEMETRY_IDENTITY_ROTATION", row: "IDN-009", flag: "telemetry-identity-rotation",
 			register: func(t *testing.T) {
 				t.Helper()
@@ -433,10 +433,12 @@ func telemetrySettings() []settingCase {
 			malformed: "24", wellFormed: "6h", policy: tenancy.RefuseStartup,
 			observe: func(t *testing.T, value string) settingOutcome {
 				t.Helper()
-				rotation, err := telemetryIdentityRotation()
-				if err != nil {
+				t.Setenv(telemetry.EnvIdentityKeyName, "")
+				if validateTelemetryIdentity() != nil {
 					return outcomeRefused
 				}
+				// Parsed already by the check, which let it through.
+				rotation, _ := telemetryIdentityRotation()
 				if want, parseErr := time.ParseDuration(value); parseErr == nil && rotation == want && rotation != telemetry.DefaultKeyRotation {
 					return outcomeApplied
 				}

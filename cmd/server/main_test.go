@@ -1152,6 +1152,36 @@ func TestRunWithContext_InvalidConfig(t *testing.T) {
 	}
 }
 
+// TestRunWithContext_AnUnusableTelemetryIdentity_RefusesEitherTransport pins
+// where the refusal of register row IDN-009 happens (issue 957): in the one
+// place both transports start telemetry, before either reads its own
+// configuration. The rest of each start is left unconfigured on purpose, so a
+// start that went on past telemetry would fail on something else, a stdio run
+// on its missing token and an HTTP one on the instance it names none of, and
+// the refusal is seen to come first because it names the identity variable.
+func TestRunWithContext_AnUnusableTelemetryIdentity_RefusesEitherTransport(t *testing.T) {
+	restore := telemetryFlag
+	t.Cleanup(func() { telemetryFlag = restore })
+	telemetryFlag = nil
+	t.Setenv("GITLAB_URL", "")
+	t.Setenv("GITLAB_TOKEN", "")
+	t.Setenv(telemetry.EnvSwitchName, "true")
+	t.Setenv("OTEL_SDK_DISABLED", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+	t.Setenv(telemetry.EnvIdentityKeyName, "")
+	t.Setenv(telemetry.EnvIdentityRotationName, "24")
+
+	for name, hcfg := range map[string]*httpConfig{"stdio": nil, "http": {}} {
+		t.Run(name, func(t *testing.T) {
+			err := runWithContext(t.Context(), hcfg)
+			if err == nil || !strings.Contains(err.Error(), telemetry.EnvIdentityRotationName) {
+				t.Errorf("runWithContext() = %v, want the refusal naming %s", err, telemetry.EnvIdentityRotationName)
+			}
+		})
+	}
+}
+
 // TestRunWithContext_PingFailure_StartsInDegradedMode verifies that an
 // unreachable or refusing GitLab does not stop the server from starting.
 //

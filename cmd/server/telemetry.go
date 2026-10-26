@@ -48,26 +48,43 @@ func telemetryEnabled() bool {
 // panic on that page alone, and copying them would mean a telemetry
 // misconfiguration takes down a working server.
 //
-// Both return values are always usable. The provider is never nil, reports
-// itself disabled when telemetry is off or failed to start, and answers
-// Snapshot for the server card; the stop function is safe to call in every one
-// of those states. That is what lets the caller defer it unconditionally rather
-// than carrying a nil check into the exit path, which is the worst place to put
-// one because it runs after the work succeeded.
-func startTelemetry(ctx context.Context, serverVersion, toolSurface string) (provider *telemetry.Provider, stop func(context.Context)) {
+// The provider and the stop function are always usable, a refused start
+// included. The provider is never nil, reports itself disabled when telemetry
+// is off or failed to start, and answers Snapshot for the server card; the
+// stop function is safe to call in every one of those states. That is what
+// lets the caller defer it unconditionally rather than carrying a nil check
+// into the exit path, which is the worst place to put one because it runs
+// after the work succeeded.
+//
+// One failure is not swallowed, and it is a setting of this server's rather
+// than of OpenTelemetry's: an identity setting telemetry cannot use refuses
+// the start (register row IDN-009, issue 957). It is the third return, and
+// the caller returns it. telemetry.Start asks [validateTelemetryIdentity]
+// once it knows telemetry is on, so the value is judged only when telemetry
+// would export under it, and before anything is built that could.
+func startTelemetry(ctx context.Context, serverVersion, toolSurface string) (provider *telemetry.Provider, stop func(context.Context), refusal error) {
 	provider, err := telemetry.Start(ctx, telemetry.Config{
 		Enabled:                 telemetryEnabled(),
 		ServiceVersion:          serverVersion,
 		Signals:                 telemetry.AllSignals(),
 		DropToolNameFromMetrics: dropToolNameFromMetrics(toolSurface),
+		Check: func() error {
+			// Kept apart from err, which Start returns it as, so that the
+			// one error that refuses the start is told from the ones that
+			// leave the server serving without telemetry.
+			refusal = validateTelemetryIdentity()
+			return refusal
+		},
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "telemetry disabled: it could not be started",
-			"component", "telemetry", "error", err)
+		if refusal == nil {
+			slog.ErrorContext(ctx, "telemetry disabled: it could not be started",
+				"component", "telemetry", "error", err)
+		}
 		return &telemetry.Provider{}, func(context.Context) {
 			// Nothing to shut down: the provider never started, and the
 			// caller still defers this unconditionally.
-		}
+		}, refusal
 	}
 	restoreLogger := func() {
 		// Replaced below when the bridge is installed. Until then it is what
@@ -125,7 +142,7 @@ func startTelemetry(ctx context.Context, serverVersion, toolSurface string) (pro
 		// global, so without this a stopped telemetry stack keeps every later
 		// log record routed at a logger provider that has been shut down.
 		restoreLogger()
-	}
+	}, nil
 }
 
 // isFlagPassed reports whether a flag was named on the command line, as opposed

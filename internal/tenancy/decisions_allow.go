@@ -933,6 +933,16 @@ func allowDecisions() []Decision {
 			Sites: []Site{enforce(pkgPool, "ServerPool.GetOrCreateEntryWithFacts")},
 		},
 		{
+			// A policy the server does not know, or a rotation that does not
+			// parse or lies outside what a generated key may live, refuses the
+			// start on either transport, judged once telemetry is known to be
+			// on and before anything is built (issue 957). Off, or vetoed by
+			// OTEL_SDK_DISABLED, nothing is exported under them and nothing is
+			// refused, and the readers record nothing about callers under such
+			// a value. Beside a configured key the rotation is ignored, so it
+			// refuses nothing there. Any text is a key, except one under 14
+			// bytes under GODEBUG=fips140=only, which records nothing about
+			// callers rather than refusing the start.
 			ID: "IDN-009", Question: Allow, Kind: Rule, Class: ClassP, Disposition: Ruled,
 			Resource: "how telemetry records a caller",
 			Key:      KeyProcess, StdioKey: KeyProcess,
@@ -942,7 +952,10 @@ func allowDecisions() []Decision {
 				"GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION",
 			},
 			Malformed: RefuseStartup,
-			Sites:     []Site{enforce(pkgServer, "telemetryIdentityPolicy")},
+			Sites: []Site{
+				enforce(pkgServer, "telemetryIdentityPolicy"),
+				enforce(pkgServer, "validateTelemetryIdentity"),
+			},
 		},
 		{
 			ID: "IDN-011", Question: Allow, Kind: Lifetime, Class: ClassQ, Disposition: Valued,
