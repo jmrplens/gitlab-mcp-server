@@ -472,10 +472,12 @@ golangci-lint run --timeout 20m ./...
 ```
 
 If a cold run hits the timeout, suspect concurrency before suspecting the
-timeout. `golangci-lint` defaults to one worker per logical CPU, and across 226
-packages and 55 linters that working set does not fit comfortably in memory on a
-many-threaded machine — it thrashes rather than going faster. Measured on a cold
-cache on the same 16-thread machine:
+timeout. `golangci-lint` defaults to one worker per logical CPU, and that
+working set does not fit comfortably in memory on a many-threaded machine: it
+thrashes rather than going faster. Measured in July 2026 on a cold cache on the
+same 16-thread machine, when the module had 226 packages and `.golangci.yml`
+enabled 52 linters and 3 formatters (`golangci-lint linters` lists what it
+enables today):
 
 | Concurrency           | Peak RSS | Cold run         |
 | --------------------- | -------- | ---------------- |
