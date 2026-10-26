@@ -3,6 +3,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"flag"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -535,19 +537,24 @@ func checkTestFunctionDoc(pkg golist.PackageInfo, path string, fn *ast.FuncDecl,
 	}
 }
 
+// testFamilies are the functions of a test file that go test runs, by the
+// prefix of their name, each with the categories a missing and a malformed doc
+// comment of one is reported under. TestMain carries the Test prefix, so it is
+// one of the first family.
+var testFamilies = []struct{ prefix, missing, form string }{
+	{prefix: "Test", missing: categoryTestMissing, form: categoryTestForm},
+	{prefix: "Benchmark", missing: categoryBenchmarkMissing, form: categoryBenchmarkForm},
+	{prefix: "Fuzz", missing: categoryFuzzMissing, form: categoryFuzzForm},
+	{prefix: "Example", missing: categoryExampleMissing, form: categoryExampleForm},
+}
+
 func testDocCategories(name string) (missingCategory, formCategory string, ok bool) {
-	switch {
-	case name == "TestMain" || strings.HasPrefix(name, "Test"):
-		return categoryTestMissing, categoryTestForm, true
-	case strings.HasPrefix(name, "Benchmark"):
-		return categoryBenchmarkMissing, categoryBenchmarkForm, true
-	case strings.HasPrefix(name, "Fuzz"):
-		return categoryFuzzMissing, categoryFuzzForm, true
-	case strings.HasPrefix(name, "Example"):
-		return categoryExampleMissing, categoryExampleForm, true
-	default:
-		return "", "", false
+	for _, family := range testFamilies {
+		if strings.HasPrefix(name, family.prefix) {
+			return family.missing, family.form, true
+		}
 	}
+	return "", "", false
 }
 
 func hasExampleOutput(docText string) bool {
@@ -588,19 +595,16 @@ func firstLine(text string) string {
 	return line
 }
 
+// sortFindings orders the findings by package, file, category and name, and
+// keeps the order they were found in among findings that share all four.
 func sortFindings(findings []finding) {
-	sort.Slice(findings, func(i, j int) bool {
-		left, right := findings[i], findings[j]
-		if left.ImportPath != right.ImportPath {
-			return left.ImportPath < right.ImportPath
-		}
-		if left.File != right.File {
-			return left.File < right.File
-		}
-		if left.Category != right.Category {
-			return left.Category < right.Category
-		}
-		return left.Name < right.Name
+	slices.SortStableFunc(findings, func(left, right finding) int {
+		return cmp.Or(
+			strings.Compare(left.ImportPath, right.ImportPath),
+			strings.Compare(left.File, right.File),
+			strings.Compare(left.Category, right.Category),
+			strings.Compare(left.Name, right.Name),
+		)
 	})
 }
 
@@ -668,14 +672,11 @@ func writeCountTable(b *strings.Builder, title string, counts map[string]int, li
 	for key, count := range counts {
 		rows = append(rows, row{key: key, count: count})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].count == rows[j].count {
-			return rows[i].key < rows[j].key
-		}
-		return rows[i].count > rows[j].count
+	slices.SortFunc(rows, func(left, right row) int {
+		return cmp.Or(cmp.Compare(right.count, left.count), strings.Compare(left.key, right.key))
 	})
-	if limit > 0 && len(rows) > limit {
-		rows = rows[:limit]
+	if limit > 0 {
+		rows = rows[:min(len(rows), limit)]
 	}
 	b.WriteString("| Name | Count |\n")
 	b.WriteString("| --- | ---: |\n")

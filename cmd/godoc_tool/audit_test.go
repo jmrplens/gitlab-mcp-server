@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1371,6 +1372,45 @@ func TestSortFindings_OrdersByPathFileCategoryName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSortFindings_SharedKeys_KeepTheOrderFound verifies findings that share
+// the import path, file, category and name keep the order they were found in,
+// so the report lists them the same way on every run. The findings alternate
+// between two names and number their details in the order found; there are
+// thirty-two of them because below thirteen the sort package's unstable sort
+// orders by insertion and keeps ties anyway, so a short list would pass under
+// either sort.
+func TestSortFindings_SharedKeys_KeepTheOrderFound(t *testing.T) {
+	t.Parallel()
+
+	var input, wantA, wantB []finding
+	for i := range 32 {
+		f := finding{ImportPath: "a", File: "a.go", Category: "func_missing", Name: "B", Detail: strconv.Itoa(i)}
+		if i%2 == 1 {
+			f.Name = "A"
+			wantA = append(wantA, f)
+		} else {
+			wantB = append(wantB, f)
+		}
+		input = append(input, f)
+	}
+	want := slices.Concat(wantA, wantB)
+
+	got := slices.Clone(input)
+	sortFindings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sortFindings() details = %v, want %v", details(got), details(want))
+	}
+}
+
+// details returns the detail of each finding, in order.
+func details(findings []finding) []string {
+	out := make([]string, 0, len(findings))
+	for _, f := range findings {
+		out = append(out, f.Detail)
+	}
+	return out
 }
 
 // TestCountBy_TalliesByKey verifies the aggregation helper counts findings
