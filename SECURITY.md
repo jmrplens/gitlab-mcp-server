@@ -107,6 +107,12 @@ and boundaries is recorded in
 what was checked against the code, with which tools, what was found, and where
 each finding is tracked.
 
+**Assurance case.** The argument that these requirements are met, from the
+boundaries above, the secure design principles the server applies and the
+common implementation weaknesses it counters, each with its evidence and with
+what does not hold yet, is the
+[assurance case](https://docs.jmrp.io/gitlab-mcp-server/operations/assurance-case/).
+
 ## Scope
 
 ### In scope

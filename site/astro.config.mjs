@@ -828,6 +828,11 @@ export default defineConfig({
 							translations: { es: "Seguridad" },
 						},
 						{
+							slug: "operations/assurance-case",
+							label: "Assurance Case",
+							translations: { es: "Caso de aseguramiento" },
+						},
+						{
 							slug: "operations/fine-grained-tokens",
 							label: "Fine-grained Tokens",
 							translations: { es: "Tokens de grano fino" },

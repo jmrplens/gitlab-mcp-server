@@ -42,6 +42,8 @@ flowchart TB
 - **Process-level isolation**: The server runs as a local process communicating via stdin/stdout. No network ports are opened in stdio mode.
 - **Minimal privilege**: The server only needs a GitLab token with scopes required for the operations you intend to use.
 
+Why these controls meet the server's security requirements, boundary by boundary and weakness by weakness, and what does not hold yet, is argued in the [Assurance Case](/gitlab-mcp-server/operations/assurance-case/).
+
 ## Token management
 
 ### Recommended: Environment file

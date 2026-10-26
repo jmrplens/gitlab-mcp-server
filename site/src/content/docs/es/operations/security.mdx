@@ -42,6 +42,8 @@ flowchart TB
 - **Aislamiento a nivel de proceso**: El servidor se ejecuta como un proceso local comunicándose a través de stdin/stdout. No se abren puertos de red en modo stdio.
 - **Mínimo privilegio**: El servidor solo necesita un token de GitLab con los scopes requeridos para las operaciones que deseas utilizar.
 
+Por qué estos controles cumplen los requisitos de seguridad del servidor, frontera por frontera y debilidad por debilidad, y qué no se cumple todavía, se argumenta en el [Caso de aseguramiento](/gitlab-mcp-server/es/operations/assurance-case/).
+
 ## Gestión de tokens
 
 ### Recomendado: Archivo de entorno
