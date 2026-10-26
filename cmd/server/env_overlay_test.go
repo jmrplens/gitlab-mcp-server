@@ -13,7 +13,9 @@ import (
 )
 
 // newOverlayConfig returns an httpConfig carrying the flag defaults, with the
-// named flags marked as explicitly passed.
+// named flags marked as explicitly passed. The upload limit carries the
+// default an overlay with no variable leaves it at, since no flag declaration
+// holds it.
 func newOverlayConfig(setFlags ...string) *httpConfig {
 	hcfg := &httpConfig{
 		sessionTimeout:     config.DefaultSessionTimeout,
@@ -21,6 +23,7 @@ func newOverlayConfig(setFlags ...string) *httpConfig {
 		revalidateInterval: config.DefaultRevalidateInterval,
 		maxHTTPClients:     config.DefaultMaxHTTPClients,
 		capabilitySurface:  config.DefaultCapabilitySurface,
+		uploadMaxFileSize:  config.DefaultMaxFileSize,
 		setFlags:           map[string]bool{},
 	}
 	for _, name := range setFlags {
@@ -103,6 +106,22 @@ func TestApplyHTTPEnvOverlay_AbsentEnvironmentKeepsDefault(t *testing.T) {
 	}
 	if hcfg.maxHTTPClients != config.DefaultMaxHTTPClients {
 		t.Errorf("maxHTTPClients = %d, want the default %d", hcfg.maxHTTPClients, config.DefaultMaxHTTPClients)
+	}
+}
+
+// TestApplyHTTPEnvOverlay_UploadLimit_IsTheDefaultWithNoVariable covers the
+// one setting the overlay gives a default to (register row RQB-007): no flag
+// declaration holds the upload limit, since --upload-max-file-size writes
+// its variable, so with the variable absent the field the flag layer leaves
+// at zero becomes the default. The tool layer reads a zero as no limit at
+// all, so a deployment that configured nothing would accept a file of any
+// size.
+func TestApplyHTTPEnvOverlay_UploadLimit_IsTheDefaultWithNoVariable(t *testing.T) {
+	hcfg := &httpConfig{setFlags: map[string]bool{}}
+	applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{})
+
+	if hcfg.uploadMaxFileSize != config.DefaultMaxFileSize {
+		t.Errorf("uploadMaxFileSize = %d, want the default %d", hcfg.uploadMaxFileSize, int64(config.DefaultMaxFileSize))
 	}
 }
 
@@ -291,6 +310,19 @@ type overlaySetting struct {
 	want func(*httpConfig)
 }
 
+// writesItsVariable reports whether flag is one of envBackedFlags, which
+// write their variable rather than a field of httpConfig: the overlay then
+// reads the flag's own value, which lands whether or not the flag is marked
+// as passed. The upload limit is the one the overlay carries.
+func writesItsVariable(flag string) bool {
+	for _, entry := range envBackedFlags {
+		if entry.flagName == flag {
+			return true
+		}
+	}
+	return false
+}
+
 // overlaySettings lists every setting the overlay carries, each with a value
 // its default does not hold. The flag names are spelled as main registers
 // them, so an overlay consulting a misspelled or a neighboring flag is caught.
@@ -421,6 +453,10 @@ func overlaySettings() []overlaySetting {
 			"tier", func(o *config.HTTPEnvOverlay) { o.Tier, o.TierExplicit = &ultimate, true },
 			func(h *httpConfig) { h.tier, h.tierSet = ultimate.String(), true },
 		},
+		{
+			"upload-max-file-size", func(o *config.HTTPEnvOverlay) { size := int64(50 << 20); o.UploadMaxFileSize = &size },
+			func(h *httpConfig) { h.uploadMaxFileSize = 50 << 20 },
+		},
 	}
 }
 
@@ -431,7 +467,10 @@ func overlaySettings() []overlaySetting {
 // operator-flipping tool and to any test that sets two settings to one value.
 // Applied alone, a variable must change its own field and nothing else, and
 // its own flag, passed alone, must leave the configuration exactly as the flag
-// layer resolved it.
+// layer resolved it. A flag that writes its variable is the exception: the
+// overlay reads that flag's own value, so with the flag passed the value
+// lands as it does from the environment, and holding it back would drop what
+// the operator typed.
 func TestApplyHTTPEnvOverlay_EachSettingLandsInItsOwnFieldAndYieldsToItsOwnFlag(t *testing.T) {
 	t.Parallel()
 
@@ -452,8 +491,12 @@ func TestApplyHTTPEnvOverlay_EachSettingLandsInItsOwnFieldAndYieldsToItsOwnFlag(
 
 			held := newOverlayConfig(tc.flag)
 			applyHTTPEnvOverlay(held, overlay)
-			if untouched := newOverlayConfig(tc.flag); !reflect.DeepEqual(held, untouched) {
-				t.Errorf("--%s was passed, yet the environment changed the configuration to\n%+v", tc.flag, held)
+			untouched := newOverlayConfig(tc.flag)
+			if writesItsVariable(tc.flag) {
+				tc.want(untouched)
+			}
+			if !reflect.DeepEqual(held, untouched) {
+				t.Errorf("--%s was passed, and the environment changed the configuration to\n%+v\nwant\n%+v", tc.flag, held, untouched)
 			}
 		})
 	}

@@ -16,8 +16,10 @@ import (
 // Each of these is consumed somewhere that reads the process environment and
 // nothing else: parseLogLevel takes config.Getenv("LOG_LEVEL"),
 // clientcompat.Enabled reads CLIENT_COMPAT, toolutil.IsYOLOMode reads GITLAB_MCP_YOLO_MODE
-// and AUTOPILOT, and the upload limit is read per request inside the tools that
-// enforce it. Threading a flag value to each of those would mean four new
+// and AUTOPILOT, and the upload limit is read by config.UploadMaxFileSizeFromEnv,
+// which stdio's config.Load and HTTP mode's overlay both call, so a malformed
+// value is refused the same way from the flag and from the variable (issue
+// 1170). Threading a flag value to each of those would mean four new
 // parameters through four unrelated call paths, and it would create a second
 // source of truth in every one of them: a reader that consults the flag and a
 // reader that consults the variable, disagreeing the first time somebody adds a

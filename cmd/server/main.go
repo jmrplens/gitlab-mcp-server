@@ -189,8 +189,12 @@ type httpConfig struct {
 	stateless             bool
 	jsonResponse          bool
 	maxRequestBodyBytes   int64
-	tlsCert               string
-	tlsKey                string
+	// uploadMaxFileSize is the largest local file a tool accepts, which no
+	// flag of this struct holds: --upload-max-file-size writes its variable,
+	// and [applyOverlayUploadLimit] fills this from the overlay.
+	uploadMaxFileSize int64
+	tlsCert           string
+	tlsKey            string
 	// discoveryRateLimitRPS and discoveryRateLimitBurst are the bucket each
 	// client address draws on for the discovery documents (RTC-008).
 	discoveryRateLimitRPS   float64
@@ -1217,7 +1221,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, tier edition.Tier
 		Stateless:              hcfg.stateless,
 		JSONResponse:           hcfg.jsonResponse,
 		MaxRequestBodyBytes:    hcfg.maxRequestBodyBytes,
-		UploadMaxFileSize:      uploadMaxFileSize(),
+		UploadMaxFileSize:      hcfg.uploadMaxFileSize,
 		AuthMode:               hcfg.authMode,
 		PublicURL:              hcfg.publicURL,
 		ResourceDocumentation:  hcfg.resourceDocumentation,
@@ -5393,30 +5397,4 @@ func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
 		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
 	return withStandalone, nil
-}
-
-// uploadMaxFileSize resolves the upload limit for HTTP mode.
-//
-// A parse failure falls back to the default and says so, rather than refusing
-// to start: this runs while the HTTP configuration is being assembled, and a
-// malformed size is worth a loud line and a working server rather than a dead
-// one. The same value is validated again by config.Config.Validate, which is
-// where an out-of-range limit is rejected.
-func uploadMaxFileSize() int64 {
-	size, err := config.UploadMaxFileSizeFromEnv()
-	if err != nil {
-		slog.Warn("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE could not be parsed; using the default",
-			"error", err, "default", config.DefaultMaxFileSize)
-		return config.DefaultMaxFileSize
-	}
-	// The ceiling is enforced here rather than only in config.Validate, which
-	// the HTTP path never calls: "1025GB" parses cleanly, so without this a
-	// deployment starts with a limit above the documented one and nothing says
-	// so until a request the size of a small disk arrives.
-	if size > config.MaxFileSize {
-		slog.Warn("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds the maximum; using the maximum",
-			"requested", size, "maximum", config.MaxFileSize)
-		return config.MaxFileSize
-	}
-	return size
 }

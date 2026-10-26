@@ -27,7 +27,8 @@ import (
 
 // HTTPEnvOverlay holds the HTTP-relevant settings found in the environment.
 // A nil field means the variable was absent or empty, and the caller keeps
-// whatever the flag layer resolved.
+// whatever the flag layer resolved, except for UploadMaxFileSize, whose flag
+// writes the variable and leaves the flag layer nothing to keep.
 type HTTPEnvOverlay struct {
 	GitLabURL         *string
 	SkipTLSVerify     *bool
@@ -73,6 +74,14 @@ type HTTPEnvOverlay struct {
 	// (register row RTC-008), each half overlaid on its own like a budget's.
 	DiscoveryRateLimitRPS   *float64
 	DiscoveryRateLimitBurst *int
+
+	// UploadMaxFileSize is the largest local file a tool accepts (register
+	// row RQB-007). --upload-max-file-size writes the variable rather than a
+	// field of the flag layer, so the value read here is the flag's when it
+	// was passed. It is the one field whose nil the caller does not answer
+	// with the flag layer's value, since that layer holds none: the caller
+	// sets [DefaultMaxFileSize].
+	UploadMaxFileSize *int64
 }
 
 // envPresent reports whether name is set to a non-empty value, under either
@@ -101,6 +110,7 @@ func LoadHTTPEnvOverlay() (*HTTPEnvOverlay, error) {
 		loadOverlayLimits,
 		loadOverlayAuthAndRate,
 		loadOverlayDiscoveryRate,
+		loadOverlayUploadLimit,
 	} {
 		if err := load(overlay); err != nil {
 			return nil, err
@@ -287,6 +297,24 @@ func loadOverlayDiscoveryRate(o *HTTPEnvOverlay) error {
 		}
 		o.DiscoveryRateLimitBurst = &value
 	}
+	return nil
+}
+
+// loadOverlayUploadLimit overlays the upload limit (register row RQB-007)
+// through the reader stdio's [Load] calls, so a value that does not parse,
+// one that is not positive and one above the ceiling refuse startup in both
+// transports with the same words, and a blank one is unset in both. HTTP mode
+// used to read it outside the overlay, warning and using the default for the
+// first two and the maximum for the third (issue 1170).
+func loadOverlayUploadLimit(o *HTTPEnvOverlay) error {
+	if !envPresent("UPLOAD_MAX_FILE_SIZE") {
+		return nil
+	}
+	value, err := UploadMaxFileSizeFromEnv()
+	if err != nil {
+		return err
+	}
+	o.UploadMaxFileSize = &value
 	return nil
 }
 

@@ -9521,8 +9521,6 @@ func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
 // differ, so each is driven on its own and the whole struct compared, which is
 // what tells a swap between two of them from a correct mapping.
 func TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField(t *testing.T) {
-	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "7340033")
-
 	base := httpConfig{
 		gitlabURL:             "https://first.example.test",
 		gitlabURLs:            repeatedFlag{"https://first.example.test", "https://second.example.test"},
@@ -9537,6 +9535,7 @@ func TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField(t *testing.T) {
 		actionTimeout:         66 * time.Minute,
 		drainDelay:            7 * time.Second,
 		maxRequestBodyBytes:   4097,
+		uploadMaxFileSize:     7340033,
 		authMode:              "auth-mode-value",
 		publicURL:             "https://public.example.test/prefix",
 		resourceDocumentation: "https://docs.example.test/app",
@@ -11935,47 +11934,6 @@ func TestToolsList_FitsInOnePage(t *testing.T) {
 	t.Logf("the largest surface lists %d tools in one page", len(listed.Tools))
 }
 
-// TestUploadMaxFileSize_HTTPMode_HonorsTheSetting is the regression for a flag
-// that worked on one transport and silently did nothing on the other.
-//
-// --upload-max-file-size writes UPLOAD_MAX_FILE_SIZE into the environment,
-// which config.Load reads. HTTP mode does not go through Load: it builds its
-// configuration from flags, and that path hardcoded the default. So an operator
-// raising the limit saw it applied over stdio and ignored over HTTP, with
-// nothing anywhere saying which they had got.
-func TestUploadMaxFileSize_HTTPMode_HonorsTheSetting(t *testing.T) {
-	tests := []struct {
-		name  string
-		set   bool
-		value string
-		want  int64
-	}{
-		{name: "unset falls back to the default", want: config.DefaultMaxFileSize},
-		{name: "a plain byte count", set: true, value: "1048576", want: 1048576},
-		{name: "a human-friendly size", set: true, value: "50MB", want: 50 * 1024 * 1024},
-		{
-			name:  "an unparseable value falls back rather than failing the start",
-			set:   true,
-			value: "not-a-size",
-			want:  config.DefaultMaxFileSize,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Cleared first, so the "unset" case tests an absent variable
-			// rather than whatever the developer's shell happens to export.
-			t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "")
-			if tc.set {
-				t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", tc.value)
-			}
-			if got := uploadMaxFileSize(); got != tc.want {
-				t.Errorf("uploadMaxFileSize() = %d, want %d", got, tc.want)
-			}
-		})
-	}
-}
-
 // TestServerCard_AnnouncesTelemetryWithoutNamingTheCollector is two assertions
 // that pull in opposite directions, which is why they belong in one test.
 //
@@ -12602,59 +12560,6 @@ func TestOAuthCacheTTL_ANonPositiveValueFallsBackAndSaysSo(t *testing.T) {
 				t.Errorf("oauthCacheTTL(%s) = %s, want %s", tt.configured, got, tt.want)
 			}
 		})
-	}
-}
-
-// TestUploadMaxFileSize_ClampsAndFallsBackWithoutRefusingToStart covers the
-// upload limit HTTP mode reads from the environment.
-//
-// Neither branch stops the server: this runs while the HTTP configuration is
-// being assembled, where a malformed or oversized value is worth a loud line and
-// a working server rather than a dead one. The ceiling is applied here because
-// the HTTP path never calls config.Validate, so without it "1025GB" would parse
-// cleanly and start a deployment above the documented maximum with nothing
-// saying so.
-func TestUploadMaxFileSize_ClampsAndFallsBackWithoutRefusingToStart(t *testing.T) {
-	tests := []struct {
-		name  string
-		value string
-		want  int64
-	}{
-		{name: "unset uses the default", value: "", want: config.DefaultMaxFileSize},
-		{name: "unparseable uses the default", value: "the-size-of-a-cat", want: config.DefaultMaxFileSize},
-		{name: "above the ceiling is clamped", value: "1025GB", want: config.MaxFileSize},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.value == "" {
-				t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "")
-				os.Unsetenv("UPLOAD_MAX_FILE_SIZE")
-			} else {
-				t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", tt.value)
-			}
-
-			if got := uploadMaxFileSize(); got != tt.want {
-				t.Errorf("uploadMaxFileSize() = %d, want %d", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestUploadMaxFileSize_TheCeilingItselfIsNotAnOverflow covers the upload
-// limit at exactly the documented maximum. That is a value an operator may
-// set, so it is used as given and no warning claims it was clamped: a line
-// saying a limit exceeds the maximum when it equals it sends an operator to
-// fix a setting that is correct.
-func TestUploadMaxFileSize_TheCeilingItselfIsNotAnOverflow(t *testing.T) {
-	logged := captureLogMessages(t)
-	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", strconv.FormatInt(config.MaxFileSize, 10))
-
-	if got := uploadMaxFileSize(); got != config.MaxFileSize {
-		t.Errorf("uploadMaxFileSize() = %d, want %d", got, config.MaxFileSize)
-	}
-	if logged("exceeds the maximum") {
-		t.Error("a limit equal to the maximum was reported as exceeding it")
 	}
 }
 
@@ -13390,6 +13295,21 @@ func TestRunHTTP_RefusesABadConfigurationBeforeBinding(t *testing.T) {
 			env:     map[string]string{"GITLAB_MCP_CAPABILITY_SURFACE": "some"},
 			hcfg:    &httpConfig{gitlabURL: "https://gitlab.example.com"},
 			wantErr: "loading environment configuration",
+		},
+		{
+			// The upload limit used to warn and use the default here, and the
+			// maximum for a value above it, where stdio refused both (issue
+			// 1170, register row RQB-007).
+			name:    "an upload size that does not parse",
+			env:     map[string]string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE": "the-size-of-a-cat"},
+			hcfg:    &httpConfig{gitlabURL: "https://gitlab.example.com"},
+			wantErr: "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value",
+		},
+		{
+			name:    "an upload size above the ceiling",
+			env:     map[string]string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE": "1025GB"},
+			hcfg:    &httpConfig{gitlabURL: "https://gitlab.example.com"},
+			wantErr: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB",
 		},
 		{
 			name:    "a socket mode that is not a mode",

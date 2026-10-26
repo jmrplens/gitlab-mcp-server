@@ -61,6 +61,8 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 
 		"DiscoveryRateLimitRPS":   overlay.DiscoveryRateLimitRPS == nil,
 		"DiscoveryRateLimitBurst": overlay.DiscoveryRateLimitBurst == nil,
+
+		"UploadMaxFileSize": overlay.UploadMaxFileSize == nil,
 	}
 	for field, isNil := range nilFields {
 		t.Run(field, func(t *testing.T) {
@@ -284,7 +286,48 @@ func presentVariableCases() []presentVariableCase {
 			},
 		},
 	}
-	return append(append(cases, authBudgetPresentCases()...), discoveryRatePresentCases()...)
+	return slices.Concat(cases, authBudgetPresentCases(), discoveryRatePresentCases(), uploadLimitPresentCases())
+}
+
+// uploadLimitPresentCases are the upload limit's rows of the table above
+// (register row RQB-007), which HTTP mode reads through the overlay since
+// issue 1170: a size with a unit, read as the bytes it names, the ceiling
+// itself, which is a limit an operator may set rather than one the reader
+// refuses, and a blank value, which is no value here as it is to stdio's
+// reader, so the caller keeps the default.
+func uploadLimitPresentCases() []presentVariableCase {
+	return []presentVariableCase{
+		{
+			name: "a blank upload limit counts as absent",
+			env:  map[string]string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE": "   "},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.UploadMaxFileSize != nil {
+					t.Errorf("UploadMaxFileSize = %d, want nil for a blank value", *o.UploadMaxFileSize)
+				}
+			},
+		},
+		{
+			name: "upload limit with a unit",
+			env:  map[string]string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE": "50MB"},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.UploadMaxFileSize == nil || *o.UploadMaxFileSize != 50<<20 {
+					t.Errorf("UploadMaxFileSize = %v, want %d", o.UploadMaxFileSize, 50<<20)
+				}
+			},
+		},
+		{
+			name: "upload limit at the ceiling",
+			env:  map[string]string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE": strconv.FormatInt(MaxFileSize, 10)},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.UploadMaxFileSize == nil || *o.UploadMaxFileSize != MaxFileSize {
+					t.Errorf("UploadMaxFileSize = %v, want %d", o.UploadMaxFileSize, int64(MaxFileSize))
+				}
+			},
+		},
+	}
 }
 
 // discoveryRatePresentCases are the discovery documents' bucket's rows of the
@@ -476,6 +519,14 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST", "bogus", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST"},
 		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST", "-1", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST"},
 		{"GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST", "10001", "GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST exceeds maximum of 10000 (got 10001)"},
+		// The upload limit (register row RQB-007), which HTTP mode used to
+		// read outside the overlay, warning and using the default for a
+		// value it could not parse and the maximum for one above it (issue
+		// 1170). It is refused now with the stdio reader's own words.
+		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "bogus", "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
+		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "0", "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
+		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "1025GB", "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB"},
+		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "17179869185GB", "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
 	}
 
 	for _, tt := range tests {

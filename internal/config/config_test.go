@@ -830,29 +830,16 @@ func TestValidate_URLFormat(t *testing.T) {
 	}
 }
 
-// TestValidate_UploadMaxFileSizeBound verifies that excessively large
-// UPLOAD_MAX_FILE_SIZE values are rejected.
-func TestValidate_UploadMaxFileSizeBound(t *testing.T) {
-	cfg := &Config{
-		GitLabURL:         "https://gitlab.example.com",
-		GitLabToken:       "test-token",
-		UploadMaxFileSize: MaxFileSize + 1,
-	}
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("validate() expected error for oversized UPLOAD_MAX_FILE_SIZE")
-	}
-}
-
-// TestValidate_AcceptableMaxValues verifies that values at the exact
-// upper bound are accepted.
+// TestValidate_AcceptableMaxValues verifies that the rate limit's values at
+// their exact upper bound are accepted. The upload limit's ceiling is not
+// validate's to judge (issue 1170): its reader accepts the ceiling itself,
+// which TestUploadMaxFileSizeFromEnv_RefusesWhatEitherTransportRefuses holds.
 func TestValidate_AcceptableMaxValues(t *testing.T) {
 	cfg := &Config{
-		GitLabURL:         "https://gitlab.example.com",
-		GitLabToken:       "test-token",
-		UploadMaxFileSize: MaxFileSize,
-		RateLimitRPS:      MaxRateLimitRPS,
-		RateLimitBurst:    MaxRateLimitBurst,
+		GitLabURL:      "https://gitlab.example.com",
+		GitLabToken:    "test-token",
+		RateLimitRPS:   MaxRateLimitRPS,
+		RateLimitBurst: MaxRateLimitBurst,
 	}
 	err := cfg.validate()
 	if err != nil {
@@ -1099,6 +1086,73 @@ func TestParseSize_ASizeNoByteCountHolds_IsRefused(t *testing.T) {
 			}
 			if err != nil || got != tc.want {
 				t.Errorf("parseSize(%q) = %d, %v; want %d", tc.input, got, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestUploadMaxFileSizeFromEnv_RefusesWhatEitherTransportRefuses holds the
+// one reader of the upload limit to its bounds (register row RQB-007, issue
+// 1170). Stdio's Load and HTTP mode's overlay both read the setting through
+// it, so the ceiling is applied there rather than by Validate, which only
+// stdio calls: HTTP mode used to warn and use the default for a value it
+// could not parse, and the maximum for one above it. Each refusal names the
+// variable in full, which is also the variable --upload-max-file-size writes.
+//
+// A blank value is no value, as it is to the overlay, which reads one as
+// absent and leaves the limit at its default: the reader used to refuse it as
+// a size that did not parse, so the same exported line stopped a stdio server
+// and started an HTTP one. A padded size is read trimmed, as every variable is.
+func TestUploadMaxFileSizeFromEnv_RefusesWhatEitherTransportRefuses(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		want        int64
+		says        string
+	}{
+		{name: "unset is the default", want: DefaultMaxFileSize},
+		{name: "blank is the default", value: "   ", want: DefaultMaxFileSize},
+		{name: "a padded size", value: " 50MB ", want: 50 << 20},
+		{name: "a size with a unit", value: "50MB", want: 50 << 20},
+		{name: "the ceiling itself", value: "1024GB", want: MaxFileSize},
+		{name: "a value that does not parse", value: "the-size-of-a-cat", says: `invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value: invalid size "the-size-of-a-cat"`},
+		{name: "zero", value: "0", says: `invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value: size must be positive, got "0"`},
+		{name: "one byte above the ceiling", value: strconv.FormatInt(MaxFileSize+1, 10), says: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB (got 1099511627777 bytes)"},
+		{name: "a unit above the ceiling", value: "1025GB", says: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB"},
+		{name: "a size no byte count holds", value: "17179869185GB", says: "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(EnvPrefix+"UPLOAD_MAX_FILE_SIZE", tc.value)
+			got, err := UploadMaxFileSizeFromEnv()
+			if tc.says != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.says) {
+					t.Errorf("UploadMaxFileSizeFromEnv() = %d, %v; want a refusal carrying %q", got, err, tc.says)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Errorf("UploadMaxFileSizeFromEnv() = %d, %v; want %d", got, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestLoad_AnUploadSizeAboveTheCeilingOrNoByteCountHolds_RefusesStdio is the
+// stdio half of the test above, through Load: a value the reader refuses ends
+// the start with the reader's own words, the variable named in full, and a
+// size that wrapped to one below the ceiling no longer starts a server under
+// a limit nobody wrote.
+func TestLoad_AnUploadSizeAboveTheCeilingOrNoByteCountHolds_RefusesStdio(t *testing.T) {
+	for _, tc := range []struct{ value, says string }{
+		{value: "1025GB", says: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB"},
+		{value: "17179869185GB", says: "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv(EnvPrefix+"UPLOAD_MAX_FILE_SIZE", tc.value)
+			cfg, err := Load()
+			if err == nil || !strings.Contains(err.Error(), tc.says) {
+				t.Errorf("Load() = %+v, %v; want a refusal carrying %q", cfg, err, tc.says)
 			}
 		})
 	}
@@ -2100,8 +2154,8 @@ func TestLoad_ActionTimeoutInvalid(t *testing.T) {
 // dangerous one: toolutil reads a non-positive limit as no limit at all, so a
 // DefaultMaxFileSize that lost its multiplication would switch the
 // out-of-the-box upload ceiling off with the suite still green. MaxFileSize is
-// the figure Validate names when it refuses ("exceeds maximum of 1 TB"), so one
-// that moved would make that sentence a lie.
+// the figure UploadMaxFileSizeFromEnv names when it refuses ("exceeds maximum
+// of 1 TB"), so one that moved would make that sentence a lie.
 //
 // The wanted sizes are spelled as shifts rather than as the product the
 // declaration uses, so the two sides cannot move together.
@@ -2119,7 +2173,7 @@ func TestUploadSizeConstants_HoldTheDefaultBelowTheCeilingItNames(t *testing.T) 
 			defaultSize, twoGiB)
 	}
 	if ceiling != oneTiB {
-		t.Errorf("MaxFileSize = %d bytes, want %d: Validate refuses anything above it by naming 1 TB",
+		t.Errorf("MaxFileSize = %d bytes, want %d: the reader refuses anything above it by naming 1 TB",
 			ceiling, oneTiB)
 	}
 	if defaultSize <= 0 {
