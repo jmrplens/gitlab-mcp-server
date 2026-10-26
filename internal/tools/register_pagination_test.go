@@ -22,93 +22,80 @@ import (
 // TestMRReview_InlinePositionsAcrossDiffPages exercises the served tools,
 // including their pre-check and actual writes, against a 201-file MR.
 func TestMRReview_InlinePositionsAcrossDiffPages(t *testing.T) {
-	tools := []struct {
-		name, method, path, bodyField, response string
-	}{
-		{"gitlab_mr_discussion_create", http.MethodPost, "/discussions", "body", `{"id":"thread","notes":[{"id":10,"body":"Keep this text"}]}`},
-		{"gitlab_mr_draft_note_create", http.MethodPost, "/draft_notes", "note", `{"id":10,"note":"Keep this text"}`},
-		{"gitlab_mr_draft_note_update", http.MethodPut, "/draft_notes/10", "note", `{"id":10,"note":"Keep this text"}`},
-	}
-	positions := []struct {
-		name, path, oldPath string
-		newLine, oldLine    int
-	}{
-		{"FirstPageAdded", "file-000.go", "file-000.go", 2, 0},
-		{"SecondPageRemoved", "file-100.go", "file-100.go", 0, 2},
-		{"ThirdPageRenamedContext", "renamed.go", "file-200.go", 1, 1},
-	}
-	for _, tool := range tools {
-		t.Run(tool.name, func(t *testing.T) {
-			for _, position := range positions {
-				t.Run(position.name, func(t *testing.T) {
-					var pages []int
-					var writes []map[string]any
-					session := newMRPaginationSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						if r.URL.Path == "/api/v4/projects/42/merge_requests/1/diffs" {
-							pages = append(pages, respondMRDiffPage(w, r))
-							return
-						}
-						if r.Method != tool.method || r.URL.Path != "/api/v4/projects/42/merge_requests/1"+tool.path {
-							http.NotFound(w, r)
-							return
-						}
-						var body map[string]any
-						if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-							t.Error(err)
-							w.WriteHeader(http.StatusBadRequest)
-							return
-						}
-						writes = append(writes, body)
-						testutil.RespondJSON(w, http.StatusOK, tool.response)
-					}))
-					pos := map[string]any{
-						"base_sha": strings.Repeat("a", 40), "start_sha": strings.Repeat("b", 40),
-						"head_sha": strings.Repeat("c", 40), "position_type": "text",
-						"new_path": position.path, "old_path": position.oldPath,
-					}
-					if position.newLine != 0 {
-						pos["new_line"] = position.newLine
-					}
-					if position.oldLine != 0 {
-						pos["old_line"] = position.oldLine
-					}
-					args := map[string]any{
-						"project_id": "42", "merge_request_iid": 1,
-						tool.bodyField: "Keep this text", "position": pos,
-					}
-					if tool.method == http.MethodPut {
-						args["note_id"] = 10
-					}
+	discussion := mrInlineTool{"gitlab_mr_discussion_create", http.MethodPost, "/discussions", "body", `{"id":"thread","notes":[{"id":10,"body":"Keep this text"}]}`}
+	draftCreate := mrInlineTool{"gitlab_mr_draft_note_create", http.MethodPost, "/draft_notes", "note", `{"id":10,"note":"Keep this text"}`}
+	draftUpdate := mrInlineTool{"gitlab_mr_draft_note_update", http.MethodPut, "/draft_notes/10", "note", `{"id":10,"note":"Keep this text"}`}
+	firstPage := mrInlinePosition{"FirstPageAdded", "file-000.go", "file-000.go", 2, 0}
+	secondPage := mrInlinePosition{"SecondPageRemoved", "file-100.go", "file-100.go", 0, 2}
+	thirdPage := mrInlinePosition{"ThirdPageRenamedContext", "renamed.go", "file-200.go", 1, 1}
 
-					result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: tool.name, Arguments: args})
+	cases := []struct {
+		tool     mrInlineTool
+		position mrInlinePosition
+	}{
+		{discussion, firstPage},
+		{discussion, secondPage},
+		{discussion, thirdPage},
+		{draftCreate, firstPage},
+		{draftCreate, secondPage},
+		{draftCreate, thirdPage},
+		{draftUpdate, firstPage},
+		{draftUpdate, secondPage},
+		{draftUpdate, thirdPage},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tool.name+"/"+tc.position.name, func(t *testing.T) {
+			session, requests := newMRInlineWriteSession(t, tc.tool)
+			pos := tc.position.input()
+			args := map[string]any{
+				"project_id": "42", "merge_request_iid": 1,
+				tc.tool.bodyField: "Keep this text", "position": pos,
+			}
+			if tc.tool.method == http.MethodPut {
+				args["note_id"] = 10
+			}
 
-					if err != nil || result.IsError {
-						t.Fatalf("CallTool() = (%+v, %v), want a successful inline write", result, err)
-					}
-					if !slices.Equal(pages, []int{1, 2, 3}) {
-						t.Errorf("diff pages = %v, want [1 2 3]", pages)
-					}
-					if len(writes) != 1 {
-						t.Fatalf("writes = %d, want 1", len(writes))
-					}
-					if writes[0][tool.bodyField] != "Keep this text" {
-						t.Errorf("written body = %v", writes[0])
-					}
-					expected, err := json.Marshal(pos)
-					if err != nil {
-						t.Fatal(err)
-					}
-					var want map[string]any
-					if err := json.Unmarshal(expected, &want); err != nil {
-						t.Fatal(err)
-					}
-					if !reflect.DeepEqual(writes[0]["position"], want) {
-						t.Errorf("written position = %#v, want %#v", writes[0]["position"], want)
-					}
-				})
+			result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: tc.tool.name, Arguments: args})
+			if err != nil || result.IsError {
+				t.Fatalf("CallTool() = (%+v, %v), want a successful inline write", result, err)
+			}
+			if !slices.Equal(requests.pages, []int{1, 2, 3}) {
+				t.Errorf("diff pages = %v, want [1 2 3]", requests.pages)
+			}
+			if len(requests.writes) != 1 {
+				t.Fatalf("writes = %d, want 1", len(requests.writes))
+			}
+			if requests.writes[0][tc.tool.bodyField] != "Keep this text" {
+				t.Errorf("written body = %v", requests.writes[0])
+			}
+			if !reflect.DeepEqual(requests.writes[0]["position"], pos) {
+				t.Errorf("written position = %#v, want %#v", requests.writes[0]["position"], pos)
 			}
 		})
 	}
+}
+
+// mrInlinePosition identifies a line in one of the three fixture diff pages.
+type mrInlinePosition struct {
+	name, path, oldPath string
+	newLine, oldLine    int
+}
+
+// input uses JSON-decoded number types so the request can be compared directly
+// with the position received by the mock GitLab endpoint.
+func (p mrInlinePosition) input() map[string]any {
+	position := map[string]any{
+		"base_sha": strings.Repeat("a", 40), "start_sha": strings.Repeat("b", 40),
+		"head_sha": strings.Repeat("c", 40), "position_type": "text",
+		"new_path": p.path, "old_path": p.oldPath,
+	}
+	if p.newLine != 0 {
+		position["new_line"] = float64(p.newLine)
+	}
+	if p.oldLine != 0 {
+		position["old_line"] = float64(p.oldLine)
+	}
+	return position
 }
 
 // TestMRReview_InvalidPositionAfterCompleteListing keeps real validation
@@ -143,7 +130,6 @@ func TestMRReview_InvalidPositionAfterCompleteListing(t *testing.T) {
 					},
 				},
 			})
-
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,8 +165,8 @@ func TestMRReview_ChangesPagination(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out mrchanges.Output
-		if err := json.Unmarshal(body, &out); err != nil {
-			t.Fatal(err)
+		if decodeErr := json.Unmarshal(body, &out); decodeErr != nil {
+			t.Fatal(decodeErr)
 		}
 		pages = append(pages, out.Pagination.Page)
 		count += len(out.Changes)
@@ -199,6 +185,43 @@ func TestMRReview_ChangesPagination(t *testing.T) {
 	if count != 201 || !slices.Equal(pages, []int64{1, 2, 3}) {
 		t.Errorf("listing = (%d files, pages %v), want (201, [1 2 3])", count, pages)
 	}
+}
+
+// mrInlineTool describes an inline write endpoint and its MCP projection.
+type mrInlineTool struct {
+	name, method, path, bodyField, response string
+}
+
+// mrInlineRequests records the diff pages and write bodies received by GitLab.
+type mrInlineRequests struct {
+	pages  []int
+	writes []map[string]any
+}
+
+// newMRInlineWriteSession records requests to an inline write endpoint while
+// serving the same 201-file diff fixture used by the pagination read tests.
+func newMRInlineWriteSession(t *testing.T, tool mrInlineTool) (*mcp.ClientSession, *mrInlineRequests) {
+	t.Helper()
+	requests := &mrInlineRequests{}
+	session := newMRPaginationSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/diffs" {
+			requests.pages = append(requests.pages, respondMRDiffPage(w, r))
+			return
+		}
+		if r.Method != tool.method || r.URL.Path != "/api/v4/projects/42/merge_requests/1"+tool.path {
+			http.NotFound(w, r)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		requests.writes = append(requests.writes, body)
+		testutil.RespondJSON(w, http.StatusOK, tool.response)
+	}))
+	return session, requests
 }
 
 // newMRPaginationSession connects an MCP client to the actual individual

@@ -78,9 +78,8 @@ func TestMRChangesGet_Pagination(t *testing.T) {
 
 			out, err := Get(t.Context(), client, GetInput{
 				ProjectID: "42", MRIID: 1, Unidiff: true,
-				PaginationInput: toolutil.PaginationInput{Page: page, PerPage: 100},
+				Page: page, PerPage: 100,
 			})
-
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -109,14 +108,23 @@ func TestFormatOutputMarkdown_Pagination(t *testing.T) {
 		pagination toolutil.PaginationOutput
 		want       string
 	}{
-		{"WithTotals", []FileDiffOutput{{NewPath: "a.go", Diff: "+a"}},
+		{
+			"WithTotals",
+			[]FileDiffOutput{{NewPath: "a.go", Diff: "+a"}},
 			toolutil.PaginationOutput{Page: 2, PerPage: 100, TotalItems: 201, TotalPages: 3, NextPage: 3, HasMore: true},
-			"Page 2 of 3 | 201 items total | 100 per page"},
-		{"WithoutTotals", []FileDiffOutput{{NewPath: "a.go", Diff: "+a"}},
+			"Page 2 of 3 | 201 items total | 100 per page",
+		},
+		{
+			"WithoutTotals",
+			[]FileDiffOutput{{NewPath: "a.go", Diff: "+a"}},
 			toolutil.PaginationOutput{Page: 2, PerPage: 100, NextPage: 3, HasMore: true},
-			"Page 2 | 100 per page | more pages available"},
-		{"EmptyLastPage", nil, toolutil.PaginationOutput{Page: 3, PerPage: 100},
-			"Page 3 | 100 per page | no more pages"},
+			"Page 2 | 100 per page | more pages available",
+		},
+		{
+			"EmptyLastPage", nil,
+			toolutil.PaginationOutput{Page: 3, PerPage: 100},
+			"Page 3 | 100 per page | no more pages",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
