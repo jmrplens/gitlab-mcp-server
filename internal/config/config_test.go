@@ -1066,6 +1066,44 @@ func TestParseSize_NegativeValue(t *testing.T) {
 	}
 }
 
+// TestParseSize_ASizeNoByteCountHolds_IsRefused verifies that a size whose
+// byte count does not fit in an int64 is refused rather than wrapped (issue
+// 1170). The count is the number times its unit, and the product used to
+// wrap: 17179869185GB is 2^64 plus 1 GiB bytes, which came back as 1 GiB, a
+// limit far below the one written that the ceiling then had no reason to
+// refuse, and 8589934592GB came back as the most negative int64, which is no
+// limit at all to toolutil. The largest count of each unit that fits is a
+// size like any other, and the ceiling judges it.
+func TestParseSize_ASizeNoByteCountHolds_IsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		input   string
+		want    int64
+		refused bool
+	}{
+		{input: "17179869185GB", refused: true},
+		{input: "8589934592GB", refused: true},
+		{input: "8796093022208MB", refused: true},
+		{input: "9007199254740992KB", refused: true},
+		{input: "8589934591GB", want: 8589934591 << 30},
+		{input: "8796093022207MB", want: 8796093022207 << 20},
+		{input: "9007199254740991KB", want: 9007199254740991 << 10},
+		{input: "9223372036854775807", want: 9223372036854775807},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := parseSize(tc.input, 0)
+			if tc.refused {
+				if err == nil || !strings.Contains(err.Error(), "does not fit") {
+					t.Errorf("parseSize(%q) = %d, %v; want a refusal saying the byte count does not fit", tc.input, got, err)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Errorf("parseSize(%q) = %d, %v; want %d", tc.input, got, err, tc.want)
+			}
+		})
+	}
+}
+
 // TestLoad_InvalidSafeMode verifies that Load returns an error when
 // GITLAB_MCP_SAFE_MODE has an invalid boolean value.
 func TestLoad_InvalidSafeMode(t *testing.T) {

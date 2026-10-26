@@ -861,6 +861,11 @@ func parseMetaParamSchema(s, defaultValue string) (string, error) {
 // parseSize parses a human-friendly size string (e.g. "50MB", "10mb", "2GB",
 // "1024") into bytes. Supported suffixes: KB, MB, GB (case-insensitive).
 // Returns defaultValue when s is empty.
+//
+// A count whose bytes do not fit in an int64 is refused rather than
+// multiplied (issue 1170): the product wrapped, so 17179869185GB came back as
+// 1 GiB, a limit nobody wrote that no ceiling had a reason to refuse, and
+// 8589934592GB as the most negative int64, which toolutil reads as no limit.
 func parseSize(s string, defaultValue int64) (int64, error) {
 	if s == "" {
 		return defaultValue, nil
@@ -890,6 +895,9 @@ func parseSize(s string, defaultValue int64) (int64, error) {
 	}
 	if n <= 0 {
 		return 0, fmt.Errorf("size must be positive, got %q", s)
+	}
+	if n > math.MaxInt64/multiplier {
+		return 0, fmt.Errorf("size %q is a byte count that does not fit in 64 bits", s)
 	}
 
 	return n * multiplier, nil
