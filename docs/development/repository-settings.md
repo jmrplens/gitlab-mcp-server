@@ -34,8 +34,12 @@ long-lived credential to rotate and is itself an unmanaged repository setting.
 That trade is not worth taking for items that change roughly never, so the
 checks below are run by hand.
 
-The one exception is release immutability, which is visible in the public
-release metadata and is already checked (see below). The npm trusted
+There are two exceptions. Release immutability is visible in the public
+release metadata and is already checked (see below), and the documentation
+site's response headers are visible in its public responses and are checked
+by the `headers` job of `pages.yml` after every deploy (see
+[Documentation site response headers](#documentation-site-response-headers)).
+The npm trusted
 publishers, the NuGet.org trusted publishing policy and the PyPI trusted
 publisher at the end of this page are not GitHub settings at all, but they are
 recorded here for the same reason: they live outside the repository, the
@@ -43,7 +47,10 @@ release depends on them, and no gate can see them. The `Protect main` item is
 the rule every pull request merges under rather than something the release
 depends on, and it is recorded here because
 [GOVERNANCE.md](../../GOVERNANCE.md#access-and-two-factor-authentication)
-describes it and no file in the tree can show it.
+describes it and no file in the tree can show it. The documentation site's
+response headers are a Cloudflare setting, and the release does not depend on
+them either; they are here because the OpenSSF Best Practices answer for the
+project's website rests on them and only the maintainer can set them.
 
 ## SC-04: enable immutable releases
 
@@ -465,6 +472,74 @@ PyPI's reason (`invalid-publisher` when no publisher matches the token's
 claims). A wheel uploaded through any other publisher fails `verify-published`,
 which names the publisher its provenance carries.
 
+## Documentation site response headers
+
+**What to set.** In Cloudflare, in the `jmrp.io` zone, a response header
+transform rule (**Rules**, **Transform Rules**, **Modify Response Header**)
+whose expression matches the site, for example
+`http.host eq "docs.jmrp.io" and starts_with(http.request.uri.path, "/gitlab-mcp-server/")`,
+and which sets two headers:
+
+```text
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.shields.io https://cursor.com https://kiro.dev https://files.lmstudio.ai; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+X-Frame-Options: DENY
+```
+
+**Why.** The OpenSSF Best Practices gold criterion hardened_site asks the
+project's website for four headers with values that are not permissive:
+`Content-Security-Policy`, `Strict-Transport-Security`,
+`X-Content-Type-Options` as `nosniff`, and `X-Frame-Options`. The site is a
+GitHub Pages build, and Pages lets a site set none of its own response headers,
+so the two it lacks can only be added by Cloudflare in front of it.
+
+The policy is written for what the built site loads, read from its 216 pages
+on 2026-10-26: its own scripts, styles, search index and search worker, data:
+images, and the four hosts of the install badges on the getting started page.
+`'unsafe-inline'` is there because Starlight writes its theme, sidebar and tab
+scripts inline, twelve distinct scripts across the site, and their hashes are
+hashes of Starlight's own code, so a policy of hashes set in Cloudflare would
+have to change with every Starlight release the dependency updates bring.
+`'wasm-unsafe-eval'` is there because Pagefind compiles its search index from
+WebAssembly. With the policy and `X-Frame-Options: DENY` injected into every
+response, each of the 216 pages loaded in Chromium with no violation, the
+theme switch and the search worked, and the five badge images from the four
+hosts loaded; the same run with `script-src 'self'` and `img-src 'self' data:`
+reported violations, the search returned nothing and the badges did not load.
+A page that later loads an image or a script from
+another host needs that host added here, in the rule and in
+`recommendedPolicy` in `cmd/audit_site_headers/csp.go` together: the check
+judges how strict the policy is, and cannot see what it blocks.
+
+**Current state.** Not satisfied. Read on 2026-10-26, the site's responses
+carry `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+and `X-Content-Type-Options: nosniff`, and neither `Content-Security-Policy`
+nor `X-Frame-Options`.
+
+**How to check.**
+
+```bash
+make check-site-headers
+curl -sI https://docs.jmrp.io/gitlab-mcp-server/ \
+  | grep -i -E '^(content-security-policy|strict-transport-security|x-content-type-options|x-frame-options):'
+```
+
+`make check-site-headers` reports each header as `ok`, `pending` with the value
+to set, or `FAIL`. Once the rule is in place it reports the two headers as
+`notice`, served while declared pending: remove their `pending` reason from
+`siteHeaders` in `cmd/audit_site_headers/headers.go` then, so that losing them
+fails the check from then on. The same change updates the tests that pin
+today's declarations (`TestSiteHeaders_Declarations_NameTheFourHeadersAndHoldTheirOwnValues`,
+and the cases of `TestRunMain_Arguments_JudgeEachPageOrRefuse` that expect the
+two as pending or as a notice), **Current state** above, and the sentence of
+[the command's reference](cmd-utilities.md#audit_site_headers) that names the
+two pending.
+
+**What tells you it drifted.** The `🛡️ Check the security headers` job of
+`pages.yml`, after every deploy: it fails when a header declared required is
+lost or turns permissive, and warns with the value to set while one is
+pending. A change in Cloudflare between deploys shows at the next deploy, or
+at once with `make check-site-headers`.
+
 ## Checking all of it at once
 
 ```bash
@@ -476,6 +551,7 @@ gh api repos/jmrplens/gitlab-mcp-server --jq '"squash=\(.allow_squash_merge) mer
 gh api repos/jmrplens/gitlab-mcp-server/environments/release --jq '"release_policy=\(.deployment_branch_policy) admins_bypass=\(.can_admins_bypass)"'
 gh api repos/jmrplens/gitlab-mcp-server/environments/release/deployment-branch-policies --jq '.branch_policies[] | "release_ref=\(.type):\(.name)"'
 gh api repos/jmrplens/gitlab-mcp-server/environments/release-rehearsal/secrets --jq '"rehearsal_secrets=\(.total_count)"'
+make check-site-headers
 ```
 
 Run these after any change to repository settings, and before a release when one

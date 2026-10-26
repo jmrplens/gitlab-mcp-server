@@ -54,6 +54,7 @@ security:
           - cmd/audit_supply_chain/**
           - cmd/audit_image_vulns/**
           - cmd/reproduce_release/**
+          - cmd/audit_site_headers/**
           - cmd/server/authgate*.go
           - cmd/server/bearerguard*.go
           - internal/oauth/**

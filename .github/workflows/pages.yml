@@ -136,6 +136,36 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
 
+  # The OpenSSF Best Practices criterion hardened_site asks the project's
+  # website for Content-Security-Policy, Strict-Transport-Security,
+  # X-Content-Type-Options and X-Frame-Options with values that are not
+  # permissive. GitHub Pages lets a site set none of its own headers, so all
+  # four come from Cloudflare in front of it, and only the live responses can
+  # show them. cmd/audit_site_headers fetches the page the deploy published and
+  # judges each one: losing one the site serves fails this job, and one still
+  # waiting for the maintainer's Cloudflare rule is reported with the value to
+  # set, as a warning on the run, without failing it. The site is already
+  # deployed when this runs, so a failure here is a regression to fix in
+  # Cloudflare, not a deploy to roll back.
+  headers:
+    name: "🛡️ Check the security headers"
+    needs: deploy
+    runs-on: ubuntu-latest
+    # Building the command takes about a minute; a page that does not answer
+    # is retried four times ten seconds apart, each fetch bounded at thirty.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - name: Judge the deployed site's security headers
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: go run ./cmd/audit_site_headers -url "$PAGE_URL" -annotate -summary "$GITHUB_STEP_SUMMARY"
+
   indexnow:
     name: "📡 Submit to IndexNow"
     needs: deploy

@@ -54,7 +54,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 788 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 488 test files under `internal/tools/`                                                                       |
-| Go packages               | 307 in the module (`go list ./...`); 334 directories hold tracked `.go` files, the twenty-seven more being what `go list` leaves out: twenty-six `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
+| Go packages               | 308 in the module (`go list ./...`); 335 directories hold tracked `.go` files, the twenty-seven more being what `go list` leaves out: twenty-six `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
 
 ### Orbit live tests
 
@@ -84,6 +84,7 @@ gitlab-mcp-server/
 │   ├── audit_binary_vulns/           # Release binaries against the Go vulnerability database (make check-binary-vulns)
 │   ├── audit_image_vulns/            # The image's Alpine packages against Trivy's database, before the push (make check-image-vulns)
 │   ├── reproduce_release/            # Release binaries rebuilt from the tag and compared byte for byte (make check-reproducible, check-repeatable)
+│   ├── audit_site_headers/           # The documentation site's security headers, after each deploy (make check-site-headers)
 │   ├── godoc_tool/                   # Go doc auditor and fixer (make check-godocs)
 │   ├── audit_md_escaping/            # GitLab-authored values reaching Markdown unescaped (make check-md-escaping)
 │   ├── audit_metrics/                # Tool, resource and prompt metrics

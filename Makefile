@@ -5,7 +5,7 @@
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
-	golangci-lint govulncheck check-binary-vulns image-vulns-images check-image-vulns check-repeatable check-reproducible sonar sonar-status \
+	golangci-lint govulncheck check-binary-vulns image-vulns-images check-image-vulns check-repeatable check-reproducible check-site-headers sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links check-md-tables \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
@@ -1012,6 +1012,12 @@ check-reproducible:
 		bash scripts/fetch-release-assets.sh "$(patsubst v%,%,$(TAG))" "$$published"; \
 	fi; \
 	go run ./cmd/reproduce_release/ -published "$$published" -tag "$(TAG)" -ref "$(or $(REF),$(TAG))" $(if $(SHORT_COMMIT),-short-commit "$(SHORT_COMMIT)")
+
+## check-site-headers: fetch the documentation site (SITE_URL overrides its root) and judge the four security headers the OpenSSF Best Practices criterion hardened_site names.
+## Fails when a header the site serves, declared required in cmd/audit_site_headers/headers.go, is lost or permissive; one still waiting for the maintainer's Cloudflare rule is reported with the value to set.
+## Needs the network, so make analyze does not run it; the headers job of pages.yml runs it after every deploy.
+check-site-headers:
+	go run ./cmd/audit_site_headers/ $(if $(SITE_URL),-url "$(SITE_URL)")
 
 # Trivy's own image, pinned by digest, at the release the release workflow
 # fetches as a tarball (TRIVY_VERSION and TRIVY_SHA256 in release.yml), so a

@@ -50,7 +50,7 @@ testing reference live in subfolders here.
 | [Documentation Audit, September 2026](documentation-audit-2026-09.md)     | The five end-to-end paths executed, the organisation review, and the plan                   |
 | [Distribution](distribution.md)                                           | How the Claude Desktop bundles and the package channels are built and published             |
 | [Release Process](release-process.md)                                     | How a release is rehearsed, cut and published on every channel                              |
-| [Repository Settings](repository-settings.md)                             | Release-pipeline settings that live on GitHub rather than in the tree                       |
+| [Repository Settings](repository-settings.md)                             | Settings that live outside the tree: on GitHub, the package registries and Cloudflare       |
 
 **Looking for something else?**
 [Architecture](https://docs.jmrp.io/gitlab-mcp-server/architecture/) for design rationale ·
