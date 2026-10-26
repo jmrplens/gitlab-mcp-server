@@ -24,9 +24,12 @@ const (
 	// broadcastTargetLevels: the roles a banner can target are the membership
 	// roles proper, without the two ends of AccessLevelValue.
 	broadcastTargetLevels = "doc/api/broadcast_messages.md lists target_access_levels as 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer) and 50 (Owner); 5 (Minimal access) and 60 (Admin) are AccessLevelValue constants outside that set"
-	// minAccessLevelFilter: the list filters document the membership roles a
-	// caller can hold, which excludes both ends of the type.
-	minAccessLevelFilter = "doc/api/groups.md and projects.md document min_access_level and shared_min_access_level as 5 (Minimal access) through 50 (Owner): 0 (No access) filters nothing and 60 (Admin) is not a membership level"
+	// minAccessLevelFilter: the list filters take the membership roles a
+	// caller can hold. It cites the routes at v19.5.0-ee, which register row
+	// 110 of docs/development/upstream-bugs.md records, rather than the API
+	// pages, which listed 5 until the documentation change that row names;
+	// the schemas offer toolutil.FilterAccessLevels (issue 1280).
+	minAccessLevelFilter = "every min_access_level and shared_min_access_level route declares values: Gitlab::Access.all_values at v19.5.0-ee, Guest (10) to Owner (50) in every edition: 0 filters nothing, 5 (Minimal access) is refused and 60 (Admin) is not a membership level (docs/development/upstream-bugs.md row 110)"
 	// shareAccessLevel covers the two share endpoints, which grant a role.
 	shareAccessLevel = "doc/api/groups.md#share-groups-with-groups and projects.md#share-a-project-with-a-group list 5 (Minimal access) through 50 (Owner); 0 grants nothing and 60 (Admin) is not a membership level"
 	// protectedBranchLevels is the four-value set every protection level
@@ -100,19 +103,30 @@ func buildAcceptedEnumGaps() map[string]string {
 		"broadcastmessages.UpdateInput.target_access_levels=5":  broadcastTargetLevels,
 		"broadcastmessages.UpdateInput.target_access_levels=60": broadcastTargetLevels,
 
-		"groups.InvitedListInput.min_access_level=0":                minAccessLevelFilter,
-		"groups.InvitedListInput.min_access_level=60":               minAccessLevelFilter,
-		"groups.ListInput.min_access_level=0":                       minAccessLevelFilter,
-		"groups.ListInput.min_access_level=60":                      minAccessLevelFilter,
-		"groups.ListProjectsInput.min_access_level=0":               minAccessLevelFilter,
-		"groups.ListProjectsInput.min_access_level=60":              minAccessLevelFilter,
-		"groups.ListSharedProjectsInput.min_access_level=0":         minAccessLevelFilter,
-		"groups.ListSharedProjectsInput.min_access_level=60":        minAccessLevelFilter,
-		"groups.SharedWithListInput.min_access_level=0":             minAccessLevelFilter,
-		"groups.SharedWithListInput.min_access_level=60":            minAccessLevelFilter,
-		"groups.SubgroupsListInput.min_access_level=0":              minAccessLevelFilter,
-		"projects.ListInvitedGroupsInput.min_access_level=0":        minAccessLevelFilter,
-		"projects.ListProjectGroupsInput.shared_min_access_level=0": minAccessLevelFilter,
+		"groups.InvitedListInput.min_access_level=0":                 minAccessLevelFilter,
+		"groups.InvitedListInput.min_access_level=5":                 minAccessLevelFilter,
+		"groups.InvitedListInput.min_access_level=60":                minAccessLevelFilter,
+		"groups.ListInput.min_access_level=0":                        minAccessLevelFilter,
+		"groups.ListInput.min_access_level=5":                        minAccessLevelFilter,
+		"groups.ListInput.min_access_level=60":                       minAccessLevelFilter,
+		"groups.ListProjectsInput.min_access_level=0":                minAccessLevelFilter,
+		"groups.ListProjectsInput.min_access_level=5":                minAccessLevelFilter,
+		"groups.ListProjectsInput.min_access_level=60":               minAccessLevelFilter,
+		"groups.ListSharedProjectsInput.min_access_level=0":          minAccessLevelFilter,
+		"groups.ListSharedProjectsInput.min_access_level=5":          minAccessLevelFilter,
+		"groups.ListSharedProjectsInput.min_access_level=60":         minAccessLevelFilter,
+		"groups.SharedWithListInput.min_access_level=0":              minAccessLevelFilter,
+		"groups.SharedWithListInput.min_access_level=5":              minAccessLevelFilter,
+		"groups.SharedWithListInput.min_access_level=60":             minAccessLevelFilter,
+		"groups.SubgroupsListInput.min_access_level=0":               minAccessLevelFilter,
+		"groups.SubgroupsListInput.min_access_level=5":               minAccessLevelFilter,
+		"groups.SubgroupsListInput.min_access_level=60":              minAccessLevelFilter,
+		"projects.ListInvitedGroupsInput.min_access_level=0":         minAccessLevelFilter,
+		"projects.ListInvitedGroupsInput.min_access_level=5":         minAccessLevelFilter,
+		"projects.ListInvitedGroupsInput.min_access_level=60":        minAccessLevelFilter,
+		"projects.ListProjectGroupsInput.shared_min_access_level=0":  minAccessLevelFilter,
+		"projects.ListProjectGroupsInput.shared_min_access_level=5":  minAccessLevelFilter,
+		"projects.ListProjectGroupsInput.shared_min_access_level=60": minAccessLevelFilter,
 
 		"groups.ShareGroupInput.group_access=0":      shareAccessLevel,
 		"groups.ShareGroupInput.group_access=60":     shareAccessLevel,

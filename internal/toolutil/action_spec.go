@@ -210,6 +210,7 @@ func specInputSchema(schema map[string]any, overrides []InputSchemaOverride) map
 		}
 		applyInputSchemaOverrides(out, overrides)
 		applyCanonicalParamEnums(out)
+		applyCanonicalAccessLevelEnums(out)
 		applyCanonicalParamFormats(out)
 		applyCanonicalParamRanges(out)
 		removeUnsetSchemaKeywords(out, overrides)
