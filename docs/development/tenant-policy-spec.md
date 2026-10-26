@@ -706,6 +706,13 @@ finding. The local allow-lists, which HTTP mode never reads, have no flag and ne
 their source is `StdioEnvOnly`. G14 keeps F-13 as the finding a row would have to carry
 if one of its variables were read any other way again, and the one variable read around
 the package on purpose, the env file's, is declared with its reason rather than recorded.
+The same issue made one row's stated policy true. `IDN-009` said a telemetry identity
+policy or rotation that does not parse refuses startup, and the server logged it and
+recorded nothing about callers instead, the departure issue 1170 also reported. It refuses
+startup now on either transport, once telemetry is known to be on and before anything is
+built, and a rotation lying outside what a generated key may live is refused with it;
+with telemetry off nothing is exported under either, and beside a configured key the
+rotation is ignored.
 
 F-36 ([issue 1053](https://github.com/jmrplens/gitlab-mcp-server/issues/1053)) is the one
 finding a decision recorded rather than a reading of the code found. The three documents
