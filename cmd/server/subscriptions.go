@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -1577,8 +1576,15 @@ const (
 )
 
 // maxListenStreamsEnv overrides the per-server ceiling. Zero disables it,
-// which leaves the process-wide one in place.
+// which leaves the process-wide one in place. --max-listen-streams writes it
+// on either transport (envBackedFlags), so a flag and the variable are one
+// setting with one reader.
 const maxListenStreamsEnv = "GITLAB_MCP_MAX_LISTEN_STREAMS"
+
+// maxListenStreamsSetting is the same variable without its prefix, the name
+// [config.TrimmedGetenv] reads it under (issue 957); the warning names the
+// variable in full, as an operator exports it.
+const maxListenStreamsSetting = "MAX_LISTEN_STREAMS"
 
 // listenCounter counts open streams against a ceiling.
 type listenCounter struct {
@@ -1689,7 +1695,7 @@ func listenLimitsFromEnv() listenLimits {
 		perProcess:    maxListenStreamsPerProcess,
 		processOpen:   processListenStreams,
 	}
-	raw := strings.TrimSpace(os.Getenv(maxListenStreamsEnv))
+	raw := config.TrimmedGetenv(maxListenStreamsSetting)
 	if raw == "" {
 		return limits
 	}

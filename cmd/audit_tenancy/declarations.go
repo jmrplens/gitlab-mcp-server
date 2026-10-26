@@ -57,16 +57,23 @@ type rules struct {
 	// shareInvariant the invariant whose finding excuses one (G13).
 	shareWords     []string
 	shareInvariant string
-	// envPrefix, envNames, envReaders, envExpanders and configFinding are
-	// G14's: the prefix every setting carries, the list of names the
-	// configuration package reads, the calls that read a variable directly,
-	// those that read every variable a template names, and the finding a row
-	// reading one that way carries.
-	envPrefix     string
-	envNames      tenancy.Site
-	envReaders    []string
-	envExpanders  []string
-	configFinding string
+	// envPrefix, envNames, envReaders, envExpanders, configFinding and
+	// envDeclared are G14's: the prefix every setting carries, the list of
+	// names the configuration package reads, the calls that read a variable
+	// directly, those that read every variable a template names, the finding
+	// a row reading one that way carries, and the variables no row names that
+	// the code reads that way, each with why. envListReaders and envBare are
+	// its too: the configuration package's readers, which read a name the
+	// list holds under the prefix and any other as given, and the names
+	// without the prefix the code reads bare through them, each with why.
+	envPrefix      string
+	envNames       tenancy.Site
+	envReaders     []string
+	envExpanders   []string
+	configFinding  string
+	envDeclared    map[string]string
+	envListReaders []string
+	envBare        map[string]string
 	// leafImports are the only packages the register may import, and server
 	// the package that must already import each of them (G12).
 	leafImports []string
@@ -155,17 +162,49 @@ func productionRules() rules {
 		shareWords:     []string{"fair", "fairness", "quota", "entitlement"},
 		shareInvariant: "INV-003",
 
-		envPrefix:     "GITLAB_MCP_",
-		envNames:      tenancy.Site{Pkg: "internal/config", Name: "prefixedNames"},
-		envReaders:    []string{"os.Getenv", "os.LookupEnv", "syscall.Getenv", "syscall.LookupEnv"},
-		envExpanders:  []string{"os.ExpandEnv"},
-		configFinding: "F-13",
+		envPrefix:      "GITLAB_MCP_",
+		envNames:       tenancy.Site{Pkg: "internal/config", Name: "prefixedNames"},
+		envReaders:     []string{"os.Getenv", "os.LookupEnv", "syscall.Getenv", "syscall.LookupEnv"},
+		envExpanders:   []string{"os.ExpandEnv"},
+		configFinding:  "F-13",
+		envDeclared:    readAroundConfig,
+		envListReaders: []string{goprogram.ModulePath + "/internal/config.Getenv"},
+		envBare:        readBare,
 
 		leafImports: []string{"errors", "fmt", "strings", "time"},
 		server:      "cmd/server",
 		valueFiles:  []string{"values.go", "codes.go"},
 		ruleFiles:   []string{"meter.go", "busy.go", "budget.go", "grants.go"},
 	}
+}
+
+// readAroundConfig is G14's declaration table: the variables this project
+// defines that the server reads around the configuration package although no
+// row names them, each with why. A variable a row names is its row's to
+// answer, through the finding it carries, so it is never declared here; and
+// a declaration whose variable nothing reads that way any more is a finding,
+// so the table cannot outlive what it describes.
+//
+// It holds the one read issue 957 keeps, which is not a limit and so has no
+// row: the env file's. The telemetry switch and the description
+// substitutions were declared here too until issue 957 put them on the list
+// and read them through the configuration package.
+//
+// Each reason is one literal rather than a concatenation, which mutation
+// testing would read as arithmetic no test could reach.
+var readAroundConfig = map[string]string{
+	"GITLAB_MCP_ENV_FILE": "names the one dotenv file to load beside the home file, so it is read once per process from the process environment before any file is loaded, which is what keeps a file this server declines to load from nominating itself (config.explicitEnvFile)",
+}
+
+// readBare is G14's second declaration table: the names without the prefix
+// that the server hands the configuration package's readers and that the
+// list does not hold, so that they are read as given, each with why. A
+// setting of this project's the list left out would be read that way too,
+// under a name no operator sets, which is why every such name is declared
+// as somebody else's; and a declaration whose name nothing reads bare any
+// more, the list's own suffixes among them, is a finding.
+var readBare = map[string]string{
+	"GITLAB_URL": "the instance the server talks to, one of the names this project never prefixed, which config.Getenv reads as given (CLAUDE.md, Environment variables)",
 }
 
 // The categories an exemption may give, each with what it covers.

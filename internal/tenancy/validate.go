@@ -47,10 +47,12 @@ type setRule struct {
 // with no process partner is refused, and so is a refusal on a channel the
 // method cannot carry. A rule that can be excused passes a row breaking its
 // invariant only through a finding recorded for it (see
-// [Finding.Invariants]); some rules cannot be excused at all, and two are
-// excused by a recorded decision instead: checkAcrossKeys, and the half of
-// checkZeroStated that lets a process partner follow the row it stands
-// beside. The specification's section on invariants says which is which.
+// [Finding.Invariants]); some rules cannot be excused at all, and three are
+// excused by a recorded decision as well or instead: checkAcrossKeys,
+// checkZeroStated for a process partner that follows the row it stands
+// beside and for a zero ZeroBy names, and checkMalformedDecided for a
+// malformed value MalformedBy names. The specification's section on
+// invariants says which is which.
 func Validate(ds []Decision) error {
 	rows := make(map[string]Decision, len(ds))
 	for _, d := range ds {
@@ -84,6 +86,9 @@ const (
 	// invUnitsAgree is INV-016: every limit states its key, mint cost and
 	// reason, and the units agree.
 	invUnitsAgree = "INV-016"
+	// invThroughConfig is INV-017: configuration goes through the
+	// configuration package.
+	invThroughConfig = "INV-017"
 	// invProcessOnProcess is INV-018: bound the process on the process.
 	invProcessOnProcess = "INV-018"
 )
@@ -101,8 +106,11 @@ func rowRules() []rowRule {
 		{"units-agree", invUnitsAgree, checkUnitsAgree},
 		{"stated-unit", invUnitsAgree, checkStatedUnit},
 		{"class-consistent", "VAL-003", checkClassConsistent},
-		{"through-config", "INV-017", checkThroughConfig},
+		{"through-config", invThroughConfig, checkThroughConfig},
+		{"malformed-decided", invThroughConfig, checkMalformedDecided},
+		{"fixed-reasoned", "VAL-009", checkFixedReasoned},
 		{"capacity-stated", "VAL-006", checkCapacityStated},
+		{"capacity-fits", "VAL-006", checkCapacityFits},
 		{"bounded-table", "INV-010", checkBoundedTable},
 		{"charged-exists", invNotJudgedNotCharged, checkChargedExists},
 		{"stdio", "VAL-011", checkStdio},
@@ -254,7 +262,7 @@ func inLegacyRange(code int) bool {
 }
 
 // checkZeroStated holds a valued decision to saying what zero means, and a
-// zero that is not "off" to a finding.
+// zero that is not "off" to a finding or a recorded decision.
 //
 // One zero decided by another row passes without a finding: a process partner
 // switched off with the row it stands beside, when a recorded decision says
@@ -263,17 +271,39 @@ func inLegacyRange(code int) bool {
 // the register records rather than a defect it carries (RTC-007, issue 951).
 // The decision is the one OffWithBy names, and it must be among the row's
 // Decided: a row carrying a decision about something else does not pass.
+//
+// A zero refused at startup, or one that selects the default, passes the same
+// way when the record ZeroBy names decided it and the row records that
+// decision (issue 958), whether it is the row's own zero or the zero of one of
+// its settings: it is then a stated exception with its reason, rather than a
+// silent normalization the register carries as a finding. A ZeroBy on a row
+// whose every zero means off decides nothing, and is refused, so a decision
+// cannot stay on a row after the zero it decided has gone.
 func checkZeroStated(d Decision, rows map[string]Decision) []string {
 	var out []string
 	if d.Disposition == Valued && d.Zero == ZeroUnset {
 		out = append(out, "a valued decision that does not say what zero means")
 	}
+	departing := zeroDeparts(d.Zero)
+	for _, s := range d.SettingZeros {
+		departing = departing || zeroDeparts(s.Zero)
+	}
+	decided := d.ZeroBy != "" && has(d.Decided, d.ZeroBy)
 	followsPartnered := rows[d.OffWith].Partner == d.ID && has(d.Decided, d.OffWithBy)
-	departs := d.Zero == ZeroRefused || d.Zero == ZeroSelectsDefault || (d.OffWith != "" && !followsPartnered)
+	departs := (departing && !decided) || (d.OffWith != "" && !followsPartnered)
 	if departs && !d.RecordsDeparture("INV-015") {
-		out = append(out, "a zero that does not mean off, with no finding")
+		out = append(out, "a zero that does not mean off, with no decision or finding")
+	}
+	if d.ZeroBy != "" && !departing {
+		out = append(out, fmt.Sprintf("its zero is decided by %s, and every zero it states means off", d.ZeroBy))
 	}
 	return out
+}
+
+// zeroDeparts reports whether a zero meaning departs from INV-015: a zero
+// refused at startup, or one replaced by the default.
+func zeroDeparts(z Zero) bool {
+	return z == ZeroRefused || z == ZeroSelectsDefault
 }
 
 // checkUnitsAgree holds a class D disagreement to a finding.
@@ -311,8 +341,16 @@ func checkClassConsistent(d Decision, _ map[string]Decision) []string {
 }
 
 // checkThroughConfig holds a configurable value to a flag, a GITLAB_MCP_
-// variable and a malformed-value policy, and a value only an environment
-// variable or a Go option reaches to a finding.
+// variable and a malformed-value policy, a value only an environment variable
+// reaches in HTTP mode to a finding, since INV-017 asks a flag of it, and one
+// only stdio's environment reaches to [stdioEnvFaults], and a row with no
+// value source that names a flag or a variable to a malformed-value policy
+// (issue 1170). Whether a variable is read through the configuration package
+// is the code's to answer, which the register cannot see, and
+// cmd/audit_tenancy's G14 holds it. A value only a
+// Go option reaches is no operator's configuration: it is a constant to every
+// operator, and checkFixedReasoned holds it to its reason as it holds one
+// (issue 958).
 func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 	var out []string
 	for _, env := range d.Envs {
@@ -331,12 +369,95 @@ func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 		if d.Malformed == MalformedNone {
 			out = append(out, "configurable with no malformed-value policy")
 		}
-	case EnvOnly, OptionOnly:
-		if !d.RecordsDeparture("INV-017") {
-			out = append(out, "configurable outside the configuration package, with no finding")
+	case EnvOnly:
+		if !d.RecordsDeparture(invThroughConfig) {
+			out = append(out, "configurable in HTTP mode by an environment variable alone, with no flag and no finding")
+		}
+	case StdioEnvOnly:
+		out = append(out, stdioEnvFaults(d)...)
+	case SourceNone:
+		// A request bound or a rule has no value source of its own, and may
+		// still name the flag or the variable an operator sets it with. The
+		// upload limit's row named both and stated no policy (issue 1170),
+		// so nothing held it to the refusal HTTP mode did not make.
+		if (len(d.Flags) > 0 || len(d.Envs) > 0) && d.Malformed == MalformedNone {
+			out = append(out, "names a setting with no malformed-value policy")
 		}
 	}
 	return out
+}
+
+// stdioEnvFaults is what a value only stdio's environment reaches says
+// against itself (issue 957). The source is a statement that HTTP mode never
+// reads the setting, so it needs no flag and passes with none, and holds the
+// rest of INV-017 instead: the variables that set it and what a value that
+// does not parse does. A flag would be a way in the source denies, and a row
+// that does not exist on stdio has no stdio to be read on. A finding excuses
+// none of these, since each is the row contradicting what it says of itself
+// rather than a departure from an invariant.
+func stdioEnvFaults(d Decision) []string {
+	var out []string
+	if len(d.Flags) > 0 {
+		out = append(out, "read from stdio's environment alone, with a flag")
+	}
+	if len(d.Envs) == 0 {
+		out = append(out, "read from stdio's environment alone, with no GITLAB_MCP_ variable")
+	}
+	if d.Malformed == MalformedNone {
+		out = append(out, "read from stdio's environment alone, with no malformed-value policy")
+	}
+	if d.StdioKey == KeyNone {
+		out = append(out, "read from stdio's environment alone, on a row that does not exist on stdio")
+	}
+	return out
+}
+
+// checkMalformedDecided holds a malformed value that does not refuse startup
+// to a recorded decision or a finding (issue 957). Refusing startup is the
+// policy issue 957 decided for a limit, as internal/config already refused a
+// value it could not parse; a row that warns and keeps the default, skips an
+// entry or reads the value as off passes when the record MalformedBy names
+// decided it and the row records that decision, which is then the stated
+// exception with its reason, or when a finding records the departure from
+// INV-017. A MalformedBy on a row whose malformed value refuses startup, or
+// that states no value that does not parse, decides nothing, and is refused,
+// so a decision cannot stay on a row after its exception has gone.
+func checkMalformedDecided(d Decision, _ map[string]Decision) []string {
+	departs := malformedDeparts(d.Malformed)
+	decided := d.MalformedBy != "" && has(d.Decided, d.MalformedBy)
+	if departs && !decided && !d.RecordsDeparture(invThroughConfig) {
+		return []string{"a malformed value that does not refuse startup, with no decision or finding"}
+	}
+	if d.MalformedBy != "" && !departs {
+		return []string{fmt.Sprintf("its malformed-value policy is decided by %s, and a malformed value refuses startup or is none", d.MalformedBy)}
+	}
+	return nil
+}
+
+// malformedDeparts reports whether a malformed-value policy departs from
+// refusing startup: a value that warns and keeps the default, an entry
+// skipped, or a value read as off. A switch every value of which means
+// something has no malformed value to depart with.
+func malformedDeparts(m Malformed) bool {
+	return m == WarnKeepDefault || m == SkipEntry || m == ReadsAsOff
+}
+
+// checkFixedReasoned holds a value no operator setting reaches, a constant or
+// a Go option's, to saying why (issue 958). The process partners had a
+// reason, INV-004's, and the other constants had none a reader could tell
+// from an accident, so the next one copied whichever neighbor it was written
+// beside. A reason on a value a setting reaches, or on one derived from
+// another value or from a limit the process starts under, says something
+// false about it, and is refused too.
+func checkFixedReasoned(d Decision, _ map[string]Decision) []string {
+	fixed := d.Source == Constant || d.Source == OptionOnly
+	if fixed == (d.Fixed != "") {
+		return nil
+	}
+	if fixed {
+		return []string{"a value no setting reaches, with no reason it is fixed"}
+	}
+	return []string{"says why no setting reaches its value, which is not a constant or a Go option's"}
 }
 
 // checkCapacityStated holds a ceiling to saying what happens when it is full.
@@ -345,6 +466,71 @@ func checkCapacityStated(d Decision, _ map[string]Decision) []string {
 		return nil
 	}
 	return []string{"a ceiling that does not say what happens when it is full"}
+}
+
+// checkCapacityFits is the capacity rule issue 958 stated: which of the
+// behaviors at capacity a row may name, read off its kind, its key and
+// whether it holds a record per key.
+//
+// Only what fills can state one: a ceiling, a rate, a budget, a share or a
+// table. A wait is a ceiling's, for a slot another request frees. Reclaiming
+// takes back what the same key holds, so it needs a key a caller holds. The
+// oldest record is evicted only from a table kept before admission, where no
+// tenant exists yet to hold anything and a record is a count or a verdict
+// against its key, so evicting one takes nothing from another key (INV-005);
+// and only where a record has a lifetime or a refill to be the oldest by,
+// which is how EvictOldest reads. Counting stops only where the newcomer it no
+// longer counts is let through, which a row says by declaring that silent
+// refusal. And a holding is taken across keys only from a table, by the
+// recorded decision checkAcrossKeys asks for (INV-005: the pool entry, POL-001
+// and POL-002, and the verified OAuth identity, ADM-005). Refusing the
+// newcomer fits anything that fills. Where more than one behavior fits, the
+// rule does not choose between them: the row names one, and its comment says
+// why.
+func checkCapacityFits(d Decision, _ map[string]Decision) []string {
+	if d.AtCapacity == CapacityNone {
+		return nil
+	}
+	if !d.Kind.IsAllowance() && !d.Table {
+		return []string{"states what it does when full, and holds nothing that fills: a ceiling, a rate, a budget, a share or a table"}
+	}
+	switch d.AtCapacity {
+	case WaitThenRefuse:
+		if d.Kind != Ceiling {
+			return []string{"waits for room, and is not a ceiling a slot frees in"}
+		}
+	case ReclaimOwnThenRefuse:
+		if axis := d.Key.Axis(); axis != AxisRequester && axis != AxisPreAdmission {
+			return []string{fmt.Sprintf("reclaims its own holding on the %s key, which no caller holds", d.Key)}
+		}
+	case EvictOldest:
+		if !d.Table || (d.Kind != Lifetime && d.Kind != Rate) {
+			return []string{"evicts its oldest record, and is not a table of records with a lifetime or a refill"}
+		}
+		if d.Key.Axis() != AxisPreAdmission {
+			return []string{fmt.Sprintf("evicts the oldest record on the %s key, where a record is a holding a caller has (INV-005)", d.Key)}
+		}
+	case StopCounting:
+		if !declaresSilentRefusal(d) {
+			return []string{"stops counting, and declares no silent refusal where the newcomer goes uncounted"}
+		}
+	case EvictAcrossKeys:
+		if !d.Table {
+			return []string{"takes a holding across keys, and is not a table one is taken from"}
+		}
+	}
+	return nil
+}
+
+// declaresSilentRefusal reports whether one of the row's refusals reaches the
+// caller as nothing at all.
+func declaresSilentRefusal(d Decision) bool {
+	for _, r := range d.Refusals {
+		if r.Channel == Silent {
+			return true
+		}
+	}
+	return false
 }
 
 // checkBoundedTable refuses a structure keyed on a value a caller can mint
@@ -392,6 +578,7 @@ func checkWellFormed(d Decision, rows map[string]Decision) []string {
 		}
 	}
 	out = append(out, danglingReferences(d, rows)...)
+	out = append(out, settingZerosContradict(d)...)
 	if d.Disposition == Promoted && len(d.Functions) == 0 {
 		out = append(out, "promoted with no function")
 	}
@@ -404,8 +591,38 @@ func checkWellFormed(d Decision, rows map[string]Decision) []string {
 	return out
 }
 
+// settingZerosContradict is what a row's SettingZeros say against each other
+// and against its Zero: a setting whose zero is stated twice has two meanings,
+// and SettingZeros that name every one of the row's settings leave its Zero,
+// the meaning of the rest, the meaning of none.
+func settingZerosContradict(d Decision) []string {
+	var out, stated []string
+	for _, s := range d.SettingZeros {
+		if has(stated, s.Config) {
+			out = append(out, fmt.Sprintf("it states the zero of %s twice", s.Config))
+		}
+		stated = append(stated, s.Config)
+	}
+	if len(stated) > 0 && !leavesASetting(d.Config, stated) {
+		out = append(out, "it states the zero of each setting, and leaves none of its settings to the row's own zero")
+	}
+	return out
+}
+
+// leavesASetting reports whether one of settings is not among stated.
+func leavesASetting(settings, stated []string) bool {
+	for _, c := range settings {
+		if !has(stated, c) {
+			return true
+		}
+	}
+	return false
+}
+
 // danglingReferences is the half of [checkWellFormed] that follows a row's
-// references: a partner and a zero partner must be rows, and a finding must
+// references: a partner and a zero partner must be rows, a record said to
+// decide its zero or its malformed-value policy must be one it records, a
+// setting whose zero it states must be one of its settings, and a finding must
 // be one of the specification's.
 func danglingReferences(d Decision, rows map[string]Decision) []string {
 	var out []string
@@ -415,12 +632,41 @@ func danglingReferences(d Decision, rows map[string]Decision) []string {
 	if _, ok := rows[d.OffWith]; d.OffWith != "" && !ok {
 		out = append(out, fmt.Sprintf("its zero follows %s, which names no row", d.OffWith))
 	}
+	for _, by := range []string{d.OffWithBy, d.ZeroBy} {
+		if by != "" && !has(d.Decided, by) {
+			out = append(out, fmt.Sprintf("its zero is decided by %s, which it does not record", by))
+		}
+	}
+	if d.MalformedBy != "" && !has(d.Decided, d.MalformedBy) {
+		out = append(out, fmt.Sprintf("its malformed-value policy is decided by %s, which it does not record", d.MalformedBy))
+	}
+	for _, s := range d.SettingZeros {
+		if fault := settingZeroFault(d, s); fault != "" {
+			out = append(out, fault)
+		}
+	}
 	for _, id := range d.Findings {
 		if FindingIssue(id) == 0 {
 			out = append(out, fmt.Sprintf("it carries %s, which is not a finding", id))
 		}
 	}
 	return out
+}
+
+// settingZeroFault is what is wrong with one of a row's SettingZeros, or
+// nothing: the setting must be one of the row's, and its zero must say
+// something the row's own does not.
+func settingZeroFault(d Decision, s SettingZero) string {
+	if !has(d.Config, s.Config) {
+		return fmt.Sprintf("it states the zero of %s, which is not one of its settings", s.Config)
+	}
+	if s.Zero == ZeroUnset {
+		return fmt.Sprintf("it states the zero of %s and does not say what it means", s.Config)
+	}
+	if s.Zero == d.Zero {
+		return fmt.Sprintf("the zero of %s means what the row's own does", s.Config)
+	}
+	return ""
 }
 
 // checkCodeMirrorsStatus holds every in-band code this server allocates to the

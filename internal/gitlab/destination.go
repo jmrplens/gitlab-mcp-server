@@ -76,7 +76,13 @@ func DestinationRefusedHintFor(err error) string {
 //
 // The `--allow-private-instances` flag writes this variable, so there stays
 // one reader; see cmd/server/env_flags.go for why that indirection exists.
-const AllowPrivateInstancesEnv = config.EnvPrefix + "ALLOW_PRIVATE_INSTANCES"
+const AllowPrivateInstancesEnv = "GITLAB_MCP_ALLOW_PRIVATE_INSTANCES"
+
+// allowPrivateInstancesSetting is the same variable without its prefix, the
+// name [config.TrimmedGetenv] reads it under. Handed the full name, which the
+// configuration package's list cannot hold, the helper read it verbatim
+// until issue 957 put the setting on the list.
+const allowPrivateInstancesSetting = "ALLOW_PRIVATE_INSTANCES"
 
 // allowPrivateAdvice is the one sentence that changes a tier B outcome, kept
 // in one place so the dialer, the gate and the tool-error hint cannot come to
@@ -473,7 +479,7 @@ func allZeroBytes(b []byte) bool {
 // failure mode nobody notices. The flag is what an operator normally types,
 // and a flag value that does not parse is theirs to see in the same startup.
 func allowPrivateInstances() bool {
-	value := config.TrimmedGetenv(AllowPrivateInstancesEnv)
+	value := config.TrimmedGetenv(allowPrivateInstancesSetting)
 	if value == "" {
 		return false
 	}

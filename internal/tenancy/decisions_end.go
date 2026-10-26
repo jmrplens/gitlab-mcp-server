@@ -56,11 +56,12 @@ func endDecisions() []Decision {
 		},
 		{
 			// Surfaced by the gate as the register landed, not by the survey of
-			// limits before it, and made a row then. Through the flag a zero
-			// leaves the SDK with no idle timeout; the environment variable is
-			// read by the parser every positive duration shares, which refuses
-			// a zero at startup. That second half is an INV-015 departure of
-			// the kind issue 958 records.
+			// limits before it, and made a row then. A zero leaves the SDK with
+			// no idle timeout, through the flag and, since issue 958, through
+			// the environment variable too, which used to be read by the parser
+			// every positive duration shares and refused a zero at startup
+			// (F-34). The variable now reads a zero however it is written, 0s
+			// as 0, as the flag does.
 			//
 			// Off costs more beside HLD-010 (issue 951). A session no client
 			// deletes then holds its slot of the session ceiling until the
@@ -76,7 +77,10 @@ func endDecisions() []Decision {
 			Values: []string{"SessionIdleTimeout", "SessionIdleTimeoutMax"},
 			Source: Configurable, Flags: []string{"--session-timeout"}, Envs: []string{"GITLAB_MCP_SESSION_TIMEOUT"},
 			Config: []string{"SessionTimeout"}, Malformed: RefuseStartup, Zero: ZeroOff,
-			Findings: []string{"F-34"},
+			// The flag refuses a negative value as the variable does, where it
+			// used to read one as off without the warning a zero writes
+			// (issue 1171).
+			Decided: []string{"issue 958", "issue 1171"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{MethodExpiry}, Era: EraLegacy, Channel: SessionClose, Answer: StartOver,

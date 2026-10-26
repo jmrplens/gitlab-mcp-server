@@ -3,7 +3,7 @@ package tenancy
 import "fmt"
 
 // Decisions returns every row of the register: one per requirement of the
-// specification, eighty-nine in all.
+// specification, ninety in all.
 //
 // The rows are grouped by the question they answer (spec: The five questions),
 // in the order the specification asks them (identify, admit, authorize, allow,
@@ -43,7 +43,7 @@ func requirementIDs() []string {
 		prefix string
 		count  int
 	}{
-		{"IDN", 13},
+		{"IDN", 14},
 		{"ADM", 14},
 		{"AUB", 6},
 		{"RTC", 8},
@@ -90,11 +90,6 @@ const (
 // constant reads.
 func alias(pkg, name, reads string) Site {
 	return Site{Pkg: pkg, Name: name, Role: Alias, Reads: reads}
-}
-
-// pin is a site that keeps its own literal, held equal to reads.
-func pin(pkg, name, reads string) Site {
-	return Site{Pkg: pkg, Name: name, Role: Pin, Reads: reads}
 }
 
 // arg is the index'th argument of count calls to call inside the function

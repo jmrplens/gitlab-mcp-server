@@ -23,6 +23,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
@@ -290,6 +291,29 @@ func TestAllowedImportArchiveDirs_SkipsInvalidConfiguredDirectory(t *testing.T) 
 		if dir == invalid {
 			t.Fatalf("allowedImportArchiveDirs() included invalid configured file %q", invalid)
 		}
+	}
+}
+
+// TestAllowlistSettings_AreTheVariablesTheRefusalsName holds each allow-list's
+// name on the configuration package's list, which is what allowedLocalDirs
+// reads and what its warning names with the prefix, to the full name a
+// refusal tells an operator to set (issue 957): two spellings of one
+// variable that could drift apart, so that a refusal would ask for a
+// variable nothing reads.
+func TestAllowlistSettings_AreTheVariablesTheRefusalsName(t *testing.T) {
+	for setting, env := range map[string]string{
+		uploadDirAllowlistSetting:     UploadDirAllowlistEnv,
+		downloadDirAllowlistSetting:   DownloadDirAllowlistEnv,
+		importArchiveAllowlistSetting: ImportArchiveAllowlistEnv,
+	} {
+		t.Run(setting, func(t *testing.T) {
+			if config.EnvPrefix+setting != env {
+				t.Errorf("%s with the prefix is %s, but the refusals name %s", setting, config.EnvPrefix+setting, env)
+			}
+			if !slices.Contains(config.PrefixedEnvNames(), setting) {
+				t.Errorf("%s is not on the configuration package's list, so config.Getenv reads it bare", setting)
+			}
+		})
 	}
 }
 
@@ -984,7 +1008,7 @@ func TestAllowedLocalDirs_ImplicitRootsThatCannotBeResolved_AreSkipped(t *testin
 		t.Skipf("cannot remove current working directory: %v", err)
 	}
 
-	if got := allowedLocalDirs(UploadDirAllowlistEnv); len(got) != 0 {
+	if got := allowedLocalDirs(uploadDirAllowlistSetting); len(got) != 0 {
 		t.Errorf("allowedLocalDirs() = %v, want no directory once both implicit roots are unresolvable", got)
 	}
 }
@@ -1478,7 +1502,7 @@ func TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory(t *testing.T) {
 	testutil.IsolateTempDir(t, t.TempDir())
 	t.Chdir("/")
 
-	for _, dir := range allowedLocalDirs(UploadDirAllowlistEnv) {
+	for _, dir := range allowedLocalDirs(uploadDirAllowlistSetting) {
 		if dir == "/" {
 			t.Fatal(`allowedLocalDirs() included "/", want the filesystem root skipped`)
 		}
@@ -1516,7 +1540,7 @@ func TestAllowedLocalDirs_SkipsHomeWorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalDirPath(%q) error = %v", home, err)
 	}
-	for _, dir := range allowedLocalDirs(UploadDirAllowlistEnv) {
+	for _, dir := range allowedLocalDirs(uploadDirAllowlistSetting) {
 		if dir == canonicalHome {
 			t.Fatalf("allowedLocalDirs() included the home directory %q, want it skipped", canonicalHome)
 		}
@@ -1545,8 +1569,8 @@ func TestAllowedLocalDirs_SaysWhyTheHomeRootWasDropped(t *testing.T) {
 		homeDirWarned.Store(warnedBefore)
 	})
 
-	allowedLocalDirs(UploadDirAllowlistEnv)
-	allowedLocalDirs(DownloadDirAllowlistEnv)
+	allowedLocalDirs(uploadDirAllowlistSetting)
+	allowedLocalDirs(downloadDirAllowlistSetting)
 
 	logged := buf.String()
 	for _, want := range []string{
@@ -1584,9 +1608,9 @@ func TestAllowedLocalDirs_HomeIsReachableWhenTheOperatorNamesIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalDirPath(%q) error = %v", home, err)
 	}
-	if !slices.Contains(allowedLocalDirs(UploadDirAllowlistEnv), canonicalHome) {
+	if !slices.Contains(allowedLocalDirs(uploadDirAllowlistSetting), canonicalHome) {
 		t.Errorf("allowedLocalDirs() = %v, want it to contain the explicitly allowed home %q",
-			allowedLocalDirs(UploadDirAllowlistEnv), canonicalHome)
+			allowedLocalDirs(uploadDirAllowlistSetting), canonicalHome)
 	}
 }
 
@@ -1610,9 +1634,9 @@ func TestAllowedLocalDirs_KeepsAnOrdinaryWorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalDirPath(%q) error = %v", workspace, err)
 	}
-	if !slices.Contains(allowedLocalDirs(UploadDirAllowlistEnv), canonicalWorkspace) {
+	if !slices.Contains(allowedLocalDirs(uploadDirAllowlistSetting), canonicalWorkspace) {
 		t.Errorf("allowedLocalDirs() = %v, want it to contain the working directory %q",
-			allowedLocalDirs(UploadDirAllowlistEnv), canonicalWorkspace)
+			allowedLocalDirs(uploadDirAllowlistSetting), canonicalWorkspace)
 	}
 }
 

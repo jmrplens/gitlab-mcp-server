@@ -189,8 +189,12 @@ type httpConfig struct {
 	stateless             bool
 	jsonResponse          bool
 	maxRequestBodyBytes   int64
-	tlsCert               string
-	tlsKey                string
+	// uploadMaxFileSize is the largest local file a tool accepts, which no
+	// flag of this struct holds: --upload-max-file-size writes its variable,
+	// and [applyOverlayUploadLimit] fills this from the overlay.
+	uploadMaxFileSize int64
+	tlsCert           string
+	tlsKey            string
 	// discoveryRateLimitRPS and discoveryRateLimitBurst are the bucket each
 	// client address draws on for the discovery documents (RTC-008).
 	discoveryRateLimitRPS   float64
@@ -301,7 +305,7 @@ func main() {
 	flag.IntVar(&hcfg.authFailureLimit, "auth-failure-limit", config.DefaultAuthFailureLimit,
 		"Failed authentications one address, an IPv6 one by its /64, may produce inside --auth-failure-window before it is blocked for the rest of it (0 disables this budget)")
 	flag.DurationVar(&hcfg.authFailureWindow, "auth-failure-window", config.DefaultAuthFailureWindow,
-		"Window the failure budget counts in, and the step the distinct-token escalation is built from: one window, then ten, then sixty")
+		"Window the failure budget counts in, and the step the distinct-token escalation is built from: one window, then ten, then sixty (0 disables the failure budget alone; the escalation then steps by the default)")
 	flag.IntVar(&hcfg.authDistinctLimit, "auth-distinct-token-limit", config.DefaultAuthDistinctTokenLimit,
 		"Distinct credentials one address, an IPv6 one by its /64, may have refused inside --auth-distinct-token-window before it is blocked, for longer each time (0 disables this budget)")
 	flag.DurationVar(&hcfg.authDistinctWindow, "auth-distinct-token-window", config.DefaultAuthDistinctWindow,
@@ -482,12 +486,13 @@ FLAGS
   A stdio server takes its configuration from the environment. Of these flags
   it reads the General ones, -transport, -http, the ones that set a variable
   (-upload-max-file-size, -allow-private-instances, -client-compat,
-  -description-substitutions, -yolo-mode) and the Telemetry group. Every other
-  flag is read in HTTP mode only, and a stdio run given one names it at startup
-  with the variable to set instead. Where ignoring it would cost more than a
-  setting, the run refuses to start: -read-only, -safe-mode or -exclude-tools
-  asking to withhold what stdio would then serve, and -gitlab-url naming an
-  instance other than the one GITLAB_URL sends the token to.
+  -description-substitutions, -max-listen-streams, -yolo-mode) and the
+  Telemetry group. Every other flag is read in HTTP mode only, and a stdio run
+  given one names it at startup with the variable to set instead. Where
+  ignoring it would cost more than a setting, the run refuses to start:
+  -read-only, -safe-mode or -exclude-tools asking to withhold what stdio would
+  then serve, and -gitlab-url naming an instance other than the one GITLAB_URL
+  sends the token to.
 
  General
   -h, -help                 Show this help message
@@ -551,6 +556,10 @@ FLAGS
  Tool surface
   -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
   -capability-surface str   Capability surface: full|minimal (default full)
+  -max-listen-streams int   Concurrent subscriptions/listen streams one credential may hold open (default
+                            64; 0 removes this ceiling, and the process-wide one of 512 stays). Both
+                            transports; a value that is not a whole number of 0 or more warns and keeps
+                            the default
   -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
   -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
   -exclude-tools string     Comma-separated tool names, group names or canonical action IDs
@@ -606,7 +615,8 @@ FLAGS
                             disables this budget). Separately, %d /64s of one IPv6 /48 with a credential
                             refused inside -auth-distinct-token-window block the /48, not configurable
   -auth-failure-window dur  Window the failure budget counts in, and the step the distinct-credential
-                            escalation below is built from: one window, then ten, then sixty (default %s)
+                            escalation below is built from: one window, then ten, then sixty (default %s;
+                            0 disables the failure budget alone, and the escalation steps by the default)
   -auth-distinct-token-limit int
                             Distinct credentials one address, an IPv6 one by its /64, may have refused
                             inside -auth-distinct-token-window before it is blocked, for longer each
@@ -672,6 +682,14 @@ ENVIRONMENT VARIABLES (stdio mode)
                                     is refused, not buffered
   GITLAB_MCP_MAX_LISTEN_STREAMS     Concurrent subscriptions/listen streams one credential may hold open
                                     (default 64; 0 disables the per-credential ceiling). Both transports
+  GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long (default 65m, 0
+                                    disables). Both transports
+  GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
+                                    How often a token is read again (default %s; 0 stops the periodic
+                                    read). Both transports: a stdio process re-reads its fine-grained
+                                    token's grant and the instance version at it, and HTTP mode
+                                    re-validates each pooled token at it, where an entry whose
+                                    credential is older than %s is still rebuilt at 0
   GITLAB_MCP_ALLOW_PRIVATE_INSTANCES
                                     Permit a private, loopback or CGNAT address as a destination this
                                     server's operator did not choose: an instance a caller named in
@@ -711,20 +729,18 @@ ENVIRONMENT VARIABLES (HTTP mode)
   GITLAB_MCP_MAX_HTTP_CLIENTS       Maximum unique (token, GitLab URL) pool entries; not sessions
                                     (default 100)
   GITLAB_MCP_SESSION_TIMEOUT        Idle MCP session timeout; --stateless=false only (default 30m). A session
-                                    no client deletes keeps one of the process's session slots until it expires
+                                    no client deletes keeps one of the process's session slots until it expires,
+                                    and with 0 until its credential's pool entry is evicted
   GITLAB_MCP_POOL_IDLE_TIMEOUT      Reclaim an unused pooled server after this long (default 1h, 0 disables)
-  GITLAB_MCP_ACTION_TIMEOUT         Cancel an action still running after this long, both transports
-                                    (default 65m, 0 disables)
   GITLAB_MCP_DRAIN_DELAY            After SIGTERM, answer /health with 503 draining this long before closing
                                     the listener (default 0)
-  GITLAB_MCP_SESSION_REVALIDATE_INTERVAL
-                                    Token re-validation interval (default 15m; 0 stops the periodic
-                                    check, an entry older than 1h is still rebuilt)
   GITLAB_MCP_AUTH_FAILURE_LIMIT     Failed authentications one address, an IPv6 one by its /64, may
                                     produce inside the failure window before it is blocked (default
                                     %d; 0 disables this budget)
   GITLAB_MCP_AUTH_FAILURE_WINDOW    Window the failure budget counts in, and the step the
-                                    distinct-credential escalation is built from (default %s)
+                                    distinct-credential escalation is built from (default %s; 0
+                                    disables the failure budget alone, and the escalation steps by
+                                    the default)
   GITLAB_MCP_AUTH_DISTINCT_TOKEN_LIMIT
                                     Distinct credentials one address, an IPv6 one by its /64, may have
                                     refused inside the distinct-credential window before it is
@@ -795,6 +811,10 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultAuthFailureLimit, networkFailingPrefixes, config.DefaultAuthFailureWindow,
 		config.DefaultAuthDistinctTokenLimit, config.DefaultAuthDistinctWindow,
 		config.DefaultGitLabURL,
+		// The revalidation interval's default and the pool's credential
+		// ceiling, in the stdio block since stdio reads the setting (issue
+		// 1171).
+		config.DefaultRevalidateInterval, serverpool.DefaultMaxCredentialAge,
 		// The ENVIRONMENT block names the same four budgets and the discovery
 		// documents' bucket again, because a reader who arrived at a variable
 		// rather than at its flag is owed the default there too.
@@ -912,7 +932,13 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 	// The auto tool-name policy decides per surface, and reading TOOL_SURFACE
 	// here regardless of mode gave an HTTP deployment started with
 	// --tool-surface=individual the dynamic default's decision.
-	_, stopTelemetry := startTelemetry(ctx, version, resolveToolSurfaceForTelemetry(hcfg))
+	// A refusal is an identity setting telemetry cannot use, and ends the
+	// start on either transport before it reads anything else (register row
+	// IDN-009, issue 957); nothing was started, so there is nothing to stop.
+	_, stopTelemetry, telemetryRefusal := startTelemetry(ctx, version, resolveToolSurfaceForTelemetry(hcfg))
+	if telemetryRefusal != nil {
+		return telemetryRefusal
+	}
 
 	mcpotel.SetMetricServerAddresses(metricHostsFor(hcfg, os.Getenv("GITLAB_URL")))
 	// The routes a GitLab call's span may name are the ones the binary's own
@@ -1195,7 +1221,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, tier edition.Tier
 		Stateless:              hcfg.stateless,
 		JSONResponse:           hcfg.jsonResponse,
 		MaxRequestBodyBytes:    hcfg.maxRequestBodyBytes,
-		UploadMaxFileSize:      uploadMaxFileSize(),
+		UploadMaxFileSize:      hcfg.uploadMaxFileSize,
 		AuthMode:               hcfg.authMode,
 		PublicURL:              hcfg.publicURL,
 		ResourceDocumentation:  hcfg.resourceDocumentation,
@@ -1336,6 +1362,9 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 			return err
 		}
 	}
+	if err := refuseNonPositiveOAuthCacheTTL(cfg.OAuthCacheTTL); err != nil {
+		return err
+	}
 	if cfg.AuthMode != "oauth" {
 		// In legacy mode --public-url is optional, but when set it now has
 		// an effect (its origin seeds the trusted-origins list), so a
@@ -1391,14 +1420,37 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	return validateOAuthCacheTTL(cfg.OAuthCacheTTL)
 }
 
-// validateOAuthCacheTTL bounds an explicitly configured TTL. A non-positive
-// value is not rejected here — see [oauthCacheTTL], which normalizes it at
-// the point of use so no construction path can produce the broken server a
-// zero would otherwise cause.
-func validateOAuthCacheTTL(ttl time.Duration) error {
-	if ttl <= 0 {
+// refuseNonPositiveOAuthCacheTTL refuses a TTL of zero or less, in either
+// authentication mode, as its variable is refused (register row ADM-005,
+// issue 958).
+//
+// A zero is not a TTL an operator could mean: the verifier stamps the TTL into
+// every token's expiration, so a token cached for no time expires as it is
+// verified and every request carrying it is refused. This used to let a zero
+// or a negative value through, and [oauthCacheTTL] replaced it with the
+// default and a warning, so the deployment ran at 15 minutes that no page
+// described (D7 of the 2026-09 documentation audit). That replacement stays
+// for a Config no validation saw.
+//
+// Legacy mode verifies no OAuth token and is refused the zero all the same,
+// because the HTTP overlay refuses GITLAB_MCP_OAUTH_CACHE_TTL=0 whatever the
+// mode: a flag that let it through there would read the zero apart from its
+// variable, which is what F-34 recorded. The range is a property of the TTL
+// in use, and only oauth mode checks it ([validateOAuthCacheTTL]), for the
+// flag and the variable alike.
+func refuseNonPositiveOAuthCacheTTL(ttl time.Duration) error {
+	if ttl > 0 {
 		return nil
 	}
+	return fmt.Errorf("--oauth-cache-ttl must be positive, got %s: it is the lifetime the verifier stamps into every token, from %s to %s",
+		ttl, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL)
+}
+
+// validateOAuthCacheTTL bounds the TTL oauth mode uses. A zero or a negative
+// one never reaches it from validateHTTPAuthConfig, which
+// [refuseNonPositiveOAuthCacheTTL] refused first, and is below the minimum
+// here too.
+func validateOAuthCacheTTL(ttl time.Duration) error {
 	if ttl < config.MinOAuthCacheTTL {
 		return fmt.Errorf("--oauth-cache-ttl %s is below minimum of %s", ttl, config.MinOAuthCacheTTL)
 	}
@@ -1428,15 +1480,31 @@ func validateHTTPSurfaceConfig(cfg *config.Config) error {
 	return nil
 }
 
+// validateHTTPDurationConfig holds the duration flags to the range their
+// variables accept: from 0, which turns each setting off, to its maximum.
+//
+// A negative --session-timeout, --revalidate-interval or --pool-idle-timeout is
+// refused rather than read as off, since zero already says that and a minus
+// sign is a typo, and because the variable of each refuses one: the three used
+// to let it through to readers that take anything not positive as off, the
+// session timeout's without the warning its zero writes (issue 1171, Q16 of its
+// triage). The action timeout and the drain delay refused one already.
 func validateHTTPDurationConfig(cfg *config.Config) error {
-	if cfg.SessionTimeout > config.MaxSessionTimeout {
-		return fmt.Errorf("--session-timeout %s exceeds maximum of %s", cfg.SessionTimeout, config.MaxSessionTimeout)
-	}
-	if cfg.RevalidateInterval > config.MaxRevalidateInterval {
-		return fmt.Errorf("--revalidate-interval %s exceeds maximum of %s", cfg.RevalidateInterval, config.MaxRevalidateInterval)
-	}
-	if cfg.PoolIdleTimeout > config.MaxPoolIdleTimeout {
-		return fmt.Errorf("--pool-idle-timeout %s exceeds maximum of %s", cfg.PoolIdleTimeout, config.MaxPoolIdleTimeout)
+	for _, d := range []struct {
+		flag  string
+		value time.Duration
+		max   time.Duration
+	}{
+		{"--session-timeout", cfg.SessionTimeout, config.MaxSessionTimeout},
+		{"--revalidate-interval", cfg.RevalidateInterval, config.MaxRevalidateInterval},
+		{"--pool-idle-timeout", cfg.PoolIdleTimeout, config.MaxPoolIdleTimeout},
+	} {
+		if d.value < 0 {
+			return fmt.Errorf("%s must not be negative, got %s (0 turns it off)", d.flag, d.value)
+		}
+		if d.value > d.max {
+			return fmt.Errorf("%s %s exceeds maximum of %s", d.flag, d.value, d.max)
+		}
 	}
 	if cfg.ActionTimeout < 0 || cfg.ActionTimeout > config.MaxActionTimeout {
 		return fmt.Errorf("--action-timeout %s is outside 0 (disabled) to %s", cfg.ActionTimeout, config.MaxActionTimeout)
@@ -1629,11 +1697,13 @@ func prepareStdioCatalog(
 	// has nothing to say about the token's kind or the admission minimum,
 	// unless the start could not reach GitLab: then the request would spend the
 	// lazy re-initialization's first attempt, and both questions are asked
-	// once the client recovers, or on the 15-minute round, instead. A version
-	// refused for want of a scope reached it, and is what GitLab answers a
-	// token carrying self_rotate or read_repository alone, so the question is
-	// asked then too: a start that waited for a recovery that never comes
-	// would serve such a token the catalog for a round.
+	// once the client recovers, or on the next round of re-reads at
+	// GITLAB_MCP_SESSION_REVALIDATE_INTERVAL (there is none at 0), instead.
+	// A version refused for want of a scope reached it, and is what GitLab
+	// answers a token carrying self_rotate or read_repository alone, so the
+	// question is asked then too: a start that waited for a recovery that
+	// never comes would serve such a token the catalog until the next round,
+	// or for good at 0.
 	facts := gitlabclient.TokenFacts{KindUnknown: true}
 	if scopeRefused {
 		// Asked only to name the token's scopes in the verdict, which an
@@ -1730,11 +1800,12 @@ func prepareStdioCatalog(
 	client.SetAuthority(stdioAuthority(ctx, client, facts))
 	shell.gate.markReady()
 	slog.InfoContext(ctx, "tool catalog ready", "transport", "stdio")
-	// Re-read at the interval an HTTP pool entry is revalidated at by default
-	// (ADM-009's value, read here by register row AUT-008), so the two
-	// transports follow an instance upgraded under a running session alike.
-	// Stdio reads no revalidation setting, so nothing moves it or turns it off.
-	go refreshStdioAuthority(ctx, client, facts, config.DefaultRevalidateInterval, recovered, stdioBelowMinimumRefuser(ctx, shell.gate))
+	// Re-read at the interval an HTTP pool entry is revalidated at
+	// (GITLAB_MCP_SESSION_REVALIDATE_INTERVAL, register row ADM-009), so the
+	// two transports follow an instance upgraded under a running session
+	// alike, and a zero stops the re-reads in both. Stdio used to parse the
+	// setting and then re-read at its default whatever it said (issue 1171).
+	go refreshStdioAuthority(ctx, client, facts, cfg.RevalidateInterval, recovered, stdioBelowMinimumRefuser(ctx, shell.gate))
 	return nil
 }
 
@@ -1772,14 +1843,25 @@ func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitl
 // the arguments the start logs a phase A authority with, and one that kept the
 // authority is logged once, with its reason.
 //
+// An interval of zero, which GITLAB_MCP_SESSION_REVALIDATE_INTERVAL=0 asks
+// for, starts no timer, as it stops the HTTP pool's revalidation: the token is
+// then asked again only once a degraded start recovers, and otherwise keeps
+// what the start judged until ctx ends.
+//
 // A token whose scopes the answer names below the admission minimum is handed
 // to onBelowMinimum, which makes the process refuse every catalog method as a
 // start that learned it would have, and the goroutine returns: a token's
 // scopes cannot change, so there is nothing more to ask. A nil onBelowMinimum
 // only returns.
 func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, interval time.Duration, recovered <-chan struct{}, onBelowMinimum func(scopes []string)) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	// A nil channel is never ready, which is the timer a zero interval asks
+	// for: time.NewTicker refuses one.
+	var rounds <-chan time.Time
+	if interval > 0 {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		rounds = ticker.C
+	}
 	logged := false
 	for facts.GrantReadable || facts.KindUnknown {
 		select {
@@ -1788,7 +1870,7 @@ func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, fac
 		case <-recovered:
 			// Asked once: a nil channel is never ready again.
 			recovered = nil
-		case <-ticker.C:
+		case <-rounds:
 		}
 		readCtx, cancel := context.WithTimeout(ctx, stdioRereadTimeout)
 		if facts.KindUnknown {
@@ -3055,22 +3137,23 @@ func httpStartupAttrs(cfg *config.Config, httpAddr string) []any {
 // warnStatefulSessions tells the operator of a deployment that keeps sessions
 // what that costs.
 //
-// The transport itself is a legacy mode. And with --session-timeout=0 the SDK
-// never closes an idle session, so one no client deletes keeps its slot of the
-// session ceiling (HLD-010) until the pool evicts its credential's entry: after
-// --pool-idle-timeout without a request (never with 0), or to make room at
-// --max-http-clients. A client that opens sessions, deletes none and keeps its
-// credential in use then takes the slots one by one until no tenant can open
-// another. Zero still means off (END-005); the line is
-// what tells the operator who chose it.
+// The transport itself is a legacy mode. And with a session timeout of zero
+// the SDK never closes an idle session, so one no client deletes keeps its
+// slot of the session ceiling (HLD-010) until the pool evicts its credential's
+// entry: after --pool-idle-timeout without a request (never with 0), or to make
+// room at --max-http-clients. A client that opens sessions, deletes none and
+// keeps its credential in use then takes the slots one by one until no tenant
+// can open another. Zero still means off (END-005), through the flag and the
+// variable alike since issue 958, so the line names both: it is what tells the
+// operator who chose it.
 func warnStatefulSessions(ctx context.Context, cfg *config.Config) {
 	if cfg.Stateless {
 		return
 	}
 	slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
 	if cfg.SessionTimeout == 0 {
-		slog.WarnContext(ctx, "--session-timeout=0: a stateful session no client deletes never expires, and keeps one of the "+
-			"process's session slots until its credential's pool entry is evicted",
+		slog.WarnContext(ctx, "--session-timeout=0 (or GITLAB_MCP_SESSION_TIMEOUT=0): a stateful session no client deletes "+
+			"never expires, and keeps one of the process's session slots until its credential's pool entry is evicted",
 			"stateful_sessions_per_process", processStatefulSessions.limit)
 	}
 }
@@ -3938,10 +4021,11 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 // token the instant it is verified, and the server answers 401 to every
 // request carrying a perfectly valid credential.
 //
-// Normalizing here rather than rejecting at config validation keeps the
-// invariant at the point that depends on it: a Config built by any path — the
-// flag layer, the environment overlay, a test constructing a zero value —
-// cannot produce that server.
+// The flag and the variable both refuse such a value at startup, in either
+// authentication mode ([refuseNonPositiveOAuthCacheTTL]). Normalizing here as
+// well keeps the invariant at the point that depends on it: a Config built by
+// a path that skipped that validation, a test constructing a zero value among
+// them, cannot produce that server either.
 func oauthCacheTTL(configured time.Duration) time.Duration {
 	if configured > 0 {
 		return configured
@@ -4057,17 +4141,19 @@ func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 //
 // The order is the log's: the retired variable names first, since a refusal
 // there ends the run before anything else is worth saying; then the transport,
-// whose choice could not be logged before this handler existed; then the flags
-// a stdio run ignores, after the transport because the line written under
-// --transport=auto refers to that choice. See http_only_flags.go.
+// whose choice could not be logged before this handler existed; then the
+// variables and the flags a stdio run ignores, after the transport because the
+// lines written under --transport=auto refer to that choice, and the flags
+// last, since a refusal of one ends the run. See http_only_flags.go.
 //
-// One function rather than three statements in main, whose body is at the
+// One function rather than four statements in main, whose body is at the
 // limit of what the maintainability check accepts.
 func reportStartupConfiguration(choice transportDecision, hcfg *httpConfig) bool {
 	if !reportRetiredEnvNames() {
 		return false
 	}
 	choice.explain()
+	reportStdioIgnoredVariables(choice)
 	return reportStdioIgnoredFlags(choice, hcfg)
 }
 
@@ -4116,14 +4202,12 @@ func transportFailureBudget(cfg *config.Config) *transportBudget {
 	if !tenancy.TransportSourceBudgetOn(cfg.TrustedProxyHeader) { // register row AUB-002
 		return nil
 	}
-	window := cfg.AuthFailureWindow
-	if window <= 0 {
-		// The fast budget is off, but this one is not: it catches header
-		// rotation, which is a different question. It keeps the default
-		// window rather than inheriting a zero that would make every record
-		// lapse instantly.
-		window = config.DefaultAuthFailureWindow
-	}
+	// A zero fast window switches the fast budget off, and not this one: it
+	// catches header rotation, which is a different question, so it keeps the
+	// default window rather than inheriting a zero that would make every
+	// record lapse instantly. The limiter and the accounting share the window
+	// resolved here.
+	window := windowOrDefault(cfg.AuthFailureWindow, config.DefaultAuthFailureWindow)
 	return newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, window), window)
 }
 
@@ -5313,30 +5397,4 @@ func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
 		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
 	return withStandalone, nil
-}
-
-// uploadMaxFileSize resolves the upload limit for HTTP mode.
-//
-// A parse failure falls back to the default and says so, rather than refusing
-// to start: this runs while the HTTP configuration is being assembled, and a
-// malformed size is worth a loud line and a working server rather than a dead
-// one. The same value is validated again by config.Config.Validate, which is
-// where an out-of-range limit is rejected.
-func uploadMaxFileSize() int64 {
-	size, err := config.UploadMaxFileSizeFromEnv()
-	if err != nil {
-		slog.Warn("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE could not be parsed; using the default",
-			"error", err, "default", config.DefaultMaxFileSize)
-		return config.DefaultMaxFileSize
-	}
-	// The ceiling is enforced here rather than only in config.Validate, which
-	// the HTTP path never calls: "1025GB" parses cleanly, so without this a
-	// deployment starts with a limit above the documented one and nothing says
-	// so until a request the size of a small disk arrives.
-	if size > config.MaxFileSize {
-		slog.Warn("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds the maximum; using the maximum",
-			"requested", size, "maximum", config.MaxFileSize)
-		return config.MaxFileSize
-	}
-	return size
 }

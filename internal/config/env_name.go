@@ -32,17 +32,26 @@ const EnvPrefix = "GITLAB_MCP_"
 // quietly reconfigured. Only the settings 3.0.0 read had one
 // ([hadOldSpelling]); a setting added since carries the prefix from the start.
 //
-// Every variable this server defines is on this list; the rule has no
-// exception for a name that already began with GITLAB_. Two names stay bare
-// on purpose: GITLAB_URL and GITLAB_TOKEN are GitLab's own convention, every
-// existing configuration sets them, and a user who already has them in the
-// environment must not have to spell them twice. OTEL_* stays bare for a
+// Every variable this server defines is on this list but one; the rule has no
+// exception for a name that already began with GITLAB_. The twelve issue 957
+// put here had been read where they were used, under their prefixed name, so
+// none has another spelling. GITLAB_MCP_ENV_FILE is the one left off: it
+// names the dotenv file to load beside the home file and is read once from
+// the process environment before any file is loaded ([explicitEnvFile]), so
+// a file this server declines to load cannot nominate itself. Two names stay
+// bare on purpose: GITLAB_URL and GITLAB_TOKEN are GitLab's own convention,
+// every existing configuration sets them, and a user who already has them in
+// the environment must not have to spell them twice. OTEL_* stays bare for a
 // stronger reason: those names belong to the OpenTelemetry specification and
 // the exporters read them directly, so a prefixed spelling would not be seen.
 // AUTOPILOT is not ours either; it is a convention other agent tooling sets,
 // consulted as an alias of YOLO_MODE and never warned about.
 var prefixedNames = []string{
 	"ACTION_TIMEOUT",
+	"ALLOWED_DOWNLOAD_DIRS",
+	"ALLOWED_IMPORT_DIRS",
+	"ALLOWED_UPLOAD_DIRS",
+	"ALLOW_PRIVATE_INSTANCES",
 	"AUTH_DISTINCT_TOKEN_LIMIT",
 	"AUTH_DISTINCT_TOKEN_WINDOW",
 	"AUTH_FAILURE_LIMIT",
@@ -50,6 +59,7 @@ var prefixedNames = []string{
 	"AUTH_MODE",
 	"CAPABILITY_SURFACE",
 	"CLIENT_COMPAT",
+	"DESCRIPTION_SUBSTITUTIONS",
 	"DISCOVERY_RATE_LIMIT_BURST",
 	"DISCOVERY_RATE_LIMIT_RPS",
 	"DRAIN_DELAY",
@@ -58,6 +68,7 @@ var prefixedNames = []string{
 	"IGNORE_SCOPES",
 	"LOG_LEVEL",
 	"MAX_HTTP_CLIENTS",
+	"MAX_LISTEN_STREAMS",
 	"META_PARAM_SCHEMA",
 	"OAUTH_CACHE_TTL",
 	"OAUTH_CLIENT_UID",
@@ -71,11 +82,67 @@ var prefixedNames = []string{
 	"SESSION_REVALIDATE_INTERVAL",
 	"SESSION_TIMEOUT",
 	"SKIP_TLS_VERIFY",
+	"STDIO_MAX_LINE_BYTES",
+	"TELEMETRY",
+	"TELEMETRY_IDENTITY",
+	"TELEMETRY_IDENTITY_KEY",
+	"TELEMETRY_IDENTITY_ROTATION",
+	"TELEMETRY_TOOL_NAME",
 	"TIER",
 	"TOOL_SURFACE",
 	"TRUSTED_ORIGINS",
 	"UPLOAD_MAX_FILE_SIZE",
 	"YOLO_MODE",
+}
+
+// httpOnlyNames are the settings only HTTP mode has, named without their
+// prefix and in name order: the listener's drain, the pool and its idle
+// timeout, the stateful session's timeout, the authentication gate with its
+// mode and budgets, the OAuth verifier and the metadata it publishes, the
+// origins a browser may come from, and the discovery documents' bucket.
+//
+// A stdio server has none of these, so [Load] reads none of them, and
+// [HTTPOnlyEnvUses] names the ones an environment sets so a stdio run can say
+// it ignores them, as it says so of an HTTP-only flag (issue 1171). Until then
+// stdio parsed most of them and refused to start on a value it would never
+// have used: a GITLAB_MCP_AUTH_MODE=oauth or a GITLAB_MCP_MAX_HTTP_CLIENTS=0
+// the same shell exported for an HTTP deployment beside it stopped the stdio
+// process, while GITLAB_MCP_TRUSTED_ORIGINS, which it never read, did not.
+//
+// The revalidation interval is not one of them: stdio re-reads a fine-grained
+// token at it. TestHTTPOnlyNames_AreTheSettingsOnlyTheOverlayReads holds the
+// list to the two readers, so a name is here exactly when
+// [LoadHTTPEnvOverlay] reads it and [Load] does not.
+var httpOnlyNames = []string{
+	"AUTH_DISTINCT_TOKEN_LIMIT",
+	"AUTH_DISTINCT_TOKEN_WINDOW",
+	"AUTH_FAILURE_LIMIT",
+	"AUTH_FAILURE_WINDOW",
+	"AUTH_MODE",
+	"DISCOVERY_RATE_LIMIT_BURST",
+	"DISCOVERY_RATE_LIMIT_RPS",
+	"DRAIN_DELAY",
+	"MAX_HTTP_CLIENTS",
+	"OAUTH_CACHE_TTL",
+	"OAUTH_CLIENT_UID",
+	"POOL_IDLE_TIMEOUT",
+	"PUBLIC_URL",
+	"SESSION_TIMEOUT",
+	"TRUSTED_ORIGINS",
+}
+
+// HTTPOnlyEnvUses returns the settings only HTTP mode has that this
+// environment sets, each under the name an operator exports it by, in name
+// order. A value of blanks counts as unset, as it does to the HTTP overlay
+// ([envPresent]), which would not read it either.
+func HTTPOnlyEnvUses() []string {
+	var set []string
+	for _, name := range httpOnlyNames {
+		if envPresent(name) {
+			set = append(set, EnvPrefix+name)
+		}
+	}
+	return set
 }
 
 // hadOldSpelling are the settings that answered to another name as well until

@@ -214,8 +214,9 @@ instancia de versión previa de [más abajo](#gitlabcom-y-otras-versiones), cada
 que no se retiene a todo token de grano fino.
 
 La concesión se lee una vez al empezar la sesión y otra en cada revalidación: cada 15
-minutos por defecto en modo HTTP (`--revalidate-interval`), y con un temporizador de los
-mismos 15 minutos en stdio. Una instancia actualizada lleva así la sesión a lo que
+minutos por defecto en modo HTTP (`--revalidate-interval`), y con un temporizador del
+mismo intervalo en stdio (`GITLAB_MCP_SESSION_REVALIDATE_INTERVAL`, donde `0` detiene
+las relecturas). Una instancia actualizada lleva así la sesión a lo que
 decide su nueva versión. Una relectura que falla conserva lo que se le mostraba a la
 sesión en lugar de reducirlo, así que lo que ve un asistente nunca cambia por una caída
 de GitLab. El servidor lee como mucho 1 MiB y 1000 scopes de una concesión; una
@@ -264,8 +265,9 @@ El servidor vuelve a preguntar hasta que GitLab responde:
   `--revalidate-interval` (15 minutos por defecto). Con `0` no se revalida nada, y la
   pregunta se repite cuando la primera petición que llega con la credencial una hora
   sin comprobar vuelve a construir la entrada.
-- En stdio, con el temporizador que vuelve a leer una concesión, cada 15 minutos, y en
-  cuanto se recupera un arranque que no pudo llegar a GitLab en absoluto, que es la
+- En stdio, con el temporizador que vuelve a leer una concesión, cada
+  `GITLAB_MCP_SESSION_REVALIDATE_INTERVAL` (15 minutos por defecto, y nunca con `0`), y
+  en cuanto se recupera un arranque que no pudo llegar a GitLab en absoluto, que es la
   primera llamada que GitLab responde.
 
 Una ronda que GitLab sigue sin responder no cambia nada y se escribe en `DEBUG`

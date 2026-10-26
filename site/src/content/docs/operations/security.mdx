@@ -347,7 +347,7 @@ gitlab-mcp-server --http \
   --auth-distinct-token-limit=50 --auth-distinct-token-window=10m
 ```
 
-The escalation ladder is built from `--auth-failure-window`: one window, then ten, then sixty, reset after sixty of silence. It stops there rather than growing without end, because a block is a defense and not a punishment and whoever inherits the address later did nothing to earn it.
+The escalation ladder is built from `--auth-failure-window`: one window, then ten, then sixty, reset after sixty of silence. A window of `0` turns the failure budget off and leaves the ladder on, built from the default minute, so turning one budget off never turns off another. It stops there rather than growing without end, because a block is a defense and not a punishment and whoever inherits the address later did nothing to earn it.
 
 With telemetry enabled, refusals are exported as `gitlab_mcp.auth.blocks`, split by which budget refused. The address is deliberately not a dimension of that metric.
 

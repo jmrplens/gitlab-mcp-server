@@ -146,15 +146,17 @@ func TestBudgetOn_ZeroInEitherSettingSwitchesTheBudgetOff(t *testing.T) {
 	}
 }
 
-// TestEscalationOn_AZeroStepSwitchesTheBudgetOff pins the coupling the
-// register records rather than fixes (issue 958): the step is AUB-001's window,
-// so a zero there switches AUB-003 off even with its own limit and window set.
+// TestEscalationOn_AZeroStepSwitchesTheBudgetOff pins that a budget is never
+// built to climb a ladder of zero-length blocks. The server passes no such
+// step since issue 958: it hands over AUB-001's window, or the default when
+// that window is zero, so a zero there switches AUB-001 off and leaves AUB-003
+// on.
 func TestEscalationOn_AZeroStepSwitchesTheBudgetOff(t *testing.T) {
 	if !EscalationOn(50, 10*time.Minute, time.Minute) {
 		t.Error("EscalationOn at the defaults is off, want on")
 	}
 	if EscalationOn(50, 10*time.Minute, 0) {
-		t.Error("EscalationOn with a zero step is on, want off: the step is AUB-001's window")
+		t.Error("EscalationOn with a zero step is on, want off: its blocks would last no time")
 	}
 }
 
@@ -175,8 +177,8 @@ func TestBudgetSwitches_AllocateNothing(t *testing.T) {
 
 // TestBudgetSwitches_AreTheRulesTheirRowsName ties each switch to the row that
 // names it: AUB-001 names BudgetOn and AUB-003 names EscalationOn, both
-// meaning off by zero, AUB-003 switched off with AUB-001, and AUB-002, whose
-// value is a constant with no zero to mean anything, names
+// meaning off by zero and neither switched off with another (issue 958), and
+// AUB-002, whose value is a constant with no zero to mean anything, names
 // TransportSourceBudgetOn.
 func TestBudgetSwitches_AreTheRulesTheirRowsName(t *testing.T) {
 	for _, tc := range []struct {
@@ -187,7 +189,7 @@ func TestBudgetSwitches_AreTheRulesTheirRowsName(t *testing.T) {
 	}{
 		{"AUB-001", "BudgetOn", ZeroOff, ""},
 		{"AUB-002", "TransportSourceBudgetOn", ZeroNotApplicable, ""},
-		{"AUB-003", "EscalationOn", ZeroOff, "AUB-001"},
+		{"AUB-003", "EscalationOn", ZeroOff, ""},
 	} {
 		t.Run(tc.row, func(t *testing.T) {
 			d, ok := Lookup(tc.row)

@@ -107,6 +107,10 @@ func authorizeDecisions() []Decision {
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages", "TierMembershipPageSize", "TierMembershipMaxPages"},
 			Source: Constant, Zero: ZeroNotApplicable,
+			Fixed: "the pages bound what detecting the tier costs at every entry build, and a caller past them " +
+				"resolves lower than it should, which --tier answers, while a warning says so only when an " +
+				"enterprise instance falls back to Free: the operator's lever is the tier itself rather than the " +
+				"pages read to guess it",
 			Flags: []string{"--tier"}, Envs: []string{"GITLAB_MCP_TIER"}, Malformed: RefuseStartup,
 			// Issue 956 answered F-10: the actions the tier filter removed are
 			// recorded beside the scope and operator narrowings, so a call for
@@ -168,12 +172,22 @@ func authorizeDecisions() []Decision {
 			ID: "AUT-006", Question: Authorize, Kind: Rule, Class: ClassP, Disposition: Ruled,
 			Resource: "the local directories a stdio tool may read from or write to",
 			Key:      KeyProcess, StdioKey: KeyProcess,
-			Source: EnvOnly,
+			// Only stdio reads the three lists: each is consulted once a
+			// caller-supplied local path is admitted, and a server reached
+			// over HTTP refuses every such path first (RQB-008), so they have
+			// no flag and INV-017's, which it asks of a setting in HTTP mode,
+			// would configure nothing (issue 957).
+			Source: StdioEnvOnly,
 			Envs: []string{
 				"GITLAB_MCP_ALLOWED_UPLOAD_DIRS", "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS", "GITLAB_MCP_ALLOWED_IMPORT_DIRS",
 			},
-			Malformed: WarnKeepDefault,
-			Findings:  []string{"F-13"},
+			// A directory that does not resolve is skipped with a warning and
+			// the rest of the list is kept, rather than refusing startup
+			// (issue 957): each entry widens what a tool may touch, so one
+			// that names nothing widens nothing, and the list is read when a
+			// tool resolves a path, after the server has started.
+			Malformed: SkipEntry, MalformedBy: "issue 957",
+			Decided: []string{"issue 957"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Answer: AskOperator,
@@ -253,12 +267,12 @@ func authorizeDecisions() []Decision {
 			// varies with the authorization on the request alone (INV-009), so
 			// a re-read that did not answer keeps the authority in place
 			// rather than falling back. An HTTP entry is re-read on each
-			// accepted revalidation, at ADM-009's interval and off with it; the
-			// stdio process is re-read on a timer at ADM-009's default, which
-			// is this row's own use of that value (the Arg site below): stdio
-			// reads no revalidation setting, so nothing moves the timer or
-			// turns it off, and what it costs is the two reads, once per
-			// interval, of the one token the process serves. A token whose kind
+			// accepted revalidation, at ADM-009's interval and off with it, and
+			// the stdio process on a timer at the same setting's interval and
+			// off with it too, which ADM-009 declares on stdio: stdio used to
+			// re-read at the default whatever the setting said, and issue 1171
+			// gave it the setting. What the timer costs is the two reads, once
+			// per interval, of the one token the process serves. A token whose kind
 			// nothing has told yet (the self endpoint did not answer, or the
 			// OAuth verifier's scopes are its assumption) is asked its kind on
 			// those same rounds instead, and on stdio once a degraded start
@@ -303,7 +317,6 @@ func authorizeDecisions() []Decision {
 				enforce(pkgServer, "stdioAuthority"),
 				enforce(pkgServer, "refreshStdioAuthority"),
 				enforce(pkgServer, "redetectStdioToken"),
-				arg(pkgServer, "prepareStdioCatalog", "refreshStdioAuthority", 3, 1, "RevalidateInterval"),
 				enforce(pkgVisibility, "CallMiddleware"),
 				enforce(pkgToolutil, "FineGrainedRefusal"),
 				enforce(pkgVisibility, "ListingMiddleware"),
@@ -324,10 +337,16 @@ func authorizeDecisions() []Decision {
 			Resource: "the destinations a client may dial",
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			Source: Configurable, Flags: []string{"--allow-private-instances"},
-			Envs:      []string{"GITLAB_MCP_ALLOW_PRIVATE_INSTANCES"},
-			Malformed: AcceptsAny,
-			Decided:   []string{"ADR-0022"},
-			Findings:  []string{"F-13"},
+			Envs: []string{"GITLAB_MCP_ALLOW_PRIVATE_INSTANCES"},
+			// A value the variable does not parse as a boolean reads as off,
+			// which leaves tier B on, rather than refusing startup (issue
+			// 957): the variable turns a guard off, and a typo that did so
+			// would be the one failure nobody notices (DST-003 stays
+			// fail-safe). The flag writes the variable before anything reads
+			// it (cmd/server:applyEnvBackedFlags), so a flag value that does
+			// not parse reads as off too.
+			Malformed: ReadsAsOff, MalformedBy: "issue 957",
+			Decided: []string{"ADR-0022", "issue 957"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError,

@@ -116,7 +116,9 @@ const (
 	Constant
 	// Configurable is a value with a flag and a GITLAB_MCP_ variable.
 	Configurable
-	// EnvOnly is a value only an environment variable changes.
+	// EnvOnly is a value only an environment variable changes, of a setting
+	// HTTP mode reads as well, which INV-017 asks a flag of: a row passes
+	// [Validate] with it only through a finding.
 	EnvOnly
 	// OptionOnly is a value only a Go option changes, which no operator can
 	// reach.
@@ -125,6 +127,14 @@ const (
 	// the process is started under (HLD-011, from its descriptor limit, and
 	// HLD-010, from HLD-011's). No operator sets it, as none sets a constant.
 	Derived
+	// StdioEnvOnly is a value only an environment variable changes, of a
+	// setting only stdio reads. INV-017 asks a flag of a setting in HTTP
+	// mode, and HTTP mode never reads this one: the local allow-lists are
+	// consulted once a caller-supplied path is admitted, and a server
+	// reached over HTTP refuses every such path first (RQB-008). Issue 957
+	// gave it a name of its own, so that a value only an environment
+	// variable reaches in HTTP mode (EnvOnly) still departs from INV-017.
+	StdioEnvOnly
 )
 
 // Zero is what a value of zero means for a decision (INV-015).
@@ -146,6 +156,15 @@ const (
 	// ZeroSelectsDefault replaces a zero with the default.
 	ZeroSelectsDefault
 )
+
+// SettingZero is what a zero means for one setting of a row whose settings do
+// not all mean the same by it (INV-015).
+type SettingZero struct {
+	// Config is the setting, named as the row's Config names it.
+	Config string
+	// Zero is what a zero written in it means.
+	Zero Zero
+}
 
 // Capacity is what a structure or a ceiling does when it is full (VAL-006).
 type Capacity uint8
@@ -179,13 +198,21 @@ type Malformed uint8
 const (
 	// MalformedNone states none: a value no operator writes.
 	MalformedNone Malformed = iota
-	// RefuseStartup refuses to start.
+	// RefuseStartup refuses to start. It is the policy of a limit (issue
+	// 957), and any other a row names for a value that does not parse is an
+	// exception it records (see [Decision.MalformedBy]).
 	RefuseStartup
 	// WarnKeepDefault warns and keeps the default.
 	WarnKeepDefault
 	// AcceptsAny is a switch every value of which means something (IDN-013:
 	// anything but "off" enables it).
 	AcceptsAny
+	// SkipEntry warns about an entry of a list that does not parse, skips it
+	// and keeps the rest (AUT-006: a directory that does not resolve).
+	SkipEntry
+	// ReadsAsOff reads a value that does not parse as off (DST-003: a typo in
+	// the opt-out leaves the guard it would turn off on).
+	ReadsAsOff
 )
 
 // Era is a protocol revision a refusal applies in.
@@ -343,8 +370,10 @@ const (
 	// [Site.Call] pass the register constant at index [Site.Arg].
 	Arg
 	// Pin is a site that keeps its own literal, held equal to the register
-	// constant [Site.Reads] (the second statements of issue 958's duplicated
-	// defaults).
+	// constant [Site.Reads]. It held the pool's second statements of three
+	// configuration defaults to the register until issue 958 made them
+	// aliases, and no row declares one since; cmd/audit_tenancy still holds
+	// any a row declares to its constant (G4).
 	Pin
 	// Enforce is a function or var that applies the decision.
 	Enforce
@@ -468,6 +497,12 @@ type Decision struct {
 	Functions []string
 	// Source is where its value comes from.
 	Source Source
+	// Fixed is why no operator setting reaches the value, on a row whose
+	// Source is Constant or OptionOnly, in the register's own words: what the
+	// value is set against, and what a setting that moved it would cost or
+	// undo. Bounds no setting reaches used to carry no reason a reader could
+	// tell from an accident, which F-16 recorded (issue 958).
+	Fixed string
 	// Flags are the command-line flags that set it.
 	Flags []string
 	// Envs are the environment variables that set it.
@@ -476,11 +511,36 @@ type Decision struct {
 	Config []string
 	// Malformed is what a value that does not parse does.
 	Malformed Malformed
+	// MalformedBy is the record that decided a malformed-value policy other
+	// than refusing startup, which is the stated exception INV-017 lets
+	// through in place of a finding: issue 957 decided that a value a limit
+	// cannot parse refuses startup, as internal/config refused for the
+	// settings it read, and kept the policies of the settings it names as
+	// exceptions with their reasons. It decides a value that warns and keeps
+	// the default, an entry skipped or a value read as off, and it is one of
+	// Decided; a row whose malformed value refuses startup, or that has none,
+	// has nothing for it to decide.
+	MalformedBy string
 	// Zero is what a value of zero means.
 	Zero Zero
+	// SettingZeros are the settings whose zero means something other than
+	// Zero, on a row whose settings disagree, each named once, and Zero is
+	// then the meaning of the rest, of which there is at least one: a zero
+	// rate switches RTC-001's bucket off, and a zero burst beside a positive
+	// rate is refused.
+	SettingZeros []SettingZero
+	// ZeroBy is the record that decided a zero that does not mean off, which
+	// is the stated exception INV-015 lets through in place of a finding
+	// (issue 958): a zero refused at startup where neither no limit nor a
+	// limit of nothing is a meaning an operator could want, or one replaced by
+	// the default where zero must not switch the limit off. It decides the
+	// row's Zero and every one of its SettingZeros, and it is one of Decided;
+	// a row whose every zero means off has nothing for it to decide.
+	ZeroBy string
 	// OffWith is the ID of another row which, switched off, switches this one
-	// off too: AUB-003's step is AUB-001's window (F-34, issue 958), and
-	// RTC-007 follows the row it is the process partner of (issue 951).
+	// off too: RTC-007 follows the row it is the process partner of (issue
+	// 951). AUB-003 followed AUB-001, whose window was its escalation step,
+	// until issue 958 gave the step the default window when AUB-001's is zero.
 	//
 	// It names the row the code consults, which need not be the row an
 	// operator sets to zero: RTC-007 is consulted where RTC-003's bucket
@@ -583,6 +643,13 @@ func (f Finding) Records(invariant string) bool {
 // process partner beside it, since a bucket the whole process shared would let
 // a flood from many addresses deny discovery to every caller, and the finding
 // is how RTC-008 records that departure from INV-004.
+//
+// F-16 records a departure from no invariant a rule reads. It used to record
+// INV-017's for a value only a Go option reaches, which issue 958 stopped
+// reading as configuration, and the rest of what it covered, defaults and
+// fallbacks written twice, which no rule of Validate holds, issue 958 wrote
+// once, so no row carries it; listed for INV-017, it would let a value only an
+// environment variable reaches pass on a finding about something else.
 func AllFindings() []Finding {
 	return []Finding{
 		{ID: "F-01", Issue: 955},
@@ -600,7 +667,7 @@ func AllFindings() []Finding {
 		{ID: "F-13", Issue: 957, Invariants: []string{"INV-017"}},
 		{ID: "F-14", Issue: 954},
 		{ID: "F-15", Issue: 953},
-		{ID: "F-16", Issue: 958, Invariants: []string{"INV-017"}},
+		{ID: "F-16", Issue: 958},
 		{ID: "F-17", Issue: 952},
 		{ID: "F-18", Issue: 955, Invariants: []string{"INV-018"}},
 		{ID: "F-19", Issue: 959},

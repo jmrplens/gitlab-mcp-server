@@ -638,7 +638,10 @@ dice al arrancar en vez de rotarla por debajo.
 Pon el intervalo de rotación si ejecutas una sola instancia y quieres que el
 seudónimo deje de correlacionar pasado un tiempo. Viene desactivado porque las
 réplicas arrancan en instantes distintos, así que rotarían desfasadas y el
-recuento de usuarios se movería sin que nadie lo haya pedido.
+recuento de usuarios se movería sin que nadie lo haya pedido. Un intervalo que
+no es una duración, como `24` sin unidad, o uno negativo o de más de 30 días
+impide el arranque con la telemetría activa y sin clave; junto a una clave se
+ignora, diga lo que diga.
 
 Ninguna de las dos respuestas está prescrita. La convención define `user.hash`
 como un valor "para correlacionar información de un usuario de forma
@@ -670,8 +673,8 @@ usa como clave directamente y un digest de usuario no se puede comparar con uno
 de recurso.
 
 Con `GODEBUG=fips140=only`, HKDF no acepta una clave de menos de 112 bits, así
-que una clave de menos de 14 bytes se rechaza al arrancar: el servidor deja el
-rechazo en el log y no registra nada sobre quien llama, como siempre que no
+que una clave de menos de 14 bytes no se puede usar: el servidor arranca, deja
+el motivo en el log y no registra nada sobre quien llama, como siempre que no
 puede derivar sus claves de seudonimización. La 3.1.0 detenía el proceso con un
 panic ante esa misma clave.
 
@@ -726,6 +729,14 @@ Desactivado por defecto, en tres escalones:
 ```
 
 o `GITLAB_MCP_TELEMETRY_IDENTITY`.
+
+Un valor que el servidor no reconoce impide el arranque, en cualquiera de los
+dos transportes, siempre que la telemetría esté activa, con un `ERROR` que
+nombra el flag o la variable que lo contenía. Antes arrancaba igualmente: el
+servidor funcionaba sin registrar nada sobre quien llama, y el único rastro del
+motivo eran líneas `ERROR` en sus logs, fáciles de pasar por alto detrás de un
+panel que simplemente seguía vacío. Con la telemetría desactivada, o vetada por
+`OTEL_SDK_DISABLED`, nada se exporta bajo el ajuste y nada se rechaza.
 
 La política gobierna una cosa más de lo que sugiere su nombre: **qué recurso
 nombró la petición**. Un URI de recurso aquí lleva ids de proyecto y de grupo,

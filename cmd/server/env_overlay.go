@@ -32,6 +32,21 @@ func applyHTTPEnvOverlay(hcfg *httpConfig, overlay *config.HTTPEnvOverlay) {
 	applyOverlayNumbers(hcfg, overlay)
 	applyOverlayDurations(hcfg, overlay)
 	applyOverlayTier(hcfg, overlay)
+	applyOverlayUploadLimit(hcfg, overlay)
+}
+
+// applyOverlayUploadLimit resolves the upload limit (register row RQB-007),
+// the one HTTP setting with no flag of its own in httpConfig:
+// --upload-max-file-size writes the variable (env_flags.go), so the
+// overlay's value is the flag's when it was passed, and there is no passed
+// flag here for it to give way to. With neither, it is the default, which is
+// set here because no flag declaration holds it. The overlay has already
+// refused a value that does not parse or lies above the ceiling (issue 1170).
+func applyOverlayUploadLimit(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
+	hcfg.uploadMaxFileSize = config.DefaultMaxFileSize
+	if o.UploadMaxFileSize != nil {
+		hcfg.uploadMaxFileSize = *o.UploadMaxFileSize
+	}
 }
 
 // overlayString assigns value to target when the flag was not passed and the

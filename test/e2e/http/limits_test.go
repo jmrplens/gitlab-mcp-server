@@ -334,6 +334,32 @@ func TestLimit_MaxRequestBodyBytes(t *testing.T) {
 	})
 }
 
+// TestLimit_MaxListenStreams_TheFlagWinsOverTheVariable verifies that
+// --max-listen-streams, the flag issue 957 gave the listen ceiling, bounds the
+// streams one credential holds open, and that it wins over
+// GITLAB_MCP_MAX_LISTEN_STREAMS: the variable allows five, the flag one, and
+// the second stream is refused at one. A second stream acknowledged would be
+// the flag configuring nothing, and a refusal naming five the variable
+// winning.
+func TestLimit_MaxListenStreams_TheFlagWinsOverTheVariable(t *testing.T) {
+	gitlab := startThrottlingGitLab(t)
+	srv := startServer(t, map[string]string{"GITLAB_MCP_MAX_LISTEN_STREAMS": "5"},
+		"--gitlab-url="+gitlab.URL, "--capability-surface=full", "--max-listen-streams=1")
+
+	held := openListen(t, srv, "glpat-whatever", "gitlab://project/900", 1)
+	if _, seen, ok := held.awaitFrame(t, "notifications/subscriptions/acknowledged", 20*time.Second); !ok {
+		t.Fatalf("the first stream was never acknowledged; frames: %v", seen)
+	}
+	refused := openListen(t, srv, "glpat-whatever", "gitlab://project/901", 2)
+	frame, seen, ok := refused.awaitFrame(t, "too many open subscriptions/listen streams", 20*time.Second)
+	if !ok {
+		t.Fatalf("a second stream was not refused past the flag's ceiling of one under a variable of five; frames: %v", seen)
+	}
+	if !strings.Contains(frame, "(per-credential limit 1); close one and retry") {
+		t.Errorf("the refusal does not name the flag's ceiling of one: %s", frame)
+	}
+}
+
 // TestLimit_RateLimitRPS verifies that the tools/call rate limiter engages when
 // configured, that HTTP mode has it on by default, and that a refusal is
 // visible to an operator.

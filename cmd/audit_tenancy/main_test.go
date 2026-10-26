@@ -100,6 +100,11 @@ func fixtureRules() rules {
 	r.chargeCallers = []string{siteDir + ":gate.charge"}
 	r.server = siteDir
 	r.envNames = tenancy.Site{Pkg: siteDir, Name: "prefixedNames"}
+	r.envListReaders = []string{sitePath + ".Getenv"}
+	// The fixture reads none of the variables the production tables declare,
+	// each of which would otherwise be a declaration answering nothing.
+	r.envDeclared = nil
+	r.envBare = nil
 	// No register file is held to a reader unless a case says so, since
 	// the fixture's rows rarely alias the whole leaf.
 	r.valueFiles = nil
@@ -318,7 +323,7 @@ func TestRunMain_TheTree_PassesTheGate(t *testing.T) {
 		"exempted literal":    "cmd/server:readinessGate.abandoned: not a decision (literals, server-state): ",
 		"exempted name":       "internal/toolutil:PollMaxTimeout: not a decision (names, tool-argument): ",
 		"verdict":             "; 0 findings, 65 declarations exempted\n",
-		"what the rules read": "(32 refusal returns, 96 refusals, 15 reasons and 33 settings read)",
+		"what the rules read": "(32 refusal returns, 96 refusals, 15 reasons and 34 settings read)",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if !strings.Contains(out, want) {

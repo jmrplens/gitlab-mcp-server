@@ -25,12 +25,21 @@ func requestDecisions() []Decision {
 	rqb001.StdioKey = KeyNone
 	rqb001.Flags = []string{"--max-request-body-bytes"}
 	rqb001.Config = []string{"MaxRequestBodyBytes"}
+	// A count the flag package cannot parse refuses startup, as every
+	// flag's does.
+	rqb001.Malformed = RefuseStartup
 
 	rqb004 := bound("RQB-004", "the length of one stdio line",
 		enforce(pkgServer, "defaultMaxStdioLineBytes"),
-		enforce(pkgServer, "stdioMaxLineBytesEnv"))
+		enforce(pkgServer, "stdioMaxLineBytesEnv"),
+		enforce(pkgServer, "stdioMaxLineBytesSetting"))
 	rqb004.Envs = []string{"GITLAB_MCP_STDIO_MAX_LINE_BYTES"}
-	rqb004.Findings = []string{"F-13"}
+	// A value that does not parse warns and keeps the default rather than
+	// refusing startup (issue 957): stdio configuration arrives through the
+	// environment of whatever launched the process, and failing to start over
+	// one mistyped number would take the client down with it.
+	rqb004.Malformed, rqb004.MalformedBy = WarnKeepDefault, "issue 957"
+	rqb004.Decided = []string{"issue 957"}
 
 	rqb005 := bound("RQB-005", "how long one action's handler may run",
 		enforce(pkgConfig, "DefaultActionTimeout"),
@@ -39,14 +48,29 @@ func requestDecisions() []Decision {
 	rqb005.Flags = []string{"--action-timeout"}
 	rqb005.Envs = []string{"GITLAB_MCP_ACTION_TIMEOUT"}
 	rqb005.Config = []string{"ActionTimeout"}
+	// A duration that does not parse, or one above the ceiling, refuses
+	// startup, from the variable on both transports and from the flag in
+	// HTTP mode. A blank variable is unset on both, as the overlay and
+	// stdio's reader each read it.
+	rqb005.Malformed = RefuseStartup
 
 	rqb007 := bound("RQB-007", "the size of one uploaded or read file",
 		enforce(pkgConfig, "DefaultMaxFileSize"),
 		enforce(pkgConfig, "MaxFileSize"),
+		enforce(pkgConfig, "UploadMaxFileSizeFromEnv"),
+		enforce(pkgConfig, "loadOverlayUploadLimit"),
 		enforce(pkgToolutil, "DefaultMaxFileSize"))
 	rqb007.Flags = []string{"--upload-max-file-size"}
 	rqb007.Envs = []string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE"}
 	rqb007.Config = []string{"UploadMaxFileSize"}
+	// A size that does not parse, one that is not positive and one above
+	// the ceiling refuse startup on both transports (issue 1170): the flag
+	// writes the variable, and stdio's Load and HTTP mode's overlay read it
+	// through the one reader that holds it to its bounds, which reads a
+	// blank value as unset as the overlay does. HTTP mode used to warn and
+	// use the default, or the maximum, where stdio refused.
+	rqb007.Malformed = RefuseStartup
+	rqb007.Decided = []string{"issue 1170"}
 
 	return []Decision{
 		rqb001,

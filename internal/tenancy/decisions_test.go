@@ -1,6 +1,7 @@
 package tenancy
 
 import (
+	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -17,7 +18,7 @@ import (
 // row.
 var specRequirementIDs = []string{
 	"IDN-001", "IDN-002", "IDN-003", "IDN-004", "IDN-005", "IDN-006", "IDN-007",
-	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013",
+	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013", "IDN-014",
 	"ADM-001", "ADM-002", "ADM-003", "ADM-004", "ADM-005", "ADM-006", "ADM-007",
 	"ADM-008", "ADM-009", "ADM-010", "ADM-011", "ADM-012", "ADM-013", "ADM-014",
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005", "AUB-006",
@@ -100,8 +101,11 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // latest_pipeline resource runs on every poll of a watch (issue 1242), the
 // twelfth. AUB-006, the /48 aggregate issue 954 added, is the thirty-second
 // valued row, and RTC-008, the discovery documents' bucket issue 1053 added,
-// the thirty-third. RQB-013 bounds advisory merge request diff searches and
-// is the thirteenth request bound.
+// the thirty-third. IDN-014, whether the tool name and the action are
+// dimensions of telemetry's metrics, which issue 957 gave a row so that its
+// variable and its malformed value are held as every setting's are, is the
+// thirty-seventh ruled row. RQB-013 bounds advisory merge request diff searches
+// and is the thirteenth request bound.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -113,7 +117,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 33},
-		{"ruled", Ruled, 36},
+		{"ruled", Ruled, 37},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 13},
@@ -336,13 +340,14 @@ func heldIsDecidedByIssue951(held Decision) bool {
 // decided for the keys before admission. The address (IDN-004) and the
 // transport source (IDN-005) are derived at budgetKey, the whole IPv4 address
 // or the IPv6 /64, and the budgets keyed on them (AUB-001 to AUB-003) record
-// the decision and carry F-14 and F-25 no longer, F-34 staying on the two that
-// carry it for issue 958. AUB-006 is the /48 aggregate the decision added: a
-// constant on a key of its own, charged with the refused credentials the
-// distinct-credential budget is charged with, refused in the words every
-// budget refuses with, its zero not an operator's to set, and its table capped
-// with the others by AUB-004. Both findings stay in the register's list, filed
-// as issue 954's.
+// the decision and carry F-14 and F-25 no longer, nor F-34 on the two that
+// carried it, which issue 958 answered when a zero failure window stopped
+// switching the distinct-credential budget off. AUB-006 is the /48 aggregate
+// the decision added: a constant on a key of its own, charged with the refused
+// credentials the distinct-credential budget is charged with, refused in the
+// words every budget refuses with, its zero not an operator's to set, and its
+// table capped with the others by AUB-004. Both findings stay in the
+// register's list, filed as issue 954's.
 func TestDecisions_AuthenticationKeys_AreDecidedByIssue954(t *testing.T) {
 	for _, id := range []string{"IDN-004", "IDN-005", "AUB-001", "AUB-002", "AUB-003", "AUB-006"} {
 		t.Run(id, func(t *testing.T) {
@@ -361,9 +366,10 @@ func TestDecisions_AuthenticationKeys_AreDecidedByIssue954(t *testing.T) {
 		})
 	}
 	for _, id := range []string{"AUB-001", "AUB-003"} {
-		t.Run(id+" keeps F-34", func(t *testing.T) {
-			if d, _ := Lookup(id); !slices.Equal(d.Findings, []string{"F-34"}) {
-				t.Errorf("%s carries %v, want F-34 alone, which issue 958 answers", id, d.Findings)
+		t.Run(id+" carries no finding", func(t *testing.T) {
+			if d, _ := Lookup(id); len(d.Findings) != 0 || d.OffWith != "" || !slices.Contains(d.Decided, "issue 958") {
+				t.Errorf("%s carries %v, follows %q off and records %v; want no finding, no row it follows off, "+
+					"and issue 958, which answered the F-34 it carried", id, d.Findings, d.OffWith, d.Decided)
 			}
 		})
 	}
@@ -383,16 +389,17 @@ func TestDecisions_AuthenticationKeys_AreDecidedByIssue954(t *testing.T) {
 // own oldest for a fresh key, and a source the limiter did not record is given
 // no place, and the sites that keep and reclaim a pair and forget the sources
 // with none live are declared, with the alias of AUB-004's value the last of
-// them reads. F-16, issue 958's, is carried as before, and F-35 stays in the
-// register's list, filed as issue 982's.
+// them reads. It carries no finding: F-16, issue 958's, left it when the
+// fallback of its window to the default was written once, and F-35 stays in
+// the register's list, filed as issue 982's.
 func TestDecisions_TransportSourcePairs_AreBoundedByIssue982(t *testing.T) {
 	d, _ := Lookup("AUB-002")
 	if !d.Table || d.AtCapacity != ReclaimOwnThenRefuse || !slices.Contains(d.Decided, "issue 982") {
 		t.Errorf("AUB-002: table %v, at capacity %d, decided %v; want a table that reclaims its own key's holding, by issue 982",
 			d.Table, d.AtCapacity, d.Decided)
 	}
-	if !slices.Equal(d.Findings, []string{"F-16"}) {
-		t.Errorf("AUB-002 carries %v, want F-16 alone: F-35 is answered", d.Findings)
+	if len(d.Findings) != 0 {
+		t.Errorf("AUB-002 carries %v, want no finding: F-35 and F-16 are answered", d.Findings)
 	}
 	for _, name := range []string{
 		"transportBudget.charge", "transportBudget.keepLocked",
@@ -798,7 +805,14 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // /64 with a /48 aggregate and a named unix-socket key, and stated the
 // distinct-credential budget's reason as GitLab 19.5 answered it, and F-35 did
 // when issue 982 bounded the transport-source budget's record of charged pairs
-// per source and to the sources its limiter recorded.
+// per source and to the sources its limiter recorded, and F-11 did when issue
+// 958 stated the rule for what a row does at capacity, and F-16 and F-34 did
+// when issue 958 stated each zero it kept from meaning off, made the zeros a
+// flag and its variable read apart mean one thing, stopped a zero failure
+// window switching the distinct-credential budget off, and wrote each default
+// and fallback once, and F-13 did when issue 957 moved every variable a row
+// names onto the configuration package's list, read through it, and gave
+// the listen ceiling its flag.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -826,8 +840,347 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-14,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
+	}
+}
+
+// TestDecisions_ZeroExceptions_AreDecidedByIssue958 pins the zeros issue 958
+// states as exceptions rather than switching them off, each recorded through
+// ZeroBy in place of F-34: the pool size's zero refused at startup
+// (POL-001), the tool-call bucket's burst refused beside a positive rate
+// while a zero rate still switches the bucket off (RTC-001), and the
+// credential age ceiling and the watcher ceiling, two Go options whose zero
+// selects the default (ADM-008, HLD-003), and the OAuth cache TTL's zero
+// refused at startup by its flag as by its variable (ADM-005), where the flag
+// used to replace it with the default. No row carries F-34 any longer: the
+// other three that did had a zero that meant off and was read apart, the
+// failure window's, which switched the distinct-credential budget off with it
+// (AUB-001, AUB-003), and the session timeout's, whose variable refused what
+// its flag reads as off (END-005), and each now records issue 958.
+func TestDecisions_ZeroExceptions_AreDecidedByIssue958(t *testing.T) {
+	for _, tc := range []struct {
+		id       string
+		zero     Zero
+		settings []SettingZero
+	}{
+		{"ADM-005", ZeroRefused, nil},
+		{"POL-001", ZeroRefused, nil},
+		{"RTC-001", ZeroOff, []SettingZero{{Config: "RateLimitBurst", Zero: ZeroRefused}}},
+		{"ADM-008", ZeroSelectsDefault, nil},
+		{"HLD-003", ZeroSelectsDefault, nil},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if d.Zero != tc.zero || !slices.Equal(d.SettingZeros, tc.settings) {
+				t.Errorf("%s: zero %d, settings %v; want %d and %v", tc.id, d.Zero, d.SettingZeros, tc.zero, tc.settings)
+			}
+			if d.ZeroBy != "issue 958" || !slices.Contains(d.Decided, "issue 958") || d.Carries("F-34") {
+				t.Errorf("%s: zero by %q, decided %v, findings %v; want issue 958 recorded as the decision and no F-34",
+					tc.id, d.ZeroBy, d.Decided, d.Findings)
+			}
+		})
+	}
+	for _, id := range []string{"AUB-001", "AUB-003", "END-005"} {
+		t.Run(id, func(t *testing.T) {
+			d, _ := Lookup(id)
+			if d.Zero != ZeroOff || d.ZeroBy != "" || d.OffWith != "" || !slices.Contains(d.Decided, "issue 958") {
+				t.Errorf("%s: zero %d, zero by %q, off with %q, decided %v; want a zero that switches it off alone, "+
+					"and issue 958 recorded", id, d.Zero, d.ZeroBy, d.OffWith, d.Decided)
+			}
+		})
+	}
+	for _, d := range Decisions() {
+		if d.Carries("F-34") {
+			t.Errorf("%s carries F-34, which issue 958 answered", d.ID)
+		}
+	}
+}
+
+// TestDecisions_CapacityRule_AnswersF11UnderIssue958 pins the rows F-11 was
+// carried by, the two whose behavior at capacity no rule judged before issue
+// 958 stated one: the rejected-token cache evicts its oldest record, which a
+// table kept before admission may, and the authentication tables stop
+// counting a new key, which their silent refusals say. Each records the
+// issue, no row carries F-11 any longer, and F-11 stays in the register's
+// list, filed as issue 958's.
+func TestDecisions_CapacityRule_AnswersF11UnderIssue958(t *testing.T) {
+	for _, tc := range []struct {
+		id       string
+		capacity Capacity
+	}{
+		{"ADM-006", EvictOldest},
+		{"AUB-004", StopCounting},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if d.AtCapacity != tc.capacity || !slices.Contains(d.Decided, "issue 958") || d.Carries("F-11") {
+				t.Errorf("%s: at capacity %d, decided %v, findings %v; want %d, issue 958 recorded and no F-11",
+					tc.id, d.AtCapacity, d.Decided, d.Findings, tc.capacity)
+			}
+		})
+	}
+	for _, d := range Decisions() {
+		if d.Carries("F-11") {
+			t.Errorf("%s carries F-11, which the capacity rule answers", d.ID)
+		}
+	}
+	if FindingIssue("F-11") != 958 {
+		t.Errorf("F-11 is filed as issue %d, want it kept as issue 958's", FindingIssue("F-11"))
+	}
+}
+
+// TestDecisions_UnreasonedBounds_StateTheirReasonUnderIssue958 pins the five
+// rows F-16 recorded as bounds no setting reaches with no reason stated, which
+// issue 958 answered by stating one: the rejected-token cache, the credential
+// age ceiling, the unexplained-401 interval, the probe bound and the upstream
+// retries. Each records the issue and carries F-16 no longer. Nor does any
+// other row: the four whose default or fallback was written in two places
+// record the issue too, the revalidation interval, the pool size and the idle
+// timeout, which the pool aliased from the register in place of stating them a
+// second time, and the transport-source budget, whose window falls back to the
+// default through the one helper and whose 500 states its reason here.
+func TestDecisions_UnreasonedBounds_StateTheirReasonUnderIssue958(t *testing.T) {
+	for _, id := range []string{"ADM-006", "ADM-008", "ADM-010", "POL-006", "RTC-006"} {
+		t.Run(id, func(t *testing.T) {
+			d, _ := Lookup(id)
+			if d.Fixed == "" || !slices.Contains(d.Decided, "issue 958") || d.Carries("F-16") {
+				t.Errorf("%s: fixed %q, decided %v, findings %v; want a reason, issue 958 recorded and no F-16",
+					id, d.Fixed, d.Decided, d.Findings)
+			}
+		})
+	}
+	if d, _ := Lookup("AUB-002"); d.Fixed == "" {
+		t.Error("AUB-002 states no reason its 500 is fixed")
+	}
+	for _, id := range []string{"ADM-009", "AUB-002", "POL-001", "POL-004"} {
+		t.Run(id+" writes its default once", func(t *testing.T) {
+			if d, _ := Lookup(id); !slices.Contains(d.Decided, "issue 958") {
+				t.Errorf("%s records %v, want issue 958, which wrote its default or fallback once", id, d.Decided)
+			}
+		})
+	}
+	for _, d := range Decisions() {
+		if d.Carries("F-16") {
+			t.Errorf("%s carries F-16, which issue 958 answered", d.ID)
+		}
+	}
+}
+
+// TestDecisions_PoolDefaults_AreAliasesOfTheRegister pins the three defaults
+// issue 958 found stated twice, once in internal/config and again as the
+// pool's own fallback: the pool size, the revalidation interval and the idle
+// timeout. The pool's statements are aliases of the register's constants now,
+// declared as such on POL-001, ADM-009 and POL-004, so a change of value is one
+// edit and check-tenancy's G2 holds every place that reads it; none of the
+// three keeps a Pin, a site holding a literal of its own. The role stays for a
+// value that has to be stated twice, which G4 holds to its constant, so this
+// asks it of these three rows and not of the register.
+func TestDecisions_PoolDefaults_AreAliasesOfTheRegister(t *testing.T) {
+	for _, tc := range []struct{ id, name, value string }{
+		{"POL-001", "defaultMaxSize", "PoolSize"},
+		{"ADM-009", "DefaultRevalidateInterval", "RevalidateInterval"},
+		{"POL-004", "DefaultIdleTimeout", "PoolIdleTimeout"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if !slices.Contains(d.Sites, alias(pkgPool, tc.name, tc.value)) {
+				t.Errorf("%s declares %v, want serverpool's %s an alias of %s", tc.id, d.Sites, tc.name, tc.value)
+			}
+			for _, s := range d.Sites {
+				if s.Role == Pin {
+					t.Errorf("%s declares %s.%s as a Pin, a second statement of %s", tc.id, s.Pkg, s.Name, s.Reads)
+				}
+			}
+		})
+	}
+}
+
+// TestDecisions_GoOptions_AreTheValuesOnlyTestsSet pins the rows whose value
+// only a Go option reaches, which no production code sets and no operator can:
+// the pool's credential age option (ADM-008), and the watcher manager's
+// Options fields, its per-credential ceiling (HLD-003) and its lease, cadence
+// and lifetime (HLD-007). Each says why its value is fixed, as a constant
+// does, and no other row is declared a Go option's.
+func TestDecisions_GoOptions_AreTheValuesOnlyTestsSet(t *testing.T) {
+	var options []string
+	for _, d := range Decisions() {
+		if d.Source != OptionOnly {
+			continue
+		}
+		options = append(options, d.ID)
+		if d.Fixed == "" {
+			t.Errorf("%s: a Go option's value with no reason it is fixed", d.ID)
+		}
+	}
+	if want := []string{"ADM-008", "HLD-003", "HLD-007"}; !slices.Equal(options, want) {
+		t.Errorf("the rows only a Go option reaches are %v, want %v", options, want)
+	}
+}
+
+// TestDecisions_MalformedExceptions_AreDecidedByIssue957 pins the
+// malformed-value policies issue 957 keeps as exceptions to refusing startup,
+// each recorded through MalformedBy with the issue among the row's decisions:
+// a value that does not parse is skipped when it is one directory of a stdio
+// allow-list (AUT-006), and read as off when it is the opt-out of the
+// destination guard, so a typo never turns the guard off (DST-003); the listen
+// ceiling warns and keeps its default, as the stdio line limit does, so that a
+// typo cannot take a client down with the server (HLD-001, RQB-004); and the
+// tool name as a metric dimension falls back to auto (IDN-014). Every other
+// row's malformed value refuses startup, or every value of it means something
+// (AcceptsAny), or the row has none, which is what the rule's own
+// [malformedDeparts] says.
+func TestDecisions_MalformedExceptions_AreDecidedByIssue957(t *testing.T) {
+	exceptions := []struct {
+		id     string
+		policy Malformed
+	}{
+		{"AUT-006", SkipEntry},
+		{"DST-003", ReadsAsOff},
+		{"HLD-001", WarnKeepDefault},
+		{"IDN-014", WarnKeepDefault},
+		{"RQB-004", WarnKeepDefault},
+	}
+	var want []string
+	for _, tc := range exceptions {
+		want = append(want, tc.id)
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if d.Malformed != tc.policy {
+				t.Errorf("%s: malformed policy %d, want %d", tc.id, d.Malformed, tc.policy)
+			}
+			if d.MalformedBy != "issue 957" || !slices.Contains(d.Decided, "issue 957") {
+				t.Errorf("%s: malformed by %q, decided %v; want issue 957 recorded as the decision", tc.id, d.MalformedBy, d.Decided)
+			}
+		})
+	}
+	var departing []string
+	for _, d := range Decisions() {
+		if d.MalformedBy != "" || malformedDeparts(d.Malformed) {
+			departing = append(departing, d.ID)
+		}
+	}
+	if !slices.Equal(departing, want) {
+		t.Errorf("the rows whose malformed value departs from refusing startup, or that name a decision for one, are %v, want %v", departing, want)
+	}
+}
+
+// TestDecisions_UploadLimit_RefusesAMalformedValueByIssue1170 pins what issue
+// 1170 decided for the upload limit (RQB-007): a value that does not parse,
+// one that is not positive and one above the ceiling refuse startup on both
+// transports, which is every limit's policy (INV-017). HTTP mode used to warn
+// and use the default for the first two and the maximum for the third, and
+// the row stated no policy at all, so nothing held it to either answer. The
+// refusal is enforced by the one reader both transports call and by the
+// overlay HTTP mode reads it through.
+func TestDecisions_UploadLimit_RefusesAMalformedValueByIssue1170(t *testing.T) {
+	d, ok := Lookup("RQB-007")
+	if !ok {
+		t.Fatal("RQB-007 names no row")
+	}
+	if d.Malformed != RefuseStartup || d.MalformedBy != "" || !slices.Equal(d.Decided, []string{"issue 1170"}) {
+		t.Errorf("RQB-007: malformed %d by %q, decided %v; want a refused start, the default policy, decided by issue 1170",
+			d.Malformed, d.MalformedBy, d.Decided)
+	}
+	if !slices.Equal(d.Flags, []string{"--upload-max-file-size"}) || !slices.Equal(d.Envs, []string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE"}) {
+		t.Errorf("RQB-007: flags %v, envs %v; want --upload-max-file-size and the variable it writes", d.Flags, d.Envs)
+	}
+	var missing []string
+	for _, site := range []Site{enforce(pkgConfig, "UploadMaxFileSizeFromEnv"), enforce(pkgConfig, "loadOverlayUploadLimit")} {
+		if !slices.Contains(d.Sites, site) {
+			missing = append(missing, site.Name)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("RQB-007 does not name %v in %s, where a malformed value is refused", missing, pkgConfig)
+	}
+}
+
+// TestDecisions_ASettingOnARowWithNoValueSource_StatesItsMalformedPolicy pins
+// the policy of every row that names a flag or a variable without a value
+// source of its own: the request bounds an operator sets and the escape hatch
+// of the free instance choice. Four of them stated none, which says no
+// operator writes a value, beside the flag or the variable an operator writes
+// it in. The flag package refuses a value of a numeric, duration or boolean
+// flag it cannot parse, and the action timeout's and the upload limit's
+// variables are refused on both transports by the readers the configuration
+// package holds to their bounds, so each of the four refuses startup (issue
+// 1170). The stdio line limit is the fifth, whose value warns and keeps the
+// default by issue 957's decision.
+func TestDecisions_ASettingOnARowWithNoValueSource_StatesItsMalformedPolicy(t *testing.T) {
+	want := map[string]Malformed{
+		"DST-002": RefuseStartup,
+		"RQB-001": RefuseStartup,
+		"RQB-004": WarnKeepDefault,
+		"RQB-005": RefuseStartup,
+		"RQB-007": RefuseStartup,
+	}
+	var named []string
+	for _, d := range Decisions() {
+		if d.Source == SourceNone && (len(d.Flags) > 0 || len(d.Envs) > 0) {
+			named = append(named, d.ID)
+		}
+	}
+	slices.Sort(named)
+	if ids := slices.Sorted(maps.Keys(want)); !slices.Equal(named, ids) {
+		t.Errorf("the rows naming a setting with no value source are %v, want %v", named, ids)
+	}
+	for _, id := range named {
+		t.Run(id, func(t *testing.T) {
+			d, _ := Lookup(id)
+			if d.Malformed != want[id] {
+				t.Errorf("flags %v, envs %v, malformed policy %d; want %d", d.Flags, d.Envs, d.Malformed, want[id])
+			}
+		})
+	}
+}
+
+// TestDecisions_LocalAllowLists_AreReadFromStdiosEnvironmentAlone pins the
+// value source issue 957 gave AUT-006, the one row on it. RQB-004's stdio
+// line is read on stdio alone too, but a per-request bound is declared with
+// no value source. AUT-006's three allow-lists are consulted once a
+// caller-supplied local path is admitted, and a server reached over HTTP
+// refuses every such path first (RQB-008), so INV-017's flag, which it asks
+// of a setting in HTTP mode, has nothing to configure. The row names the
+// variables and no flag, and exists on stdio.
+func TestDecisions_LocalAllowLists_AreReadFromStdiosEnvironmentAlone(t *testing.T) {
+	var stdioOnly []string
+	for _, d := range Decisions() {
+		if d.Source == StdioEnvOnly {
+			stdioOnly = append(stdioOnly, d.ID)
+		}
+	}
+	if want := []string{"AUT-006"}; !slices.Equal(stdioOnly, want) {
+		t.Errorf("the rows only stdio's environment reaches are %v, want %v", stdioOnly, want)
+	}
+	d, _ := Lookup("AUT-006")
+	wantEnvs := []string{"GITLAB_MCP_ALLOWED_UPLOAD_DIRS", "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS", "GITLAB_MCP_ALLOWED_IMPORT_DIRS"}
+	if !slices.Equal(d.Envs, wantEnvs) || len(d.Flags) != 0 || d.StdioKey != KeyProcess {
+		t.Errorf("AUT-006: envs %v, flags %v, stdio key %s; want the three allow-lists, no flag and the process on stdio",
+			d.Envs, d.Flags, d.StdioKey)
+	}
+}
+
+// TestDecisions_TelemetryToolName_IsARowOfItsOwn pins IDN-014, the row issue
+// 957 gave GITLAB_MCP_TELEMETRY_TOOL_NAME, which no row named: a process-wide
+// rule set by its flag and its variable, read through the configuration
+// package since issue 957 moved the read, so it carries no finding, and
+// decided by nothing else the register holds.
+func TestDecisions_TelemetryToolName_IsARowOfItsOwn(t *testing.T) {
+	d, ok := Lookup("IDN-014")
+	if !ok {
+		t.Fatal("IDN-014 names no row")
+	}
+	if d.Source != Configurable || !slices.Equal(d.Flags, []string{"--telemetry-tool-name"}) ||
+		!slices.Equal(d.Envs, []string{"GITLAB_MCP_TELEMETRY_TOOL_NAME"}) || len(d.Config) != 0 {
+		t.Errorf("IDN-014: source %d, flags %v, envs %v, config %v; want the flag and the variable, carried by no internal/config field",
+			d.Source, d.Flags, d.Envs, d.Config)
+	}
+	if len(d.Findings) != 0 || !slices.Equal(d.Decided, []string{"issue 957"}) {
+		t.Errorf("IDN-014: findings %v, decided %v; want none, the variable being read through the configuration package, and issue 957", d.Findings, d.Decided)
+	}
+	if want := []Site{enforce(pkgServer, "dropToolNameFromMetrics")}; !slices.Equal(d.Sites, want) {
+		t.Errorf("IDN-014: sites %v, want %v", d.Sites, want)
 	}
 }
 
@@ -1060,7 +1413,9 @@ func rowPins() map[string]rowPin {
 		"ADM-008": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_reset", StartOver),
 		}},
-		"ADM-009": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
+		// Keyed on the process on stdio since issue 1171, where the process
+		// re-reads its fine-grained token at the same interval.
+		"ADM-009": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_revoked", Reauthorize),
 		}},
 		"ADM-010": {Admit, Lifetime, ClassC, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
@@ -1235,6 +1590,7 @@ func rowPins() map[string]rowPin {
 		"POL-005": {Allow, Rule, ClassR, Mechanism, KeyEntry, KeyNone, KeyNone, KeyNone, nil},
 		"IDN-009": {Allow, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, nil},
 		"IDN-011": {Allow, Lifetime, ClassQ, Valued, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
+		"IDN-014": {Allow, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, nil},
 
 		"END-001": {End, Rule, ClassR, Ruled, KeyOwner, KeyNone, KeyNone, KeyNone, []refusalPin{
 			pinListenEnd("credential_evicted", StartOver),

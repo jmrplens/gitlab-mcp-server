@@ -285,6 +285,7 @@ func TestRunWithContext_PprofAddr_ServesWhileTheServerRuns(t *testing.T) {
 			gitlabURL:      srv.URL,
 			maxHTTPClients: config.DefaultMaxHTTPClients,
 			sessionTimeout: config.DefaultSessionTimeout,
+			oauthCacheTTL:  config.DefaultOAuthCacheTTL,
 		})
 	}()
 

@@ -65,6 +65,14 @@ On stdio, process, entry and tenant are one. Over HTTP one tenant maps to one en
 credential per instance, one entry to one tenant or to unknown and to one owner for the
 life of its build, and one address to many tenants.
 
+A stdio process reads none of the settings only HTTP mode has, the pool, the stateful
+session, the drain, the authentication gate with its budgets, the OAuth verifier, the
+trusted origins and the discovery documents' bucket, so
+a row of one of them has no stdio key, and a stdio start names each such variable it
+finds set instead of refusing a value it would never use (issue 1171). The revalidation
+interval is not one of them: the process re-reads its fine-grained token at that
+interval and stops with it at zero, so `ADM-009` is keyed on the process there.
+
 ### Two axes, and why the tenant does not license a share
 
 Before admission a decision is keyed on the address, the socket or a refused
@@ -158,27 +166,47 @@ which `HLD-001` breaks.
 
 A new limit, or a change to an existing one, meets every invariant below. Existing code
 that does not is a finding, filed as an issue; nothing here requires it to change.
-`Validate` holds a row to eleven of them, in three ways:
+`Validate` holds a row to eleven of them, and to two items of the
+[validation checklist](#validation-checklist) that read them for what a row holds and
+where its value comes from, in three ways:
 
 - **With no exception**: a share on any mintable key (`INV-003`); a charge to anything but
   a budget before admission (`INV-007`); a refusal on a channel its method cannot carry,
   or with a status, a code, a `Retry-After` or a challenge the channel forbids, a code
   in the legacy `-32000` range among them (`INV-011`); a process partner that is
   configurable or not keyed on the process, and a reason about the process on a row that
-  does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); and a variable without the
+  does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); a variable without the
   `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
-  policy (`INV-017`).
-- **With a recorded decision**: a holding taken across keys (`INV-005`); and a process
+  policy, a value only stdio's environment reaches (`StdioEnvOnly`, issue 957) with
+  a flag, with no variable or malformed-value policy, or on a row that does not exist on
+  stdio, and a row with no value source of its own, a request bound or a rule, that names
+  a flag or a variable and no malformed-value policy (issue 1170) (`INV-017`); a behavior
+  at capacity the capacity rule does not allow for the
+  row's kind, key and table, which is how `INV-005` and `INV-010` are read for what each
+  structure holds (`VAL-006`, issue 958; see [Validation checklist](#validation-checklist));
+  and a value no operator setting reaches, a constant or a Go option's, that does not say
+  why, or such a reason on a value a setting reaches or one derived from another
+  (`VAL-009`, issue 958).
+- **With a recorded decision**: a holding taken across keys (`INV-005`); a process
   partner switched off with the per-key limit it stands beside (`INV-015`), which is the
-  one zero another row decides that passes without a finding (`RTC-007`, issue 951). The
-  decision is the one the row's `OffWithBy` names, among those it records: a row whose
-  decisions are about something else does not pass that way.
+  one zero another row decides that passes without a finding (`RTC-007`, issue 951); a
+  zero refused at startup or replaced by the default, the row's own or one of its
+  settings' (`INV-015`), which is how the exceptions issue 958 states pass (`POL-001`,
+  `RTC-001`'s burst, `ADM-005`, `ADM-008`, `HLD-003`); and a value that does not parse
+  and does not refuse startup, warning and keeping the default, skipping the entry or
+  reading as off (`INV-017`), which is how the exceptions issue 957 states pass
+  (`HLD-001`, `RQB-004`, `IDN-014`, `AUT-006`, `DST-003`). The decision is the one the
+  row's `OffWithBy`, `ZeroBy` or `MalformedBy` names, among those it records: a row
+  whose decisions are about something else does not pass that way, a `ZeroBy` on a row
+  whose every zero means off decides nothing and is refused, and so is a `MalformedBy`
+  on a row whose malformed value refuses startup or that has none.
 - **With a finding recorded for the invariant**: a per-key ceiling on a process resource
   with no partner (`INV-004`); a table keyed on a mintable value with no capacity
   (`INV-010`); an in-band code of the server's own that mirrors no status the gate
-  answers its class of next action with (`INV-012`); a zero that does not mean off
-  (`INV-015`); a reason whose unit differs from its key or misstates its own
-  (`INV-016`); a value only an environment variable or a Go option reaches (`INV-017`);
+  answers its class of next action with (`INV-012`); any other zero that does not mean
+  off (`INV-015`); a reason whose unit differs from its key or misstates its own
+  (`INV-016`); a value only an environment variable reaches in HTTP mode, and any other
+  malformed value that does not refuse startup (`INV-017`);
   and a ceiling nothing bounds (`INV-018`).
 
 - **INV-001 Identity from the credential.** A limit derives who a caller is from the
@@ -234,8 +262,10 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   authorization on the request and never with the connection or other requests on it, and
   a listing is never shrunk to express a refusal.
 - **INV-010 Caller-chosen values never grow a structure that does not evict.** A cache or
-  table keyed on a caller-chosen value either evicts or refuses new keys at a bound. The
-  shape key holds nothing about the credential's identity beyond what changes the catalog.
+  table keyed on a caller-chosen value either evicts or refuses new keys at a bound, and
+  the capacity rule says which it may do (see [Validation checklist](#validation-checklist),
+  issue 958). The shape key holds nothing about the credential's identity beyond what
+  changes the catalog.
 - **INV-011 Every refusal uses a channel the protocol and the SDK carry** (see
   [Refusal channels](#refusal-channels)).
 - **INV-012 One class and one next action per refusal, and the code the standard gives
@@ -257,12 +287,44 @@ that does not is a finding, filed as an issue; nothing here requires it to chang
   partner (`RTC-007`) is off wherever `RTC-003` is, which is when `--rate-limit-rps` is
   `0`, so a deployment that turned rate limiting off has turned all of it off (issue 951).
   The listen and watcher partners keep counting when their per-key ceilings are off.
+  Where zero must not mean off, the exception is stated with its reason and the decision
+  that made it, never left as a silent normalization (issue 958): the pool size refuses a
+  zero, since a pool with no bound would grow with every credential presented and one
+  that kept no entry could serve nothing (`POL-001`); the tool-call bucket's burst
+  refuses a zero beside a positive rate, the rate being the setting that says off
+  (`RTC-001`); the OAuth cache TTL refuses a zero or a negative value through its flag
+  and its variable alike, in either authentication mode, since the verifier stamps the
+  TTL into every token's expiration, so a zero would expire each token as it is verified
+  (`ADM-005`); and the credential age ceiling and the per-credential watcher ceiling,
+  which no operator sets, keep their default for a Go option's zero, the first because
+  it exists so that every credential is re-checked whatever else is off (`ADM-008`) and
+  the second because off would leave one credential's watchers bounded only by the
+  process's (`HLD-003`). A row whose settings mean different things by zero states each
+  that differs once (`SettingZeros`), and its own `Zero` is the meaning of the rest.
 - **INV-016 Every limit states its key, mint cost and reason, and the units agree.** The
   reason's unit matches the key, or the mismatch is recorded as a finding before the limit
   merges, and the reason states its own unit correctly.
 - **INV-017 Configuration goes through the configuration package.** A configurable limit
   is read through `config.Getenv` or `config.TrimmedGetenv` with its name in
-  `prefixedNames`, has a flag in HTTP mode, and states its malformed-value policy.
+  `prefixedNames`, has a flag in HTTP mode, and states its malformed-value policy, which
+  refuses startup (issue 957, as `internal/config` already refused a value it could not
+  parse). Where a value that does not parse must not refuse startup, the exception is
+  stated with its reason and the decision that made it (`MalformedBy`), never left
+  implicit: the listen ceiling and the stdio line limit warn and keep their default,
+  since stdio configuration arrives through the environment of whatever launched the
+  process and a mistyped number must not take the client down with the server
+  (`HLD-001`, `RQB-004`); the tool name and the action as metric dimensions fall back to
+  `auto`, since telemetry observes the server rather than serving its clients
+  (`IDN-014`); a directory of a local allow-list that does not resolve is skipped and the
+  rest kept, since an entry that names nothing widens nothing (`AUT-006`); and the
+  private-instance opt-out reads a value it does not parse as off, so a typo never turns
+  the destination guard off (`DST-003`). The flag is asked of a setting in HTTP mode,
+  and a setting HTTP mode never reads has none to have: the local allow-lists are
+  consulted once a caller-supplied path is admitted, which a server reached over HTTP
+  refuses first (`RQB-008`), so their row's source is `StdioEnvOnly`, a value only
+  stdio's environment reaches, which departs from nothing (`AUT-006`, issue 957), where
+  a value only an environment variable reaches in HTTP mode (`EnvOnly`) still records
+  the departure.
 - **INV-018 Bound the process on the process.** A bound whose purpose is to protect the
   process, or an upstream budget the whole deployment shares, is keyed on the process.
 - **INV-019 No cross-tenant observation.** No tenant observes another's data, watch state
@@ -499,20 +561,54 @@ requirement, none declared twice and none missing (its rules `unique` and `compl
 every row answering VAL-001 to VAL-009 with a value and naming only rows and findings that
 exist (`well-formed`).
 
-| Item    | The question                                                                                           | Answered by                                                              |
-| ------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| VAL-001 | Which of the five questions it answers                                                                 | `Question`                                                               |
-| VAL-002 | Its key, and that key's mint cost; a new key amends the vocabulary                                     | `Key`, with `MintCost` and `Evidence`                                    |
-| VAL-003 | Its class; a class D limit needs a finding and a reason to ship anyway                                 | `Class`, checked against `Disagrees`; `StatedUnit` against `ReasonUnit`  |
-| VAL-004 | Whether it is a ceiling or a share; a share on a mintable key is refused                               | `Kind`                                                                   |
-| VAL-005 | If it protects a process resource, its process partner and why that partner is not configurable        | `ProtectsProcess`, `Partner`                                             |
-| VAL-006 | What happens at capacity, and why                                                                      | `AtCapacity`, and `Table` for a structure keyed on a caller-chosen value |
-| VAL-007 | Its refusal: channel, code, status, `Retry-After`, message and class, per method and era, and on stdio | `Refusals`                                                               |
-| VAL-008 | What it charges, and that nothing unjudged is charged                                                  | `Refusals[].Charged`, and `Failures` for an admission path               |
-| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy                                     | `Values`, `Source`, `Zero`, `Malformed`                                  |
-| VAL-010 | Its telemetry: the reason only                                                                         | The pull request                                                         |
-| VAL-011 | Its behavior on stdio                                                                                  | `StdioKey`                                                               |
-| VAL-012 | Its measurement, when it claims to protect one population from another                                 | The pull request, with `make bench-fairness`                             |
+| Item    | The question                                                                                                | Answered by                                                                                               |
+| ------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| VAL-001 | Which of the five questions it answers                                                                      | `Question`                                                                                                |
+| VAL-002 | Its key, and that key's mint cost; a new key amends the vocabulary                                          | `Key`, with `MintCost` and `Evidence`                                                                     |
+| VAL-003 | Its class; a class D limit needs a finding and a reason to ship anyway                                      | `Class`, checked against `Disagrees`; `StatedUnit` against `ReasonUnit`                                   |
+| VAL-004 | Whether it is a ceiling or a share; a share on a mintable key is refused                                    | `Kind`                                                                                                    |
+| VAL-005 | If it protects a process resource, its process partner and why that partner is not configurable             | `ProtectsProcess`, `Partner`                                                                              |
+| VAL-006 | What happens at capacity, and why                                                                           | `AtCapacity`, held to the capacity rule below, and `Table` for a structure keyed on a caller-chosen value |
+| VAL-007 | Its refusal: channel, code, status, `Retry-After`, message and class, per method and era, and on stdio      | `Refusals`                                                                                                |
+| VAL-008 | What it charges, and that nothing unjudged is charged                                                       | `Refusals[].Charged`, and `Failures` for an admission path                                                |
+| VAL-009 | Its value, source, bounds, zero meaning and malformed-value policy, and for a value no setting reaches, why | `Values`, `Source`, `Fixed`, `Zero`, `SettingZeros`, `ZeroBy`, `Malformed`, `MalformedBy`                 |
+| VAL-010 | Its telemetry: the reason only                                                                              | The pull request                                                                                          |
+| VAL-011 | Its behavior on stdio                                                                                       | `StdioKey`                                                                                                |
+| VAL-012 | Its measurement, when it claims to protect one population from another                                      | The pull request, with `make bench-fairness`                                                              |
+
+**The capacity rule** (issue 958, rule `capacity-fits`) says which behavior at capacity
+a row may name, read off its kind, its key and whether it holds a record per key, and
+`Validate` holds every row to it with no exception. Refusing the newcomer fits anything
+that fills, which is a ceiling, a rate, a budget, a share or a table, and nothing else
+names a capacity. Waiting for room is a ceiling's, for a slot another request frees
+(`ADM-014`, `POL-006`). Reclaiming takes back what the same key holds, so it needs a key a
+caller holds (`AUB-002`'s source, `HLD-003`'s entry). The oldest record is evicted only
+from a table kept before admission whose records have a lifetime or a refill: before
+admission no tenant exists to hold anything, a record there is a count or a verdict
+against its key, and evicting one takes nothing from another key (`INV-005`), which is
+the rejected-token cache (`ADM-006`) and the discovery documents' buckets (`RTC-008`).
+Counting stops only where the newcomer it no longer counts is let through, which the row
+declares as a silent refusal: the authentication tables (`AUB-004`), where evicting a
+count would release the block it holds and refusing would refuse every new address while
+a flood lasts. And a holding is taken across keys only from a table, by the recorded
+decision `INV-005` asks for: the pool entry (`POL-001`, `POL-002`, ADR-0020) and the
+verified OAuth identity (`ADM-005`, issue 950). Where more than one behavior fits, the
+rule does not choose between them: the row names one, and its comment says why, as the
+rejected-token cache's says why it evicts rather than refuse and the authentication
+tables' why they stop counting rather than refuse.
+
+**A value no setting reaches says why** (issue 958, rule `fixed-reasoned`). Every row
+whose value is a constant, or one only a Go option reaches, states in `Fixed` what the
+value is set against and what a setting that moved it would cost or undo. `Validate`
+refuses, with no exception, such a row that states none, and a `Fixed` reason on a value
+a setting reaches or one derived from another. The process partners and the process's own
+ceilings had a reason, `INV-004`'s, written beside some of them in the code; the others
+had none a reader could tell from an accident, and the next constant copied whichever
+neighbor it was written beside. A Go option no operator reaches is not configuration and
+departs from nothing in `INV-017`: it is a constant to every operator, and it is held to
+its reason as one is (`ADM-008`, the credential age ceiling, whose option exists for the
+tests, and the watcher manager's ceiling and cadence, `HLD-003` and `HLD-007`, whose
+`Options` fields only the tests set).
 
 ## Findings
 
@@ -543,7 +639,35 @@ against the code as a whole. F-34 ([issue 958](https://github.com/jmrplens/gitla
 also records the idle session timeout's variable, which refuses a zero its flag accepts
 (`END-005`), and the tool-call bucket's burst, whose zero beside a positive rate refuses
 startup rather than meaning off (`RTC-001`); both are departures from `INV-015` of the
-kind the issue is about. F-35
+kind the issue is about. Issue 958 then settled four of the zeros F-34 recorded as stated
+exceptions, which their rows record through `ZeroBy` and no longer carry the finding for:
+the pool size's and the burst's, which its decision of 2026-09-28 keeps refused; the
+credential age ceiling's, the exception its own text keeps; and the watcher ceiling's
+option's, under its measure that each zero left departing is an exception with its reason
+(see `INV-015`). It answered the other four with code, and no row carries F-34 any
+longer. The OAuth cache TTL's flag selected the default in oauth mode and went unread in
+legacy mode, where its variable refused in both, and now refuses a zero or a negative
+value at startup in either mode as the variable does, the fifth stated exception
+(`ADM-005`). The fast lockout's window switched the distinct-credential budget
+off with it, whose escalation steps by that window; a zero there now switches the
+lockout off alone, and the escalation steps by the default window, as the
+transport-source budget and the `/48` aggregate already counted in it (`AUB-001`,
+`AUB-003`). And the session timeout's variable refused the zero its flag reads as off,
+and now reads it as off too (`END-005`), as every duration variable whose zero means off
+now reads `0s` as it reads `0`. Each records the issue. F-16, of the same
+issue, recorded bounds no setting reaches with no reason stated, and defaults and
+fallbacks written in two places. Issue 958 stated a reason for every value no setting
+reaches (see [Validation checklist](#validation-checklist)), so the rejected-token
+cache, the credential age ceiling, the unexplained-401 interval, the probe bound and the
+upstream retries (`ADM-006`, `ADM-008`, `ADM-010`, `POL-006`, `RTC-006`) record the
+issue and carry the finding no longer. It then wrote the four written twice once: the
+revalidation interval, the pool size and the idle timeout, which the pool stated a
+second time and now aliases from the register as `internal/config` does (`ADM-009`,
+`POL-001`, `POL-004`), and the transport-source budget's window fallback (`AUB-002`),
+which every budget that reads another one's window takes from one helper, so no row
+carries F-16 either. F-16, like F-11, records a
+departure from no invariant: the `INV-017` departure it covered, a value only a Go option
+reached, is none, since a Go option is not configuration. F-35
 ([issue 982](https://github.com/jmrplens/gitlab-mcp-server/issues/982)) recorded the
 transport-source budget's map of charged (source, key) pairs, which only the sweep bounded,
 since a source the full failure table never tracks is never blocked (`AUB-002`), a
@@ -573,6 +697,37 @@ are at most three times what the table holds, whatever the window. What
 the issue leaves alone is the saturation itself, a source arriving once the limiter's
 table is full being blocked by neither table, which is the `/48` aggregate's (`AUB-006`)
 and issue 958's capacity rules'.
+
+F-13 ([issue 957](https://github.com/jmrplens/gitlab-mcp-server/issues/957)) recorded the
+settings read around the configuration package, which every row naming one carried
+(`HLD-001`, `RQB-004`, `IDN-009`, `IDN-014`, `AUT-006`, `DST-003`). Issue 957 put the twelve
+variables it found that way on `prefixedNames` and read each through `config.Getenv` or
+`config.TrimmedGetenv` under the same spelling, and gave the listen ceiling the flag
+`INV-017` asks of a limit in HTTP mode (`--max-listen-streams`), so no row carries the
+finding. The local allow-lists, which HTTP mode never reads, have no flag and need none:
+their source is `StdioEnvOnly`. G14 keeps F-13 as the finding a row would have to carry
+if one of its variables were read any other way again, and the one variable read around
+the package on purpose, the env file's, is declared with its reason rather than recorded.
+The same issue made one row's stated policy true. `IDN-009` said a telemetry identity
+policy or rotation that does not parse refuses startup, and the server logged it and
+recorded nothing about callers instead, the departure issue 1170 also reported. It refuses
+startup now on either transport, once telemetry is known to be on and before anything is
+built, and a rotation lying outside what a generated key may live is refused with it;
+with telemetry off nothing is exported under either, and beside a configured key the
+rotation is ignored.
+
+Issue 1170 reported the other half of that departure. `RQB-007`, the upload limit, named
+its flag and its variable and stated no malformed-value policy, and HTTP mode warned and
+used the default for a value it could not parse and the maximum for one above the 1 TB
+ceiling, where stdio refused both. Both transports refuse all of them now, through the
+one reader stdio's `Load` and HTTP mode's overlay call, which also refuses a count whose
+bytes do not fit in 64 bits (it used to wrap, so `17179869185GB` was read as 1 GiB) and
+reads a blank value as unset on both, and the row states the refused start. Three more
+rows with no value source of their own named a setting and stated no policy, `RQB-001`,
+`RQB-005` and `DST-002`, each of which the flag package or its variable's reader already
+refused, so they state the refused start too, and `Validate` holds the next such row to
+stating one. The action timeout's reader read a blank variable as a duration that did
+not parse on stdio and as unset in HTTP mode, and reads it as unset on both now.
 
 F-36 ([issue 1053](https://github.com/jmrplens/gitlab-mcp-server/issues/1053)) is the one
 finding a decision recorded rather than a reading of the code found. The three documents
@@ -640,7 +795,7 @@ failed authentication per address.
 
 Issue 954 then changed the key, and answered F-14 and F-25 with it; the rows it moved
 (`IDN-004`, `IDN-005`, `AUB-001` to `AUB-003`) record the issue among their decisions and
-carry neither finding, and F-34 stays on `AUB-001` and `AUB-003` for issue 958. Every
+carry neither finding, nor F-34, which issue 958 answered on `AUB-001` and `AUB-003`. Every
 budget before admission reads its key off the address through `budgetKey`: a whole IPv4
 address, an IPv4-mapped one as the IPv4 address it names, and an IPv6 address by the
 fixed `/64` it lies in, since an IPv6 subnet is a `/64` (RFC 4291) and a caller on one
@@ -676,7 +831,7 @@ caller as a TCP proxy does, and the host guard reads the same set. The two pairi
 trust nobody refuse startup: a socket listener whose list names addresses and no `unix`,
 which used to start with its header inert, and `unix` on a TCP listener.
 
-Fifteen findings are answered, and stay in the list with their issues. F-03, the listing
+Sixteen findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing
 carries, which `RTC-003` names as its partner and which no row carries F-03 for any
@@ -974,7 +1129,15 @@ reason first, from what GitLab 19.5 answered, then the key, the `/48` aggregate
 (`AUB-006`) and the named unix-socket key. F-35 is answered by issue 982, as the
 paragraph that records it says: the transport-source budget's pairs are bounded per
 source, and across sources to three times what its limiter's table holds, and `AUB-002`
-records the issue and carries the finding no longer. Four
+records the issue and carries the finding no longer. F-11 is answered by issue 958's
+capacity rule (see [Validation checklist](#validation-checklist)): the rejected-token
+cache's eviction of its oldest record and the authentication tables' stop at a full
+table are behaviors the rule allows for what each holds, each row says why it names the
+one it does, and `ADM-006` and `AUB-004` record the issue and carry the finding no
+longer. F-16 and F-34 are answered by issue 958 too, as the paragraph that records them
+says: every zero that does not mean off is a stated exception with its reason, every
+other zero means off through the flag and the variable alike and switches nothing else
+off, and each default and fallback is written once. Four
 more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a

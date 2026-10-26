@@ -154,8 +154,7 @@ func TestAuthFailureLimiter_RealSettings_BuildOne(t *testing.T) {
 }
 
 // TestAuthSprayBudget_ZeroSettings_BuildNothing checks that the distinct-token
-// budget is off under the same spellings, and that the escalation step it is
-// given is the failure window.
+// budget is off when one of its own settings is zero: its limit or its window.
 func TestAuthSprayBudget_ZeroSettings_BuildNothing(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -164,7 +163,6 @@ func TestAuthSprayBudget_ZeroSettings_BuildNothing(t *testing.T) {
 	}{
 		{name: "zero limit", cfg: config.Config{AuthDistinctTokenLimit: 0, AuthDistinctWindow: time.Minute, AuthFailureWindow: time.Minute}},
 		{name: "zero distinct window", cfg: config.Config{AuthDistinctTokenLimit: 5, AuthDistinctWindow: 0, AuthFailureWindow: time.Minute}},
-		{name: "zero step", cfg: config.Config{AuthDistinctTokenLimit: 5, AuthDistinctWindow: time.Minute, AuthFailureWindow: 0}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -200,6 +198,41 @@ func TestAuthSprayBudget_LadderIsBuiltFromTheFailureWindow(t *testing.T) {
 	}
 	if remaining > 2*time.Second || remaining <= 0 {
 		t.Errorf("first block = %v, want at most the 2s failure window", remaining)
+	}
+}
+
+// TestAuthSprayBudget_AFailureWindowOfZero_LeavesItOnAtTheDefaultStep pins the
+// zero issue 958 decided for the failure window (AUB-001): it switches the
+// failure budget off and nothing else (INV-015). The distinct-credential
+// budget, whose escalation steps by that window, used to be switched off with
+// it, and now climbs its ladder from the default window instead, as the /48
+// aggregate and the transport-source budget already did.
+func TestAuthSprayBudget_AFailureWindowOfZero_LeavesItOnAtTheDefaultStep(t *testing.T) {
+	t.Parallel()
+	for _, window := range []time.Duration{0, -time.Minute} {
+		t.Run(window.String(), func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				cfg := &config.Config{
+					AuthFailureLimit: config.DefaultAuthFailureLimit, AuthFailureWindow: window,
+					AuthDistinctTokenLimit: 2, AuthDistinctWindow: config.DefaultAuthDistinctWindow,
+				}
+				if authFailureLimiter(cfg) != nil {
+					t.Errorf("a failure window of %v built the failure budget, want it off", window)
+				}
+				budget := authSprayBudget(cfg)
+				if budget == nil {
+					t.Fatalf("a failure window of %v switched the distinct-credential budget off, want it on", window)
+				}
+				budget.Charge("10.0.0.1", "glpat-a")
+				budget.Charge("10.0.0.1", "glpat-b")
+				blocked, remaining := budget.Blocked("10.0.0.1")
+				if !blocked || remaining != config.DefaultAuthFailureWindow {
+					t.Errorf("Blocked() = (%v, %v), want (true, %v): the first block is one default failure window",
+						blocked, remaining, config.DefaultAuthFailureWindow)
+				}
+			})
+		})
 	}
 }
 

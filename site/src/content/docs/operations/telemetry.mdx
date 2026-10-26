@@ -621,7 +621,10 @@ than rotating it underneath you.
 Set the rotation interval when you run one instance and want the pseudonym to
 stop correlating after a while. It is off by default because replicas start at
 different moments, so they would rotate out of phase and a distinct-user count
-would churn without anybody asking for it.
+would churn without anybody asking for it. An interval that is not a duration,
+such as `24` with no unit, or one that is negative or longer than 30 days
+refuses the start while telemetry is on and no key is set; beside a key it is
+ignored, whatever it says.
 
 Nothing prescribes either answer. The OpenTelemetry registry defines `user.hash`
 as a value "to correlate information for a user in anonymized form" and says
@@ -651,8 +654,8 @@ and one for resource URIs, so the value you supply is never used as a key
 itself and a digest of a user cannot be compared against a digest of a resource.
 
 Under `GODEBUG=fips140=only`, HKDF takes no key shorter than 112 bits, so a key
-of fewer than 14 bytes is refused at startup: the server logs the refusal and
-records nothing about callers, as it does whenever it cannot derive its
+of fewer than 14 bytes cannot be used: the server starts, logs why and records
+nothing about callers, as it does whenever it cannot derive its
 pseudonymisation keys. 3.1.0 stopped the process with a panic on the same key.
 
 ### What is never recorded
@@ -703,6 +706,14 @@ Off by default, in three steps:
 ```
 
 or `GITLAB_MCP_TELEMETRY_IDENTITY`.
+
+A value the server does not recognise refuses the start, on either
+transport, whenever telemetry is on, with an `ERROR` naming the flag or the
+variable that held it. Starting anyway is what it used to do: the server ran
+and recorded nothing about callers, and the only sign of why was in `ERROR`
+lines of its logs, easy to miss behind a dashboard that simply stayed empty.
+With telemetry off, or vetoed by `OTEL_SDK_DISABLED`, nothing is exported
+under the setting and nothing is refused.
 
 The policy governs one more thing than its name suggests: **which resource a
 request named**. A resource URI here embeds project and group ids, so it says

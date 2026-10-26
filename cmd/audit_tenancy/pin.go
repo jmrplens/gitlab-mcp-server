@@ -11,9 +11,10 @@ import (
 
 // checkPins is G4: a Pin site keeps its own literal, and the value and type it
 // folds to equal the register constant it names. It is how the second
-// statement of a default stated twice (issue 958) is held to the first
-// without aliasing it, so drift between the two is a finding rather than a
-// surprise.
+// statement of a default stated twice is held to the first without aliasing
+// it, so drift between the two is a finding rather than a surprise. The pool's
+// three were the ones it held until issue 958 made them aliases, and no row
+// declares a Pin since.
 func (g *gate) checkPins() []Finding {
 	var found []Finding
 	for _, d := range g.reg.decisions {

@@ -86,7 +86,7 @@ func TestStartTelemetry_DisabledReturnsAUsableStop(t *testing.T) {
 	telemetryFlag = nil
 	t.Setenv("GITLAB_MCP_TELEMETRY", "false")
 
-	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	provider, stop := startTelemetryForTest(t)
 	if stop == nil {
 		t.Fatal("startTelemetry returned a nil stop function; the deferred call in runWithContext would panic")
 	}
@@ -150,7 +150,7 @@ func TestStartTelemetry_SurvivesAnUnreachableCollector(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
 	t.Setenv("OTEL_BSP_EXPORT_TIMEOUT", "200")
 
-	_, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	_, stop := startTelemetryForTest(t)
 
 	done := make(chan struct{})
 	go func() {
@@ -178,12 +178,18 @@ func TestStartTelemetry_RefusesAnUnusableProtocolWithoutKillingTheProcess(t *tes
 	t.Setenv("GITLAB_MCP_TELEMETRY", "true")
 	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "carrier-pigeon")
 
-	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	logged := captureLogMessages(t)
+	provider, stop := startTelemetryForTest(t)
 	if stop == nil {
 		t.Fatal("a refused configuration returned a nil stop function")
 	}
 	if provider.Enabled() {
 		t.Error("a protocol this server cannot honor was accepted; nothing would reach the collector and nothing would say so")
+	}
+	// The line is what says so: the server keeps serving, so without it a
+	// deployment would run without the telemetry it asked for in silence.
+	if !logged("telemetry disabled: it could not be started") {
+		t.Error("a telemetry start that failed was not logged")
 	}
 	stop(boundedShutdown(t))
 }
@@ -203,7 +209,7 @@ func TestSDKDisabledVetoesTheFlag(t *testing.T) {
 	t.Setenv("GITLAB_MCP_TELEMETRY", "true")
 	t.Setenv("OTEL_SDK_DISABLED", "true")
 
-	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	provider, stop := startTelemetryForTest(t)
 	t.Cleanup(func() { stop(boundedShutdown(t)) })
 
 	if provider.Enabled() {
@@ -333,6 +339,20 @@ func boundedShutdown(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+// startTelemetryForTest starts telemetry the way runWithContext does, and
+// fails the test on a refused start, which none of its callers configures:
+// each sets no identity setting, so a refusal would be a defect of the check
+// rather than the case under test.
+func startTelemetryForTest(t *testing.T) (provider *telemetry.Provider, stop func(context.Context)) {
+	t.Helper()
+
+	provider, stop, err := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	if err != nil {
+		t.Fatalf("startTelemetry() refused a start with no identity setting: %v", err)
+	}
+	return provider, stop
 }
 
 // TestDropToolNameFromMetrics_ReadsTheFlagThenTheEnvironmentThenAuto covers the
@@ -490,7 +510,7 @@ func TestStartTelemetry_TheEnabledAnnouncement_SurvivesAWarnLogLevel(t *testing.
 	baseLogHandler = capture
 	slog.SetDefault(slog.New(capture))
 
-	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	provider, stop := startTelemetryForTest(t)
 	t.Cleanup(func() { stop(boundedShutdown(t)) })
 	if !provider.Enabled() {
 		t.Fatal("telemetry did not start, so there was no announcement to make")
@@ -539,7 +559,7 @@ func TestStartTelemetry_WarnsWhenACredentialCrossesTheNetworkInTheClear(t *testi
 	baseLogHandler = capture
 	slog.SetDefault(slog.New(capture))
 
-	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+	provider, stop := startTelemetryForTest(t)
 	t.Cleanup(func() { stop(boundedShutdown(t)) })
 	if !provider.Enabled() {
 		t.Fatal("telemetry did not start, so there was no export to warn about")

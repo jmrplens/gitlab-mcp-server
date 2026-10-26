@@ -264,30 +264,10 @@ type mcpServerGate struct {
 	// instance every request reaches; several make the GITLAB-URL header a
 	// selection among them, refused when it names anything else.
 	gitlabURLs []string
-	// limiter blocks IPs with repeated authentication failures. In OAuth
-	// mode it is the same limiter [bearerGuard] uses, so the two layers
-	// share one per-address budget and a caller cannot earn a fresh
-	// allowance by failing at whichever layer it has not exhausted yet.
-	limiter *serverpool.AuthRateLimiter
-	// sourceBudget is the secondary, far coarser budget charged to the
-	// transport source. Set only when trustedProxyHeader is configured,
-	// which is the only case in which the primary key is caller-controlled;
-	// without a trusted header the two keys are the same string and one
-	// budget is the whole story. Its limiter is shared with [bearerGuard],
-	// like limiter.
-	sourceBudget *transportBudget
-	// spray is the slow budget: distinct credentials refused per address over
-	// a longer window, answered with a block that lengthens each time. Shared
-	// with [bearerGuard] for the same reason limiter is, so a sprayer cannot
-	// earn a fresh allowance by moving between the two layers. Nil when the
-	// deployment turns it off, and every method tolerates that.
-	spray *serverpool.DistinctTokenBudget
-	// network is the aggregate one level above the address (AUB-006): the
-	// distinct /64s of one IPv6 /48 that had a credential refused, counted on
-	// the slow budget's machinery with the /64 in place of the credential.
-	// Shared with [bearerGuard] like spray. Nil only in tests that build a
-	// gate without it; a deployment always has one ([authNetworkBudget]).
-	network *serverpool.DistinctTokenBudget
+	// authBudgets are the four budgets consulted before a credential is
+	// read. In OAuth mode they are the ones [bearerGuard] holds, so the two
+	// layers share each budget.
+	authBudgets
 	// blocks counts the refusals each budget produced, for telemetry. Shared
 	// with [bearerGuard], since the two layers share the budgets themselves.
 	blocks             *authBlockCounters
@@ -826,6 +806,36 @@ func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
 	return g.pool.Admitted(token, options.GitLabURL)
 }
 
+// authBudgets are the four authentication budgets a request is held to before
+// its credential is read. The legacy gate and the bearer guard each embed the
+// set, and in OAuth mode both embed the same budgets, so a caller cannot earn
+// a fresh allowance by failing at whichever layer it has not exhausted yet,
+// and both ask [authBudgets.blockedByBudget], the one implementation of the
+// question each of them used to answer with a copy of its own kept in step by
+// hand (issue 958).
+type authBudgets struct {
+	// limiter blocks an address with repeated authentication failures
+	// (AUB-001). Nil when the deployment turns it off.
+	limiter *serverpool.AuthRateLimiter
+	// sourceBudget is the secondary, far coarser budget charged to the
+	// transport source (AUB-002). Set only when a trusted proxy header is
+	// configured, which is the only case in which the primary key is
+	// caller-controlled; without one the two keys are the same string and one
+	// budget is the whole story.
+	sourceBudget *transportBudget
+	// spray is the slow budget: distinct credentials refused per address over
+	// a longer window, answered with a block that lengthens each time
+	// (AUB-003). Nil when the deployment turns it off, and every method
+	// tolerates that.
+	spray *serverpool.DistinctTokenBudget
+	// network is the aggregate one level above the address (AUB-006): the
+	// distinct /64s of one IPv6 /48 that had a credential refused, counted on
+	// the slow budget's machinery with the /64 in place of the credential. Nil
+	// only in tests that build a guard without it; a deployment always has one
+	// ([authNetworkBudget]).
+	network *serverpool.DistinctTokenBudget
+}
+
 // blockedByBudget reports whether any budget is exhausted: the caller's key,
 // the transport source it arrived from, the distinct credentials that key has
 // had refused, or the /48 the caller's address lies in. The duration is what
@@ -841,18 +851,18 @@ func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
 // The reason is what telemetry records the refusal under, and is the only
 // thing recorded about it: an address is who was refused, which a counter must
 // not carry.
-func (g *mcpServerGate) blockedByBudget(address, source string) (blocked bool, retryAfter time.Duration, reason string) {
+func (b *authBudgets) blockedByBudget(address, source string) (blocked bool, retryAfter time.Duration, reason string) {
 	key := budgetKey(address)
 	lockout := authBlock{reason: mcpotel.AuthBlockFailureLockout}
-	if g.limiter != nil {
-		lockout.active, lockout.remaining = g.limiter.BlockedFor(key)
+	if b.limiter != nil {
+		lockout.active, lockout.remaining = b.limiter.BlockedFor(key)
 	}
 	sourceBlock := authBlock{reason: mcpotel.AuthBlockTransportSource}
-	sourceBlock.active, sourceBlock.remaining = g.sourceBudget.blockedFor(source)
+	sourceBlock.active, sourceBlock.remaining = b.sourceBudget.blockedFor(source)
 	spray := authBlock{reason: mcpotel.AuthBlockDistinctTokens}
-	spray.active, spray.remaining = g.spray.Blocked(key)
+	spray.active, spray.remaining = b.spray.Blocked(key)
 	network := authBlock{reason: mcpotel.AuthBlockNetworkAggregate}
-	network.active, network.remaining = g.network.Blocked(networkKey(address))
+	network.active, network.remaining = b.network.Blocked(networkKey(address))
 	return longestAuthBlock(lockout, sourceBlock, spray, network)
 }
 
@@ -893,7 +903,7 @@ func longestAuthBlock(blocks ...authBlock) (blocked bool, retryAfter time.Durati
 // chargeFailure charges one authentication failure to every budget.
 //
 // address is the client address [clientIP] returned, and its keys are read off
-// it here, as [mcpServerGate.blockedByBudget] reads them; source is already
+// it here, as [authBudgets.blockedByBudget] reads them; source is already
 // keyed. token is the credential that was refused, and is empty for a request
 // that carried none. The distinct-token budget ignores an empty one, and the
 // /48 aggregate is not charged for one, so a client that simply forgot its
@@ -990,14 +1000,12 @@ type sourcePairs struct {
 // newTransportBudget wraps a limiter in the per-key accounting above.
 //
 // window is the one the limiter was built with, not the one the operator
-// configured: the two differ when the configured value was zero or less, and
-// the accounting here has to follow the limiter rather than the configuration.
+// configured: the two differ when the configured value was zero or less, which
+// [transportFailureBudget] resolves to the default for both, and the
+// accounting here has to follow the limiter rather than the configuration.
 func newTransportBudget(limiter *serverpool.AuthRateLimiter, window time.Duration) *transportBudget {
 	if limiter == nil {
 		return nil
-	}
-	if window <= 0 {
-		window = authFailureWindow
 	}
 	return &transportBudget{
 		limiter:         limiter,
@@ -1010,9 +1018,9 @@ func newTransportBudget(limiter *serverpool.AuthRateLimiter, window time.Duratio
 
 // window is the effective window this budget lapses pairs on, for the guards
 // that answer Retry-After with it. A nil budget reports the default, which is
-// what its own limiter would have used. A budget that exists was built by
-// [newTransportBudget], which already resolved a window of zero or less to the
-// default, so its own window is the answer as it stands.
+// what its own limiter would have used. A budget that exists was built from
+// the window [transportFailureBudget] resolved, a configured zero or less
+// already the default, so its own window is the answer as it stands.
 func (b *transportBudget) window() time.Duration {
 	if b == nil {
 		return authFailureWindow

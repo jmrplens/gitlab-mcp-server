@@ -27,7 +27,8 @@ import (
 
 // HTTPEnvOverlay holds the HTTP-relevant settings found in the environment.
 // A nil field means the variable was absent or empty, and the caller keeps
-// whatever the flag layer resolved.
+// whatever the flag layer resolved, except for UploadMaxFileSize, whose flag
+// writes the variable and leaves the flag layer nothing to keep.
 type HTTPEnvOverlay struct {
 	GitLabURL         *string
 	SkipTLSVerify     *bool
@@ -73,6 +74,14 @@ type HTTPEnvOverlay struct {
 	// (register row RTC-008), each half overlaid on its own like a budget's.
 	DiscoveryRateLimitRPS   *float64
 	DiscoveryRateLimitBurst *int
+
+	// UploadMaxFileSize is the largest local file a tool accepts (register
+	// row RQB-007). --upload-max-file-size writes the variable rather than a
+	// field of the flag layer, so the value read here is the flag's when it
+	// was passed. It is the one field whose nil the caller does not answer
+	// with the flag layer's value, since that layer holds none: the caller
+	// sets [DefaultMaxFileSize].
+	UploadMaxFileSize *int64
 }
 
 // envPresent reports whether name is set to a non-empty value, under either
@@ -88,9 +97,11 @@ func envPresent(name string) bool {
 
 // LoadHTTPEnvOverlay reads the environment variables that have an HTTP flag
 // counterpart, validating each with the same parser and bounds the stdio path
-// applies. An invalid value is an error rather than a silent fallback, so a
-// typo in a deployment manifest fails at startup instead of quietly running
-// with a default the operator did not choose.
+// applies to the settings both transports have. An invalid value is an error
+// rather than a silent fallback, so a typo in a deployment manifest fails at
+// startup instead of quietly running with a default the operator did not
+// choose. The settings only HTTP mode has are read here alone
+// ([httpOnlyNames]).
 func LoadHTTPEnvOverlay() (*HTTPEnvOverlay, error) {
 	overlay := &HTTPEnvOverlay{}
 	for _, load := range []func(*HTTPEnvOverlay) error{
@@ -99,6 +110,7 @@ func LoadHTTPEnvOverlay() (*HTTPEnvOverlay, error) {
 		loadOverlayLimits,
 		loadOverlayAuthAndRate,
 		loadOverlayDiscoveryRate,
+		loadOverlayUploadLimit,
 	} {
 		if err := load(overlay); err != nil {
 			return nil, err
@@ -179,32 +191,25 @@ func loadOverlayLimits(o *HTTPEnvOverlay) error {
 		o.MaxHTTPClients = &value
 	}
 
+	// A zero turns each of these off, as it does to the flag of the same name:
+	// the session timeout's used to be refused here (issue 958).
 	durations := []struct {
 		name     string
 		fallback time.Duration
 		maxValue time.Duration
-		zeroOK   bool
 		target   **time.Duration
 	}{
-		{"SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout, false, &o.SessionTimeout},
-		{"POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout, true, &o.PoolIdleTimeout},
-		{"SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval, true, &o.RevalidateInterval},
-		{"ACTION_TIMEOUT", DefaultActionTimeout, MaxActionTimeout, true, &o.ActionTimeout},
-		{"DRAIN_DELAY", DefaultDrainDelay, MaxDrainDelay, true, &o.DrainDelay},
+		{"SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout, &o.SessionTimeout},
+		{"POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout, &o.PoolIdleTimeout},
+		{"SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval, &o.RevalidateInterval},
+		{"ACTION_TIMEOUT", DefaultActionTimeout, MaxActionTimeout, &o.ActionTimeout},
+		{"DRAIN_DELAY", DefaultDrainDelay, MaxDrainDelay, &o.DrainDelay},
 	}
 	for _, d := range durations {
 		if !envPresent(d.name) {
 			continue
 		}
-		var (
-			value time.Duration
-			err   error
-		)
-		if d.zeroOK {
-			value, err = parseDisableableDurationEnv(d.name, d.fallback, d.maxValue)
-		} else {
-			value, err = parseBoundedDurationEnv(d.name, d.fallback, d.maxValue)
-		}
+		value, err := parseDisableableDurationEnv(d.name, d.fallback, d.maxValue)
 		if err != nil {
 			return err
 		}
@@ -214,12 +219,11 @@ func loadOverlayLimits(o *HTTPEnvOverlay) error {
 }
 
 func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
+	// AUTH_MODE is passed through unparsed as well: validateHTTPAuthConfig
+	// owns the check, since it needs the resolved mode to judge the rest.
 	if envPresent("AUTH_MODE") {
-		auth, err := loadAuthEnv()
-		if err != nil {
-			return err
-		}
-		o.AuthMode = &auth.mode
+		value := Getenv("AUTH_MODE")
+		o.AuthMode = &value
 	}
 	// PUBLIC_URL and TRUSTED_ORIGINS are passed through unparsed: both are
 	// validated later against the fully resolved configuration (public-url
@@ -234,11 +238,11 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 		o.TrustedOrigins = &value
 	}
 	if envPresent("OAUTH_CACHE_TTL") {
-		auth, err := loadAuthEnv()
+		value, err := parseDuration(Getenv("OAUTH_CACHE_TTL"), DefaultOAuthCacheTTL)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
 		}
-		o.OAuthCacheTTL = &auth.oauthCacheTTL
+		o.OAuthCacheTTL = &value
 	}
 	// Carried verbatim, as the flag's own value is: the flag layer splits the
 	// comma-separated list. Without this the documented variable was inert in
@@ -296,10 +300,29 @@ func loadOverlayDiscoveryRate(o *HTTPEnvOverlay) error {
 	return nil
 }
 
+// loadOverlayUploadLimit overlays the upload limit (register row RQB-007)
+// through the reader stdio's [Load] calls, so a value that does not parse,
+// one that is not positive and one above the ceiling refuse startup in both
+// transports with the same words, and a blank one is unset in both. HTTP mode
+// used to read it outside the overlay, warning and using the default for the
+// first two and the maximum for the third (issue 1170).
+func loadOverlayUploadLimit(o *HTTPEnvOverlay) error {
+	if !envPresent("UPLOAD_MAX_FILE_SIZE") {
+		return nil
+	}
+	value, err := UploadMaxFileSizeFromEnv()
+	if err != nil {
+		return err
+	}
+	o.UploadMaxFileSize = &value
+	return nil
+}
+
 // readAuthBudgetEnv overlays the four authentication-budget settings, each
-// validated with the same parser and the same bound the stdio path uses, so a
-// value exported without its flag is honored and an invalid one fails startup
-// rather than falling back in silence.
+// validated with the bound its flag is held to, so a value exported without
+// its flag is honored and an invalid one fails startup rather than falling
+// back in silence. This is their one reader: a stdio server has no
+// authentication gate and reads none of them (issue 1171).
 func (o *HTTPEnvOverlay) readAuthBudgetEnv() error {
 	if envPresent("AUTH_FAILURE_LIMIT") {
 		value, err := parseIntNonNegative(Getenv("AUTH_FAILURE_LIMIT"), DefaultAuthFailureLimit)

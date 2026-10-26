@@ -208,7 +208,8 @@ every call that is not withheld from all fine-grained tokens.
 
 The grant is read once when the session starts and again on every revalidation: every
 15 minutes by default in HTTP mode (`--revalidate-interval`), and on a timer of the
-same 15 minutes on stdio. An upgraded instance therefore moves the session to what its
+same interval on stdio (`GITLAB_MCP_SESSION_REVALIDATE_INTERVAL`, where `0` stops the
+re-reads). An upgraded instance therefore moves the session to what its
 new release decides. A re-read that fails keeps what the session was shown rather than
 narrowing it, so what an assistant sees never changes with a GitLab outage. The server
 reads at most 1 MiB and 1000 scopes of a grant; a larger grant is not evaluated.
@@ -255,9 +256,10 @@ The server asks again until GitLab answers:
   `--revalidate-interval` (15 minutes by default). With `0` nothing revalidates, and
   the question is asked again by the build of the entry the first request makes once
   its credential has gone an hour unchecked.
-- On stdio, on the timer that re-reads a grant, every 15 minutes, and as soon as a
-  start that could not reach GitLab at all recovers, which is the first call GitLab
-  answers.
+- On stdio, on the timer that re-reads a grant, at
+  `GITLAB_MCP_SESSION_REVALIDATE_INTERVAL` (15 minutes by default, and never with
+  `0`), and as soon as a start that could not reach GitLab at all recovers, which is
+  the first call GitLab answers.
 
 A round GitLab still does not answer changes nothing and is logged at `DEBUG`
 (`the token's kind is still unknown`). The round that learns the token is a

@@ -731,6 +731,13 @@ func mcpPOST(headers map[string]string) request {
 // supposed to refuse to run.
 func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, error) {
 	t.Helper()
+	return runServerWithEnvExpectingExit(t, bin, nil, args...)
+}
+
+// runServerWithEnvExpectingExit is runServerExpectingExit with env added to
+// the child's environment, for a refusal a variable rather than a flag causes.
+func runServerWithEnvExpectingExit(t *testing.T, bin string, env map[string]string, args ...string) (string, error) {
+	t.Helper()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
@@ -741,6 +748,9 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 	// the way out: the startup validation these cases drive is measured like
 	// everything else.
 	cmd.Env = append(cmd.Env, coverEnviron(t)...)
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

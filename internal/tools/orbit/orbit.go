@@ -139,12 +139,12 @@ type DSLOutput struct {
 // RETURN path. CALL db.schema() and CALL db.schema('Node') answer the ontology.
 // The query type of the answer is inferred from the statement.
 //
-// Examples, each answered 200 by GitLab.com on 2026-10-17:
+// Examples, each answered 200 by GitLab.com on 2026-10-26:
 //
-//	MATCH (p:Project {full_path: 'plens1/kg-fixtures'}) RETURN p.id, p.full_path, p.name
-//	MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'plens1/' RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC
-//	MATCH (p:Project {full_path: 'plens1/kg-fixtures'})--(n) RETURN n
-//	MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: 'feature/restock-helper'})-[:IN_PROJECT*1..2]->(p:Project {full_path: 'plens1/kg-fixtures'}) RETURN path
+//	MATCH (p:Project {full_path: 'gitlab-mcp-server-orbit-fixtures/kg-fixtures'}) RETURN p.id, p.full_path, p.name
+//	MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'gitlab-mcp-server-orbit-fixtures/' RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC
+//	MATCH (p:Project {full_path: 'gitlab-mcp-server-orbit-fixtures/kg-fixtures'})--(n) RETURN n
+//	MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: 'feature/restock-helper'})-[:IN_PROJECT*1..2]->(p:Project {full_path: 'gitlab-mcp-server-orbit-fixtures/kg-fixtures'}) RETURN path
 type QueryInput struct {
 	Query any `json:"query" jsonschema:"Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [LIMIT n or PAGE n [AFTER cursor]]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. A relationship type follows a colon, -[:IN_PROJECT]->, and a repeat is bounded, *1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. orbit.schema lists the entities, properties and relationship types a query names. A JSON object is forwarded as written, and GitLab.com refuses it while it reads queries as GQL. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
 	// ResponseFormat selects the answer's shape. POST /orbit/query declares

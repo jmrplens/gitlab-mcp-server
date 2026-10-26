@@ -195,7 +195,8 @@ const (
 	// CredentialMaxAgeCeiling is the largest age the pool option honors
 	// (ADM-008).
 	CredentialMaxAgeCeiling = 24 * time.Hour
-	// RevalidateInterval is how often every entry's credential is re-probed
+	// RevalidateInterval is how often every entry's credential is re-probed,
+	// and on stdio how often the process's fine-grained token is re-read
 	// (ADM-009).
 	RevalidateInterval = 15 * time.Minute
 	// RevalidateIntervalMax is the longest interval an operator may configure

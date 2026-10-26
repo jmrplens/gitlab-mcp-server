@@ -40,6 +40,16 @@ const (
 	DownloadDirAllowlistEnv = "GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS"
 )
 
+// The three allow-lists without their prefix, the names [config.Getenv] reads
+// them under, on the configuration package's list since issue 957. The
+// exported names above spell each in full, which is what a refusal tells an
+// operator to set.
+const (
+	importArchiveAllowlistSetting = "ALLOWED_IMPORT_DIRS"
+	uploadDirAllowlistSetting     = "ALLOWED_UPLOAD_DIRS"
+	downloadDirAllowlistSetting   = "ALLOWED_DOWNLOAD_DIRS"
+)
+
 // The file-system calls below run on a path that was already resolved through
 // every symlink and checked, so each fails only when the file is removed or
 // replaced in between, or, for the ancestor walk, only on a file system with
@@ -235,7 +245,7 @@ func CanonicalLocalFilePath(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve file path %s: %w", absolutePath, err)
 	}
-	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(UploadDirAllowlistEnv)) {
+	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(uploadDirAllowlistSetting)) {
 		return "", outsideAllowedDirsError("file", canonicalPath, UploadDirAllowlistEnv)
 	}
 	return canonicalPath, nil
@@ -258,7 +268,7 @@ func CanonicalLocalDirPath(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve directory path: %w", err)
 	}
-	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(UploadDirAllowlistEnv)) {
+	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(uploadDirAllowlistSetting)) {
 		return "", outsideAllowedDirsError("directory", canonicalPath, UploadDirAllowlistEnv)
 	}
 	return canonicalPath, nil
@@ -322,7 +332,7 @@ func canonicalDownloadOutputPath(path string) (string, error) {
 	if info, statErr := os.Lstat(canonicalPath); statErr == nil && !info.Mode().IsRegular() {
 		return "", fmt.Errorf("output path %s already exists and is not a regular file", canonicalPath)
 	}
-	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(DownloadDirAllowlistEnv)) {
+	if !pathWithinAllowedDirs(canonicalPath, allowedLocalDirs(downloadDirAllowlistSetting)) {
 		return "", outsideAllowedDirsError("output path", canonicalPath, DownloadDirAllowlistEnv)
 	}
 	return canonicalPath, nil
@@ -443,12 +453,14 @@ func pathWithinAllowedDirs(canonicalPath string, dirs []string) bool {
 }
 
 func allowedImportArchiveDirs() []string {
-	return allowedLocalDirs(ImportArchiveAllowlistEnv)
+	return allowedLocalDirs(importArchiveAllowlistSetting)
 }
 
 // allowedLocalDirs returns the canonical directories a caller-supplied local
 // path may resolve into: the working directory, the OS temporary directory,
-// and whatever envName lists.
+// and whatever the setting lists, which is read through [config.Getenv] under
+// its name without the prefix and named in full in the warning for an entry
+// that does not resolve.
 //
 // The working directory is skipped when it is a filesystem root or the user's
 // home directory. A stdio server usually starts in the workspace the user just
@@ -461,12 +473,12 @@ func allowedImportArchiveDirs() []string {
 // GITLAB_TOKEN the containment exists to protect.
 //
 // Skipped as an implicit root, not forbidden: an operator whose workspace
-// really is their home directory names it in envName and gets it back. That is
-// the difference between a default that is safe and a policy that decides for
-// them, and the warning logged the first time a caller-supplied path is
-// resolved there says so rather than leaving a working setup to fail as a
-// puzzling "outside the allowed directories".
-func allowedLocalDirs(envName string) []string {
+// really is their home directory names it in the setting and gets it back.
+// That is the difference between a default that is safe and a policy that
+// decides for them, and the warning logged the first time a caller-supplied
+// path is resolved there says so rather than leaving a working setup to fail
+// as a puzzling "outside the allowed directories".
+func allowedLocalDirs(setting string) []string {
 	type dirEntry struct {
 		path       string
 		configured bool
@@ -476,7 +488,7 @@ func allowedLocalDirs(envName string) []string {
 		dirs = append(dirs, dirEntry{path: cwd})
 	}
 	dirs = append(dirs, dirEntry{path: os.TempDir()})
-	if configured := os.Getenv(envName); configured != "" {
+	if configured := config.Getenv(setting); configured != "" {
 		for _, dir := range filepath.SplitList(configured) {
 			dirs = append(dirs, dirEntry{path: dir, configured: true})
 		}
@@ -488,7 +500,7 @@ func allowedLocalDirs(envName string) []string {
 		canonicalDir, err := canonicalDirPath(dir.path)
 		if err != nil {
 			if dir.configured {
-				slog.Warn("skipping invalid allowlist directory", "env", envName, "path", dir.path, "error", err)
+				slog.Warn("skipping invalid allowlist directory", "env", config.EnvPrefix+setting, "path", dir.path, "error", err)
 			}
 			continue
 		}

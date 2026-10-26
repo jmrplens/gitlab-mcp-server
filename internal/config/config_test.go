@@ -4,8 +4,11 @@
 package config
 
 import (
+	"maps"
 	"os"
+	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -528,7 +531,6 @@ func TestValidate_RateLimitBurstOfOne_IsAccepted(t *testing.T) {
 		GitLabToken:    testGitLabToken,
 		RateLimitRPS:   10,
 		RateLimitBurst: 1,
-		MaxHTTPClients: DefaultMaxHTTPClients,
 	}
 	if err := cfg.validate(); err != nil {
 		t.Errorf("validate() refused a burst of 1 beside a positive RPS: %v", err)
@@ -599,76 +601,199 @@ func TestParseDuration(t *testing.T) {
 	}
 }
 
-// TestLoad_MaxHTTPClients verifies MAX_HTTP_CLIENTS env var parsing.
-func TestLoad_MaxHTTPClients(t *testing.T) {
-	t.Setenv("GITLAB_URL", testHTTPExampleURL)
-	t.Setenv("GITLAB_TOKEN", "test")
+// httpOnlyValuesAStartRefuses gives every setting only HTTP mode has a value
+// an HTTP start refuses, where the setting has one: oauth without the public
+// URL it requires, a URL ending in a slash, an origin that is not one, and a
+// value each parser or bound refuses for the rest. OAUTH_CLIENT_UID takes any
+// list, so it is given one. A stdio start used to refuse most of these values
+// too, on settings it never used (issue 1171).
+var httpOnlyValuesAStartRefuses = map[string]string{
+	"AUTH_DISTINCT_TOKEN_LIMIT":  "many",
+	"AUTH_DISTINCT_TOKEN_WINDOW": "soon",
+	"AUTH_FAILURE_LIMIT":         "-1",
+	"AUTH_FAILURE_WINDOW":        "25h",
+	"AUTH_MODE":                  AuthModeOAuth,
+	"DISCOVERY_RATE_LIMIT_BURST": "-1",
+	"DISCOVERY_RATE_LIMIT_RPS":   "NaN",
+	"DRAIN_DELAY":                "1h",
+	"MAX_HTTP_CLIENTS":           "0",
+	"OAUTH_CACHE_TTL":            "0",
+	"OAUTH_CLIENT_UID":           "12ab,34cd",
+	"POOL_IDLE_TIMEOUT":          "-1m",
+	"PUBLIC_URL":                 "https://mcp.example.com/",
+	"SESSION_TIMEOUT":            "forever",
+	"TRUSTED_ORIGINS":            "not an origin",
+}
 
-	t.Run(subtestDefault, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.MaxHTTPClients != DefaultMaxHTTPClients {
-			t.Errorf("MaxHTTPClients = %d, want %d", cfg.MaxHTTPClients, DefaultMaxHTTPClients)
-		}
-	})
+// loadWithNothingSet is what [Load] returns from an environment that sets no
+// setting this project defines, the configuration every case below compares
+// against.
+func loadWithNothingSet(t *testing.T) Config {
+	t.Helper()
+	clearOverlayEnv(t)
+	t.Setenv(EnvFileVar, "")
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	return *cfg
+}
 
-	t.Run(subtestCustom, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "50")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
+// TestLoad_HTTPOnlySettings_AreNotRead pins what a stdio server makes of a
+// setting only HTTP mode has: nothing, whatever its value (issue 1171). Each is
+// set, alone and then all of them together, to a value an HTTP start refuses,
+// and Load must succeed and load exactly what it loads with none of them set.
+//
+// It used to parse most of them and refuse to start, so a variable the same
+// shell exported for an HTTP deployment beside it stopped a stdio process
+// that would never have used it: GITLAB_MCP_AUTH_MODE=oauth without a public
+// URL did, naming --public-url, and so did GITLAB_MCP_MAX_HTTP_CLIENTS=0. The
+// ones it parsed and accepted still landed in fields nothing on stdio read.
+func TestLoad_HTTPOnlySettings_AreNotRead(t *testing.T) {
+	if got := slices.Sorted(maps.Keys(httpOnlyValuesAStartRefuses)); !slices.Equal(got, httpOnlyNames) {
+		t.Fatalf("this test gives values to %v, and the HTTP-only settings are %v; give each one a value", got, httpOnlyNames)
+	}
+	for _, name := range httpOnlyNames {
+		t.Run(name, func(t *testing.T) {
+			want := loadWithNothingSet(t)
+			t.Setenv(EnvPrefix+name, httpOnlyValuesAStartRefuses[name])
+			assertLoadsAsIfUnset(t, want, EnvPrefix+name)
+		})
+	}
+	t.Run("all of them", func(t *testing.T) {
+		want := loadWithNothingSet(t)
+		for name, value := range httpOnlyValuesAStartRefuses {
+			t.Setenv(EnvPrefix+name, value)
 		}
-		if cfg.MaxHTTPClients != 50 {
-			t.Errorf("MaxHTTPClients = %d, want 50", cfg.MaxHTTPClients)
-		}
-	})
-
-	t.Run(subtestInvalid, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "not-a-number")
-		_, err := Load()
-		if err == nil {
-			t.Fatal("expected error for invalid MAX_HTTP_CLIENTS")
-		}
+		assertLoadsAsIfUnset(t, want, "every HTTP-only setting")
 	})
 }
 
-// TestLoad_SessionTimeout verifies SESSION_TIMEOUT env var parsing.
-func TestLoad_SessionTimeout(t *testing.T) {
-	t.Setenv("GITLAB_URL", testHTTPExampleURL)
-	t.Setenv("GITLAB_TOKEN", "test")
+// assertLoadsAsIfUnset holds Load to the configuration it loads when nothing
+// is set, with what was set named in the failure.
+func assertLoadsAsIfUnset(t *testing.T, want Config, set string) {
+	t.Helper()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() with %s set refused to start: %v", set, err)
+	}
+	if !reflect.DeepEqual(*cfg, want) {
+		t.Errorf("Load() with %s set loaded %+v, want what it loads with nothing set, %+v", set, *cfg, want)
+	}
+}
 
-	t.Run(subtestDefault, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
+// TestHTTPOnlyNames_AreTheSettingsOnlyTheOverlayReads holds [httpOnlyNames]
+// to the two readers, by what each does rather than by a second list: a
+// setting is on it exactly when [LoadHTTPEnvOverlay] reads it and [Load] does
+// not. A setting HTTP mode gains would otherwise be read by neither stdio nor
+// the line that says stdio ignores it, and one stdio starts reading would be
+// named at startup as ignored while it configures the run.
+//
+// Each setting this project defines is set, alone, to one value no parser
+// accepts, and a reader takes notice of it when it refuses the value or
+// reports something it does not report with nothing set. The second is what
+// catches a reader that keeps the value as written and so accepts it, such as
+// the overlay's AUTH_MODE, PUBLIC_URL, TRUSTED_ORIGINS and OAUTH_CLIENT_UID
+// and Load's EXCLUDE_TOOLS. The list is also held to name only settings this
+// project defines, in name order, which is the order [HTTPOnlyEnvUses]
+// answers in.
+func TestHTTPOnlyNames_AreTheSettingsOnlyTheOverlayReads(t *testing.T) {
+	if !slices.IsSorted(httpOnlyNames) {
+		t.Errorf("httpOnlyNames is not in name order: %v", httpOnlyNames)
+	}
+	for _, name := range httpOnlyNames {
+		if !slices.Contains(prefixedNames, name) {
+			t.Errorf("httpOnlyNames lists %s, which is not a setting this project defines", name)
 		}
-		if cfg.SessionTimeout != DefaultSessionTimeout {
-			t.Errorf("SessionTimeout = %v, want %v", cfg.SessionTimeout, DefaultSessionTimeout)
-		}
-	})
+	}
+	for _, name := range PrefixedEnvNames() {
+		t.Run(name, func(t *testing.T) {
+			overlayReads, loadReads := readersOf(t, name)
+			want := overlayReads && !loadReads
+			if listed := slices.Contains(httpOnlyNames, name); listed != want {
+				t.Errorf("%s: on httpOnlyNames %v, want %v, since the HTTP overlay reads it %v and Load reads it %v",
+					name, listed, want, overlayReads, loadReads)
+			}
+		})
+	}
+}
 
-	t.Run(subtestCustom, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "1h")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.SessionTimeout != time.Hour {
-			t.Errorf("SessionTimeout = %v, want 1h", cfg.SessionTimeout)
-		}
-	})
+// readersOf reports which of the two readers take notice of a setting set to a
+// value no parser accepts: by refusing it, or by reporting what they do not
+// report with nothing set.
+func readersOf(t *testing.T, name string) (overlay, load bool) {
+	t.Helper()
+	baseline := loadWithNothingSet(t)
+	baseOverlay, err := LoadHTTPEnvOverlay()
+	if err != nil {
+		t.Fatalf("LoadHTTPEnvOverlay() with nothing set: %v", err)
+	}
 
-	t.Run(subtestInvalid, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "not-a-duration")
-		_, err := Load()
-		if err == nil {
-			t.Fatal("expected error for invalid SESSION_TIMEOUT")
-		}
-	})
+	t.Setenv(EnvPrefix+name, "unreadable-1171")
+	got, err := LoadHTTPEnvOverlay()
+	overlay = err != nil || !reflect.DeepEqual(got, baseOverlay)
+	cfg, err := Load()
+	load = err != nil || !reflect.DeepEqual(*cfg, baseline)
+	return overlay, load
+}
+
+// TestHTTPOnlyEnvUses_NamesWhatTheEnvironmentSets covers what a stdio run is
+// handed to name: the HTTP-only settings set to something, under the name an
+// operator exports, in name order, and none of the settings stdio reads. A
+// value of blanks is unset, as it is to the overlay, and the bare spelling a
+// setting had before 3.1.0 is nobody's setting here: [RetiredEnvUses] answers
+// for it.
+func TestHTTPOnlyEnvUses_NamesWhatTheEnvironmentSets(t *testing.T) {
+	every := make([]string, 0, len(httpOnlyNames))
+	for _, name := range httpOnlyNames {
+		every = append(every, EnvPrefix+name)
+	}
+	cases := []struct {
+		name string
+		env  map[string]string
+		want []string
+	}{
+		{name: "nothing set"},
+		{
+			name: "only settings stdio reads",
+			env:  map[string]string{EnvPrefix + "TOOL_SURFACE": ToolSurfaceMeta, EnvPrefix + "SESSION_REVALIDATE_INTERVAL": "5m"},
+		},
+		{
+			name: "two of them beside a setting stdio reads, and a blank one",
+			env: map[string]string{
+				EnvPrefix + "SESSION_TIMEOUT":  "  ",
+				EnvPrefix + "MAX_HTTP_CLIENTS": "0",
+				EnvPrefix + "AUTH_MODE":        AuthModeOAuth,
+				EnvPrefix + "TOOL_SURFACE":     ToolSurfaceMeta,
+			},
+			want: []string{EnvPrefix + "AUTH_MODE", EnvPrefix + "MAX_HTTP_CLIENTS"},
+		},
+		{name: "a retired bare spelling", env: map[string]string{"AUTH_MODE": AuthModeOAuth}},
+		{name: "every one of them", env: prefixedValues(httpOnlyValuesAStartRefuses), want: every},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clearOverlayEnv(t)
+			for key, value := range tc.env {
+				t.Setenv(key, value)
+			}
+			if got := HTTPOnlyEnvUses(); !slices.Equal(got, tc.want) {
+				t.Errorf("HTTPOnlyEnvUses() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// prefixedValues keys each value by the setting's name as an operator exports
+// it.
+func prefixedValues(values map[string]string) map[string]string {
+	prefixed := make(map[string]string, len(values))
+	for name, value := range values {
+		prefixed[EnvPrefix+name] = value
+	}
+	return prefixed
 }
 
 // TestValidate_URLFormat verifies that GITLAB_URL must have a valid scheme and host.
@@ -691,9 +816,8 @@ func TestValidate_URLFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &Config{
-				GitLabURL:      tt.url,
-				GitLabToken:    "test-token",
-				MaxHTTPClients: 1,
+				GitLabURL:   tt.url,
+				GitLabToken: "test-token",
 			}
 			err := cfg.validate()
 			if tt.wantErr && err == nil {
@@ -706,58 +830,16 @@ func TestValidate_URLFormat(t *testing.T) {
 	}
 }
 
-// TestValidate_UploadMaxFileSizeBound verifies that excessively large
-// UPLOAD_MAX_FILE_SIZE values are rejected.
-func TestValidate_UploadMaxFileSizeBound(t *testing.T) {
-	cfg := &Config{
-		GitLabURL:         "https://gitlab.example.com",
-		GitLabToken:       "test-token",
-		MaxHTTPClients:    1,
-		UploadMaxFileSize: MaxFileSize + 1,
-	}
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("validate() expected error for oversized UPLOAD_MAX_FILE_SIZE")
-	}
-}
-
-// TestValidate_MaxHTTPClientsBound verifies that MAX_HTTP_CLIENTS
-// beyond the upper bound are rejected.
-func TestValidate_MaxHTTPClientsBound(t *testing.T) {
-	cfg := &Config{
-		GitLabURL:      "https://gitlab.example.com",
-		GitLabToken:    "test-token",
-		MaxHTTPClients: MaxHTTPClients + 1,
-	}
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("validate() expected error for oversized MAX_HTTP_CLIENTS")
-	}
-}
-
-// TestValidate_MaxHTTPClientsZero verifies that zero MAX_HTTP_CLIENTS is rejected.
-func TestValidate_MaxHTTPClientsZero(t *testing.T) {
-	cfg := &Config{
-		GitLabURL:      "https://gitlab.example.com",
-		GitLabToken:    "test-token",
-		MaxHTTPClients: 0,
-	}
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("validate() expected error for zero MAX_HTTP_CLIENTS")
-	}
-}
-
-// TestValidate_AcceptableMaxValues verifies that values at the exact
-// upper bound are accepted.
+// TestValidate_AcceptableMaxValues verifies that the rate limit's values at
+// their exact upper bound are accepted. The upload limit's ceiling is not
+// validate's to judge (issue 1170): its reader accepts the ceiling itself,
+// which TestUploadMaxFileSizeFromEnv_RefusesWhatEitherTransportRefuses holds.
 func TestValidate_AcceptableMaxValues(t *testing.T) {
 	cfg := &Config{
-		GitLabURL:         "https://gitlab.example.com",
-		GitLabToken:       "test-token",
-		UploadMaxFileSize: MaxFileSize,
-		MaxHTTPClients:    MaxHTTPClients,
-		RateLimitRPS:      MaxRateLimitRPS,
-		RateLimitBurst:    MaxRateLimitBurst,
+		GitLabURL:      "https://gitlab.example.com",
+		GitLabToken:    "test-token",
+		RateLimitRPS:   MaxRateLimitRPS,
+		RateLimitBurst: MaxRateLimitBurst,
 	}
 	err := cfg.validate()
 	if err != nil {
@@ -776,7 +858,7 @@ func TestValidate_RateLimitBounds(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{GitLabURL: "https://gitlab.example.com", GitLabToken: "test-token", MaxHTTPClients: 1, RateLimitBurst: DefaultRateLimitBurst}
+			cfg := &Config{GitLabURL: "https://gitlab.example.com", GitLabToken: "test-token", RateLimitBurst: DefaultRateLimitBurst}
 			tt.patch(cfg)
 			if err := cfg.validate(); err == nil {
 				t.Fatal("validate() expected rate limit bound error, got nil")
@@ -954,35 +1036,6 @@ func TestLoad_InvalidUploadMaxFileSize(t *testing.T) {
 	}
 }
 
-// TestLoad_InvalidMaxHTTPClients verifies that Load rejects non-integer MAX_HTTP_CLIENTS.
-func TestLoad_InvalidMaxHTTPClients(t *testing.T) {
-	t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "abc")
-	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
-	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
-	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "5242880")
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected error for invalid MAX_HTTP_CLIENTS")
-	}
-}
-
-// TestLoad_InvalidSessionTimeout verifies that Load rejects invalid SESSION_TIMEOUT.
-func TestLoad_InvalidSessionTimeout(t *testing.T) {
-	t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "notaduration")
-	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
-	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
-	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "5242880")
-	t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "100")
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected error for invalid SESSION_TIMEOUT")
-	}
-}
-
 // TestParseSize_InvalidSuffix verifies parseSize rejects invalid numeric strings
 // that are not plain numbers or known suffixes.
 func TestParseSize_InvalidSuffix(t *testing.T) {
@@ -1000,139 +1053,109 @@ func TestParseSize_NegativeValue(t *testing.T) {
 	}
 }
 
-// TestValidate_AuthMode verifies that validate accepts valid AUTH_MODE values
-// and rejects invalid ones.
-func TestValidate_AuthMode(t *testing.T) {
-	tests := []struct {
-		name    string
-		mode    string
-		wantErr bool
+// TestParseSize_ASizeNoByteCountHolds_IsRefused verifies that a size whose
+// byte count does not fit in an int64 is refused rather than wrapped (issue
+// 1170). The count is the number times its unit, and the product used to
+// wrap: 17179869185GB is 2^64 plus 1 GiB bytes, which came back as 1 GiB, a
+// limit far below the one written that the ceiling then had no reason to
+// refuse, and 8589934592GB came back as the most negative int64, which is no
+// limit at all to toolutil. The largest count of each unit that fits is a
+// size like any other, and the ceiling judges it.
+func TestParseSize_ASizeNoByteCountHolds_IsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		input   string
+		want    int64
+		refused bool
 	}{
-		{name: "empty is valid", mode: "", wantErr: false},
-		{name: "legacy is valid", mode: "legacy", wantErr: false},
-		{name: "oauth is valid", mode: "oauth", wantErr: false},
-		{name: "invalid value", mode: "saml", wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{
-				GitLabURL:      "https://gitlab.example.com",
-				GitLabToken:    "test-token",
-				MaxHTTPClients: 1,
-				AuthMode:       tt.mode,
-				// oauth mode requires the RFC 9728 resource identifier.
-				PublicURL: "https://mcp.example.com",
+		{input: "17179869185GB", refused: true},
+		{input: "8589934592GB", refused: true},
+		{input: "8796093022208MB", refused: true},
+		{input: "9007199254740992KB", refused: true},
+		{input: "8589934591GB", want: 8589934591 << 30},
+		{input: "8796093022207MB", want: 8796093022207 << 20},
+		{input: "9007199254740991KB", want: 9007199254740991 << 10},
+		{input: "9223372036854775807", want: 9223372036854775807},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := parseSize(tc.input, 0)
+			if tc.refused {
+				if err == nil || !strings.Contains(err.Error(), "does not fit") {
+					t.Errorf("parseSize(%q) = %d, %v; want a refusal saying the byte count does not fit", tc.input, got, err)
+				}
+				return
 			}
-			err := cfg.validate()
-			if tt.wantErr && err == nil {
-				t.Errorf("validate() for AuthMode %q expected error, got nil", tt.mode)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("validate() for AuthMode %q unexpected error: %v", tt.mode, err)
+			if err != nil || got != tc.want {
+				t.Errorf("parseSize(%q) = %d, %v; want %d", tc.input, got, err, tc.want)
 			}
 		})
 	}
 }
 
-// TestValidate_OAuthCacheTTL verifies that validate enforces min/max bounds
-// on OAuthCacheTTL when it is non-zero.
-func TestValidate_OAuthCacheTTL(t *testing.T) {
-	tests := []struct {
-		name    string
-		ttl     time.Duration
-		wantErr bool
+// TestUploadMaxFileSizeFromEnv_RefusesWhatEitherTransportRefuses holds the
+// one reader of the upload limit to its bounds (register row RQB-007, issue
+// 1170). Stdio's Load and HTTP mode's overlay both read the setting through
+// it, so the ceiling is applied there rather than by Validate, which only
+// stdio calls: HTTP mode used to warn and use the default for a value it
+// could not parse, and the maximum for one above it. Each refusal names the
+// variable in full, which is also the variable --upload-max-file-size writes.
+//
+// A blank value is no value, as it is to the overlay, which reads one as
+// absent and leaves the limit at its default: the reader used to refuse it as
+// a size that did not parse, so the same exported line stopped a stdio server
+// and started an HTTP one. A padded size is read trimmed, as every variable is.
+func TestUploadMaxFileSizeFromEnv_RefusesWhatEitherTransportRefuses(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		want        int64
+		says        string
 	}{
-		{name: "zero is valid (disabled)", ttl: 0, wantErr: false},
-		{name: "at minimum", ttl: MinOAuthCacheTTL, wantErr: false},
-		{name: "at maximum", ttl: MaxOAuthCacheTTL, wantErr: false},
-		{name: "between bounds", ttl: 30 * time.Minute, wantErr: false},
-		{name: "below minimum", ttl: 30 * time.Second, wantErr: true},
-		{name: "above maximum", ttl: 3 * time.Hour, wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{
-				GitLabURL:      "https://gitlab.example.com",
-				GitLabToken:    "test-token",
-				MaxHTTPClients: 1,
-				OAuthCacheTTL:  tt.ttl,
+		{name: "unset is the default", want: DefaultMaxFileSize},
+		{name: "blank is the default", value: "   ", want: DefaultMaxFileSize},
+		{name: "a padded size", value: " 50MB ", want: 50 << 20},
+		{name: "a size with a unit", value: "50MB", want: 50 << 20},
+		{name: "the ceiling itself", value: "1024GB", want: MaxFileSize},
+		{name: "a value that does not parse", value: "the-size-of-a-cat", says: `invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value: invalid size "the-size-of-a-cat"`},
+		{name: "zero", value: "0", says: `invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value: size must be positive, got "0"`},
+		{name: "one byte above the ceiling", value: strconv.FormatInt(MaxFileSize+1, 10), says: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB (got 1099511627777 bytes)"},
+		{name: "a unit above the ceiling", value: "1025GB", says: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB"},
+		{name: "a size no byte count holds", value: "17179869185GB", says: "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(EnvPrefix+"UPLOAD_MAX_FILE_SIZE", tc.value)
+			got, err := UploadMaxFileSizeFromEnv()
+			if tc.says != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.says) {
+					t.Errorf("UploadMaxFileSizeFromEnv() = %d, %v; want a refusal carrying %q", got, err, tc.says)
+				}
+				return
 			}
-			err := cfg.validate()
-			if tt.wantErr && err == nil {
-				t.Errorf("validate() for OAuthCacheTTL %v expected error, got nil", tt.ttl)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("validate() for OAuthCacheTTL %v unexpected error: %v", tt.ttl, err)
+			if err != nil || got != tc.want {
+				t.Errorf("UploadMaxFileSizeFromEnv() = %d, %v; want %d", got, err, tc.want)
 			}
 		})
 	}
 }
 
-// TestLoad_AuthMode verifies AUTH_MODE env var parsing and defaults.
-func TestLoad_AuthMode(t *testing.T) {
-	t.Setenv("GITLAB_URL", testHTTPExampleURL)
-	t.Setenv("GITLAB_TOKEN", "test")
-
-	t.Run("default is legacy", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_AUTH_MODE", "")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.AuthMode != "legacy" {
-			t.Errorf("AuthMode = %q, want %q", cfg.AuthMode, "legacy")
-		}
-	})
-
-	t.Run("explicit oauth", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_AUTH_MODE", "oauth")
-		t.Setenv("GITLAB_MCP_PUBLIC_URL", "https://mcp.example.com")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.AuthMode != "oauth" {
-			t.Errorf("AuthMode = %q, want %q", cfg.AuthMode, "oauth")
-		}
-	})
-}
-
-// TestLoad_OAuthCacheTTL verifies OAUTH_CACHE_TTL env var parsing.
-func TestLoad_OAuthCacheTTL(t *testing.T) {
-	t.Setenv("GITLAB_URL", testHTTPExampleURL)
-	t.Setenv("GITLAB_TOKEN", "test")
-
-	t.Run(subtestDefault, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", "")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.OAuthCacheTTL != DefaultOAuthCacheTTL {
-			t.Errorf("OAuthCacheTTL = %v, want %v", cfg.OAuthCacheTTL, DefaultOAuthCacheTTL)
-		}
-	})
-
-	t.Run(subtestCustom, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", "30m")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.OAuthCacheTTL != 30*time.Minute {
-			t.Errorf("OAuthCacheTTL = %v, want 30m", cfg.OAuthCacheTTL)
-		}
-	})
-
-	t.Run(subtestInvalid, func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", "not-a-duration")
-		_, err := Load()
-		if err == nil {
-			t.Fatal("expected error for invalid OAUTH_CACHE_TTL")
-		}
-	})
+// TestLoad_AnUploadSizeAboveTheCeilingOrNoByteCountHolds_RefusesStdio is the
+// stdio half of the test above, through Load: a value the reader refuses ends
+// the start with the reader's own words, the variable named in full, and a
+// size that wrapped to one below the ceiling no longer starts a server under
+// a limit nobody wrote.
+func TestLoad_AnUploadSizeAboveTheCeilingOrNoByteCountHolds_RefusesStdio(t *testing.T) {
+	for _, tc := range []struct{ value, says string }{
+		{value: "1025GB", says: "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB"},
+		{value: "17179869185GB", says: "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testGitLabURL)
+			t.Setenv("GITLAB_TOKEN", testGitLabToken)
+			t.Setenv(EnvPrefix+"UPLOAD_MAX_FILE_SIZE", tc.value)
+			cfg, err := Load()
+			if err == nil || !strings.Contains(err.Error(), tc.says) {
+				t.Errorf("Load() = %+v, %v; want a refusal carrying %q", cfg, err, tc.says)
+			}
+		})
+	}
 }
 
 // TestLoad_InvalidSafeMode verifies that Load returns an error when
@@ -1170,11 +1193,11 @@ func TestValidate_DirectErrorBranches(t *testing.T) {
 		name string
 		cfg  Config
 	}{
-		{name: "empty gitlab url", cfg: Config{GitLabToken: "test-token", MaxHTTPClients: 1}},
-		{name: "invalid tool surface", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", MaxHTTPClients: 1, ToolSurface: "unknown"}},
-		{name: "invalid capability surface", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", MaxHTTPClients: 1, CapabilitySurface: "compact"}},
-		{name: "negative rate limit", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", MaxHTTPClients: 1, RateLimitRPS: -1}},
-		{name: "missing burst for positive rate limit", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", MaxHTTPClients: 1, RateLimitRPS: 1, RateLimitBurst: 0}},
+		{name: "empty gitlab url", cfg: Config{GitLabToken: "test-token"}},
+		{name: "invalid tool surface", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", ToolSurface: "unknown"}},
+		{name: "invalid capability surface", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", CapabilitySurface: "compact"}},
+		{name: "negative rate limit", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", RateLimitRPS: -1}},
+		{name: "missing burst for positive rate limit", cfg: Config{GitLabURL: testGitLabURL, GitLabToken: "test-token", RateLimitRPS: 1, RateLimitBurst: 0}},
 	}
 
 	for _, tt := range tests {
@@ -1351,19 +1374,6 @@ func TestLoad_InvalidIgnoreScopes(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for invalid GITLAB_MCP_IGNORE_SCOPES")
-	}
-}
-
-// TestLoad_SessionTimeoutExceedsMax verifies that Load rejects a SESSION_TIMEOUT
-// value that exceeds the maximum allowed duration.
-func TestLoad_SessionTimeoutExceedsMax(t *testing.T) {
-	t.Setenv("GITLAB_URL", testHTTPExampleURL)
-	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "25h")
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected error for SESSION_TIMEOUT exceeding maximum")
 	}
 }
 
@@ -1699,46 +1709,142 @@ func TestConfigEnterprise_NilReceivers(t *testing.T) {
 	}
 }
 
-// TestLoad_DisableableDurations_AcceptZero verifies that the two settings
-// documented as "0 disables" actually accept 0 from the environment.
-//
-// Both route through parseDisableableDurationEnv rather than the shared
-// parseDuration, which rejects any non-positive value. Without that split the
-// documented way to switch these off failed at startup, while the equivalent
-// CLI flags accepted it. SESSION_TIMEOUT is covered as a control: it documents
-// no zero behavior, so zero must still be an error there.
-func TestLoad_DisableableDurations_AcceptZero(t *testing.T) {
+// zeroOffDuration is a duration variable whose zero turns its setting off, with
+// the field each of the two readers fills from it: [Load] for stdio, nil for a
+// setting only HTTP mode has, which stdio does not read, and
+// [LoadHTTPEnvOverlay] for HTTP mode.
+type zeroOffDuration struct {
+	name    string
+	loaded  func(*Config) time.Duration
+	overlay func(*HTTPEnvOverlay) *time.Duration
+}
+
+// zeroOffDurations are every duration variable a zero turns off. The session
+// timeout is the one issue 958 added: its variable used to refuse the zero its
+// flag reads as off (issue 1171, item 1).
+func zeroOffDurations() []zeroOffDuration {
+	return []zeroOffDuration{
+		{
+			"SESSION_TIMEOUT",
+			nil,
+			func(o *HTTPEnvOverlay) *time.Duration { return o.SessionTimeout },
+		},
+		{
+			"POOL_IDLE_TIMEOUT",
+			nil,
+			func(o *HTTPEnvOverlay) *time.Duration { return o.PoolIdleTimeout },
+		},
+		{
+			"SESSION_REVALIDATE_INTERVAL",
+			func(c *Config) time.Duration { return c.RevalidateInterval },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.RevalidateInterval },
+		},
+		{
+			"ACTION_TIMEOUT",
+			func(c *Config) time.Duration { return c.ActionTimeout },
+			func(o *HTTPEnvOverlay) *time.Duration { return o.ActionTimeout },
+		},
+		{
+			"DRAIN_DELAY",
+			nil,
+			func(o *HTTPEnvOverlay) *time.Duration { return o.DrainDelay },
+		},
+		{
+			"AUTH_FAILURE_WINDOW",
+			nil,
+			func(o *HTTPEnvOverlay) *time.Duration { return o.AuthFailureWindow },
+		},
+		{
+			"AUTH_DISTINCT_TOKEN_WINDOW",
+			nil,
+			func(o *HTTPEnvOverlay) *time.Duration { return o.AuthDistinctWindow },
+		},
+	}
+}
+
+// zeroDurationSpellings are ways an operator writes a zero duration: the bare
+// digit the variables documented first, and the Go duration forms the flag of
+// the same name accepts, which the variables used to refuse (issue 1171, item
+// 3), padded too, since every variable is read trimmed.
+var zeroDurationSpellings = []string{"0", "0s", "0ms", "0h0m0s", " 0s "}
+
+// TestLoad_AZeroDuration_TurnsItsSettingOffHoweverWritten pins what zero means
+// for every duration variable that has a zero to mean, at the stdio reader's
+// environment layer: the setting is off, written as the bare digit or as a Go
+// duration (issue 958). A negative duration is still refused, since zero
+// already says off and a minus sign is a typo. The settings only HTTP mode has
+// are not read here at all (issue 1171), which
+// TestLoad_HTTPOnlySettings_AreNotRead holds.
+func TestLoad_AZeroDuration_TurnsItsSettingOffHoweverWritten(t *testing.T) {
 	t.Setenv("GITLAB_URL", testHTTPExampleURL)
 	t.Setenv("GITLAB_TOKEN", "test")
 
-	t.Run("POOL_IDLE_TIMEOUT=0 disables idle eviction", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_POOL_IDLE_TIMEOUT", "0")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
+	for _, setting := range zeroOffDurations() {
+		if setting.loaded == nil {
+			continue
 		}
-		if cfg.PoolIdleTimeout != 0 {
-			t.Errorf("PoolIdleTimeout = %v, want 0", cfg.PoolIdleTimeout)
-		}
-	})
+		t.Run(setting.name, func(t *testing.T) {
+			for _, spelling := range zeroDurationSpellings {
+				t.Run(strconv.Quote(spelling), func(t *testing.T) {
+					t.Setenv(EnvPrefix+setting.name, spelling)
+					cfg, err := Load()
+					if err != nil {
+						t.Fatalf("Load() with %s=%q error = %v, want the setting off", setting.name, spelling, err)
+					}
+					if got := setting.loaded(cfg); got != 0 {
+						t.Errorf("%s=%q loaded as %v, want 0", setting.name, spelling, got)
+					}
+				})
+			}
+			t.Run("negative", func(t *testing.T) {
+				t.Setenv(EnvPrefix+setting.name, "-1s")
+				if _, err := Load(); err == nil {
+					t.Errorf("Load() with %s=-1s error = nil, want a refusal", setting.name)
+				}
+			})
+		})
+	}
+}
 
-	t.Run("SESSION_REVALIDATE_INTERVAL=0 disables revalidation", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "0")
-		cfg, err := Load()
-		if err != nil {
-			t.Fatalf(fmtLoadErr, err)
-		}
-		if cfg.RevalidateInterval != 0 {
-			t.Errorf("RevalidateInterval = %v, want 0", cfg.RevalidateInterval)
-		}
-	})
-
-	t.Run("zero stays invalid where it is not documented", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "0")
-		if _, err := Load(); err == nil {
-			t.Error("Load() error = nil, want an error for SESSION_TIMEOUT=0")
-		}
-	})
+// TestLoad_ABlankDuration_IsUnsetOnBothTransports pins what a blank duration
+// variable means to both readers: nothing was set, so the setting keeps its
+// default. HTTP mode's overlay has always read a blank value as absent, and
+// stdio's reader refused it as a duration that did not parse, so the same
+// exported line started an HTTP server and stopped a stdio one. The action
+// timeout's row states that a malformed value refuses startup on both
+// transports (RQB-005), which held only once both agreed on what a value is.
+func TestLoad_ABlankDuration_IsUnsetOnBothTransports(t *testing.T) {
+	for _, setting := range zeroOffDurations() {
+		t.Run(setting.name, func(t *testing.T) {
+			clearOverlayEnv(t)
+			t.Setenv("GITLAB_URL", testHTTPExampleURL)
+			t.Setenv("GITLAB_TOKEN", "test")
+			var unset *Config
+			if setting.loaded != nil {
+				var err error
+				if unset, err = Load(); err != nil {
+					t.Fatalf("Load() with %s unset error = %v", setting.name, err)
+				}
+			}
+			t.Setenv(EnvPrefix+setting.name, "   ")
+			if setting.loaded != nil {
+				cfg, err := Load()
+				if err != nil {
+					t.Fatalf("Load() with a blank %s error = %v, want its default", setting.name, err)
+				}
+				if got, want := setting.loaded(cfg), setting.loaded(unset); got != want {
+					t.Errorf("a blank %s loaded as %v, want the default %v", setting.name, got, want)
+				}
+			}
+			overlay, err := LoadHTTPEnvOverlay()
+			if err != nil {
+				t.Fatalf("LoadHTTPEnvOverlay() with a blank %s error = %v, want it absent", setting.name, err)
+			}
+			if got := setting.overlay(overlay); got != nil {
+				t.Errorf("a blank %s overlaid as %v, want nil", setting.name, *got)
+			}
+		})
+	}
 }
 
 // TestValidate_OAuthRequiresPublicURL verifies oauth mode refuses to start
@@ -1765,62 +1871,6 @@ func TestValidate_OAuthRequiresPublicURL(t *testing.T) {
 				t.Errorf("validatePublicURL(%q) error = %v, wantErr %t", tt.publicURL, err, tt.wantErr)
 			}
 		})
-	}
-}
-
-// TestLoad_PoolIdleTimeoutInvalid verifies that Load surfaces a wrapped error
-// when POOL_IDLE_TIMEOUT cannot be parsed as a duration or exceeds
-// MaxPoolIdleTimeout. This exercises the loadLimitEnv error path distinct
-// from the POOL_IDLE_TIMEOUT=0 "disabled" case already covered by
-// TestLoad_DisableableDurations_AcceptZero: a non-zero, invalid value must
-// still fail startup rather than silently falling back to the default.
-func TestLoad_PoolIdleTimeoutInvalid(t *testing.T) {
-	t.Setenv("GITLAB_URL", testHTTPExampleURL)
-	t.Setenv("GITLAB_TOKEN", "test")
-
-	t.Run("unparseable duration", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_POOL_IDLE_TIMEOUT", "notaduration")
-		_, err := Load()
-		if err == nil {
-			t.Fatal("Load() error = nil, want error for unparseable POOL_IDLE_TIMEOUT")
-		}
-		if !strings.Contains(err.Error(), "POOL_IDLE_TIMEOUT") {
-			t.Errorf("Load() error = %v, want it to mention POOL_IDLE_TIMEOUT", err)
-		}
-	})
-
-	t.Run("exceeds maximum", func(t *testing.T) {
-		t.Setenv("GITLAB_MCP_POOL_IDLE_TIMEOUT", "48h")
-		_, err := Load()
-		if err == nil {
-			t.Fatal("Load() error = nil, want error for POOL_IDLE_TIMEOUT exceeding MaxPoolIdleTimeout")
-		}
-		if !strings.Contains(err.Error(), "exceeds maximum") {
-			t.Errorf("Load() error = %v, want it to mention 'exceeds maximum'", err)
-		}
-	})
-}
-
-// TestValidate_OAuthModeRejectsInvalidPublicURLThroughValidate verifies that
-// c.validate() itself (not just validatePublicURL in isolation) surfaces the
-// RFC 9728 error when AuthMode is "oauth" and PublicURL is empty or
-// malformed. This exercises the return path inside validateModeEnums that
-// propagates validatePublicURL's error, which a direct call to
-// validatePublicURL (see TestValidate_OAuthRequiresPublicURL) does not touch.
-func TestValidate_OAuthModeRejectsInvalidPublicURLThroughValidate(t *testing.T) {
-	cfg := &Config{
-		GitLabURL:      testGitLabURL,
-		GitLabToken:    testGitLabToken,
-		MaxHTTPClients: 1,
-		AuthMode:       "oauth",
-		PublicURL:      "",
-	}
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("validate() error = nil, want error for oauth mode without PublicURL")
-	}
-	if !strings.Contains(err.Error(), "--public-url") {
-		t.Errorf("validate() error = %v, want it to mention --public-url", err)
 	}
 }
 
@@ -1880,34 +1930,24 @@ func TestValidateMetadataURL_RejectsWhatTheFlagsPromise(t *testing.T) {
 // whole path, and the absence of a deprecation warning is what proves the
 // prefixed name was the one used rather than an old one left over.
 func TestLoad_PrefixedNamesReachTheConfig(t *testing.T) {
-	// oauth mode is rejected without a public URL, so that case names the
-	// companion setting it needs rather than being dropped: auth mode is one of
-	// the readers this test exists to cover.
+	// The authentication mode and the public URL were cases here too, until
+	// stdio stopped reading the settings only HTTP mode has (issue 1171); the
+	// HTTP overlay's own test of prefixed names covers them now.
 	for _, tc := range []struct {
-		name      string
-		env       string
-		value     string
-		field     string
-		alsoEnv   string
-		alsoValue string
+		name  string
+		env   string
+		value string
+		field string
 	}{
 		{name: "tool surface", env: "TOOL_SURFACE", value: ToolSurfaceMeta, field: "ToolSurface"},
 		{name: "capability surface", env: "CAPABILITY_SURFACE", value: CapabilitySurfaceMinimal, field: "CapabilitySurface"},
 		{name: "meta param schema", env: "META_PARAM_SCHEMA", value: MetaParamSchemaFull, field: "MetaParamSchema"},
-		{
-			name: "auth mode", env: "AUTH_MODE", value: "oauth", field: "AuthMode",
-			alsoEnv: "PUBLIC_URL", alsoValue: "https://mcp.example.com",
-		},
-		{name: "public url", env: "PUBLIC_URL", value: "https://mcp.example.com", field: "PublicURL"},
 		{name: "excluded tools", env: "EXCLUDE_TOOLS", value: "gitlab_issue_delete", field: "ExcludeTools"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GITLAB_URL", testGitLabURL)
 			t.Setenv("GITLAB_TOKEN", testGitLabToken)
 			t.Setenv(EnvPrefix+tc.env, tc.value)
-			if tc.alsoEnv != "" {
-				t.Setenv(EnvPrefix+tc.alsoEnv, tc.alsoValue)
-			}
 
 			cfg, err := Load()
 			if err != nil {
@@ -1936,10 +1976,6 @@ func loadedSetting(cfg *Config, field string) string {
 		return cfg.CapabilitySurface
 	case "MetaParamSchema":
 		return cfg.MetaParamSchema
-	case "AuthMode":
-		return cfg.AuthMode
-	case "PublicURL":
-		return cfg.PublicURL
 	case "ExcludeTools":
 		return strings.Join(cfg.ExcludeTools, ",")
 	default:
@@ -2124,10 +2160,12 @@ func TestValidatePublicURL_ExportedPathAndTheNonURL(t *testing.T) {
 	}
 }
 
-// TestLoad_ActionTimeoutAndDrainDelayInvalid verifies the two limits parsed
-// last in the limit block refuse a value outside their range through Load,
-// which is the path a deployment actually takes.
-func TestLoad_ActionTimeoutAndDrainDelayInvalid(t *testing.T) {
+// TestLoad_ActionTimeoutInvalid verifies the limit parsed last in the limit
+// block refuses a value outside its range through Load, which is the path a
+// deployment actually takes. The drain delay was a case here too, until stdio
+// stopped reading it with the rest of the settings only HTTP mode has (issue
+// 1171).
+func TestLoad_ActionTimeoutInvalid(t *testing.T) {
 	cases := []struct {
 		name  string
 		env   string
@@ -2135,8 +2173,6 @@ func TestLoad_ActionTimeoutAndDrainDelayInvalid(t *testing.T) {
 	}{
 		{name: "action timeout above its maximum", env: "ACTION_TIMEOUT", value: "48h"},
 		{name: "action timeout unparseable", env: "ACTION_TIMEOUT", value: "soon"},
-		{name: "drain delay above its maximum", env: "DRAIN_DELAY", value: "1h"},
-		{name: "drain delay unparseable", env: "DRAIN_DELAY", value: "later"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2150,62 +2186,6 @@ func TestLoad_ActionTimeoutAndDrainDelayInvalid(t *testing.T) {
 	}
 }
 
-// TestLoad_AuthBudgets_ReachTheirOwnFields verifies that each of the four
-// authentication-budget settings lands in its own Config field.
-//
-// loadAuthBudgetEnv is tested on its own, but Load copies its four answers
-// into four fields of two types, two of each, and nothing else read them
-// back: a limit copied into the other budget's field, or a window into the
-// other window, would compile and pass. Four different values make any such
-// crossing visible.
-func TestLoad_AuthBudgets_ReachTheirOwnFields(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv(EnvPrefix+"AUTH_FAILURE_LIMIT", "4")
-	t.Setenv(EnvPrefix+"AUTH_FAILURE_WINDOW", "30s")
-	t.Setenv(EnvPrefix+"AUTH_DISTINCT_TOKEN_LIMIT", "9")
-	t.Setenv(EnvPrefix+"AUTH_DISTINCT_TOKEN_WINDOW", "5m")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf(fmtLoadUnexpected, err)
-	}
-	if cfg.AuthFailureLimit != 4 {
-		t.Errorf("AuthFailureLimit = %d, want 4", cfg.AuthFailureLimit)
-	}
-	if cfg.AuthFailureWindow != 30*time.Second {
-		t.Errorf("AuthFailureWindow = %s, want 30s", cfg.AuthFailureWindow)
-	}
-	if cfg.AuthDistinctTokenLimit != 9 {
-		t.Errorf("AuthDistinctTokenLimit = %d, want 9", cfg.AuthDistinctTokenLimit)
-	}
-	if cfg.AuthDistinctWindow != 5*time.Minute {
-		t.Errorf("AuthDistinctWindow = %s, want 5m", cfg.AuthDistinctWindow)
-	}
-}
-
-// TestLoad_InvalidAuthBudget_RefusesToLoad verifies that Load stops on an
-// authentication-budget value it cannot use instead of starting with the
-// default, which is what the setting's malformed-value policy (refuse
-// startup) promises. The reader's own test covers every refusal; this one
-// covers Load passing the refusal on.
-func TestLoad_InvalidAuthBudget_RefusesToLoad(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv(EnvPrefix+"AUTH_DISTINCT_TOKEN_LIMIT", "many")
-
-	cfg, err := Load()
-	if err == nil {
-		t.Fatalf("Load() = %+v, want a refusal of AUTH_DISTINCT_TOKEN_LIMIT=many", cfg)
-	}
-	if cfg != nil {
-		t.Errorf("Load() returned a Config alongside its error: %+v", cfg)
-	}
-	if !strings.Contains(err.Error(), "AUTH_DISTINCT_TOKEN_LIMIT") {
-		t.Errorf("error = %q, want it to name AUTH_DISTINCT_TOKEN_LIMIT", err)
-	}
-}
-
 // TestUploadSizeConstants_HoldTheDefaultBelowTheCeilingItNames states what the
 // two upload-size constants are, which nothing else in this package does.
 //
@@ -2215,8 +2195,8 @@ func TestLoad_InvalidAuthBudget_RefusesToLoad(t *testing.T) {
 // dangerous one: toolutil reads a non-positive limit as no limit at all, so a
 // DefaultMaxFileSize that lost its multiplication would switch the
 // out-of-the-box upload ceiling off with the suite still green. MaxFileSize is
-// the figure Validate names when it refuses ("exceeds maximum of 1 TB"), so one
-// that moved would make that sentence a lie.
+// the figure UploadMaxFileSizeFromEnv names when it refuses ("exceeds maximum
+// of 1 TB"), so one that moved would make that sentence a lie.
 //
 // The wanted sizes are spelled as shifts rather than as the product the
 // declaration uses, so the two sides cannot move together.
@@ -2234,7 +2214,7 @@ func TestUploadSizeConstants_HoldTheDefaultBelowTheCeilingItNames(t *testing.T) 
 			defaultSize, twoGiB)
 	}
 	if ceiling != oneTiB {
-		t.Errorf("MaxFileSize = %d bytes, want %d: Validate refuses anything above it by naming 1 TB",
+		t.Errorf("MaxFileSize = %d bytes, want %d: the reader refuses anything above it by naming 1 TB",
 			ceiling, oneTiB)
 	}
 	if defaultSize <= 0 {
@@ -2254,9 +2234,9 @@ func TestUploadSizeConstants_HoldTheDefaultBelowTheCeilingItNames(t *testing.T) 
 // parsed Config against the very constant that supplied its default, and the
 // bound tests hand a maximum back to the parser that enforces it, so a constant
 // that collapsed to zero would move both sides of every one of them. Zero is
-// what this arithmetic collapses to, and neither parser here has a floor to
-// catch it: parseBoundedDurationEnv only refuses a value above the maximum, and
-// parseDisableableDurationEnv reads zero as the operator asking for no bound at
+// what this arithmetic collapses to, and the parser here has no floor to catch
+// it: parseDisableableDurationEnv only refuses a value above the maximum, and
+// reads zero as the operator asking for no bound at
 // all — so a DefaultActionTimeout that lost its multiplication would leave
 // every handler unbounded and say nothing, which is the opposite of what the
 // constant is for.
@@ -2301,15 +2281,20 @@ func TestDurationConstants_ArePublishedAsTheDocumentationStatesThem(t *testing.T
 // published default still has to leave the deployment that asks for nothing
 // working.
 //
-// A default above its own ceiling is not a lint: Load runs the default through
-// the same bound check an operator's value goes through, so such a pair refuses
-// startup for a deployment that set nothing at all. The two assertions after
-// the loop are the bounds that are not a plain default-and-maximum pair: the
-// OAuth TTL has a floor as well, and the action timeout has to outlast the
-// longest wait an action offers, which is the 3600-second ceiling a pipeline
-// wait imposes on itself. internal/toolutil pins that second one against the
-// real constant, which this package cannot import; here it is the number the
-// declaration's own comment names.
+// A default above its own ceiling is not a lint: the start that reads a setting
+// runs its default through the same bound check an operator's value goes
+// through, so such a pair refuses startup for a deployment that set nothing at
+// all. On stdio that is Load, for the two of these stdio has (the revalidation
+// interval and the action timeout). In HTTP mode, whose flags default to these
+// constants, it is cmd/server's validateHTTPDurationConfig for the first five
+// and its validateOAuthCacheTTL for the TTL of an oauth deployment.
+//
+// The two assertions after the loop are the bounds that are not a plain
+// default-and-maximum pair: the OAuth TTL has a floor as well, and the action
+// timeout has to outlast the longest wait an action offers, which is the
+// 3600-second ceiling a pipeline wait imposes on itself. internal/toolutil
+// pins that second one against the real constant, which this package cannot
+// import; here it is the number the declaration's own comment names.
 func TestDurationConstants_KeepEveryDefaultInsideItsOwnBound(t *testing.T) {
 	t.Parallel()
 
@@ -2333,16 +2318,16 @@ func TestDurationConstants_KeepEveryDefaultInsideItsOwnBound(t *testing.T) {
 					"could set, its own default included", tc.name, tc.ceiling)
 			}
 			if tc.value > tc.ceiling {
-				t.Errorf("%s default = %s is above its maximum of %s: Load puts the default through "+
-					"the same bound check, so a deployment that set nothing would not start",
+				t.Errorf("%s default = %s is above its maximum of %s: the start that reads it puts "+
+					"the default through the same bound check, so a deployment that set nothing would not start",
 					tc.name, tc.value, tc.ceiling)
 			}
 		})
 	}
 
 	if DefaultOAuthCacheTTL < MinOAuthCacheTTL {
-		t.Errorf("DefaultOAuthCacheTTL = %s is below MinOAuthCacheTTL = %s: validateDurationRange "+
-			"refuses the default an oauth deployment never overrides",
+		t.Errorf("DefaultOAuthCacheTTL = %s is below MinOAuthCacheTTL = %s: cmd/server's "+
+			"validateOAuthCacheTTL refuses the default an oauth deployment never overrides",
 			DefaultOAuthCacheTTL, MinOAuthCacheTTL)
 	}
 	if longestWait := 3600 * time.Second; DefaultActionTimeout <= longestWait {

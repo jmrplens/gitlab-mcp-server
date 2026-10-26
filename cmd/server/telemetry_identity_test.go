@@ -14,6 +14,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -491,6 +492,178 @@ func TestTelemetryIdentityPolicy_TheFlagBeatsTheEnvironment(t *testing.T) {
 	}
 	if policy != telemetry.IdentityFull {
 		t.Errorf("policy = %q, want the flag's full rather than the environment's none", policy)
+	}
+}
+
+// TestValidateTelemetryIdentity_RefusesWhatTelemetryCannotUse is the startup
+// check register row IDN-009 states (issue 957): a policy the server does not
+// know refuses the start, and so does a rotation that does not parse or lies
+// outside what a generated key may live, unless a key is configured, beside
+// which the rotation is ignored whatever it says and so refuses nothing. Each
+// refusal names the variable that held the value, so an operator is sent to
+// the line they wrote, and says what was wrong with it.
+func TestValidateTelemetryIdentity_RefusesWhatTelemetryCannotUse(t *testing.T) {
+	for _, tc := range []struct {
+		name, policy, key, rotation string
+		// says is what the refusal carries, empty for a start it allows.
+		says []string
+	}{
+		{name: "the defaults"},
+		{name: "every setting usable", policy: "pseudonymous", rotation: "24h"},
+		{name: "the longest rotation a key may live", rotation: telemetry.MaxKeyRotation.String()},
+		{name: "a key beside a rotation", policy: "full", key: "a deployment-wide secret", rotation: "6h"},
+		{
+			name: "a policy it does not know", policy: "pseudonimous",
+			says: []string{telemetry.EnvIdentityName + ": ", `unknown identity policy "pseudonimous"`},
+		},
+		{
+			name: "a rotation that is not a duration", rotation: "24",
+			says: []string{telemetry.EnvIdentityRotationName + ": ", `missing unit in duration "24"`},
+		},
+		{
+			name: "a rotation past the maximum", rotation: (telemetry.MaxKeyRotation + time.Hour).String(),
+			says: []string{telemetry.EnvIdentityRotationName + ": ", "out of range"},
+		},
+		{
+			name: "a negative rotation", rotation: "-1h",
+			says: []string{telemetry.EnvIdentityRotationName + ": ", "out of range"},
+		},
+		{
+			// Not judged with a key set, as identityKeyring does not read
+			// it, so neither a typo nor a value out of range refuses.
+			name: "a key beside a rotation that is not a duration", key: "a deployment-wide secret", rotation: "24",
+		},
+		{
+			name: "a key beside a rotation past the maximum", key: "a deployment-wide secret",
+			rotation: (telemetry.MaxKeyRotation + time.Hour).String(),
+		},
+		{
+			// The policy is judged first, and a key does not excuse it.
+			name: "a key beside a policy it does not know", policy: "hashed", key: "a deployment-wide secret",
+			says: []string{telemetry.EnvIdentityName + ": ", `unknown identity policy "hashed"`},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(telemetry.EnvIdentityName, tc.policy)
+			t.Setenv(telemetry.EnvIdentityKeyName, tc.key)
+			t.Setenv(telemetry.EnvIdentityRotationName, tc.rotation)
+
+			err := validateTelemetryIdentity()
+			if len(tc.says) == 0 {
+				if err != nil {
+					t.Errorf("validateTelemetryIdentity() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("validateTelemetryIdentity() = nil, want a refusal")
+			}
+			for _, want := range tc.says {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("refusal %q does not carry %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+// TestTelemetryIdentitySettings_AValuePassedAsAFlag_IsRefusedUnderTheFlagsName
+// pins the other source a refusal names. --telemetry-identity and
+// --telemetry-identity-rotation are read in place of their variables when
+// passed, so a value one of them carries is refused under the flag's name: a
+// refusal naming the variable would send an operator to an environment that
+// holds nothing wrong, or nothing at all.
+func TestTelemetryIdentitySettings_AValuePassedAsAFlag_IsRefusedUnderTheFlagsName(t *testing.T) {
+	for _, tc := range []struct {
+		name, arg, says, not string
+	}{
+		{
+			name: "the policy", arg: "-telemetry-identity=pseudonimous",
+			says: "--telemetry-identity: ", not: telemetry.EnvIdentityName,
+		},
+		{
+			name: "a rotation that is not a duration", arg: "-telemetry-identity-rotation=24",
+			says: "--telemetry-identity-rotation: ", not: telemetry.EnvIdentityRotationName,
+		},
+		{
+			name: "a rotation past the maximum", arg: "-telemetry-identity-rotation=" + (telemetry.MaxKeyRotation + time.Hour).String(),
+			says: "--telemetry-identity-rotation: ", not: telemetry.EnvIdentityRotationName,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withFreshFlagSet(t)
+			t.Setenv(telemetry.EnvIdentityName, "")
+			t.Setenv(telemetry.EnvIdentityKeyName, "")
+			t.Setenv(telemetry.EnvIdentityRotationName, "")
+			previousPolicy, previousRotation := telemetryIdentityFlag, telemetryIdentityRotationFlag
+			t.Cleanup(func() { telemetryIdentityFlag, telemetryIdentityRotationFlag = previousPolicy, previousRotation })
+			telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy), "")
+			telemetryIdentityRotationFlag = flag.String("telemetry-identity-rotation", "", "")
+			if err := flag.CommandLine.Parse([]string{tc.arg}); err != nil {
+				t.Fatalf("parsing: %v", err)
+			}
+
+			err := validateTelemetryIdentity()
+			if err == nil {
+				t.Fatalf("validateTelemetryIdentity() = nil with %s, want a refusal", tc.arg)
+			}
+			if !strings.HasPrefix(err.Error(), tc.says) || strings.Contains(err.Error(), tc.not) {
+				t.Errorf("refusal %q, want it to start with %q and not to name %s", err, tc.says, tc.not)
+			}
+		})
+	}
+}
+
+// TestStartTelemetry_AnUnusableIdentitySetting_RefusesTheStartWhileTelemetryIsOn
+// holds the wiring of the check to the start: with telemetry on, a policy the
+// server does not know comes back from startTelemetry as the error that ends
+// the start, with a provider that reports itself disabled and a stop that is
+// safe to call, as every other return of it is. Off, or vetoed by
+// OTEL_SDK_DISABLED, the same value refuses nothing, since telemetry never
+// reads it then; the readers still record nothing about callers under it,
+// which TestIdentityRedactor_AnUnusableValueRecordsNothing pins.
+func TestStartTelemetry_AnUnusableIdentitySetting_RefusesTheStartWhileTelemetryIsOn(t *testing.T) {
+	restore := telemetryFlag
+	t.Cleanup(func() { telemetryFlag = restore })
+	telemetryFlag = nil
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+	t.Setenv(telemetry.EnvIdentityName, "pseudonimous")
+
+	for _, tc := range []struct {
+		name, on, vetoed string
+		refused          bool
+	}{
+		{name: "telemetry on", on: "true", refused: true},
+		{name: "telemetry off", on: "false"},
+		{name: "telemetry vetoed by OTEL_SDK_DISABLED", on: "true", vetoed: "true"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(telemetry.EnvSwitchName, tc.on)
+			t.Setenv("OTEL_SDK_DISABLED", tc.vetoed)
+
+			logged := captureLogMessages(t)
+			provider, stop, err := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
+			if stop == nil || provider == nil {
+				t.Fatal("startTelemetry returned a nil provider or stop; the deferred call in runWithContext would panic")
+			}
+			t.Cleanup(func() { stop(boundedShutdown(t)) })
+			if refused := err != nil; refused != tc.refused {
+				t.Fatalf("startTelemetry() error = %v, want a refusal: %v", err, tc.refused)
+			}
+			if provider.Enabled() {
+				t.Error("telemetry is running under an identity policy the server does not know")
+			}
+			if tc.refused && !strings.Contains(err.Error(), telemetry.EnvIdentityName) {
+				t.Errorf("the refusal %q does not name %s", err, telemetry.EnvIdentityName)
+			}
+			// The refusal is the start's to report, as the error it returns;
+			// logging it as telemetry that failed while the server serves
+			// on would say the opposite of what happens next.
+			if logged("telemetry disabled: it could not be started") {
+				t.Error("the refusal was also logged as a telemetry start that failed")
+			}
+		})
 	}
 }
 

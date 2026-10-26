@@ -343,14 +343,20 @@ func TestMiddleware_FailedCall_IsPassedThroughUntouched(t *testing.T) {
 	}
 }
 
-// TestMiddleware_UnrewritableSchema_KeepsItsOriginalValue covers the two ways a
-// tool's schema comes back exactly as it arrived.
+// TestMiddleware_UnrewritableSchema_KeepsItsOriginalValue covers the three ways
+// a tool's schema comes back exactly as it arrived.
 //
-// A schema that cannot be marshaled has no JSON form to walk, and a schema with
-// no prose in it has nothing to change; in both cases the original typed value
-// is kept rather than a decoded copy, so a caller's *jsonschema.Schema stays a
+// A schema that cannot be marshaled has no JSON form to walk, one whose JSON
+// cannot be decoded has none either, and a schema with no prose in it has
+// nothing to change; in each case the original typed value is kept rather
+// than a decoded copy, so a caller's *jsonschema.Schema stays a
 // *jsonschema.Schema. Returning the decoded map instead would marshal to the
 // same wire bytes while silently changing the type every other layer sees.
+//
+// The JSON that cannot be decoded is a raw schema, which the SDK accepts as
+// it is, carrying a number no float64 holds: the encoder passes it through as
+// valid JSON and the decoder into an interface refuses it, so its prose is
+// left as written rather than the schema replaced by nothing.
 //
 // The listing is handed to the middleware directly rather than served over a
 // session, because one of the cases is a schema the JSON encoder refuses and no
@@ -363,6 +369,7 @@ func TestMiddleware_UnrewritableSchema_KeepsItsOriginalValue(t *testing.T) {
 		schema any
 	}{
 		{name: "nothing to marshal", schema: make(chan int)},
+		{name: "nothing the decoder can hold", schema: json.RawMessage(`{"description":"a;b","maximum":1e400}`)},
 		{name: "no prose to rewrite", schema: map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "integer"}}}},
 		{name: "prose the substitutions do not touch", schema: map[string]any{"description": "nothing here"}},
 	}

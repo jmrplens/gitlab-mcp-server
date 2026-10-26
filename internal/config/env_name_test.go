@@ -265,6 +265,77 @@ func TestHadOldSpelling_HoldsTheSettings300ReadAndNoOthers(t *testing.T) {
 	}
 }
 
+// movedByIssue957 are the settings issue 957 put on the list, which the
+// server read around it until then, under their prefixed name alone: with
+// os.Getenv or os.LookupEnv where they were used, or, for
+// ALLOW_PRIVATE_INSTANCES, through [TrimmedGetenv] handed the full name,
+// which it reads verbatim. None ever answered to another spelling.
+// GITLAB_MCP_ENV_FILE stays off the list, the one read issue 957 keeps: it
+// names the dotenv file to load and is read once, before any file is.
+var movedByIssue957 = []string{
+	"ALLOWED_DOWNLOAD_DIRS",
+	"ALLOWED_IMPORT_DIRS",
+	"ALLOWED_UPLOAD_DIRS",
+	"ALLOW_PRIVATE_INSTANCES",
+	"DESCRIPTION_SUBSTITUTIONS",
+	"MAX_LISTEN_STREAMS",
+	"STDIO_MAX_LINE_BYTES",
+	"TELEMETRY",
+	"TELEMETRY_IDENTITY",
+	"TELEMETRY_IDENTITY_KEY",
+	"TELEMETRY_IDENTITY_ROTATION",
+	"TELEMETRY_TOOL_NAME",
+}
+
+// TestPrefixedEnvNames_HoldTheSettingsIssue957Moved verifies that each setting
+// issue 957 moved is on the list, so [Getenv] reads it under its prefixed name,
+// and that none is among the settings an old spelling is looked for under: a
+// bare TELEMETRY or ALLOWED_UPLOAD_DIRS is somebody else's variable if it is
+// anybody's, since this server never read one.
+func TestPrefixedEnvNames_HoldTheSettingsIssue957Moved(t *testing.T) {
+	names := PrefixedEnvNames()
+	for _, name := range movedByIssue957 {
+		t.Run(name, func(t *testing.T) {
+			if !slices.Contains(names, name) {
+				t.Errorf("%s is not on prefixedNames, so Getenv reads it bare, under a name no operator sets", name)
+			}
+			if slices.Contains(hadOldSpelling, name) {
+				t.Errorf("%s has an old spelling looked for, but it never had one", name)
+			}
+		})
+	}
+	if slices.Contains(names, "ENV_FILE") {
+		t.Error("ENV_FILE is on prefixedNames; it is read once from the process environment before any file loads, outside the list")
+	}
+	if !slices.IsSorted(prefixedNames) {
+		t.Errorf("prefixedNames is not in name order: %v", prefixedNames)
+	}
+}
+
+// TestRetiredEnvUses_ASettingIssue957Moved_HasNoOldSpelling sets the bare
+// suffix of every setting issue 957 moved onto the list, alone and beside its
+// prefixed name, and expects no report: the closed list of the settings 3.0.0
+// read ([hadOldSpelling]) is what keeps a name the list gains from being
+// reported as a spelling this server removed, which would send an operator
+// renaming another tool's variable.
+func TestRetiredEnvUses_ASettingIssue957Moved_HasNoOldSpelling(t *testing.T) {
+	for _, name := range PrefixedEnvNames() {
+		absentForTest(t, RetiredEnvName(name), EnvPrefix+name)
+	}
+	for _, name := range movedByIssue957 {
+		t.Setenv(name, "set-by-another-tool")
+	}
+	if refuse, warn := RetiredEnvUses(); len(refuse) != 0 || len(warn) != 0 {
+		t.Errorf("RetiredEnvUses() = %v, %v with only the bare suffixes set, want nothing reported", refuse, warn)
+	}
+	for _, name := range movedByIssue957 {
+		t.Setenv(EnvPrefix+name, "set-by-the-operator")
+	}
+	if refuse, warn := RetiredEnvUses(); len(refuse) != 0 || len(warn) != 0 {
+		t.Errorf("RetiredEnvUses() = %v, %v with both spellings set, want nothing reported", refuse, warn)
+	}
+}
+
 // TestPrefixedEnvNames_IsACopy verifies that a caller cannot reorder or empty
 // the list the whole migration is driven from.
 // TestRetiredEnvName_SpellsTheRemovedNameOfEachSetting pins the two shapes a

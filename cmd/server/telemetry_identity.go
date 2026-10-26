@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -42,40 +42,99 @@ var (
 // every line.
 type Keyring = telemetry.Keyring
 
+// The identity settings without their prefix, the names [config.Getenv] reads
+// them under (issue 957). The telemetry package exports each in full:
+// telemetry.EnvIdentityName and telemetry.EnvIdentityRotationName are the
+// names a message gives when the value came from the environment, the error of
+// a policy this server does not know and of a rotation that does not parse or
+// lies out of range, and telemetry.EnvIdentityKeyName is the spelling the
+// tests set.
+const (
+	telemetryIdentitySetting         = "TELEMETRY_IDENTITY"
+	telemetryIdentityKeySetting      = "TELEMETRY_IDENTITY_KEY"
+	telemetryIdentityRotationSetting = "TELEMETRY_IDENTITY_ROTATION"
+)
+
 // telemetryIdentityKey resolves the operator's pseudonymisation secret.
 //
 // Empty means none was supplied, which is the default and generates one
 // instead. Environment only; see the note on telemetryIdentityRotationFlag for
 // why this secret has no command-line form.
 func telemetryIdentityKey() string {
-	return os.Getenv(telemetry.EnvIdentityKeyName)
+	return config.Getenv(telemetryIdentityKeySetting)
+}
+
+// telemetryIdentityRotationValue is the rotation as the operator wrote it, and
+// the name of what held it: the flag when it was passed, the variable
+// otherwise. An error about the value gives that name, so it sends the
+// operator to the one they typed rather than to one that holds nothing wrong.
+func telemetryIdentityRotationValue() (value, source string) {
+	if telemetryIdentityRotationFlag != nil && isFlagPassed("telemetry-identity-rotation") {
+		return *telemetryIdentityRotationFlag, "--telemetry-identity-rotation"
+	}
+	return config.Getenv(telemetryIdentityRotationSetting), telemetry.EnvIdentityRotationName
 }
 
 // telemetryIdentityRotation resolves how long a generated key lives.
 //
 // Unparseable is fatal rather than silently defaulted, like the policy: an
 // operator who typed "24" meaning hours should be told, not given a key that
-// rotates every twenty-four nanoseconds.
+// rotates every twenty-four nanoseconds. [validateTelemetryIdentity] is what
+// makes it fatal, at startup; this only parses.
 func telemetryIdentityRotation() (time.Duration, error) {
-	value := os.Getenv(telemetry.EnvIdentityRotationName)
-	if telemetryIdentityRotationFlag != nil && isFlagPassed("telemetry-identity-rotation") {
-		value = *telemetryIdentityRotationFlag
-	}
+	value, source := telemetryIdentityRotationValue()
 	if strings.TrimSpace(value) == "" {
 		return telemetry.DefaultKeyRotation, nil
 	}
 	rotation, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", telemetry.EnvIdentityRotationName, err)
+		return 0, fmt.Errorf("%s: %w", source, err)
 	}
 	return rotation, nil
 }
 
+// validateTelemetryIdentity refuses a start whose identity settings telemetry
+// cannot use: a policy this server does not know and, when no key is
+// configured, a rotation that does not parse or lies outside what a generated
+// key may live (register row IDN-009, issue 957). Each refusal names the flag
+// or the variable that held the value.
+//
+// [startTelemetry] hands it to telemetry.Start as the check Start asks once it
+// knows telemetry is on, so a setting is judged only when telemetry would
+// export under it: a typo beside telemetry that is off, or vetoed by
+// OTEL_SDK_DISABLED, refuses nothing. The readers below keep their
+// record-nothing answer to the same values as the inner guard, which is the
+// answer a start with telemetry off, one this never ran for, still gets from
+// them.
+//
+// With a key configured the rotation is not judged, as [identityKeyring] does
+// not read it: a key the operator supplied is theirs to rotate, so an interval
+// beside it is ignored whatever it says, and refusing the start over it would
+// let a setting documented as ignored veto the one the operator relies on.
+func validateTelemetryIdentity() error {
+	if _, err := telemetryIdentityPolicy(); err != nil {
+		return err
+	}
+	if telemetryIdentityKey() != "" {
+		return nil
+	}
+	rotation, err := telemetryIdentityRotation()
+	if err != nil {
+		return err
+	}
+	if err = telemetry.CheckKeyRotation(rotation); err != nil {
+		_, source := telemetryIdentityRotationValue()
+		return fmt.Errorf("%s: %w", source, err)
+	}
+	return nil
+}
+
 // identityKeyring returns the process's keyring, building it the first time.
 //
-// A failure records nothing rather than stopping the process, matching every
-// other decision in this file: telemetry that cannot pseudonymize must not fall
-// back to naming people, and must not take the server down either.
+// A failure records nothing rather than stopping the process, as every reader
+// here does once the process is running; the startup refusal is
+// [validateTelemetryIdentity]'s. Telemetry that cannot pseudonymize must not
+// fall back to naming people, and must not take a running server down either.
 func identityKeyring() *Keyring {
 	identityKeyringOnce.Do(func() {
 		secret := telemetryIdentityKey()
@@ -190,16 +249,22 @@ var telemetryIdentityFlag *string
 // operator's decision about their own users, and a default that decides for
 // them is the wrong default whichever way it points.
 //
-// An unparseable value is fatal rather than silently defaulted. Falling back to
+// An unparseable value is fatal rather than silently defaulted, and
+// [validateTelemetryIdentity] is what makes it so, at startup. Falling back to
 // none would leave an operator who typed "pseudonimous" believing they had
 // per-user correlation, looking at an empty dashboard, with nothing anywhere
-// saying why.
+// saying why. The error names the flag when it was passed and the variable
+// otherwise, the one the operator wrote the value in.
 func telemetryIdentityPolicy() (telemetry.IdentityPolicy, error) {
-	value := os.Getenv(telemetry.EnvIdentityName)
+	value, source := config.Getenv(telemetryIdentitySetting), telemetry.EnvIdentityName
 	if telemetryIdentityFlag != nil && isFlagPassed("telemetry-identity") {
-		value = *telemetryIdentityFlag
+		value, source = *telemetryIdentityFlag, "--telemetry-identity"
 	}
-	return telemetry.ParseIdentityPolicy(value)
+	policy, err := telemetry.ParseIdentityPolicy(value)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", source, err)
+	}
+	return policy, nil
 }
 
 // newUserAttributer connects the identity policy to the identity this server
@@ -276,11 +341,12 @@ func identityRedactor() *telemetry.Redactor {
 // answers nothing.
 //
 // A policy this server cannot parse is reported and treated as none. That is
-// the opposite of what [telemetryIdentityPolicy] does for a startup check, and
+// the opposite of what [validateTelemetryIdentity] does with it at startup, and
 // deliberately so: by the time a server is registering middleware it is already
 // running, and the safe answer to "I do not understand your privacy setting" is
 // to record less rather than to guess or to crash mid-startup. The startup
-// validation is where a typo is meant to be caught loudly.
+// check is where a typo is caught loudly, whenever telemetry is on; with it
+// off the value reaches this unchecked, and recording nothing is all it costs.
 func telemetryUsers() mcpotel.UserAttributer {
 	redactor := identityRedactor()
 	if redactor == nil {

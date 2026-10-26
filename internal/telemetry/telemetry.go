@@ -22,6 +22,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	nooptrace "go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // Protocol selects the OTLP transport.
@@ -72,6 +74,16 @@ type Config struct {
 	DropToolNameFromMetrics bool
 	// Signals selects what is exported. A zero value means all three.
 	Signals Signals
+	// Check, when set, is asked once Start knows telemetry is on, before
+	// anything is built or installed. An error it returns is what Start
+	// returns, unwrapped, with nothing started.
+	//
+	// It is how the caller refuses a start over a setting of its own that
+	// telemetry reads, at the one point that knows whether telemetry will run:
+	// neither when it is off nor under OTEL_SDK_DISABLED, so a setting nothing
+	// is exported under refuses nothing, and with the switch and the veto each
+	// read once. The server's identity settings are the case (issue 957).
+	Check func() error
 }
 
 // Signals selects which OTel signals are exported.
@@ -131,6 +143,11 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	if SDKDisabledByEnv() {
 		slog.InfoContext(ctx, "telemetry suppressed by OTEL_SDK_DISABLED", "component", "telemetry")
 		return &Provider{}, nil
+	}
+	if cfg.Check != nil {
+		if err := cfg.Check(); err != nil {
+			return nil, err
+		}
 	}
 
 	// Before anything can fail, so that whatever the SDK says about the
@@ -226,6 +243,11 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 // whatever else a host has exported.
 const EnvSwitchName = "GITLAB_MCP_TELEMETRY"
 
+// envSwitchSetting is the same variable without its prefix, the name
+// [config.Getenv] reads it under, which puts it on the configuration
+// package's list beside every other setting this project defines (issue 957).
+const envSwitchSetting = "TELEMETRY"
+
 // EnvSwitch reports whether the environment asks for telemetry.
 //
 // Parsed with the same grammar as every other boolean here, which is stricter
@@ -235,7 +257,7 @@ const EnvSwitchName = "GITLAB_MCP_TELEMETRY"
 // deliberate: two booleans in one configuration surface that disagree about
 // whether "1" means true would be worse than either rule alone.
 func EnvSwitch() bool {
-	return envBool(EnvSwitchName)
+	return parseEnvBool(EnvSwitchName, config.Getenv(envSwitchSetting))
 }
 
 // SDKDisabledByEnv reports whether the specification's own kill switch is set.
@@ -277,10 +299,13 @@ func SDKDisabledByEnv() bool {
 // anyway. An unrecognized value is warned about, per the specification's
 // SHOULD, and then treated as false.
 func envBool(key string) bool {
-	raw, ok := os.LookupEnv(key)
-	if !ok {
-		return false
-	}
+	return parseEnvBool(key, os.Getenv(key))
+}
+
+// parseEnvBool is [envBool]'s grammar applied to raw, the value of the
+// variable key names, which the warning reports by that name. An unset
+// variable and an empty one read alike, so the value alone decides.
+func parseEnvBool(key, raw string) bool {
 	value := strings.TrimSpace(raw)
 	// A chain of ifs rather than a tagless switch: Go's coverage records no
 	// block for a case expression, so mutation testing reads every mutant of

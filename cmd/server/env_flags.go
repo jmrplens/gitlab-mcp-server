@@ -4,7 +4,6 @@ import (
 	"flag"
 	"os"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
@@ -17,8 +16,10 @@ import (
 // Each of these is consumed somewhere that reads the process environment and
 // nothing else: parseLogLevel takes config.Getenv("LOG_LEVEL"),
 // clientcompat.Enabled reads CLIENT_COMPAT, toolutil.IsYOLOMode reads GITLAB_MCP_YOLO_MODE
-// and AUTOPILOT, and the upload limit is read per request inside the tools that
-// enforce it. Threading a flag value to each of those would mean four new
+// and AUTOPILOT, and the upload limit is read by config.UploadMaxFileSizeFromEnv,
+// which stdio's config.Load and HTTP mode's overlay both call, so a malformed
+// value is refused the same way from the flag and from the variable (issue
+// 1170). Threading a flag value to each of those would mean four new
 // parameters through four unrelated call paths, and it would create a second
 // source of truth in every one of them: a reader that consults the flag and a
 // reader that consults the variable, disagreeing the first time somebody adds a
@@ -50,22 +51,22 @@ var envBackedFlags = []struct {
 }{
 	{
 		flagName: "log-level",
-		envName:  config.EnvPrefix + "LOG_LEVEL",
+		envName:  "GITLAB_MCP_LOG_LEVEL",
 		usage:    "Logging verbosity: debug, info, warn or error",
 	},
 	{
 		flagName: "client-compat",
-		envName:  config.EnvPrefix + "CLIENT_COMPAT",
+		envName:  "GITLAB_MCP_CLIENT_COMPAT",
 		usage:    "Per-client response compatibility: auto (default) or off",
 	},
 	{
 		flagName: "upload-max-file-size",
-		envName:  config.EnvPrefix + "UPLOAD_MAX_FILE_SIZE",
+		envName:  "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE",
 		usage:    "Largest local file the upload and file-read tools accept: a byte count, or one with a KB, MB or GB suffix (default 2GB, at most 1024GB)",
 	},
 	{
 		flagName: "yolo-mode",
-		envName:  config.EnvPrefix + "YOLO_MODE",
+		envName:  "GITLAB_MCP_YOLO_MODE",
 		usage:    "Skip the confirmation prompt on destructive actions: true or false",
 	},
 	{
@@ -80,8 +81,16 @@ var envBackedFlags = []struct {
 	},
 	{
 		flagName: "pprof-addr",
-		envName:  config.EnvPrefix + "PPROF_ADDR",
+		envName:  "GITLAB_MCP_PPROF_ADDR",
 		usage:    "Serve Go's profiling handlers (net/http/pprof) on this loopback address, e.g. 127.0.0.1:6060; empty serves nothing. Refused unless the host is loopback",
+	},
+	{
+		// INV-017 asks a flag of a limit in HTTP mode, and the listen
+		// ceiling had none (issue 957). It is read once per server built, on
+		// either transport, so writing the variable is the whole of it.
+		flagName: "max-listen-streams",
+		envName:  maxListenStreamsEnv,
+		usage:    "Concurrent subscriptions/listen streams one credential may hold open (default 64; 0 removes this ceiling, and the process-wide one of 512 stays). A value that is not a whole number of 0 or more warns and keeps the default",
 	},
 }
 

@@ -104,7 +104,7 @@ var httpOnlyFlags = map[string]httpOnlyFlag{
 	"rate-limit-rps":             {stdioVariable: "GITLAB_MCP_RATE_LIMIT_RPS"},
 	"rate-limit-burst":           {stdioVariable: "GITLAB_MCP_RATE_LIMIT_BURST"},
 	"max-http-clients":           {},
-	"revalidate-interval":        {},
+	"revalidate-interval":        {stdioVariable: "GITLAB_MCP_SESSION_REVALIDATE_INTERVAL"},
 	"pool-idle-timeout":          {},
 	"auth-mode":                  {},
 	"public-url":                 {},
@@ -235,6 +235,45 @@ const (
 	stdioWithheldLine         = "a flag withholding part of what this server serves was passed to a stdio server, which reads it in HTTP mode only, so the flag has no effect here and this deployment will not be started with it: set the variable named instead and remove the flag"
 	stdioInstanceLine         = "--gitlab-url names no instance this stdio server connects to: stdio connects to the one GITLAB_URL names, https://gitlab.com when it is unset, and sends GITLAB_TOKEN there, so this deployment will not be started with the flag: set GITLAB_URL to the instance and remove the flag"
 )
+
+// The two lines [reportStdioIgnoredVariables] writes, spelled out for the
+// reason the four above are, and read off the real binary's stderr by
+// test/e2e/stdio as those are.
+const (
+	stdioIgnoredVariablesLine     = "these variables configure settings only HTTP mode has, so a stdio server does not read them and they have no effect"
+	stdioAutoIgnoredVariablesLine = "--transport=auto chose stdio, which has none of the settings these variables configure, so they have no effect on this run"
+)
+
+// reportStdioIgnoredVariables tells the operator of a stdio run which of the
+// variables its environment sets configure a setting only HTTP mode has, the
+// pool, the stateful session, the drain, the authentication gate and its
+// budgets, the OAuth verifier and its metadata ([config.HTTPOnlyEnvUses]),
+// which the run does not read. It is the variables' half of what
+// [reportStdioIgnoredFlags] says about the flags (issue 1171).
+//
+// The line is WARN, and INFO under --transport=auto, where the flag of a
+// setting stdio does not have is named at INFO too: that operator wrote one
+// configuration for either transport. The run never refuses on one of these,
+// since none of them withholds part of what the server serves or names the
+// instance the token is sent to, and those are the costs a refusal is kept
+// for: stdio serves the same catalog and dials the instance GITLAB_URL names
+// whatever they say. Stdio used to parse most of them and refuse to start on a
+// value it would never have used, so a variable the same shell exported for an
+// HTTP deployment beside it stopped the stdio process.
+func reportStdioIgnoredVariables(choice transportDecision) {
+	if choice.HTTP {
+		return
+	}
+	ignored := config.HTTPOnlyEnvUses()
+	if len(ignored) == 0 {
+		return
+	}
+	if choice.Inference != "" {
+		slog.Info(stdioAutoIgnoredVariablesLine, "variables", ignored)
+		return
+	}
+	slog.Warn(stdioIgnoredVariablesLine, "variables", ignored)
+}
 
 // reportStdioIgnoredFlags tells the operator of a stdio run which of the flags
 // it was given only HTTP mode reads, and reports whether startup may continue.

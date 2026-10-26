@@ -176,18 +176,18 @@ type UserIdentity struct {
 func (u UserIdentity) Resolved() bool { return u.UserID != "" }
 
 // defaultMaxSize is the fallback number of HTTP client sessions retained when
-// the operator does not configure a pool size.
-const defaultMaxSize = 100
+// the operator does not configure a pool size, the register's as config's is.
+const defaultMaxSize = tenancy.PoolSize // register row POL-001
 
 // DefaultRevalidateInterval is the default period between token re-validation
 // checks via a lightweight GitLab API call.
-const DefaultRevalidateInterval = 15 * time.Minute
+const DefaultRevalidateInterval = tenancy.RevalidateInterval // register row ADM-009
 
 // DefaultIdleTimeout is how long an entry may go unused before the pool
 // reclaims it. Without it an abandoned entry survives until enough distinct
 // token+URL pairs push it out of the LRU, holding a fully registered server
 // and drawing a revalidation ping against GitLab every interval, forever.
-const DefaultIdleTimeout = 1 * time.Hour
+const DefaultIdleTimeout = tenancy.PoolIdleTimeout // register row POL-004
 
 // DefaultMaxCredentialAge is the longest an entry keeps serving on the
 // strength of a credential check made that long ago.

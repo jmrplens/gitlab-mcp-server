@@ -4,7 +4,9 @@ package httpe2e
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -272,6 +274,73 @@ func TestTelemetry_OffByDefaultOverHTTP(t *testing.T) {
 	}
 	if _, present := card["telemetry"]; present {
 		t.Errorf("the card carries a telemetry block with telemetry off: %s", got.body)
+	}
+}
+
+// TestTelemetry_AnUnusableIdentitySetting_RefusesToStartOverHTTP pins the
+// refusal register row IDN-009 states (issue 957) on the transport a hosted
+// deployment uses, through the variable and through the flag. A policy the
+// server does not know, or a rotation that is not a duration or lies past
+// thirty days, used to start a server that recorded nothing about callers,
+// and the only sign of why was in ERROR lines of its log. With telemetry on
+// the start is refused now, before the listener opens, and the refusal names
+// what held the value: the flag when it was passed, the variable otherwise.
+func TestTelemetry_AnUnusableIdentitySetting_RefusesToStartOverHTTP(t *testing.T) {
+	base := []string{"--http", "--http-addr=127.0.0.1:0", "--gitlab-url=https://gitlab.example.com"}
+	// The output is the JSON log, where the quotes around a value the error
+	// quotes are escaped, so each refusal is matched up to the value.
+	for _, tc := range []struct {
+		name  string
+		env   map[string]string
+		flags []string
+		says  string
+	}{
+		{
+			name: "the policy's variable",
+			env:  map[string]string{"GITLAB_MCP_TELEMETRY_IDENTITY": "pseudonimous"},
+			says: "GITLAB_MCP_TELEMETRY_IDENTITY: unknown identity policy ",
+		},
+		{
+			name:  "the policy's flag",
+			flags: []string{"--telemetry-identity=pseudonimous"},
+			says:  "--telemetry-identity: unknown identity policy ",
+		},
+		{
+			name: "the rotation's variable",
+			env:  map[string]string{"GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION": "721h"},
+			says: "GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION: telemetry identity key rotation 721h0m0s is out of range",
+		},
+		{
+			name:  "the rotation's flag",
+			flags: []string{"--telemetry-identity-rotation=24"},
+			says:  "--telemetry-identity-rotation: time: missing unit in duration ",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := telemetryEnv()
+			maps.Copy(env, tc.env)
+			out, err := runServerWithEnvExpectingExit(t, serverBinary(t), env, append(slices.Clone(base), tc.flags...)...)
+			if err == nil {
+				t.Fatalf("the server started and exited cleanly; output:\n%s", out)
+			}
+			if !strings.Contains(out, tc.says) {
+				t.Errorf("the start was not refused with %q; output:\n%s", tc.says, out)
+			}
+			if strings.Contains(out, "telemetry enabled") {
+				t.Errorf("telemetry started under a setting it cannot use; output:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestTelemetry_AnIdentitySettingTelemetryDoesNotUse_RefusesNothingOverHTTP
+// is the other half: with telemetry off, the same policy the server does not
+// know starts a server that serves, since nothing is exported under it.
+// startServer fails the test on a server that does not come up healthy.
+func TestTelemetry_AnIdentitySettingTelemetryDoesNotUse_RefusesNothingOverHTTP(t *testing.T) {
+	srv := startServer(t, map[string]string{"GITLAB_MCP_TELEMETRY_IDENTITY": "pseudonimous"}, "--telemetry=false")
+	if got := srv.do(t, request{method: http.MethodGet, path: "/health"}); got.status != http.StatusOK {
+		t.Errorf("/health answered %d, want 200 from a server whose telemetry is off", got.status)
 	}
 }
 

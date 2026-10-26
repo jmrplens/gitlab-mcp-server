@@ -190,6 +190,12 @@ func TestValidate_CodeRanges(t *testing.T) {
 // whose decisions are about something else, not one naming a decision it does
 // not record, not a decided row following a row it does not partner, and not
 // one following a row that names another partner.
+//
+// A zero refused at startup or replaced by the default passes without a
+// finding too when the record its ZeroBy names decided it and the row records
+// that decision (issue 958), whether it is the row's own zero or the zero of
+// one of its settings, and not when the row records something else. A ZeroBy
+// on a row whose every zero means off decides nothing, and is refused.
 func TestValidate_ZeroStated(t *testing.T) {
 	valued := func(d *Decision) { d.Disposition, d.Values = Valued, []string{"V"} }
 	follows := func(offWith, by string, decided ...string) func(d *Decision) {
@@ -198,6 +204,14 @@ func TestValidate_ZeroStated(t *testing.T) {
 			d.Key, d.Zero, d.OffWith, d.OffWithBy, d.Decided = KeyProcess, ZeroNotApplicable, offWith, by, decided
 		}
 	}
+	decidedZero := func(zero Zero, settings []SettingZero, by string, decided ...string) func(d *Decision) {
+		return func(d *Decision) {
+			valued(d)
+			d.Config = []string{"A", "B"}
+			d.Zero, d.SettingZeros, d.ZeroBy, d.Decided = zero, settings, by, decided
+		}
+	}
+	refusedBurst := []SettingZero{{Config: "B", Zero: ZeroRefused}}
 	runRule(t, checkZeroStated, []ruleCase{
 		{"a valued row with no zero meaning", row(valued), "does not say what zero means"},
 		{"zero switches it off", row(func(d *Decision) { valued(d); d.Zero = ZeroOff }), ""},
@@ -205,6 +219,37 @@ func TestValidate_ZeroStated(t *testing.T) {
 		{"zero selects the default", row(func(d *Decision) { valued(d); d.Zero = ZeroSelectsDefault }), "does not mean off"},
 		{"another row's zero", row(func(d *Decision) { valued(d); d.Zero, d.OffWith = ZeroOff, "PROC" }), "does not mean off"},
 		{"recorded", row(func(d *Decision) { valued(d); d.Zero, d.Findings = ZeroRefused, []string{"F-34"} }), ""},
+		{"zero refuses startup, decided", row(decidedZero(ZeroRefused, nil, "issue 958", "issue 958")), ""},
+		{"zero selects the default, decided", row(decidedZero(ZeroSelectsDefault, nil, "issue 958", "ADR-0020", "issue 958")), ""},
+		{"zero refuses startup, undecided", row(decidedZero(ZeroRefused, nil, "")), "does not mean off"},
+		{
+			"zero refuses startup, by a decision it does not record",
+			row(decidedZero(ZeroRefused, nil, "issue 958", "ADR-0020")), "does not mean off",
+		},
+		{"a setting's zero refuses startup", row(decidedZero(ZeroOff, refusedBurst, "")), "does not mean off"},
+		{
+			"a setting's zero selects the default",
+			row(decidedZero(ZeroOff, []SettingZero{{Config: "B", Zero: ZeroSelectsDefault}}, "")), "does not mean off",
+		},
+		{"a setting's zero refuses startup, decided", row(decidedZero(ZeroOff, refusedBurst, "issue 958", "issue 958")), ""},
+		{
+			"zero refuses startup beside a setting it switches off, undecided",
+			row(decidedZero(ZeroRefused, []SettingZero{{Config: "B", Zero: ZeroOff}}, "")), "does not mean off",
+		},
+		{
+			"zero refuses startup beside a setting it switches off, decided",
+			row(decidedZero(ZeroRefused, []SettingZero{{Config: "B", Zero: ZeroOff}}, "issue 958", "issue 958")), "",
+		},
+		{
+			"a setting's zero refuses startup, recorded",
+			row(func(d *Decision) { decidedZero(ZeroOff, refusedBurst, "")(d); d.Findings = []string{"F-34"} }), "",
+		},
+		{"a decision for a zero that means off", row(decidedZero(ZeroOff, nil, "issue 958", "issue 958")), "every zero it states means off"},
+		{
+			"a decision for a setting's zero that means off",
+			row(decidedZero(ZeroOff, []SettingZero{{Config: "B", Zero: ZeroOffKeepsCount}}, "issue 958", "issue 958")),
+			"every zero it states means off",
+		},
 		{"a ruled row", row(nil), ""},
 		{"a partner following its row, decided", row(follows("PAIRED", "issue 951", "issue 951")), ""},
 		{"a partner following its row, undecided", row(follows("PAIRED", "")), "does not mean off"},
@@ -262,10 +307,20 @@ func TestValidate_ClassConsistent(t *testing.T) {
 }
 
 // TestValidate_ThroughConfig holds a configurable value to the configuration
-// package's rule, and every other way in to a finding.
+// package's rule, a value only an environment variable reaches in HTTP mode to
+// a finding, and one only stdio's environment reaches to its variables and its
+// malformed-value policy on a row that exists on stdio, with no flag.
+//
+// The last is what issue 957 made of the local allow-lists: INV-017 asks a
+// flag of a setting in HTTP mode, and HTTP mode never reads one of theirs,
+// since a server reached over HTTP refuses every caller-supplied local path
+// before the list is consulted (RQB-008).
 func TestValidate_ThroughConfig(t *testing.T) {
 	configurable := func(d *Decision) {
 		d.Source, d.Flags, d.Envs, d.Malformed = Configurable, []string{"--x"}, []string{"GITLAB_MCP_X"}, RefuseStartup
+	}
+	stdioEnv := func(d *Decision) {
+		d.Source, d.Envs, d.Malformed, d.StdioKey = StdioEnvOnly, []string{"GITLAB_MCP_X"}, SkipEntry, KeyProcess
 	}
 	runRule(t, checkThroughConfig, []ruleCase{
 		{"configurable through the package", row(configurable), ""},
@@ -273,11 +328,139 @@ func TestValidate_ThroughConfig(t *testing.T) {
 		{"no variable", row(func(d *Decision) { configurable(d); d.Envs = nil }), "no GITLAB_MCP_ variable"},
 		{"no malformed policy", row(func(d *Decision) { configurable(d); d.Malformed = MalformedNone }), "no malformed-value policy"},
 		{"an unprefixed variable", row(func(d *Decision) { d.Envs = []string{"MAX_THINGS"} }), "MAX_THINGS does not carry"},
-		{"an environment variable alone", row(func(d *Decision) { d.Source = EnvOnly }), "outside the configuration package"},
-		{"a Go option alone", row(func(d *Decision) { d.Source = OptionOnly }), "outside the configuration package"},
+		{"an environment variable alone", row(func(d *Decision) { d.Source = EnvOnly }), "with no flag and no finding"},
 		{"an environment variable alone, recorded", row(func(d *Decision) { d.Source, d.Findings = EnvOnly, []string{"F-13"} }), ""},
-		{"a Go option alone, recorded", row(func(d *Decision) { d.Source, d.Findings = OptionOnly, []string{"F-16"} }), ""},
+		// F-16 recorded bounds with no reason and defaults written twice, and
+		// no longer the value only a Go option reached, so it excuses no value
+		// only an environment variable reaches.
+		{
+			"an environment variable alone, carrying F-16",
+			row(func(d *Decision) { d.Source, d.Findings = EnvOnly, []string{"F-16"} }), "with no flag and no finding",
+		},
+		{"stdio's environment alone", row(stdioEnv), ""},
+		{
+			"stdio's environment alone, with a flag",
+			row(func(d *Decision) { stdioEnv(d); d.Flags = []string{"--x"} }), "stdio's environment alone, with a flag",
+		},
+		{
+			"stdio's environment alone, with no variable",
+			row(func(d *Decision) { stdioEnv(d); d.Envs = nil }), "stdio's environment alone, with no GITLAB_MCP_ variable",
+		},
+		{
+			"stdio's environment alone, with no malformed policy",
+			row(func(d *Decision) { stdioEnv(d); d.Malformed = MalformedNone }), "stdio's environment alone, with no malformed-value policy",
+		},
+		{
+			"stdio's environment alone, on a row stdio does not have",
+			row(func(d *Decision) { stdioEnv(d); d.StdioKey = KeyNone }), "on a row that does not exist on stdio",
+		},
+		// A finding excuses nothing here: the source states that HTTP mode
+		// never reads the setting, which is a fact about the row rather than a
+		// departure, so a row it does not describe is wrong rather than
+		// recorded.
+		{
+			"stdio's environment alone, with a flag and F-13",
+			row(func(d *Decision) { stdioEnv(d); d.Flags, d.Findings = []string{"--x"}, []string{"F-13"} }), "with a flag",
+		},
+		// A value only a Go option reaches is no operator's configuration:
+		// checkFixedReasoned holds it to its reason, as it holds a constant.
+		{"a Go option alone", row(func(d *Decision) { d.Source = OptionOnly }), ""},
 		{"a constant", row(func(d *Decision) { d.Source = Constant }), ""},
+		// A row with no value source of its own, a request bound or a rule,
+		// may still name the flag or the variable an operator sets it with,
+		// and is then held to saying what a value that does not parse does
+		// (issue 1170): the upload limit's row named both and stated none.
+		{"no value source and no setting", row(nil), ""},
+		{
+			"no value source, a flag and a policy",
+			row(func(d *Decision) { d.Flags, d.Malformed = []string{"--x"}, RefuseStartup }), "",
+		},
+		{
+			"no value source and a flag with no policy",
+			row(func(d *Decision) { d.Flags = []string{"--x"} }), "names a setting with no malformed-value policy",
+		},
+		{
+			"no value source and a variable with no policy",
+			row(func(d *Decision) { d.Envs = []string{"GITLAB_MCP_X"} }), "names a setting with no malformed-value policy",
+		},
+	})
+}
+
+// TestValidate_MalformedDecided holds a malformed value that does not refuse
+// startup to a recorded decision or a finding (issue 957): warning and keeping
+// the default, skipping an entry and reading the value as off each pass when
+// the record MalformedBy names decided it and the row records that decision,
+// or when the row carries the finding that records the departure from
+// INV-017, and not when the row records something else. Refusing startup, a
+// switch every value of which means something and a value no operator writes
+// depart from nothing, and a MalformedBy on any of them decides nothing, so it
+// is refused.
+func TestValidate_MalformedDecided(t *testing.T) {
+	policy := func(m Malformed, by string, decided ...string) func(d *Decision) {
+		return func(d *Decision) { d.Malformed, d.MalformedBy, d.Decided = m, by, decided }
+	}
+	runRule(t, checkMalformedDecided, []ruleCase{
+		{"refusing startup", row(policy(RefuseStartup, "")), ""},
+		{"accepting any value", row(policy(AcceptsAny, "")), ""},
+		{"no policy", row(nil), ""},
+		{"warning and keeping the default, undecided", row(policy(WarnKeepDefault, "")), "does not refuse startup, with no decision or finding"},
+		{"skipping an entry, undecided", row(policy(SkipEntry, "")), "does not refuse startup, with no decision or finding"},
+		{"reading as off, undecided", row(policy(ReadsAsOff, "")), "does not refuse startup, with no decision or finding"},
+		{"warning and keeping the default, decided", row(policy(WarnKeepDefault, "issue 957", "issue 957")), ""},
+		{"skipping an entry, decided", row(policy(SkipEntry, "issue 957", "issue 957")), ""},
+		{"reading as off, decided", row(policy(ReadsAsOff, "issue 957", "ADR-0022", "issue 957")), ""},
+		{
+			"warning and keeping the default, by a decision it does not record",
+			row(policy(WarnKeepDefault, "issue 957", "ADR-0022")), "does not refuse startup, with no decision or finding",
+		},
+		{
+			"warning and keeping the default, decided about something else",
+			row(policy(WarnKeepDefault, "", "issue 957")), "does not refuse startup, with no decision or finding",
+		},
+		{
+			"warning and keeping the default, recorded",
+			row(func(d *Decision) { d.Malformed, d.Findings = WarnKeepDefault, []string{"F-13"} }), "",
+		},
+		// F-34 records a departure from INV-015, which says nothing about a
+		// value that does not parse.
+		{
+			"warning and keeping the default, carrying a finding about zero",
+			row(func(d *Decision) { d.Malformed, d.Findings = WarnKeepDefault, []string{"F-34"} }),
+			"does not refuse startup, with no decision or finding",
+		},
+		{
+			"a decision for a value that refuses startup",
+			row(policy(RefuseStartup, "issue 957", "issue 957")), "decided by issue 957, and a malformed value refuses startup or is none",
+		},
+		{
+			"a decision for a switch every value of which means something",
+			row(policy(AcceptsAny, "issue 957", "issue 957")), "decided by issue 957, and a malformed value refuses startup or is none",
+		},
+		{
+			"a decision for no policy",
+			row(policy(MalformedNone, "issue 957", "issue 957")), "decided by issue 957, and a malformed value refuses startup or is none",
+		},
+	})
+}
+
+// TestValidate_FixedReasoned holds a value no operator setting reaches, a
+// constant or a Go option's, to saying why (issue 958), and refuses that
+// reason on a value a setting reaches or one derived from another's.
+func TestValidate_FixedReasoned(t *testing.T) {
+	from := func(source Source, fixed string) func(d *Decision) {
+		return func(d *Decision) { d.Source, d.Fixed = source, fixed }
+	}
+	runRule(t, checkFixedReasoned, []ruleCase{
+		{"a constant with its reason", row(from(Constant, "why")), ""},
+		{"a constant with none", row(from(Constant, "")), "no reason it is fixed"},
+		{"a Go option with its reason", row(from(OptionOnly, "why")), ""},
+		{"a Go option with none", row(from(OptionOnly, "")), "no reason it is fixed"},
+		{"a configurable value", row(from(Configurable, "")), ""},
+		{"a configurable value said to be fixed", row(from(Configurable, "why")), "is not a constant or a Go option's"},
+		{"an environment variable said to be fixed", row(from(EnvOnly, "why")), "is not a constant or a Go option's"},
+		{"stdio's environment said to be fixed", row(from(StdioEnvOnly, "why")), "is not a constant or a Go option's"},
+		{"a derived value said to be fixed", row(from(Derived, "why")), "is not a constant or a Go option's"},
+		{"no value", row(nil), ""},
 	})
 }
 
@@ -289,6 +472,61 @@ func TestValidate_CapacityStated(t *testing.T) {
 		{"refusing the newcomer", row(func(d *Decision) { d.Kind, d.Source, d.AtCapacity = Ceiling, Constant, RefuseNewcomer }), ""},
 		{"a ceiling nothing bounds", row(func(d *Decision) { d.Kind = Ceiling }), ""},
 		{"a rule", row(func(d *Decision) { d.Source = Constant }), ""},
+	})
+}
+
+// TestValidate_CapacityFits puts each capacity behavior to the rule issue 958
+// stated for when it applies: only what can fill states one; a wait is a
+// ceiling's; reclaiming is from a key a caller holds; the oldest record is
+// evicted only from a table kept before admission whose records have a
+// lifetime or a refill; counting stops only where the newcomer it no longer
+// counts is let through silently; and a holding is taken across keys only
+// from a table, whose decision checkAcrossKeys asks for.
+func TestValidate_CapacityFits(t *testing.T) {
+	at := func(kind Kind, key Key, table bool, capacity Capacity) func(d *Decision) {
+		return func(d *Decision) { d.Kind, d.Key, d.Table, d.AtCapacity = kind, key, table, capacity }
+	}
+	refusing := func(change func(d *Decision), channels ...Channel) func(d *Decision) {
+		return func(d *Decision) {
+			change(d)
+			for _, c := range channels {
+				d.Refusals = append(d.Refusals, Refusal{Methods: []string{MethodGate}, Channel: c, Answer: NoAnswer})
+			}
+		}
+	}
+	runRule(t, checkCapacityFits, []ruleCase{
+		{"no capacity", row(nil), ""},
+		{"a ceiling refusing the newcomer", row(at(Ceiling, KeyProcess, false, RefuseNewcomer)), ""},
+		{"a rate refusing the newcomer", row(at(Rate, KeyProcess, false, RefuseNewcomer)), ""},
+		{"a table refusing the newcomer", row(at(Rule, KeySession, true, RefuseNewcomer)), ""},
+		{"a rule refusing the newcomer", row(at(Rule, KeySession, false, RefuseNewcomer)), "holds nothing that fills"},
+		{"a lifetime that is no table", row(at(Lifetime, KeyEntry, false, EvictOldest)), "holds nothing that fills"},
+		{"a ceiling waiting for a slot", row(at(Ceiling, KeyProcess, false, WaitThenRefuse)), ""},
+		{"a rate waiting for room", row(at(Rate, KeyProcess, false, WaitThenRefuse)), "waits for room, and is not a ceiling"},
+		{"reclaiming on the entry", row(at(Ceiling, KeyEntry, true, ReclaimOwnThenRefuse)), ""},
+		{"reclaiming on a source", row(at(Budget, KeySource, true, ReclaimOwnThenRefuse)), ""},
+		{"reclaiming on the process", row(at(Ceiling, KeyProcess, false, ReclaimOwnThenRefuse)), "on the process key, which no caller holds"},
+		{"reclaiming on a request", row(at(Ceiling, KeyRequest, false, ReclaimOwnThenRefuse)), "on the request key, which no caller holds"},
+		{"evicting a refused token's oldest record", row(at(Lifetime, KeyRefused, true, EvictOldest)), ""},
+		{"evicting an address's oldest bucket", row(at(Rate, KeyAddress, true, EvictOldest)), ""},
+		{
+			"evicting the oldest verified identity",
+			row(at(Lifetime, KeyVerified, true, EvictOldest)), "on the verified key, where a record is a holding",
+		},
+		{"evicting the oldest count of a budget", row(at(Budget, KeyAddress, true, EvictOldest)), "a lifetime or a refill"},
+		{"evicting the oldest bucket of no table", row(at(Rate, KeyAddress, false, EvictOldest)), "a lifetime or a refill"},
+		{"stopping counting silently", row(refusing(at(Ceiling, KeyProcess, false, StopCounting), Silent)), ""},
+		{
+			"stopping counting, silently among others",
+			row(refusing(at(Ceiling, KeyProcess, false, StopCounting), Gate, Silent)), "",
+		},
+		{"stopping counting, saying nothing", row(at(Ceiling, KeyProcess, false, StopCounting)), "declares no silent refusal"},
+		{
+			"stopping counting aloud",
+			row(refusing(at(Ceiling, KeyProcess, false, StopCounting), Gate)), "declares no silent refusal",
+		},
+		{"taking across keys from a table", row(at(Ceiling, KeyProcess, true, EvictAcrossKeys)), ""},
+		{"taking across keys from no table", row(at(Ceiling, KeyProcess, false, EvictAcrossKeys)), "is not a table one is taken from"},
 	})
 }
 
@@ -346,6 +584,77 @@ func TestValidate_WellFormed(t *testing.T) {
 		{"a refusal with no answer", row(func(d *Decision) { d.Refusals = []Refusal{{Channel: RPC}} }), "no channel or no answer"},
 		{"an unknown partner", row(func(d *Decision) { d.Partner = "NONE" }), "partner NONE names no row"},
 		{"an unknown zero partner", row(func(d *Decision) { d.OffWith = "NONE" }), "follows NONE"},
+		{
+			"a zero decided by a record it keeps",
+			row(func(d *Decision) {
+				d.OffWithBy, d.ZeroBy, d.Decided = "issue 951", "issue 958", []string{"issue 951", "issue 958"}
+			}), "",
+		},
+		{
+			"a partner's zero decided by a record it does not keep",
+			row(func(d *Decision) { d.OffWithBy = "issue 951" }), "decided by issue 951, which it does not record",
+		},
+		{
+			"a zero decided by a record it does not keep",
+			row(func(d *Decision) { d.ZeroBy, d.Decided = "issue 958", []string{"ADR-0020"} }), "decided by issue 958, which it does not record",
+		},
+		{
+			"a malformed-value policy decided by a record it keeps",
+			row(func(d *Decision) { d.MalformedBy, d.Decided = "issue 957", []string{"ADR-0022", "issue 957"} }), "",
+		},
+		{
+			"a malformed-value policy decided by a record it does not keep",
+			row(func(d *Decision) { d.MalformedBy, d.Decided = "issue 957", []string{"ADR-0022"} }),
+			"its malformed-value policy is decided by issue 957, which it does not record",
+		},
+		{
+			"a setting's zero",
+			row(func(d *Decision) {
+				d.Config, d.SettingZeros = []string{"A", "B"}, []SettingZero{{Config: "B", Zero: ZeroRefused}}
+			}), "",
+		},
+		{
+			"the zero of a setting it does not have",
+			row(func(d *Decision) {
+				d.Config, d.SettingZeros = []string{"A", "B"}, []SettingZero{{Config: "C", Zero: ZeroRefused}}
+			}),
+			"the zero of C, which is not one of its settings",
+		},
+		{
+			"a setting's zero left unsaid",
+			row(func(d *Decision) { d.Config, d.SettingZeros = []string{"A", "B"}, []SettingZero{{Config: "B"}} }),
+			"the zero of B and does not say what it means",
+		},
+		{
+			"a setting's zero that agrees with the row's",
+			row(func(d *Decision) {
+				d.Config, d.Zero, d.SettingZeros = []string{"A", "B"}, ZeroOff, []SettingZero{{Config: "B", Zero: ZeroOff}}
+			}),
+			"the zero of B means what the row's own does",
+		},
+		{
+			"a setting's zero stated twice",
+			row(func(d *Decision) {
+				d.Config, d.Zero = []string{"A", "B"}, ZeroOff
+				d.SettingZeros = []SettingZero{{Config: "B", Zero: ZeroRefused}, {Config: "B", Zero: ZeroSelectsDefault}}
+			}),
+			"it states the zero of B twice",
+		},
+		{
+			"the zero of every setting",
+			row(func(d *Decision) {
+				d.Config, d.Zero = []string{"A"}, ZeroRefused
+				d.SettingZeros = []SettingZero{{Config: "A", Zero: ZeroOff}}
+			}),
+			"leaves none of its settings to the row's own zero",
+		},
+		{
+			"the zero of every setting but one",
+			row(func(d *Decision) {
+				d.Config, d.Zero = []string{"A", "B", "C"}, ZeroOff
+				d.SettingZeros = []SettingZero{{Config: "A", Zero: ZeroRefused}, {Config: "C", Zero: ZeroRefused}}
+			}), "",
+		},
 		{"an unknown finding", row(func(d *Decision) { d.Findings = []string{"F-99"} }), "F-99, which is not a finding"},
 		{"promoted with no function", row(func(d *Decision) { d.Disposition = Promoted }), "promoted with no function"},
 		{"promoted with a function", row(func(d *Decision) { d.Disposition, d.Functions = Promoted, []string{"F"} }), ""},
