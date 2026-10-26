@@ -14,9 +14,10 @@ const (
 	// membership can carry it.
 	membershipNoAdmin = "60 (Admin) is not a level a membership can carry: doc/api/project_members.md, group_members.md, invitations.md and access_requests.md list 0 (No access) through 50 (Owner) for adding, editing, inviting and approving; only the group member edit endpoint documents 60, and that field offers it"
 	// membershipNoAccessGrant: 0 (No access) is a level a membership reads
-	// back with, not one the add and edit endpoints grant; the handlers treat
-	// 0 as the field left unset and refuse the request before it leaves.
-	membershipNoAccessGrant = "0 (No access) is read back on a membership but never granted: doc/api/members.md lists it under valid access levels while the add and edit handlers (members.go, group_members.go) treat 0 as access_level left unset and refuse the call"
+	// back with, not one any write grants.
+	membershipNoAccessGrant = "0 (No access) is read back on a membership but never granted: no write route accepts it at v19.5.0-ee, and an access request approval answers it with 201 while the request stays pending, so the approvals refuse it before the request (docs/development/upstream-bugs.md row 110)"
+	// projectNoMinimalAccess: Minimal access is a group level.
+	projectNoMinimalAccess = "5 (Minimal access) is refused on a project in every edition at v19.5.0-ee: a project member, invitation, share and approval are held to Gitlab::Access.all_values, Guest (10) to Owner (50) (docs/development/upstream-bugs.md row 110)"
 	// memberRoleBaseLevels: a custom role is based on a role a member can
 	// hold, which leaves out both ends of AccessLevelValue and the minimal
 	// access level in between.
@@ -78,7 +79,10 @@ var acceptedEnumGaps = buildAcceptedEnumGaps()
 func buildAcceptedEnumGaps() map[string]string {
 	table := map[string]string{
 		// --- Membership access levels (AccessLevelValue) ---
+		"accessrequests.ApproveGroupInput.access_level=0":    membershipNoAccessGrant,
 		"accessrequests.ApproveGroupInput.access_level=60":   membershipNoAdmin,
+		"accessrequests.ApproveProjectInput.access_level=0":  membershipNoAccessGrant,
+		"accessrequests.ApproveProjectInput.access_level=5":  projectNoMinimalAccess,
 		"accessrequests.ApproveProjectInput.access_level=60": membershipNoAdmin,
 		"groupmembers.AddInput.access_level=60":              membershipNoAdmin,
 		"invites.GroupInvitesInput.access_level=60":          membershipNoAdmin,

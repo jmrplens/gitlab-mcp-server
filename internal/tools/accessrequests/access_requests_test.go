@@ -13,12 +13,16 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -214,7 +218,7 @@ func TestApproveProject_Success(t *testing.T) {
 	out, err := ApproveProject(context.Background(), client, ApproveProjectInput{
 		ProjectID:   toolutil.StringOrInt("10"),
 		UserID:      1,
-		AccessLevel: 30,
+		AccessLevel: new(30),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -616,7 +620,7 @@ func TestApproveGroup_WithAccessLevel(t *testing.T) {
 	out, err := ApproveGroup(context.Background(), client, ApproveGroupInput{
 		GroupID:     toolutil.StringOrInt("10"),
 		UserID:      2,
-		AccessLevel: 40,
+		AccessLevel: new(40),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1594,16 +1598,15 @@ func TestAccessRequests_ListPairsEachExtraWithItsOwnRequest(t *testing.T) {
 // carries one, and send no access_level at all when it does not.
 //
 // Only the request shows this. GitLab answers the same either way, so a test
-// reading the output cannot tell an omitted role from a zero one, and a zero
-// is what the endpoint refuses.
+// reading the output cannot tell an omitted role from a named one.
 func TestApprove_SendsTheAccessLevelOnlyWhenTheCallerNamedOne(t *testing.T) {
 	for _, testCase := range []struct {
 		name     string
-		level    int
+		level    *int
 		wantSent bool
 	}{
-		{name: "with_a_level", level: 40, wantSent: true},
-		{name: "without_a_level", level: 0},
+		{name: "with_a_level", level: new(40), wantSent: true},
+		{name: "without_a_level"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			for scope, approve := range map[string]func(*gitlabclient.Client) error{
@@ -1652,5 +1655,309 @@ func TestAccessRequests_ListPublishesNoRequestsForAnEmptyPage(t *testing.T) {
 	}
 	if out.AccessRequests != nil {
 		t.Errorf("AccessRequests = %+v, want none", out.AccessRequests)
+	}
+}
+
+// approvalGitLab is a mock of the four routes an approval can reach, which
+// records every request it is sent as "METHOD path". The group it serves is
+// group 5, a subgroup of group 3 when parentID is set and a top-level group
+// otherwise, and the requester, user 1, is a member of it after the approval
+// only when memberStatus is 200: GitLab answers an approval it could not save
+// with 201 and the unsaved requester, so the member read is where the two
+// differ.
+type approvalGitLab struct {
+	parentID     string
+	memberStatus int
+	// groupMissing answers the group read with 404, as GitLab does for a
+	// group the caller cannot see.
+	groupMissing bool
+	mu           sync.Mutex
+	requests     []string
+}
+
+// ServeHTTP answers one request and records it.
+func (g *approvalGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	g.mu.Lock()
+	g.requests = append(g.requests, r.Method+" "+r.URL.Path)
+	g.mu.Unlock()
+	member := `{"id":1,"username":"alice","name":"Alice","state":"active","access_level":5}`
+	switch r.Method + " " + r.URL.Path {
+	case "GET /api/v4/groups/5":
+		if g.groupMissing {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Group Not Found"}`)
+			return
+		}
+		parent := "null"
+		if g.parentID != "" {
+			parent = g.parentID
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":5,"full_path":"top/sub","parent_id":`+parent+`}`)
+	case "PUT /api/v4/groups/5/access_requests/1/approve", "PUT /api/v4/projects/10/access_requests/1/approve":
+		testutil.RespondJSON(w, http.StatusCreated, member)
+	case "GET /api/v4/groups/5/members/1":
+		if g.memberStatus != http.StatusOK {
+			testutil.RespondJSON(w, g.memberStatus, `{"message":"404 Not found"}`)
+			return
+		}
+		// The read answers with a field the approval does not, so a test
+		// can tell which of the two answers an output was built from.
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"username":"alice","name":"Alice","state":"active","access_level":5,"email":"read-back@example.com"}`)
+	default:
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
+	}
+}
+
+// sent returns the requests recorded so far.
+func (g *approvalGitLab) sent() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return slices.Clone(g.requests)
+}
+
+// approveThroughRoute calls one approval action through its catalog route,
+// which is how every surface reaches the handler, on a session of the given
+// tier.
+func approveThroughRoute(t *testing.T, gitlab *approvalGitLab, tier edition.Tier, tool string, args map[string]any) (any, error) {
+	t.Helper()
+	client := testutil.NewTestClient(t, gitlab)
+	client.SetTier(tier)
+	return accessRequestSpecsByTool(t, ActionSpecs(client))[tool].Route.Handler(t.Context(), args)
+}
+
+// TestApprove_LevelGitLabWouldNotGrant_IsRefusedBeforeTheApproval verifies
+// that an approval naming a level GitLab would not grant is refused before
+// the approval is sent (issue 1280).
+//
+// GitLab answers such an approval with 201 and the requester, as though it
+// had granted the level, while the request stays pending: the service sets
+// the level on the request, the save fails validation, and the unsaved
+// record is what the route presents. 0 is such a level everywhere, and this
+// server used to drop it instead, so GitLab applied its default and made the
+// requester a Developer; 5 is one on a project, on a session of the Free
+// tier, and on a subgroup; and 60 is not a membership level at all. A
+// subgroup is known only by reading the group, which is the one request a
+// refusal may follow.
+func TestApprove_LevelGitLabWouldNotGrant_IsRefusedBeforeTheApproval(t *testing.T) {
+	const (
+		project = "gitlab_access_request_approve_project"
+		group   = "gitlab_access_request_approve_group"
+	)
+	readGroup := []string{"GET /api/v4/groups/5"}
+	tests := []struct {
+		name     string
+		tool     string
+		tier     edition.Tier
+		parentID string
+		level    int
+		says     string
+		wantSent []string
+	}{
+		{name: "project_no_access", tool: project, level: 0, says: "omit access_level"},
+		{name: "project_minimal_access", tool: project, level: 5, says: "omit access_level"},
+		{name: "project_admin", tool: project, level: 60, says: "omit access_level"},
+		{name: "group_no_access", tool: group, tier: edition.Ultimate, level: 0, says: "omit access_level"},
+		{name: "group_admin", tool: group, tier: edition.Ultimate, level: 60, says: "omit access_level"},
+		{name: "group_minimal_access_on_the_free_tier", tool: group, tier: edition.Free, level: 5, says: "top-level group"},
+		{name: "group_minimal_access_on_a_subgroup", tool: group, tier: edition.Ultimate, parentID: "3", level: 5, says: "subgroup", wantSent: readGroup},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gitlab := &approvalGitLab{parentID: tt.parentID, memberStatus: http.StatusOK}
+			scope := map[string]any{"project_id": "10"}
+			if tt.tool == group {
+				scope = map[string]any{"group_id": "5"}
+			}
+			scope["user_id"] = 1
+			scope["access_level"] = tt.level
+			result, err := approveThroughRoute(t, gitlab, tt.tier, tt.tool, scope)
+			if err == nil {
+				t.Fatalf("approving at level %d answered %+v with no error, want a refusal", tt.level, result)
+			}
+			if !strings.Contains(err.Error(), tt.says) {
+				t.Errorf("refusal = %q, want one saying %q", err, tt.says)
+			}
+			if got := gitlab.sent(); !slices.Equal(got, tt.wantSent) {
+				t.Errorf("requests sent = %v, want %v", got, tt.wantSent)
+			}
+		})
+	}
+}
+
+// TestApproveGroup_MinimalAccessLeftPending_IsNotReportedApproved verifies
+// that a Minimal access approval GitLab answers with 201 while the requester
+// is still not a member is answered as an error saying the request is still
+// pending, not as an approval (issue 1280). That is what a top-level group
+// whose license does not include the role does, which a session's tier does
+// not tell apart on GitLab.com, where the tier is the best plan the
+// credential reaches rather than the group's.
+func TestApproveGroup_MinimalAccessLeftPending_IsNotReportedApproved(t *testing.T) {
+	gitlab := &approvalGitLab{memberStatus: http.StatusNotFound}
+	result, err := approveThroughRoute(t, gitlab, edition.Premium, "gitlab_access_request_approve_group",
+		map[string]any{"group_id": "5", "user_id": 1, "access_level": 5})
+	if err == nil {
+		t.Fatalf("the approval answered %+v with no error, want one saying the request is still pending", result)
+	}
+	if !strings.Contains(err.Error(), "still pending") {
+		t.Errorf("error = %q, want one saying the request is still pending", err)
+	}
+	want := []string{"GET /api/v4/groups/5", "PUT /api/v4/groups/5/access_requests/1/approve", "GET /api/v4/groups/5/members/1"}
+	if got := gitlab.sent(); !slices.Equal(got, want) {
+		t.Errorf("requests sent = %v, want %v", got, want)
+	}
+}
+
+// TestApproveGroup_MinimalAccessOnALicensedTopLevelGroup_IsReadBackAndApproved
+// verifies that a Minimal access approval on a top-level group is answered as
+// the membership it became once the member read finds the requester (issue
+// 1280), and that the read is what decides it: the approval's own answer is
+// the same whether GitLab saved it or not. The membership is the approval's
+// answer, with the fields its capture read, not the read's: a capture keeps
+// the last answer it sees, so a read under the approval's capture would have
+// replaced them.
+func TestApproveGroup_MinimalAccessOnALicensedTopLevelGroup_IsReadBackAndApproved(t *testing.T) {
+	gitlab := &approvalGitLab{memberStatus: http.StatusOK}
+	result, err := approveThroughRoute(t, gitlab, edition.Ultimate, "gitlab_access_request_approve_group",
+		map[string]any{"group_id": "5", "user_id": 1, "access_level": 5})
+	if err != nil {
+		t.Fatalf("approving Minimal access on a licensed top-level group: %v", err)
+	}
+	if out, ok := result.(MemberOutput); !ok || out.AccessLevel != 5 || out.Email != "" {
+		t.Errorf("result = %+v, want the approval's membership at Minimal access (5), with no email, which only the read sent", result)
+	}
+	want := []string{"GET /api/v4/groups/5", "PUT /api/v4/groups/5/access_requests/1/approve", "GET /api/v4/groups/5/members/1"}
+	if got := gitlab.sent(); !slices.Equal(got, want) {
+		t.Errorf("requests sent = %v, want %v", got, want)
+	}
+}
+
+// TestApproveGroup_MinimalAccessReadsThatFail_SayWhatIsKnown verifies the two
+// reads a Minimal access approval adds. A group read that fails is reported
+// with nothing approved, since the approval has not been sent; a member read
+// that fails after the approval cannot tell a saved approval from a pending
+// one, and says so rather than reporting either.
+func TestApproveGroup_MinimalAccessReadsThatFail_SayWhatIsKnown(t *testing.T) {
+	tests := []struct {
+		name     string
+		gitlab   *approvalGitLab
+		says     string
+		wantSent []string
+	}{
+		{
+			name:     "group_read_fails",
+			gitlab:   &approvalGitLab{groupMissing: true, memberStatus: http.StatusOK},
+			says:     "group.get",
+			wantSent: []string{"GET /api/v4/groups/5"},
+		},
+		{
+			name:     "member_read_fails",
+			gitlab:   &approvalGitLab{memberStatus: http.StatusInternalServerError},
+			says:     "not known",
+			wantSent: []string{"GET /api/v4/groups/5", "PUT /api/v4/groups/5/access_requests/1/approve", "GET /api/v4/groups/5/members/1"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := approveThroughRoute(t, tt.gitlab, edition.Ultimate, "gitlab_access_request_approve_group",
+				map[string]any{"group_id": "5", "user_id": 1, "access_level": 5})
+			if err == nil {
+				t.Fatalf("the approval answered %+v with no error, want one", result)
+			}
+			if !strings.Contains(err.Error(), tt.says) {
+				t.Errorf("error = %q, want one saying %q", err, tt.says)
+			}
+			if got := tt.gitlab.sent(); !slices.Equal(got, tt.wantSent) {
+				t.Errorf("requests sent = %v, want %v", got, tt.wantSent)
+			}
+		})
+	}
+}
+
+// TestApproveGroup_MinimalAccessApprovalRefused_IsNotReadBack verifies that
+// an approval GitLab refuses outright is reported as that refusal, with no
+// member read after it: there is nothing to confirm.
+func TestApproveGroup_MinimalAccessApprovalRefused_IsNotReadBack(t *testing.T) {
+	var requests []string
+	var mu sync.Mutex
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests = append(requests, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+		if r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":5,"parent_id":null}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	client.SetTier(edition.Ultimate)
+	_, err := ApproveGroup(t.Context(), client, ApproveGroupInput{GroupID: "5", UserID: 1, AccessLevel: new(5)})
+	if err == nil {
+		t.Fatal("ApproveGroup answered a refused approval with no error")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"GET /api/v4/groups/5", "PUT /api/v4/groups/5/access_requests/1/approve"}; !slices.Equal(requests, want) {
+		t.Errorf("requests sent = %v, want %v", requests, want)
+	}
+}
+
+// TestApproveGroup_MinimalAccessReads_CarryTheCallersContext verifies that
+// both reads a Minimal access approval adds pass the caller's context on, so
+// the action deadline and an abandoned call reach them. The context is
+// cancelled when the read under test arrives and the mock holds it: a read
+// that carried the context is abandoned at once and the approval ends in
+// context.Canceled, while one that did not sits out the hold, which is
+// counted.
+func TestApproveGroup_MinimalAccessReads_CarryTheCallersContext(t *testing.T) {
+	for _, held := range []string{"GET /api/v4/groups/5", "GET /api/v4/groups/5/members/1"} {
+		t.Run(held, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			var heldOut atomic.Int64
+			answers := &approvalGitLab{memberStatus: http.StatusOK}
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method+" "+r.URL.Path != held {
+					answers.ServeHTTP(w, r)
+					return
+				}
+				cancel()
+				select {
+				case <-r.Context().Done():
+				case <-time.After(5 * time.Second):
+					heldOut.Add(1)
+				}
+			}))
+			client.SetTier(edition.Ultimate)
+			_, err := ApproveGroup(ctx, client, ApproveGroupInput{GroupID: "5", UserID: 1, AccessLevel: new(5)})
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("error = %v, want one ending in context.Canceled", err)
+			}
+			if n := heldOut.Load(); n != 0 {
+				t.Errorf("%s sat out the hold %d time(s), so it did not carry the caller's context", held, n)
+			}
+		})
+	}
+}
+
+// TestApprove_OmittedLevel_SendsOnlyTheApproval verifies that an approval
+// naming no level sends the approval alone, with no access_level, so GitLab
+// grants its default, and is answered as the membership.
+func TestApprove_OmittedLevel_SendsOnlyTheApproval(t *testing.T) {
+	for _, tt := range []struct {
+		tool  string
+		scope map[string]any
+		want  string
+	}{
+		{tool: "gitlab_access_request_approve_project", scope: map[string]any{"project_id": "10", "user_id": 1}, want: "PUT /api/v4/projects/10/access_requests/1/approve"},
+		{tool: "gitlab_access_request_approve_group", scope: map[string]any{"group_id": "5", "user_id": 1}, want: "PUT /api/v4/groups/5/access_requests/1/approve"},
+	} {
+		t.Run(tt.tool, func(t *testing.T) {
+			gitlab := &approvalGitLab{memberStatus: http.StatusOK}
+			if _, err := approveThroughRoute(t, gitlab, edition.Ultimate, tt.tool, tt.scope); err != nil {
+				t.Fatalf("approving with no level: %v", err)
+			}
+			if got := gitlab.sent(); !slices.Equal(got, []string{tt.want}) {
+				t.Errorf("requests sent = %v, want only %s", got, tt.want)
+			}
+		})
 	}
 }

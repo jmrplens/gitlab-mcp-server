@@ -1169,6 +1169,10 @@ var premiumGatingExempt = map[string]string{
 	// custom role (Ultimate) and the Minimal access level (a Premium or
 	// Ultimate top-level group) need a license. The tool itself works on Free.
 	"gitlab_group_share": "CE feature; only the optional member_role_id custom role and the Minimal access level need a license.",
+	// Approving a group access request is CE; only the Minimal access level,
+	// which the description says a Premium or Ultimate top-level group grants,
+	// needs a license, and the handler refuses it on the Free tier (issue 1280).
+	"gitlab_access_request_approve_group": "CE feature; only the Minimal access level needs a license.",
 	// Feature flags are available on Free, Premium, and Ultimate per current
 	// GitLab docs (docs.gitlab.com/operations/feature_flags). The
 	// "Requires Premium/Ultimate" wording in the spec is legacy/over-conservative.

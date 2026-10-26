@@ -5,6 +5,7 @@ package accessrequests
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -328,11 +329,24 @@ func RequestGroup(ctx context.Context, client *gitlabclient.Client, input Reques
 // ApproveProjectAccessRequest
 // ---------------------------------------------------------------------------.
 
+// The approval handlers' operation labels, which open each error they return.
+const (
+	opApproveProject = "access_request_approve_project"
+	opApproveGroup   = "access_request_approve_group"
+)
+
 // ApproveProjectInput identifies the project access request to approve and the optional granted role.
+//
+// AccessLevel is a pointer because leaving it out and sending 0 are two
+// different calls. Left out, GitLab grants its default, Developer; 0 used to
+// be dropped as though it had been left out, so a caller asking for No access
+// got a Developer, and sent it would be answered as an approval that GitLab
+// never saved. It is refused instead, with every other level a project does
+// not grant (see [refuseUngrantedLevel]).
 type ApproveProjectInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
-	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30"`
+	AccessLevel *int                 `json:"access_level,omitempty" jsonschema:"Access level to grant (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Omit it to grant Developer, GitLab's default. A project grants no other level"`
 }
 
 // ApproveProject approves a project access request.
@@ -343,20 +357,22 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 	if input.UserID == 0 {
 		return MemberOutput{}, toolutil.ErrFieldRequired("user_id")
 	}
+	if err := refuseUngrantedLevel(opApproveProject, input.AccessLevel, toolutil.ProjectAccessLevels); err != nil {
+		return MemberOutput{}, err
+	}
 	opts := &gl.ApproveAccessRequestOptions{}
-	if input.AccessLevel != 0 {
-		lvl := gl.AccessLevelValue(input.AccessLevel)
-		opts.AccessLevel = &lvl
+	if input.AccessLevel != nil {
+		opts.AccessLevel = new(gl.AccessLevelValue(*input.AccessLevel))
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	ar, _, err := client.GL().AccessRequests.ApproveProjectAccessRequest(
 		string(input.ProjectID), input.UserID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return MemberOutput{}, toolutil.WrapErrWithStatusHint("access_request_approve_project", err, http.StatusNotFound,
-			"verify user_id with access.request_list_project; access_level must be valid (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer); approving requires Maintainer role")
+		return MemberOutput{}, toolutil.WrapErrWithStatusHint(opApproveProject, err, http.StatusNotFound,
+			"verify user_id with access.request_list_project; approving requires the Maintainer role")
 	}
-	return capturedApprovedMember("access_request_approve_project", ar, captured)
+	return capturedApprovedMember(opApproveProject, ar, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -364,13 +380,24 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 // ---------------------------------------------------------------------------.
 
 // ApproveGroupInput identifies the group access request to approve and the optional granted role.
+//
+// AccessLevel is a pointer for the reason [ApproveProjectInput] gives.
 type ApproveGroupInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
-	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30"`
+	AccessLevel *int                 `json:"access_level,omitempty" jsonschema:"Access level to grant (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Omit it to grant Developer, GitLab's default. Minimal access is refused on a subgroup and on the Free tier, and reported as an approval only once the requester is found among the group's members"`
 }
 
 // ApproveGroup approves a group access request.
+//
+// Minimal access is the one level a group grants in some places and not in
+// others, and the approval route cannot say which happened: where GitLab does
+// not grant it, the route still answers 201 with the requester, and the
+// request stays pending. So it costs up to two reads beside the approval. The
+// group is read before it, and a subgroup is refused, as the Free tier is
+// without a request; after it, the requester is read among the group's
+// members, and an approval that left them out is answered as the pending
+// request it is (see [confirmMinimalAccess]).
 func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input ApproveGroupInput) (MemberOutput, error) {
 	if input.GroupID == "" {
 		return MemberOutput{}, toolutil.ErrFieldRequired("group_id")
@@ -378,20 +405,100 @@ func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input Approv
 	if input.UserID == 0 {
 		return MemberOutput{}, toolutil.ErrFieldRequired("user_id")
 	}
-	opts := &gl.ApproveAccessRequestOptions{}
-	if input.AccessLevel != 0 {
-		lvl := gl.AccessLevelValue(input.AccessLevel)
-		opts.AccessLevel = &lvl
+	if err := refuseUngrantedLevel(opApproveGroup, input.AccessLevel, toolutil.GroupAccessLevels); err != nil {
+		return MemberOutput{}, err
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	opts := &gl.ApproveAccessRequestOptions{}
+	if input.AccessLevel != nil {
+		opts.AccessLevel = new(gl.AccessLevelValue(*input.AccessLevel))
+	}
+	minimal := opts.AccessLevel != nil && *opts.AccessLevel == gl.MinimalAccessPermissions
+	if minimal {
+		if refusal := refuseMinimalAccessGroup(ctx, client, input.GroupID); refusal != nil {
+			return MemberOutput{}, refusal
+		}
+	}
+	// The capture holds the approval's own answer, so the member read below
+	// goes out under the caller's context: a capture keeps the last answer
+	// it sees, and the read's would replace the one the SDK decoded.
+	approvalCtx, captured := gitlabclient.WithResponseCapture(ctx)
 	ar, _, err := client.GL().AccessRequests.ApproveGroupAccessRequest(
-		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
+		string(input.GroupID), input.UserID, opts, gl.WithContext(approvalCtx),
 	)
 	if err != nil {
-		return MemberOutput{}, toolutil.WrapErrWithStatusHint("access_request_approve_group", err, http.StatusNotFound,
-			"verify user_id with access.request_list_group; access_level must be valid (5/10/15/20/25/30/40/50; 60=Admin not valid for access requests); approving requires Owner role")
+		return MemberOutput{}, toolutil.WrapErrWithStatusHint(opApproveGroup, err, http.StatusNotFound,
+			"verify user_id with access.request_list_group; approving requires the Owner role")
 	}
-	return capturedApprovedMember("access_request_approve_group", ar, captured)
+	if minimal {
+		if unconfirmed := confirmMinimalAccess(ctx, client, input.GroupID, input.UserID); unconfirmed != nil {
+			return MemberOutput{}, unconfirmed
+		}
+	}
+	return capturedApprovedMember(opApproveGroup, ar, captured)
+}
+
+// refuseUngrantedLevel refuses under op, before any request, an approval
+// naming a level the scope does not grant, and lets one naming no level
+// through.
+//
+// Such a level is not refused by GitLab. The approval service sets it on the
+// request and saves, the save fails the member's validation, and the route
+// presents the unsaved record with 201, which reads like a membership while
+// the request stays pending. 0 is one such level on both scopes, 5 on a
+// project and 60 everywhere.
+//
+// The handlers build the SDK options themselves, from their own input, so
+// the 1:1 audit pairs each input with ApproveAccessRequestOptions and judges
+// the level it offers against client-go's.
+func refuseUngrantedLevel(op string, level *int, accepted toolutil.AccessLevelSet) error {
+	if level == nil || accepted.Accepts(*level) {
+		return nil
+	}
+	return fmt.Errorf("%s: access_level %d is not a level GitLab grants here, and it would answer the approval as done while the request stays pending. Use one of %s, or omit access_level to grant Developer (30), GitLab's default", op, *level, accepted.Choices())
+}
+
+// minimalAccessRetry is what a refusal or a pending answer about Minimal
+// access tells the caller to do instead.
+const minimalAccessRetry = "Approve with 10 (Guest) or higher, or omit access_level to grant Developer (30), GitLab's default"
+
+// refuseMinimalAccessGroup refuses a Minimal access approval GitLab could not
+// save: on the Free tier, which has no Minimal Access role, before any
+// request, and on a subgroup, which the group's parent_id tells, before the
+// approval.
+func refuseMinimalAccessGroup(ctx context.Context, client *gitlabclient.Client, groupID toolutil.StringOrInt) error {
+	if !client.IsEnterprise() {
+		return fmt.Errorf("%s: access_level 5 (Minimal access) is granted only on a top-level group with a Premium or Ultimate license, and this session serves the Free tier, so GitLab would leave the request pending. %s", opApproveGroup, minimalAccessRetry)
+	}
+	//gitlab:request optional: the group is read only for a Minimal access approval, to refuse it on a subgroup before the approval is sent
+	group, _, err := client.GL().Groups.GetGroup(string(groupID), &gl.GetGroupOptions{
+		WithProjects: new(false), //nolint:staticcheck // SA1019: parent_id is all this read needs, and without it GitLab answers with up to 100 projects as well
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return toolutil.WrapErrWithStatusHint(opApproveGroup, err, http.StatusNotFound, "verify group_id with group.get")
+	}
+	if group.ParentID != 0 {
+		return fmt.Errorf("%s: group %s is a subgroup, and GitLab grants access_level 5 (Minimal access) only on a top-level group, so it would leave the request pending. %s", opApproveGroup, groupID, minimalAccessRetry)
+	}
+	return nil
+}
+
+// confirmMinimalAccess reads the requester back among the group's members
+// after a Minimal access approval, which is the only way to tell an approval
+// GitLab saved from one it answered without saving: on a top-level group
+// whose license does not include the role, GitLab.com's free groups among
+// them while the session's tier is the best plan the credential reaches.
+// A requester who is not found is still pending, and is answered so.
+func confirmMinimalAccess(ctx context.Context, client *gitlabclient.Client, groupID toolutil.StringOrInt, userID int64) error {
+	//gitlab:request optional: the requester is read back only after a Minimal access approval, since the approval answers alike whether GitLab saved it or not
+	_, _, err := client.GL().GroupMembers.GetGroupMember(string(groupID), userID, gl.WithContext(ctx))
+	if err == nil {
+		return nil
+	}
+	if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		return fmt.Errorf("%s: GitLab answered the approval, and user %d is still not a member of group %s, so the request is still pending: GitLab grants access_level 5 (Minimal access) only where the top-level group's license includes it. %s", opApproveGroup, userID, groupID, minimalAccessRetry)
+	}
+	return toolutil.WrapErrWithHint(opApproveGroup, err,
+		"GitLab answered the approval, and reading the requester back among the group's members failed, so whether Minimal access was granted is not known; check with group.members")
 }
 
 // ---------------------------------------------------------------------------

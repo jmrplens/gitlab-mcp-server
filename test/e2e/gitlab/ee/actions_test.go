@@ -15,7 +15,8 @@
 // A Free action is here too where the scenario that drives it needs a
 // license: the license endpoints, a merge request's approval reset, a
 // deployment's approval and the group Datadog integration are Free in the
-// catalog and answer only on a licensed instance.
+// catalog and answer only on a licensed instance, and an access request
+// approval grants Minimal access only under a license.
 
 package ee
 
@@ -448,4 +449,11 @@ const (
 // tool and so carries that domain rather than one of its own.
 const (
 	actionDependencyFirewallEvaluate harness.ActionID = "project.dependency_firewall_evaluate"
+)
+
+// Access requests at group scope, approved at Minimal access.
+const (
+	actionAccessRequestGroup     harness.ActionID = "access.request_group"
+	actionAccessRequestListGroup harness.ActionID = "access.request_list_group"
+	actionAccessApproveGroup     harness.ActionID = "access.approve_group"
 )

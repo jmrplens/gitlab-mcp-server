@@ -28,6 +28,7 @@ const (
 	actionAccessRequestListProject = "access.request_list_project"
 	actionAccessRequestListGroup   = "access.request_list_group"
 	paramUserID                    = "user_id"
+	paramAccessLevel               = "access_level"
 )
 
 // ActionSpecs returns canonical specs for project and group access request actions.
@@ -153,10 +154,11 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 			},
 		}
 	case "approve_project":
-		options.Usage = "Approve a user project access request. Use after listing pending requests and selecting the user_id to approve."
+		options.Usage = "Approve a user project access request. Use after listing pending requests and selecting the user_id to approve. Leave access_level out to grant Developer. A project grants Guest (10) to Owner (50), and any other level is refused before the request, since GitLab would answer it as an approval while the request stays pending."
 		options.Aliases = []string{"approve project access request", "grant project access request", "accept project join request"}
 		options.RelatedActions = []string{actionAccessRequestListProject, actionAccessDenyProject, actionProjectMemberList}
-		options.IndividualTool.Description = "Approve a pending project access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.ProjectAccessLevels.SchemaOverride(paramAccessLevel)}
+		options.IndividualTool.Description = "Approve a pending project access request, granting the user membership at access_level, or Developer when it is left out. A level a project does not grant is refused before the request. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramUserID: {
 				SemanticRole:   paramUserID,
@@ -165,10 +167,11 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 			},
 		}
 	case "approve_group":
-		options.Usage = "Approve a user group access request. Use after listing pending group requests and selecting the user_id to approve."
+		options.Usage = "Approve a user group access request. Use after listing pending group requests and selecting the user_id to approve. Leave access_level out to grant Developer. Minimal access (5) is granted only on a top-level group with a Premium or Ultimate license: it is refused on a subgroup and on the Free tier, and otherwise confirmed by reading the requester back among the group's members, since GitLab answers the approval alike when it leaves the request pending."
 		options.Aliases = []string{"approve group access request", "grant group access request", "accept group join request"}
 		options.RelatedActions = []string{actionAccessRequestListGroup, actionAccessDenyGroup, actionGroupMemberList}
-		options.IndividualTool.Description = "Approve a pending group access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.GroupAccessLevels.SchemaOverride(paramAccessLevel)}
+		options.IndividualTool.Description = "Approve a pending group access request, granting the user membership at access_level, or Developer when it is left out. Minimal access is granted only on a top-level group with a Premium or Ultimate license, and is reported as granted only once the requester is found among the group's members. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramUserID: {
 				SemanticRole:   paramUserID,

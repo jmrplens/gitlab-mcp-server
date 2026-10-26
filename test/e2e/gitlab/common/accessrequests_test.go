@@ -63,6 +63,75 @@ func TestAccessRequests_Lifecycle_RequestDenyAskAgainApprove(t *testing.T) {
 	})
 }
 
+// TestAccessRequests_Approval_LevelNotGranted_IsRefusedAndTheRequestStaysPending
+// has one fixture user per surface ask for access to the project and to the
+// group, and the owner approve each at a level the scope does not grant: 0
+// and Minimal access on the project, 0 on the group (issue 1280). GitLab
+// answers such an approval with 201 and the requester while the request
+// stays pending, and this server used to drop a 0 and approve the requester
+// as a Developer, so each is refused before the approval is sent and the
+// request is still listed after it. An approval naming no level then grants
+// Developer, GitLab's default.
+//
+// The refusal comes from two places: the individual surface's input schema
+// lists the levels, so the SDK refuses the call as invalid params, and on the
+// other two the handler refuses it as a tool error.
+func TestAccessRequests_Approval_LevelNotGranted_IsRefusedAndTheRequestStaysPending(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, buildAccessRequestFixture, func(e *harness.Env, surface harness.Surface, f accessRequestFixture) {
+		requester := fixture.NewUser(e, "requester")
+		token := fixture.NewToken(e, requester, accessTokenScope)
+		owner := e.On(surface)
+		asking := e.Session(harness.ServerConfig{Surface: surface, Token: token.Value, Private: true})
+
+		project := map[string]any{"project_id": f.project.IDParam()}
+		assertRequested(e, harness.Do[accessrequests.Output](asking, actionAccessRequestProject, project), requester.ID)
+		for _, level := range []int{0, int(gl.MinimalAccessPermissions)} {
+			refuseApproval(e, owner, surface, actionAccessApproveProject, withParams(project, map[string]any{"user_id": requester.ID, "access_level": level}))
+		}
+		assertStillPending(e, owner, actionAccessRequestListProject, project, requester.ID)
+		approved := harness.Do[accessrequests.MemberOutput](owner, actionAccessApproveProject, withParams(project, map[string]any{"user_id": requester.ID}))
+		if approved.ID != requester.ID || approved.AccessLevel != int(gl.DeveloperPermissions) {
+			e.T.Errorf("the approval with no level answered user %d at level %d, want %d as a developer (%d)", approved.ID, approved.AccessLevel, requester.ID, gl.DeveloperPermissions)
+		}
+
+		group := map[string]any{"group_id": f.group.IDParam()}
+		assertRequested(e, harness.Do[accessrequests.Output](asking, actionAccessRequestGroup, group), requester.ID)
+		refuseApproval(e, owner, surface, actionAccessApproveGroup, withParams(group, map[string]any{"user_id": requester.ID, "access_level": 0}))
+		assertStillPending(e, owner, actionAccessRequestListGroup, group, requester.ID)
+	})
+}
+
+// assertRequested asserts that a request for access answered the requester.
+func assertRequested(e *harness.Env, requested accessrequests.Output, requesterID int64) {
+	e.T.Helper()
+	if requested.ID != requesterID {
+		e.T.Errorf("the request for access answered user %d, want the requester %d", requested.ID, requesterID)
+	}
+}
+
+// refuseApproval asserts that an approval at a level the scope does not
+// grant is refused, in the shape the surface refuses it in.
+func refuseApproval(e *harness.Env, s *harness.Session, surface harness.Surface, approve harness.ActionID, params map[string]any) {
+	e.T.Helper()
+	if surface == harness.SurfaceIndividual {
+		harness.Refused(s, approve, params, harness.FailureInvalidParams)
+		return
+	}
+	harness.ExpectToolError(s, approve, params, "omit access_level")
+}
+
+// assertStillPending asserts that the requester's request is still listed
+// as pending after the refused approvals.
+func assertStillPending(e *harness.Env, owner *harness.Session, list harness.ActionID, scope map[string]any, requesterID int64) {
+	e.T.Helper()
+	pending := harness.Do[accessrequests.ListOutput](owner, list, scope)
+	if !containsID(accessRequesterIDs(pending.AccessRequests), requesterID) {
+		e.T.Errorf("the request of user %d is no longer pending after the refused approvals: %+v", requesterID, pending.AccessRequests)
+	}
+}
+
 // buildAccessRequestFixture creates the project and the group once on the
 // parent Env and opens both to requests: a non-member can only ask for
 // access to something it can see, and only where the setting allows it.
