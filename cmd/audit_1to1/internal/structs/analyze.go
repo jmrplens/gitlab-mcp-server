@@ -206,6 +206,10 @@ const (
 	// bridgeListOffsetOnly is the reason the bridge list offers no ordering or
 	// keyset field of the gl.ListOptions either of its routes pages with.
 	bridgeListOffsetOnly = "GET /projects/:id/pipelines/:pipeline_id/trigger_jobs and the bridges route it deprecates declare scope, page and per_page and nothing else (gitlab-api-live.json, 19.5.0), and the helper both run pages with offset pagination alone (present_pipeline_trigger_jobs in lib/api/ci/pipelines.rb), so gl.ListOptions ordering and keyset fields reach nothing there"
+	// serviceAccountPATsOffsetOnly is the reason the group and project service
+	// account token lists offer no keyset field of the gl.ListOptions they
+	// page with.
+	serviceAccountPATsOffsetOnly = "GET /groups/:id/service_accounts/:user_id/personal_access_tokens and GET /projects/:id/service_accounts/:user_id/personal_access_tokens page a PersonalAccessToken relation with paginate_with_strategies (lib/api/group_service_accounts.rb and lib/api/project_service_accounts.rb at v19.5.0-ee); the class has no supported_keyset_orderings and is not a Project, so GitLab answers pagination=keyset with 405 and otherwise pages by offset, which reads page and per_page alone and ignores page_token; neither route declares order_by (gitlab-api-live.json, 19.5.0-ee), both hand the token finder their declared params alone, and the finder orders by sort; so gl.ListOptions pagination, page_token and order_by do nothing a caller wants there (issue 1165)"
 	// milestoneBurndownUnpaged is the reason the project milestone burndown
 	// offers none of the gl.ListOptions its options struct embeds.
 	milestoneBurndownUnpaged = "GET /projects/:id/milestones/:milestone_id/burndown_events declares no page, per_page, order_by or sort (gitlab-api-live.json, 19.5.0-ee), and ee/lib/ee/api/milestone_responses.rb presents the whole Burndown without paginate, so every gl.ListOptions field would be sent and ignored"
@@ -1083,6 +1087,15 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"jobs.BridgeListInput.sort":       bridgeListOffsetOnly,
 	"jobs.BridgeListInput.pagination": bridgeListOffsetOnly,
 	"jobs.BridgeListInput.page_token": bridgeListOffsetOnly,
+	// The service account token lists page by offset alone: GitLab refuses a
+	// keyset request on both routes with 405, ignores page_token without one,
+	// and declares no order_by, so no keyset field is offered.
+	"groupserviceaccounts.ListPATInput.pagination":   serviceAccountPATsOffsetOnly,
+	"groupserviceaccounts.ListPATInput.page_token":   serviceAccountPATsOffsetOnly,
+	"groupserviceaccounts.ListPATInput.order_by":     serviceAccountPATsOffsetOnly,
+	"projectserviceaccounts.ListPATInput.pagination": serviceAccountPATsOffsetOnly,
+	"projectserviceaccounts.ListPATInput.page_token": serviceAccountPATsOffsetOnly,
+	"projectserviceaccounts.ListPATInput.order_by":   serviceAccountPATsOffsetOnly,
 	// The project milestone burndown is presented whole: GitLab pages and
 	// orders nothing on that route, so the whole gl.ListOptions is plumbing.
 	"milestones.GetBurndownChartEventsInput.pagination": milestoneBurndownUnpaged,

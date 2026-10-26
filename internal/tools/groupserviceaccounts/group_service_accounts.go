@@ -295,12 +295,20 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 }
 
 // ListPATInput holds parameters for listing service account PATs.
+//
+// It offers offset pagination only. GitLab pages these tokens with
+// paginate_with_strategies over a PersonalAccessToken relation, and that class
+// has no keyset ordering and is not a Project, so GitLab answers
+// pagination=keyset with 405 and otherwise pages by offset, which reads page
+// and per_page alone and ignores page_token. The route does not declare
+// order_by, it hands the token finder its declared params alone, and the
+// finder orders by sort (lib/api/group_service_accounts.rb at v19.5.0-ee).
+// None of the three does anything a caller wants, so the input does not take
+// them (issue 1165).
 type ListPATInput struct {
 	GroupID          string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	ServiceAccountID int64  `json:"service_account_id" jsonschema:"Service account user ID,required"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
-	OrderBy        string `json:"order_by,omitempty" jsonschema:"Order tokens by a supported column (e.g. id, created_at, expires_at, last_used_at)"`
 	Sort           string `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	Revoked        *bool  `json:"revoked,omitempty" jsonschema:"Filter by revoked state: true returns only revoked tokens, false only active ones"`
 	UserID         int64  `json:"user_id,omitempty" jsonschema:"Filter by the user ID that owns the token"`
@@ -323,10 +331,7 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, input ListPATInp
 		return ListPATOutput{}, toolutil.ErrFieldRequired("service_account_id")
 	}
 	opts := &gl.ListServiceAccountPersonalAccessTokensOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	if input.OrderBy != "" {
-		opts.OrderBy = input.OrderBy
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Sort != "" {
 		opts.Sort = &input.Sort
 	}

@@ -500,9 +500,6 @@ func TestPATList(t *testing.T) {
 			testutil.AssertQueryParam(t, r, "search", "deploy")
 			testutil.AssertQueryParam(t, r, "state", "active")
 			testutil.AssertQueryParam(t, r, "sort", "created_desc")
-			testutil.AssertQueryParam(t, r, "order_by", "created_at")
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "55")
 			testutil.AssertQueryParam(t, r, "user_id", "7")
 			testutil.AssertQueryParam(t, r, "created_after", "2026-01-01T02:03:04Z")
 			testutil.AssertQueryParam(t, r, "created_before", "2026-01-02T00:00:00Z")
@@ -516,8 +513,6 @@ func TestPATList(t *testing.T) {
 			ProjectID:        "42",
 			ServiceAccountID: 7,
 			Page:             2, PerPage: 50,
-			Pagination: "keyset", PageToken: "55",
-			OrderBy:        "created_at",
 			CreatedAfter:   "2026-01-01T02:03:04Z",
 			CreatedBefore:  "2026-01-02",
 			ExpiresAfter:   "2026-01-01",
@@ -1230,4 +1225,61 @@ func TestList_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
 		})
 		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Accounts)}, err
 	})
+}
+
+// TestListPATs_KeysetArgument_IsRefusedBeforeAnyRequest verifies that the
+// token list refuses pagination, page_token and order_by, the three keyset
+// fields of client-go's ListOptions, as arguments it does not take, before any
+// request. GitLab pages these tokens with paginate_with_strategies over a
+// PersonalAccessToken relation, a class with no keyset ordering, so it answers
+// pagination=keyset with 405 and otherwise pages by offset, which ignores
+// page_token; the route does not declare order_by, so nothing reads it
+// (lib/api/project_service_accounts.rb at v19.5.0-ee, issue 1165). Offered,
+// none of the three did anything a caller wants.
+func TestListPATs_KeysetArgument_IsRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		param string
+		value string
+	}{
+		{name: "Pagination", param: "pagination", value: "keyset"},
+		{name: "PageToken", param: "page_token", value: "55"},
+		{name: "OrderBy", param: "order_by", value: "created_at"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			route := toolutil.RouteAction(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), ListPATs)
+			_, err := route.Handler(t.Context(), map[string]any{"project_id": "42", "service_account_id": 7, tc.param: tc.value})
+			if err == nil || !strings.Contains(err.Error(), `unknown field "`+tc.param+`"`) {
+				t.Errorf("Handler() error = %v, want %s refused as an unknown field", err, tc.param)
+			}
+		})
+	}
+}
+
+// TestListPATInput_Schema_OffersOffsetPaginationOnly verifies that the
+// token list publishes page and per_page, which GitLab pages these tokens by,
+// and none of the keyset fields: GitLab answers pagination=keyset with 405 on
+// this route, ignores page_token without it, and does not declare order_by
+// (issue 1165).
+func TestListPATInput_Schema_OffersOffsetPaginationOnly(t *testing.T) {
+	route := toolutil.RouteAction(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), ListPATs)
+	props, _ := route.InputSchema["properties"].(map[string]any)
+	cases := []struct {
+		param   string
+		offered bool
+	}{
+		{param: "page", offered: true},
+		{param: "per_page", offered: true},
+		{param: "pagination", offered: false},
+		{param: "page_token", offered: false},
+		{param: "order_by", offered: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.param, func(t *testing.T) {
+			if _, ok := props[tc.param]; ok != tc.offered {
+				t.Errorf("schema offers %s = %t, want %t", tc.param, ok, tc.offered)
+			}
+		})
+	}
 }

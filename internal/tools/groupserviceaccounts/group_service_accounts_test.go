@@ -524,11 +524,10 @@ func TestListPATs(t *testing.T) {
 			wantCount: 0,
 		},
 		{
-			name: "passes order_by, sort, filters and date params",
+			name: "passes sort, filters and date params",
 			input: ListPATInput{
 				GroupID:          "mygroup",
 				ServiceAccountID: 42,
-				OrderBy:          "created_at",
 				Sort:             "desc",
 				Revoked:          new(true),
 				UserID:           7,
@@ -542,7 +541,6 @@ func TestListPATs(t *testing.T) {
 				LastUsedBefore:   "2026-10-01T00:00:00Z",
 			},
 			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertQueryParam(t, r, "order_by", "created_at")
 				testutil.AssertQueryParam(t, r, "sort", "desc")
 				testutil.AssertQueryParam(t, r, "revoked", "true")
 				testutil.AssertQueryParam(t, r, "user_id", "7")
@@ -555,11 +553,11 @@ func TestListPATs(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:  "passes keyset pagination params",
-			input: ListPATInput{GroupID: "mygroup", ServiceAccountID: 42, KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"}},
+			name:  "passes offset pagination params",
+			input: ListPATInput{GroupID: "mygroup", ServiceAccountID: 42, PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 50}},
 			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertQueryParam(t, r, "pagination", "keyset")
-				testutil.AssertQueryParam(t, r, "page_token", "100")
+				testutil.AssertQueryParam(t, r, "page", "2")
+				testutil.AssertQueryParam(t, r, "per_page", "50")
 				testutil.RespondJSON(w, http.StatusOK, `[]`)
 			},
 			wantCount: 0,
@@ -1355,5 +1353,62 @@ func TestListPATs_TimestampFilterThatDoesNotParse_IsRefusedBeforeAnyRequest(t *t
 	_, err := ListPATs(context.Background(), client, ListPATInput{GroupID: "10", ServiceAccountID: 7, LastUsedBefore: "not-a-date"})
 	if err == nil || !strings.Contains(err.Error(), "last_used_before must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
 		t.Errorf("ListPATs() error = %v, want the last_used_before refusal quoting the value", err)
+	}
+}
+
+// TestListPATs_KeysetArgument_IsRefusedBeforeAnyRequest verifies that the
+// token list refuses pagination, page_token and order_by, the three keyset
+// fields of client-go's ListOptions, as arguments it does not take, before any
+// request. GitLab pages these tokens with paginate_with_strategies over a
+// PersonalAccessToken relation, a class with no keyset ordering, so it answers
+// pagination=keyset with 405 and otherwise pages by offset, which ignores
+// page_token; the route does not declare order_by, so nothing reads it
+// (lib/api/group_service_accounts.rb at v19.5.0-ee, issue 1165). Offered, none
+// of the three did anything a caller wants.
+func TestListPATs_KeysetArgument_IsRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		param string
+		value string
+	}{
+		{name: "Pagination", param: "pagination", value: "keyset"},
+		{name: "PageToken", param: "page_token", value: "100"},
+		{name: "OrderBy", param: "order_by", value: "created_at"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			route := toolutil.RouteAction(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), ListPATs)
+			_, err := route.Handler(t.Context(), map[string]any{"group_id": "mygroup", "service_account_id": 42, tc.param: tc.value})
+			if err == nil || !strings.Contains(err.Error(), `unknown field "`+tc.param+`"`) {
+				t.Errorf("Handler() error = %v, want %s refused as an unknown field", err, tc.param)
+			}
+		})
+	}
+}
+
+// TestListPATInput_Schema_OffersOffsetPaginationOnly verifies that the
+// token list publishes page and per_page, which GitLab pages these tokens by,
+// and none of the keyset fields: GitLab answers pagination=keyset with 405 on
+// this route, ignores page_token without it, and does not declare order_by
+// (issue 1165).
+func TestListPATInput_Schema_OffersOffsetPaginationOnly(t *testing.T) {
+	route := toolutil.RouteAction(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), ListPATs)
+	props, _ := route.InputSchema["properties"].(map[string]any)
+	cases := []struct {
+		param   string
+		offered bool
+	}{
+		{param: "page", offered: true},
+		{param: "per_page", offered: true},
+		{param: "pagination", offered: false},
+		{param: "page_token", offered: false},
+		{param: "order_by", offered: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.param, func(t *testing.T) {
+			if _, ok := props[tc.param]; ok != tc.offered {
+				t.Errorf("schema offers %s = %t, want %t", tc.param, ok, tc.offered)
+			}
+		})
 	}
 }

@@ -299,11 +299,21 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 }
 
 // ListPATInput holds parameters for listing project service account PATs.
+//
+// It offers offset pagination only. GitLab pages these tokens with
+// paginate_with_strategies over a PersonalAccessToken relation, and that class
+// has no keyset ordering and is not a Project, so GitLab answers
+// pagination=keyset with 405 and otherwise pages by offset, which reads page
+// and per_page alone and ignores page_token. The route does not declare
+// order_by, it hands the token finder its declared params alone, and the
+// finder orders by sort (lib/api/project_service_accounts.rb and
+// finder_params in lib/api/helpers/personal_access_tokens_helpers.rb at
+// v19.5.0-ee). None of the three does anything a caller wants, so the input
+// does not take them (issue 1165).
 type ListPATInput struct {
 	ProjectID        toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	ServiceAccountID int64                `json:"service_account_id" jsonschema:"Service account user ID,required"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 	CreatedAfter   string `json:"created_after,omitempty" jsonschema:"Filter tokens created after RFC3339 datetime or YYYY-MM-DD date"`
 	CreatedBefore  string `json:"created_before,omitempty" jsonschema:"Filter tokens created before RFC3339 datetime or YYYY-MM-DD date"`
 	ExpiresAfter   string `json:"expires_after,omitempty" jsonschema:"Filter tokens expiring after YYYY-MM-DD date"`
@@ -313,7 +323,6 @@ type ListPATInput struct {
 	Revoked        *bool  `json:"revoked,omitempty" jsonschema:"Filter by revoked state"`
 	UserID         int64  `json:"user_id,omitempty" jsonschema:"Filter by user ID"`
 	Search         string `json:"search,omitempty" jsonschema:"Search token names"`
-	OrderBy        string `json:"order_by,omitempty" jsonschema:"Order tokens by column (keyset pagination)"`
 	Sort           string `json:"sort,omitempty" jsonschema:"Sort expression"`
 	State          string `json:"state,omitempty" jsonschema:"Token state filter: active or inactive"`
 }
@@ -483,7 +492,7 @@ func listPATOptions(input ListPATInput) (*gl.ListProjectServiceAccountPersonalAc
 	opts := &gl.ListProjectServiceAccountPersonalAccessTokensOptions{
 		Revoked: input.Revoked,
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if err := toolutil.ParseTimeInputs(
 		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
 		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
@@ -503,9 +512,6 @@ func listPATOptions(input ListPATInput) (*gl.ListProjectServiceAccountPersonalAc
 	}
 	if input.Search != "" {
 		opts.Search = &input.Search
-	}
-	if input.OrderBy != "" {
-		opts.OrderBy = input.OrderBy
 	}
 	if input.Sort != "" {
 		opts.Sort = &input.Sort
