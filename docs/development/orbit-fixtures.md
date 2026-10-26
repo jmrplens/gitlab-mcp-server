@@ -18,9 +18,10 @@ The file holds 10 tests and 66 subtests, and every query they send but one is wr
 
 The fixtures are the two projects of `jmrp-oss/orbit-fixtures`, a public
 subgroup of the top-level group `jmrp-oss` ("jmrp open source", id
-134059988). That group is the namespace the maintainer is taking into
-the GitLab for Open Source program, which gives the whole top-level
-namespace Ultimate, and it is meant for any of the maintainer's open
+134059988). That group has been in the GitLab for Open Source program
+since 2026-10-26 (`GET /namespaces/134059988` reads `plan: opensource`),
+which gives the whole top-level namespace Ultimate, and it is meant for
+any of the maintainer's open
 source work on gitlab.com, not for the fixtures alone. Orbit keys its
 enrollment and its index by the group's id, so both survived each
 rename. The program's Ultimate does not by itself entitle the group to
@@ -42,7 +43,10 @@ subgroups included, so every project added to `jmrp-oss` follows them:
 - **Every project carries an OSI-approved license.** Both fixture
   projects carry this repository's MIT `LICENSE`, and
   `test/fixtures/orbit/{kg,security}-fixtures/LICENSE` is the same file,
-  so a project the setup script provisions again carries it too. GitLab
+  so a project the setup script provisions again carries it too. The
+  script leaves a project that already exists as it is, so one
+  provisioned before the file was added takes it only by a push of its
+  own, which is how both fixtures took theirs on 2026-10-26. GitLab
   reports the license it detects as `license.key` of
   `GET /projects/:id?license=true`; check it before moving a project in,
   a fork above all, since a repository that mixes licenses may not be
@@ -74,10 +78,10 @@ since 2026-10-15, and each of those was answered `200` against the
 fixture namespace, then `plens1`, on 2026-10-17. On 2026-10-26, against
 `jmrp-oss/orbit-fixtures`, every one of them was answered `200` again
 but two, which GitLab.com has refused since: `PAGE` (issue 1527) and a
-shortest path that names no relationship type (issue 1528). The one that
-is not is written as a JSON object,
-the query DSL the suite used before, which GitLab.com refuses now, and the
-subtest that sends it holds what a caller is told about it.
+shortest path that names no relationship type (issue 1528). The one query
+not written in GQL is a JSON object, the query DSL the suite used before,
+which GitLab.com refuses now, and the subtest that sends it holds what a
+caller is told about it.
 
 `TestOrbitLiveGitLabCom` and `TestOrbitLiveGitLabCom_ShapeDiscovery`
 are self-contained: they bound their projects by path
@@ -126,7 +130,8 @@ is a no-op. The namespace may be a subgroup, as the default
 full path with every slash encoded. It creates the projects public, as
 `jmrp-oss` requires; set `ORBIT_FIXTURES_VISIBILITY=private` for a
 private group of your own, since GitLab refuses a public project in a
-private group.
+private group. `make orbit-setup-fixtures` and `make test-e2e-gitlab-com`
+hand the setting on from their command line or from `.env`.
 
 ### What the script creates
 

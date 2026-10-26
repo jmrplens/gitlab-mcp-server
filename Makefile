@@ -580,6 +580,9 @@ e2e-clean-orphans:
 ##   ORBIT_FIXTURES_MIRROR         default: false  (set to "true" to
 ##                                                  mirror gitlab-org/cli
 ##                                                  as <namespace>/glab-mirror)
+##   ORBIT_FIXTURES_VISIBILITY     default: public (set to "private" for
+##                                                  a private group of
+##                                                  your own)
 ##
 ## Examples:
 ##   make test-e2e-gitlab-com                                # default group
@@ -620,7 +623,7 @@ orbit-setup-fixtures: orbit-ensure-token
 		if [ "$(ORBIT_FIXTURES_MIRROR)" = "true" ]; then mirror_flag="--mirror-cli"; fi; \
 		echo ""; \
 		echo "=== Provisioning Orbit fixtures in $(ORBIT_FIXTURES_NAMESPACE) on $(ORBIT_FIXTURES_GITLAB_URL) ==="; \
-		export GITLAB_COM_TOKEN \
+		export GITLAB_COM_TOKEN ORBIT_FIXTURES_VISIBILITY \
 			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE) \
 			ORBIT_FIXTURES_GITLAB_URL=$(ORBIT_FIXTURES_GITLAB_URL); \
 		./scripts/setup-orbit-fixtures.sh $$mirror_flag; \
