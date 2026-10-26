@@ -110,5 +110,7 @@ func requestDecisions() []Decision {
 		// pages one read sends are bounded where the walk is (issue 1242).
 		bound("RQB-012", "the pages of the pipeline list one latest-pipeline fallback reads",
 			enforce("internal/tools/pipelines", "latestFallbackMaxPages")),
+		bound("RQB-013", "the diff pages one advisory merge request position check reads",
+			enforce(pkgToolutil, "mergeRequestDiffPositionMaxPages")),
 	}
 }

@@ -1108,6 +1108,10 @@ func TestList_APIError(t *testing.T) {
 func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+			return
+		}
 		if strings.Contains(r.URL.Path, "/diffs") {
 			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"other.go","new_path":"other.go","diff":"@@ -1,3 +1,4 @@\n line1\n+line2\n line3\n line4\n"}]`)
 			return
@@ -1116,7 +1120,8 @@ func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
 		NewPath: "missing_file.go",
 		NewLine: 1,
 	})
@@ -1133,6 +1138,10 @@ func TestValidatePosition_FileNotInDiff(t *testing.T) {
 func TestValidatePosition_FileFoundInDiff(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+			return
+		}
 		if strings.Contains(r.URL.Path, "/diffs") {
 			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"main.go","new_path":"main.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added line\n line3\n line4\n"}]`)
 			return
@@ -1141,7 +1150,8 @@ func TestValidatePosition_FileFoundInDiff(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
 		NewPath: "main.go",
 		NewLine: 2,
 	})
@@ -1153,11 +1163,16 @@ func TestValidatePosition_FileFoundInDiff(t *testing.T) {
 // TestValidatePosition_DiffFetchError verifies that validatePosition silently
 // skips validation when the diff API returns an error (best-effort behavior).
 func TestValidatePosition_DiffFetchError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+			return
+		}
 		w.WriteHeader(http.StatusForbidden)
 	}))
 
-	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
 		NewPath: "any.go",
 		NewLine: 1,
 	})
@@ -1171,6 +1186,10 @@ func TestValidatePosition_DiffFetchError(t *testing.T) {
 func TestValidatePosition_FallbackToOldPath(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+			return
+		}
 		if strings.Contains(r.URL.Path, "/diffs") {
 			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old_name.go","new_path":"new_name.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
 			return
@@ -1180,7 +1199,8 @@ func TestValidatePosition_FallbackToOldPath(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	// NewPath is empty, should fallback to OldPath
-	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
 		OldPath: "old_name.go",
 		NewLine: 2,
 	})
@@ -1194,6 +1214,10 @@ func TestValidatePosition_FallbackToOldPath(t *testing.T) {
 func TestUpdate_WithPositionValidation(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+			return
+		}
 		if strings.Contains(r.URL.Path, "/diffs") {
 			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"main.go","new_path":"main.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
 			return
@@ -1206,7 +1230,7 @@ func TestUpdate_WithPositionValidation(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	out, err := Update(context.Background(), client, UpdateInput{
+	out, err := Update(t.Context(), client, UpdateInput{
 		ProjectID: "42",
 		MRIID:     1,
 		NoteID:    10,

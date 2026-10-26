@@ -97,7 +97,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.Unidiff {
 		opts.Unidiff = new(true)
 	}
-	diffs, resp, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
+	diffs, resp, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrChangesGet", err, http.StatusNotFound, hintVerifyMR)
 	}

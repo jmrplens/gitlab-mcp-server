@@ -13,44 +13,76 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
-// MergeRequestDiffsForPositionCheck lists every page of a merge request's
-// diffs for a position pre-check and reports whether the listing completed.
-// A failed page discards the partial listing so it cannot falsely establish
-// that a file is absent.
+// mergeRequestDiffPositionMaxPages bounds the diff pages one advisory position
+// check reads (register row RQB-013). Reaching it defers to GitLab's write.
+const mergeRequestDiffPositionMaxPages = 100
+
+// MergeRequestDiffForPositionCheck finds targetPath in a merge request's current
+// diff and reports whether the result belongs to the position's expected refs.
+// A nil diff with a true second result means the file was absent from a complete
+// listing. A false second result means the caller must defer validation to
+// GitLab, including when the snapshot cannot be confirmed or a request fails.
 //
-// The pre-check exists to hand a model an actionable message before GitLab
-// answers a line outside the diff with a bare 400 or 500, and it is advisory:
-// when the listing itself fails the second result is false and the caller
-// skips the check rather than refusing the write. What is skipped is the
-// message, never the judgement, because the write that follows goes to the
-// same instance with the same credential and GitLab answers it on its own
-// terms. A 401, 403 or 404 on the listing is the refusal the write is about
-// to get, with the right status; a cancelled context ends the write the same
-// way; and a transient failure on the listing leaves the write judged by
-// GitLab alone, which is exactly what a caller had before the pre-check
-// existed. The cause is logged at debug so that a listing which fails every
-// time can be seen without the write having to fail.
-func MergeRequestDiffsForPositionCheck(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64) ([]*gl.MergeRequestDiff, bool) {
+// The search stops at the matching old or new path and retains no earlier
+// pages. It reads at most 100 pages of 100 files. The MR's diff refs must match
+// expected before and after the search; this detects changes between reads,
+// not changes after the final read. GitLab still judges the subsequent write.
+func MergeRequestDiffForPositionCheck(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, targetPath string, expected gl.MergeRequestDiffRefs) (*gl.MergeRequestDiff, bool) {
+	if expected.BaseSha == "" || expected.StartSha == "" || expected.HeadSha == "" {
+		return nil, false
+	}
+	if !mergeRequestPositionSnapshotMatches(ctx, client, projectID, mrIID, expected) {
+		return nil, false
+	}
 	opts := &gl.ListMergeRequestDiffsOptions{Page: 1, PerPage: 100}
-	var diffs []*gl.MergeRequestDiff
-	for {
+	for range mergeRequestDiffPositionMaxPages {
 		page, resp, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, mrIID, opts, gl.WithContext(ctx))
 		if err != nil {
-			slog.DebugContext(ctx, "merge request diff listing failed; the position pre-check is skipped and GitLab judges the write",
+			slog.DebugContext(ctx, "merge request diff listing failed; GitLab judges the position",
 				"project_id", projectID, "merge_request_iid", mrIID, "page", opts.Page, "error", err)
 			return nil, false
 		}
-		diffs = append(diffs, page...)
+		for _, diff := range page {
+			if diff != nil && (diff.NewPath == targetPath || diff.OldPath == targetPath) {
+				if !mergeRequestPositionSnapshotMatches(ctx, client, projectID, mrIID, expected) {
+					return nil, false
+				}
+				return diff, true
+			}
+		}
 		if resp == nil || resp.NextPage == 0 {
-			return diffs, true
+			return nil, mergeRequestPositionSnapshotMatches(ctx, client, projectID, mrIID, expected)
 		}
 		if resp.NextPage <= opts.Page {
-			slog.DebugContext(ctx, "merge request diff pagination did not advance; the position pre-check is skipped and GitLab judges the write",
+			slog.DebugContext(ctx, "merge request diff pagination did not advance; GitLab judges the position",
 				"project_id", projectID, "merge_request_iid", mrIID, "page", opts.Page, "next_page", resp.NextPage)
 			return nil, false
 		}
 		opts.Page = resp.NextPage
 	}
+	slog.DebugContext(ctx, "merge request diff page budget exhausted; GitLab judges the position",
+		"project_id", projectID, "merge_request_iid", mrIID)
+	return nil, false
+}
+
+// mergeRequestPositionSnapshotMatches confirms that the current diff has all
+// three expected refs. An unreadable snapshot cannot justify a local refusal.
+func mergeRequestPositionSnapshotMatches(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, expected gl.MergeRequestDiffRefs) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, mrIID, nil, gl.WithContext(ctx))
+	if err != nil {
+		slog.DebugContext(ctx, "merge request diff snapshot unreadable; GitLab judges the position",
+			"project_id", projectID, "merge_request_iid", mrIID, "error", err)
+		return false
+	}
+	if mr == nil || mr.DiffRefs != expected {
+		slog.DebugContext(ctx, "merge request diff snapshot differs; GitLab judges the position",
+			"project_id", projectID, "merge_request_iid", mrIID)
+		return false
+	}
+	return true
 }
 
 // LineType classifies a line within a unified diff hunk.

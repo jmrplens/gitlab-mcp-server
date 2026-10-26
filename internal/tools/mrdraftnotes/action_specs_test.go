@@ -232,42 +232,49 @@ func TestUpdate_Forbidden(t *testing.T) {
 	}
 }
 
-// TestCreateUpdate_InvalidPosition verifies inline draft notes reject files outside the MR diff.
-func TestCreateUpdate_InvalidPosition(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"new_path":"other.go","old_path":"other.go","diff":"@@ -1 +1 @@\n-old\n+new"}]`)
+// TestCreate_InvalidPosition_RejectsMissingFile refuses a file absent from a stable diff.
+func TestCreate_InvalidPosition_RejectsMissingFile(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/diffs") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"new_path":"other.go","old_path":"other.go","diff":"@@ -1 +1 @@\n-old\n+new"}]`)
+			return
+		}
+		t.Errorf("invalid position reached write: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusBadRequest)
 	}))
 	position := &DiffPosition{BaseSHA: "base", StartSHA: "start", HeadSHA: "head", NewPath: "missing.go", NewLine: 1}
 
-	tests := []struct {
-		name string
-		run  func() error
-	}{
-		{
-			name: "create",
-			run: func() error {
-				_, err := Create(context.Background(), client, CreateInput{ProjectID: "1", MRIID: 1, Note: "inline", Position: position})
-				return err
-			},
-		},
-		{
-			name: "update",
-			run: func() error {
-				_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", MRIID: 1, NoteID: 1, Note: "inline", Position: position})
-				return err
-			},
-		},
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "1", MRIID: 1, Note: "inline", Position: position})
+
+	if err == nil || !strings.Contains(err.Error(), "missing.go") {
+		t.Fatalf("error = %v, want missing file hint", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.run()
-			if err == nil {
-				t.Fatal("expected invalid position error")
-			}
-			if !strings.Contains(err.Error(), "missing.go") {
-				t.Fatalf("error = %v, want missing file hint", err)
-			}
-		})
+}
+
+// TestUpdate_InvalidPosition_RejectsMissingFile keeps update validation in-process.
+func TestUpdate_InvalidPosition_RejectsMissingFile(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/diffs") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"new_path":"other.go","old_path":"other.go","diff":"@@ -1 +1 @@\n-old\n+new"}]`)
+			return
+		}
+		t.Errorf("invalid position reached write: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	position := &DiffPosition{BaseSHA: "base", StartSHA: "start", HeadSHA: "head", NewPath: "missing.go", NewLine: 1}
+
+	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "1", MRIID: 1, NoteID: 1, Note: "inline", Position: position})
+
+	if err == nil || !strings.Contains(err.Error(), "missing.go") {
+		t.Fatalf("error = %v, want missing file hint", err)
 	}
 }
 

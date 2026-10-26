@@ -25,9 +25,9 @@ func TestMRReview_InlinePositionsAcrossDiffPages(t *testing.T) {
 	discussion := mrInlineTool{"gitlab_mr_discussion_create", http.MethodPost, "/discussions", "body", `{"id":"thread","notes":[{"id":10,"body":"Keep this text"}]}`}
 	draftCreate := mrInlineTool{"gitlab_mr_draft_note_create", http.MethodPost, "/draft_notes", "note", `{"id":10,"note":"Keep this text"}`}
 	draftUpdate := mrInlineTool{"gitlab_mr_draft_note_update", http.MethodPut, "/draft_notes/10", "note", `{"id":10,"note":"Keep this text"}`}
-	firstPage := mrInlinePosition{"FirstPageAdded", "file-000.go", "file-000.go", 2, 0}
-	secondPage := mrInlinePosition{"SecondPageRemoved", "file-100.go", "file-100.go", 0, 2}
-	thirdPage := mrInlinePosition{"ThirdPageRenamedContext", "renamed.go", "file-200.go", 1, 1}
+	firstPage := mrInlinePosition{"FirstPageAdded", "file-000.go", "file-000.go", 2, 0, 1}
+	secondPage := mrInlinePosition{"SecondPageRemoved", "file-100.go", "file-100.go", 0, 2, 2}
+	thirdPage := mrInlinePosition{"ThirdPageRenamedContext", "renamed.go", "file-200.go", 1, 1, 3}
 
 	cases := []struct {
 		tool     mrInlineTool
@@ -59,8 +59,12 @@ func TestMRReview_InlinePositionsAcrossDiffPages(t *testing.T) {
 			if err != nil || result.IsError {
 				t.Fatalf("CallTool() = (%+v, %v), want a successful inline write", result, err)
 			}
-			if !slices.Equal(requests.pages, []int{1, 2, 3}) {
-				t.Errorf("diff pages = %v, want [1 2 3]", requests.pages)
+			var wantPages []int
+			for page := 1; page <= tc.position.page; page++ {
+				wantPages = append(wantPages, page)
+			}
+			if !slices.Equal(requests.pages, wantPages) || requests.snapshots != 2 {
+				t.Errorf("diff pages = %v, snapshots = %d; want %v, 2", requests.pages, requests.snapshots, wantPages)
 			}
 			if len(requests.writes) != 1 {
 				t.Fatalf("writes = %d, want 1", len(requests.writes))
@@ -79,6 +83,7 @@ func TestMRReview_InlinePositionsAcrossDiffPages(t *testing.T) {
 type mrInlinePosition struct {
 	name, path, oldPath string
 	newLine, oldLine    int
+	page                int
 }
 
 // input uses JSON-decoded number types so the request can be compared directly
@@ -112,6 +117,10 @@ func TestMRReview_InvalidPositionAfterCompleteListing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var pages []int
 			session := newMRPaginationSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+					respondMRInlineSnapshot(w)
+					return
+				}
 				if r.URL.Path == "/api/v4/projects/42/merge_requests/1/diffs" {
 					pages = append(pages, respondMRDiffPage(w, r))
 					return
@@ -187,6 +196,54 @@ func TestMRReview_ChangesPagination(t *testing.T) {
 	}
 }
 
+// TestMRReview_UnavailablePositionEvidence_PreservesInlineWrites ensures that a
+// changing or unreadable snapshot cannot reject a valid write locally.
+func TestMRReview_UnavailablePositionEvidence_PreservesInlineWrites(t *testing.T) {
+	discussion := mrInlineTool{"gitlab_mr_discussion_create", http.MethodPost, "/discussions", "body", `{"id":"thread","notes":[{"id":10,"body":"Keep this text"}]}`}
+	draftCreate := mrInlineTool{"gitlab_mr_draft_note_create", http.MethodPost, "/draft_notes", "note", `{"id":10,"note":"Keep this text"}`}
+	draftUpdate := mrInlineTool{"gitlab_mr_draft_note_update", http.MethodPut, "/draft_notes/10", "note", `{"id":10,"note":"Keep this text"}`}
+	stableSnapshot := fmt.Sprintf(`{"diff_refs":{"base_sha":"%s","start_sha":"%s","head_sha":"%s"}}`, strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40))
+	cases := []struct {
+		name     string
+		tool     mrInlineTool
+		status   int
+		snapshot string
+		diffBody string
+	}{
+		{"DiscussionChanged", discussion, http.StatusOK, `{"diff_refs":{"head_sha":"changed"}}`, "[]"},
+		{"DraftCreateChanged", draftCreate, http.StatusOK, `{"diff_refs":{"head_sha":"changed"}}`, "[]"},
+		{"DraftUpdateChanged", draftUpdate, http.StatusOK, `{"diff_refs":{"head_sha":"changed"}}`, "[]"},
+		{"DiscussionUnreadable", discussion, http.StatusForbidden, `{"message":"Forbidden"}`, "[]"},
+		{"DraftCreateUnreadable", draftCreate, http.StatusForbidden, `{"message":"Forbidden"}`, "[]"},
+		{"DraftUpdateUnreadable", draftUpdate, http.StatusForbidden, `{"message":"Forbidden"}`, "[]"},
+		{"DiscussionEmptyPatch", discussion, http.StatusOK, stableSnapshot, `[{"new_path":"moved.go","diff":""}]`},
+		{"DraftCreateEmptyPatch", draftCreate, http.StatusOK, stableSnapshot, `[{"new_path":"moved.go","diff":""}]`},
+		{"DraftUpdateEmptyPatch", draftUpdate, http.StatusOK, stableSnapshot, `[{"new_path":"moved.go","diff":""}]`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			session, requests := newMRPositionEvidenceSession(t, tc.tool, tc.status, tc.snapshot, tc.diffBody)
+			pos := (mrInlinePosition{"MissingDuringScan", "moved.go", "moved.go", 2, 0, 1}).input()
+			args := map[string]any{"project_id": "42", "merge_request_iid": 1, tc.tool.bodyField: "Keep this text", "position": pos}
+			if tc.tool.method == http.MethodPut {
+				args["note_id"] = 10
+			}
+
+			result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: tc.tool.name, Arguments: args})
+
+			if err != nil || result.IsError {
+				t.Fatalf("CallTool = (%+v, %v), want GitLab to judge the write", result, err)
+			}
+			if requests.snapshots != 2 || len(requests.pages) != 1 || len(requests.writes) != 1 {
+				t.Fatalf("snapshots=%d, pages=%v, writes=%d; want 2, [1], 1", requests.snapshots, requests.pages, len(requests.writes))
+			}
+			if requests.writes[0][tc.tool.bodyField] != "Keep this text" || !reflect.DeepEqual(requests.writes[0]["position"], pos) {
+				t.Errorf("write changed the requested body or position: %#v", requests.writes[0])
+			}
+		})
+	}
+}
+
 // mrInlineTool describes an inline write endpoint and its MCP projection.
 type mrInlineTool struct {
 	name, method, path, bodyField, response string
@@ -194,8 +251,9 @@ type mrInlineTool struct {
 
 // mrInlineRequests records the diff pages and write bodies received by GitLab.
 type mrInlineRequests struct {
-	pages  []int
-	writes []map[string]any
+	pages     []int
+	snapshots int
+	writes    []map[string]any
 }
 
 // newMRInlineWriteSession records requests to an inline write endpoint while
@@ -204,6 +262,11 @@ func newMRInlineWriteSession(t *testing.T, tool mrInlineTool) (*mcp.ClientSessio
 	t.Helper()
 	requests := &mrInlineRequests{}
 	session := newMRPaginationSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			requests.snapshots++
+			respondMRInlineSnapshot(w)
+			return
+		}
 		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/diffs" {
 			requests.pages = append(requests.pages, respondMRDiffPage(w, r))
 			return
@@ -284,4 +347,49 @@ func respondMRDiffPage(w http.ResponseWriter, r *http.Request) int {
 		Page: strconv.Itoa(page), PerPage: "100", NextPage: next,
 	})
 	return page
+}
+
+// respondMRInlineSnapshot identifies the synthetic version the positions use.
+func respondMRInlineSnapshot(w http.ResponseWriter) {
+	testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(
+		`{"diff_refs":{"base_sha":"%s","start_sha":"%s","head_sha":"%s"}}`,
+		strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40),
+	))
+}
+
+// newMRPositionEvidenceSession serves one diff page between an initial
+// snapshot and the test's final snapshot response, recording the actual write.
+func newMRPositionEvidenceSession(t *testing.T, tool mrInlineTool, status int, snapshot, diffBody string) (*mcp.ClientSession, *mrInlineRequests) {
+	t.Helper()
+	requests := &mrInlineRequests{}
+	session := newMRPaginationSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			requests.snapshots++
+			if requests.snapshots == 1 {
+				respondMRInlineSnapshot(w)
+				return
+			}
+			testutil.RespondJSON(w, status, snapshot)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/diffs") {
+			requests.pages = append(requests.pages, 1)
+			testutil.RespondJSON(w, http.StatusOK, diffBody)
+			return
+		}
+		if r.Method != tool.method || r.URL.Path != "/api/v4/projects/42/merge_requests/1"+tool.path {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		requests.writes = append(requests.writes, body)
+		testutil.RespondJSON(w, http.StatusOK, tool.response)
+	}))
+	return session, requests
 }

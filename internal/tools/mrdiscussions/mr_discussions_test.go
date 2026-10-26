@@ -518,6 +518,10 @@ func TestCreate_APIError(t *testing.T) {
 // error when an inline comment targets a file outside the MR diff.
 func TestCreate_PositionValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+			return
+		}
 		if strings.Contains(r.URL.Path, "/diffs") {
 			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"other.go","new_path":"other.go","diff":"@@ -1,1 +1,1 @@\n-old\n+new\n"}]`)
 			return
@@ -526,11 +530,12 @@ func TestCreate_PositionValidationError(t *testing.T) {
 		http.Error(w, "unexpected API call", http.StatusInternalServerError)
 	}))
 
-	_, err := Create(context.Background(), client, CreateInput{
+	_, err := Create(t.Context(), client, CreateInput{
 		ProjectID: "42",
 		MRIID:     1,
 		Body:      "missing file",
 		Position: &DiffPosition{
+			BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
 			NewPath: "missing.go",
 			NewLine: 1,
 		},
@@ -1096,10 +1101,15 @@ func newMRDiscussionsActionSpecs(t *testing.T) []toolutil.ActionSpec {
 // TestValidatePosition_FileNotInDiff verifies that validatePosition returns
 // an error when the target file is not part of the MR diff.
 func TestValidatePosition_FileNotInDiff(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+			return
+		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"a.go","new_path":"a.go","diff":"@@ -1,3 +1,3 @@\n-old\n+new\n ctx\n"}]`)
 	}))
-	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
 		NewPath: "not_in_diff.go",
 		NewLine: 1,
 	})
@@ -1114,16 +1124,19 @@ func TestValidatePosition_FileNotInDiff(t *testing.T) {
 // TestValidatePosition_ValidFile verifies that validatePosition succeeds
 // when the file is found in the MR diff and the line is valid.
 func TestValidatePosition_ValidFile(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+			return
+		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"a.go","new_path":"a.go","diff":"@@ -1,3 +1,3 @@\n-old\n+new\n ctx\n"}]`)
 	}))
-	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
 		NewPath: "a.go",
 		NewLine: 1,
 	})
-	// err may or may not be nil depending on line validation, but it should not
-	// be the "not in diff" error.
-	if err != nil && strings.Contains(err.Error(), "not in the merge request diff") {
+	if err != nil {
 		t.Errorf("file should have been found in diff, got: %v", err)
 	}
 }
@@ -1131,14 +1144,19 @@ func TestValidatePosition_ValidFile(t *testing.T) {
 // TestValidatePosition_OldPathFallback verifies that validatePosition
 // uses OldPath when NewPath is empty.
 func TestValidatePosition_OldPathFallback(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+			return
+		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old.go","new_path":"renamed.go","diff":"@@ -1,2 +1,2 @@\n-x\n+y\n"}]`)
 	}))
-	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
 		OldPath: "old.go",
 		OldLine: 1,
 	})
-	if err != nil && strings.Contains(err.Error(), "not in the merge request diff") {
+	if err != nil {
 		t.Errorf("old_path fallback should match, got: %v", err)
 	}
 }
@@ -1146,10 +1164,15 @@ func TestValidatePosition_OldPathFallback(t *testing.T) {
 // TestValidatePosition_APIError verifies that validatePosition returns nil
 // (best-effort) when the diff API call fails.
 func TestValidatePosition_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+			return
+		}
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500"}`)
 	}))
-	err := validatePosition(context.Background(), client, "42", 1, &DiffPosition{
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
 		NewPath: "a.go",
 		NewLine: 1,
 	})
