@@ -49,10 +49,20 @@ func requestDecisions() []Decision {
 	rqb007 := bound("RQB-007", "the size of one uploaded or read file",
 		enforce(pkgConfig, "DefaultMaxFileSize"),
 		enforce(pkgConfig, "MaxFileSize"),
+		enforce(pkgConfig, "UploadMaxFileSizeFromEnv"),
+		enforce(pkgConfig, "loadOverlayUploadLimit"),
 		enforce(pkgToolutil, "DefaultMaxFileSize"))
 	rqb007.Flags = []string{"--upload-max-file-size"}
 	rqb007.Envs = []string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE"}
 	rqb007.Config = []string{"UploadMaxFileSize"}
+	// A size that does not parse, one that is not positive and one above
+	// the ceiling refuse startup on both transports (issue 1170): the flag
+	// writes the variable, and stdio's Load and HTTP mode's overlay read it
+	// through the one reader that holds it to its bounds, which reads a
+	// blank value as unset as the overlay does. HTTP mode used to warn and
+	// use the default, or the maximum, where stdio refused.
+	rqb007.Malformed = RefuseStartup
+	rqb007.Decided = []string{"issue 1170"}
 
 	return []Decision{
 		rqb001,

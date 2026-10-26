@@ -1063,6 +1063,38 @@ func TestDecisions_MalformedExceptions_AreDecidedByIssue957(t *testing.T) {
 	}
 }
 
+// TestDecisions_UploadLimit_RefusesAMalformedValueByIssue1170 pins what issue
+// 1170 decided for the upload limit (RQB-007): a value that does not parse,
+// one that is not positive and one above the ceiling refuse startup on both
+// transports, which is every limit's policy (INV-017). HTTP mode used to warn
+// and use the default for the first two and the maximum for the third, and
+// the row stated no policy at all, so nothing held it to either answer. The
+// refusal is enforced by the one reader both transports call and by the
+// overlay HTTP mode reads it through.
+func TestDecisions_UploadLimit_RefusesAMalformedValueByIssue1170(t *testing.T) {
+	d, ok := Lookup("RQB-007")
+	if !ok {
+		t.Fatal("RQB-007 names no row")
+	}
+	if d.Malformed != RefuseStartup || d.MalformedBy != "" || !slices.Equal(d.Decided, []string{"issue 1170"}) {
+		t.Errorf("RQB-007: malformed %d by %q, decided %v; want a refused start, the default policy, decided by issue 1170",
+			d.Malformed, d.MalformedBy, d.Decided)
+	}
+	if !slices.Equal(d.Flags, []string{"--upload-max-file-size"}) || !slices.Equal(d.Envs, []string{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE"}) {
+		t.Errorf("RQB-007: flags %v, envs %v; want --upload-max-file-size and the variable it writes", d.Flags, d.Envs)
+	}
+	var missing []string
+	for _, site := range []Site{enforce(pkgConfig, "UploadMaxFileSizeFromEnv"), enforce(pkgConfig, "loadOverlayUploadLimit")} {
+		if !slices.Contains(d.Sites, site) {
+			missing = append(missing, site.Name)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("RQB-007 does not name %v in %s, where a malformed value is refused", missing, pkgConfig)
+	}
+}
+
+
 // TestDecisions_LocalAllowLists_AreReadFromStdiosEnvironmentAlone pins the
 // value source issue 957 gave AUT-006, the one row on it. RQB-004's stdio
 // line is read on stdio alone too, but a per-request bound is declared with
