@@ -1806,6 +1806,47 @@ func TestLoad_AZeroDuration_TurnsItsSettingOffHoweverWritten(t *testing.T) {
 	}
 }
 
+// TestLoad_ABlankDuration_IsUnsetOnBothTransports pins what a blank duration
+// variable means to both readers: nothing was set, so the setting keeps its
+// default. HTTP mode's overlay has always read a blank value as absent, and
+// stdio's reader refused it as a duration that did not parse, so the same
+// exported line started an HTTP server and stopped a stdio one. The action
+// timeout's row states that a malformed value refuses startup on both
+// transports (RQB-005), which held only once both agreed on what a value is.
+func TestLoad_ABlankDuration_IsUnsetOnBothTransports(t *testing.T) {
+	for _, setting := range zeroOffDurations() {
+		t.Run(setting.name, func(t *testing.T) {
+			clearOverlayEnv(t)
+			t.Setenv("GITLAB_URL", testHTTPExampleURL)
+			t.Setenv("GITLAB_TOKEN", "test")
+			var unset *Config
+			if setting.loaded != nil {
+				var err error
+				if unset, err = Load(); err != nil {
+					t.Fatalf("Load() with %s unset error = %v", setting.name, err)
+				}
+			}
+			t.Setenv(EnvPrefix+setting.name, "   ")
+			if setting.loaded != nil {
+				cfg, err := Load()
+				if err != nil {
+					t.Fatalf("Load() with a blank %s error = %v, want its default", setting.name, err)
+				}
+				if got, want := setting.loaded(cfg), setting.loaded(unset); got != want {
+					t.Errorf("a blank %s loaded as %v, want the default %v", setting.name, got, want)
+				}
+			}
+			overlay, err := LoadHTTPEnvOverlay()
+			if err != nil {
+				t.Fatalf("LoadHTTPEnvOverlay() with a blank %s error = %v, want it absent", setting.name, err)
+			}
+			if got := setting.overlay(overlay); got != nil {
+				t.Errorf("a blank %s overlaid as %v, want nil", setting.name, *got)
+			}
+		})
+	}
+}
+
 // TestValidate_OAuthRequiresPublicURL verifies oauth mode refuses to start
 // without a public URL, and enforces the RFC 9728 identifier constraints on
 // the one given.

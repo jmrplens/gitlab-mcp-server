@@ -662,11 +662,18 @@ func loadLimitEnv() (limitEnv, error) {
 // refused the start, and the session timeout's refused even the digit its
 // flag reads as off. Anything else, a negative duration included, goes on to
 // that parser and its bound.
+//
+// The value is read trimmed once, so a blank one is unset and keeps the
+// default, which is what HTTP mode's overlay makes of it before it calls this.
+// Stdio's [Load] used to hand the parser the untrimmed value, which refused a
+// blank one as a duration that did not parse, so the same exported line
+// stopped a stdio server and started an HTTP one.
 func parseDisableableDurationEnv(name string, defaultValue, maxValue time.Duration) (time.Duration, error) {
-	if d, err := time.ParseDuration(TrimmedGetenv(name)); err == nil && d == 0 {
+	raw := TrimmedGetenv(name)
+	if d, err := time.ParseDuration(raw); err == nil && d == 0 {
 		return 0, nil
 	}
-	value, err := parseDuration(Getenv(name), defaultValue)
+	value, err := parseDuration(raw, defaultValue)
 	if err != nil {
 		return 0, fmt.Errorf("invalid %s value: %w", name, err)
 	}
