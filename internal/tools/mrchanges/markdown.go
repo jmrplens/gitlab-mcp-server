@@ -70,10 +70,12 @@ func writeDiffBodies(c *toolutil.Card, diffs []FileDiffOutput) []string {
 // FormatOutputMarkdown renders the file changes of a merge request: the files
 // as a collection sharing columns, then each patch as a fenced block.
 func FormatOutputMarkdown(out Output) string {
-	if len(out.Changes) == 0 {
-		return toolutil.EmptyMessage("file changes")
-	}
 	var b strings.Builder
+	if len(out.Changes) == 0 {
+		b.WriteString(toolutil.EmptyMessage("file changes"))
+		toolutil.WritePagination(&b, out.Pagination)
+		return b.String()
+	}
 	c := toolutil.NewCard(&b, fmt.Sprintf("MR !%d Changes", out.MRIID))
 	c.Int("Files", int64(len(out.Changes)))
 	c.Count("Truncated by GitLab", int64(len(out.TruncatedFiles)))
@@ -89,7 +91,7 @@ func FormatOutputMarkdown(out Output) string {
 		// field is where a caller reads them anyway.
 		hints = append(hints, fmt.Sprintf("GitLab truncated %d file diff(s); truncated_files names them. Use action '%s' with a version_id for the full patch", len(out.TruncatedFiles), actionDiffVersionGet))
 	}
-	c.End(hints...)
+	toolutil.WriteListFooter(&b, out.Pagination, false, hints...)
 	return b.String()
 }
 

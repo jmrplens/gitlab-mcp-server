@@ -84,7 +84,7 @@ To ask across every project at once, `merge_request.list_global` takes the same 
 mr_review.changes_get → project_id: "my-group/backend", merge_request_iid: 42
 ```
 
-Returns: list of changed files with additions, deletions, and full diffs.
+Returns one page of changed files and their diffs, plus pagination metadata. Pass `next_page` from the returned `pagination` as `page` while `has_more` is true; use `per_page: 100` to reduce round trips. Inline discussion and draft-note position checks follow every diff page automatically, including files after the first 100. GitLab's own diff-size limits still apply.
 
 ### Check MR approval status
 

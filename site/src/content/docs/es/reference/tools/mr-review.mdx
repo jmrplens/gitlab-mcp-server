@@ -64,7 +64,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `mr_review.changes_get`
 
-> Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, and truncated_files when GitLab collapses large diffs. See also: [`mr_review.diff_versions_list`](#mr_reviewdiff_versions_list), [`mr_review.raw_diffs`](#mr_reviewraw_diffs), [`merge_request.get`](/gitlab-mcp-server/es/reference/tools/merge-request/#merge_requestget).
+> Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, pagination metadata, and truncated_files when GitLab collapses large diffs. See also: [`mr_review.diff_versions_list`](#mr_reviewdiff_versions_list), [`mr_review.raw_diffs`](#mr_reviewraw_diffs), [`merge_request.get`](/gitlab-mcp-server/es/reference/tools/merge-request/#merge_requestget).
 
 - **Meta-herramienta**: `gitlab_mr_review`, acción `changes_get`
 - **Herramienta individual**: `gitlab_mr_changes_get`

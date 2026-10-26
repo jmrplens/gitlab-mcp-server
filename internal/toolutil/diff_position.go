@@ -13,8 +13,10 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
-// MergeRequestDiffsForPositionCheck lists a merge request's diffs for a
-// position pre-check and reports whether it could.
+// MergeRequestDiffsForPositionCheck lists every page of a merge request's
+// diffs for a position pre-check and reports whether the listing completed.
+// A failed page discards the partial listing so it cannot falsely establish
+// that a file is absent.
 //
 // The pre-check exists to hand a model an actionable message before GitLab
 // answers a line outside the diff with a bare 400 or 500, and it is advisory:
@@ -29,15 +31,26 @@ import (
 // existed. The cause is logged at debug so that a listing which fails every
 // time can be seen without the write having to fail.
 func MergeRequestDiffsForPositionCheck(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64) ([]*gl.MergeRequestDiff, bool) {
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, mrIID, &gl.ListMergeRequestDiffsOptions{
-		PerPage: 100,
-	}, gl.WithContext(ctx))
-	if err != nil {
-		slog.DebugContext(ctx, "merge request diff listing failed; the position pre-check is skipped and GitLab judges the write",
-			"project_id", projectID, "merge_request_iid", mrIID, "error", err)
-		return nil, false
+	opts := &gl.ListMergeRequestDiffsOptions{Page: 1, PerPage: 100}
+	var diffs []*gl.MergeRequestDiff
+	for {
+		page, resp, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, mrIID, opts, gl.WithContext(ctx))
+		if err != nil {
+			slog.DebugContext(ctx, "merge request diff listing failed; the position pre-check is skipped and GitLab judges the write",
+				"project_id", projectID, "merge_request_iid", mrIID, "page", opts.Page, "error", err)
+			return nil, false
+		}
+		diffs = append(diffs, page...)
+		if resp == nil || resp.NextPage == 0 {
+			return diffs, true
+		}
+		if resp.NextPage <= opts.Page {
+			slog.DebugContext(ctx, "merge request diff pagination did not advance; the position pre-check is skipped and GitLab judges the write",
+				"project_id", projectID, "merge_request_iid", mrIID, "page", opts.Page, "next_page", resp.NextPage)
+			return nil, false
+		}
+		opts.Page = resp.NextPage
 	}
-	return diffs, true
 }
 
 // LineType classifies a line within a unified diff hunk.

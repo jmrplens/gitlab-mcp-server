@@ -84,7 +84,7 @@ Para preguntar en todos los proyectos a la vez, `merge_request.list_global` acep
 mr_review.changes_get → project_id: "my-group/backend", merge_request_iid: 42
 ```
 
-Devuelve: lista de archivos modificados con adiciones, eliminaciones y diffs completos.
+Devuelve una página de archivos modificados y sus diffs, junto con los metadatos de paginación. Pasa `next_page` de la `pagination` devuelta como `page` mientras `has_more` sea true; usa `per_page: 100` para reducir las solicitudes. Las comprobaciones de posición de discusiones en línea y notas de borrador recorren automáticamente todas las páginas del diff, incluidos los archivos posteriores a los primeros 100. Los límites de tamaño de diff de GitLab siguen aplicándose.
 
 ### Verificar estado de aprobación
 

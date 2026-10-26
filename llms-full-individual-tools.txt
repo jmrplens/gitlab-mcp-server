@@ -9315,7 +9315,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_changes_get
 
-Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, and truncated_files when GitLab collapses large diffs. See also: gitlab_mr_diff_versions_list, gitlab_mr_raw_diffs, gitlab_mr_get.
+Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, pagination metadata, and truncated_files when GitLab collapses large diffs. See also: gitlab_mr_diff_versions_list, gitlab_mr_raw_diffs, gitlab_mr_get.
 
 **Parameters:**
 

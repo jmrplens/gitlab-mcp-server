@@ -4,7 +4,11 @@ package toolutil
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -409,6 +413,132 @@ func TestMergeRequestDiffsForPositionCheck_Lists(t *testing.T) {
 	}
 	if len(diffs) != 1 || diffs[0].NewPath != "a.go" {
 		t.Errorf("diffs = %+v, want the one diff the fixture serves", diffs)
+	}
+}
+
+// TestMergeRequestDiffsForPositionCheck_AllPages verifies that pagination,
+// rather than page length or totals, determines when the listing is complete.
+func TestMergeRequestDiffsForPositionCheck_AllPages(t *testing.T) {
+	var pages []string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		if r.URL.Query().Get("per_page") != "100" {
+			t.Errorf("per_page = %q, want 100", r.URL.Query().Get("per_page"))
+		}
+		number, err := strconv.Atoi(page)
+		if err != nil || number < 1 || number > 3 {
+			http.Error(w, "unexpected page", http.StatusBadRequest)
+			return
+		}
+		var files []map[string]string
+		for i := (number - 1) * 100; i < min(number*100, 201); i++ {
+			files = append(files, map[string]string{"new_path": fmt.Sprintf("file-%03d.go", i)})
+		}
+		body, err := json.Marshal(files)
+		if err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		next := ""
+		if number < 3 {
+			next = strconv.Itoa(number + 1)
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, string(body), testutil.PaginationHeaders{
+			Page: page, PerPage: "100", NextPage: next,
+		})
+	}))
+
+	diffs, ok := MergeRequestDiffsForPositionCheck(t.Context(), client, "42", 7)
+
+	if !ok || len(diffs) != 201 {
+		t.Fatalf("listing = (%d files, %t), want (201, true)", len(diffs), ok)
+	}
+	if !slices.Equal(pages, []string{"1", "2", "3"}) {
+		t.Errorf("requested pages = %v, want [1 2 3]", pages)
+	}
+	if diffs[200].NewPath != "file-200.go" {
+		t.Errorf("last file = %q, want file-200.go", diffs[200].NewPath)
+	}
+}
+
+// TestMergeRequestDiffsForPositionCheck_LaterPageFails discards partial
+// evidence so a caller cannot mistake the first page for the whole diff.
+func TestMergeRequestDiffsForPositionCheck_LaterPageFails(t *testing.T) {
+	var pages []string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		if page == "1" {
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"new_path":"first.go"}]`,
+				testutil.PaginationHeaders{Page: "1", NextPage: "2"})
+			return
+		}
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	diffs, ok := MergeRequestDiffsForPositionCheck(t.Context(), client, "42", 7)
+
+	if ok || diffs != nil {
+		t.Fatalf("listing = (%v, %t), want (nil, false)", diffs, ok)
+	}
+	if !slices.Equal(pages, []string{"1", "2"}) {
+		t.Errorf("requested pages = %v, want [1 2]", pages)
+	}
+}
+
+// TestMergeRequestDiffsForPositionCheck_CancelledBetweenPages verifies that
+// cancellation prevents another request and makes partial evidence unusable.
+func TestMergeRequestDiffsForPositionCheck_CancelledBetweenPages(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	calls := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		cancel()
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"new_path":"first.go"}]`,
+			testutil.PaginationHeaders{Page: "1", NextPage: "2"})
+	}))
+
+	diffs, ok := MergeRequestDiffsForPositionCheck(ctx, client, "42", 7)
+
+	if ok || diffs != nil {
+		t.Fatalf("listing = (%v, %t), want (nil, false)", diffs, ok)
+	}
+	if calls != 1 {
+		t.Errorf("requests = %d, want 1", calls)
+	}
+}
+
+// TestMergeRequestDiffsForPositionCheck_RepeatedPage skips the pre-check
+// rather than looping forever or treating an incomplete list as complete.
+func TestMergeRequestDiffsForPositionCheck_RepeatedPage(t *testing.T) {
+	calls := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"new_path":"a.go"}]`,
+			testutil.PaginationHeaders{Page: "1", NextPage: "1"})
+	}))
+
+	diffs, ok := MergeRequestDiffsForPositionCheck(t.Context(), client, "42", 7)
+
+	if ok || diffs != nil || calls != 1 {
+		t.Errorf("listing = (%v, %t), calls = %d; want (nil, false), 1", diffs, ok, calls)
+	}
+}
+
+// TestMergeRequestDiffsForPositionCheck_Empty verifies that an empty complete
+// listing remains usable evidence that the merge request has no changed files.
+func TestMergeRequestDiffsForPositionCheck_Empty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, "[]")
+	}))
+
+	diffs, ok := MergeRequestDiffsForPositionCheck(t.Context(), client, "42", 7)
+
+	if !ok || len(diffs) != 0 {
+		t.Errorf("listing = (%v, %t), want an empty complete listing", diffs, ok)
 	}
 }
 
