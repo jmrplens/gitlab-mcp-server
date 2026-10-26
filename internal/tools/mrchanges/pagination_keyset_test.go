@@ -24,6 +24,8 @@ func TestGet_KeysetContinuation_AdvancesAndPreservesListing(t *testing.T) {
 			t.Error("the continuation link was sent as a raw page_token")
 		}
 		path := "first.go"
+		// The synthetic Link exercises client continuation handling; it does not
+		// establish GitLab support for keyset on this endpoint.
 		if query.Get("id_after") == "" {
 			query.Set("id_after", "100")
 			w.Header().Set("Link", fmt.Sprintf("<http://%s%s?%s>; rel=\"next\"", r.Host, r.URL.Path, query.Encode()))
@@ -83,21 +85,31 @@ func TestGet_KeysetCredentialParameter_RefusesBeforeRequest(t *testing.T) {
 	}
 }
 
-func TestActionSpecs_ChangesGetPagination_DescribesBothContinuations(t *testing.T) {
+func TestActionSpecs_ChangesGetPagination_DescribesOffsetContinuation(t *testing.T) {
 	specs := ActionSpecs(nil)
 	usage := specs[0].Usage
-	for _, name := range []string{"next_page", "next_page_token", "page_token", "has_more"} {
+	for _, name := range []string{"next_page as page", "has_more", "per_page: 100"} {
 		t.Run(name, func(t *testing.T) {
 			if !strings.Contains(usage, name) {
 				t.Errorf("usage lacks %s: %s", name, usage)
 			}
 		})
 	}
-	for _, name := range []string{"page", "per_page", "page_token"} {
+	for _, name := range []string{"keyset", "page_token"} {
+		t.Run("unadvertised_"+name, func(t *testing.T) {
+			if strings.Contains(strings.ToLower(usage), name) {
+				t.Errorf("usage advertises %s: %s", name, usage)
+			}
+		})
+	}
+	for _, name := range []string{"page", "per_page"} {
 		t.Run("guidance_"+name, func(t *testing.T) {
 			if _, ok := specs[0].ParameterGuidance[name]; !ok {
 				t.Errorf("parameter guidance lacks %s", name)
 			}
 		})
+	}
+	if _, ok := specs[0].ParameterGuidance["page_token"]; ok {
+		t.Error("parameter guidance advertises page_token for MR diffs")
 	}
 }

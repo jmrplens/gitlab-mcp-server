@@ -84,7 +84,7 @@ To ask across every project at once, `merge_request.list_global` takes the same 
 mr_review.changes_get → project_id: "my-group/backend", merge_request_iid: 42
 ```
 
-Returns one page of changed files and their diffs, plus pagination metadata. While `has_more` is true, pass `next_page` as `page` for offset pagination, or pass `next_page_token` unchanged as `page_token` when GitLab returns a keyset continuation. Use `per_page: 100` to reduce round trips. Inline discussion and draft-note position checks search for the target file across at most 100 diff pages, stopping when it is found. The check compares the MR's diff SHAs before and after the search; if the snapshot cannot be confirmed or the page budget is exhausted, GitLab validates the write. GitLab's own diff-size limits still apply.
+Returns one page of changed files and their diffs, plus pagination metadata. While `has_more` is true, pass `next_page` as `page` for offset pagination. Use `per_page: 100` to reduce round trips. Inline discussion and draft-note position checks search for the target file across at most 100 diff pages, stopping when it is found. The check compares the MR's diff SHAs before and after the search; if the snapshot cannot be confirmed or the page budget is exhausted, GitLab validates the write. GitLab's own diff-size limits still apply.
 
 ### Check MR approval status
 

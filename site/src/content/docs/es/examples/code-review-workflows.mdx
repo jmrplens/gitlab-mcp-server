@@ -84,7 +84,7 @@ Para preguntar en todos los proyectos a la vez, `merge_request.list_global` acep
 mr_review.changes_get → project_id: "my-group/backend", merge_request_iid: 42
 ```
 
-Devuelve una página de archivos modificados y sus diffs, junto con los metadatos de paginación. Mientras `has_more` sea true, pasa `next_page` como `page` para la paginación por offset, o devuelve `next_page_token` sin cambios como `page_token` cuando GitLab proporcione una continuación keyset. Usa `per_page: 100` para reducir las solicitudes. Las comprobaciones de posición de discusiones en línea y notas de borrador buscan el archivo de destino en un máximo de 100 páginas del diff y se detienen al encontrarlo. La comprobación compara los SHA del diff del MR antes y después de la búsqueda; si no puede confirmar la misma versión o se agota el límite de páginas, GitLab valida la escritura. Los límites de tamaño de diff de GitLab siguen aplicándose.
+Devuelve una página de archivos modificados y sus diffs, junto con los metadatos de paginación. Mientras `has_more` sea true, pasa `next_page` como `page` para la paginación por offset. Usa `per_page: 100` para reducir las solicitudes. Las comprobaciones de posición de discusiones en línea y notas de borrador buscan el archivo de destino en un máximo de 100 páginas del diff y se detienen al encontrarlo. La comprobación compara los SHA del diff del MR antes y después de la búsqueda; si no puede confirmar la misma versión o se agota el límite de páginas, GitLab valida la escritura. Los límites de tamaño de diff de GitLab siguen aplicándose.
 
 ### Verificar estado de aprobación
 
