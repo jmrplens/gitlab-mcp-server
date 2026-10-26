@@ -185,6 +185,13 @@ jobs:
       # the first run of this rule found twenty-five constants nothing reads.
       - name: Check no constant is left unread
         run: make check-dead-consts
+      # Every source file opens with the copyright statement and the SPDX
+      # identifier of the license (the OpenSSF Best Practices criteria
+      # copyright_per_file and license_per_file). The gate reads git's file
+      # list, which this job's checkout carries, and judges what is committed,
+      # so it is never deferred.
+      - name: Check every source file carries its copyright and license header
+        run: make check-file-headers
       # client-go takes the caller's context only as the gl.WithContext request
       # option and builds the request from context.Background() without it,
       # so a call that forgets it compiles, answers correctly and cannot be

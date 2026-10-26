@@ -14,7 +14,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
-	check-em-dash check-pr-description check-plan-untracked check-dco \
+	check-em-dash check-pr-description check-plan-untracked check-dco check-file-headers fix-file-headers \
 	audit-action-ids check-action-ids \
 	audit-dead-consts check-dead-consts \
 	audit-sdk-context check-sdk-context \
@@ -1156,37 +1156,38 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/31] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/31] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/31] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/31] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/31] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/31] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
-	run_check "[7/31] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/31] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/31] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/31] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/31] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/31] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/31] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/31] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/31] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/31] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/31] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
-	run_check "[18/31] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/31] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/31] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/31] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/31] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/31] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/31] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/31] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
-	run_check "[26/31] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
-	run_check "[27/31] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
-	run_check "[28/31] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/31] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
-	run_check "[30/31] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
-	run_check "[31/31] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
+	run_check "[1/32] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/32] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/32] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/32] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/32] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/32] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
+	run_check "[7/32] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/32] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/32] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/32] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/32] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/32] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/32] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/32] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/32] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/32] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/32] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
+	run_check "[18/32] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/32] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/32] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/32] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/32] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/32] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/32] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/32] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/32] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/32] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
+	run_check "[28/32] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
+	run_check "[29/32] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[30/32] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
+	run_check "[31/32] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
+	run_check "[32/32] copyright and license headers" go run ./cmd/audit_file_headers/; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -2612,6 +2613,22 @@ DCO_BASE ?= origin/main
 DCO_HEAD ?= HEAD
 check-dco:
 	go run ./cmd/audit_dco/ -base "$(DCO_BASE)" -head "$(DCO_HEAD)" -opened-by "$(DCO_OPENED_BY)" $(DCO_FLAGS)
+
+## check-file-headers: fail when a source file of the repository (the files
+## git holds and the untracked ones it would add) does not open with the
+## copyright and license header cmd/internal/fileheader spells, or carries
+## another copyright or license notice. It reads git's file list, so it runs in
+## a checkout. Step 32 of make analyze and a CI gate.
+check-file-headers:
+	go run ./cmd/audit_file_headers/
+
+## fix-file-headers: write the header into every source file that does not
+## open with it and carries no other notice, after a shebang, an encoding
+## declaration, a Dockerfile parser directive or a CSS @charset rule, and
+## inside an Astro component's frontmatter. A file with another notice is left
+## for a hand edit.
+fix-file-headers:
+	go run ./cmd/audit_file_headers/ -fix
 
 ## check-plan-untracked: fail when git tracks a file under plan/, a working area
 ## .gitignore excludes, so a file there is tracked only if it was force-added.

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/fileheader"
 )
 
 // buildHolder parses src as a package file and returns the holder moveToDocGo
@@ -36,7 +38,8 @@ func readFixtureFile(t *testing.T, dir, name string) string {
 
 // TestMovePackageDoc_MovesTheCommentIntoDocGo verifies the mechanical move:
 // the package comment lands verbatim in a new doc.go above its own package
-// clause, the file it came from keeps its build constraint and loses only the
+// clause, below the copyright and license header every source file opens
+// with, the file it came from keeps its build constraint and loses only the
 // comment, and the audit is satisfied afterwards.
 func TestMovePackageDoc_MovesTheCommentIntoDocGo(t *testing.T) {
 	pkg := writePackageFixture(t, "sample", map[string]string{
@@ -48,7 +51,7 @@ func TestMovePackageDoc_MovesTheCommentIntoDocGo(t *testing.T) {
 		t.Fatalf("movePackageDoc() error = %v", err)
 	}
 
-	if got, want := readFixtureFile(t, pkg.Dir, "doc.go"), "// Package sample provides a fixture.\n//\n// It has a second paragraph.\npackage sample\n"; got != want {
+	if got, want := readFixtureFile(t, pkg.Dir, "doc.go"), fileheader.Go+"// Package sample provides a fixture.\n//\n// It has a second paragraph.\npackage sample\n"; got != want {
 		t.Errorf("doc.go = %q, want %q", got, want)
 	}
 	if got, want := readFixtureFile(t, pkg.Dir, "sample.go"), "//go:build linux\n\npackage sample\n\n// Exported is documented.\nfunc Exported() {}\n"; got != want {
@@ -170,7 +173,7 @@ func TestMovePackageDoc_SkipsFilesOnceTheHolderIsFound(t *testing.T) {
 			t.Errorf("movePackageDoc() error = %v", err)
 		}
 	})
-	if got, want := readFixtureFile(t, pkg.Dir, "doc.go"), "// Package sample is documented here.\npackage sample\n"; got != want {
+	if got, want := readFixtureFile(t, pkg.Dir, "doc.go"), fileheader.Go+"// Package sample is documented here.\npackage sample\n"; got != want {
 		t.Errorf("doc.go = %q, want %q", got, want)
 	}
 	if got := readFixtureFile(t, pkg.Dir, "zzz.go"); got != second {
@@ -193,7 +196,7 @@ func TestMovePackageDoc_PassesOverFilesThatAreNotGoSource(t *testing.T) {
 			t.Errorf("movePackageDoc() error = %v", err)
 		}
 	})
-	if got, want := readFixtureFile(t, pkg.Dir, "doc.go"), "// Package sample provides a fixture.\npackage sample\n"; got != want {
+	if got, want := readFixtureFile(t, pkg.Dir, "doc.go"), fileheader.Go+"// Package sample provides a fixture.\npackage sample\n"; got != want {
 		t.Errorf("doc.go = %q, want %q", got, want)
 	}
 	if got := readFixtureFile(t, pkg.Dir, "README.md"); got != readme {
@@ -258,7 +261,7 @@ func TestMoveToDocGo_BoundsAreTheSlicesItTakes(t *testing.T) {
 				t.Errorf("moveToDocGo() error = %v", err)
 			}
 		})
-		if got, want := readFixtureFile(t, dir, "doc.go"), "/* Package sample is documented. */\npackage sample\n"; got != want {
+		if got, want := readFixtureFile(t, dir, "doc.go"), fileheader.Go+"/* Package sample is documented. */\npackage sample\n"; got != want {
 			t.Errorf("doc.go = %q, want %q", got, want)
 		}
 		if got, want := readFixtureFile(t, dir, "sample.go"), "package sample\n"; got != want {
@@ -275,7 +278,7 @@ func TestMoveToDocGo_BoundsAreTheSlicesItTakes(t *testing.T) {
 				t.Errorf("moveToDocGo() error = %v", err)
 			}
 		})
-		if got, want := readFixtureFile(t, dir, "doc.go"), src; got != want {
+		if got, want := readFixtureFile(t, dir, "doc.go"), fileheader.Go+src; got != want {
 			t.Errorf("doc.go = %q, want %q", got, want)
 		}
 	})

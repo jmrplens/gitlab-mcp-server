@@ -54,7 +54,9 @@ for arg in "$@"; do
     --mirror-cli) MIRROR_CLI=true ;;
     --skip-mirror) SKIP_MIRROR=true ;;
     -h|--help)
-      sed -n '2,44p' "$0"
+      # The usage comment, from its first line to the blank line that ends
+      # it, found by its text so that no line above it shifts what is shown.
+      sed -n '/^# setup-orbit-fixtures\.sh /,/^$/{/./p;}' "$0"
       exit 0
       ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;

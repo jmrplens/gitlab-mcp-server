@@ -50,6 +50,7 @@ What a review checks and what a merge requires are in [Code Review](https://gith
 - [ ] Consolidated Go analysis passes on changed packages (or `make golangci-lint` / `make analyze`)
 - [ ] Code is formatted: `make analyze-fix` (runs configured `golangci-lint` formatters: `goimports`, `gofumpt`, and `gci`)
 - [ ] Follows idiomatic Go patterns and the conventions documented in `CLAUDE.md` / `.github/instructions/`
+- [ ] Every new source file opens with the copyright and license header: `make check-file-headers` (`make fix-file-headers` writes it)
 
 ### Testing
 

@@ -34,6 +34,7 @@ testing reference live in subfolders here.
 | [Dynamic Search Ranker](dynamic-search-ranker.md)                         | How `gitlab_find_action` ranks and matches queries                                                                                 |
 | [Command-Line Utilities](cmd-utilities.md)                                | The `cmd/` developer tools (generators and auditors)                                                                               |
 | [Static Analysis](static-analysis.md)                                     | The golangci-lint, govulncheck, and markdownlint gates                                                                             |
+| [Copyright and License Headers](file-headers.md)                          | The two lines every source file opens with, where each kind carries them, and how generated files get them                         |
 | [Godoc Compliance](godoc.md)                                              | The godoc audit workflow for packages, symbols, and tests                                                                          |
 | [Token Footprint](token-footprint.md)                                     | Token accounting across tiers, surfaces, and schema modes                                                                          |
 | [Resource Hot Spots](resource-hot-spots.md)                               | What a pooled credential costs in memory, what is shared, and what remains                                                         |

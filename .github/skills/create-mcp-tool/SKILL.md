@@ -32,11 +32,19 @@ only: `merge_requests.go` and `merge_requests_test.go` in `package mergerequests
 Go's convention and the `stylecheck`/`revive` naming rules refuse underscores in
 a package identifier, and the directory follows the package.
 
+Every file opens with the copyright and license header and a blank line, as in
+the templates below, `doc.go` and the test files included; `make
+check-file-headers` fails a file without it and `make fix-file-headers` writes
+it ([Copyright and License Headers](../../../docs/development/file-headers.md)).
+
 ## Step 1: Define Input/Output Structs
 
 In `{domain}.go`:
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package {domain}
 
 import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -153,6 +161,9 @@ Error handling rules:
 In `action_specs.go`, define the canonical route metadata once. Meta-tools, dynamic find/execute, `gitlab://tools` resources, audits, and individual tool projection consume this spec.
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package {domain}
 
 import (
@@ -209,6 +220,9 @@ Spec rules:
 In `markdown.go`:
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package {domain}
 
 import (
@@ -285,6 +299,9 @@ Expected checks:
 In `{domain}_test.go`:
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package {domain}
 
 import (

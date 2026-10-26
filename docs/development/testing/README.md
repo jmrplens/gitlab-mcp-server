@@ -232,7 +232,7 @@ left to test.
 
 **An external test package gobco cannot read is staged as well.** gobco
 resolves the `_test` package against the non-test files alone, so
-`internal/tools/todos` died with `action_specs_test.go:49:27: undefined:
+`internal/tools/todos` died with `action_specs_test.go:52:27: undefined:
 todos.PublishedActionIDs`, a name its `export_test.go` declares, before
 instrumenting anything. And it bridges that package to the instrumented one
 through an import of the package it finds in the directory, so

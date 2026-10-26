@@ -43,6 +43,13 @@ link to each for Claude Code. OpenCode wiring is per developer: `opencode.json` 
 - **Conventional commits.** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`,
   `chore:`. Use the `git-commit` skill (`.claude/skills/git-commit/`) for
   auto-detected type/scope.
+- **A copyright and license header in every source file.** Each source
+  file opens with `Copyright (c) 2026 José M. Requena Plens` and
+  `SPDX-License-Identifier: MIT` as comments of its language, a Go file
+  with a blank line before its package clause or build constraint.
+  `make fix-file-headers` writes them into a new file and
+  `make check-file-headers` is the gate; which files carry them and where
+  is in `docs/development/file-headers.md`.
 - **Coverage target: maximum possible, 100% when feasible.** CI fails
   below 90% total coverage (`COVERAGE_MIN` in `.github/workflows/ci.yml`);
   in practice the team pushes per-package coverage to 100%
@@ -69,7 +76,7 @@ make test                                 # all unit tests, with coverage.out
 make coverage                             # writes coverage.html
 
 # Lint / analyze
-make analyze                              # 31 steps: golangci-lint, govulncheck, markdownlint and the cmd/ audits and record checks
+make analyze                              # 32 steps: golangci-lint, govulncheck, markdownlint and the cmd/ audits and record checks
 make analyze-fix                          # apply gofumpt/goimports/gci/markdownlint --fix
 make golangci-lint                        # Go-only gate
 golangci-lint run --build-tags e2e ./internal/tools/branches/  # one package

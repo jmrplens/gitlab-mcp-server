@@ -121,9 +121,9 @@ func TestExcludeTools_LeavesEverythingElseAlone(t *testing.T) {
 // model reading "unknown action, did you mean ..." concludes the server lacks
 // the capability rather than that something narrowed it. An action
 // --exclude-tools removed is the other way round: `ExcludedByName` is kept out
-// of the withheld lists on purpose (internal/tools/catalog_filter.go:28), since
-// naming it would leak the operator's configuration and contradict the
-// exclusion that operator asked for.
+// of the withheld lists on purpose (the doc comment of WithheldActions in
+// internal/tools/catalog_filter.go), since naming it would leak the operator's
+// configuration and contradict the exclusion that operator asked for.
 //
 // So the assertion here is that the refusal gives nothing away: it must not
 // name the exclusion, the tool, or the configuration. This is the scenario

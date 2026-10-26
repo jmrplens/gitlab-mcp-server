@@ -44,7 +44,7 @@ Follow idiomatic Go practices and community standards when writing Go code. Thes
   - **BEFORE writing any code**, check what package name other `.go` files in the same directory use
   - Use the SAME package name as existing files in that directory
   - If it's a new directory, use the directory name as the package name
-  - Write **exactly one** `package <name>` line at the very top of the file
+  - Open the file with the copyright and license header (`// Copyright (c) 2026 José M. Requena Plens`, `// SPDX-License-Identifier: MIT`) and a blank line, then write **exactly one** `package <name>` line; `make fix-file-headers` writes the header and `make check-file-headers` fails a file without it (see [docs/development/file-headers.md](../../docs/development/file-headers.md))
 - When using file creation or replacement tools:
   - **ALWAYS verify** the target file doesn't already have a `package` declaration before adding one
   - If replacing file content, include only ONE `package` declaration in the new content

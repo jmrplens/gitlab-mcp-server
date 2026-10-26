@@ -161,6 +161,7 @@ GitHub signs off a commit made in its web interface, such as an applied review s
 - [ ] All tests pass: `go test ./... -count=1`
 - [ ] Static analysis is clean: `make analyze` (run `make analyze-fix` first to apply supported Go and Markdown fixes)
 - [ ] New tools have tests, and total coverage stays at or above the 90% CI enforces
+- [ ] Every new source file opens with the [copyright and license header](#copyright-and-license-headers): `make check-file-headers`, or `make fix-file-headers` to write it
 - [ ] Documentation is updated where the change shows: the site page for user-facing behavior (English and Spanish), `docs/development/` for contributor-facing changes (see [Documentation](#documentation))
 - [ ] Commit messages follow conventional commits
 - [ ] Every commit is signed off by its author (`git commit -s`), which certifies the [Developer Certificate of Origin](#developer-certificate-of-origin); `make check-dco` says which are not
@@ -257,6 +258,17 @@ internal/tools/
     ├── <domain>_test.go     # Table-driven unit tests
     └── markdown.go          # Markdown formatters (self-registered via init())
 ```
+
+### Copyright and License Headers
+
+Every source file opens with these two lines, written as comments of its language:
+
+```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+```
+
+A shebang, an encoding declaration, a Dockerfile parser directive or a CSS `@charset` rule stays above them, and an Astro component carries them inside its frontmatter. `make fix-file-headers` writes them into a new file, `make check-file-headers` fails a file without them, and a generator that writes source writes them itself. A file somebody else wrote keeps its own notice and is not stamped with this one. [Copyright and License Headers](docs/development/file-headers.md) lists the files and where each kind carries the lines.
 
 ### Repository Tooling
 

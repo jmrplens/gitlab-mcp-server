@@ -16110,7 +16110,7 @@ the issue's minimal reproduction with Go 1.27.1, measured on 2026-10-08.
 symbol to a package's black box tests: a file of `package x`, compiled only
 into the test binary, that `x_test` reads. `go test` builds it and gobco
 cannot: on `internal/tools/todos` it dies with
-`action_specs_test.go:49:27: undefined: todos.PublishedActionIDs` before it
+`action_specs_test.go:52:27: undefined: todos.PublishedActionIDs` before it
 writes a single counter.
 
 **How we found it**: the condition gate, first on `internal/clientcompat`

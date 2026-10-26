@@ -125,9 +125,12 @@ Rules from go.dev/doc/comment:
 
 #### 2. File Header Comment (multi-file packages)
 
-For packages with multiple `.go` files, each file gets a header describing its scope. Place it BEFORE the `package` declaration:
+For packages with multiple `.go` files, each file gets a header describing its scope. Place it BEFORE the `package` declaration. Every file, `doc.go` and the test files included, opens above it with the copyright and license header and a blank line; that header is not a doc comment, so leave it as it is ([Copyright and License Headers](../../docs/development/file-headers.md)):
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // branches.go implements the MCP tool handlers for GitLab branch
 // operations: create, list, protect, and unprotect.
 //

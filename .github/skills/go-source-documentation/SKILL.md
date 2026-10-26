@@ -55,9 +55,12 @@ package tools
 
 ### Pattern 2: File Header Comment
 
-For multi-file packages, each file gets a header describing its scope. The header goes immediately before the `package` declaration:
+For multi-file packages, each file gets a header describing its scope. The header goes immediately before the `package` declaration. Above it, separated by a blank line, every file (`doc.go` and the test files included) opens with the copyright and license header, which is not a doc comment and is never edited into one ([Copyright and License Headers](../../../docs/development/file-headers.md)):
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // branches.go implements MCP tool handlers for GitLab branch operations.
 //
 // It provides the following tools:
