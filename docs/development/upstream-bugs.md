@@ -164,6 +164,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The vulnerability dismissal reason outlives the dismissal](#the-vulnerability-dismissal-reason-outlives-the-dismissal)
   - [Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token](#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token)
   - [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet)
+  - [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -359,7 +360,7 @@ readable without opening the tracker:
 | 107 | client-go | [The work item documents leave out fields GitLab sends on a work item](#the-work-item-documents-leave-out-fields-gitlab-sends-on-a-work-item) | No; not yet decided | No | No | No | None possible |
 | 108 | client-go | [The saved view documents leave out who made a view, when it changed and how to share it](#the-saved-view-documents-leave-out-who-made-a-view-when-it-changed-and-how-to-share-it) | No; not yet decided | No | No | No | None possible |
 | 109 | gitlab-org/gitlab | [The releases list caches one rendering for both values of `include_html_description`](#the-releases-list-caches-one-rendering-for-both-values-of-include_html_description) | Yes, by another user, [gitlab-org/gitlab#588980](https://gitlab.com/gitlab-org/gitlab/-/issues/588980), which the merge request names to close and which this project's maintainer closed as fixed on 2026-10-17 | Yes, [gitlab-org/gitlab!261176](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261176), merged | **Yes, unreleased**: merged on 2026-10-16 in milestone 19.5, after the 19.5 cut, so 19.6 is its first release; deployed to GitLab.com at 17:00 UTC that day | No; `release.list` can answer the other variant for five minutes on a release before the one that carries the merge | None taken |
-| 110 | gitlab-org/gitlab | [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses) | Yes, by the merge request | Yes, [gitlab-org/gitlab!261285](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261285), merged | **Yes, unreleased**: merged on 2026-10-13 in milestone 19.6 and deployed to GitLab.com the next day | No; a refused value is answered 400, except that `access.approve_project` and `access.approve_group` grant Developer for `0` and report as approved a request that `5` leaves pending where GitLab does not accept it | None yet; this server's own schemas offer refused values: eleven filters `5` (six of them `60` too), six writes `0`, five project writes `5` and the group member update `60`; #1280 tracks it |
+| 110 | gitlab-org/gitlab | [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses) | Yes, by the merge request | Yes, [gitlab-org/gitlab!261285](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261285), merged | **Yes, unreleased**: merged on 2026-10-13 in milestone 19.6 and deployed to GitLab.com the next day | No; a refused value is answered 400, except that an access request approval at a level GitLab does not grant is answered 201 with the requester while the request stays pending | Yes ([issue 1280](https://github.com/jmrplens/gitlab-mcp-server/issues/1280)): every access level parameter publishes, as an enum and in its description, only what its route accepts (`toolutil.AccessLevelSet`), and both approvals refuse a level their scope does not grant before the request; a group approval at `5` is refused on a subgroup and on the Free tier and otherwise confirmed by reading the requester back |
 | 111 | gitlab-org/gitlab | [The forks list returns statistics when asked not to](#the-forks-list-returns-statistics-when-asked-not-to) | Yes, [gitlab-org/gitlab#633318](https://gitlab.com/gitlab-org/gitlab/-/issues/633318) | Yes, [gitlab-org/gitlab!261732](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261732), open in milestone 19.6, closing the issue; approved, with the reviewer's question whether a `400` for a non-boolean value is a breaking change left in the description for the maintainer; its pipelines of 2026-10-14 ran no job, and after our request of 2026-10-17 a GitLab team member ran a new one on 2026-10-20, which passed, and asked the reviewer to set it to merge, which nobody has | No | No; `project.list_forks` with `statistics: false` answers every fork's statistics, and an administrator's `project.list_user_starred` with `with_custom_attributes: false` the custom attributes | None taken |
 | 112 | gitlab-org/gitlab | [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads) | No | No | No | No | Yes, `project.list_user_contributed` refuses keyset pagination and pages by offset only |
 | 113 | client-go | [`DependencyListExport` carries four of the eight fields GitLab sends](#dependencylistexport-carries-four-of-the-eight-fields-gitlab-sends) | No; for a small merge request, since the joint one was closed on 2026-10-21 | No | No | No | Yes, the export create and status read take the four from the captured response |
@@ -390,6 +391,7 @@ readable without opening the tracker:
 | 138 | client-go | [`BranchAccessDescription` and `GroupBranchAccessDescription` model no `member_role_name`](#branchaccessdescription-and-groupbranchaccessdescription-model-no-member_role_name) | No, not yet; it goes out as a small merge request at the pace of the ones that replace row 34's joint one | No, not yet | No | No | Yes, every project and group protected branch read and write, and the `audit_project_full` prompt, read it off the captured response |
 | 139 | client-go | [The protected environment approval rule options model an `access_level_description` no route declares](#the-protected-environment-approval-rule-options-model-an-access_level_description-no-route-declares) | No | No | No | No | Yes, the four project and group protect and update actions no longer offer it |
 | 140 | gobco | [gobco bridges a black box test package through an import it may not find](#gobco-bridges-a-black-box-test-package-through-an-import-it-may-not-find) | Yes, by another user, [rillig/gobco#33](https://github.com/rillig/gobco/issues/33) | Yes, by another contributor, [rillig/gobco#39](https://github.com/rillig/gobco/pull/39), open | No | No; the condition gate could not measure a package it reaches | Yes, temporarily: the staged copy of `scripts/coverage-conditions.sh` since 2026-10-27, by the decision of row 97, until a gobco release carries a fix |
+| 141 | gitlab-org/gitlab | [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses) | No | No | No | No; GitLab answers both with `400` | Yes, the two custom role creates offer Guest to Maintainer and the two broadcast message writes every target but Security Manager |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -15057,39 +15059,40 @@ cache holds.
   Most values the API refuses are answered 400 (or, adding several members
   at once, `201` with `"status":"error"` and nobody created), so nothing
   wrong is stored and the cost is a refusal a caller was told to expect to
-  work. Approving an access request is the exception, twice over:
-  `access.approve_project` and `access.approve_group` send no level when
-  given `0`, which their schemas offer as No access, so GitLab applies its
-  default of `30` and the requester becomes a Developer; and `5` where
-  GitLab does not accept it (on a project, or on a group that is not a
-  top-level group of a licensed instance) is answered `201` with the
-  requester while the request stays pending, which both actions report as
-  an approval.
-- **Workaround**: none yet, and part of this is ours to fix: this server's own
-  input schemas repeat the pages' values, and in places offer values the
-  pages do not. Eleven list filters offer `5=Minimal access` where every
-  route refuses it, in `internal/tools/projects` (`ListInput`,
-  `ListForksInput`, `ListProjectGroupsInput`, `ListInvitedGroupsInput` and
-  `userProjectFilterInput`) and `internal/tools/groups` (`ListInput`,
-  `SubgroupsListInput`, `ListProjectsInput`, `SharedWithListInput`,
-  `InvitedListInput` and `ListSharedProjectsInput`), and the five in
-  `internal/tools/projects` and `SubgroupsListInput` also offer
-  `60=Admin where supported`, which the same `values:` declaration refuses
-  (read from the declaration, not measured). On the writes, `0=No access`,
-  which no route accepts, is offered by both invitation inputs
-  (`internal/tools/invites`), both access request approvals
-  (`internal/tools/accessrequests`, which drop it rather than send it, the
-  Developer grant above), the SAML group link (`internal/tools/groupsaml`)
-  and the LDAP group link (`internal/tools/groupldap`); `5=Minimal access`,
-  which no edition accepts on a project, is offered by the project member
-  add and update (`AddInput` and `EditInput` in `internal/tools/members`),
-  the project share (`ShareProjectInput` in `internal/tools/projects`), the
-  project invitation (`ProjectInvitesInput`) and the project access request
-  approval (`ApproveProjectInput`), whose error hint also lists it among the
-  valid levels; and `60=Admin`, which the group member update refuses, is
-  offered by `EditInput` in `internal/tools/groupmembers`, while the
-  invitations' error hint calls it valid where supported, which no
-  invitation route accepts. #1280 tracks that correction.
+  work. Approving an access request is the exception: the approval service
+  sets the level on the request and saves it, the save fails the member's
+  validation, and the route presents the unsaved record with `201`, so `0`,
+  and `5` where GitLab does not accept it (on a project, or on a group that
+  is not a top-level group of a licensed instance), read like an approval
+  while the request stays pending. The same failed approval resolves the
+  approver's to-do items and, on Enterprise Edition, records a
+  `member_created` audit event. This server's two approvals used to send no
+  level when given `0`, which their schemas offered as No access, so GitLab
+  applied its default of `30` and the requester became a Developer, and
+  reported the pending `5` as an approval.
+- **Workaround**: yes, since
+  [issue 1280](https://github.com/jmrplens/gitlab-mcp-server/issues/1280),
+  for what is ours. Every membership access level parameter is published
+  from one table, `toolutil.AccessLevelSet` in
+  `internal/toolutil/access_level.go`, as an integer enum and as an `N=Role`
+  list in its description, held to the levels its route accepts at
+  v19.5.0-ee by
+  `TestBuildActionCatalog_MembershipAccessLevels_OfferOnlyWhatTheRouteAccepts`
+  in `internal/tools`: the filters (`min_access_level`,
+  `shared_min_access_level`, given their enum centrally) and every project
+  write take Guest to Owner; the group writes (member add and update,
+  invitation, both shares, SAML group link, approval) take Minimal access as
+  well, described as granted only on a top-level group with a Premium or
+  Ultimate license; the LDAP group link takes Minimal access on any group.
+  Planner and Security Manager carry no tier any more, since Community
+  Edition grants both. `access.approve_project` and `access.approve_group`
+  take the level as optional, refuse before the request a level their scope
+  does not grant, `0` included, and send none when it is left out; a group
+  approval at `5` is refused on the Free tier without a request, reads the
+  group and is refused on a subgroup before the approval, and otherwise reads
+  the requester back among the group's members after it, answering a
+  requester who is not found as a request still pending. The CE and EE
+  end-to-end scenarios hold the three answers on a real instance.
 
 **Where**: the `min_access_level` and `shared_min_access_level` rows of the
 projects, groups, forks, starring and token association pages (14 rows), and
@@ -15115,6 +15118,16 @@ where `5` is accepted, and drops the `30` defaults that do not apply. It
 leaves out, to be raised on its own, that approving an access request with a
 level the model refuses answers `201` with the requester while the request
 stays pending.
+
+**Beyond the merge request**: reading the routes at v19.5.0-ee for this
+server's correction found two pages the merge request does not touch, the
+custom role page and the broadcast message page, each listing a level the API
+refuses; they are row 141,
+[The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses).
+The same reading corrected two claims of this server's own that the pages
+never made: a project access token takes Owner from a creator who holds it,
+which GitLab's own service spec asserts, and a project share takes Security
+Manager and Owner.
 
 **How we found it**: checking the values this server sends against what the
 API accepts, during the GitLab Hackathon of October 2026.
@@ -15502,6 +15515,56 @@ under `search_type=advanced`.
 
 **How we found it**: the review of issue 1393's path match marker, which read
 what each backend sends for a file that matched by its path.
+
+### The custom role and broadcast message pages list a level the API refuses
+
+- **Reported**: no. A documentation merge request on gitlab-org/gitlab, as
+  for [the pages row 110 corrected](#the-api-pages-list-access-levels-the-api-refuses),
+  is the next step.
+- **In review**: no.
+- **Merged**: no. Read at `v19.5.0-ee` and on master at `2feb926298d5`
+  (2026-10-26), where both pages still list the level.
+- **Blocking**: no. GitLab answers both with `400`, so nothing wrong is
+  stored, and the cost is a refusal the page told a caller to expect to work.
+  Read from the code, not measured.
+- **Workaround**: yes, since
+  [issue 1280](https://github.com/jmrplens/gitlab-mcp-server/issues/1280):
+  `toolutil.CustomRoleBaseAccessLevels` and
+  `toolutil.BroadcastTargetAccessLevels` in `internal/toolutil/access_level.go`
+  publish what the routes accept, so `member_role.create_instance` and
+  `member_role.create_group` offer Guest to Maintainer, and
+  `admin.broadcast_message_create` and `admin.broadcast_message_update` every
+  target but Security Manager. Nothing upstream retires it: the schemas follow
+  the routes already, and a corrected page only stops disagreeing with them.
+
+**Where**: `doc/api/member_roles.md`, the `base_access_level` row of the
+custom role create, and `doc/api/broadcast_messages.md`, the list of valid
+`target_access_levels`.
+
+**What**: each page offers a level its route or its model refuses.
+
+- `base_access_level` is listed as `10` to `50`. The create routes declare
+  `values: Gitlab::Access.all_values` (`create_role_params` in
+  `ee/lib/api/member_roles.rb`), which is `10` to `50`, and `MemberRole`
+  validates the level against `LEVELS`, which is
+  `Gitlab::Access.options_for_custom_roles`
+  (`ee/app/models/members/member_role.rb`), Minimal access to Maintainer:
+  Owner passes the route and fails the model, and the create answers `400`
+  with the service's message. Guest to Maintainer is what both accept.
+- `target_access_levels` lists Security Manager (`25`) among the valid
+  levels. The create and update routes declare
+  `values: System::BroadcastMessage::ALLOWED_TARGET_ACCESS_LEVELS`
+  (`lib/api/admin/broadcast_messages.rb`), which is Guest, Planner, Reporter,
+  Developer, Maintainer and Owner, so Grape refuses `25` with `400` before the
+  model, which validates the same list, is reached.
+
+**What it costs this server**: nothing at run time. Its schemas offered both
+levels, because they followed the pages, and since issue 1280 they follow the
+routes.
+
+**How we found it**: reading the routes at v19.5.0-ee for issue 1280's
+correction, after the merge request of
+[row 110](#the-api-pages-list-access-levels-the-api-refuses) had merged.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

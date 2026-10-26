@@ -20,15 +20,18 @@
 //     accepts;
 //   - an enum value the description spells for a parameter whose routes publish
 //     an enum that does not carry it;
-//   - a value the description spells for a parameter that publishes no enum but
-//     whose own schema description spells a value set of its own;
+//   - a value the description spells for a parameter that publishes no enum of
+//     strings but whose own schema description spells a value set of its own;
 //   - a "Parameter guidance:" line written for a parameter the action it names
 //     does not accept.
 //
-// The third rule exists because a schema enum is a closed set of strings, so a
-// numeric value set cannot be one. gitlab_member_role's base_access_level
-// offered 5 in the prose while the schema description said 10 to 50, and
-// doc/api/member_roles.md agrees with the schema: GitLab refuses 5. Both sides
+// The third rule exists because the audit folds only the string values of a
+// published enum, so a numeric value set, published as an integer enum (as
+// every access level parameter is since issue 1280) or as none, is compared
+// with nothing through the schema. gitlab_member_role's base_access_level
+// offered 5 in the prose while the schema description said 10 to 50, the set
+// doc/api/member_roles.md lists, and GitLab refuses 5 (its model refuses 50
+// as well, and the schema has said 10 to 40 since issue 1280). Both sides
 // of that comparison are read by one function, so the description's own
 // "10=Guest, 20=Reporter" list is the oracle and a set nothing spells is not
 // judged at all.
