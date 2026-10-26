@@ -77,7 +77,13 @@ func FormatOutputMarkdown(out Output) string {
 		return b.String()
 	}
 	c := toolutil.NewCard(&b, fmt.Sprintf("MR !%d Changes", out.MRIID))
-	c.Int("Files", int64(len(out.Changes)))
+	files := strconv.Itoa(len(out.Changes))
+	if out.Pagination.TotalItems > int64(len(out.Changes)) {
+		files = fmt.Sprintf("%d of %d", len(out.Changes), out.Pagination.TotalItems)
+	} else if out.Pagination.HasMore {
+		files = fmt.Sprintf("%d shown, more available", len(out.Changes))
+	}
+	c.Field("Files", files)
 	c.Count("Truncated by GitLab", int64(len(out.TruncatedFiles)))
 	writeChangeTable(c, "Files", out.Changes)
 	elided := writeDiffBodies(c, out.Changes)

@@ -65,9 +65,9 @@ func TestMRChangesGet_Pagination(t *testing.T) {
 			calls := 0
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
-				if r.URL.Query().Get("page") != tc.page || r.URL.Query().Get("per_page") != "100" || r.URL.Query().Get("unidiff") != "true" {
-					t.Errorf("query = %s", r.URL.RawQuery)
-				}
+				testutil.AssertQueryParam(t, r, "page", tc.page)
+				testutil.AssertQueryParam(t, r, "per_page", "100")
+				testutil.AssertQueryParam(t, r, "unidiff", "true")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"new_path":"a.go","diff":"+a"}]`,
 					testutil.PaginationHeaders{Page: tc.page, PerPage: "100", Total: "201", TotalPages: "3", NextPage: tc.next, PrevPage: tc.previous})
 			}))
@@ -132,6 +132,34 @@ func TestFormatOutputMarkdown_Pagination(t *testing.T) {
 
 			if !strings.Contains(got, tc.want) {
 				t.Errorf("rendered = %q, want pagination %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFormatOutputMarkdown_FileCount distinguishes a page size from a known
+// total and from an unfinished listing without totals.
+func TestFormatOutputMarkdown_FileCount(t *testing.T) {
+	cases := []struct {
+		name       string
+		pagination toolutil.PaginationOutput
+		want       string
+	}{
+		{"KnownTotal", toolutil.PaginationOutput{TotalItems: 201, HasMore: true}, "1 of 201"},
+		{"UnknownTotal", toolutil.PaginationOutput{HasMore: true}, "1 shown, more available"},
+		{"Complete", toolutil.PaginationOutput{TotalItems: 1}, "1"},
+		{"CompleteWithoutTotal", toolutil.PaginationOutput{}, "1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatOutputMarkdown(Output{
+				MRIID:      1,
+				Changes:    []FileDiffOutput{{NewPath: "a.go", Diff: "+a"}},
+				Pagination: tc.pagination,
+			})
+
+			if !strings.Contains(got, "**Files**: "+tc.want+"\n") {
+				t.Errorf("rendered = %q, want file count %q", got, tc.want)
 			}
 		})
 	}

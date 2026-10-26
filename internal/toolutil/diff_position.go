@@ -50,7 +50,7 @@ func MergeRequestDiffForPositionCheck(ctx context.Context, client *gitlabclient.
 				return diff, true
 			}
 		}
-		if resp == nil || resp.NextPage == 0 {
+		if resp.NextPage == 0 {
 			return nil, mergeRequestPositionSnapshotMatches(ctx, client, projectID, mrIID, expected)
 		}
 		if resp.NextPage <= opts.Page {

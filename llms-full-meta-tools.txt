@@ -6458,7 +6458,7 @@ IMPORTANT for action choice: use note_create only for a general/top-level MR com
 Returns:
 - *_list: array with pagination (page, per_page, total, next_page).
 - note_*, discussion_*, draft_note_*, diff_*: resource object(s) with id, body/note, author, position (when inline).
-- changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files, pagination: {has_more, next_page, next_page_token, ...}}. While has_more is true, pass next_page as page for offset pagination. Use per_page: 100 to reduce round trips. If truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
+- changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files, pagination: {has_more, next_page, ...}}. While has_more is true, pass next_page as page for offset pagination. Use per_page: 100 to reduce round trips. If truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
 - raw_diffs: {raw_diff: string}. Full unified diff for the MR head. Ideal when changes_get returns truncated_files.
 - *_delete / *_publish: {success: bool, message: string}.
 Errors: 404 not found (hint: check note_id/discussion_id and merge_request_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
@@ -6481,7 +6481,7 @@ Discussions (threaded, can be inline via position):
 - discussion_note_delete: discussion_id*, note_id*
 
 Changes and diff versions:
-- changes_get: page, per_page, pagination, page_token, unidiff (bool), order_by, sort. Returns one page of structured MR file diffs. Use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
+- changes_get: page, per_page, unidiff (bool), order_by, sort. Returns one page of structured MR file diffs. Use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
 - raw_diffs: project_id*, merge_request_iid*. Returns the full raw unified diff for the MR head (use only when a raw patch/unified diff is requested or changes_get reports truncated_files)
 - diff_versions_list: order_by, sort. Lists the MR diff revisions.
 - diff_version_get: version_id*, unidiff (bool)

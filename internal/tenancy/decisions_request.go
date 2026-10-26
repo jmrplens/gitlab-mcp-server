@@ -110,6 +110,13 @@ func requestDecisions() []Decision {
 		// pages one read sends are bounded where the walk is (issue 1242).
 		bound("RQB-012", "the pages of the pipeline list one latest-pipeline fallback reads",
 			enforce("internal/tools/pipelines", "latestFallbackMaxPages")),
+		// An inline discussion or draft note checks its position against the
+		// merge request's diff, listed 100 files a page, and the walk stops at
+		// the page that names the file. GitLab stores at most diff_max_files
+		// files in one diff version (3,000 at the highest setting), so a real
+		// instance ends the walk within 30 pages, and the bound ends a walk
+		// whose next page never runs out. Reaching it skips the check and
+		// GitLab judges the write.
 		bound("RQB-013", "the diff pages one advisory merge request position check reads",
 			enforce(pkgToolutil, "mergeRequestDiffPositionMaxPages")),
 	}

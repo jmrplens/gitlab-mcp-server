@@ -20,11 +20,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,189 |
-| Unit test functions                                   | 20,571 |
+| Total test functions                                  | 22,188 |
+| Unit test functions                                   | 20,570 |
 | E2E test functions                                    |  1,618 |
 | cmd test functions                                    |  4,931 |
-| Test files (internal/)                                |    736 |
+| Test files (internal/)                                |    733 |
 | Test files (cmd/)                                     |    349 |
 | Test files (test/e2e/)                                |    424 |
 | Tool sub-packages tested                              |    181 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,476 | 60.7% |
+| `TestFunc_Scenario` (2-part)           | 13,477 | 60.7% |
 | `TestFunc` (no underscore)             |    909 |  4.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,804 | 35.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  7,802 | 35.2% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,097 |        245 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            426 |         18 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,117 |        473 | domain-specific GitLab tool handlers                                                            |
+| Core packages           |          4,097 |        244 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            426 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (181) |         11,116 |        473 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,618 |        424 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          4,931 |        349 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,189** |  **1,509** |                                                                                                 |
+| **Total**               |     **22,188** |  **1,506** |                                                                                                 |
 
 ### Core Packages
 
@@ -245,7 +245,7 @@
 | modelregistry           |         13 |          3 |   100.0% |         1 |
 | mrapprovals             |        108 |          3 |   100.0% |         7 |
 | mrapprovalsettings      |         14 |          4 |   100.0% |         4 |
-| mrchanges               |         48 |          2 |   100.0% |         4 |
+| mrchanges               |         47 |          2 |   100.0% |         4 |
 | mrcontextcommits        |         40 |          3 |   100.0% |         3 |
 | mrdiscussions           |         67 |          1 |   100.0% |         7 |
 | mrdraftnotes            |         81 |          3 |   100.0% |         7 |
@@ -312,7 +312,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,117** |    **473** |          | **1,195** |
+| **Total**               | **11,116** |    **473** |          | **1,195** |
 
 </details>
 

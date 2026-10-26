@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -228,6 +229,31 @@ func TestLoadCatalogToolDescriptions_PanicOnInvalidJSON(t *testing.T) {
 		individualToolSnapshotJSON = []byte(`{`)
 		assertPanics(t, func() { _ = loadCatalogIndividualToolDescriptions() })
 	})
+}
+
+// TestCatalogGroupDescription_MRChangesPagination_StatesReturnAndParameters verifies the curated offset contract and accepted parameter summary.
+func TestCatalogGroupDescription_MRChangesPagination_StatesReturnAndParameters(t *testing.T) {
+	description := catalogGroupDescription("gitlab_mr_review")
+	for _, want := range []string{
+		"truncated_files, pagination: {has_more, next_page, ...}",
+		"next_page as page for offset pagination",
+		"Use per_page: 100",
+		"changes_get: page, per_page, unidiff",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(description, want) {
+				t.Errorf("MR review description lacks %q", want)
+			}
+		})
+	}
+	for line := range strings.SplitSeq(description, "\n") {
+		if strings.HasPrefix(line, "- changes_get:") && strings.Contains(strings.ToLower(line), "keyset") {
+			t.Errorf("MR changes description advertises keyset: %s", line)
+		}
+	}
+	if strings.Contains(description, "- changes_get.page_token") {
+		t.Error("MR changes parameter guidance advertises page_token")
+	}
 }
 
 func assertPanics(t *testing.T, fn func()) {

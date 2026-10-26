@@ -1582,63 +1582,6 @@
     {
       "package": "internal/tools",
       "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/merge_requests/:merge_request_id/diffs",
-      "query": [
-        "page",
-        "per_page"
-      ],
-      "identifiers": {
-        ":merge_request_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools",
-      "kind": "rest",
-      "method": "POST",
-      "path": "/projects/:project_id/merge_requests/:merge_request_id/discussions",
-      "body": [
-        "body",
-        "position"
-      ],
-      "identifiers": {
-        ":merge_request_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools",
-      "kind": "rest",
-      "method": "POST",
-      "path": "/projects/:project_id/merge_requests/:merge_request_id/draft_notes",
-      "body": [
-        "note",
-        "position"
-      ],
-      "identifiers": {
-        ":merge_request_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/merge_requests/:merge_request_id/draft_notes/:draft_note_id",
-      "body": [
-        "note",
-        "position"
-      ],
-      "identifiers": {
-        ":draft_note_id": 1,
-        ":merge_request_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools",
-      "kind": "rest",
       "method": "PUT",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/merge",
       "identifiers": {
@@ -13398,7 +13341,6 @@
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/diffs",
       "query": [
-        "id_after",
         "order_by",
         "page",
         "page_token",
