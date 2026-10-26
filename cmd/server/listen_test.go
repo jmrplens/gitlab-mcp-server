@@ -590,3 +590,135 @@ func TestStaleSocketDialTimeout_BoundsTheProbeRatherThanDisablingIt(t *testing.T
 			"so a budget this large only delays startup", staleSocketDialTimeout)
 	}
 }
+
+// TestAnnouncePlaintextListener_SaysWhatTheListenerExposes verifies the one
+// line startup writes about a listener that serves plain HTTP, and the
+// listeners it writes nothing about.
+//
+// The warning is for a TCP listener another machine can open a connection to,
+// with no TLS on it and no word from the operator that something in front of
+// it encrypts the hop: that is the configuration that puts every caller's
+// token on a network segment in the clear, and it is also what the default
+// --http-addr and the container image's command bind. A loopback address and
+// a unix socket carry nothing across a network, and TLS on the listener is the
+// remedy itself, so all three are silent. The opt-in turns the warning into a
+// line at INFO rather than into silence, so a deployment that declared it
+// still says what it serves.
+//
+// Every case names its addr, because the address is what an operator reading
+// the line has to change, and the message is a constant so that a log
+// pipeline can match it.
+func TestAnnouncePlaintextListener_SaysWhatTheListenerExposes(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		addr    string
+		tlsCert string
+		allowed bool
+		// resolve is what the name in addr resolves to; nil leaves a literal
+		// unresolved, as listenerIsHostLocal does.
+		resolve []string
+		level   string
+		msg     string
+	}{
+		{name: "a wildcard bind", addr: "0.0.0.0:8080", level: "WARN", msg: plaintextListenerWarning},
+		{name: "a port-only bind, the default address", addr: ":8080", level: "WARN", msg: plaintextListenerWarning},
+		{name: "an ipv6 wildcard bind", addr: "[::]:8080", level: "WARN", msg: plaintextListenerWarning},
+		{name: "a routable address", addr: "10.0.0.7:8080", level: "WARN", msg: plaintextListenerWarning},
+		{name: "a name resolving off the machine", addr: "mcp.internal:8080", resolve: []string{"10.0.0.7"}, level: "WARN", msg: plaintextListenerWarning},
+		{name: "a wildcard bind under the opt-in", addr: "0.0.0.0:8080", allowed: true, level: "INFO", msg: plaintextListenerAllowed},
+		{name: "a routable address under the opt-in", addr: "10.0.0.7:8080", allowed: true, level: "INFO", msg: plaintextListenerAllowed},
+		{name: "a wildcard bind serving TLS", addr: "0.0.0.0:8443", tlsCert: "/etc/ssl/mcp.crt"},
+		{name: "a wildcard bind serving TLS under the opt-in", addr: "0.0.0.0:8443", tlsCert: "/etc/ssl/mcp.crt", allowed: true},
+		{name: "a loopback address", addr: "127.0.0.1:8080"},
+		{name: "an ipv6 loopback address", addr: "[::1]:8080"},
+		{name: "a name resolving to loopback", addr: "localhost:8080", resolve: []string{"127.0.0.1", "::1"}},
+		{name: "a loopback address under the opt-in", addr: "127.0.0.1:8080", allowed: true},
+		{name: "a unix socket", addr: "/run/gitlab-mcp/server.sock"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resolveListenerHostTo(t, tc.resolve)
+			logged := captureJSONLog(t)
+
+			announcePlaintextListener(t.Context(), tc.addr, tc.tlsCert, tc.allowed)
+
+			records := decodeRecords(t, logged)
+			if tc.level == "" {
+				if len(records) != 0 {
+					t.Fatalf("a listener that crosses no network in the clear was announced: %v", records)
+				}
+				return
+			}
+			if len(records) != 1 {
+				t.Fatalf("logged %d records, want the one line about the listener: %v", len(records), records)
+			}
+			record := records[0]
+			if record["level"] != tc.level || record["msg"] != tc.msg {
+				t.Errorf("logged %v %q, want %s %q", record["level"], record["msg"], tc.level, tc.msg)
+			}
+			if record["addr"] != tc.addr {
+				t.Errorf("addr = %v, want the address the listener binds, %q", record["addr"], tc.addr)
+			}
+		})
+	}
+}
+
+// resolveListenerHostTo makes [lookupHost] answer every name with the
+// literals in addresses for the rest of the test, so a case that names a host
+// is judged by what the case says it resolves to rather than by the machine's
+// resolver. A nil list answers with an error, as a name that does not resolve
+// does, which is also what a literal address never reaches.
+func resolveListenerHostTo(t *testing.T, addresses []string) {
+	t.Helper()
+	previous := lookupHost
+	lookupHost = func(string) ([]net.IP, error) {
+		if addresses == nil {
+			return nil, errors.New("the case names no host to resolve")
+		}
+		resolved := make([]net.IP, 0, len(addresses))
+		for _, literal := range addresses {
+			resolved = append(resolved, net.ParseIP(literal))
+		}
+		return resolved, nil
+	}
+	t.Cleanup(func() { lookupHost = previous })
+}
+
+// TestPlaintextListenerLines_NameEveryWayOut holds the two lines to what an
+// operator needs from them.
+//
+// The warning is read by somebody deciding what to change, so it names each
+// remedy by the flag or variable that applies it: TLS on the listener, a
+// loopback address or a unix socket for a proxy on the same machine, and the
+// opt-in in both spellings, since a container takes the variable without
+// replacing the image's command line. The line written under the opt-in names
+// the opt-in, so a reader of a deployment's log can tell a declared plaintext
+// listener from one nobody looked at.
+func TestPlaintextListenerLines_NameEveryWayOut(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		line  string
+		names []string
+	}{
+		{
+			name:  "the warning",
+			line:  plaintextListenerWarning,
+			names: []string{"--http-addr", "plain HTTP", "--tls-cert", "--tls-key", "loopback", "unix socket", "--allow-plaintext-http", "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true"},
+		},
+		{
+			name:  "the line under the opt-in",
+			line:  plaintextListenerAllowed,
+			names: []string{"--http-addr", "plain HTTP", "--allow-plaintext-http"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			for _, name := range tc.names {
+				if !strings.Contains(tc.line, name) {
+					t.Errorf("%s does not name %q: %s", tc.name, name, tc.line)
+				}
+			}
+		})
+	}
+}

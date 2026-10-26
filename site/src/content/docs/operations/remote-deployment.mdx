@@ -312,6 +312,15 @@ which means a client, and the container speaks stdio to nobody.
 `-p 8080:8080` publishes on every interface and, with Docker's default iptables
 integration, that goes around the host firewall.
 
+**The plain HTTP line at startup is about the container's own interfaces.**
+Inside the container the listener binds `0.0.0.0`, which every container on
+the same bridge network can reach, so it warns at startup that tokens cross
+that network in the clear, loopback publishing or not. With a proxy in front
+that terminates TLS ([Behind a reverse proxy](#behind-a-reverse-proxy)),
+`-e GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true` says so, and the
+line is written at `INFO` instead
+([Plain HTTP on an address other machines can reach](/gitlab-mcp-server/operations/http-server/#plain-http-on-an-address-other-machines-can-reach)).
+
 **`--read-only` works because the image writes nothing at runtime.** The one
 exception is a unix socket, whose bind needs a writable parent directory for the
 staging step described above, so give it a `--tmpfs` or a volume. The container

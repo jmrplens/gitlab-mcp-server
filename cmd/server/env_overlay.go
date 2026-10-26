@@ -94,6 +94,7 @@ func applyOverlayBools(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 	overlayBool(hcfg, "safe-mode", &hcfg.safeMode, o.SafeMode)
 	overlayBool(hcfg, "embedded-resources", &hcfg.embeddedResources, o.EmbeddedResources)
 	overlayBool(hcfg, "ignore-scopes", &hcfg.ignoreScopes, o.IgnoreScopes)
+	overlayBool(hcfg, "allow-plaintext-http", &hcfg.allowPlaintextHTTP, o.AllowPlaintextHTTP)
 }
 
 func applyOverlayNumbers(hcfg *httpConfig, o *config.HTTPEnvOverlay) {

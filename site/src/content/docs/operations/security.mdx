@@ -277,6 +277,7 @@ When running in HTTP mode (`--http`), additional security considerations apply:
 
 - **`--http-addr` defaults to `:8080`, which is every interface**, not loopback. `--http-addr=127.0.0.1:8080` keeps the listener on the host, and a filesystem path (`--http-addr=/run/gitlab-mcp.sock`) binds a unix socket instead, with `--http-socket-mode` (default `0660`, owner and group) deciding who may connect: that removes the network hop to a proxy on the same machine rather than encrypting it.
 - **TLS can terminate on the listener**: `--tls-cert` and `--tls-key` serve HTTPS, both or neither, loaded at startup so a wrong path stops the start rather than failing the first handshake. TLS 1.2 is the floor.
+- **A plain HTTP listener other machines can reach is named at startup.** A TCP listener off loopback that serves without `--tls-cert` writes a `WARN` line with its address, since every request's token then crosses the network in the clear. It is not refused: behind a proxy that terminates TLS that is the intended shape, and `--allow-plaintext-http` (or `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true`) declares it, which writes the line at `INFO` instead ([Plain HTTP on an address other machines can reach](/gitlab-mcp-server/operations/http-server/#plain-http-on-an-address-other-machines-can-reach)).
 - **Every response carries the security headers**, refusals included: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`, except the two server cards and the RFC 9728 metadata document, public documents that send `Cache-Control: public, max-age=3600` instead. A request body is bounded in size (`--max-request-body-bytes`, 4 MiB by default) and in JSON nesting (100 levels).
 
 ### Per-request authentication
@@ -758,6 +759,7 @@ A useful report includes the affected version (`gitlab-mcp-server --version`), t
 
 - ☐ Terminate TLS — reverse proxy, `--tls-cert`/`--tls-key`, or a unix socket to a same-host proxy
 - ☐ Bind `--http-addr` to a loopback address or a unix socket unless the listener must be reachable from other machines
+- ☐ Read the startup log: a plain HTTP warning on a listener behind a proxy that terminates TLS is answered with `--allow-plaintext-http`, and anywhere else it is a finding
 - ☐ Behind a reverse proxy, set `--public-url` so the `Host` the proxy forwards is declared
 - ☐ Configure `--trusted-proxy-header` and `--trusted-proxies` so authentication failures are charged to real client addresses
 - ☐ Let `--trusted-origins` answer CORS, and remove any CORS block from the proxy

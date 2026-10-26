@@ -390,6 +390,10 @@ func overlaySettings() []overlaySetting {
 			func(h *httpConfig) { h.ignoreScopes = true },
 		},
 		{
+			"allow-plaintext-http", func(o *config.HTTPEnvOverlay) { o.AllowPlaintextHTTP = yes() },
+			func(h *httpConfig) { h.allowPlaintextHTTP = true },
+		},
+		{
 			"max-http-clients", func(o *config.HTTPEnvOverlay) { o.MaxHTTPClients = num(250) },
 			func(h *httpConfig) { h.maxHTTPClients = 250 },
 		},

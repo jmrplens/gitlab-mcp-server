@@ -7,6 +7,11 @@
 // in the first place, no bridge, no docker-proxy hop, and no certificate to
 // issue or rotate. The socket is the cheaper answer where it applies, so
 // --http-addr accepts a filesystem path as well as host:port.
+//
+// A listener that does neither, a TCP port another machine can reach in plain
+// HTTP, is still served, and startup warns about it unless the operator
+// declared that something in front of it encrypts the hop
+// (announcePlaintextListener).
 
 package main
 
@@ -238,4 +243,56 @@ func validateTLSFiles(cfg *config.Config) error {
 		return fmt.Errorf("loading the TLS certificate and key: %w", err)
 	}
 	return nil
+}
+
+// The two lines [announcePlaintextListener] writes. Each is one literal, so a
+// log pipeline can match it whole, and test/e2e/http reads both off the real
+// binary's output, spelled out there because it cannot import this package.
+const (
+	// plaintextListenerWarning is written at WARN, beside the address, when a
+	// TCP listener another machine can reach serves plain HTTP and the
+	// operator has not said that anything in front of it encrypts the hop.
+	plaintextListenerWarning = "--http-addr serves plain HTTP on an address other machines can reach, so every request's GitLab token and every answer cross the network in the clear: serve TLS on the listener with --tls-cert and --tls-key, bind a loopback address or a unix socket for a proxy on this machine, or, where something in front of the listener already encrypts the hop, say so with --allow-plaintext-http or GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true"
+	// plaintextListenerAllowed is written at INFO in its place under the
+	// opt-in, so the log of a deployment that declared the hop still says
+	// what its listener serves.
+	plaintextListenerAllowed = "--http-addr serves plain HTTP on an address other machines can reach, as --allow-plaintext-http declares: whatever is in front of the listener is trusted to encrypt the hop"
+)
+
+// announcePlaintextListener says at startup what a listener serving plain
+// HTTP exposes. It is the one listener configuration of this server that puts
+// a caller's token on a network in the clear, since every request carries one
+// (an http:// instance does the same on the outbound side).
+//
+// It is silent for the three listeners that carry nothing across a network in
+// the clear: TLS on the listener (tlsCert names the pair, which runHTTP has
+// loaded by now), and a loopback address or a unix socket, judged by
+// [listenerIsHostLocal], the test --allow-any-gitlab-url is admitted on.
+// Everything else is reachable from another machine in plain HTTP: a wildcard
+// bind, which is what the default --http-addr of :8080 and the container
+// image's command bind, a routable address, and a name that resolves to
+// anything but loopback.
+//
+// It warns rather than refuses, because most deployments of this shape are
+// sound: a reverse proxy terminates TLS and reaches the listener over a
+// private network or a container bridge, and nothing inside the process can
+// tell that hop from the open network. A container published on loopback
+// only (-p 127.0.0.1:8080:8080) is one of them: on a bridge network it binds
+// every interface inside the container and is warned about like any other.
+// Refusing would stop every such deployment at the upgrade that brought the
+// refusal, which is a decision of its own.
+//
+// allowed is the operator's statement that such a proxy is there
+// (--allow-plaintext-http, or GITLAB_MCP_ALLOW_PLAINTEXT_HTTP through the
+// environment overlay). It turns the warning into a line at INFO rather than
+// into silence, so a declared plaintext listener stays on the record.
+func announcePlaintextListener(ctx context.Context, addr, tlsCert string, allowed bool) {
+	if tlsCert != "" || listenerIsHostLocal(addr) {
+		return
+	}
+	if allowed {
+		slog.InfoContext(ctx, plaintextListenerAllowed, "addr", addr)
+		return
+	}
+	slog.WarnContext(ctx, plaintextListenerWarning, "addr", addr)
 }

@@ -195,6 +195,11 @@ type httpConfig struct {
 	uploadMaxFileSize int64
 	tlsCert           string
 	tlsKey            string
+	// allowPlaintextHTTP is the operator's statement that something in front
+	// of a plain HTTP listener off loopback encrypts the hop; it turns the
+	// startup warning about that listener into a line at INFO. See
+	// [announcePlaintextListener].
+	allowPlaintextHTTP bool
 	// discoveryRateLimitRPS and discoveryRateLimitBurst are the bucket each
 	// client address draws on for the discovery documents (RTC-008).
 	discoveryRateLimitRPS   float64
@@ -320,6 +325,7 @@ func main() {
 	flag.BoolVar(&hcfg.jsonResponse, "json-response", false, "Return application/json responses instead of text/event-stream (SSE)")
 	flag.StringVar(&hcfg.tlsCert, "tls-cert", "", "PEM certificate file; serves HTTPS on the listener itself (requires --tls-key)")
 	flag.StringVar(&hcfg.tlsKey, "tls-key", "", "PEM private key file matching --tls-cert")
+	flag.BoolVar(&hcfg.allowPlaintextHTTP, "allow-plaintext-http", false, "Declare that something in front of a plain HTTP listener off loopback, such as a reverse proxy that terminates TLS, encrypts the hop; startup then says so at INFO instead of warning that tokens cross the network in the clear. Also read from GITLAB_MCP_ALLOW_PLAINTEXT_HTTP")
 	flag.StringVar(&hcfg.socketMode, "http-socket-mode", "", "Permission mode for a unix socket named by --http-addr, in octal (default 0660)")
 	// Both transports, not just HTTP: a stdio deployment is exactly the case an
 	// operator monitoring their own machine cares about. Off by default for
@@ -481,7 +487,8 @@ FLAGS
 
   Grouped by what they configure. A flag with an environment variable below
   reads its value from it when the flag is not passed; the transport and
-  listener flags have none. See ENVIRONMENT VARIABLES below.
+  listener flags have none, -session-timeout and -allow-plaintext-http
+  aside. See ENVIRONMENT VARIABLES below.
 
   A stdio server takes its configuration from the environment. Of these flags
   it reads the General ones, -transport, -http, the ones that set a variable
@@ -524,6 +531,11 @@ FLAGS
   -http-socket-mode str     Octal permission mode for a unix socket (default "0660")
   -tls-cert string          PEM certificate; serves HTTPS on the listener (requires -tls-key)
   -tls-key string           PEM private key matching -tls-cert
+  -allow-plaintext-http     A TCP listener off loopback without -tls-cert serves plain HTTP and warns at
+                            startup that tokens cross the network in the clear. This declares that
+                            something in front of it, such as a proxy terminating TLS, encrypts the hop,
+                            so the line is written at INFO instead (default false). The environment
+                            sets it with GITLAB_MCP_ALLOW_PLAINTEXT_HTTP
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28)
   -json-response            Return application/json responses instead of SSE (default false)
   -max-request-body-bytes n Maximum streamable HTTP request body bytes (0 = SDK default 4 MiB)
@@ -720,6 +732,9 @@ ENVIRONMENT VARIABLES (HTTP mode)
   is not passed. Precedence: an explicitly passed flag, then the environment,
   then the built-in default. The variables below have no stdio equivalent:
 
+  GITLAB_MCP_ALLOW_PLAINTEXT_HTTP   Declare that something in front of a plain HTTP listener off loopback,
+                                    such as a proxy terminating TLS, encrypts the hop: startup says so at
+                                    INFO instead of warning (default false)
   GITLAB_MCP_AUTH_MODE              Authentication mode: legacy|oauth (default legacy)
   GITLAB_MCP_PUBLIC_URL             Externally reachable https origin; required with oauth auth mode
   GITLAB_MCP_TRUSTED_ORIGINS        Origins allowed to make cross-origin browser requests
@@ -789,8 +804,8 @@ JSON CONFIGURATION EXAMPLES
 
   Every other client: https://docs.jmrp.io/gitlab-mcp-server/install/clients/
 
-  HTTP mode (single GitLab instance):
-  gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:8080
+  HTTP mode behind a reverse proxy on this machine (single GitLab instance):
+  gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=127.0.0.1:8080
 
   HTTP mode with no instance published (loopback only; clients send GITLAB-URL per request):
   gitlab-mcp-server --http --allow-any-gitlab-url --http-addr=127.0.0.1:8080
@@ -1013,6 +1028,10 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	if listenerErr := validateTrustedProxyListener(hcfg.addr, cfg); listenerErr != nil {
 		return listenerErr
 	}
+	// After the TLS pair was validated, so a certificate named here is one
+	// the listener will serve, and before the bind, so a listener that fails
+	// to come up is still described as the one the operator asked for.
+	announcePlaintextListener(ctx, hcfg.addr, cfg.TLSCertFile, hcfg.allowPlaintextHTTP)
 	// The description-substitution knob is parsed here so a typo in it fails
 	// startup with a clear message; createServer parses it again per pool
 	// entry, but that build happens hours later, on somebody's request.

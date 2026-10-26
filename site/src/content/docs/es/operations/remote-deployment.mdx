@@ -321,6 +321,15 @@ stdio a nadie.
 `-p 8080:8080` lo publica en todas las interfaces y, con la integración de
 iptables que Docker trae por defecto, eso se salta el cortafuegos de la máquina.
 
+**La línea de HTTP en claro del arranque habla de las interfaces del propio contenedor.**
+Dentro del contenedor el listener se liga a `0.0.0.0`, que alcanza cualquier
+contenedor de la misma red bridge, así que avisa al arrancar de que los tokens
+cruzan esa red en claro, se publique en loopback o no. Con un proxy delante
+que termina TLS ([Tras un proxy inverso](#tras-un-proxy-inverso)),
+`-e GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true` lo dice, y la línea
+se escribe en `INFO`
+([HTTP en claro en una dirección que otras máquinas alcanzan](/gitlab-mcp-server/es/operations/http-server/#http-en-claro-en-una-dirección-que-otras-máquinas-alcanzan)).
+
 **`--read-only` funciona porque la imagen no escribe nada en ejecución.** La
 única excepción es un socket unix, cuya vinculación necesita un directorio padre
 con permiso de escritura para el paso de preparación descrito arriba, así que

@@ -63,6 +63,8 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"DiscoveryRateLimitBurst": overlay.DiscoveryRateLimitBurst == nil,
 
 		"UploadMaxFileSize": overlay.UploadMaxFileSize == nil,
+
+		"AllowPlaintextHTTP": overlay.AllowPlaintextHTTP == nil,
 	}
 	for field, isNil := range nilFields {
 		t.Run(field, func(t *testing.T) {
@@ -209,6 +211,29 @@ func presentVariableCases() []presentVariableCase {
 				assertBool(t, "SafeMode", o.SafeMode, true)
 				assertBool(t, "EmbeddedResources", o.EmbeddedResources, false)
 				assertBool(t, "IgnoreScopes", o.IgnoreScopes, true)
+			},
+		},
+		{
+			// The opt-in a container takes without replacing the image's
+			// command line, which already names --http-addr: the variable is
+			// the only way such a deployment can say that a proxy in front of
+			// it encrypts the hop.
+			name: "the plaintext listener opt-in reaches the overlay",
+			env:  map[string]string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP": "true"},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertBool(t, "AllowPlaintextHTTP", o.AllowPlaintextHTTP, true)
+			},
+		},
+		{
+			// false is a value like any other: it overrides nothing the flag
+			// layer resolved, since the flag's default is false too, but it
+			// must be read as false rather than taken for an absent variable.
+			name: "the plaintext listener opt-in can be set to false",
+			env:  map[string]string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP": "false"},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertBool(t, "AllowPlaintextHTTP", o.AllowPlaintextHTTP, false)
 			},
 		},
 		{
@@ -480,6 +505,7 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"GITLAB_MCP_READ_ONLY", "bogus", "GITLAB_MCP_READ_ONLY"},
 		{"GITLAB_MCP_SAFE_MODE", "bogus", "GITLAB_MCP_SAFE_MODE"},
 		{"GITLAB_MCP_IGNORE_SCOPES", "bogus", "GITLAB_MCP_IGNORE_SCOPES"},
+		{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP", "bogus", "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP"},
 		{"GITLAB_MCP_MAX_HTTP_CLIENTS", "bogus", "MAX_HTTP_CLIENTS"},
 		{"GITLAB_MCP_SESSION_TIMEOUT", "bogus", "SESSION_TIMEOUT"},
 		// The overlay is the session timeout's one reader since stdio stopped

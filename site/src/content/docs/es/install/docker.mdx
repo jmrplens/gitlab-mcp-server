@@ -64,6 +64,8 @@ docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
+Las dos formas sirven HTTP en claro en todas las interfaces del contenedor, así que el arranque escribe una línea `WARN` que dice que el token de cada petición cruza la red en claro, y con `-p 8080:8080` eso vale también para todas las interfaces de la máquina. Para un proxy en la misma máquina, publica en loopback (`-p 127.0.0.1:8080:8080`), y cuando ese proxy termine TLS, dilo con `-e GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true`, que escribe la línea en `INFO`. [HTTP en claro en una dirección que otras máquinas alcanzan](/gitlab-mcp-server/es/operations/http-server/#http-en-claro-en-una-dirección-que-otras-máquinas-alcanzan) tiene las alternativas.
+
 Un despliegue que no nombra ninguna instancia haría peticiones al host que quien llama ponga en la cabecera `GITLAB-URL`, con el token que esa misma persona enviara, así que se rechaza al arrancar. `--allow-any-gitlab-url` lo acepta para un despliegue local de un único usuario y avisa, pero solo si `--http-addr` liga loopback o un socket unix, así que dentro de un contenedor que liga `0.0.0.0` no sirve: publica las instancias. Cada cliente envía además su propio token de GitLab en cada petición, y el servidor no guarda ninguno. Para endurecer el contenedor como hace el despliegue de referencia:
 
 <Tabs>

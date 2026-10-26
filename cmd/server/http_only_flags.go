@@ -82,6 +82,7 @@ var httpOnlyFlags = map[string]httpOnlyFlag{
 	"http-socket-mode":           {},
 	"tls-cert":                   {},
 	"tls-key":                    {},
+	"allow-plaintext-http":       {},
 	"stateless":                  {},
 	"json-response":              {},
 	"max-request-body-bytes":     {stdioVariable: stdioMaxLineBytesEnv},

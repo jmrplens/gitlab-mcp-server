@@ -1650,6 +1650,110 @@ func TestPrintHelp_ExcludeTools_NamesEverySpellingItAccepts(t *testing.T) {
 	}
 }
 
+// TestPrintHelp_AllowPlaintextHTTP_SaysWhatItDeclaresAndWhereItIsRead holds
+// the help of the plaintext listener opt-in to what an operator deciding
+// whether to set it has to know: that a TCP listener off loopback without TLS
+// warns at startup, that the opt-in is a statement that something in front of
+// the listener encrypts the hop, and that it is read from the environment too,
+// which is the one way a container that keeps the image's command can set it.
+// Both entries are checked, the flag's and the variable's, since an operator
+// reads whichever they arrived at.
+func TestPrintHelp_AllowPlaintextHTTP_SaysWhatItDeclaresAndWhereItIsRead(t *testing.T) {
+	stdout := captureStdout(t)
+
+	printHelp()
+
+	help := stdout()
+	for _, tc := range []struct {
+		entry string
+		says  []string
+	}{
+		{entry: "-allow-plaintext-http", says: []string{"plain HTTP", "loopback", "warns", "TLS", "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP"}},
+		{entry: "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP", says: []string{"plain HTTP", "loopback", "TLS"}},
+	} {
+		t.Run(tc.entry, func(t *testing.T) {
+			entry := helpEntry(help, tc.entry)
+			if entry == "" {
+				t.Fatalf("the help has no entry for %s", tc.entry)
+			}
+			for _, want := range tc.says {
+				if !strings.Contains(entry, want) {
+					t.Errorf("help for %s = %q, want it to say %q", tc.entry, entry, want)
+				}
+			}
+		})
+	}
+}
+
+// TestPrintHelp_FlagIntro_NamesEachTransportFlagTheEnvironmentSets holds the
+// paragraph above the flag groups to the environment overlay. It says the
+// transport and listener flags read no variable and names the exceptions, and
+// an operator who believes it never looks for the variable that sets a flag
+// they did not pass. The exceptions are derived rather than listed: every flag
+// of the Transport group that [overlaySettings] carries, a table
+// [TestOverlaySettings_CoverEveryOverlayField] keeps complete, and no other.
+func TestPrintHelp_FlagIntro_NamesEachTransportFlagTheEnvironmentSets(t *testing.T) {
+	stdout := captureStdout(t)
+
+	printHelp()
+
+	help := stdout()
+	transport := helpGroupFlags(help, "Transport")
+	if len(transport) == 0 {
+		t.Fatal("the help has no Transport group, or the group lists no flag")
+	}
+	var want []string
+	for _, setting := range overlaySettings() {
+		if slices.Contains(transport, "-"+setting.flag) {
+			want = append(want, "-"+setting.flag)
+		}
+	}
+	got := helpFlagIntroExceptions(help)
+	slices.Sort(want)
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("the paragraph above the flag groups names %q as the transport and listener flags a variable sets, want %q", got, want)
+	}
+}
+
+// helpGroupFlags returns the flags the help lists under one group heading,
+// each spelled as its row spells it ("-http-addr"). A heading is indented one
+// space and its rows two, so the group ends at the next line indented one.
+func helpGroupFlags(help, group string) []string {
+	var flags []string
+	inGroup := false
+	for line := range strings.SplitSeq(help, "\n") {
+		switch {
+		case line == " "+group:
+			inGroup = true
+		case !inGroup:
+		case helpIndent(line) == 1:
+			return flags
+		case helpIndent(line) == 2 && strings.HasPrefix(strings.TrimSpace(line), "-"):
+			flags = append(flags, strings.Fields(line)[0])
+		}
+	}
+	return flags
+}
+
+// helpFlagIntroExceptions returns the flags the paragraph above the flag
+// groups names as the exceptions to "the transport and listener flags have
+// none": every flag spelled between that clause and the end of its sentence.
+func helpFlagIntroExceptions(help string) []string {
+	_, rest, found := strings.Cut(strings.Join(strings.Fields(help), " "), "listener flags have none")
+	if !found {
+		return nil
+	}
+	sentence, _, _ := strings.Cut(rest, ".")
+	var flags []string
+	for word := range strings.FieldsSeq(sentence) {
+		if name := strings.TrimRight(word, ","); strings.HasPrefix(name, "-") {
+			flags = append(flags, name)
+		}
+	}
+	return flags
+}
+
 // TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification
 // verifies that the help says what the pool now does.
 //
@@ -15316,6 +15420,66 @@ func TestRunHTTP_AllowAnyGitLabURLStarts(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("runHTTP with --allow-any-gitlab-url: %v", err)
+	}
+}
+
+// TestRunHTTP_AnnouncesThePlaintextListenerItWasConfiguredFor verifies that
+// runHTTP judges the listener it was given: the address it binds, the
+// certificate it serves, and the opt-in, from the flag and from the
+// environment alike. [announcePlaintextListener] is held to its cases by its
+// own test; this one holds the call to the configuration it is made from.
+//
+// The address is 192.0.2.1, a documentation address (RFC 5737) no host
+// running the suite holds, so the bind fails and runHTTP returns without
+// serving. The announcement comes before the bind, which is the order that
+// matters: a listener that fails to come up is still one the operator asked
+// to serve in plain HTTP, and saying so then costs nothing.
+func TestRunHTTP_AnnouncesThePlaintextListenerItWasConfiguredFor(t *testing.T) {
+	certPath, keyPath := rotatingPair(t, t.TempDir(), 1, time.Now())
+	for _, tc := range []struct {
+		name    string
+		flag    bool
+		env     string
+		tlsCert string
+		tlsKey  string
+		want    string
+	}{
+		{name: "plain HTTP without the opt-in", want: plaintextListenerWarning},
+		{name: "plain HTTP with the flag", flag: true, want: plaintextListenerAllowed},
+		{name: "plain HTTP with the variable", env: "true", want: plaintextListenerAllowed},
+		{name: "TLS on the listener", tlsCert: certPath, tlsKey: keyPath},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_MCP_ALLOW_PLAINTEXT_HTTP", tc.env)
+			logged := captureJSONLog(t)
+
+			// The error is the failed bind, or nil from a machine that does
+			// hold the address, which the bounded run then stops; either way
+			// what is asserted is the line written before it.
+			_ = runHTTPExpectingRefusal(t, &httpConfig{
+				addr:               "192.0.2.1:0",
+				gitlabURL:          "https://gitlab.example.com",
+				maxHTTPClients:     config.DefaultMaxHTTPClients,
+				sessionTimeout:     config.DefaultSessionTimeout,
+				allowPlaintextHTTP: tc.flag,
+				tlsCert:            tc.tlsCert,
+				tlsKey:             tc.tlsKey,
+			})
+
+			var announced []string
+			for _, record := range decodeRecords(t, logged) {
+				if msg, _ := record["msg"].(string); msg == plaintextListenerWarning || msg == plaintextListenerAllowed {
+					announced = append(announced, msg)
+				}
+			}
+			var want []string
+			if tc.want != "" {
+				want = []string{tc.want}
+			}
+			if !slices.Equal(announced, want) {
+				t.Errorf("announced %q, want %q", announced, want)
+			}
+		})
 	}
 }
 

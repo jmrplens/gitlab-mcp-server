@@ -2,7 +2,8 @@
 
 // listener_test.go drives the real binary over the two listeners a deployment
 // can choose instead of a plain TCP port: a unix socket, and TLS terminated by
-// the server itself.
+// the server itself. It also holds the startup line a plain TCP listener off
+// loopback writes instead, and its absence on the other listeners.
 //
 // Unit tests cover the listener helpers in isolation, but nothing proved the
 // FLAGS reach them — that --http-addr with a path actually binds a socket, that
@@ -67,6 +68,14 @@ func socketDialingClient(socketPath string) *http.Client {
 // cannot reach, so the caller supplies both the client and the base URL.
 func startServerWithClient(t *testing.T, client *http.Client, baseURL string, flags ...string) *server {
 	t.Helper()
+	return startServerWithClientEnv(t, client, baseURL, nil, flags...)
+}
+
+// startServerWithClientEnv is startServerWithClient with variables added to
+// the server's environment, for a setting whose environment spelling is the
+// one under test.
+func startServerWithClientEnv(t *testing.T, client *http.Client, baseURL string, env []string, flags ...string) *server {
+	t.Helper()
 
 	bin := serverBinary(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -80,6 +89,7 @@ func startServerWithClient(t *testing.T, client *http.Client, baseURL string, fl
 	// nothing else in the tree reaches, so an instrumented binary has to be
 	// told where to write them down (coverage_test.go).
 	cmd.Env = append(cmd.Env, coverEnviron(t)...)
+	cmd.Env = append(cmd.Env, env...)
 
 	var out bytes.Buffer
 	var mu sync.Mutex
@@ -394,6 +404,146 @@ func TestListener_TLS_ServesHTTPS(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if !strings.Contains(string(body), "HTTPS") {
 		t.Errorf("a cleartext request got %d without explaining that the listener is TLS: %s", resp.StatusCode, truncate(string(body)))
+	}
+}
+
+// The two lines the server writes at startup about a listener that serves
+// plain HTTP to the network, spelled out here because this module cannot
+// import package main (cmd/server/listen.go holds them). Each is matched by a
+// prefix long enough to be no other line.
+const (
+	plaintextWarningPrefix = "--http-addr serves plain HTTP on an address other machines can reach, so"
+	plaintextAllowedPrefix = "--http-addr serves plain HTTP on an address other machines can reach, as --allow-plaintext-http declares"
+)
+
+// TestListener_PlaintextOffLoopback_WarnsAtStartup verifies that the real
+// binary, bound to every interface in plain HTTP, says so at startup, at WARN
+// and naming the address, and still serves.
+//
+// The wildcard bind is the case that matters: it is what the default
+// --http-addr of :8080 binds and what the container image's command binds, and
+// every other test in this module binds 127.0.0.1, so a warning wired to
+// nothing would pass all of them. The port is chosen in advance because a
+// wildcard bind is reached here on 127.0.0.1, which the harness's address
+// reader cannot give for a server that reports [::].
+func TestListener_PlaintextOffLoopback_WarnsAtStartup(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	for _, host := range []string{"0.0.0.0", ""} {
+		t.Run("host "+strconv.Quote(host), func(t *testing.T) {
+			port := freePort(t)
+			addr := net.JoinHostPort(host, strconv.Itoa(port))
+			srv := startServerWithClient(t, &http.Client{Timeout: 30 * time.Second}, "http://127.0.0.1:"+strconv.Itoa(port),
+				"--http-addr="+addr,
+				"--gitlab-url="+gitlab.url,
+			)
+
+			line := awaitLogLine(t, srv, plaintextWarningPrefix)
+			if line == "" {
+				t.Fatalf("a plaintext listener on %s started without the warning:\n%s", addr, srv.logs())
+			}
+			if !strings.Contains(line, `"level":"WARN"`) {
+				t.Errorf("the line is not at WARN: %s", line)
+			}
+			if !strings.Contains(line, `"addr":"`+addr+`"`) {
+				t.Errorf("the line does not name the address %q it judged: %s", addr, line)
+			}
+			// A warning, not a refusal: the listener serves.
+			if got := srv.do(t, mcpPOST(nil)); got.status != http.StatusUnauthorized {
+				t.Errorf("status = %d, want %d from a listener that warned and kept serving: %s", got.status, http.StatusUnauthorized, truncate(got.body))
+			}
+		})
+	}
+}
+
+// TestListener_PlaintextOffLoopback_TheOptInIsReadFromTheFlagAndTheVariable
+// verifies that an operator who declares the plaintext hop, by the flag or by
+// the variable a container sets without replacing the image's command, gets a
+// line at INFO saying the listener serves plain HTTP as declared, and no
+// warning.
+func TestListener_PlaintextOffLoopback_TheOptInIsReadFromTheFlagAndTheVariable(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	for _, tc := range []struct {
+		name  string
+		env   []string
+		flags []string
+	}{
+		{name: "the flag", flags: []string{"--allow-plaintext-http"}},
+		{name: "the variable", env: []string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			port := freePort(t)
+			addr := "0.0.0.0:" + strconv.Itoa(port)
+			srv := startServerWithClientEnv(t, &http.Client{Timeout: 30 * time.Second}, "http://127.0.0.1:"+strconv.Itoa(port), tc.env,
+				append([]string{"--http-addr=" + addr, "--gitlab-url=" + gitlab.url}, tc.flags...)...,
+			)
+
+			line := awaitLogLine(t, srv, plaintextAllowedPrefix)
+			if line == "" {
+				t.Fatalf("the declared plaintext listener on %s was not announced:\n%s", addr, srv.logs())
+			}
+			if !strings.Contains(line, `"level":"INFO"`) {
+				t.Errorf("the line is not at INFO: %s", line)
+			}
+			if !strings.Contains(line, `"addr":"`+addr+`"`) {
+				t.Errorf("the line does not name the address %q: %s", addr, line)
+			}
+			if strings.Contains(srv.logs(), plaintextWarningPrefix) {
+				t.Errorf("the opt-in was given and the warning was written anyway:\n%s", srv.logs())
+			}
+		})
+	}
+}
+
+// TestListener_ListenersThatCrossNoNetworkInTheClear_AreNotAnnounced verifies
+// the other side: a loopback address, a unix socket and a wildcard bind
+// serving TLS write neither line.
+//
+// Absence is only proved once the output that would have held the line has
+// arrived, and an answer from /health does not prove that: the process writes
+// to a pipe, and the harness copies the pipe into its buffer on a goroutine of
+// its own. So each case first waits for the "listening on" line, which the
+// process writes after the bind, and the bind comes after the announcement.
+// The pipe keeps the order, so a line that was going to be written is in the
+// buffer by then.
+func TestListener_ListenersThatCrossNoNetworkInTheClear_AreNotAnnounced(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	certFile, keyFile, pool := writeSelfSignedCert(t)
+	starts := []struct {
+		name  string
+		start func(t *testing.T) *server
+	}{
+		{name: "loopback", start: func(t *testing.T) *server {
+			t.Helper()
+			return startServer(t, nil, "--gitlab-url="+gitlab.url)
+		}},
+		{name: "unix socket", start: func(t *testing.T) *server {
+			t.Helper()
+			return startServerOnUnixSocket(t, filepath.Join(socketDir(t), "mcp.sock"), "--gitlab-url="+gitlab.url)
+		}},
+		{name: "every interface serving TLS", start: func(t *testing.T) *server {
+			t.Helper()
+			port := strconv.Itoa(freePort(t))
+			return startServerWithClient(t, tlsClientTrusting(t, pool), "https://127.0.0.1:"+port,
+				"--http-addr=0.0.0.0:"+port,
+				"--gitlab-url="+gitlab.url,
+				"--tls-cert="+certFile,
+				"--tls-key="+keyFile,
+			)
+		}},
+	}
+	for _, tc := range starts {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := tc.start(t)
+			if awaitLogLine(t, srv, "listening on") == "" {
+				t.Fatalf("the server never said what it bound, so the absence of a line proves nothing:\n%s", srv.logs())
+			}
+			logs := srv.logs()
+			for _, prefix := range []string{plaintextWarningPrefix, plaintextAllowedPrefix} {
+				if strings.Contains(logs, prefix) {
+					t.Errorf("a listener that crosses no network in the clear was announced with %q:\n%s", prefix, logs)
+				}
+			}
+		})
 	}
 }
 
