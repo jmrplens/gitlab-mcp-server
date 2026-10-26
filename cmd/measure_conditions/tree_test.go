@@ -34,8 +34,8 @@ func treeScript() *fakeScript {
 
 // TestRunTree_Usage_IsRefusedWithStatus2 verifies every way the command line
 // can be wrong, before anything is listed: an unknown flag, an argument, no
-// records, no commit, a -parallel below one, and a gate the script would
-// refuse.
+// records, no commit, a -parallel below one, and a gate or a mode the script
+// would refuse.
 func TestRunTree_Usage_IsRefusedWithStatus2(t *testing.T) {
 	t.Parallel()
 	const flagsWanted = "measure_conditions: tree takes -records and -commit, both non-empty, a -parallel of at least 1, and no arguments\n"
@@ -52,6 +52,10 @@ func TestRunTree_Usage_IsRefusedWithStatus2(t *testing.T) {
 		{
 			name: "a gate the script would refuse", args: []string{"-records", "r", "-commit", "c", "-gate", "some"},
 			wantStderr: "measure_conditions: -gate \"some\" is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n",
+		},
+		{
+			name: "a mode the script would refuse", args: []string{"-records", "r", "-commit", "c", "-mode", "Branch"},
+			wantStderr: "measure_conditions: -mode \"Branch\" is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n",
 		},
 	}
 	for _, tc := range cases {
@@ -122,7 +126,7 @@ func TestRunTree_EveryPackage_IsMeasuredAndSummarized(t *testing.T) {
 		t.Fatalf("runTree() = %d, want 0; stderr:\n%s", got, stderr.String())
 	}
 	slices.SortFunc(script.calls, func(a, b scriptCall) int { return strings.Compare(a.pkg, b.pkg) })
-	env := []string{"GOBCO_GATE=beyond:linux/amd64"}
+	env := []string{"GOBCO_GATE=beyond:linux/amd64", "GOBCO_MODE=condition"}
 	wantCalls := []scriptCall{{dir: "root", pkg: "./cmd/a", env: env}, {dir: "root", pkg: "./internal/b", env: env}, {dir: "root", pkg: "./internal/c", env: env}}
 	if !reflect.DeepEqual(script.calls, wantCalls) {
 		t.Errorf("script calls = %+v, want %+v", script.calls, wantCalls)
@@ -145,7 +149,7 @@ func TestRunTree_EveryPackage_IsMeasuredAndSummarized(t *testing.T) {
 		t.Errorf("stdout =\n%s\nwant\n%s", stdout.String(), want)
 	}
 	lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
-	wantFirst := "measure_conditions: measuring the 3 packages below cmd/ and internal/, 2 at a time, with GOBCO_GATE=beyond:linux/amd64"
+	wantFirst := "measure_conditions: measuring the 3 packages below cmd/ and internal/, 2 at a time, with GOBCO_GATE=beyond:linux/amd64 and GOBCO_MODE=condition"
 	if len(lines) != 4 || lines[0] != wantFirst {
 		t.Fatalf("stderr lines = %q, want %q and one line per package", lines, wantFirst)
 	}
@@ -157,6 +161,57 @@ func TestRunTree_EveryPackage_IsMeasuredAndSummarized(t *testing.T) {
 	}
 	if !reflect.DeepEqual(progress, wantProgress) {
 		t.Errorf("progress lines = %q, want %q in any order", progress, wantProgress)
+	}
+}
+
+// TestRunTree_BranchMode_CountsBranchesThroughTheScript verifies the tree in
+// gobco's branch mode: the mode reaches every run of the script beside the
+// gate, and the summary is of branch coverage, read from the figure gobco
+// writes in that mode, so a package whose report carries only a condition
+// figure is a record the summary could not use and fails the run.
+func TestRunTree_BranchMode_CountsBranchesThroughTheScript(t *testing.T) {
+	t.Parallel()
+	script := &fakeScript{
+		outputs: map[string]string{
+			"./cmd/a": "Branch coverage: 4/4\n",
+			"./internal/b": "Branch coverage: 5/6\n" + `b.go:3:4: condition "x && y" was once true but never false` + "\n" +
+				"gobco: held:\n" + `  b.go:3:4: condition "x && y" was once true but never false` + "\n",
+			"./internal/c": "Condition coverage: 9/10\n",
+		},
+		status: map[string]int{"./cmd/a": 0, "./internal/b": 3, "./internal/c": 0},
+	}
+	var stdout, stderr bytes.Buffer
+	args := []string{"-records", t.TempDir(), "-commit", "c0ffee", "-mode", "branch"}
+	if got := runTree(args, &stdout, &stderr, treeLister(treeListing(), nil), script.run); got != 1 {
+		t.Fatalf("runTree() = %d, want 1; stderr:\n%s", got, stderr.String())
+	}
+	for _, call := range script.calls {
+		if want := []string{"GOBCO_GATE=all", "GOBCO_MODE=branch"}; !reflect.DeepEqual(call.env, want) {
+			t.Errorf("the script ran over %s with %q, want %q", call.pkg, call.env, want)
+		}
+	}
+	local := "`local` (" + platform + ")"
+	const problem = "the record of ./internal/c on local cannot be read: the script's status says it measured, and its output carries no Branch coverage figure"
+	want := "## Branch coverage, measured\n\n" +
+		"`GOBCO_GATE=all` at `c0ffee`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each decision twice, once per outcome: the whole condition of an `if` or a `for`, and each case of a `switch`, so a total is twice the number of decisions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
+		"| Package | System | Covered | Not both ways | Held by the gate | Raw output |\n" +
+		"| --- | --- | ---: | ---: | ---: | --- |\n" +
+		"| `./cmd/a` | " + local + " | 4 of 4 | 0 | 0 | `cmd-a` |\n" +
+		"| `./internal/b` | " + local + " | 5 of 6 | 1 | 1 | `internal-b` |\n" +
+		"| `./internal/c` | " + local + " | unreadable record | - | - | `internal-c` |\n" +
+		totalsTable("| `local` | 2 of 3 | 9 of 10 | 90.0% |") +
+		"\n### Not evaluated both ways\n\n" +
+		"| Package | System | File | Line | Condition | gobco says | Held |\n" +
+		"| --- | --- | --- | ---: | --- | --- | --- |\n" +
+		"| `./internal/b` | `local` | `b.go` | 3 | `x && y` | once true but never false | yes |\n" +
+		"\n### Records this summary could not use\n\n" +
+		"- " + problem + "\n"
+	if stdout.String() != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout.String(), want)
+	}
+	if !strings.HasPrefix(stderr.String(), "measure_conditions: measuring the 3 packages below cmd/ and internal/, 1 at a time, with GOBCO_GATE=all and GOBCO_MODE=branch\n") ||
+		!strings.HasSuffix(stderr.String(), "measure_conditions: "+problem+"\n") {
+		t.Errorf("stderr =\n%s\nwant the mode named first and the unusable record last", stderr.String())
 	}
 }
 

@@ -125,7 +125,7 @@ class CheckSpecConditionsTest(unittest.TestCase):
              "gobco: gobco exited 1 on ./internal/tools/{pkg}, so any figure above is not a measurement"),
             ("no condition measured", NOTICE + "\nCondition coverage: 0/0\n"
              "gobco: the report above measured no condition of ./internal/tools/{pkg} (Condition coverage: 0/0, "
-             "or no figure at all), which is what gobco prints when no test wrote its counts or when it declined "
+             "or no such figure at all), which is what gobco prints when no test wrote its counts or when it declined "
              "to instrument every file; refusing to pass it on as a measurement\n", 1,
              "refusing to pass it on as a measurement"),
             ("refused before gobco ran", "gobco: ./internal/tools/{pkg} keeps no test file on linux/amd64 under "

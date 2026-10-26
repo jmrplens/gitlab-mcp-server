@@ -25,6 +25,22 @@ var runners = []string{"windows-latest", "macos-latest", "ubuntu-latest"}
 // started is refused before any has.
 var gatePattern = regexp.MustCompile(`^(all|beyond:[a-z0-9]+/[a-z0-9]+)$`)
 
+// defaultMode is the mode a subcommand measures or reads in when it is not
+// given one: gobco's own default, which every run measured in before the
+// mode could be chosen.
+const defaultMode = "condition"
+
+// refuseMode says on stderr that a -mode is not a GOBCO_MODE the script
+// reads, and reports whether it did, so a value the script would refuse
+// after a runner has started is refused before any has, as the gate is.
+func refuseMode(stderr io.Writer, mode string) bool {
+	if _, known := coverageModes[mode]; known {
+		return false
+	}
+	fmt.Fprintf(stderr, "%s: -mode %q is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n", toolName, mode)
+	return true
+}
+
 // segmentPattern is one directory of a package path. It admits what this
 // module's directories are named with and nothing a shell, a workflow
 // command or an artifact name would read as syntax, and since a segment
@@ -75,6 +91,7 @@ func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
 	packagesFlag := flags.String("packages", "", "packages to measure, ./cmd/server style, separated by spaces or commas; empty means every package carrying a GOOS- or GOARCH-constrained file")
 	systemsFlag := flags.String("systems", "", "runners to measure on, separated by spaces or commas: "+strings.Join(runners, ", "))
 	gate := flags.String("gate", "", "the GOBCO_GATE the script runs with: all or beyond:GOOS/GOARCH")
+	mode := flags.String("mode", defaultMode, "the GOBCO_MODE the script runs with: condition or branch")
 	dir := flags.String("dir", ".", "module root the packages are looked for in")
 	tree := flags.Bool("tree", false, "measure every package below cmd/ and internal/, in shards, instead of the packages -packages names")
 	if err := flags.Parse(args); err != nil {
@@ -88,6 +105,10 @@ func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
 		fmt.Fprintf(stderr, "%s: -gate %q is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n", toolName, *gate)
 		return 2
 	}
+	if refuseMode(stderr, *mode) {
+		return 2
+	}
+	measuredWith := fmt.Sprintf("GOBCO_GATE=%s and GOBCO_MODE=%s", *gate, *mode)
 	systems, err := parseSystems(*systemsFlag)
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: -systems: %v\n", toolName, err)
@@ -99,7 +120,7 @@ func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
 		return 2
 	}
 	if *tree {
-		return planTree(stdout, stderr, list, *dir, packages, systems, *gate)
+		return planTree(stdout, stderr, list, *dir, packages, systems, measuredWith)
 	}
 	if len(packages) == 0 {
 		packages, err = constrainedPackages(context.Background(), *dir, list)
@@ -119,7 +140,7 @@ func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
 		return 2
 	}
 	fmt.Fprintf(stdout, "matrix=%s\n", cmdutil.Must(json.Marshal(planned)))
-	fmt.Fprintf(stderr, "%s: %d run(s) planned, %s on %s, with GOBCO_GATE=%s\n", toolName, len(planned.Include), strings.Join(packages, " "), strings.Join(systems, " "), *gate)
+	fmt.Fprintf(stderr, "%s: %d run(s) planned, %s on %s, with %s\n", toolName, len(planned.Include), strings.Join(packages, " "), strings.Join(systems, " "), measuredWith)
 	return 0
 }
 
@@ -195,9 +216,10 @@ func buildMatrix(packages, systems []string) (matrix, error) {
 }
 
 // planTree prints the plan of a -tree dispatch: every package below cmd/ and
-// internal/, in shards. A package list beside -tree is refused, since the
-// dispatch would be asking for two things at once.
-func planTree(stdout, stderr io.Writer, list lister, dir string, named, systems []string, gate string) int {
+// internal/, in shards, and says on stderr what it planned and the gate and
+// mode the runs measure with. A package list beside -tree is refused, since
+// the dispatch would be asking for two things at once.
+func planTree(stdout, stderr io.Writer, list lister, dir string, named, systems []string, measuredWith string) int {
 	if len(named) > 0 {
 		fmt.Fprintf(stderr, "%s: -tree measures every package below cmd/ and internal/, and -packages names %s besides; leave -packages empty\n", toolName, strings.Join(named, " "))
 		return 2
@@ -213,8 +235,8 @@ func planTree(stdout, stderr io.Writer, list lister, dir string, named, systems 
 	}
 	planned := buildShards(packages, systems, treeShards)
 	fmt.Fprintf(stdout, "matrix=%s\n", cmdutil.Must(json.Marshal(planned)))
-	fmt.Fprintf(stderr, "%s: %d run(s) planned, the %d packages below cmd/ and internal/ in %d shard(s) on %s, with GOBCO_GATE=%s\n",
-		toolName, len(planned.Include), len(packages), min(treeShards, len(packages)), strings.Join(systems, " "), gate)
+	fmt.Fprintf(stderr, "%s: %d run(s) planned, the %d packages below cmd/ and internal/ in %d shard(s) on %s, with %s\n",
+		toolName, len(planned.Include), len(packages), min(treeShards, len(packages)), strings.Join(systems, " "), measuredWith)
 	return 0
 }
 

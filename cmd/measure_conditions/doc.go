@@ -15,10 +15,18 @@
 // same script on each runner a dispatch names, and this command is everything
 // around that script:
 //
-//	measure_conditions plan -packages <list> -systems <list> -gate <gate> [-tree]
+//	measure_conditions plan -packages <list> -systems <list> -gate <gate> [-mode <mode>] [-tree]
 //	measure_conditions measure -packages <list> -system <runner> -records <dir>
-//	measure_conditions summarize -plan <json> -records <dir> -gate <gate> -commit <sha>
-//	measure_conditions tree -records <dir> -commit <sha> [-gate <gate>] [-parallel <n>]
+//	measure_conditions summarize -plan <json> -records <dir> -gate <gate> [-mode <mode>] -commit <sha>
+//	measure_conditions tree -records <dir> -commit <sha> [-gate <gate>] [-mode <mode>] [-parallel <n>]
+//
+// The mode is the GOBCO_MODE the script runs gobco in, condition when it is
+// not given: condition is gobco's default, which counts every atomic
+// condition, each operand of && and || and each comparison wherever it is
+// written, and branch is gobco's -branch, which counts the whole controlling
+// condition of each if and for and each case of a switch, the branches
+// test_branch_coverage80 asks about. measure takes none, since the script
+// reads the mode from the environment the job gives it.
 //
 // plan validates what the dispatch asked for and prints the matrix the
 // workflow fans out over, as one `matrix=<json>` line for $GITHUB_OUTPUT: a

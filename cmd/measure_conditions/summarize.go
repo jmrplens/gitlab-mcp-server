@@ -63,6 +63,7 @@ func runSummarize(args []string, stdout, stderr io.Writer) int {
 	planFlag := flags.String("plan", "", "the matrix plan printed, as JSON")
 	records := flags.String("records", "", "directory the runs' artifacts were downloaded into")
 	gate := flags.String("gate", "", "the GOBCO_GATE the runs used")
+	mode := flags.String("mode", defaultMode, "the GOBCO_MODE the runs used: condition or branch")
 	commit := flags.String("commit", "", "the commit the runs measured")
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -71,15 +72,18 @@ func runSummarize(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%s: summarize takes -plan, -records, -gate and -commit, all four non-empty, and no arguments\n", toolName)
 		return 2
 	}
+	if refuseMode(stderr, *mode) {
+		return 2
+	}
 	var planned matrix
 	if err := json.Unmarshal([]byte(*planFlag), &planned); err != nil || len(runsOf(planned.Include)) == 0 {
 		fmt.Fprintf(stderr, "%s: -plan is not a matrix plan with at least one run in it\n", toolName)
 		return 2
 	}
 	recs, problems := readRecords(*records)
-	outcomes, more := join(runsOf(planned.Include), recs)
+	outcomes, more := join(runsOf(planned.Include), recs, *mode)
 	problems = append(problems, more...)
-	render(stdout, *gate, *commit, outcomes, problems)
+	render(stdout, *gate, *mode, *commit, outcomes, problems)
 	for _, problem := range problems {
 		fmt.Fprintf(stderr, "%s: %s\n", toolName, problem)
 	}
@@ -90,11 +94,12 @@ func runSummarize(args []string, stdout, stderr io.Writer) int {
 }
 
 // join pairs every planned run with its record, in the plan's order, and
-// reads the measurement of each record whose status says one was taken. A
-// record the plan did not ask for, a second record for one run, and a record
-// whose output disagrees with its status are problems, since a table built on
-// any of them would be a guess.
-func join(runs []packageRun, recs []record) (outcomes []outcome, problems []string) {
+// reads the measurement of each record whose status says one was taken, in
+// the mode the runs were asked for. A record the plan did not ask for, a
+// second record for one run, and a record whose output disagrees with its
+// status or carries no figure of the mode are problems, since a table built
+// on any of them would be a guess.
+func join(runs []packageRun, recs []record, mode string) (outcomes []outcome, problems []string) {
 	byRun := map[string]*record{}
 	for i := range recs {
 		rec := &recs[i]
@@ -111,7 +116,7 @@ func join(runs []packageRun, recs []record) (outcomes []outcome, problems []stri
 		result := outcome{packageRun: planned, rec: byRun[key]}
 		delete(byRun, key)
 		if result.rec != nil && measured(result.rec.status) {
-			found, err := parseMeasurement(result.rec.output, result.rec.status)
+			found, err := parseMeasurement(result.rec.output, result.rec.status, mode)
 			if err != nil {
 				result.problem = err.Error()
 				problems = append(problems, fmt.Sprintf("the record of %s cannot be read: %v", key, err))
@@ -127,12 +132,13 @@ func join(runs []packageRun, recs []record) (outcomes []outcome, problems []stri
 	return outcomes, problems
 }
 
-// render writes the summary: the figures, the total of each system, then
-// every condition not evaluated both ways, then what could not be measured
-// and why.
-func render(w io.Writer, gate, commit string, outcomes []outcome, problems []string) {
-	fmt.Fprintf(w, "## Condition coverage, measured\n\n")
-	fmt.Fprintf(w, "`GOBCO_GATE=%s` at `%s`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each condition twice, once per outcome, so a total is twice the number of conditions. No figure fails this workflow: it is a measurement, not a gate.\n\n", gate, commit)
+// render writes the summary of the mode the runs measured in: the figures,
+// the total of each system, then every condition not evaluated both ways,
+// then what could not be measured and why.
+func render(w io.Writer, gate, mode, commit string, outcomes []outcome, problems []string) {
+	measured := coverageModes[mode]
+	fmt.Fprintf(w, "## %s, measured\n\n", measured.figure)
+	fmt.Fprintf(w, "`GOBCO_GATE=%s` at `%s`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. %s No figure fails this workflow: it is a measurement, not a gate.\n\n", gate, commit, measured.counts)
 	writeRow(w, "Package", "System", "Covered", "Not both ways", "Held by the gate", "Raw output")
 	fmt.Fprintf(w, "| --- | --- | ---: | ---: | ---: | --- |\n")
 	for _, result := range outcomes {

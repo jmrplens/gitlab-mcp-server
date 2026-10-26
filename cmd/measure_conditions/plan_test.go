@@ -32,8 +32,9 @@ func treeLister(listing string, err error) lister {
 }
 
 // TestRunPlan_Dispatches_PrintTheMatrixOrRefuse verifies the plan end to end:
-// the matrix line it prints for $GITHUB_OUTPUT, what it says on stderr, and
-// its status, for every input it accepts or refuses, for the three ways the
+// the matrix line it prints for $GITHUB_OUTPUT, what it says on stderr (the
+// gate and the mode the runs measure with among it), and its status, for
+// every input it accepts or refuses, for the three ways the
 // discovery of an empty package list can end, and for a -tree plan, which
 // refuses a package list beside it and the two ways its listing can come back
 // with nothing to plan.
@@ -69,7 +70,7 @@ func TestRunPlan_Dispatches_PrintTheMatrixOrRefuse(t *testing.T) {
 				`{"system":"ubuntu-latest","name":"./cmd/server","packages":"./cmd/server","artifact":"gobco-ubuntu-latest-cmd-server"},` +
 				`{"system":"windows-latest","name":"./internal/toolutil","packages":"./internal/toolutil","artifact":"gobco-windows-latest-internal-toolutil"},` +
 				`{"system":"ubuntu-latest","name":"./internal/toolutil","packages":"./internal/toolutil","artifact":"gobco-ubuntu-latest-internal-toolutil"}]}` + "\n",
-			wantStderr: "measure_conditions: 4 run(s) planned, ./cmd/server ./internal/toolutil on windows-latest ubuntu-latest, with GOBCO_GATE=beyond:linux/amd64\n",
+			wantStderr: "measure_conditions: 4 run(s) planned, ./cmd/server ./internal/toolutil on windows-latest ubuntu-latest, with GOBCO_GATE=beyond:linux/amd64 and GOBCO_MODE=condition\n",
 		},
 		{
 			name:       "no package named: the constrained ones are found",
@@ -77,7 +78,22 @@ func TestRunPlan_Dispatches_PrintTheMatrixOrRefuse(t *testing.T) {
 			list:       discovered,
 			wantStdout: `matrix={"include":[{"system":"macos-latest","name":"./cmd/server","packages":"./cmd/server","artifact":"gobco-macos-latest-cmd-server"}]}` + "\n",
 			wantStderr: "measure_conditions: no package named; measuring the 1 whose built files differ between release targets: ./cmd/server\n" +
-				"measure_conditions: 1 run(s) planned, ./cmd/server on macos-latest, with GOBCO_GATE=all\n",
+				"measure_conditions: 1 run(s) planned, ./cmd/server on macos-latest, with GOBCO_GATE=all and GOBCO_MODE=condition\n",
+		},
+		{
+			name:       "branches counted",
+			args:       []string{"-packages", "./cmd/server", "-systems", "macos-latest", "-gate", "all", "-mode", "branch"},
+			list:       broken,
+			wantStdout: `matrix={"include":[{"system":"macos-latest","name":"./cmd/server","packages":"./cmd/server","artifact":"gobco-macos-latest-cmd-server"}]}` + "\n",
+			wantStderr: "measure_conditions: 1 run(s) planned, ./cmd/server on macos-latest, with GOBCO_GATE=all and GOBCO_MODE=branch\n",
+		},
+		{
+			name: "a mode the script would refuse", args: []string{"-systems", "macos-latest", "-gate", "all", "-mode", "branches"}, list: broken, wantCode: 2,
+			wantStderr: "measure_conditions: -mode \"branches\" is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n",
+		},
+		{
+			name: "no mode", args: []string{"-systems", "macos-latest", "-gate", "all", "-mode", ""}, list: broken, wantCode: 2,
+			wantStderr: "measure_conditions: -mode \"\" is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n",
 		},
 		{
 			name: "no package named and none found", args: []string{"-systems", "macos-latest", "-gate", "all"}, list: nothing, wantCode: 1,
@@ -132,7 +148,7 @@ func TestRunPlan_Dispatches_PrintTheMatrixOrRefuse(t *testing.T) {
 				`{"system":"ubuntu-latest","name":"tree 01 of 02","packages":"./cmd/a","artifact":"gobco-ubuntu-latest-tree-01"},` +
 				`{"system":"windows-latest","name":"tree 02 of 02","packages":"./internal/b","artifact":"gobco-windows-latest-tree-02"},` +
 				`{"system":"ubuntu-latest","name":"tree 02 of 02","packages":"./internal/b","artifact":"gobco-ubuntu-latest-tree-02"}]}` + "\n",
-			wantStderr: "measure_conditions: 4 run(s) planned, the 2 packages below cmd/ and internal/ in 2 shard(s) on windows-latest ubuntu-latest, with GOBCO_GATE=all\n",
+			wantStderr: "measure_conditions: 4 run(s) planned, the 2 packages below cmd/ and internal/ in 2 shard(s) on windows-latest ubuntu-latest, with GOBCO_GATE=all and GOBCO_MODE=condition\n",
 		},
 		{
 			name: "the tree and packages besides", args: []string{"-tree", "-packages", "./cmd/server", "-systems", "ubuntu-latest", "-gate", "all"}, list: broken, wantCode: 2,

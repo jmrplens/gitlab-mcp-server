@@ -99,8 +99,9 @@
 # Any other value is refused before gobco runs.
 #
 # A run the gate fails exits 3, and no other path does. Every other failure
-# means nothing was measured and exits 1 or 2, never 3: 2 for a gate value it
-# cannot read; 1 for a package go cannot load, a 0/0 report, and a gobco or
+# means nothing was measured and exits 1 or 2, never 3: 2 for a gate or a mode
+# (GOBCO_MODE, below) it cannot read; 1 for a package go cannot load, a 0/0
+# report, a report without the figure of its mode, and a gobco or
 # test failure, since `go run` reports any non-zero exit of the program it
 # ran as 1; and 1 or 2 for a command of its own that fails under set -e
 # (GNU tar and awk exit 2 on a fatal error, as the go command does when it
@@ -114,6 +115,26 @@
 # spaces and each written in one word (-timeout=30m), since gobco runs it with
 # go test's own ten-minute timeout and cmd/server takes about three times as
 # long on Windows as on Linux.
+#
+# GOBCO_MODE chooses what gobco counts (markConds in instrumenter.go):
+#
+#   condition (the default)  gobco's own default: every atomic condition,
+#                            which is each operand of &&, || and ! taken
+#                            apart, and each comparison wherever it is
+#                            written, a return statement or an assignment as
+#                            much as an if; the report opens its figure with
+#                            "Condition coverage"
+#   branch                   gobco's -branch: the whole controlling condition
+#                            of each if and each for, and each case of a
+#                            switch, and nothing else; the report opens its
+#                            figure with "Branch coverage"
+#
+# A case of a switch with a tag is counted alike in both, as the tag compared
+# with the case. Every condition a report names, and the gate above, read the
+# same in either mode, since gobco names a branch taken one way in the words
+# it uses for a condition. A report whose figure is in the other mode's words
+# is refused like a 0/0, and any other value of the mode is refused before
+# gobco runs.
 set -euo pipefail
 
 # The files a run leaves out are listed in the order a glob returns them,
@@ -127,11 +148,27 @@ PKG=${1:?usage: coverage-conditions.sh <package> [tags]}
 TAGS=${2:-}
 tag_args=()
 gobco_args=()
+
+# The mode is read before anything runs, as the gate is below, and decides
+# the words the report's figure is read in.
+MODE=${GOBCO_MODE:-condition}
+case "$MODE" in
+  condition) figure="Condition coverage" ;;
+  branch)
+    figure="Branch coverage"
+    gobco_args+=(-branch)
+    ;;
+  *)
+    echo "gobco: GOBCO_MODE=$MODE is neither condition nor branch; refusing to measure" >&2
+    exit 2
+    ;;
+esac
+
 if [ -n "$TAGS" ]; then
   tag_args=(-tags "$TAGS")
   # gobco hands every -test option to its `go test` after the package, where
   # the go command still reads a build flag.
-  gobco_args=("-test=-tags=$TAGS")
+  gobco_args+=("-test=-tags=$TAGS")
 fi
 read -r -a test_flags <<<"${GOBCO_TEST_FLAGS:-}"
 for flag in ${test_flags[@]+"${test_flags[@]}"}; do
@@ -356,8 +393,8 @@ fi
   exit "$status"
 }
 
-if ! grep -qE '^Condition coverage: [0-9]+/[1-9][0-9]*$' "$report"; then
-  echo "gobco: the report above measured no condition of $PKG (Condition coverage: 0/0, or no figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement" >&2
+if ! grep -qE "^$figure: [0-9]+/[1-9][0-9]*\$" "$report"; then
+  echo "gobco: the report above measured no condition of $PKG ($figure: 0/0, or no such figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement" >&2
   exit 1
 fi
 

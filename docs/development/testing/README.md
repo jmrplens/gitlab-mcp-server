@@ -127,13 +127,28 @@ this build compiles and the named platform does not, and prints, counts and
 passes the rest. A value it cannot read is refused before gobco runs. A run
 the gate fails exits 3, a status no other failure of the script uses, so a
 caller can tell a figure the gate held from no figure at all: every other
-failure exits 1 or 2, never 3 (1 for a package go cannot load, a failing test
-or a `0/0` report, 2 for a gate value it cannot read, and 1 or 2 when a
-command the script runs fails on its own, as GNU tar, awk and a crashing go
-command exit 2). `make coverage-conditions` reports any failure of the script
-as its own, with status 2.
+failure exits 1 or 2, never 3 (1 for a package go cannot load, a failing test,
+a `0/0` report or one without the figure of its mode, 2 for a gate or a mode
+it cannot read, and 1 or 2 when a command the script runs fails on its own, as
+GNU tar, awk and a crashing go command exit 2). `make coverage-conditions`
+reports any failure of the script as its own, with status 2.
 `GOBCO_TEST_FLAGS` hands gobco's `go test` flags of its own (`-timeout=30m`),
 one word each.
+
+**What gobco counts is chosen with `GOBCO_MODE`.** Unset, empty or
+`condition`, it is gobco's own default: every atomic condition, which is each
+operand of `&&`, `||` and `!` taken apart and each comparison wherever it is
+written, a `return` statement or an assignment as much as an `if`, and the
+report ends on `Condition coverage: N/M`. `GOBCO_MODE=branch` runs gobco with
+`-branch`, which counts the whole controlling condition of each `if` and each
+`for` and each case of a `switch`, and nothing else, and the report ends on
+`Branch coverage: N/M`. A case of a switch with a tag is counted alike in
+both, as the tag compared with the case. A report without the figure of its
+mode is refused like a `0/0`, any other value is refused before gobco runs,
+and the gate reads either mode's report alike, since gobco names a branch
+taken one way in the words it uses for a condition. The two modes measure
+different things: `return a == b || c` is two conditions and no branch, and
+`if a && b` is two conditions and one branch.
 
 **The platform halves the copy leaves out are measured where they build.**
 The Windows and non-Linux halves of `cmd/server` (four source files:

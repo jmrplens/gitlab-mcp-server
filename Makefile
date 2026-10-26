@@ -804,22 +804,26 @@ coverage-conditions:
 	@scripts/coverage-conditions.sh $(PKG) $(TAGS)
 
 # Where coverage-conditions-tree leaves each package's record and raw output,
-# and how many packages it measures at once.
+# how many packages it measures at once, and what gobco counts.
 CONDITIONS_RECORDS ?= dist/conditions-tree
 CONDITIONS_PARALLEL ?= 1
+CONDITIONS_MODE ?= condition
 
-## coverage-conditions-tree: condition coverage (gobco) of every package under cmd/ and internal/, one row each and the total, written as the summary conditions.yml's tree dispatch writes. CONDITIONS_RECORDS keeps the records (dist/conditions-tree); CONDITIONS_PARALLEL packages run at once (1).
+## coverage-conditions-tree: condition or branch coverage (gobco) of every package under cmd/ and internal/, one row each and the total, written as the summary conditions.yml's tree dispatch writes. CONDITIONS_RECORDS keeps the records (dist/conditions-tree); CONDITIONS_PARALLEL packages run at once (1); CONDITIONS_MODE is condition or branch (condition).
 # Each package is measured by scripts/coverage-conditions.sh, the recipe
 # behind coverage-conditions, with GOBCO_GATE=all as the workflow's default,
 # which decides only which conditions the summary marks as held and moves no
-# figure, and the summary goes to stdout and to summary.md beside the
-# records. It is the command docs/development/testing/README.md takes the
-# recorded figure with, so the figure can be taken again on any machine
-# without a dispatch; that page says how long the run behind it took, on how
-# many cores and with how many packages at a time.
+# figure, and GOBCO_MODE=$(CONDITIONS_MODE): condition is gobco's default,
+# every operand of && and || and every comparison, and branch is gobco's
+# -branch, the whole condition of each if and for and each switch case. The
+# summary goes to stdout and to summary.md beside the records. It is the
+# command docs/development/testing/README.md takes the recorded figures with,
+# so they can be taken again on any machine without a dispatch; that page
+# says how long each run behind them took, on how many cores and with how
+# many packages at a time.
 coverage-conditions-tree:
 	@mkdir -p "$(CONDITIONS_RECORDS)"
-	@bash -o pipefail -c 'go run ./cmd/measure_conditions tree -records "$(CONDITIONS_RECORDS)" -parallel "$(CONDITIONS_PARALLEL)" -commit "$$(git rev-parse HEAD)" | tee "$(CONDITIONS_RECORDS)/summary.md"'
+	@bash -o pipefail -c 'go run ./cmd/measure_conditions tree -records "$(CONDITIONS_RECORDS)" -parallel "$(CONDITIONS_PARALLEL)" -mode "$(CONDITIONS_MODE)" -commit "$$(git rev-parse HEAD)" | tee "$(CONDITIONS_RECORDS)/summary.md"'
 
 ## coverage-mutants: mutation-test PKG with gremlins, INVERT_LOGICAL on so `&&`/`||` independence is checked. The gate on a changed package is Lived 0 and Not covered 0.
 # The recipe itself is scripts/coverage-mutants.sh. It moved out of this file

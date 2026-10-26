@@ -6,18 +6,30 @@ import (
 )
 
 // TestParseMeasurement_Outputs_ReadTheFigureAndTheConditions verifies the
-// reading of a run that measured: gobco's figure, every condition it names
-// in each of its three shapes with the file written with slashes and the
-// code unquoted, the held ones marked from the lines the gate printed under
-// its verdict, and everything else in the output passed over, a condition
-// evaluated both ways, an indented line that is not a condition and a
-// carriage return included.
+// reading of a run that measured, in each mode: gobco's figure in the words
+// of the mode, every condition it names in each of its three shapes with the
+// file written with slashes and the code unquoted, the held ones marked from
+// the lines the gate printed under its verdict, and everything else in the
+// output passed over, a condition evaluated both ways, an indented line that
+// is not a condition and a carriage return included.
 func TestParseMeasurement_Outputs_ReadTheFigureAndTheConditions(t *testing.T) {
 	t.Parallel()
+	for mode, figure := range map[string]string{"condition": "Condition coverage", "branch": "Branch coverage"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+			parseEveryShape(t, mode, figure)
+		})
+	}
+}
+
+// parseEveryShape reads the output a run of the mode prints, its figure in
+// the words given, and holds the reading to every condition it names.
+func parseEveryShape(t *testing.T, mode, figure string) {
+	t.Helper()
 	output := "go: downloading example.com/x v1.0.0\n" +
 		"ok  \texample.com/m/cmd/server\t1.2s\r\n" +
 		"\n" +
-		"Condition coverage: 2236/2240\r\n" +
+		figure + ": 2236/2240\r\n" +
 		`main.go:91:5: condition "x != \"\"" was 3 times true but never false` + "\n" +
 		`cmd\server\conn_windows.go:12:9: condition "errors.Is(err, errRefused)" was once false but never true` + "\r\n" +
 		`probe.go:7:2: condition "a | b == c" was never evaluated` + "\n" +
@@ -26,7 +38,7 @@ func TestParseMeasurement_Outputs_ReadTheFigureAndTheConditions(t *testing.T) {
 		`  main.go:91:5: condition "x != \"\"" was 3 times true but never false` + "\n" +
 		`  probe.go:7:2: condition "a | b == c" was never evaluated` + "\r\n" +
 		"  --- FAIL: an indented line that is not a condition\n"
-	got, err := parseMeasurement(output, statusGateHeld)
+	got, err := parseMeasurement(output, statusGateHeld, mode)
 	if err != nil {
 		t.Fatalf("parseMeasurement() error = %v", err)
 	}
@@ -55,12 +67,13 @@ func TestParseMeasurement_Outputs_ReadTheFigureAndTheConditions(t *testing.T) {
 }
 
 // TestParseMeasurement_StatusAndOutput_MustAgree verifies that a measurement
-// is refused when its output is not what the script writes for its status:
-// no figure, a figure of zero (which the script refuses), a figure whose
-// count of either side does not fit an int, a held line gobco's report does
-// not name, a gate status with nothing held, and a passing status with
-// something held. The last figure printed is the one read, and a passing run
-// that holds nothing is accepted.
+// is refused when its output is not what the script writes for its status
+// and mode: no figure, a figure of zero (which the script refuses), a figure
+// in the other mode's words, a figure whose count of either side does not
+// fit an int, a held line gobco's report does not name, a gate status with
+// nothing held, and a passing status with something held. The last figure of
+// the mode printed is the one read, and a passing run that holds nothing is
+// accepted in either mode.
 func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 	t.Parallel()
 	const never = `main.go:1:2: condition "x" was never evaluated`
@@ -68,11 +81,32 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 		name    string
 		output  string
 		status  int
+		mode    string
 		wantErr string
 	}{
 		{
 			name: "no figure", output: never + "\n", status: statusMeasured,
 			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+		},
+		{
+			name: "a branch figure read as conditions", output: "Branch coverage: 2/2\n", status: statusMeasured,
+			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+		},
+		{
+			name: "a condition figure read as branches", output: "Condition coverage: 2/2\n", status: statusMeasured, mode: "branch",
+			wantErr: "the script's status says it measured, and its output carries no Branch coverage figure",
+		},
+		{
+			name: "a branch figure of zero", output: "Branch coverage: 0/0\n", status: statusMeasured, mode: "branch",
+			wantErr: "the script's status says it measured, and its output carries no Branch coverage figure",
+		},
+		{
+			name: "a branch total past an int", output: "Branch coverage: 2/99999999999999999999\n", status: statusMeasured, mode: "branch",
+			wantErr: `the figure "Branch coverage: 2/99999999999999999999" does not fit a count: strconv.Atoi: parsing "99999999999999999999": value out of range`,
+		},
+		{
+			name: "a passing branch run, the last branch figure read", output: "Branch coverage: 1/9\nBranch coverage: 2/2\nCondition coverage: 1/9\n",
+			status: statusMeasured, mode: "branch",
 		},
 		{
 			name: "a figure of zero", output: "Condition coverage: 0/0\n", status: statusMeasured,
@@ -98,12 +132,16 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 			name: "a passing status with something held", output: "Condition coverage: 1/2\n" + never + "\n  " + never + "\n", status: statusMeasured,
 			wantErr: "the script exited 0 and its gate held 1 condition(s)",
 		},
-		{name: "a passing run, the last figure read", output: "Condition coverage: 1/9\nCondition coverage: 2/2\n", status: statusMeasured},
+		{name: "a passing run, the last figure read", output: "Condition coverage: 1/9\nCondition coverage: 2/2\nBranch coverage: 1/9\n", status: statusMeasured},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := parseMeasurement(tc.output, tc.status)
+			mode := tc.mode
+			if mode == "" {
+				mode = "condition"
+			}
+			got, err := parseMeasurement(tc.output, tc.status, mode)
 			if tc.wantErr == "" {
 				if err != nil || got.covered != 2 || got.total != 2 || got.held != 0 {
 					t.Errorf("parseMeasurement() = %+v, %v; want 2 of 2 and nothing held", got, err)

@@ -28,7 +28,7 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 		{
 			name: "plan", args: []string{"plan", "-packages", "./cmd/server", "-systems", "macos-latest", "-gate", "all"},
 			wantStdout: `matrix={"include":[{"system":"macos-latest","name":"./cmd/server","packages":"./cmd/server","artifact":"gobco-macos-latest-cmd-server"}]}` + "\n",
-			wantStderr: "measure_conditions: 1 run(s) planned, ./cmd/server on macos-latest, with GOBCO_GATE=all\n",
+			wantStderr: "measure_conditions: 1 run(s) planned, ./cmd/server on macos-latest, with GOBCO_GATE=all and GOBCO_MODE=condition\n",
 		},
 		{
 			name: "measure", args: []string{"measure"}, wantCode: 2,

@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -215,8 +217,8 @@ func TestConditionsWorkflow_Triggers_AreADispatchThatOnlyReads(t *testing.T) {
 
 // TestConditionsWorkflow_MeasureStep_WritesTheRecordThisCommandReads holds the
 // measuring step to what summarize assumes of it: it runs this command's
-// measure over the job's packages through bash, with the dispatch's gate in
-// the script's environment and the system and artifact the plan chose, writes
+// measure over the job's packages through bash, with the dispatch's gate and
+// mode in the script's environment and the system and artifact the plan chose, writes
 // the records below the directory the upload step sends under the artifact
 // name, and fails the job with an annotation when the command says a package
 // was not measured. It also removes setup-go's problem matcher before
@@ -231,6 +233,7 @@ func TestConditionsWorkflow_MeasureStep_WritesTheRecordThisCommandReads(t *testi
 		"SYSTEM":           "${{ matrix.system }}",
 		"ARTIFACT":         "${{ matrix.artifact }}",
 		"GOBCO_GATE":       "${{ inputs.gate }}",
+		"GOBCO_MODE":       "${{ inputs.mode }}",
 		"GOBCO_TEST_FLAGS": "-timeout=30m",
 	}
 	if measure.Shell != "bash" || !reflect.DeepEqual(measure.Env, wantEnv) {
@@ -291,11 +294,11 @@ func TestConditionsWorkflow_PlanAndSummary_RunThisCommand(t *testing.T) {
 	t.Parallel()
 	workflow := loadConditionsWorkflow(t)
 	plan := workflow.steps["plan/Plan the runs"]
-	if want := `go run ./cmd/measure_conditions plan -packages "$PACKAGES" -systems "$SYSTEMS" -gate "$GATE" -tree="$TREE" >> "$GITHUB_OUTPUT"`; plan.Run != want {
+	if want := `go run ./cmd/measure_conditions plan -packages "$PACKAGES" -systems "$SYSTEMS" -gate "$GATE" -mode "$MODE" -tree="$TREE" >> "$GITHUB_OUTPUT"`; plan.Run != want {
 		t.Errorf("the plan step runs %q, want %q", plan.Run, want)
 	}
-	if plan.Env["TREE"] != "${{ inputs.tree }}" {
-		t.Errorf("the plan step's env is %v, want TREE from the tree input", plan.Env)
+	if plan.Env["TREE"] != "${{ inputs.tree }}" || plan.Env["MODE"] != "${{ inputs.mode }}" {
+		t.Errorf("the plan step's env is %v, want TREE and MODE from the tree and mode inputs", plan.Env)
 	}
 	if name := workflow.Jobs["measure"].Name; name != "🔬 ${{ matrix.name }} on ${{ matrix.system }}" {
 		t.Errorf("the measure job is named %q", name)
@@ -316,8 +319,35 @@ func TestConditionsWorkflow_PlanAndSummary_RunThisCommand(t *testing.T) {
 		})
 	}
 	summary := workflow.steps["summary/Write the job summary"]
-	if !strings.Contains(summary.Run, "go run ./cmd/measure_conditions summarize ") ||
+	if !strings.Contains(summary.Run, "go run ./cmd/measure_conditions summarize ") || !strings.Contains(summary.Run, ` -mode "$MODE" `) ||
 		!strings.Contains(summary.Run, `tee -a "$GITHUB_STEP_SUMMARY"`) || summary.Shell != "bash" {
 		t.Errorf("the summary step runs %q with shell %q", summary.Run, summary.Shell)
+	}
+	if summary.Env["MODE"] != "${{ inputs.mode }}" {
+		t.Errorf("the summary step's env is %v, want MODE from the mode input", summary.Env)
+	}
+}
+
+// TestConditionsWorkflow_ModeInput_OffersTheModesTheScriptReads holds the
+// dispatch form's mode to the modes this command and the script read, every
+// one of them and no other, with gobco's default mode as its default, so a
+// dispatch that leaves it alone measures what every dispatch measured before
+// the mode existed.
+func TestConditionsWorkflow_ModeInput_OffersTheModesTheScriptReads(t *testing.T) {
+	t.Parallel()
+	workflow := loadConditionsWorkflow(t)
+	dispatch, _ := workflow.On["workflow_dispatch"].(map[string]any)
+	inputs, _ := dispatch["inputs"].(map[string]any)
+	input, _ := inputs["mode"].(map[string]any)
+	var offered []string
+	options, _ := input["options"].([]any)
+	for _, option := range options {
+		offered = append(offered, fmt.Sprint(option))
+	}
+	if want := slices.Sorted(maps.Keys(coverageModes)); !reflect.DeepEqual(slices.Sorted(slices.Values(offered)), want) {
+		t.Errorf("the mode input offers %q, want %q", offered, want)
+	}
+	if input["type"] != "choice" || input["default"] != "condition" {
+		t.Errorf("the mode input is %v, want a choice defaulting to condition", input)
 	}
 }

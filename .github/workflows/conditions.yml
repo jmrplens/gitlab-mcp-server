@@ -14,10 +14,13 @@
 #
 # It also takes the figure for the whole tree: with tree set, every package
 # below cmd/ and internal/ is measured, in shards, and the summary adds up
-# each system's total, which is the figure this repository answers the
-# OpenSSF Best Practices criterion test_branch_coverage80 with
-# (docs/development/testing/README.md records the one taken, and the command
-# that takes it on any machine).
+# each system's total. mode chooses what gobco counts: condition, its
+# default, counts every operand of && and || and every comparison; branch is
+# gobco's -branch, which counts the whole condition of each if and for and
+# each switch case, the branches the OpenSSF Best Practices criterion
+# test_branch_coverage80 asks about. docs/development/testing/README.md
+# records the figures taken in both, and the command that takes them on any
+# machine.
 #
 # Dispatch only. A push or a pull request never runs it: the answer is wanted
 # when somebody asks the question, and a package can take the better part of
@@ -40,6 +43,8 @@
 #     -f systems="windows-latest macos-latest ubuntu-latest" -f gate=all
 #
 #   gh workflow run conditions.yml -f tree=true -f systems=ubuntu-latest -f gate=all
+#
+#   gh workflow run conditions.yml -f tree=true -f systems=ubuntu-latest -f gate=all -f mode=branch
 
 name: Condition Coverage
 
@@ -65,6 +70,13 @@ on:
         description: "Measure every package below cmd/ and internal/ instead, in shards, with each system's total. Leave packages empty."
         default: false
         type: boolean
+      mode:
+        description: "What gobco counts. condition, its default, counts every operand of && and || and every comparison; branch (gobco -branch) counts the whole condition of each if and for and each switch case."
+        default: condition
+        type: choice
+        options:
+          - condition
+          - branch
 
 # Read only. Nothing here writes to the repository, comments, or mints an
 # identity: the default token reads the checkout and the artifacts of this run.
@@ -96,7 +108,8 @@ jobs:
       # not hand on, and for an empty package list lists the module under
       # every release target to find the packages whose files differ. With
       # tree it lists the packages below cmd/ and internal/ instead, and
-      # refuses a package list beside it.
+      # refuses a package list beside it. The mode is refused here too when
+      # the script would refuse it, before any runner starts.
       - name: Plan the runs
         id: plan
         shell: bash
@@ -104,8 +117,9 @@ jobs:
           PACKAGES: ${{ inputs.packages }}
           SYSTEMS: ${{ inputs.systems }}
           GATE: ${{ inputs.gate }}
+          MODE: ${{ inputs.mode }}
           TREE: ${{ inputs.tree }}
-        run: go run ./cmd/measure_conditions plan -packages "$PACKAGES" -systems "$SYSTEMS" -gate "$GATE" -tree="$TREE" >> "$GITHUB_OUTPUT"
+        run: go run ./cmd/measure_conditions plan -packages "$PACKAGES" -systems "$SYSTEMS" -gate "$GATE" -mode "$MODE" -tree="$TREE" >> "$GITHUB_OUTPUT"
 
   measure:
     name: "🔬 ${{ matrix.name }} on ${{ matrix.system }}"
@@ -133,12 +147,13 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       # The script, through bash, exactly as ci.yml's legs run it and as
-      # `make coverage-conditions` runs it, with the gate the dispatch chose,
-      # over each package of the job one after another. The measure
-      # subcommand runs it and writes each package's record: both streams of
-      # the script go to the log and to the package's raw output file, beside
-      # a run.env naming the package, the runner, the platform and the
-      # script's status, in a directory of its own named after the package.
+      # `make coverage-conditions` runs it, with the gate and the mode the
+      # dispatch chose, over each package of the job one after another. The
+      # measure subcommand runs it and writes each package's record: both
+      # streams of the script go to the log and to the package's raw output
+      # file, beside a run.env naming the package, the runner, the platform
+      # and the script's status, in a directory of its own named after the
+      # package.
       #
       # The records are written outside the checkout: the script copies the
       # module into a staged directory for a package with a platform file,
@@ -167,6 +182,7 @@ jobs:
           SYSTEM: ${{ matrix.system }}
           ARTIFACT: ${{ matrix.artifact }}
           GOBCO_GATE: ${{ inputs.gate }}
+          GOBCO_MODE: ${{ inputs.mode }}
           GOBCO_TEST_FLAGS: -timeout=30m
         run: |
           echo "::remove-matcher owner=go::"
@@ -216,13 +232,15 @@ jobs:
         with:
           pattern: gobco-*
           path: ${{ runner.temp }}/records
-      # The table goes to the job summary and to the log. The command exits
-      # non-zero only when a record cannot be read or disagrees with itself,
-      # never on a figure.
+      # The table goes to the job summary and to the log, headed by the mode
+      # the runs measured in, whose figure it reads each record's in. The
+      # command exits non-zero only when a record cannot be read or disagrees
+      # with itself, never on a figure.
       - name: Write the job summary
         shell: bash
         env:
           MATRIX: ${{ needs.plan.outputs.matrix }}
           GATE: ${{ inputs.gate }}
+          MODE: ${{ inputs.mode }}
           COMMIT: ${{ github.sha }}
-        run: go run ./cmd/measure_conditions summarize -plan "$MATRIX" -records "$RUNNER_TEMP/records" -gate "$GATE" -commit "$COMMIT" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: go run ./cmd/measure_conditions summarize -plan "$MATRIX" -records "$RUNNER_TEMP/records" -gate "$GATE" -mode "$MODE" -commit "$COMMIT" | tee -a "$GITHUB_STEP_SUMMARY"

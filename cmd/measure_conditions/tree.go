@@ -14,12 +14,13 @@ import (
 const localSystem = "local"
 
 // runTree measures every package below cmd/ and internal/ on the machine at
-// hand and writes the summary the workflow's summary job would, the total
-// included, to stdout: the one command that reproduces the whole-tree figure
-// without a dispatch. The records are left below -records, one directory per
-// package, and a record left there by an earlier run is replaced. -parallel
-// packages are measured at once; each run's output goes to its record alone,
-// and stderr says what became of each package as it finishes.
+// hand, in the -mode it is given, and writes the summary the workflow's
+// summary job would, the total included, to stdout: the one command that
+// reproduces the whole-tree figure without a dispatch. The records are left
+// below -records, one directory per package, and a record left there by an
+// earlier run is replaced. -parallel packages are measured at once; each
+// run's output goes to its record alone, and stderr says what became of each
+// package as it finishes.
 //
 // It returns 2 for a usage error, 1 when the packages could not be listed, a
 // record could not be written, or the summary found a record it could not
@@ -31,6 +32,7 @@ func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRun
 	records := flags.String("records", "", "directory each package's record and raw output are written below, one directory per package")
 	commit := flags.String("commit", "", "the commit the tree is at, which the summary names")
 	gate := flags.String("gate", "all", "the GOBCO_GATE the script runs with: all or beyond:GOOS/GOARCH")
+	mode := flags.String("mode", defaultMode, "the GOBCO_MODE the script runs with: condition or branch")
 	parallel := flags.Int("parallel", 1, "how many packages are measured at once")
 	dir := flags.String("dir", ".", "module root the packages are looked for and measured in")
 	if err := flags.Parse(args); err != nil {
@@ -44,6 +46,9 @@ func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRun
 		fmt.Fprintf(stderr, "%s: -gate %q is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n", toolName, *gate)
 		return 2
 	}
+	if refuseMode(stderr, *mode) {
+		return 2
+	}
 	ctx := context.Background()
 	packages, err := treePackages(ctx, *dir, list)
 	if err != nil {
@@ -54,8 +59,8 @@ func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRun
 		fmt.Fprintf(stderr, "%s: there is no package below cmd/ and internal/, so there is nothing to measure\n", toolName)
 		return 1
 	}
-	fmt.Fprintf(stderr, "%s: measuring the %d packages below cmd/ and internal/, %d at a time, with GOBCO_GATE=%s\n", toolName, len(packages), *parallel, *gate)
-	m := measurer{run: run, dir: *dir, system: localSystem, records: *records, env: []string{"GOBCO_GATE=" + *gate}}
+	fmt.Fprintf(stderr, "%s: measuring the %d packages below cmd/ and internal/, %d at a time, with GOBCO_GATE=%s and GOBCO_MODE=%s\n", toolName, len(packages), *parallel, *gate, *mode)
+	m := measurer{run: run, dir: *dir, system: localSystem, records: *records, env: []string{"GOBCO_GATE=" + *gate, "GOBCO_MODE=" + *mode}}
 	if err = measureAll(ctx, m, packages, *parallel, stderr); err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
 		return 1
@@ -65,9 +70,9 @@ func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRun
 		runs = append(runs, packageRun{Package: pkg, System: localSystem})
 	}
 	recs, problems := readRecords(*records)
-	outcomes, more := join(runs, recs)
+	outcomes, more := join(runs, recs, *mode)
 	problems = append(problems, more...)
-	render(stdout, *gate, *commit, outcomes, problems)
+	render(stdout, *gate, *mode, *commit, outcomes, problems)
 	for _, problem := range problems {
 		fmt.Fprintf(stderr, "%s: %s\n", toolName, problem)
 	}

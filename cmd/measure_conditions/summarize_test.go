@@ -28,7 +28,8 @@ func recordFor(pkg, system, platform string, status int) string {
 
 // TestRunSummarize_Usage_IsRefusedWithStatus2 verifies every way the command
 // line can be wrong: an unknown flag, an argument, each of the four flags
-// left empty, a plan that is not JSON and a plan with no run in it.
+// left empty, a plan that is not JSON, a plan with no run in it, and a mode
+// the script would refuse.
 func TestRunSummarize_Usage_IsRefusedWithStatus2(t *testing.T) {
 	t.Parallel()
 	plan := planOf(t, []string{"./cmd/server"}, []string{"macos-latest"})
@@ -54,6 +55,10 @@ func TestRunSummarize_Usage_IsRefusedWithStatus2(t *testing.T) {
 		{name: "no commit", args: full("-commit", ""), wantStderr: flagsWanted},
 		{name: "a plan that is not JSON", args: full("-plan", "matrix="+plan), wantStderr: planWanted},
 		{name: "a plan with no run", args: full("-plan", `{"include":[]}`), wantStderr: planWanted},
+		{
+			name: "a mode the script would refuse", args: append(full(), "-mode", "both"),
+			wantStderr: "measure_conditions: -mode \"both\" is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -89,8 +94,32 @@ func TestRunSummarize_EveryRunMeasured_WritesTheTableAndPasses(t *testing.T) {
 	}
 }
 
+// TestRunSummarize_BranchMode_ReadsTheBranchFigures verifies a dispatch that
+// asked gobco for branch coverage: the summary says so in its heading and in
+// what it says the figures count, and reads each record's figure in the words
+// gobco writes it in that mode.
+func TestRunSummarize_BranchMode_ReadsTheBranchFigures(t *testing.T) {
+	t.Parallel()
+	records := t.TempDir()
+	writeRun(t, records, recordFor("./cmd/server", "ubuntu-latest", "linux/amd64", 0), "Condition coverage: 9/9\nBranch coverage: 7/8\n")
+	plan := planOf(t, []string{"./cmd/server"}, []string{"ubuntu-latest"})
+	var stdout, stderr bytes.Buffer
+	if got := runSummarize([]string{"-plan", plan, "-records", records, "-gate", "all", "-mode", "branch", "-commit", "c0ffee"}, &stdout, &stderr); got != 0 {
+		t.Fatalf("runSummarize() = %d, want 0; stderr:\n%s", got, stderr.String())
+	}
+	want := "## Branch coverage, measured\n\n" +
+		"`GOBCO_GATE=all` at `c0ffee`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each decision twice, once per outcome: the whole condition of an `if` or a `for`, and each case of a `switch`, so a total is twice the number of decisions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
+		"| Package | System | Covered | Not both ways | Held by the gate | Raw output |\n" +
+		"| --- | --- | ---: | ---: | ---: | --- |\n" +
+		"| `./cmd/server` | `ubuntu-latest` (linux/amd64) | 7 of 8 | 0 | 0 | `gobco-ubuntu-latest-cmd-server/cmd-server` |\n" +
+		totalsTable("| `ubuntu-latest` | 1 of 1 | 7 of 8 | 87.5% |")
+	if stdout.String() != want || stderr.Len() != 0 {
+		t.Errorf("stdout =\n%s\nwant\n%s\nstderr = %q", stdout.String(), want, stderr.String())
+	}
+}
+
 // summaryIntro is the heading, the paragraph and the table head every
-// summary opens with.
+// summary of condition coverage opens with.
 func summaryIntro(gate, commit string) string {
 	return "## Condition coverage, measured\n\n" +
 		"`GOBCO_GATE=" + gate + "` at `" + commit + "`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each condition twice, once per outcome, so a total is twice the number of conditions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +

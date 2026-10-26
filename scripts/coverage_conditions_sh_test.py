@@ -226,9 +226,13 @@ elif args[:2] == ["run", GOBCO]:
             # No test binary ran, so no counts were written, and gobco
             # reports nothing measured rather than conditions unevaluated.
             figure = "0/0"
+        # gobco opens its figure with the mode it counted in: -branch counts
+        # whole controlling conditions, and its default every atomic one. A
+        # case sets STUB_GOBCO_KIND to have it answer in the other words.
+        kind = env.get("STUB_GOBCO_KIND", "Branch coverage" if "-branch" in args else "Condition coverage")
         print("")
         if figure != "none":
-            print("Condition coverage: " + figure)
+            print(kind + ": " + figure)
             # The conditions it names, one per line, which a case sets with
             # STUB_GOBCO_CONDITIONS (an empty value names none), or one in
             # the first file by default.
@@ -785,6 +789,74 @@ class CoverageConditionsTest(unittest.TestCase):
                 self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
                 self.assertEqual(calls, [])
                 self.assertIn("GOBCO_GATE=%s is neither all nor beyond:GOOS/GOARCH" % value, proc.stderr)
+
+    def test_mode_chooses_what_gobco_counts_and_the_figure_read(self):
+        # GOBCO_MODE=branch runs gobco with -branch, which instruments the
+        # whole controlling condition of an if or a for and each switch case
+        # rather than every operand and comparison, and opens its figure with
+        # "Branch coverage". condition, unset and empty are gobco's default,
+        # as every run was before the mode existed. The flag comes before the
+        # tags and the test flags, and a staged package is run the same way.
+        cases = [
+            ("unset", ("./internal/plain",), {}, ["run", GOBCO], "Condition coverage: 3/4"),
+            ("empty", ("./internal/plain",), {"GOBCO_MODE": ""}, ["run", GOBCO], "Condition coverage: 3/4"),
+            ("condition", ("./internal/plain",), {"GOBCO_MODE": "condition"}, ["run", GOBCO], "Condition coverage: 3/4"),
+            ("branch", ("./internal/plain",), {"GOBCO_MODE": "branch"}, ["run", GOBCO, "-branch"], "Branch coverage: 3/4"),
+            ("branch with tags and test flags", ("./internal/plain", "e2e"),
+             {"GOBCO_MODE": "branch", "GOBCO_TEST_FLAGS": "-timeout=30m"},
+             ["run", GOBCO, "-branch", "-test=-tags=e2e", "-test=-timeout=30m"], "Branch coverage: 3/4"),
+            ("branch on a staged package", ("./cmd/tool",), {"GOBCO_MODE": "branch"}, ["run", GOBCO, "-branch"],
+             "Branch coverage: 3/4"),
+        ]
+        for name, args, env, argv, figure in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script(*args, env=env)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                runs = self.gobco(calls)
+                self.assertEqual(len(runs), 1, calls)
+                self.assertEqual(runs[0]["argv"], argv)
+                self.assertIn(figure, proc.stdout)
+                self.assertNotIn("GOBCO_MODE", proc.stdout + proc.stderr)
+                self.assertEqual(self.staged_copies(), [])
+
+    def test_mode_a_value_it_cannot_read_is_refused_before_anything_runs(self):
+        for value in ("Branch", "branches", "conditions", "both", " branch", "branch,condition"):
+            with self.subTest(value):
+                proc, calls = self.run_script("./internal/plain", env={"GOBCO_MODE": value})
+                self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+                self.assertEqual(calls, [])
+                self.assertIn("GOBCO_MODE=%s is neither condition nor branch; refusing to measure" % value, proc.stderr)
+
+    def test_mode_a_report_without_the_figure_of_its_mode_is_refused(self):
+        # A 0/0 is no measurement in either mode, and a report whose figure
+        # is in the other mode's words is not the measurement asked for: it
+        # is what gobco would print if it had not been given the flag, or had
+        # been given it unasked.
+        cases = [
+            ("branch, 0/0", {"GOBCO_MODE": "branch", "STUB_GOBCO_REPORT": "0/0"}, "Branch coverage"),
+            ("branch, a condition figure", {"GOBCO_MODE": "branch", "STUB_GOBCO_KIND": "Condition coverage"},
+             "Branch coverage"),
+            ("condition, a branch figure", {"GOBCO_MODE": "condition", "STUB_GOBCO_KIND": "Branch coverage"},
+             "Condition coverage"),
+        ]
+        for name, env, figure in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./internal/plain", env=env)
+                self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+                self.assertEqual(len(self.gobco(calls)), 1)
+                self.assertIn("measured no condition of ./internal/plain (%s: 0/0, or no such figure at all)" % figure,
+                              proc.stderr)
+                self.assertEqual(self.staged_copies(), [])
+
+    def test_mode_branch_is_gated_like_condition(self):
+        # gobco names a branch it took one way only in the words it uses for
+        # a condition, so the gate reads either mode's report alike.
+        proc, _ = self.run_script("./internal/plain", env={
+            "GOBCO_MODE": "branch", "GOBCO_GATE": "all",
+            "STUB_GOBCO_CONDITIONS": 'plain.go:4:9: condition "c == 1" was once true but never false'})
+        self.assertEqual(proc.returncode, 3, proc.stdout + proc.stderr)
+        self.assertIn("Branch coverage: 3/4", proc.stdout)
+        self.assertIn("GOBCO_GATE=all: 1 condition(s) in the files of ./internal/plain", proc.stderr)
 
     def test_test_flags_reach_gobcos_go_test_one_per_word(self):
         cases = [
