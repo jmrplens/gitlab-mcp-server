@@ -101,6 +101,31 @@ func constrainedPackages(ctx context.Context, dir string, list lister) ([]string
 	return dirs, nil
 }
 
+// treePackages returns, as ./-relative package paths in the order the go
+// command lists them, every package treePatterns names, listed under the
+// platform the command runs on. The listing is not asked for errors: a tree
+// that does not load cannot be measured, and the go command fails the
+// listing for it with its own words.
+func treePackages(ctx context.Context, dir string, list lister) ([]string, error) {
+	out, err := list(ctx, dir, nil, append([]string{"list", "-f", listFormat}, treePatterns...)...)
+	if err != nil {
+		return nil, fmt.Errorf("go list: %w", err)
+	}
+	rows, err := parseListing(out)
+	if err != nil {
+		return nil, fmt.Errorf("go list: %w", err)
+	}
+	packages := make([]string, 0, len(rows))
+	for _, row := range rows {
+		packageDir, outside := relativePackage(row)
+		if outside != nil {
+			return nil, outside
+		}
+		packages = append(packages, packageDir)
+	}
+	return packages, nil
+}
+
 // parseListing reads the rows a `go list -f listFormat` run printed. A blank
 // line is skipped, and anything that is not exactly six tab-separated fields
 // is refused rather than guessed at.

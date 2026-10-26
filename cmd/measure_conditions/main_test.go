@@ -10,7 +10,7 @@ import (
 // TestRunMain_Subcommands_DispatchOrRefuse verifies the dispatch: no
 // subcommand and an unknown one are usage errors that print the usage, and
 // each known subcommand is reached with the arguments after its name, which
-// the plan's matrix and summarize's own usage error show.
+// the plan's matrix and the other three's own usage errors show.
 func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -22,17 +22,25 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 	}{
 		{name: "no subcommand", args: nil, wantCode: 2, wantStderr: usage},
 		{
-			name: "unknown subcommand", args: []string{"measure"}, wantCode: 2,
-			wantStderr: "measure_conditions: unknown subcommand \"measure\"\n" + usage,
+			name: "unknown subcommand", args: []string{"report"}, wantCode: 2,
+			wantStderr: "measure_conditions: unknown subcommand \"report\"\n" + usage,
 		},
 		{
 			name: "plan", args: []string{"plan", "-packages", "./cmd/server", "-systems", "macos-latest", "-gate", "all"},
-			wantStdout: `matrix={"include":[{"system":"macos-latest","package":"./cmd/server","artifact":"gobco-macos-latest-cmd-server"}]}` + "\n",
+			wantStdout: `matrix={"include":[{"system":"macos-latest","name":"./cmd/server","packages":"./cmd/server","artifact":"gobco-macos-latest-cmd-server"}]}` + "\n",
 			wantStderr: "measure_conditions: 1 run(s) planned, ./cmd/server on macos-latest, with GOBCO_GATE=all\n",
+		},
+		{
+			name: "measure", args: []string{"measure"}, wantCode: 2,
+			wantStderr: "measure_conditions: measure takes -packages, -system and -records, all three non-empty, and no arguments\n",
 		},
 		{
 			name: "summarize", args: []string{"summarize"}, wantCode: 2,
 			wantStderr: "measure_conditions: summarize takes -plan, -records, -gate and -commit, all four non-empty, and no arguments\n",
+		},
+		{
+			name: "tree", args: []string{"tree"}, wantCode: 2,
+			wantStderr: "measure_conditions: tree takes -records and -commit, both non-empty, a -parallel of at least 1, and no arguments\n",
 		},
 	}
 	for _, tc := range cases {
@@ -67,11 +75,11 @@ func TestMain_NoSubcommand_ExitsWithTheUsageStatus(t *testing.T) {
 	}
 }
 
-// TestUsage_NamesEverySubcommand verifies the usage text names both
-// subcommands the dispatch accepts.
+// TestUsage_NamesEverySubcommand verifies the usage text names every
+// subcommand the dispatch accepts.
 func TestUsage_NamesEverySubcommand(t *testing.T) {
 	t.Parallel()
-	for _, subcommand := range []string{"plan", "summarize"} {
+	for _, subcommand := range []string{"plan", "measure", "summarize", "tree"} {
 		t.Run(subcommand, func(t *testing.T) {
 			t.Parallel()
 			if !strings.Contains(usage, "  "+subcommand+" ") {

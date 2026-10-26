@@ -31,8 +31,8 @@ func TestParseMeasurement_Outputs_ReadTheFigureAndTheConditions(t *testing.T) {
 		t.Fatalf("parseMeasurement() error = %v", err)
 	}
 	want := measurement{
-		covered: "2236",
-		total:   "2240",
+		covered: 2236,
+		total:   2240,
 		held:    2,
 		conditions: []condition{
 			{
@@ -56,10 +56,11 @@ func TestParseMeasurement_Outputs_ReadTheFigureAndTheConditions(t *testing.T) {
 
 // TestParseMeasurement_StatusAndOutput_MustAgree verifies that a measurement
 // is refused when its output is not what the script writes for its status:
-// no figure, a figure of zero (which the script refuses), a held line
-// gobco's report does not name, a gate status with nothing held, and a
-// passing status with something held. The last figure printed is the one
-// read, and a passing run that holds nothing is accepted.
+// no figure, a figure of zero (which the script refuses), a figure whose
+// count of either side does not fit an int, a held line gobco's report does
+// not name, a gate status with nothing held, and a passing status with
+// something held. The last figure printed is the one read, and a passing run
+// that holds nothing is accepted.
 func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 	t.Parallel()
 	const never = `main.go:1:2: condition "x" was never evaluated`
@@ -76,6 +77,14 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 		{
 			name: "a figure of zero", output: "Condition coverage: 0/0\n", status: statusMeasured,
 			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+		},
+		{
+			name: "a covered count past an int", output: "Condition coverage: 99999999999999999999/2\n", status: statusMeasured,
+			wantErr: `the figure "Condition coverage: 99999999999999999999/2" does not fit a count: strconv.Atoi: parsing "99999999999999999999": value out of range`,
+		},
+		{
+			name: "a total past an int", output: "Condition coverage: 2/99999999999999999999\n", status: statusMeasured,
+			wantErr: `the figure "Condition coverage: 2/99999999999999999999" does not fit a count: strconv.Atoi: parsing "99999999999999999999": value out of range`,
 		},
 		{
 			name: "a held line gobco did not name", output: "Condition coverage: 1/2\n  " + never + "\n", status: statusGateHeld,
@@ -96,7 +105,7 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 			t.Parallel()
 			got, err := parseMeasurement(tc.output, tc.status)
 			if tc.wantErr == "" {
-				if err != nil || got.covered != "2" || got.total != "2" || got.held != 0 {
+				if err != nil || got.covered != 2 || got.total != 2 || got.held != 0 {
 					t.Errorf("parseMeasurement() = %+v, %v; want 2 of 2 and nothing held", got, err)
 				}
 				return

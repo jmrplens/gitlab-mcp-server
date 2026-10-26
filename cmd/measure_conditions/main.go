@@ -10,9 +10,11 @@ import (
 const toolName = "measure_conditions"
 
 // usage is printed when the subcommand is missing or unknown.
-const usage = `usage: measure_conditions <plan|summarize> [flags]
+const usage = `usage: measure_conditions <plan|measure|summarize|tree> [flags]
   plan        validate a dispatch and print the matrix the workflow runs
+  measure     measure the packages of one job and leave their records
   summarize   write the job summary from the records the runs left
+  tree        measure every package below cmd/ and internal/ here, and summarize
 `
 
 // osExit is a seam over os.Exit, so a test can observe the exit code main
@@ -33,8 +35,12 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "plan":
 		return runPlan(args[1:], stdout, stderr, goList)
+	case "measure":
+		return runMeasure(args[1:], stdout, stderr, runScript)
 	case "summarize":
 		return runSummarize(args[1:], stdout, stderr)
+	case "tree":
+		return runTree(args[1:], stdout, stderr, goList, runScript)
 	default:
 		fmt.Fprintf(stderr, "%s: unknown subcommand %q\n%s", toolName, args[0], usage)
 		return 2

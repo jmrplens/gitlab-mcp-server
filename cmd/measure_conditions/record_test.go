@@ -159,8 +159,10 @@ type conditionsWorkflow struct {
 	On          map[string]any    `yaml:"on"`
 	Permissions map[string]string `yaml:"permissions"`
 	Jobs        map[string]struct {
-		Permissions any            `yaml:"permissions"`
-		Steps       []workflowStep `yaml:"steps"`
+		Name           string         `yaml:"name"`
+		Permissions    any            `yaml:"permissions"`
+		TimeoutMinutes any            `yaml:"timeout-minutes"`
+		Steps          []workflowStep `yaml:"steps"`
 	} `yaml:"jobs"`
 	steps map[string]workflowStep
 }
@@ -212,32 +214,36 @@ func TestConditionsWorkflow_Triggers_AreADispatchThatOnlyReads(t *testing.T) {
 }
 
 // TestConditionsWorkflow_MeasureStep_WritesTheRecordThisCommandReads holds the
-// measuring step to what summarize assumes of it: it runs
-// scripts/coverage-conditions.sh through bash with the dispatch's gate, keeps
-// both streams in the raw output file, takes the script's own status rather
-// than tee's, reads as a measurement exactly the statuses this command does,
-// and writes every key of the record into the record file, which the upload
-// step sends under the artifact name the plan chose. It also removes
-// setup-go's problem matcher before the script prints anything, since that
-// matcher files every condition gobco names as an error annotation.
+// measuring step to what summarize assumes of it: it runs this command's
+// measure over the job's packages through bash, with the dispatch's gate in
+// the script's environment and the system and artifact the plan chose, writes
+// the records below the directory the upload step sends under the artifact
+// name, and fails the job with an annotation when the command says a package
+// was not measured. It also removes setup-go's problem matcher before
+// anything is printed, since that matcher files every condition gobco names
+// as an error annotation.
 func TestConditionsWorkflow_MeasureStep_WritesTheRecordThisCommandReads(t *testing.T) {
 	t.Parallel()
 	workflow := loadConditionsWorkflow(t)
 	measure := workflow.steps["measure/Measure"]
-	if measure.Shell != "bash" || measure.Env["GOBCO_GATE"] != "${{ inputs.gate }}" || measure.Env["ARTIFACT"] != "${{ matrix.artifact }}" {
-		t.Errorf("the measure step has shell %q and env %v", measure.Shell, measure.Env)
+	wantEnv := map[string]any{
+		"PACKAGES":         "${{ matrix.packages }}",
+		"SYSTEM":           "${{ matrix.system }}",
+		"ARTIFACT":         "${{ matrix.artifact }}",
+		"GOBCO_GATE":       "${{ inputs.gate }}",
+		"GOBCO_TEST_FLAGS": "-timeout=30m",
+	}
+	if measure.Shell != "bash" || !reflect.DeepEqual(measure.Env, wantEnv) {
+		t.Errorf("the measure step has shell %q and env %v, want bash and %v", measure.Shell, measure.Env, wantEnv)
 	}
 	if first, _, _ := strings.Cut(measure.Run, "\n"); first != `echo "::remove-matcher owner=go::"` {
 		t.Errorf("the measure step opens with %q, want the removal of setup-go's problem matcher", first)
 	}
 	wanted := []string{
-		`bash scripts/coverage-conditions.sh "$PACKAGE" 2>&1 | tee "$record/` + outputFile + `"`,
-		`status=${PIPESTATUS[0]}`,
-		`} >"$record/` + recordFile + `"`,
-		fmt.Sprintf("%d|%d)", statusMeasured, statusGateHeld),
-	}
-	for _, key := range recordKeys {
-		wanted = append(wanted, `echo "`+key+`=`)
+		`go run ./cmd/measure_conditions measure -packages "$PACKAGES" -system "$SYSTEM" -records "${RUNNER_TEMP//\\//}/$ARTIFACT" || status=$?`,
+		`if [ "$status" -ne 0 ]; then`,
+		`echo "::error title=Not measured::`,
+		`exit "$status"`,
 	}
 	for _, fragment := range wanted {
 		t.Run(fragment, func(t *testing.T) {
@@ -253,26 +259,61 @@ func TestConditionsWorkflow_MeasureStep_WritesTheRecordThisCommandReads(t *testi
 	}
 }
 
+// TestConditionsWorkflow_JobBounds_FollowWhatEachJobMeasures holds each job to
+// its time bound: a measuring job of named packages measures one and keeps
+// the hour it had before the tree existed, which on the Windows and macOS
+// runners is billed at a multiple of the Linux rate, a shard of the tree
+// measures fifteen or so packages one after another and gets two hours, and
+// the plan and the summary, which run the command and nothing else, ten
+// minutes each.
+func TestConditionsWorkflow_JobBounds_FollowWhatEachJobMeasures(t *testing.T) {
+	t.Parallel()
+	workflow := loadConditionsWorkflow(t)
+	want := map[string]any{"plan": 10, "measure": "${{ inputs.tree && 120 || 60 }}", "summary": 10}
+	for name, bound := range want {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := workflow.Jobs[name].TimeoutMinutes; got != bound {
+				t.Errorf("job %s has timeout-minutes %v (%T), want %v", name, got, got, bound)
+			}
+		})
+	}
+}
+
 // TestConditionsWorkflow_PlanAndSummary_RunThisCommand holds the two ends to
-// this command: the plan prints its matrix into $GITHUB_OUTPUT, and the
-// summary downloads every artifact by the prefix the plan names them with and
-// writes the table into the job summary through bash, so a failure of the
-// command is not hidden by the pipe.
+// this command: the plan is handed every input of the dispatch, the tree
+// one included, and prints its matrix into $GITHUB_OUTPUT; the jobs are
+// named by the name a cell carries; and the summary downloads every artifact
+// by the prefix the plan names them with, a shard's as much as a package's,
+// and writes the table into the job summary through bash, so a failure of
+// the command is not hidden by the pipe.
 func TestConditionsWorkflow_PlanAndSummary_RunThisCommand(t *testing.T) {
 	t.Parallel()
 	workflow := loadConditionsWorkflow(t)
 	plan := workflow.steps["plan/Plan the runs"]
-	if !strings.Contains(plan.Run, "go run ./cmd/measure_conditions plan ") || !strings.Contains(plan.Run, `>> "$GITHUB_OUTPUT"`) {
-		t.Errorf("the plan step runs %q", plan.Run)
+	if want := `go run ./cmd/measure_conditions plan -packages "$PACKAGES" -systems "$SYSTEMS" -gate "$GATE" -tree="$TREE" >> "$GITHUB_OUTPUT"`; plan.Run != want {
+		t.Errorf("the plan step runs %q, want %q", plan.Run, want)
+	}
+	if plan.Env["TREE"] != "${{ inputs.tree }}" {
+		t.Errorf("the plan step's env is %v, want TREE from the tree input", plan.Env)
+	}
+	if name := workflow.Jobs["measure"].Name; name != "🔬 ${{ matrix.name }} on ${{ matrix.system }}" {
+		t.Errorf("the measure job is named %q", name)
 	}
 	planned, err := buildMatrix([]string{"./cmd/server"}, []string{"macos-latest"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	shards := buildShards([]string{"./cmd/server"}, []string{"macos-latest"}, treeShards)
 	download := workflow.steps["summary/Download the records"]
-	if pattern, isText := download.With["pattern"].(string); !isText || !strings.HasSuffix(pattern, "*") ||
-		!strings.HasPrefix(planned.Include[0].Artifact, strings.TrimSuffix(pattern, "*")) {
-		t.Errorf("the download step takes %v, which does not match the artifact %s the plan names", download.With, planned.Include[0].Artifact)
+	for _, artifact := range []string{planned.Include[0].Artifact, shards.Include[0].Artifact} {
+		t.Run(artifact, func(t *testing.T) {
+			t.Parallel()
+			if pattern, isText := download.With["pattern"].(string); !isText || !strings.HasSuffix(pattern, "*") ||
+				!strings.HasPrefix(artifact, strings.TrimSuffix(pattern, "*")) {
+				t.Errorf("the download step takes %v, which does not match the artifact %s the plan names", download.With, artifact)
+			}
+		})
 	}
 	summary := workflow.steps["summary/Write the job summary"]
 	if !strings.Contains(summary.Run, "go run ./cmd/measure_conditions summarize ") ||

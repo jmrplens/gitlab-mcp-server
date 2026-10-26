@@ -193,6 +193,40 @@ func TestGoList_MissingDirectory_ReportsTheToolchainsWords(t *testing.T) {
 	}
 }
 
+// TestTreePackages_Listings_AreTheModulesPackagesOrRefused verifies the
+// tree's listing: every package it names, written ./ and its directory in
+// the order the go command listed them, and a refusal, naming the listing,
+// for a listing that failed, a row of another shape and a package that is not
+// below its module.
+func TestTreePackages_Listings_AreTheModulesPackagesOrRefused(t *testing.T) {
+	t.Parallel()
+	const module = "example.com/m"
+	got, err := treePackages(context.Background(), ".", treeLister(row(module+"/internal/z", module, "z.go", "", "", "")+row(module+"/cmd/a", module, "a.go", "", "", ""), nil))
+	if want := []string{"./internal/z", "./cmd/a"}; err != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("treePackages() = %q, %v; want %q", got, err, want)
+	}
+	cases := []struct {
+		name    string
+		list    lister
+		wantErr string
+	}{
+		{name: "a listing that failed", list: treeLister("", errors.New("planted failure")), wantErr: "go list: planted failure"},
+		{name: "a row of another shape", list: treeLister("a\tb\n", nil), wantErr: `go list: unexpected go list row "a\tb"`},
+		{
+			name: "a package outside its module", list: treeLister(row("example.com/other/cmd", module, "c.go", "", "", ""), nil),
+			wantErr: `go list named "example.com/other/cmd", which is not below its module path "example.com/m"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if refused, refusal := treePackages(context.Background(), ".", tc.list); refusal == nil || refusal.Error() != tc.wantErr || refused != nil {
+				t.Errorf("treePackages() = %q, %v; want nothing and %q", refused, refusal, tc.wantErr)
+			}
+		})
+	}
+}
+
 // TestParseListing_Rows_AreReadOrRefused verifies the listing reader: blank
 // lines and carriage returns are dropped, the four file lists are kept as one
 // signature, and a row with another number of fields is refused.

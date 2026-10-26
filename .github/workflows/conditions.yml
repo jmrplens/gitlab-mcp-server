@@ -12,6 +12,13 @@
 # dispatch names, so every figure is the one the gate would compute there:
 # measured on that system, never inferred from another.
 #
+# It also takes the figure for the whole tree: with tree set, every package
+# below cmd/ and internal/ is measured, in shards, and the summary adds up
+# each system's total, which is the figure this repository answers the
+# OpenSSF Best Practices criterion test_branch_coverage80 with
+# (docs/development/testing/README.md records the one taken, and the command
+# that takes it on any machine).
+#
 # Dispatch only. A push or a pull request never runs it: the answer is wanted
 # when somebody asks the question, and a package can take the better part of
 # an hour on Windows. Nothing here is a gate. No figure fails it, whatever the
@@ -20,15 +27,19 @@
 # job, and says why.
 #
 # Shape: plan validates the inputs and, for an empty package list, finds the
-# packages carrying a GOOS- or GOARCH-constrained file; measure fans out over
-# package x system; summary joins the records the runs uploaded into one table
-# in the job summary. The plan and the table are cmd/measure_conditions, whose
-# tests hold this file to the record it reads.
+# packages carrying a GOOS- or GOARCH-constrained file, or with tree lists
+# the tree and deals it into shards; measure fans out over job x system, each
+# job measuring its packages one after another; summary joins the records the
+# runs uploaded into one table, with the totals, in the job summary. The plan,
+# the measuring loop and the table are cmd/measure_conditions, whose tests
+# hold this file to the record it reads.
 #
 # Dispatch with:
 #
 #   gh workflow run conditions.yml -f packages="./cmd/server ./internal/toolutil" \
 #     -f systems="windows-latest macos-latest ubuntu-latest" -f gate=all
+#
+#   gh workflow run conditions.yml -f tree=true -f systems=ubuntu-latest -f gate=all
 
 name: Condition Coverage
 
@@ -50,6 +61,10 @@ on:
         description: "Runners to measure on, separated by spaces or commas: windows-latest, macos-latest, ubuntu-latest (the comparison)."
         default: "windows-latest macos-latest ubuntu-latest"
         type: string
+      tree:
+        description: "Measure every package below cmd/ and internal/ instead, in shards, with each system's total. Leave packages empty."
+        default: false
+        type: boolean
 
 # Read only. Nothing here writes to the repository, comments, or mints an
 # identity: the default token reads the checkout and the artifacts of this run.
@@ -79,7 +94,9 @@ jobs:
       # the expression syntax inside the script, so a value is data whatever
       # it holds. The command refuses a package, a runner or a gate it would
       # not hand on, and for an empty package list lists the module under
-      # every release target to find the packages whose files differ.
+      # every release target to find the packages whose files differ. With
+      # tree it lists the packages below cmd/ and internal/ instead, and
+      # refuses a package list beside it.
       - name: Plan the runs
         id: plan
         shell: bash
@@ -87,17 +104,21 @@ jobs:
           PACKAGES: ${{ inputs.packages }}
           SYSTEMS: ${{ inputs.systems }}
           GATE: ${{ inputs.gate }}
-        run: go run ./cmd/measure_conditions plan -packages "$PACKAGES" -systems "$SYSTEMS" -gate "$GATE" >> "$GITHUB_OUTPUT"
+          TREE: ${{ inputs.tree }}
+        run: go run ./cmd/measure_conditions plan -packages "$PACKAGES" -systems "$SYSTEMS" -gate "$GATE" -tree="$TREE" >> "$GITHUB_OUTPUT"
 
   measure:
-    name: "🔬 ${{ matrix.package }} on ${{ matrix.system }}"
+    name: "🔬 ${{ matrix.name }} on ${{ matrix.system }}"
     needs: plan
     runs-on: ${{ matrix.system }}
     # gobco's go test is bounded at 30 minutes below, the bound ci.yml gives
-    # cmd/server on Windows; the job bound leaves room for the toolchain and
-    # the staged copy around it, and ends a hang on a runner billed at a
-    # multiple of the Linux rate.
-    timeout-minutes: 60
+    # cmd/server on Windows. A job of named packages measures one, and keeps
+    # the hour it had before the tree could be measured; a shard of the tree
+    # measures fifteen or so one after another, and is given two. Each bound
+    # leaves room for the toolchain and the staged copies around the
+    # measuring, and ends a hang on a runner billed at a multiple of the Linux
+    # rate.
+    timeout-minutes: ${{ inputs.tree && 120 || 60 }}
     strategy:
       # Every run reports. Stopping at the first that could not measure would
       # hide every figure the others took.
@@ -112,20 +133,25 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       # The script, through bash, exactly as ci.yml's legs run it and as
-      # `make coverage-conditions` runs it, with the gate the dispatch chose.
-      # Both streams go to the log and to the raw output file.
+      # `make coverage-conditions` runs it, with the gate the dispatch chose,
+      # over each package of the job one after another. The measure
+      # subcommand runs it and writes each package's record: both streams of
+      # the script go to the log and to the package's raw output file, beside
+      # a run.env naming the package, the runner, the platform and the
+      # script's status, in a directory of its own named after the package.
       #
-      # The record is written outside the checkout: the script copies the
+      # The records are written outside the checkout: the script copies the
       # module into a staged directory for a package with a platform file,
-      # and a file this step is still writing inside the tree would be copied
-      # mid-write. RUNNER_TEMP is a Windows path on Windows, written with
-      # slashes here, which Git Bash and go both read, as the script does with
-      # go list's directories.
+      # and a file written inside the tree would be copied with it.
+      # RUNNER_TEMP is a Windows path on Windows, written with slashes here,
+      # which Git Bash and go both read, as the script does with go list's
+      # directories.
       #
-      # The exit status is read for one thing: 0 and 3 are a measurement (3 is
-      # the gate holding a condition, which the script uses for nothing else),
-      # and anything else means nothing was measured. That fails the job with
-      # the reason; a figure never does.
+      # The script's status is read for one thing: 0 and 3 are a measurement
+      # (3 is the gate holding a condition, which the script uses for nothing
+      # else), and anything else means nothing was measured. A package not
+      # measured fails the job with the reason once the job's other packages
+      # are measured; a figure never does.
       #
       # setup-go registers a problem matcher, owner go, that files every line
       # shaped like file.go:line:col: text as an error annotation, and every
@@ -137,32 +163,20 @@ jobs:
       - name: Measure
         shell: bash
         env:
-          PACKAGE: ${{ matrix.package }}
+          PACKAGES: ${{ matrix.packages }}
           SYSTEM: ${{ matrix.system }}
           ARTIFACT: ${{ matrix.artifact }}
           GOBCO_GATE: ${{ inputs.gate }}
           GOBCO_TEST_FLAGS: -timeout=30m
         run: |
           echo "::remove-matcher owner=go::"
-          record="${RUNNER_TEMP//\\//}/$ARTIFACT"
-          mkdir -p "$record"
-          set +e
-          bash scripts/coverage-conditions.sh "$PACKAGE" 2>&1 | tee "$record/gobco.txt"
-          status=${PIPESTATUS[0]}
-          set -e
-          {
-            echo "package=$PACKAGE"
-            echo "system=$SYSTEM"
-            echo "platform=$(go env GOOS)/$(go env GOARCH)"
-            echo "status=$status"
-          } >"$record/run.env"
-          case "$status" in
-            0|3) echo "Measured. The figure is in the summary job's table." ;;
-            *)
-              echo "::error title=Not measured::scripts/coverage-conditions.sh exited $status for $PACKAGE on $SYSTEM, so nothing was measured; the gobco: lines above say why, and the raw output is the artifact $ARTIFACT"
-              exit "$status"
-              ;;
-          esac
+          status=0
+          go run ./cmd/measure_conditions measure -packages "$PACKAGES" -system "$SYSTEM" -records "${RUNNER_TEMP//\\//}/$ARTIFACT" || status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "::error title=Not measured::a package of this job was not measured on $SYSTEM (measure_conditions exited $status); the measure_conditions: and gobco: lines above say which and why, and the raw output is in the artifact $ARTIFACT"
+            exit "$status"
+          fi
+          echo "Measured. The figures are in the summary job's table."
       # Uploaded whatever became of the measurement, since a run that could
       # not measure is the one whose output somebody will want to read. A run
       # that never reached the step above has nothing to upload, which the

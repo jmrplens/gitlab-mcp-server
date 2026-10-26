@@ -17,11 +17,7 @@ func planOf(t *testing.T, packages, systems []string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := json.Marshal(planned)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
+	return encodePlan(t, planned)
 }
 
 // recordFor is a record as the workflow writes it, for a platform of the
@@ -86,7 +82,8 @@ func TestRunSummarize_EveryRunMeasured_WritesTheTableAndPasses(t *testing.T) {
 		t.Fatalf("runSummarize() = %d, want 0; stderr:\n%s", got, stderr.String())
 	}
 	want := summaryIntro("all", "c0ffee") +
-		"| `./cmd/server` | `macos-latest` (darwin/arm64) | 12 of 12 | 0 | 0 | `gobco-macos-latest-cmd-server` |\n"
+		"| `./cmd/server` | `macos-latest` (darwin/arm64) | 12 of 12 | 0 | 0 | `gobco-macos-latest-cmd-server/cmd-server` |\n" +
+		totalsTable("| `macos-latest` | 1 of 1 | 12 of 12 | 100.0% |")
 	if stdout.String() != want || stderr.Len() != 0 {
 		t.Errorf("stdout =\n%s\nwant\n%s\nstderr = %q", stdout.String(), want, stderr.String())
 	}
@@ -99,6 +96,91 @@ func summaryIntro(gate, commit string) string {
 		"`GOBCO_GATE=" + gate + "` at `" + commit + "`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each condition twice, once per outcome, so a total is twice the number of conditions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
 		"| Package | System | Covered | Not both ways | Held by the gate | Raw output |\n" +
 		"| --- | --- | ---: | ---: | ---: | --- |\n"
+}
+
+// totalsTable is the totals section every summary carries after its table,
+// with the rows given.
+func totalsTable(rows ...string) string {
+	return "\n### Total\n\n" +
+		"A package that was not measured is in no total: the table above says which and why, and each share is of the packages its system measured.\n\n" +
+		"| System | Packages measured | Covered | Share |\n" +
+		"| --- | ---: | ---: | ---: |\n" +
+		strings.Join(rows, "\n") + "\n"
+}
+
+// TestRunSummarize_ShardedPlan_ReadsEveryPackageOfEveryJob verifies the
+// summary of a -tree plan: every package of every shard is a row of its own,
+// read from its directory inside its shard's artifact, the total of a system
+// adds up the packages it measured and leaves out the one it did not, and a
+// package the plan names with no record is reported missing under its own
+// record path.
+func TestRunSummarize_ShardedPlan_ReadsEveryPackageOfEveryJob(t *testing.T) {
+	t.Parallel()
+	records := t.TempDir()
+	writeRun(t, filepath.Join(records, "gobco-ubuntu-latest-tree-01", "cmd-a"), recordFor("./cmd/a", "ubuntu-latest", "linux/amd64", 0), "Condition coverage: 3/4\n")
+	writeRun(t, filepath.Join(records, "gobco-ubuntu-latest-tree-01", "internal-c"), recordFor("./internal/c", "ubuntu-latest", "linux/amd64", 1), "gobco: could not instrument\n")
+	writeRun(t, filepath.Join(records, "gobco-ubuntu-latest-tree-02", "internal-b"), recordFor("./internal/b", "ubuntu-latest", "linux/amd64", 3),
+		"Condition coverage: 5/6\n"+`b.go:1:2: condition "x" was never evaluated`+"\n"+"gobco: held:\n"+`  b.go:1:2: condition "x" was never evaluated`+"\n")
+	plan := encodePlan(t, buildShards([]string{"./cmd/a", "./internal/b", "./internal/c", "./internal/d"}, []string{"ubuntu-latest"}, 2))
+	var stdout, stderr bytes.Buffer
+	if got := runSummarize([]string{"-plan", plan, "-records", records, "-gate", "all", "-commit", "c0ffee"}, &stdout, &stderr); got != 0 {
+		t.Fatalf("runSummarize() = %d, want 0; stderr:\n%s", got, stderr.String())
+	}
+	want := summaryIntro("all", "c0ffee") +
+		"| `./cmd/a` | `ubuntu-latest` (linux/amd64) | 3 of 4 | 0 | 0 | `gobco-ubuntu-latest-tree-01/cmd-a` |\n" +
+		"| `./internal/c` | `ubuntu-latest` (linux/amd64) | not measured (exit 1) | - | - | `gobco-ubuntu-latest-tree-01/internal-c` |\n" +
+		"| `./internal/b` | `ubuntu-latest` (linux/amd64) | 5 of 6 | 1 | 1 | `gobco-ubuntu-latest-tree-02/internal-b` |\n" +
+		"| `./internal/d` | `ubuntu-latest` | no record | - | - | `gobco-ubuntu-latest-tree-02/internal-d` |\n" +
+		totalsTable("| `ubuntu-latest` | 2 of 4 | 8 of 10 | 80.0% |") +
+		"\n### Not evaluated both ways\n\n" +
+		"| Package | System | File | Line | Condition | gobco says | Held |\n" +
+		"| --- | --- | --- | ---: | --- | --- | --- |\n" +
+		"| `./internal/b` | `ubuntu-latest` | `b.go` | 1 | `x` | never evaluated | yes |\n" +
+		"\n### Not measured\n" +
+		"\n#### `./internal/c` on `ubuntu-latest`\n\n" +
+		"`scripts/coverage-conditions.sh` exited 1, which means it could not measure, and said:\n\n" +
+		"```text\ngobco: could not instrument\n```\n" +
+		"\n#### `./internal/d` on `ubuntu-latest`\n\n" +
+		"No record came back in `gobco-ubuntu-latest-tree-02/internal-d`: the run ended before its measuring step wrote one (a setup step failed, or the run was cancelled, timed out or lost its runner), or it did not upload the one it wrote, and its job log says which.\n"
+	if stdout.String() != want || stderr.Len() != 0 {
+		t.Errorf("stdout =\n%s\nwant\n%s\nstderr = %q", stdout.String(), want, stderr.String())
+	}
+}
+
+// encodePlan writes a plan as the plan subcommand prints it after matrix=.
+func encodePlan(t *testing.T, planned matrix) string {
+	t.Helper()
+	data, err := json.Marshal(planned)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// TestShare_Figures_AreRoundedDownToATenth verifies that a share never reads
+// higher than it is: 799 of 1000 is 79.9% and not 80.0%, two thirds is 66.6%,
+// a whole is 100.0%, nothing covered of something is 0.0%, and nothing
+// counted is a dash rather than a division by zero.
+func TestShare_Figures_AreRoundedDownToATenth(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		covered, outcomes int
+		want              string
+	}{
+		{covered: 799, outcomes: 1000, want: "79.9%"},
+		{covered: 2, outcomes: 3, want: "66.6%"},
+		{covered: 5, outcomes: 5, want: "100.0%"},
+		{covered: 0, outcomes: 4, want: "0.0%"},
+		{covered: 0, outcomes: 0, want: "-"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.want, func(t *testing.T) {
+			t.Parallel()
+			if got := share(tc.covered, tc.outcomes); got != tc.want {
+				t.Errorf("share(%d, %d) = %q, want %q", tc.covered, tc.outcomes, got, tc.want)
+			}
+		})
+	}
 }
 
 // TestRunSummarize_EveryOutcome_IsReportedAndProblemsFailIt drives the summary
@@ -148,12 +230,17 @@ func TestRunSummarize_EveryOutcome_IsReportedAndProblemsFailIt(t *testing.T) {
 		"a record names ./x on macos-latest, which the plan did not ask for",
 	}
 	want := summaryIntro("beyond:linux/amd64", "abc123") +
-		"| `./cmd/server` | `windows-latest` (windows/amd64) | 8 of 12 | 3 | 1 | `gobco-windows-latest-cmd-server` |\n" +
-		"| `./cmd/server` | `macos-latest` (darwin/arm64) | 12 of 12 | 0 | 0 | `gobco-macos-latest-cmd-server` |\n" +
-		"| `./cmd/server` | `ubuntu-latest` (linux/amd64) | not measured (exit 1) | - | - | `gobco-ubuntu-latest-cmd-server` |\n" +
-		"| `./internal/toolutil` | `windows-latest` | no record | - | - | `gobco-windows-latest-internal-toolutil` |\n" +
-		"| `./internal/toolutil` | `macos-latest` (darwin/arm64) | unreadable record | - | - | `gobco-macos-latest-internal-toolutil` |\n" +
-		"| `./internal/toolutil` | `ubuntu-latest` (linux/amd64) | not measured (exit 2) | - | - | `gobco-ubuntu-latest-internal-toolutil` |\n" +
+		"| `./cmd/server` | `windows-latest` (windows/amd64) | 8 of 12 | 3 | 1 | `gobco-windows-latest-cmd-server/cmd-server` |\n" +
+		"| `./cmd/server` | `macos-latest` (darwin/arm64) | 12 of 12 | 0 | 0 | `gobco-macos-latest-cmd-server/cmd-server` |\n" +
+		"| `./cmd/server` | `ubuntu-latest` (linux/amd64) | not measured (exit 1) | - | - | `gobco-ubuntu-latest-cmd-server/cmd-server` |\n" +
+		"| `./internal/toolutil` | `windows-latest` | no record | - | - | `gobco-windows-latest-internal-toolutil/internal-toolutil` |\n" +
+		"| `./internal/toolutil` | `macos-latest` (darwin/arm64) | unreadable record | - | - | `gobco-macos-latest-internal-toolutil/internal-toolutil` |\n" +
+		"| `./internal/toolutil` | `ubuntu-latest` (linux/amd64) | not measured (exit 2) | - | - | `gobco-ubuntu-latest-internal-toolutil/internal-toolutil` |\n" +
+		totalsTable(
+			"| `windows-latest` | 1 of 2 | 8 of 12 | 66.6% |",
+			"| `macos-latest` | 1 of 2 | 12 of 12 | 100.0% |",
+			"| `ubuntu-latest` | 0 of 2 | 0 of 0 | - |",
+		) +
 		"\n### Not evaluated both ways\n\n" +
 		"| Package | System | File | Line | Condition | gobco says | Held |\n" +
 		"| --- | --- | --- | ---: | --- | --- | --- |\n" +
@@ -163,9 +250,9 @@ func TestRunSummarize_EveryOutcome_IsReportedAndProblemsFailIt(t *testing.T) {
 		"\n### Not measured\n" +
 		"\n#### `./cmd/server` on `ubuntu-latest`\n\n" +
 		"`scripts/coverage-conditions.sh` exited 1, which means it could not measure, and said:\n\n" +
-		"````text\ngobco: a line quoting ``` three backticks\ngobco: gobco exited 1 on ./cmd/server\n````\n" +
+		"````text\n--- FAIL: TestX\ngobco: a line quoting ``` three backticks\ngobco: gobco exited 1 on ./cmd/server\n````\n" +
 		"\n#### `./internal/toolutil` on `windows-latest`\n\n" +
-		"No record came back in `gobco-windows-latest-internal-toolutil`: the run ended before its measuring step wrote one (a setup step failed, or the run was cancelled, timed out or lost its runner), or it did not upload the one it wrote, and its job log says which.\n" +
+		"No record came back in `gobco-windows-latest-internal-toolutil/internal-toolutil`: the run ended before its measuring step wrote one (a setup step failed, or the run was cancelled, timed out or lost its runner), or it did not upload the one it wrote, and its job log says which.\n" +
 		"\n#### `./internal/toolutil` on `ubuntu-latest`\n\n" +
 		"`scripts/coverage-conditions.sh` exited 2, which means it could not measure, and said:\n\n" +
 		"```text\n" + strings.Join(tail, "\n") + "\n```\n" +
@@ -180,8 +267,15 @@ func TestRunSummarize_EveryOutcome_IsReportedAndProblemsFailIt(t *testing.T) {
 }
 
 // TestReasonLines_Outputs_KeepWhatTheScriptSaid verifies the reason a run
-// that could not measure is shown with: the script's own lines when it wrote
-// any, and otherwise the whole of a short output or the end of a long one.
+// that could not measure is shown with: the script's own lines, and the
+// lines gobco or its go test said the failure in before the script's verdict
+// (a panic, a top-level failing test, a package that did not build or set
+// up, a compiler's position), each in the order printed and without the
+// conditions a report beside the failure names; and when none of those is
+// there, the whole of a short output or the end of a long one. The three
+// failures are the three ways the tree's unmeasured packages failed: an
+// export_test.go symbol gobco cannot resolve, the bridge it writes with an
+// empty import path, and tests that read the source gobco rewrote.
 func TestReasonLines_Outputs_KeepWhatTheScriptSaid(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -193,6 +287,32 @@ func TestReasonLines_Outputs_KeepWhatTheScriptSaid(t *testing.T) {
 		{name: "a short output", output: "a\r\nb\n\n", want: "a\nb"},
 		{name: "nothing", output: "", want: ""},
 		{name: "a prefix without its space", output: "gobco:x\n", want: "gobco:x"},
+		{
+			name: "gobco panicked",
+			output: "panic: a_test.go:49:27: undefined: a.PublishedActionIDs\n\ngoroutine 1 [running]:\nmain.ok(...)\n" +
+				"\t/go/pkg/mod/github.com/rillig/gobco@v1.3.4/util.go:100\nmain.(*instrumenter).resolveTypes(0x1)\n" +
+				"\t/go/pkg/mod/github.com/rillig/gobco@v1.3.4/instrumenter.go:143 +0x445\nexit status 2\n" +
+				"gobco: gobco exited 1 on ./a, so any figure above is not a measurement\n",
+			want: "panic: a_test.go:49:27: undefined: a.PublishedActionIDs\ngobco: gobco exited 1 on ./a, so any figure above is not a measurement",
+		},
+		{
+			name: "the test package did not set up",
+			output: "# example.com/m/a\n/tmp/gobco-1/module/a/gobco_bridge_test.go:3:9: invalid import path: \r\n" +
+				"FAIL\texample.com/m/a [setup failed]\nFAIL\ngo test .: exit status 1\nexit status 1\ngobco: gobco exited 1 on ./a\n",
+			want: "/tmp/gobco-1/module/a/gobco_bridge_test.go:3:9: invalid import path: \nFAIL\texample.com/m/a [setup failed]\ngobco: gobco exited 1 on ./a",
+		},
+		{
+			name:   "the test package did not build",
+			output: "FAIL\texample.com/m/b [build failed]\nFAIL\tsomething else\ngobco: gobco exited 1 on ./b\n",
+			want:   "FAIL\texample.com/m/b [build failed]\ngobco: gobco exited 1 on ./b",
+		},
+		{
+			name: "a test failed beside a report",
+			output: "--- FAIL: TestCases (0.00s)\n    --- FAIL: TestCases/one (0.00s)\n        c_test.go:20: no case labels were read\n" +
+				"FAIL\nFAIL\texample.com/m/c\t1.1s\n\nCondition coverage: 3/4\n" + `c.go:4:9: condition "x == 1" was never evaluated` + "\n" +
+				"exit status 1\ngobco: gobco exited 1 on ./c\n",
+			want: "--- FAIL: TestCases (0.00s)\ngobco: gobco exited 1 on ./c",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

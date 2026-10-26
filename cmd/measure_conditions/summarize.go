@@ -6,18 +6,49 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 )
 
 // reasonTail is how many of the last lines of a run's output stand for its
-// reason when the script printed none of its own.
+// reason when no line of it says why (failureLine).
 const reasonTail = 20
+
+// packageRun is one package measured on one runner: what a plan asks of a
+// job for each package it names, and where the job uploads that package's
+// record. A tree measured on the machine at hand has no artifact, its records
+// sitting directly below the directory it was given.
+type packageRun struct {
+	Package  string
+	System   string
+	Artifact string
+}
+
+// runsOf is every package run the cells of a plan ask for, cell by cell and,
+// within a cell, in the order its packages are named.
+func runsOf(cells []cell) []packageRun {
+	var runs []packageRun
+	for _, planned := range cells {
+		for pkg := range strings.FieldsSeq(planned.Packages) {
+			runs = append(runs, packageRun{Package: pkg, System: planned.System, Artifact: planned.Artifact})
+		}
+	}
+	return runs
+}
+
+// recordPath is where a run's record lies below the directory the records
+// were downloaded or written into: the run's artifact, if it has one, and
+// the package's own directory in it.
+func (r packageRun) recordPath() string {
+	return path.Join(r.Artifact, packageSlug(r.Package))
+}
 
 // outcome is what became of one planned run.
 type outcome struct {
-	cell
+	packageRun
 	rec      *record
 	measured *measurement
 	problem  string
@@ -41,12 +72,12 @@ func runSummarize(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	var planned matrix
-	if err := json.Unmarshal([]byte(*planFlag), &planned); err != nil || len(planned.Include) == 0 {
+	if err := json.Unmarshal([]byte(*planFlag), &planned); err != nil || len(runsOf(planned.Include)) == 0 {
 		fmt.Fprintf(stderr, "%s: -plan is not a matrix plan with at least one run in it\n", toolName)
 		return 2
 	}
 	recs, problems := readRecords(*records)
-	outcomes, more := join(planned.Include, recs)
+	outcomes, more := join(runsOf(planned.Include), recs)
 	problems = append(problems, more...)
 	render(stdout, *gate, *commit, outcomes, problems)
 	for _, problem := range problems {
@@ -63,7 +94,7 @@ func runSummarize(args []string, stdout, stderr io.Writer) int {
 // record the plan did not ask for, a second record for one run, and a record
 // whose output disagrees with its status are problems, since a table built on
 // any of them would be a guess.
-func join(cells []cell, recs []record) (outcomes []outcome, problems []string) {
+func join(runs []packageRun, recs []record) (outcomes []outcome, problems []string) {
 	byRun := map[string]*record{}
 	for i := range recs {
 		rec := &recs[i]
@@ -74,12 +105,12 @@ func join(cells []cell, recs []record) (outcomes []outcome, problems []string) {
 		}
 		byRun[key] = rec
 	}
-	outcomes = make([]outcome, 0, len(cells))
-	for _, planned := range cells {
+	outcomes = make([]outcome, 0, len(runs))
+	for _, planned := range runs {
 		key := planned.Package + " on " + planned.System
-		result := outcome{cell: planned, rec: byRun[key]}
+		result := outcome{packageRun: planned, rec: byRun[key]}
 		delete(byRun, key)
-		if result.rec != nil && (result.rec.status == statusMeasured || result.rec.status == statusGateHeld) {
+		if result.rec != nil && measured(result.rec.status) {
 			found, err := parseMeasurement(result.rec.output, result.rec.status)
 			if err != nil {
 				result.problem = err.Error()
@@ -96,8 +127,9 @@ func join(cells []cell, recs []record) (outcomes []outcome, problems []string) {
 	return outcomes, problems
 }
 
-// render writes the summary: the figures, then every condition not evaluated
-// both ways, then what could not be measured and why.
+// render writes the summary: the figures, the total of each system, then
+// every condition not evaluated both ways, then what could not be measured
+// and why.
 func render(w io.Writer, gate, commit string, outcomes []outcome, problems []string) {
 	fmt.Fprintf(w, "## Condition coverage, measured\n\n")
 	fmt.Fprintf(w, "`GOBCO_GATE=%s` at `%s`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each condition twice, once per outcome, so a total is twice the number of conditions. No figure fails this workflow: it is a measurement, not a gate.\n\n", gate, commit)
@@ -105,8 +137,9 @@ func render(w io.Writer, gate, commit string, outcomes []outcome, problems []str
 	fmt.Fprintf(w, "| --- | --- | ---: | ---: | ---: | --- |\n")
 	for _, result := range outcomes {
 		writeRow(w, codeSpan(result.Package), systemCell(result), coveredCell(result),
-			countCell(result, len(conditionsOf(result))), countCell(result, heldOf(result)), codeSpan(result.Artifact))
+			countCell(result, len(conditionsOf(result))), countCell(result, heldOf(result)), codeSpan(result.recordPath()))
 	}
+	writeTotals(w, outcomes)
 	writeConditions(w, outcomes)
 	writeUnmeasured(w, outcomes)
 	if len(problems) > 0 {
@@ -115,6 +148,59 @@ func render(w io.Writer, gate, commit string, outcomes []outcome, problems []str
 			fmt.Fprintf(w, "- %s\n", problem)
 		}
 	}
+}
+
+// total is what the measured runs of one system add up to.
+type total struct {
+	system   string
+	planned  int
+	measured int
+	covered  int
+	outcomes int
+}
+
+// writeTotals writes, for each system in the order the runs name them, how
+// many of its planned packages were measured and the outcomes gobco counted
+// as evaluated of those there are, summed over the measured ones, with that
+// share rounded down to a tenth of a percent so it never reads higher than
+// it is. A run that took no measurement is in no total: the table above says
+// which ones and why, and the share is of the packages measured.
+func writeTotals(w io.Writer, outcomes []outcome) {
+	var totals []*total
+	bySystem := map[string]*total{}
+	for _, result := range outcomes {
+		sum := bySystem[result.System]
+		if sum == nil {
+			sum = &total{system: result.System}
+			bySystem[result.System] = sum
+			totals = append(totals, sum)
+		}
+		sum.planned++
+		if result.measured != nil {
+			sum.measured++
+			sum.covered += result.measured.covered
+			sum.outcomes += result.measured.total
+		}
+	}
+	fmt.Fprintf(w, "\n### Total\n\n")
+	fmt.Fprintf(w, "A package that was not measured is in no total: the table above says which and why, and each share is of the packages its system measured.\n\n")
+	writeRow(w, "System", "Packages measured", "Covered", "Share")
+	fmt.Fprintf(w, "| --- | ---: | ---: | ---: |\n")
+	for _, sum := range totals {
+		writeRow(w, codeSpan(sum.system), fmt.Sprintf("%d of %d", sum.measured, sum.planned),
+			fmt.Sprintf("%d of %d", sum.covered, sum.outcomes), share(sum.covered, sum.outcomes))
+	}
+}
+
+// share is covered of outcomes as a percentage rounded down to a tenth, so
+// 799 of 1000 reads 79.9% and never 80.0%, and a dash when nothing was
+// counted.
+func share(covered, outcomes int) string {
+	if outcomes == 0 {
+		return "-"
+	}
+	tenths := covered * 1000 / outcomes
+	return fmt.Sprintf("%d.%d%%", tenths/10, tenths%10)
 }
 
 // writeConditions lists every condition gobco named as not evaluated both
@@ -140,7 +226,8 @@ func writeConditions(w io.Writer, outcomes []outcome) {
 }
 
 // writeUnmeasured says, for every run that took no measurement, why: the
-// lines the script said it in, or that no record came back at all.
+// lines of its output that say it (reasonLines), or that no record came back
+// at all.
 func writeUnmeasured(w io.Writer, outcomes []outcome) {
 	header := false
 	for _, result := range outcomes {
@@ -153,7 +240,7 @@ func writeUnmeasured(w io.Writer, outcomes []outcome) {
 		}
 		fmt.Fprintf(w, "\n#### %s on %s\n\n", codeSpan(result.Package), codeSpan(result.System))
 		if result.rec == nil {
-			fmt.Fprintf(w, "No record came back in %s: the run ended before its measuring step wrote one (a setup step failed, or the run was cancelled, timed out or lost its runner), or it did not upload the one it wrote, and its job log says which.\n", codeSpan(result.Artifact))
+			fmt.Fprintf(w, "No record came back in %s: the run ended before its measuring step wrote one (a setup step failed, or the run was cancelled, timed out or lost its runner), or it did not upload the one it wrote, and its job log says which.\n", codeSpan(result.recordPath()))
 			continue
 		}
 		fmt.Fprintf(w, "`scripts/coverage-conditions.sh` exited %d, which means it could not measure, and said:\n\n", result.rec.status)
@@ -163,15 +250,27 @@ func writeUnmeasured(w io.Writer, outcomes []outcome) {
 	}
 }
 
-// reasonLines returns the lines the script wrote about why it could not
-// measure, which it prefixes with `gobco: `, or the end of the output when it
-// wrote none.
+// failureLine is a line of a run's output that says why it could not
+// measure: one the script wrote, which it prefixes with `gobco: `, or one
+// gobco or its go test printed when either failed, which is what the
+// script's verdict that the run is not a measurement follows. Those are a
+// panic, which is how gobco stops on a package it cannot type-check; a
+// failing top-level test; a test package that did not build or set up; and
+// the compiler's position for either, which is the only line naming the
+// cause of a setup failure. A condition gobco names has a position too, and
+// is told apart by conditionPattern, since a report printed beside a failure
+// says nothing about the failure.
+var failureLine = regexp.MustCompile(`^(gobco: |panic: |--- FAIL: |FAIL\t.*\[(build|setup) failed\]$|\S+\.go:\d+:\d+: )`)
+
+// reasonLines returns the lines of a run's output that say why it could not
+// measure, failureLine's, in the order they were printed, or the end of the
+// output when there is none.
 func reasonLines(output string) string {
 	var said, all []string
 	for line := range strings.SplitSeq(strings.TrimRight(output, "\r\n"), "\n") {
 		line = strings.TrimSuffix(line, "\r")
 		all = append(all, line)
-		if strings.HasPrefix(line, "gobco: ") {
+		if failureLine.MatchString(line) && !conditionPattern.MatchString(line) {
 			said = append(said, line)
 		}
 	}
@@ -196,7 +295,7 @@ func systemCell(result outcome) string {
 // reported as not covered however many tests reach it.
 func coveredCell(result outcome) string {
 	if result.measured != nil {
-		return result.measured.covered + " of " + result.measured.total
+		return fmt.Sprintf("%d of %d", result.measured.covered, result.measured.total)
 	}
 	if result.problem != "" {
 		return "unreadable record"

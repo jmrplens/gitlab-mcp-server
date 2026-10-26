@@ -235,6 +235,7 @@ Unit tests live alongside the code in each sub-package. They use `net/http/httpt
 make test            # Standard tests with coverage
 make test-race       # Tests with race detector (RACE_TIMEOUT=60m per package; the suite takes the better part of an hour)
 make coverage-conditions PKG=./internal/foo   # gobco: boolean conditions never evaluated both ways (each is a missing case)
+make coverage-conditions-tree CONDITIONS_PARALLEL=3   # gobco over every package of cmd/ and internal/, and the total (hours)
 make coverage-mutants PKG=./internal/foo      # gremlins: mutation testing; Lived 0 and Not covered 0 is the gate on a changed package
 go test ./internal/... -count=1      # Run all unit tests (199 packages)
 go test ./internal/tools/branches/ -count=1 -v  # Run one domain verbose

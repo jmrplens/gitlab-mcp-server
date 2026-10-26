@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-conditions-tree coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab e2e-clean-orphans \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token gen-orbit-record check-orbit-record \
 	coverage \
@@ -802,6 +802,24 @@ modeleval-probe:
 coverage-conditions:
 	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_llms [TAGS=e2e]"; exit 2; }
 	@scripts/coverage-conditions.sh $(PKG) $(TAGS)
+
+# Where coverage-conditions-tree leaves each package's record and raw output,
+# and how many packages it measures at once.
+CONDITIONS_RECORDS ?= dist/conditions-tree
+CONDITIONS_PARALLEL ?= 1
+
+## coverage-conditions-tree: condition coverage (gobco) of every package under cmd/ and internal/, one row each and the total, written as the summary conditions.yml's tree dispatch writes. CONDITIONS_RECORDS keeps the records (dist/conditions-tree); CONDITIONS_PARALLEL packages run at once (1).
+# Each package is measured by scripts/coverage-conditions.sh, the recipe
+# behind coverage-conditions, with GOBCO_GATE=all as the workflow's default,
+# which decides only which conditions the summary marks as held and moves no
+# figure, and the summary goes to stdout and to summary.md beside the
+# records. It is the command docs/development/testing/README.md takes the
+# recorded figure with, so the figure can be taken again on any machine
+# without a dispatch; that page says how long the run behind it took, on how
+# many cores and with how many packages at a time.
+coverage-conditions-tree:
+	@mkdir -p "$(CONDITIONS_RECORDS)"
+	@bash -o pipefail -c 'go run ./cmd/measure_conditions tree -records "$(CONDITIONS_RECORDS)" -parallel "$(CONDITIONS_PARALLEL)" -commit "$$(git rev-parse HEAD)" | tee "$(CONDITIONS_RECORDS)/summary.md"'
 
 ## coverage-mutants: mutation-test PKG with gremlins, INVERT_LOGICAL on so `&&`/`||` independence is checked. The gate on a changed package is Lived 0 and Not covered 0.
 # The recipe itself is scripts/coverage-mutants.sh. It moved out of this file

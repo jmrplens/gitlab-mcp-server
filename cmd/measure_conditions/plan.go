@@ -31,11 +31,31 @@ var gatePattern = regexp.MustCompile(`^(all|beyond:[a-z0-9]+/[a-z0-9]+)$`)
 // cannot start with a dot it refuses `.`, `..` and the `...` of a pattern.
 var segmentPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 
-// cell is one run the plan asks for: one package on one runner, and the name
-// of the artifact its record and raw output are uploaded under.
+// treeShards is how many jobs a -tree plan splits the packages below cmd/ and
+// internal/ into on each runner. gobco caches nothing and takes from a few
+// seconds to several minutes a package; docs/development/testing/README.md
+// records how long the whole tree took on one machine and with how many
+// packages at a time. Twenty shards make a job of fifteen or so packages one
+// after another, which is expected to finish well inside the two hours a
+// shard's job is given, and twenty shards on all three runners stay far below
+// the 256 jobs a matrix may hold.
+const treeShards = 20
+
+// treePatterns are the packages a -tree plan measures: every package of the
+// server and of the repository's tooling. test/ is left out, since every
+// file of the e2e suite sits behind a build tag and gobco cannot measure it
+// (docs/development/testing/README.md).
+var treePatterns = []string{"./cmd/...", "./internal/..."}
+
+// cell is one job the plan asks for: the packages it measures on one runner,
+// one after another, separated by spaces, what the job is called, and the
+// name of the artifact the records and raw outputs of its packages are
+// uploaded under. A plan of named packages gives each package a job of its
+// own, named after it; a -tree plan gives each job a shard of the tree.
 type cell struct {
 	System   string `json:"system"`
-	Package  string `json:"package"`
+	Name     string `json:"name"`
+	Packages string `json:"packages"`
 	Artifact string `json:"artifact"`
 }
 
@@ -56,6 +76,7 @@ func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
 	systemsFlag := flags.String("systems", "", "runners to measure on, separated by spaces or commas: "+strings.Join(runners, ", "))
 	gate := flags.String("gate", "", "the GOBCO_GATE the script runs with: all or beyond:GOOS/GOARCH")
 	dir := flags.String("dir", ".", "module root the packages are looked for in")
+	tree := flags.Bool("tree", false, "measure every package below cmd/ and internal/, in shards, instead of the packages -packages names")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -76,6 +97,9 @@ func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: -packages: %v\n", toolName, err)
 		return 2
+	}
+	if *tree {
+		return planTree(stdout, stderr, list, *dir, packages, systems, *gate)
 	}
 	if len(packages) == 0 {
 		packages, err = constrainedPackages(context.Background(), *dir, list)
@@ -149,22 +173,79 @@ func parsePackages(value string) ([]string, error) {
 }
 
 // buildMatrix crosses the packages with the systems, package by package, and
-// names each cell's artifact after both. Two cells whose names would collide,
-// which only directory names joined differently by a dash could do, are
-// refused rather than left to overwrite each other's upload.
+// gives each package a job of its own on each system, named after it, with an
+// artifact named after both. Two cells whose names would collide, which only
+// directory names joined differently by a dash could do, are refused rather
+// than left to overwrite each other's upload.
 func buildMatrix(packages, systems []string) (matrix, error) {
 	planned := matrix{Include: []cell{}}
 	byArtifact := map[string]cell{}
 	for _, pkg := range packages {
 		for _, system := range systems {
-			artifact := "gobco-" + system + "-" + strings.ReplaceAll(strings.TrimPrefix(pkg, "./"), "/", "-")
+			artifact := "gobco-" + system + "-" + packageSlug(pkg)
 			if other, taken := byArtifact[artifact]; taken {
-				return matrix{}, fmt.Errorf("%s and %s on %s would both upload as %s", other.Package, pkg, system, artifact)
+				return matrix{}, fmt.Errorf("%s and %s on %s would both upload as %s", other.Packages, pkg, system, artifact)
 			}
-			entry := cell{System: system, Package: pkg, Artifact: artifact}
+			entry := cell{System: system, Name: pkg, Packages: pkg, Artifact: artifact}
 			byArtifact[artifact] = entry
 			planned.Include = append(planned.Include, entry)
 		}
 	}
 	return planned, nil
+}
+
+// planTree prints the plan of a -tree dispatch: every package below cmd/ and
+// internal/, in shards. A package list beside -tree is refused, since the
+// dispatch would be asking for two things at once.
+func planTree(stdout, stderr io.Writer, list lister, dir string, named, systems []string, gate string) int {
+	if len(named) > 0 {
+		fmt.Fprintf(stderr, "%s: -tree measures every package below cmd/ and internal/, and -packages names %s besides; leave -packages empty\n", toolName, strings.Join(named, " "))
+		return 2
+	}
+	packages, err := treePackages(context.Background(), dir, list)
+	if err != nil {
+		fmt.Fprintf(stderr, "%s: -tree: the packages below cmd/ and internal/ could not be listed: %v\n", toolName, err)
+		return 1
+	}
+	if len(packages) == 0 {
+		fmt.Fprintf(stderr, "%s: -tree: there is no package below cmd/ and internal/, so there is nothing to measure\n", toolName)
+		return 1
+	}
+	planned := buildShards(packages, systems, treeShards)
+	fmt.Fprintf(stdout, "matrix=%s\n", cmdutil.Must(json.Marshal(planned)))
+	fmt.Fprintf(stderr, "%s: %d run(s) planned, the %d packages below cmd/ and internal/ in %d shard(s) on %s, with GOBCO_GATE=%s\n",
+		toolName, len(planned.Include), len(packages), min(treeShards, len(packages)), strings.Join(systems, " "), gate)
+	return 0
+}
+
+// buildShards deals the packages, in the order given, into at most shards
+// jobs on each system, the first package to the first shard, the second to
+// the second and so on round again, so the slow packages of one directory
+// do not all land in one job. Each shard is named by its number and its
+// artifact by its system and number, which no two shards share.
+func buildShards(packages, systems []string, shards int) matrix {
+	count := min(shards, len(packages))
+	planned := matrix{Include: []cell{}}
+	for shard := range count {
+		var members []string
+		for i := shard; i < len(packages); i += count {
+			members = append(members, packages[i])
+		}
+		for _, system := range systems {
+			planned.Include = append(planned.Include, cell{
+				System:   system,
+				Name:     fmt.Sprintf("tree %02d of %02d", shard+1, count),
+				Packages: strings.Join(members, " "),
+				Artifact: fmt.Sprintf("gobco-%s-tree-%02d", system, shard+1),
+			})
+		}
+	}
+	return planned
+}
+
+// packageSlug is a package written as one directory name: its path below
+// the module root with each slash a dash. It names a package's artifact in a
+// plan of named packages and its record's directory everywhere.
+func packageSlug(pkg string) string {
+	return strings.ReplaceAll(strings.TrimPrefix(pkg, "./"), "/", "-")
 }

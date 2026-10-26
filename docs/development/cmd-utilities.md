@@ -57,7 +57,7 @@ Repository tooling is a Go command under `cmd/`, sharing what it needs through `
 | `gen_third_party_notices`      | Generators                    | Writes `THIRD_PARTY_NOTICES`, the license, notice and patent texts of every module the release binaries link, read from their build information, the packages each links and the module cache                                                                                                                                                                                                                                                                                            | Release time: GoReleaser's `sboms`, the Dockerfile, `make mcpb`                                                                                                         |
 | `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                                                                                                                                                                                                                                                                                                     | part of `make audit-docs`                                                                                                                                               |
 | `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential), draws the published charts, measures whether a bound leaves a quiet tenant better off, and measures what a held call and a stateful session cost the process and what the process does with each past its descriptor limit                                                                                                                                                                                 | `make bench-resources`, `make bench-fairness`, `make bench-held`, `make bench-sessions`                                                                                 |
-| `measure_conditions`           | Measurements                  | Plans the on-demand condition coverage workflow (`conditions.yml`) and writes its job summary from the records the runs left                                                                                                                                                                                                                                                                                                                                                             | Dispatch only: `gh workflow run conditions.yml`                                                                                                                         |
+| `measure_conditions`           | Measurements                  | Plans and runs the on-demand condition coverage workflow (`conditions.yml`), one package or a shard of the tree a job, writes its job summary with each runner's total, and takes the whole tree's figure on the machine at hand                                                                                                                                                                                                                                                         | Dispatch: `gh workflow run conditions.yml`; here: `make coverage-conditions-tree`                                                                                       |
 | `gen_model_corpus`             | Evaluation                    | Renders the model evaluation corpus breadth ledger: what the corpus asks about, counted against the action catalog                                                                                                                                                                                                                                                                                                                                                                       | `make gen-model-corpus`, `make check-model-corpus`                                                                                                                      |
 | `gen_model_results`            | Evaluation                    | Folds a run's observation shards into the committed record, scores them and redraws the published results page                                                                                                                                                                                                                                                                                                                                                                           | `make gen-model-results`, `make model-results-record`, `make model-results-refold`, `make check-model-results`                                                          |
 | `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                                                                                                                                                                                                                                                                                                            | `make build`, `make run`                                                                                                                                                |
@@ -2557,7 +2557,7 @@ The measurement record, the SVG chart pairs under the site chart directory (one 
 
 ### measure_conditions
 
-The two ends of `.github/workflows/conditions.yml`, the condition coverage measurement dispatched by hand on Windows, macOS and Linux (issue 1210). The measuring itself is `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`, run through bash on each runner; this command plans the runs and writes the job summary from what they left. See [Testing Documentation](testing/README.md) for how to dispatch it.
+Everything around `scripts/coverage-conditions.sh` in `.github/workflows/conditions.yml`, the condition coverage measurement dispatched by hand on Windows, macOS and Linux (issue 1210), and the same measurement of the whole tree on the machine at hand. The measuring itself is the script, the recipe behind `make coverage-conditions`, run through bash; this command plans the jobs, runs the script over each job's packages and writes the job summary from what they left. See [Testing Documentation](testing/README.md) for how to dispatch it and for the whole-tree figure.
 
 #### Usage
 
@@ -2568,8 +2568,17 @@ go run ./cmd/measure_conditions/ plan -packages "./cmd/server" -systems "windows
 # An empty package list: every package carrying a GOOS- or GOARCH-constrained file
 go run ./cmd/measure_conditions/ plan -systems ubuntu-latest -gate beyond:linux/amd64
 
+# Every package below cmd/ and internal/, in shards
+go run ./cmd/measure_conditions/ plan -tree -systems ubuntu-latest -gate all
+
+# What a job runs: its packages, one after another, into a directory of records
+go run ./cmd/measure_conditions/ measure -packages "./cmd/server ./internal/toolutil" -system ubuntu-latest -records records/
+
 # Write the job summary from the downloaded artifacts
 go run ./cmd/measure_conditions/ summarize -plan "$MATRIX" -records records/ -gate all -commit "$(git rev-parse HEAD)"
+
+# The whole tree here, and its summary (make coverage-conditions-tree)
+go run ./cmd/measure_conditions/ tree -records dist/conditions-tree -parallel 3 -commit "$(git rev-parse HEAD)"
 ```
 
 #### plan
@@ -2579,9 +2588,21 @@ go run ./cmd/measure_conditions/ summarize -plan "$MATRIX" -records records/ -ga
 | `-packages` | (empty) | Package directories, `./cmd/server` style, separated by spaces or commas; empty finds every package whose built files differ between release targets |
 | `-systems`  | (empty) | Runners: `windows-latest`, `macos-latest`, `ubuntu-latest`; at least one, and no other label                                                         |
 | `-gate`     | (empty) | The `GOBCO_GATE` the script runs with: `all` or `beyond:GOOS/GOARCH`, refused here as the script would refuse it                                     |
+| `-tree`     | false   | Plan every package below `cmd/` and `internal/` instead, in shards; refused beside a package list                                                    |
 | `-dir`      | `.`     | Module root the discovery lists                                                                                                                      |
 
-A package is constrained when the files the go command builds for it differ between two of the platforms `.goreleaser.yml` builds (its `goos` crossed with its `goarch`), listed with `CGO_ENABLED=1` under each, which is the set `audit_dead_consts` reads a package again under. A file behind a tag alone differs on no release target and is left out. Exit 2 for an input it refuses, 1 when the discovery failed or found nothing.
+A package is constrained when the files the go command builds for it differ between two of the platforms `.goreleaser.yml` builds (its `goos` crossed with its `goarch`), listed with `CGO_ENABLED=1` under each, which is the set `audit_dead_consts` reads a package again under. A file behind a tag alone differs on no release target and is left out. Without `-tree` each package is a job of its own on each runner, named after it. With `-tree` the packages the go command lists for `./cmd/... ./internal/...` are dealt round twenty shards, the first to the first shard, the second to the second and so on round again, so the slow packages of one directory land in different jobs; each shard is a job on each runner, named `tree NN of 20`, whose artifact is `gobco-<system>-tree-NN`. Exit 2 for an input it refuses, 1 when the discovery failed or found nothing.
+
+#### measure
+
+| Flag        | Default | Description                                                                        |
+| ----------- | ------- | ---------------------------------------------------------------------------------- |
+| `-packages` | (empty) | The job's packages, measured one after another in the order named                  |
+| `-system`   | (empty) | The runner the records name                                                        |
+| `-records`  | (empty) | Directory the records are written below, one directory per package, named after it |
+| `-dir`      | `.`     | Module root the script runs in                                                     |
+
+It runs the script through bash over each package, with `GOBCO_GATE` and `GOBCO_TEST_FLAGS` as the environment gives them, streams the output to stdout and leaves, in the package's directory of the records, `gobco.txt` with everything the script printed and then `run.env` (`package`, `system`, `platform`, `status`, one `key=value` each). A status of 0 or 3 is a measurement (3 is the gate holding a condition, which the script uses for nothing else) and any other is none. It exits 1 when a package could not be measured, once the job's other packages have been, or when the script could not be run or a record written, which stops it there, and 2 for a usage error.
 
 #### summarize
 
@@ -2592,7 +2613,19 @@ A package is constrained when the files the go command builds for it differ betw
 | `-gate`    | (empty) | The gate the runs used, named in the summary                    |
 | `-commit`  | (empty) | The commit measured, named in the summary                       |
 
-Each run leaves `run.env` (`package`, `system`, `platform`, `status`, one `key=value` each) beside `gobco.txt`, everything the script printed. A status of 0 or 3 is a measurement (3 is the gate holding a condition, which the script uses for nothing else) and any other is none. The summary is one row per run with gobco's figure, every condition not evaluated both ways with its file and line, and the reason each unmeasured run gave. It exits 0 whatever the figures say, 1 when a record cannot be read, names a run the plan did not ask for, repeats one, or disagrees with its own status, and 2 for a usage error.
+The summary is one row per package and runner with gobco's figure and where its record lies, each runner's total over the packages it measured (how many of its planned packages were measured, the outcomes evaluated of those there are, and that share rounded down to a tenth of a percent, so it never reads higher than it is), every condition not evaluated both ways with its file and line, and why each unmeasured package was not: the lines of its output that say so, which are the script's own `gobco:` lines and what gobco or its `go test` printed before them (a panic, a failing top-level test, a test package that did not build or set up, a compiler position), or its last twenty lines when none does. A package that was not measured is in no total. It exits 0 whatever the figures say, 1 when a record cannot be read, names a run the plan did not ask for, repeats one, or disagrees with its own status, and 2 for a usage error.
+
+#### tree
+
+| Flag        | Default | Description                                                                                   |
+| ----------- | ------- | --------------------------------------------------------------------------------------------- |
+| `-records`  | (empty) | Directory the records are written below, one directory per package; an earlier one's replaced |
+| `-commit`   | (empty) | The commit the tree is at, named in the summary                                               |
+| `-gate`     | `all`   | The `GOBCO_GATE` the script runs with                                                         |
+| `-parallel` | 1       | How many packages are measured at once                                                        |
+| `-dir`      | `.`     | Module root the packages are listed and measured in                                           |
+
+The whole of a `-tree` dispatch on the machine at hand: it lists the packages below `cmd/` and `internal/`, measures each into the records, writing its output there alone and a line per package on stderr as it finishes, and writes the summary `summarize` would to stdout, with its system named `local`. `make coverage-conditions-tree` runs it with the records in `dist/conditions-tree` (`CONDITIONS_RECORDS`) and `CONDITIONS_PARALLEL` packages at once, and keeps the summary beside them as `summary.md`. A package gobco could not measure is the summary's to name, not a failure: it exits 1 only when the packages could not be listed, a record could not be written, or the summary found a record it could not use (one an earlier run left for a package the tree no longer holds among them), and 2 for a usage error.
 
 ## Evaluation
 

@@ -49,8 +49,8 @@ type condition struct {
 // measurement is what one run's output says: gobco's figure, the outcomes
 // evaluated of the outcomes there are, and the conditions it named.
 type measurement struct {
-	covered    string
-	total      string
+	covered    int
+	total      int
 	conditions []condition
 	held       int
 }
@@ -65,12 +65,12 @@ type measurement struct {
 // refused rather than tabulated.
 func parseMeasurement(output string, status int) (measurement, error) {
 	var found measurement
-	figure := false
+	figure := ""
 	heldLines := map[string]bool{}
 	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSuffix(line, "\r")
-		if match := figurePattern.FindStringSubmatch(line); match != nil {
-			found.covered, found.total, figure = match[1], match[2], true
+		if figurePattern.MatchString(line) {
+			figure = line
 			continue
 		}
 		if rest, indented := strings.CutPrefix(line, heldIndent); indented {
@@ -89,8 +89,12 @@ func parseMeasurement(output string, status int) (measurement, error) {
 			})
 		}
 	}
-	if !figure {
+	if figure == "" {
 		return measurement{}, errors.New("the script's status says it measured, and its output carries no Condition coverage figure")
+	}
+	var err error
+	if found.covered, found.total, err = readFigure(figure); err != nil {
+		return measurement{}, err
 	}
 	for i := range found.conditions {
 		if heldLines[found.conditions[i].text] {
@@ -105,6 +109,21 @@ func parseMeasurement(output string, status int) (measurement, error) {
 		return measurement{}, fmt.Errorf("the script exited %d and its gate held %d condition(s)", status, found.held)
 	}
 	return found, nil
+}
+
+// readFigure reads the two counts of a line figurePattern matched. A count
+// too large for an int is refused rather than wrapped, since a total summed
+// from it would be a number nobody measured; gobco prints counts of
+// conditions, so no real report comes near that.
+func readFigure(line string) (covered, total int, err error) {
+	match := figurePattern.FindStringSubmatch(line)
+	if covered, err = strconv.Atoi(match[1]); err != nil {
+		return 0, 0, fmt.Errorf("the figure %q does not fit a count: %w", line, err)
+	}
+	if total, err = strconv.Atoi(match[2]); err != nil {
+		return 0, 0, fmt.Errorf("the figure %q does not fit a count: %w", line, err)
+	}
+	return covered, total, nil
 }
 
 // lineBreak is a line break in a condition's code with the spaces and tabs
