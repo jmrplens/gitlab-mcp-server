@@ -25,6 +25,9 @@ func requestDecisions() []Decision {
 	rqb001.StdioKey = KeyNone
 	rqb001.Flags = []string{"--max-request-body-bytes"}
 	rqb001.Config = []string{"MaxRequestBodyBytes"}
+	// A count the flag package cannot parse refuses startup, as every
+	// flag's does.
+	rqb001.Malformed = RefuseStartup
 
 	rqb004 := bound("RQB-004", "the length of one stdio line",
 		enforce(pkgServer, "defaultMaxStdioLineBytes"),
@@ -45,6 +48,11 @@ func requestDecisions() []Decision {
 	rqb005.Flags = []string{"--action-timeout"}
 	rqb005.Envs = []string{"GITLAB_MCP_ACTION_TIMEOUT"}
 	rqb005.Config = []string{"ActionTimeout"}
+	// A duration that does not parse, or one above the ceiling, refuses
+	// startup, from the variable on both transports and from the flag in
+	// HTTP mode. A blank variable is unset on both, as the overlay and
+	// stdio's reader each read it.
+	rqb005.Malformed = RefuseStartup
 
 	rqb007 := bound("RQB-007", "the size of one uploaded or read file",
 		enforce(pkgConfig, "DefaultMaxFileSize"),

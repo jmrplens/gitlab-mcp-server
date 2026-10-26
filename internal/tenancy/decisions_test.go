@@ -1,6 +1,7 @@
 package tenancy
 
 import (
+	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -1094,6 +1095,44 @@ func TestDecisions_UploadLimit_RefusesAMalformedValueByIssue1170(t *testing.T) {
 	}
 }
 
+// TestDecisions_ASettingOnARowWithNoValueSource_StatesItsMalformedPolicy pins
+// the policy of every row that names a flag or a variable without a value
+// source of its own: the request bounds an operator sets and the escape hatch
+// of the free instance choice. Four of them stated none, which says no
+// operator writes a value, beside the flag or the variable an operator writes
+// it in. The flag package refuses a value of a numeric, duration or boolean
+// flag it cannot parse, and the action timeout's and the upload limit's
+// variables are refused on both transports by the readers the configuration
+// package holds to their bounds, so each of the four refuses startup (issue
+// 1170). The stdio line limit is the fifth, whose value warns and keeps the
+// default by issue 957's decision.
+func TestDecisions_ASettingOnARowWithNoValueSource_StatesItsMalformedPolicy(t *testing.T) {
+	want := map[string]Malformed{
+		"DST-002": RefuseStartup,
+		"RQB-001": RefuseStartup,
+		"RQB-004": WarnKeepDefault,
+		"RQB-005": RefuseStartup,
+		"RQB-007": RefuseStartup,
+	}
+	var named []string
+	for _, d := range Decisions() {
+		if d.Source == SourceNone && (len(d.Flags) > 0 || len(d.Envs) > 0) {
+			named = append(named, d.ID)
+		}
+	}
+	slices.Sort(named)
+	if ids := slices.Sorted(maps.Keys(want)); !slices.Equal(named, ids) {
+		t.Errorf("the rows naming a setting with no value source are %v, want %v", named, ids)
+	}
+	for _, id := range named {
+		t.Run(id, func(t *testing.T) {
+			d, _ := Lookup(id)
+			if d.Malformed != want[id] {
+				t.Errorf("flags %v, envs %v, malformed policy %d; want %d", d.Flags, d.Envs, d.Malformed, want[id])
+			}
+		})
+	}
+}
 
 // TestDecisions_LocalAllowLists_AreReadFromStdiosEnvironmentAlone pins the
 // value source issue 957 gave AUT-006, the one row on it. RQB-004's stdio

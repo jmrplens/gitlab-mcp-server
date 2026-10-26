@@ -366,6 +366,23 @@ func TestValidate_ThroughConfig(t *testing.T) {
 		// checkFixedReasoned holds it to its reason, as it holds a constant.
 		{"a Go option alone", row(func(d *Decision) { d.Source = OptionOnly }), ""},
 		{"a constant", row(func(d *Decision) { d.Source = Constant }), ""},
+		// A row with no value source of its own, a request bound or a rule,
+		// may still name the flag or the variable an operator sets it with,
+		// and is then held to saying what a value that does not parse does
+		// (issue 1170): the upload limit's row named both and stated none.
+		{"no value source and no setting", row(nil), ""},
+		{
+			"no value source, a flag and a policy",
+			row(func(d *Decision) { d.Flags, d.Malformed = []string{"--x"}, RefuseStartup }), "",
+		},
+		{
+			"no value source and a flag with no policy",
+			row(func(d *Decision) { d.Flags = []string{"--x"} }), "names a setting with no malformed-value policy",
+		},
+		{
+			"no value source and a variable with no policy",
+			row(func(d *Decision) { d.Envs = []string{"GITLAB_MCP_X"} }), "names a setting with no malformed-value policy",
+		},
 	})
 }
 

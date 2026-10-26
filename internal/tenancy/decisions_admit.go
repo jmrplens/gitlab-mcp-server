@@ -797,7 +797,9 @@ func admitDecisions() []Decision {
 			ID: "DST-002", Question: Admit, Kind: Rule, Class: ClassP, Disposition: Ruled,
 			Resource: "the escape hatch that lets a caller name any instance",
 			Key:      KeyDeployment, StdioKey: KeyNone,
-			Flags:   []string{"--allow-any-gitlab-url"},
+			// A value the flag package cannot read as a boolean refuses
+			// startup, as every flag's does.
+			Flags: []string{"--allow-any-gitlab-url"}, Malformed: RefuseStartup,
 			Decided: []string{"ADR-0022"},
 			Refusals: []Refusal{
 				{

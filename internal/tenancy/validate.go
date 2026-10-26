@@ -343,9 +343,11 @@ func checkClassConsistent(d Decision, _ map[string]Decision) []string {
 // checkThroughConfig holds a configurable value to a flag, a GITLAB_MCP_
 // variable and a malformed-value policy, a value only an environment variable
 // reaches in HTTP mode to a finding, since INV-017 asks a flag of it, and one
-// only stdio's environment reaches to [stdioEnvFaults]. Whether a variable is
-// read through the configuration package is the code's to answer, which the
-// register cannot see, and cmd/audit_tenancy's G14 holds it. A value only a
+// only stdio's environment reaches to [stdioEnvFaults], and a row with no
+// value source that names a flag or a variable to a malformed-value policy
+// (issue 1170). Whether a variable is read through the configuration package
+// is the code's to answer, which the register cannot see, and
+// cmd/audit_tenancy's G14 holds it. A value only a
 // Go option reaches is no operator's configuration: it is a constant to every
 // operator, and checkFixedReasoned holds it to its reason as it holds one
 // (issue 958).
@@ -373,6 +375,14 @@ func checkThroughConfig(d Decision, _ map[string]Decision) []string {
 		}
 	case StdioEnvOnly:
 		out = append(out, stdioEnvFaults(d)...)
+	case SourceNone:
+		// A request bound or a rule has no value source of its own, and may
+		// still name the flag or the variable an operator sets it with. The
+		// upload limit's row named both and stated no policy (issue 1170),
+		// so nothing held it to the refusal HTTP mode did not make.
+		if (len(d.Flags) > 0 || len(d.Envs) > 0) && d.Malformed == MalformedNone {
+			out = append(out, "names a setting with no malformed-value policy")
+		}
 	}
 	return out
 }

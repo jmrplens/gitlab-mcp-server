@@ -177,9 +177,11 @@ where its value comes from, in three ways:
   configurable or not keyed on the process, and a reason about the process on a row that
   does not say it protects one (`INV-004`); a valued row that does not say what zero means (`INV-015`); a variable without the
   `GITLAB_MCP_` prefix, or a configurable value with no flag, variable or malformed-value
-  policy, and a value only stdio's environment reaches (`StdioEnvOnly`, issue 957) with
+  policy, a value only stdio's environment reaches (`StdioEnvOnly`, issue 957) with
   a flag, with no variable or malformed-value policy, or on a row that does not exist on
-  stdio (`INV-017`); a behavior at capacity the capacity rule does not allow for the
+  stdio, and a row with no value source of its own, a request bound or a rule, that names
+  a flag or a variable and no malformed-value policy (issue 1170) (`INV-017`); a behavior
+  at capacity the capacity rule does not allow for the
   row's kind, key and table, which is how `INV-005` and `INV-010` are read for what each
   structure holds (`VAL-006`, issue 958; see [Validation checklist](#validation-checklist));
   and a value no operator setting reaches, a constant or a Go option's, that does not say
@@ -720,7 +722,12 @@ used the default for a value it could not parse and the maximum for one above th
 ceiling, where stdio refused both. Both transports refuse all of them now, through the
 one reader stdio's `Load` and HTTP mode's overlay call, which also refuses a count whose
 bytes do not fit in 64 bits (it used to wrap, so `17179869185GB` was read as 1 GiB) and
-reads a blank value as unset on both, and the row states the refused start.
+reads a blank value as unset on both, and the row states the refused start. Three more
+rows with no value source of their own named a setting and stated no policy, `RQB-001`,
+`RQB-005` and `DST-002`, each of which the flag package or its variable's reader already
+refused, so they state the refused start too, and `Validate` holds the next such row to
+stating one. The action timeout's reader read a blank variable as a duration that did
+not parse on stdio and as unset in HTTP mode, and reads it as unset on both now.
 
 F-36 ([issue 1053](https://github.com/jmrplens/gitlab-mcp-server/issues/1053)) is the one
 finding a decision recorded rather than a reading of the code found. The three documents
