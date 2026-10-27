@@ -781,9 +781,9 @@ operand in a `return`) and a documented parameter the action does not offer
 names each with its file and line, and each is a test case to write or a
 condition to declare.
 
-The 31 packages that were not measured are in neither total. None of them
-fails under `go test`; each meets a limit of gobco's, and one a limit of its
-own tests as well.
+That run could not measure 31 packages, which are in neither total above.
+None of them failed under `go test`; each met a limit of gobco's, and two a
+limit of their own tests in gobco's copy:
 
 - Twenty-seven hand symbols from an `export_test.go` to their external test
   package, which gobco type-checks against the non-test files alone (above):
@@ -792,17 +792,40 @@ own tests as well.
   twenty-three packages under `internal/tools`.
 - Three, `internal/tools/awardemoji`, `internal/tools/freezeperiods` and
   `internal/tools/groupmarkdownuploads`, have an external test package that
-  does not import the package it tests, and gobco writes the bridge it adds
-  for such a package with an empty import path, which `go test` refuses at
-  setup.
-- One, `internal/completions`, has tests that read its own source for the
-  case labels of two switches, and gobco's instrumented copy has rewritten
-  those switches, so those tests fail in the copy and pass everywhere else.
-  That one can be fixed on the side of its tests.
+  does not import the package it tests, and gobco wrote the bridge it adds for
+  such a package with an empty import path, which `go test` refused at setup.
+- `internal/completions` has tests that read its own source for the case
+  labels of two switches, which gobco's copy rewrites into calls of its own,
+  and `internal/testutil/serialtypecheck` a test that reads the imports of
+  every file of its package, gobco's own files among them in the copy.
 
-Their decisions and conditions are counted neither way, so each share is of
-the 265 packages measured, and the share of the tree as a whole is not known
-until gobco can read those 31.
+The script stages the first two shapes now
+([above](#what-they-cost-and-why-the-figures-are-not-generated)),
+and the two tests read the same thing in gobco's copy as in the source. The
+31 were measured that way on 27 October 2026 on linux/amd64, over this
+branch on `main` at `8f339f4e8`, with `scripts/coverage-conditions.sh` and
+`GOBCO_GATE=all`, four packages at a time:
+
+| Mode      | Packages | Measured | Outcomes evaluated | Share |
+| --------- | -------: | -------: | -----------------: | ----: |
+| Branch    |       31 |       31 |       3773 of 3778 | 99.8% |
+| Condition |       31 |       31 |       4113 of 4120 | 99.8% |
+
+The five branch outcomes not taken are five decisions that went one way only.
+Four are per-action metadata decorations in `internal/tools/resourceevents`
+(`action_specs.go:158` to `:167`), the shape `make check-spec-conditions`
+exists to find, and the fifth is a comparison with the one individual tool
+name the dispatch of `internal/tools/workitems` (`action_specs.go:90`) is
+ever handed. The seven condition outcomes are the same five and two operands
+of `internal/tools/workitems/clear_guard.go` whose decisions go both ways
+without them: the YOLO mode never on (`:52`) and an elicitation flow that
+never fails (`:66`).
+
+Over all 296 packages the two runs add up to 48709 of 48732 branch outcomes
+and 57525 of 57552 condition outcomes, 99.9% each. That sum is of two trees
+measured a day apart, the 265 packages at `ed18d7d12` and the 31 on the
+rebased branch; one run over the merged tree, either way above, takes the
+figure of one tree.
 
 ## When To Use Each Layer
 
