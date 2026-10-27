@@ -230,15 +230,34 @@ cause. Without the blanking gobco declines every file and reports
 prints when no test wrote its counts, and it reads like a package with nothing
 left to test.
 
-**Nor a package whose `export_test.go` hands a symbol to its external test
-package.** It resolves the `_test` package against the non-test files alone,
-so `internal/tools/todos` dies with `action_specs_test.go:49:27: undefined:
-todos.PublishedActionIDs` before instrumenting anything. The whole-tree
-measurement [below](#the-whole-tree) found twenty-seven packages in that
-state, twenty-two of them among the 149 sub-packages of `internal/tools` that
-carry an `action_specs.go`. The limitation is the tool's rather than the
-package's, which is why `make check-spec-conditions`, which reads those 149,
-reports such a package as not measured instead of failing on it.
+**An external test package gobco cannot read is staged as well.** gobco
+resolves the `_test` package against the non-test files alone, so
+`internal/tools/todos` died with `action_specs_test.go:49:27: undefined:
+todos.PublishedActionIDs`, a name its `export_test.go` declares, before
+instrumenting anything. And it bridges that package to the instrumented one
+through an import of the package it finds in the directory, so
+`internal/tools/awardemoji`, whose external tests reach it only through the
+catalog, was given a bridge with an empty import path, which `go test`
+refused at setup. The first whole-tree measurement [below](#the-whole-tree)
+found twenty-seven packages in the first state, twenty-two of them among the
+149 sub-packages of `internal/tools` that carry an `action_specs.go`, and
+three in the second. The script measures both from the staged copy: each of
+the package's own test files that declares no test, benchmark, fuzz test or
+example (the `export_test.go`) becomes a file of the package behind
+`//go:build gc`, which the go command builds and gobco's narrower context does
+not instrument, so its names reach the external tests and its conditions stay
+out of the report as a test file's do; and an external test package that
+imports nothing of its package is given a test file that imports it. Both are
+gobco's to fix, in
+[upstream-bugs entry 97](../upstream-bugs.md#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package)
+and
+[entry 140](../upstream-bugs.md#gobco-bridges-a-black-box-test-package-through-an-import-it-may-not-find),
+and the staging is temporary: the maintainer decided on 27 October 2026 to
+keep it, superseding the decision of 6 October to leave both to gobco, until
+gobco publishes a release with both fixes, and it goes then.
+`make check-spec-conditions`, which reads those 149, still reports a package
+gobco cannot instrument as not measured instead of failing on it, since that
+is the tool's limitation rather than the package's.
 
 **`PKG` names one package and gremlins reads it as a directory to walk.** It
 mutates everything below the path it is given, so a package with anything under

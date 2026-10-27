@@ -61,10 +61,42 @@
 # reports is the original's and the file is instrumented like the rest. A
 # package holding such a file is staged for that reason alone.
 #
-# A package with neither kind of file, a constraint on the platform alone
-# included (a _unix_test.go behind //go:build !windows with no Windows
-# counterpart), is run where it is, exactly as the recipe did before, so the
-# figures of every package it could already measure do not move.
+# An external test package (package x_test) is the third shape gobco cannot
+# read, in two ways. gobco type-checks it through the source importer of
+# go/importer, which builds the package under test from its non-test files
+# alone, so a name the package's own test files declare for it, which is what
+# an export_test.go is for, is undefined there, and gobco panics before
+# anything is measured:
+#
+#   panic: action_specs_test.go:49:27: undefined: todos.PublishedActionIDs
+#
+# That was 27 packages here when the whole tree was first measured
+# (rillig/gobco#42, with the fix in review as rillig/gobco#43). The copy makes
+# each of the package's own test files that declares no test, benchmark, fuzz
+# test or example a file of the package, renamed without its _test suffix and
+# opened with //go:build gc: the go command satisfies that constraint, so the
+# file is compiled into the test binary as before and its names reach the
+# external test package, and gobco's narrower build context does not, so it
+# leaves the file uninstrumented, as it leaves a test file. And gobco bridges
+# the external test package to the instrumented one through an import of the
+# package it finds in the directory, so an external test package that imports
+# nothing of its package, as a test that reaches it through the catalog does,
+# gets a bridge with an empty import path, which does not build (three
+# packages, rillig/gobco#33). The copy adds a test file to that package which
+# imports the package and reads one name a file of the package declares behind
+# the same constraint. Neither change moves a position gobco reports.
+#
+# This staging of an external test package is TEMPORARY. The maintainer
+# decided on 2026-10-27 to keep it, superseding the decision of 2026-10-06
+# (issue 1099) to leave both limits to gobco, until gobco publishes a release
+# with the fixes of rillig/gobco#43 (for rillig/gobco#42) and rillig/gobco#39
+# (for rillig/gobco#33); it goes then (docs/development/upstream-bugs.md,
+# entries 97 and 140).
+#
+# A package with none of these, a constraint on the platform alone included
+# (a _unix_test.go behind //go:build !windows with no Windows counterpart), is
+# run where it is, exactly as the recipe did before, so the figures of every
+# package it could already measure do not move.
 #
 # Blanking has a cost the run cannot see: a test that reads its own files'
 # headers finds them blank. The e2e harness checks that every one of its
@@ -191,9 +223,17 @@ fi
 # `go test` gobco runs. -e keeps a package go cannot load (a path that is not
 # there, a directory every file of which a constraint leaves out) from ending
 # the script with go's own message, which does not say what the run needed.
+#
+# Every line but the last is read with read, which fails at the end of its
+# input, and $(...) drops the newlines a listing ends with, so the lines that
+# can be empty in a package go loads are kept above one that is not: the files
+# it builds.
 listing=$(go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Dir}}
 {{with .Module}}{{.Dir}}{{end}}
 {{len .TestGoFiles}} {{len .XTestGoFiles}}
+{{.Name}} {{.ImportPath}}
+{{join .TestGoFiles " "}}
+{{join .XTestImports " "}}
 {{join .GoFiles " "}} {{join .CgoFiles " "}} {{join .TestGoFiles " "}} {{join .XTestGoFiles " "}}
 {{join .GoFiles " "}} {{join .CgoFiles " "}}
 {{with .Error}}{{.}}{{end}}' "$PKG")
@@ -201,6 +241,11 @@ listing=$(go list -e ${tag_args[@]+"${tag_args[@]}"} -f '{{.Dir}}
   IFS= read -r pkgdir
   IFS= read -r moddir
   read -r tests xtests
+  read -r pkgname importpath
+  # The package's own test files, and what its external test package
+  # imports, which decide whether gobco can read that package (below).
+  read -r -a internal_tests
+  read -r -a xtest_imports
   read -r -a built
   # The files gobco instruments, which are the only ones whose conditions it
   # reports: it leaves the test files as they are.
@@ -318,6 +363,29 @@ for name in ${built[@]+"${built[@]}"}; do
   fi
 done
 
+# What gobco cannot read in an external test package (package x_test), only
+# where the package has one. gobco type-checks it against the package's
+# non-test files alone, so a name the package's own test files declare for it
+# (export_test.go, Go's name for the file that hands such a test what the
+# package keeps unexported) is undefined there, and gobco panics. Those are
+# the support files below: the package's own test files that declare no test,
+# benchmark, fuzz test or example. And gobco bridges that package to the
+# instrumented one through an import of the package it finds there, so one
+# that imports nothing of the package gets a bridge with an empty import path,
+# which does not build.
+support=()
+unimported=""
+if [ "$xtests" -gt 0 ]; then
+  for name in ${internal_tests[@]+"${internal_tests[@]}"}; do
+    if ! grep -qE '^func (Test|Benchmark|Fuzz|Example)' "$pkgdir/$name"; then
+      support+=("$name")
+    fi
+  done
+  if [ "$pkgname" != main ] && ! listed "$importpath" ${xtest_imports[@]+"${xtest_imports[@]}"}; then
+    unimported=yes
+  fi
+fi
+
 if [ "$tests $xtests" = "0 0" ] && [ -n "$left_out_tests" ]; then
   echo "gobco: $PKG keeps no test file on $context: its tests are among the files the go command leaves out here (${left_out[*]}), so no test would run and gobco would measure nothing; refusing to measure" >&2
   echo "gobco: a package behind a build tag is measured with TAGS=<tag>, which reaches go list and gobco's go test alike" >&2
@@ -344,15 +412,21 @@ report=$(mktemp)
 
 target=$pkgdir
 staged=""
-if [ "${#left_out[@]}" -gt 0 ] || [ "${#constrained[@]}" -gt 0 ]; then
+if [ "${#left_out[@]}" -gt 0 ] || [ "${#constrained[@]}" -gt 0 ] || [ "${#support[@]}" -gt 0 ] || [ -n "$unimported" ]; then
   staged=yes
   if [ "${#left_out[@]}" -gt 0 ]; then
     echo "gobco: $PKG holds ${#left_out[@]} .go file(s) the go command does not build on $context (${left_out[*]}), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them"
     if [ "${#constrained[@]}" -gt 0 ]; then
       echo "gobco: the copy blanks the build constraint lines of ${constrained[*]}, line for line, since each names more than the platform and gobco's own narrower build context would decline to instrument it"
     fi
-  else
+  elif [ "${#constrained[@]}" -gt 0 ]; then
     echo "gobco: $PKG builds ${constrained[*]} under a build constraint naming more than the platform, which gobco's own narrower build context would decline to instrument; measuring it in a staged copy of the module with those lines blanked, line for line, so gobco instruments every file the go command builds here"
+  fi
+  if [ "${#support[@]}" -gt 0 ]; then
+    echo "gobco: $PKG has an external test package, which gobco type-checks against the package's non-test files alone, and test files of its own that declare no test (${support[*]}), whose names that package may use; measuring it in a staged copy of the module in which those files are part of the package, behind //go:build gc, which the go command builds and gobco's own build context does not instrument, so they are compiled into the test binary as before and stay out of the report as a test file does"
+  fi
+  if [ -n "$unimported" ]; then
+    echo "gobco: $PKG has an external test package that does not import it, and gobco bridges that package to the instrumented one through an import it finds there; measuring it in a staged copy of the module with a test file in that package that imports it, beside a file of the package behind //go:build gc that declares the one name the import reads"
   fi
   workdir=$(mktemp -d)
   module="$workdir/$(basename "$moddir")"
@@ -371,6 +445,30 @@ if [ "${#left_out[@]}" -gt 0 ] || [ "${#constrained[@]}" -gt 0 ]; then
       "$target/$name" >"$target/$name.blanked"
     mv "$target/$name.blanked" "$target/$name"
   done
+  # A support file becomes a file of the package, under a name without the
+  # _test suffix, so that the go command builds it into the package and gobco
+  # reads its names when it type-checks the external test package. It opens
+  # with //go:build gc, which the go command satisfies and gobco's narrower
+  # context does not, so gobco leaves it uninstrumented, as it leaves a test
+  # file. The file builds here, so any constraint of its own already holds,
+  # and its lines are blanked rather than combined with that one.
+  for name in ${support[@]+"${support[@]}"}; do
+    {
+      printf '//go:build gc\n\n'
+      awk '!body && /^package[ \t]/ { body = 1 } !body && (/^\/\/go:build[ \t]/ || /^\/\/ [+]build[ \t]/) { print ""; next } { print }' "$target/$name"
+    } >"$target/${name%_test.go}_gobco.go"
+    rm -f "$target/$name"
+  done
+  # The import gobco's bridge copies, written where the external test package
+  # imports nothing of the package. It reads a name of the package declared in
+  # a file of the package behind the same constraint, so it compiles, and
+  # neither file is instrumented.
+  if [ -n "$unimported" ]; then
+    printf '//go:build gc\n\npackage %s\n\n// GobcoStagedImport is what gobco_staged_import_test.go reads.\nvar GobcoStagedImport struct{}\n' \
+      "$pkgname" >"$target/gobco_staged_import_gobco.go"
+    printf 'package %s_test\n\nimport %s "%s"\n\nvar _ = %s.GobcoStagedImport\n' \
+      "$pkgname" "$pkgname" "$importpath" "$pkgname" >"$target/gobco_staged_import_test.go"
+  fi
 fi
 
 # gobco's report is passed through as it is written and kept, so the figure

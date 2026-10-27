@@ -172,6 +172,7 @@ for the fork, branch, fix, test and MR workflow.
   - [go-selfupdate depends on the deprecated x/crypto/openpgp](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp)
   - [gobco type-checks every file of a package directory, whatever its build constraints say](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say)
   - [gobco cannot instrument a package whose export_test.go feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package)
+  - [gobco bridges a black box test package through an import it may not find](#gobco-bridges-a-black-box-test-package-through-an-import-it-may-not-find)
   - [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding)
 
 ## Writing an entry
@@ -345,7 +346,7 @@ readable without opening the tracker:
 | 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260458](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260458), merged | **Yes, 19.5.0** | No | None taken |
 | 95 | client-go | [`ListGroupMilestonesOptions` misspells `include_descendants` and `GroupMilestone` drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project) | `web_url`: yes, by another contributor; the rest: no | `web_url`: [gitlab-org/api/client-go!3126](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3126), merged | **`web_url`: v3.26.0**, not ours | No | Retired for `web_url` at the v3.29.0 pin; yes for `include_descendants` and `project_id` |
 | 96 | client-go | [`CreateGroupIssueBoardListOptions` models only `label_id` where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 8 | No | No; it narrows `group.group_board_create_list` to label lists | None, by decision |
-| 97 | gobco | [gobco cannot instrument a package whose `export_test.go` feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package) | Yes, [rillig/gobco#42](https://github.com/rillig/gobco/issues/42) | Yes, [rillig/gobco#43](https://github.com/rillig/gobco/pull/43), open | No | No; the condition gate cannot measure a package it reaches | None, by decision |
+| 97 | gobco | [gobco cannot instrument a package whose `export_test.go` feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package) | Yes, [rillig/gobco#42](https://github.com/rillig/gobco/issues/42) | Yes, [rillig/gobco#43](https://github.com/rillig/gobco/pull/43), open | No | No; the condition gate could not measure a package it reaches | Yes, temporarily: the staged copy of `scripts/coverage-conditions.sh` since 2026-10-27, kept by the maintainer's decision of that day, which supersedes that of 2026-10-06, until a gobco release carries the fix |
 | 98 | client-go | [`UpdateGroupIssueBoardOptions` models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 7, beside row 96 | No | No; the switches go out in a body of this server's own | Yes, since [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241); `group.group_board_update` sends both in a body that embeds `UpdateGroupIssueBoardOptions` |
 | 99 | gitlab-org/gitlab | [The roles and permissions page does not say when a Guest or a Planner can view pipelines and merge requests](#the-roles-and-permissions-page-does-not-say-when-a-guest-or-a-planner-can-view-pipelines-and-merge-requests) | Yes, by another user, [gitlab-org/gitlab#632031](https://gitlab.com/gitlab-org/gitlab/-/issues/632031), which the merge request closes, closed by its author on 2026-10-11 | Yes, [gitlab-org/gitlab!260353](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260353), merged | **Yes, 19.5.0** | No | Not needed; `pipeline.latest`'s refusal names the role the policy names |
 | 100 | gitlab-org/gitlab | [The roles and permissions page gives Guest, Planner and Reporter the pipeline security report](#the-roles-and-permissions-page-gives-guest-planner-and-reporter-the-pipeline-security-report) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260471](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260471), merged | **Yes, 19.5.0** | No | Not needed; no hint of this server names who can view a pipeline's findings |
@@ -388,6 +389,7 @@ readable without opening the tracker:
 | 137 | client-go and gitlab-org/gitlab | [`ListPipelineTriggerJobsOptions` models no `include_retried`, which the trigger job routes read and do not declare](#listpipelinetriggerjobsoptions-models-no-include_retried-which-the-trigger-job-routes-read-and-do-not-declare) | No | No | No | No | Yes, `job.list_bridges` adds `include_retried` to the `trigger_jobs` query through a request option, only when the caller asked |
 | 138 | client-go | [`BranchAccessDescription` and `GroupBranchAccessDescription` model no `member_role_name`](#branchaccessdescription-and-groupbranchaccessdescription-model-no-member_role_name) | No, not yet; it goes out as a small merge request at the pace of the ones that replace row 34's joint one | No, not yet | No | No | Yes, every project and group protected branch read and write, and the `audit_project_full` prompt, read it off the captured response |
 | 139 | client-go | [The protected environment approval rule options model an `access_level_description` no route declares](#the-protected-environment-approval-rule-options-model-an-access_level_description-no-route-declares) | No | No | No | No | Yes, the four project and group protect and update actions no longer offer it |
+| 140 | gobco | [gobco bridges a black box test package through an import it may not find](#gobco-bridges-a-black-box-test-package-through-an-import-it-may-not-find) | Yes, by another user, [rillig/gobco#33](https://github.com/rillig/gobco/issues/33) | Yes, by another contributor, [rillig/gobco#39](https://github.com/rillig/gobco/pull/39), open | No | No; the condition gate could not measure a package it reaches | Yes, temporarily: the staged copy of `scripts/coverage-conditions.sh` since 2026-10-27, by the decision of row 97, until a gobco release carries a fix |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -16052,27 +16054,47 @@ which had no entry until then and is
   2026-10-13, its Go workflow run (37855282392) waits on a maintainer's
   approval to run, as entry 73's (36452317634) has since 2026-09-28, it has
   no review, and both pull requests still merge onto `master` without a
-  conflict.
+  conflict. The decision of 2026-10-06 against a workaround in the staging
+  script is superseded by the maintainer's decision of 2026-10-27 to carry
+  one until gobco releases the fix (Workaround, below); the fix and its pull
+  request stand.
 - **Merged**: no.
-- **Blocking**: no for the server. It keeps the condition gate from measuring
-  a package it reaches. `scripts/check-spec-conditions.sh` reports such a
-  package as not measured and does not fail on it, and
-  `docs/development/testing/README.md` says the same; both count 25 of the
+- **Blocking**: no for the server. It kept the condition gate from measuring
+  a package it reaches until the workaround below. `scripts/check-spec-conditions.sh` reported such a
+  package as not measured and did not fail on it, and
+  `docs/development/testing/README.md` said the same; both counted 25 of the
   169 packages carrying an `action_specs.go` as in that state, a figure from
-  when they were written and not measured again since (read from the tree on
+  when they were written and not measured again then (read from the tree on
   2026-10-07 and again on 2026-10-13, 22 of the 150 `action_specs.go` files sit beside an
   `export_test.go` whose package also has an external test package).
   `internal/clientcompat` is held by mutation testing instead (pull request
   1047), and `internal/tools/issues` was measured once, 368 of 368
   conditions, only through a workaround applied by hand to a copy of the
   module outside this repository (pull request 1067), which the
-  repository's tooling does not carry.
-- **Workaround**: none, by the decision above. When the fix ships in a gobco
-  release and the pin of entry 73 moves to it, the "reported and does not
-  fail" bound of `scripts/check-spec-conditions.sh` retires with its
-  paragraph in `docs/development/testing/README.md`, and `internal/clientcompat`,
-  `internal/tools/issues` and the `action_specs.go` packages are measured and
-  closed like any other.
+  repository's tooling did not carry until the workaround below.
+- **Workaround**: yes, since 2026-10-27, and temporary. On 2026-10-27 the
+  maintainer decided to keep it until gobco publishes a release with the fix,
+  which supersedes the decision of 2026-10-06 (In review, above) that left
+  this to gobco. The whole-tree measurement of 26 October 2026 found 27 packages in
+  this state (`docs/development/testing/README.md`, The whole tree), and the
+  OpenSSF Best Practices gold criterion `test_branch_coverage80` asks for a
+  figure over the whole tree, which waited on a release that has not come.
+  `scripts/coverage-conditions.sh` stages such a package: in its copy of the
+  module, each test file of the package that declares no test, benchmark,
+  fuzz test or example becomes a file of the package, renamed without its
+  `_test` suffix and opened with `//go:build gc`, which the go command
+  satisfies and gobco's own narrower build context does not, so it is
+  compiled into the test binary as before, its names reach the black box
+  test, and gobco leaves it uninstrumented, as it leaves a test file. It
+  moves no position gobco reports. The 27 are measured that way, the 22
+  `action_specs.go` packages among them. The staging goes when gobco
+  publishes a release carrying the fixes,
+  [rillig/gobco#43](https://github.com/rillig/gobco/pull/43) for
+  [rillig/gobco#42](https://github.com/rillig/gobco/issues/42) and
+  [rillig/gobco#39](https://github.com/rillig/gobco/pull/39) for entry 140's
+  [rillig/gobco#33](https://github.com/rillig/gobco/issues/33), and the pin of
+  entry 73 moves to it, with the paragraph of
+  `docs/development/testing/README.md` that describes it.
 
 **Where**: `rillig/gobco` at `7a09995` (`master`, read on 2026-10-07),
 `resolveTypes` (`instrumenter.go:113-150`). It type-checks each package of the
@@ -16095,6 +16117,56 @@ writes a single counter.
 (pull request 1047) and then on `internal/tools/issues` (pull request 1067),
 and its cause by reading `resolveTypes`. It was recorded in issue 1099 beside
 entry 73's adoption until that issue closed on 2026-10-07.
+
+### gobco bridges a black box test package through an import it may not find
+
+- **Reported**: yes, by another user, as
+  [rillig/gobco#33](https://github.com/rillig/gobco/issues/33) on
+  2024-02-20, with a reproduction: a black box test that reaches its package
+  only through a helper package. Read on 2026-10-27 it is open, with nine
+  comments.
+- **In review**: yes, by another contributor, as
+  [rillig/gobco#39](https://github.com/rillig/gobco/pull/39), opened on
+  2026-05-21, which reads the import path from `go.mod` and the directory
+  instead of from the imports. Read on 2026-10-27 it is open, last updated on
+  2026-05-22.
+- **Merged**: no. No gobco release has been tagged since v1.3.4 (2024-03-08).
+- **Blocking**: no for the server. It kept the condition gate from measuring
+  three packages until the workaround below: `internal/tools/awardemoji`,
+  `internal/tools/freezeperiods` and `internal/tools/groupmarkdownuploads`,
+  whose black box tests check the catalog's view of the package and import
+  nothing of the package itself.
+- **Workaround**: yes, since 2026-10-27, and temporary, by the maintainer's
+  decision of that day that
+  [entry 97](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package)
+  records. `scripts/coverage-conditions.sh`
+  stages such a package and, in its copy of the module, adds a test file to
+  the black box test package that imports the package and reads one name
+  declared, for that file alone, in a file of the package behind
+  `//go:build gc`, which the go command builds and gobco's narrower build
+  context leaves uninstrumented. gobco then finds the import and writes a
+  bridge that builds. The staging goes when gobco publishes a release carrying
+  a fix, [rillig/gobco#39](https://github.com/rillig/gobco/pull/39) or
+  another, and the pin of [entry 73](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say)
+  moves to it.
+
+**Where**: `rillig/gobco` at `v1.3.4`, `writeGobcoBlackBox`
+(`instrumenter.go`). When a directory holds a package and its black box test
+package, gobco writes `gobco_bridge_test.go`, which imports the package to
+hand `GobcoCover` and `GobcoFinish` to the black box tests. It takes the
+import path from an import whose name is the package's in any file of the
+directory, and with none it writes the import with an empty path.
+
+**What**: `go test` refuses the bridge at setup, so nothing is measured:
+
+```text
+gobco_bridge_test.go:3:9: invalid import path:
+FAIL	github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/freezeperiods [setup failed]
+```
+
+**How we found it**: the first whole-tree measurement, on 26 October 2026,
+reported the three packages as not measured, and reading
+`writeGobcoBlackBox` gave the cause.
 
 ### go/types reads an imported generic instance another checker is expanding
 

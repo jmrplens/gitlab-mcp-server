@@ -21,13 +21,14 @@
 #   sweep's subject and is reported by `make coverage-conditions`; the claim
 #   here is narrow on purpose, so that it can gate.
 #
-#   A package gobco cannot instrument is reported and does not fail. It
-#   resolves the external test package against the non-test files alone, so
-#   a package whose export_test.go hands a symbol to its _test package dies
-#   with "undefined". Twenty-two of those 149 were in that state when the
-#   whole tree was measured on 26 October 2026 (docs/development/testing/
-#   README.md, The whole tree). Failing on them would fail for the tool's
-#   limits rather than for anything about this repository.
+#   A package gobco cannot instrument is reported and does not fail, since
+#   failing on it would fail for the tool's limits rather than for anything
+#   about this repository. gobco resolves the external test package against
+#   the non-test files alone, so a package whose export_test.go hands a
+#   symbol to its _test package died with "undefined": twenty-two of those
+#   149 were in that state when the whole tree was measured on 26 October
+#   2026 (docs/development/testing/README.md, The whole tree). The recipe
+#   below stages such a package now, and measures it.
 #
 # gobco is run through scripts/coverage-conditions.sh, the recipe behind
 # `make coverage-conditions`, rather than directly: gobco also parses every

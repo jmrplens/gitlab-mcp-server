@@ -53,6 +53,7 @@ GOBCO = "github.com/rillig/gobco@v1.3.4"
 # initialisation slows every call down.
 STUB_GO = r'''import json
 import os
+import re
 import sys
 import time
 
@@ -136,6 +137,38 @@ def header_constraint(path):
     return False
 
 
+def imports_of(path):
+    """The import paths a file names, written the way the fixtures write
+    them: one import on its line, or a parenthesized block of them."""
+    found = []
+    block = False
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if block:
+                if stripped == ")":
+                    block = False
+                elif '"' in stripped:
+                    found.append(stripped.split('"')[1])
+            elif stripped.startswith("import ("):
+                block = True
+            elif stripped.startswith("import ") and '"' in stripped:
+                found.append(stripped.split('"')[1])
+    return found
+
+
+def declared(path):
+    """The top-level names a file declares, one declaration per line."""
+    with open(path, encoding="utf-8") as fh:
+        return set(re.findall(r"^(?:func|var|const|type) ([A-Za-z_]\w*)", fh.read(), re.MULTILINE))
+
+
+def import_path(pkgdir):
+    """The package's import path in the fixture module, example.com/m."""
+    below = os.path.relpath(pkgdir, env["STUB_ROOT"])
+    return "example.com/m" if below == "." else "example.com/m/" + below.replace(os.sep, "/")
+
+
 def render(template, fields):
     for placeholder, value in fields:
         template = template.replace(placeholder, value)
@@ -176,6 +209,8 @@ elif args[:2] == ["list", "-e"]:
     if separator and pkgdir != env["STUB_ROOT"]:
         below = os.path.relpath(pkgdir, env["STUB_ROOT"])
         shown = env["STUB_ROOT"] + separator + below.replace("/", separator)
+    name = clause(os.path.join(pkgdir, gofiles[0])) if gofiles else ""
+    xtest_imports = sorted({path for n in xtests for path in imports_of(os.path.join(pkgdir, n))})
     print(render(args[args.index("-f") + 1], [
         ("{{with .Module}}{{.Dir}}{{end}}", env["STUB_ROOT"]),
         ("{{.Dir}}", shown if exists else ""),
@@ -185,6 +220,8 @@ elif args[:2] == ["list", "-e"]:
         ('{{join .CgoFiles " "}}', ""),
         ('{{join .TestGoFiles " "}}', " ".join(tests)),
         ('{{join .XTestGoFiles " "}}', " ".join(xtests)),
+        ("{{.Name}} {{.ImportPath}}", name + " " + import_path(pkgdir)),
+        ('{{join .XTestImports " "}}', " ".join(xtest_imports)),
         ("{{with .Error}}{{.}}{{end}}", error),
     ]))
 elif args[:2] == ["run", GOBCO]:
@@ -213,12 +250,43 @@ elif args[:2] == ["run", GOBCO]:
         os.path.relpath(os.path.join(d, n), root).replace(os.sep, "/")
         for d, _, ns in os.walk(root) for n in ns)
     unbuilt = [n for n in files if not builds(os.path.join(here, n), tags)]
+    # The external test package and what gobco reads it against: the names
+    # the package's non-test files declare, since go/importer's source
+    # importer loads the package under test from those alone.
+    xtest_files = [n for n in files if clause(os.path.join(here, n)).endswith("_test")]
+    package = next((clause(os.path.join(here, n)) for n in files if not n.endswith("_test.go")), "")
+    visible = set()
+    for n in files:
+        if not n.endswith("_test.go"):
+            visible |= declared(os.path.join(here, n))
+    undefined = []
+    for n in xtest_files:
+        with open(os.path.join(here, n), encoding="utf-8") as fh:
+            undefined += [(n, used) for used in re.findall(r"\b" + package + r"\.([A-Z]\w*)", fh.read())
+                          if used not in visible]
+    # gobco's bridge imports the package under the import it finds whose
+    # name is the package's, in any file of the directory.
+    bridged = any(path.rsplit("/", 1)[-1] == package
+                  for n in files for path in imports_of(os.path.join(here, n)))
     if unbuilt:
         # What gobco does with a directory holding a file the go command
         # leaves out: it type-checks it with the rest, and a platform pair
         # declares the same function twice.
         print("panic: %s:5:6: f redeclared in this block" % unbuilt[0])
         status = 2
+    elif undefined:
+        # What gobco does with an external test package that uses a name the
+        # package's own test files declare: the type check finds it
+        # undefined, and gobco panics before anything is measured.
+        print("panic: %s:1:1: undefined: %s.%s" % (undefined[0][0], package, undefined[0][1]))
+        status = 2
+    elif xtest_files and not bridged:
+        # What gobco's go test does with the bridge it writes when no file
+        # imports the package: an import with an empty path does not build.
+        print("# " + import_path(here))
+        print("gobco_bridge_test.go:3:9: invalid import path: ")
+        print("FAIL\t%s [setup failed]" % import_path(here))
+        status = 1
     else:
         time.sleep(float(env.get("STUB_GOBCO_SLEEP", "0")))
         figure = env.get("STUB_GOBCO_REPORT", "3/4")
@@ -298,6 +366,22 @@ FILES = {
     # A package only Windows builds a file of.
     "internal/winonly/w_windows.go": "package winonly\n\nfunc w(c int) bool {\n\treturn c == 1\n}\n",
     "internal/winonly/w_windows_test.go": "package winonly\n",
+    # An external test package using a name the package's own test files
+    # declare for it, beside a test of the package's own and a support file
+    # under a constraint gobco's context misjudges.
+    "internal/exported/exported.go": "package exported\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+    "internal/exported/export_test.go": "// export_test.go hands f to the external tests.\npackage exported\n\n// F is f, for the tests.\nvar F = f\n",
+    "internal/exported/norace_test.go": "//go:build !race\n\npackage exported\n\nconst raced = false\n",
+    "internal/exported/internal_test.go": "package exported\n\nimport \"testing\"\n\nfunc TestInternal(t *testing.T) { f(2) }\n",
+    "internal/exported/exported_test.go": "package exported_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/internal/exported\"\n)\n\nfunc TestF(t *testing.T) { exported.F(1) }\n",
+    # An external test package that imports nothing of its package, which it
+    # exercises through another one, as a catalog test does.
+    "internal/unimported/unimported.go": "package unimported\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+    "internal/unimported/unimported_test.go": "package unimported_test\n\nimport \"testing\"\n\nfunc TestCatalog(t *testing.T) {}\n",
+    # An external test package gobco reads as it is: it imports the package
+    # and uses only what the package's non-test files declare.
+    "internal/blackbox/blackbox.go": "package blackbox\n\n// B is b.\nfunc B(c int) bool {\n\treturn c == 1\n}\n",
+    "internal/blackbox/blackbox_test.go": "package blackbox_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/internal/blackbox\"\n)\n\nfunc TestB(t *testing.T) { blackbox.B(1) }\n",
     # What the rest of the module holds: files a test reads by a relative
     # path, which the staged copy keeps, and the directories it leaves out.
     "docs/guide.md": "guide\n",
@@ -551,6 +635,92 @@ class CoverageConditionsTest(unittest.TestCase):
         self.assertIn("builds legacy.go release.go under a build constraint naming more than the platform",
                       proc.stdout)
         self.assertNotIn("does not build", proc.stdout)
+        self.assertEqual(self.staged_copies(), [])
+
+    def test_external_test_packages_run_where_they_are_fail_the_way_gobco_does(self):
+        # What the recipe did before the external test package was staged,
+        # reproduced against the stand-in, so the two cases below are held
+        # against the failures they prevent: a panic on the name an
+        # export_test.go hands over, and a bridge that does not build.
+        cases = [
+            ("a name from the package's own test files", "exported", 2, "undefined: exported.F"),
+            ("no import of the package", "unimported", 1, "[setup failed]"),
+        ]
+        for name, rel, code, said in cases:
+            with self.subTest(name):
+                open(self.log, "w", encoding="utf-8").close()
+                proc = subprocess.run([os.path.join(self.bin, "go"), "run", GOBCO],
+                                      cwd=os.path.join(self.root, "internal", rel), env=self.environment(),
+                                      capture_output=True, text=True, timeout=60, check=False)
+                self.assertEqual(proc.returncode, code, proc.stdout + proc.stderr)
+                self.assertIn(said, proc.stdout)
+
+    def test_support_files_of_an_external_test_package_become_files_of_the_package(self):
+        # gobco type-checks the external test package against the package's
+        # non-test files alone, so the copy makes each test file of the
+        # package that declares no test a file of the package, behind a
+        # constraint gobco does not instrument, and leaves the test of the
+        # package's own where it was.
+        before = self.snapshot("")
+        proc, calls = self.run_script("./internal/exported")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        run = self.gobco(calls)[0]
+        self.assert_staged(run, os.path.join("internal", "exported"))
+        self.assertEqual(run["files"], ["export_gobco.go", "exported.go", "exported_test.go", "internal_test.go",
+                                        "norace_gobco.go"])
+        self.assertNotIn("panic", proc.stdout)
+        self.assertIn("Condition coverage: 3/4", proc.stdout)
+        # Each moved file opens with the constraint and is otherwise the
+        # original, its own constraint lines blank, since it builds here.
+        for moved, original in (("export_gobco.go", "export_test.go"), ("norace_gobco.go", "norace_test.go")):
+            with self.subTest(moved=moved):
+                with open(os.path.join(self.root, "internal", "exported", original), encoding="utf-8") as fh:
+                    lines = ["" if line.startswith("//go:build ") else line for line in fh.read().split("\n")]
+                self.assertEqual(run["contents"][moved], "//go:build gc\n\n" + "\n".join(lines))
+        self.assertEqual(run["contents"]["internal_test.go"], FILES["internal/exported/internal_test.go"])
+        self.assertIn("test files of its own that declare no test (export_test.go norace_test.go)", proc.stdout)
+        self.assertIn("behind //go:build gc", proc.stdout)
+        self.assertNotIn("does not import it", proc.stdout)
+        self.assertEqual(self.snapshot(""), before)
+        self.assertEqual(self.staged_copies(), [])
+
+    def test_external_test_package_that_imports_nothing_of_the_package_is_given_an_import(self):
+        # gobco's bridge copies an import of the package from the files it
+        # parsed, so the copy adds an external test file importing it, which
+        # reads a name a file of the package declares behind the constraint
+        # gobco does not instrument.
+        before = self.snapshot("")
+        proc, calls = self.run_script("./internal/unimported")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        run = self.gobco(calls)[0]
+        self.assert_staged(run, os.path.join("internal", "unimported"))
+        self.assertEqual(run["files"], ["gobco_staged_import_gobco.go", "gobco_staged_import_test.go",
+                                        "unimported.go", "unimported_test.go"])
+        self.assertEqual(run["contents"]["gobco_staged_import_gobco.go"],
+                         "//go:build gc\n\npackage unimported\n\n"
+                         "// GobcoStagedImport is what gobco_staged_import_test.go reads.\n"
+                         "var GobcoStagedImport struct{}\n")
+        self.assertEqual(run["contents"]["gobco_staged_import_test.go"],
+                         "package unimported_test\n\nimport unimported \"example.com/m/internal/unimported\"\n\n"
+                         "var _ = unimported.GobcoStagedImport\n")
+        self.assertNotIn("setup failed", proc.stdout)
+        self.assertIn("Condition coverage: 3/4", proc.stdout)
+        self.assertIn("has an external test package that does not import it", proc.stdout)
+        self.assertNotIn("declare no test", proc.stdout)
+        self.assertEqual(self.snapshot(""), before)
+        self.assertEqual(self.staged_copies(), [])
+
+    def test_external_test_package_gobco_can_read_is_measured_where_it_is(self):
+        # An external test package that imports the package and uses only
+        # what its non-test files declare needs no copy of the module.
+        before = self.snapshot("internal/blackbox")
+        proc, calls = self.run_script("./internal/blackbox")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        run = self.gobco(calls)[0]
+        self.assertEqual(run["cwd"], os.path.join(self.root, "internal", "blackbox"))
+        self.assertEqual(run["files"], ["blackbox.go", "blackbox_test.go"])
+        self.assertNotIn("gobco:", proc.stdout + proc.stderr)
+        self.assertEqual(self.snapshot("internal/blackbox"), before)
         self.assertEqual(self.staged_copies(), [])
 
     def test_constraint_on_the_platform_alone_is_measured_where_it_is(self):
