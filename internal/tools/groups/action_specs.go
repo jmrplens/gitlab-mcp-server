@@ -337,7 +337,7 @@ func groupOptionsForAction(individualTool string) toolutil.ActionSpecOptions {
 		}
 		options.IndividualTool.Description = "List the subgroups (descendant groups) of a GitLab group. Returns: descendant groups with path, name, and visibility. See also: gitlab_group_get, gitlab_group_projects, gitlab_group_transfer_locations."
 	case "gitlab_group_update":
-		options.Usage = "Update an existing group's settings. Send group_id plus only the fields to change (name, path, visibility, default branch protection, merge policies, Duo, runner limits, etc.)."
+		options.Usage = "Update an existing group's settings. Send group_id plus only the fields to change (name, path, visibility, default branch protection, Duo, runner limits, and on Premium and Ultimate the merge checks, etc.)."
 		options.Aliases = []string{"update group", "edit group settings", "change group configuration"}
 		options.RelatedActions = []string{actionGroupGet, actionGroupCreate, actionGroupDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

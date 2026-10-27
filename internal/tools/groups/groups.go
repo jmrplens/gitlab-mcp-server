@@ -30,7 +30,7 @@ type ListInput struct {
 	CustomAttributes     map[string]string `json:"custom_attributes,omitempty" jsonschema:"Filter groups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response"`
 	SkipGroups           []int64           `json:"skip_groups,omitempty"           jsonschema:"Group IDs to exclude from results"`
 	MinAccessLevel       int               `json:"min_access_level,omitempty"      jsonschema:"Minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
-	RepositoryStorage    string            `json:"repository_storage,omitempty"    jsonschema:"Filter by repository storage shard (administrators only)"`
+	RepositoryStorage    string            `json:"repository_storage,omitempty"    tier:"premium" jsonschema:"Filter by the storage shard of the group's wiki repository (administrators only)"`
 	Active               *bool             `json:"active,omitempty"                jsonschema:"Filter by active (true) or inactive/archived (false) groups"`
 	Archived             *bool             `json:"archived,omitempty"              jsonschema:"Limit to archived groups (true) or non-archived (false)"`
 	MarkedForDeletionOn  string            `json:"marked_for_deletion_on,omitempty" jsonschema:"Filter to groups marked for deletion on this date (YYYY-MM-DD)"`
@@ -353,7 +353,7 @@ type SubgroupsListInput struct {
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
 	CustomAttributes     map[string]string    `json:"custom_attributes,omitempty" jsonschema:"Filter subgroups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"   jsonschema:"Group IDs to exclude from results"`
-	RepositoryStorage    string               `json:"repository_storage,omitempty" jsonschema:"Filter by repository storage shard (administrators only)"`
+	RepositoryStorage    string               `json:"repository_storage,omitempty" tier:"premium" jsonschema:"Filter by the storage shard of the subgroup's wiki repository (administrators only)"`
 	Active               *bool                `json:"active,omitempty"        jsonschema:"Filter by active (true) or inactive/archived (false) subgroups"`
 	Archived             *bool                `json:"archived,omitempty"      jsonschema:"Limit to archived subgroups (true) or non-archived (false)"`
 	MarkedForDeletionOn  string               `json:"marked_for_deletion_on,omitempty" jsonschema:"Filter to subgroups marked for deletion on this date (YYYY-MM-DD)"`
@@ -1100,7 +1100,7 @@ type CreateInput struct {
 	SharedRunnersMinutesLimit       *int64                         `json:"shared_runners_minutes_limit,omitempty"       jsonschema:"Shared runner compute-minutes limit (administrators only)"`
 	SubGroupCreationLevel           string                         `json:"subgroup_creation_level,omitempty"            jsonschema:"Who can create subgroups (owner, maintainer)"`
 	TwoFactorGracePeriod            *int64                         `json:"two_factor_grace_period,omitempty"            jsonschema:"Grace period in hours before two-factor authentication is enforced"`
-	WikiAccessLevel                 string                         `json:"wiki_access_level,omitempty"                  jsonschema:"Wiki access level (disabled, private, enabled)"`
+	WikiAccessLevel                 string                         `json:"wiki_access_level,omitempty"                  tier:"premium" jsonschema:"Wiki access level (disabled, private, enabled)"`
 
 	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty" tier:"ultimate"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
 	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty" tier:"ultimate"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
@@ -1128,21 +1128,21 @@ type UpdateInput struct {
 	DefaultBranchProtection         *int64                         `json:"default_branch_protection,omitempty"          jsonschema:"Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults"`
 	DefaultBranchProtectionDefaults *BranchProtectionDefaultsInput `json:"default_branch_protection_defaults,omitempty" jsonschema:"Default branch protection settings object"`
 	DuoAvailability                 string                         `json:"duo_availability,omitempty"                   jsonschema:"GitLab Duo availability (always_on, default_on, default_off, never_on). always_on and never_on also lock the setting for every subgroup and project"`
-	DuoFeaturesEnabled              *bool                          `json:"duo_features_enabled,omitempty"               jsonschema:"Enable GitLab Duo features"`
-	LockDuoFeaturesEnabled          *bool                          `json:"lock_duo_features_enabled,omitempty"          jsonschema:"Prevent subgroups from changing the Duo features setting"`
+	DuoFeaturesEnabled              *bool                          `json:"duo_features_enabled,omitempty"               jsonschema:"Enable GitLab Duo features. GitLab Duo needs Premium or Ultimate, or GitLab Credits on a Free namespace, and elsewhere the setting has no effect"`
+	LockDuoFeaturesEnabled          *bool                          `json:"lock_duo_features_enabled,omitempty"          jsonschema:"Prevent subgroups from changing the Duo features setting. GitLab Duo needs Premium or Ultimate, or GitLab Credits on a Free namespace, and elsewhere the setting has no effect"`
 	EmailsEnabled                   *bool                          `json:"emails_enabled,omitempty"                     jsonschema:"Enable email notifications"`
 	EmailsDisabled                  *bool                          `json:"emails_disabled,omitempty"                    jsonschema:"Deprecated: disable email notifications. Prefer emails_enabled"`
 	EnabledGitAccessProtocol        string                         `json:"enabled_git_access_protocol,omitempty"        jsonschema:"Allowed Git access protocol (ssh, http, all)"`
 	ExperimentFeaturesEnabled       *bool                          `json:"experiment_features_enabled,omitempty"        jsonschema:"Enable experimental features"`
 	ExtraSharedRunnersMinutesLimit  *int64                         `json:"extra_shared_runners_minutes_limit,omitempty" jsonschema:"Extra shared runner compute-minutes (administrators only)"`
-	FileTemplateProjectID           *int64                         `json:"file_template_project_id,omitempty"           jsonschema:"Project ID providing file templates for this group (Premium/Ultimate)"`
-	IPRestrictionRanges             string                         `json:"ip_restriction_ranges,omitempty"              jsonschema:"Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only"`
-	AllowedEmailDomainsList         string                         `json:"allowed_email_domains_list,omitempty"         jsonschema:"Comma-separated list of email domains allowed for members (Premium/Ultimate)"`
+	FileTemplateProjectID           *int64                         `json:"file_template_project_id,omitempty"           tier:"premium" jsonschema:"Project ID providing file templates for this group (Premium/Ultimate)"`
+	IPRestrictionRanges             string                         `json:"ip_restriction_ranges,omitempty"              tier:"premium" jsonschema:"Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only"`
+	AllowedEmailDomainsList         string                         `json:"allowed_email_domains_list,omitempty"         tier:"premium" jsonschema:"Comma-separated list of email domains allowed for members (Premium/Ultimate)"`
 	LockMathRenderingLimitsEnabled  *bool                          `json:"lock_math_rendering_limits_enabled,omitempty" jsonschema:"Prevent subgroups from changing the math rendering limits setting"`
 	MaxArtifactsSize                *int64                         `json:"max_artifacts_size,omitempty"                 jsonschema:"Maximum job artifacts size in MB (administrators only)"`
 	MembershipLock                  *bool                          `json:"membership_lock,omitempty"                    jsonschema:"Prevent members from being added to projects in this group"`
 	MentionsDisabled                *bool                          `json:"mentions_disabled,omitempty"                  jsonschema:"Disable @-mention notifications"`
-	PreventForkingOutsideGroup      *bool                          `json:"prevent_forking_outside_group,omitempty"      jsonschema:"Prevent forking projects outside the group (Premium/Ultimate)"`
+	PreventForkingOutsideGroup      *bool                          `json:"prevent_forking_outside_group,omitempty"      tier:"premium" jsonschema:"Prevent forking projects outside the group (Premium/Ultimate)"`
 	PreventSharingGroupsOutside     *bool                          `json:"prevent_sharing_groups_outside_hierarchy,omitempty" jsonschema:"Prevent inviting groups outside this group's hierarchy"`
 	ProjectCreationLevel            string                         `json:"project_creation_level,omitempty"             jsonschema:"Who can create projects (noone, maintainer, developer)"`
 	RequireTwoFactorAuth            *bool                          `json:"require_two_factor_authentication,omitempty"  jsonschema:"Require two-factor authentication for members"`
@@ -1152,11 +1152,11 @@ type UpdateInput struct {
 	SubGroupCreationLevel           string                         `json:"subgroup_creation_level,omitempty"            jsonschema:"Who can create subgroups (owner, maintainer)"`
 	StepUpAuthRequiredOAuthProvider string                         `json:"step_up_auth_required_oauth_provider,omitempty" jsonschema:"OAuth provider required for step-up authentication"`
 	TwoFactorGracePeriod            *int64                         `json:"two_factor_grace_period,omitempty"            jsonschema:"Grace period in hours before two-factor authentication is enforced"`
-	WikiAccessLevel                 string                         `json:"wiki_access_level,omitempty"                  jsonschema:"Wiki access level (disabled, private, enabled)"`
+	WikiAccessLevel                 string                         `json:"wiki_access_level,omitempty"                  tier:"premium" jsonschema:"Wiki access level (disabled, private, enabled)"`
 
-	OnlyAllowMergeIfPipelineSucceeds          *bool `json:"only_allow_merge_if_pipeline_succeeds,omitempty"           jsonschema:"Only allow merging when the pipeline succeeds"`
-	AllowMergeOnSkippedPipeline               *bool `json:"allow_merge_on_skipped_pipeline,omitempty"                jsonschema:"Allow merging when the pipeline is skipped"`
-	OnlyAllowMergeIfAllDiscussionsAreResolved *bool `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Only allow merging when all discussions are resolved"`
+	OnlyAllowMergeIfPipelineSucceeds          *bool `json:"only_allow_merge_if_pipeline_succeeds,omitempty"           tier:"premium" jsonschema:"Only allow merging when the pipeline succeeds"`
+	AllowMergeOnSkippedPipeline               *bool `json:"allow_merge_on_skipped_pipeline,omitempty"                tier:"premium" jsonschema:"Allow merging when the pipeline is skipped"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved *bool `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" tier:"premium" jsonschema:"Only allow merging when all discussions are resolved"`
 
 	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty" tier:"ultimate"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
 	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty" tier:"ultimate"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
@@ -1212,7 +1212,7 @@ type ListProjectsInput struct {
 	WithCustomAttributes     bool                 `json:"with_custom_attributes,omitempty"     jsonschema:"Include custom attributes in the response"`
 	WithIssuesEnabled        *bool                `json:"with_issues_enabled,omitempty"        jsonschema:"Limit to projects with issues enabled"`
 	WithMergeRequestsEnabled *bool                `json:"with_merge_requests_enabled,omitempty" jsonschema:"Limit to projects with merge requests enabled"`
-	WithSecurityReports      *bool                `json:"with_security_reports,omitempty"      jsonschema:"Limit to projects with security reports (Ultimate)"`
+	WithSecurityReports      *bool                `json:"with_security_reports,omitempty"      tier:"ultimate" jsonschema:"Limit to projects with security reports (Ultimate)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }

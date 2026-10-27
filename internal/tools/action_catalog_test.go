@@ -1128,6 +1128,92 @@ func TestCentralTierFilter_BoardColumnLimitsArePremium(t *testing.T) {
 	}
 }
 
+// tieredInput is one input parameter of an action and the lowest tier whose
+// schema offers it.
+type tieredInput struct {
+	name  string
+	id    actioncatalog.ActionID
+	field string
+	from  edition.Tier
+}
+
+// assertInputsOfferedFrom builds the catalog of each tier and holds every
+// input in cases to the tiers its schema is offered at: absent below from,
+// present from it upwards. A tier whose catalog does not serve the action at
+// all is skipped, since its schema offers nothing. Ultimate serves every
+// action, so a case whose action the Ultimate catalog does not serve names no
+// action at all and fails, which holds each case to at least one schema.
+func assertInputsOfferedFrom(t *testing.T, cases []tieredInput) {
+	t.Helper()
+	tiers := []edition.Tier{edition.Free, edition.Premium, edition.Ultimate}
+	catalogs := make(map[edition.Tier]*actioncatalog.Catalog, len(tiers))
+	for _, tier := range tiers {
+		catalogs[tier] = mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, served := catalogs[edition.Ultimate].Action(tc.id); !served {
+				t.Fatalf("%s is not an action of the Ultimate catalog", tc.id)
+			}
+			for _, tier := range tiers {
+				if _, served := catalogs[tier].Action(tc.id); !served {
+					continue
+				}
+				if got, want := actionHasInputProp(t, catalogs[tier], tc.id, tc.field), tier >= tc.from; got != want {
+					t.Errorf("%s %s input schema offers %q = %t, want %t (offered from %s)", tier, tc.id, tc.field, got, want, tc.from)
+				}
+			}
+		})
+	}
+}
+
+// TestCentralTierFilter_GroupSettingsAndFilters_AreOfferedFromTheTierGitLabHonorsThem
+// holds the group parameters GitLab's API pages mark for a paid tier to the
+// tier GitLab v19.5.0-ee honors them at (issue 1240). Eight of the licensed
+// ones are dropped below their tier, so a schema offering them there invites
+// a call GitLab answers with success and without the setting: on update the
+// file template project, the IP and email domain restrictions and the three
+// merge checks are removed unless the group's license carries them
+// (EE::API::Groups#remove_unlicensed_params), forking protection needs the
+// group_forking_protection feature, and the security reports filter of a
+// group's projects needs the Ultimate security dashboard. The wiki access
+// level and the repository storage filter GitLab stores and applies on every
+// tier, but they only configure or find a group wiki, which exists from
+// Premium (group_wikis), so they follow the Premium gate of the group wiki
+// actions. The rows GitLab honors on every tier stay on the Free schema,
+// which is what tells a tag on the right fields from a tag on the whole input:
+// the membership lock and the compute minute limits, which Enterprise Edition
+// applies without a license check, the deletion date filter, which Community
+// Edition applies, and the Duo settings, which a Free namespace with GitLab
+// Credits uses.
+func TestCentralTierFilter_GroupSettingsAndFilters_AreOfferedFromTheTierGitLabHonorsThem(t *testing.T) {
+	assertInputsOfferedFrom(t, []tieredInput{
+		{name: "create_wiki_access_level", id: "group.create", field: "wiki_access_level", from: edition.Premium},
+		{name: "create_membership_lock", id: "group.create", field: "membership_lock", from: edition.Free},
+		{name: "create_shared_runners_minutes_limit", id: "group.create", field: "shared_runners_minutes_limit", from: edition.Free},
+		{name: "create_extra_shared_runners_minutes_limit", id: "group.create", field: "extra_shared_runners_minutes_limit", from: edition.Free},
+		{name: "update_wiki_access_level", id: "group.update", field: "wiki_access_level", from: edition.Premium},
+		{name: "update_file_template_project_id", id: "group.update", field: "file_template_project_id", from: edition.Premium},
+		{name: "update_ip_restriction_ranges", id: "group.update", field: "ip_restriction_ranges", from: edition.Premium},
+		{name: "update_allowed_email_domains_list", id: "group.update", field: "allowed_email_domains_list", from: edition.Premium},
+		{name: "update_prevent_forking_outside_group", id: "group.update", field: "prevent_forking_outside_group", from: edition.Premium},
+		{name: "update_only_allow_merge_if_pipeline_succeeds", id: "group.update", field: "only_allow_merge_if_pipeline_succeeds", from: edition.Premium},
+		{name: "update_allow_merge_on_skipped_pipeline", id: "group.update", field: "allow_merge_on_skipped_pipeline", from: edition.Premium},
+		{name: "update_only_allow_merge_if_all_discussions_are_resolved", id: "group.update", field: "only_allow_merge_if_all_discussions_are_resolved", from: edition.Premium},
+		{name: "update_membership_lock", id: "group.update", field: "membership_lock", from: edition.Free},
+		{name: "update_shared_runners_minutes_limit", id: "group.update", field: "shared_runners_minutes_limit", from: edition.Free},
+		{name: "update_extra_shared_runners_minutes_limit", id: "group.update", field: "extra_shared_runners_minutes_limit", from: edition.Free},
+		{name: "update_duo_features_enabled", id: "group.update", field: "duo_features_enabled", from: edition.Free},
+		{name: "update_lock_duo_features_enabled", id: "group.update", field: "lock_duo_features_enabled", from: edition.Free},
+		{name: "list_repository_storage", id: "group.list", field: "repository_storage", from: edition.Premium},
+		{name: "list_marked_for_deletion_on", id: "group.list", field: "marked_for_deletion_on", from: edition.Free},
+		{name: "subgroups_repository_storage", id: "group.subgroups", field: "repository_storage", from: edition.Premium},
+		{name: "subgroups_marked_for_deletion_on", id: "group.subgroups", field: "marked_for_deletion_on", from: edition.Free},
+		{name: "projects_with_security_reports", id: "group.projects", field: "with_security_reports", from: edition.Ultimate},
+		{name: "projects_with_issues_enabled", id: "group.projects", field: "with_issues_enabled", from: edition.Free},
+	})
+}
+
 // TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
 // half of the tier filter, across the three tiers built in one process.
 //
