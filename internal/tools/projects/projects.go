@@ -140,9 +140,9 @@ type CreateInput struct {
 
 	// Template provisioning
 	TemplateName                string `json:"template_name,omitempty" jsonschema:"Built-in project template name to use"`
-	TemplateProjectID           int64  `json:"template_project_id,omitempty" jsonschema:"Custom project template ID to use"`
-	UseCustomTemplate           *bool  `json:"use_custom_template,omitempty" jsonschema:"Use a custom group/instance project template"`
-	GroupWithProjectTemplatesID int64  `json:"group_with_project_templates_id,omitempty" jsonschema:"Group ID that provides the custom project templates"`
+	TemplateProjectID           int64  `json:"template_project_id,omitempty" tier:"premium" jsonschema:"Custom project template ID to use"`
+	UseCustomTemplate           *bool  `json:"use_custom_template,omitempty" tier:"premium" jsonschema:"Use a custom group/instance project template"`
+	GroupWithProjectTemplatesID int64  `json:"group_with_project_templates_id,omitempty" tier:"premium" jsonschema:"Group ID that provides the custom project templates"`
 
 	// Merge settings
 	MergeMethod                               string `json:"merge_method,omitempty" jsonschema:"Merge method (merge, rebase_merge, ff)"`
@@ -196,15 +196,15 @@ type CreateInput struct {
 	PublicJobs                      *bool  `json:"public_jobs,omitempty" jsonschema:"Enable public access to pipelines"`
 
 	// Mirroring
-	Mirror              *bool `json:"mirror,omitempty" jsonschema:"Enable pull mirroring from import_url"`
-	MirrorTriggerBuilds *bool `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger pipelines for mirror updates"`
+	Mirror              *bool `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url"`
+	MirrorTriggerBuilds *bool `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates"`
 
 	// Container registry cleanup
 	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
 
 	// Compliance and security
 	EnforceAuthChecksOnUploads               *bool  `json:"enforce_auth_checks_on_uploads,omitempty" jsonschema:"Enforce authorization checks on uploads"`
-	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty" jsonschema:"External authorization classification label"`
+	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty" tier:"premium" jsonschema:"External authorization classification label"`
 
 	// Access control
 	RequestAccessEnabled             *bool  `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
@@ -485,7 +485,7 @@ type ListInput struct {
 	Statistics               *bool  `json:"statistics,omitempty"           jsonschema:"Include project statistics in response"`
 	WithProgrammingLanguage  string `json:"with_programming_language,omitempty" jsonschema:"Filter by programming language name"`
 	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"    jsonschema:"Include projects that are marked/scheduled for deletion. Default false."`
-	IncludeHidden            *bool  `json:"include_hidden,omitempty"            jsonschema:"Include hidden projects in results"`
+	IncludeHidden            *bool  `json:"include_hidden,omitempty"            jsonschema:"Include hidden projects in results (administrators only)"`
 	IDAfter                  int64  `json:"id_after,omitempty"                  jsonschema:"Return projects with ID greater than this value (keyset pagination)"`
 	IDBefore                 int64  `json:"id_before,omitempty"                 jsonschema:"Return projects with ID less than this value (keyset pagination)"`
 
@@ -581,22 +581,22 @@ type UpdateInput struct {
 
 	// Basic metadata (additive 1:1 SDK parity)
 	Path              string   `json:"path,omitempty" jsonschema:"New project path slug"`
-	ImportURL         string   `json:"import_url,omitempty" jsonschema:"URL to import/mirror repository from"`
+	ImportURL         string   `json:"import_url,omitempty" tier:"premium" jsonschema:"URL to import/mirror repository from"`
 	RepositoryStorage string   `json:"repository_storage,omitempty" jsonschema:"Repository storage shard name (admin only)"`
 	TagList           []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics). Pass [] to remove every tag. Omit the field to leave them untouched"`
 
 	// Merge settings (additive)
 	OnlyAllowMergeIfAllStatusChecksPassed *bool   `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Only allow merge when all external status checks pass"`
-	AllowPipelineTriggerApproveDeployment *bool   `json:"allow_pipeline_trigger_approve_deployment,omitempty" jsonschema:"Allow pipeline triggerer to approve deployment"`
-	PreventMergeWithoutJiraIssue          *bool   `json:"prevent_merge_without_jira_issue,omitempty" jsonschema:"Require an associated Jira issue before merge"`
+	AllowPipelineTriggerApproveDeployment *bool   `json:"allow_pipeline_trigger_approve_deployment,omitempty" tier:"premium" jsonschema:"Allow pipeline triggerer to approve deployment"`
+	PreventMergeWithoutJiraIssue          *bool   `json:"prevent_merge_without_jira_issue,omitempty" tier:"ultimate" jsonschema:"Require an associated Jira issue before merge"`
 	MergeRequestDefaultTargetSelf         *bool   `json:"mr_default_target_self,omitempty" jsonschema:"Default merge request target to the project itself (for forks)"`
 	MergeTrainsSkipTrainAllowed           *bool   `json:"merge_trains_skip_train_allowed,omitempty" jsonschema:"Allow skipping the merge train"`
 	MergeTrainEnforcement                 string  `json:"merge_train_enforcement,omitempty" tier:"premium" jsonschema:"Who may merge a merge request around the merge train: allow_bypass, enforce_for_all_users or enforce_with_owner_override. It has no effect unless merge trains are enabled"`
 	PrintingMergeRequestLinkEnabled       *bool   `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Show the create-merge-request link after pushing"`
 	SuggestionCommitMessage               *string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions. Pass an empty string to go back to the default message. Omit the field to leave it untouched"`
 	IssueBranchTemplate                   *string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues. Pass an empty string to go back to the default template. Omit the field to leave it untouched"`
-	IssuesTemplate                        string  `json:"issues_template,omitempty" jsonschema:"Default issue description template"`
-	MergeRequestsTemplate                 string  `json:"merge_requests_template,omitempty" jsonschema:"Default merge request description template"`
+	IssuesTemplate                        string  `json:"issues_template,omitempty" tier:"premium" jsonschema:"Default issue description template"`
+	MergeRequestsTemplate                 string  `json:"merge_requests_template,omitempty" tier:"premium" jsonschema:"Default merge request description template"`
 
 	// Feature toggles (additive)
 	SnippetsEnabled          *bool  `json:"snippets_enabled,omitempty" jsonschema:"Enable snippets feature (deprecated: use snippets_access_level)"`
@@ -613,7 +613,7 @@ type UpdateInput struct {
 	// Auto DevOps (additive)
 	AutoDevopsEnabled        *bool  `json:"auto_devops_enabled,omitempty" jsonschema:"Enable Auto DevOps for the project"`
 	AutoDevopsDeployStrategy string `json:"auto_devops_deploy_strategy,omitempty" jsonschema:"Auto DevOps deploy strategy (continuous, manual, timed_incremental)"`
-	AutoDuoCodeReviewEnabled *bool  `json:"auto_duo_code_review_enabled,omitempty" jsonschema:"Enable automatic GitLab Duo code review"`
+	AutoDuoCodeReviewEnabled *bool  `json:"auto_duo_code_review_enabled,omitempty" jsonschema:"Enable automatic GitLab Duo code review. GitLab keeps it only where Duo code review is available to the project: on Premium or Ultimate with GitLab Duo, or on GitLab.com for a Free group with GitLab Credits. Elsewhere it is dropped"`
 
 	// CI/CD settings (additive)
 	BuildGitStrategy                       string   `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
@@ -627,26 +627,26 @@ type UpdateInput struct {
 	CIPushRepositoryForJobTokenAllowed     *bool    `json:"ci_push_repository_for_job_token_allowed,omitempty" jsonschema:"Allow CI job tokens to push to the repository"`
 	CIIDTokenSubClaimComponents            []string `json:"ci_id_token_sub_claim_components,omitempty" jsonschema:"Components used to build the CI ID token sub claim"`
 	CISeparatedCaches                      *bool    `json:"ci_separated_caches,omitempty" jsonschema:"Use separate caches for protected branches"`
-	CIRestrictPipelineCancellationRole     string   `json:"ci_restrict_pipeline_cancellation_role,omitempty" jsonschema:"Role required to cancel pipelines/jobs (developer, maintainer, no_one)"`
+	CIRestrictPipelineCancellationRole     string   `json:"ci_restrict_pipeline_cancellation_role,omitempty" tier:"premium" jsonschema:"Role required to cancel pipelines/jobs (developer, maintainer, no_one)"`
 	CIPipelineVariablesMinimumOverrideRole string   `json:"ci_pipeline_variables_minimum_override_role,omitempty" jsonschema:"Minimum role allowed to override pipeline variables (developer, maintainer, owner, no_one_allowed)"`
 	RestrictUserDefinedVariables           *bool    `json:"restrict_user_defined_variables,omitempty" jsonschema:"Restrict user-defined pipeline variables (deprecated: use ci_pipeline_variables_minimum_override_role)"`
 	ResourceGroupDefaultProcessMode        string   `json:"resource_group_default_process_mode,omitempty" jsonschema:"Default resource group process mode (unordered, oldest_first, newest_first)"`
 	PublicJobs                             *bool    `json:"public_jobs,omitempty" jsonschema:"Enable public access to pipelines"`
 
 	// Mirroring (additive)
-	Mirror                           *bool  `json:"mirror,omitempty" jsonschema:"Enable pull mirroring from import_url"`
-	MirrorTriggerBuilds              *bool  `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger pipelines for mirror updates"`
-	MirrorBranchRegex                string `json:"mirror_branch_regex,omitempty" jsonschema:"Only mirror branches matching this regex"`
-	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Overwrite diverged branches when mirroring"`
-	MirrorUserID                     *int64 `json:"mirror_user_id,omitempty" jsonschema:"User ID used to run mirror updates (admin only)"`
-	OnlyMirrorProtectedBranches      *bool  `json:"only_mirror_protected_branches,omitempty" jsonschema:"Only mirror protected branches"`
+	Mirror                           *bool  `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url"`
+	MirrorTriggerBuilds              *bool  `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates"`
+	MirrorBranchRegex                string `json:"mirror_branch_regex,omitempty" tier:"premium" jsonschema:"Only mirror branches matching this regex"`
+	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Overwrite diverged branches when mirroring"`
+	MirrorUserID                     *int64 `json:"mirror_user_id,omitempty" tier:"premium" jsonschema:"User ID used to run mirror updates (admin only)"`
+	OnlyMirrorProtectedBranches      *bool  `json:"only_mirror_protected_branches,omitempty" tier:"premium" jsonschema:"Only mirror protected branches"`
 
 	// Container registry cleanup (additive)
 	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
 
 	// Compliance and security (additive)
 	EnforceAuthChecksOnUploads               *bool   `json:"enforce_auth_checks_on_uploads,omitempty" jsonschema:"Enforce authorization checks on uploads"`
-	ExternalAuthorizationClassificationLabel *string `json:"external_authorization_classification_label,omitempty" jsonschema:"External authorization classification label. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	ExternalAuthorizationClassificationLabel *string `json:"external_authorization_classification_label,omitempty" tier:"premium" jsonschema:"External authorization classification label. Pass an empty string to remove it. Omit the field to leave it untouched"`
 
 	// Access control (additive)
 	IssuesAccessLevel                string `json:"issues_access_level,omitempty" jsonschema:"Issues access level (disabled, private, enabled)"`

@@ -103,6 +103,12 @@ const (
 	// reasonMirrorRegexOnEveryTier answers the branch regex of a push mirror
 	// create and update.
 	reasonMirrorRegexOnEveryTier = "Enterprise Edition declares mirror_branch_regex on the push mirror create and update with no license check (EE::API::Helpers::RemoteMirrorsHelpers, ee/lib/ee/api/helpers/remote_mirrors_helpers.rb:11-14 at v19.5.0-ee), lets the services save it (EE::RemoteMirrors::Attributes, ee/app/models/ee/remote_mirrors/attributes.rb:8-24) and pushes only the branches it matches on every tier (EE::RemoteMirror#options_for_update and #branches_to_sync, ee/app/models/ee/remote_mirror.rb:22-35). Community Edition does not declare it (lib/api/helpers/remote_mirrors_helpers.rb:13-14) and drops it, as it drops every Enterprise Edition parameter, which the tier model cannot tell from Free (issue 1240)."
+	// reasonHiddenProjectsOnEveryTier answers the hidden project filter of the
+	// project list.
+	reasonHiddenProjectsOnEveryTier = "Enterprise Edition applies include_hidden for an administrator on every tier, with no license check: the list keeps it only for a caller who can administer all resources (EE::API::Projects#verify_project_filters!, ee/lib/ee/api/projects.rb:116-121 at v19.5.0-ee), hands it to the finder (EE::API::Helpers#project_finder_params_ee, ee/lib/ee/api/helpers.rb:119-127), and EE::ProjectsFinder#by_hidden returns the hidden projects only when it is set (ee/app/finders/ee/projects_finder.rb:49-51). Community Edition does not declare it, as it declares no Enterprise Edition parameter, and its finder hides no project (issue 1240)."
+	// reasonDuoCodeReviewWhereAvailable answers the automatic Duo code review
+	// of a project update.
+	reasonDuoCodeReviewWhereAvailable = "GitLab keeps the setting only where Duo code review is available to the project, which the row's Ultimate does not describe: the update deletes it unless the instance's license carries review_merge_request, a Premium feature (EE::API::Helpers::ProjectsHelpers#filter_attributes_using_license!, ee/lib/ee/api/helpers/projects_helpers.rb:144-149 at v19.5.0-ee, and ee/app/models/gitlab_subscriptions/features.rb:221), and the project has Duo code review, through the Duo Agent Platform's code review flow or a Duo Enterprise add-on (EE::Project#auto_duo_code_review_settings_available? and #duo_code_review_available?, ee/app/models/ee/project.rb:741-743 and 761-777). The platform is open to a Free group with a GitLab Credits add-on (Gitlab::Llm::StageCheck.available?, ee/lib/gitlab/llm/stage_check.rb:19-32), which on GitLab.com, whose license carries every feature, keeps the setting below Premium. A tag would take it from that group, so the description says where it applies (issue 1240)."
 	// reasonOneAssigneeBelowPremium answers the assignees of an issue create.
 	reasonOneAssigneeBelowPremium = "Every tier takes the parameter, and what needs Premium is a second assignee: IssuableBaseService#filter_assignees_using_checks keeps only the first ID unless the issue allows multiple assignees (app/services/issuable_base_service.rb:117-122 at v19.5.0-ee), which Community Edition never does (Issuable#allows_multiple_assignees?, app/models/concerns/issuable.rb:189-191) and Enterprise Edition does where multiple_issue_assignees is licensed (EE::Issue#allows_multiple_assignees?, ee/app/models/ee/issue.rb:195-197), a feature of the starter list every Premium license carries (ee/app/models/gitlab_subscriptions/features.rb:67 and 363). On GitLab.com, whose license carries every feature, the namespace's plan decides (EE::Project#load_licensed_feature_available, ee/app/models/ee/project.rb:1876-1886), so a Free namespace keeps the first as an unlicensed instance does, and the description says both (issue 1240)."
 )
@@ -155,6 +161,9 @@ var declaredParamAnswers = map[string]paramDeclaration{
 
 	"project.mirror_add mirror_branch_regex":  {Documented: tierPremium, Category: categoryNotGated, Reason: reasonMirrorRegexOnEveryTier},
 	"project.mirror_edit mirror_branch_regex": {Documented: tierPremium, Category: categoryNotGated, Reason: reasonMirrorRegexOnEveryTier},
+
+	"project.list include_hidden":                 {Documented: tierPremium, Category: categoryNotGated, Reason: reasonHiddenProjectsOnEveryTier},
+	"project.update auto_duo_code_review_enabled": {Documented: tierUltimate, Category: categoryValueLevelGate, Reason: reasonDuoCodeReviewWhereAvailable},
 }
 
 // answeredParamFinding is a finding a declaration answers, with the answer.

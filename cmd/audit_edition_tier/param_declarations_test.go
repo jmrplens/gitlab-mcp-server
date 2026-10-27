@@ -643,6 +643,33 @@ const (
 	routeRemoteMirrorUpdate    = "PUT /projects/:id/remote_mirrors/:mirror_id"
 )
 
+// The rows of doc/api/projects.md that issue 1240 lists, as GitLab's page
+// carries them on master on 2026-10-27, and the routes they document. The
+// create, the create for a user and the update write the rows they share the
+// same way.
+const (
+	rowProjectIncludeHidden           = "| `include_hidden` | boolean | No | Include hidden projects. _(administrators only)_ Premium and Ultimate only. |"
+	rowProjectClassificationLabel     = "| `external_authorization_classification_label` | string | No | The classification label for the project. Premium and Ultimate only. |"
+	rowProjectGroupWithTemplates      = "| `group_with_project_templates_id` | integer | No | For group-level custom templates, specifies ID of group from which all the custom project templates are sourced. Leave empty for instance-level templates. Requires `use_custom_template` to be true. Premium and Ultimate only. |"
+	rowProjectMirrorTriggerBuilds     = "| `mirror_trigger_builds` | boolean | No | Pull mirroring triggers builds. Premium and Ultimate only. |"
+	rowProjectMirror                  = "| `mirror` | boolean | No | Enables pull mirroring in a project. Premium and Ultimate only. |"
+	rowProjectTemplateProjectID       = "| `template_project_id` | integer | No | When used with `use_custom_template`, project ID of a custom project template. Using a project ID is preferable to using `template_name` because `template_name` can be ambiguous. Premium and Ultimate only. |"
+	rowProjectUseCustomTemplate       = "| `use_custom_template` | boolean | No | Use either custom [instance](../administration/project_templates.md) or [group](../user/group/custom_project_templates.md) (with `group_with_project_templates_id`) project template. Premium and Ultimate only. |"
+	rowProjectTriggerApprovesDeploy   = "| `allow_pipeline_trigger_approve_deployment` | boolean | No | Set whether or not a pipeline triggerer is allowed to approve deployments. Premium and Ultimate only. |"
+	rowProjectAutoDuoCodeReview       = "| `auto_duo_code_review_enabled` | boolean | No | Enable automatic reviews by GitLab Duo on merge requests. See [GitLab Duo in merge requests](../user/project/merge_requests/duo_in_merge_requests.md#use-gitlab-duo-to-review-your-code). Ultimate only. |"
+	rowProjectCancellationRole        = "| `ci_restrict_pipeline_cancellation_role` | string | No | Set the [role required to cancel a pipeline or job](../ci/pipelines/settings.md#restrict-roles-that-can-cancel-pipelines-or-jobs). One of `developer`, `maintainer`, or `no_one`. Premium and Ultimate only. |"
+	rowProjectIssuesTemplate          = "| `issues_template` | string | No | Default description for new issues. Formatted as GitLab Flavored Markdown. Premium and Ultimate only. |"
+	rowProjectMergeRequestsTemplate   = "| `merge_requests_template` | string | No | Default description for new merge requests. Formatted as GitLab Flavored Markdown. Premium and Ultimate only. |"
+	rowProjectMirrorOverwrites        = "| `mirror_overwrites_diverged_branches` | boolean | No | Pull mirror overwrites diverged branches. Premium and Ultimate only. |"
+	rowProjectMirrorUserID            = "| `mirror_user_id` | integer | No | User responsible for all the activity surrounding a pull mirror event. _(administrators only)_ Premium and Ultimate only. |"
+	rowProjectOnlyMirrorProtected     = "| `only_mirror_protected_branches` | boolean | No | Only mirror protected branches. Premium and Ultimate only. |"
+	rowProjectPreventMergeWithoutJira = "| `prevent_merge_without_jira_issue` | boolean | No | Set whether merge requests require an associated issue from Jira. Ultimate only. |"
+	routeProjectsList                 = "GET /projects"
+	routeProjectCreate                = "POST /projects"
+	routeProjectCreateForUser         = "POST /projects/user/:user_id"
+	routeProjectUpdate                = "PUT /projects/:id"
+)
+
 // TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles drives the entry
 // point over a module root whose record names the actions of one page and
 // whose cache holds that page's sections, for each page whose rows issue 1240
@@ -805,6 +832,32 @@ func TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles(t *testing.T) {
 			want: map[string]string{
 				"project.mirror_add mirror_branch_regex":  categoryNotGated,
 				"project.mirror_edit mirror_branch_regex": categoryNotGated,
+			},
+		},
+		{
+			name:   "projects",
+			area:   "projects",
+			domain: "projects",
+			page: endpointSection("List all projects", routeProjectsList, rowProjectIncludeHidden) +
+				endpointSection("Create a project", routeProjectCreate,
+					rowProjectClassificationLabel, rowProjectGroupWithTemplates, rowProjectMirrorTriggerBuilds, rowProjectMirror,
+					rowProjectTemplateProjectID, rowProjectUseCustomTemplate) +
+				endpointSection("Create a project for a user", routeProjectCreateForUser,
+					rowProjectClassificationLabel, rowProjectGroupWithTemplates, rowProjectMirrorTriggerBuilds, rowProjectMirror,
+					rowProjectUseCustomTemplate) +
+				endpointSection("Update a project", routeProjectUpdate,
+					rowProjectTriggerApprovesDeploy, rowProjectAutoDuoCodeReview, rowProjectCancellationRole, rowProjectClassificationLabel,
+					rowProjectIssuesTemplate, rowProjectMergeRequestsTemplate, rowProjectMirrorOverwrites, rowProjectMirrorTriggerBuilds,
+					rowProjectMirrorUserID, rowProjectMirror, rowProjectOnlyMirrorProtected, rowProjectPreventMergeWithoutJira),
+			record: []actionrequests.RecordAction{
+				restRecord("project.list", routeProjectsList),
+				restRecord("project.create", routeProjectCreate),
+				restRecord("project.create_for_user", routeProjectCreateForUser),
+				restRecord("project.update", routeProjectUpdate),
+			},
+			want: map[string]string{
+				"project.list include_hidden":                 categoryNotGated,
+				"project.update auto_duo_code_review_enabled": categoryValueLevelGate,
 			},
 		},
 	}

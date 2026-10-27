@@ -1303,6 +1303,65 @@ func TestCentralTierFilter_EpicNotification_IsOfferedWhereGitLabTakesIt(t *testi
 	})
 }
 
+// TestCentralTierFilter_ProjectSettings_AreOfferedFromTheTierGitLabHonorsThem
+// holds the project parameters GitLab's API pages mark for a paid tier to the
+// tier GitLab v19.5.0-ee honors them at (issue 1240). Each tagged one is
+// dropped or refused below its tier: the classification label, the
+// deployment approval by a pipeline trigger, the Jira issue requirement and
+// the pipeline cancellation role are deleted unless the instance's license
+// carries their feature (EE::API::Helpers::ProjectsHelpers#filter_attributes_using_license!);
+// a custom template needs the instance's custom_project_templates, without
+// which a template_project_id is refused; the issue and merge request
+// description templates are deleted unless the project carries
+// issuable_default_templates; and every pull mirror setting needs
+// admin_mirror, which needs the repository_mirrors feature: a create applies
+// mirror and mirror_trigger_builds only for a caller who has it
+// (EE::Projects::CreateService#setup_pull_mirroring), and an update deletes
+// every pull mirror attribute, the mirror's URL included, from a caller who
+// has not (verify_mirror_attrs!). repository_mirrors is also a registration
+// feature, which a Free self-managed Enterprise Edition instance has with
+// Service Ping and registration features turned on
+// (License.feature_available?), and the mirror settings take its license
+// tier all the same, as the pull mirror actions beside them, the group wiki
+// and the group webhooks already do. The built-in template name, the hidden
+// project filter, which an administrator uses on every tier, and the
+// automatic Duo code review stay on Free: the last follows the group Duo
+// settings, which stay on every tier with a description, since a Free group
+// with GitLab Credits keeps them on GitLab.com.
+func TestCentralTierFilter_ProjectSettings_AreOfferedFromTheTierGitLabHonorsThem(t *testing.T) {
+	cases := []tieredInput{
+		{name: "list_include_hidden", id: "project.list", field: "include_hidden", from: edition.Free},
+		{name: "update_allow_pipeline_trigger_approve_deployment", id: "project.update", field: "allow_pipeline_trigger_approve_deployment", from: edition.Premium},
+		{name: "update_ci_restrict_pipeline_cancellation_role", id: "project.update", field: "ci_restrict_pipeline_cancellation_role", from: edition.Premium},
+		{name: "update_external_authorization_classification_label", id: "project.update", field: "external_authorization_classification_label", from: edition.Premium},
+		{name: "update_issues_template", id: "project.update", field: "issues_template", from: edition.Premium},
+		{name: "update_merge_requests_template", id: "project.update", field: "merge_requests_template", from: edition.Premium},
+		{name: "update_import_url", id: "project.update", field: "import_url", from: edition.Premium},
+		{name: "update_mirror", id: "project.update", field: "mirror", from: edition.Premium},
+		{name: "update_mirror_trigger_builds", id: "project.update", field: "mirror_trigger_builds", from: edition.Premium},
+		{name: "update_mirror_branch_regex", id: "project.update", field: "mirror_branch_regex", from: edition.Premium},
+		{name: "update_mirror_overwrites_diverged_branches", id: "project.update", field: "mirror_overwrites_diverged_branches", from: edition.Premium},
+		{name: "update_mirror_user_id", id: "project.update", field: "mirror_user_id", from: edition.Premium},
+		{name: "update_only_mirror_protected_branches", id: "project.update", field: "only_mirror_protected_branches", from: edition.Premium},
+		{name: "update_prevent_merge_without_jira_issue", id: "project.update", field: "prevent_merge_without_jira_issue", from: edition.Ultimate},
+		{name: "update_auto_duo_code_review_enabled", id: "project.update", field: "auto_duo_code_review_enabled", from: edition.Free},
+	}
+	// project.create_for_user embeds the create input, so both creates are
+	// held to the same tiers.
+	for _, id := range []actioncatalog.ActionID{"project.create", "project.create_for_user"} {
+		cases = append(cases,
+			tieredInput{name: string(id) + "_external_authorization_classification_label", id: id, field: "external_authorization_classification_label", from: edition.Premium},
+			tieredInput{name: string(id) + "_use_custom_template", id: id, field: "use_custom_template", from: edition.Premium},
+			tieredInput{name: string(id) + "_template_project_id", id: id, field: "template_project_id", from: edition.Premium},
+			tieredInput{name: string(id) + "_group_with_project_templates_id", id: id, field: "group_with_project_templates_id", from: edition.Premium},
+			tieredInput{name: string(id) + "_mirror", id: id, field: "mirror", from: edition.Premium},
+			tieredInput{name: string(id) + "_mirror_trigger_builds", id: id, field: "mirror_trigger_builds", from: edition.Premium},
+			tieredInput{name: string(id) + "_template_name", id: id, field: "template_name", from: edition.Free},
+		)
+	}
+	assertInputsOfferedFrom(t, cases)
+}
+
 // TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
 // half of the tier filter, across the three tiers built in one process.
 //
