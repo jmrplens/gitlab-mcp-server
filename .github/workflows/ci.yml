@@ -334,6 +334,8 @@ jobs:
         run: make check-md-escaping
       - name: Check every published action ID names an action
         run: make check-action-ids
+      - name: Check person-facing texts come from the message catalog
+        run: make check-i18n
       - name: Check gateway-safe served characters
         run: make check-gateway-chars
       - name: Check MCP tool surface quality

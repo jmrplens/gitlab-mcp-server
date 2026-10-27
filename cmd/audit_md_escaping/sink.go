@@ -28,11 +28,18 @@ type sink struct {
 // A card-shaped line carries no value of its own: its expr is the constant
 // that holds the line, for the position, and text is the line itself, which
 // is what the finding names.
+//
+// A placeholder of a catalog render may be filled by something the call does
+// not show the value of: an argument the call does not name it by, or a
+// message nested in it that the call does not build inline. Its expr is that
+// argument or message, and unbound says why the value that lands there cannot
+// be read from the call; it is empty for every other hole.
 type sinkHole struct {
-	expr ast.Expr
-	ctx  mdContext
-	verb string
-	text string
+	expr    ast.Expr
+	ctx     mdContext
+	verb    string
+	text    string
+	unbound string
 }
 
 // escapable reports whether the escaping verdict applies to this hole. A
@@ -156,6 +163,8 @@ func (f sinkFile) sinkOf(call *ast.CallExpr) (sink, bool) {
 			return f.cardCallSink(call, callee)
 		}
 		return f.cellSink(call, callee.Name())
+	case i18nPath:
+		return f.catalogSink(call, callee)
 	default:
 		if builderWriters[callee.Name()] && builderPackages[callee.Pkg().Path()] {
 			return f.constantSink(call, callee.Name(), call.Args)
@@ -204,7 +213,7 @@ func (f sinkFile) formatSink(call *ast.CallExpr, name string) (sink, bool) {
 			verb: "%" + string(h.verb),
 		})
 	}
-	s.holes = append(s.holes, f.cardHoles(call.Args[index], template)...)
+	s.holes = append(s.holes, f.cardHoles(call.Args[index], cardRows(template))...)
 	return s, len(s.holes) > 0
 }
 
@@ -219,19 +228,19 @@ func (f sinkFile) constantSink(call *ast.CallExpr, name string, args []ast.Expr)
 		if tv.Value == nil {
 			continue
 		}
-		s.holes = append(s.holes, f.cardHoles(arg, constantText(tv))...)
+		s.holes = append(s.holes, f.cardHoles(arg, cardRows(constantText(tv)))...)
 	}
 	return s, len(s.holes) > 0
 }
 
 // cardHoles turns the card-shaped lines of one constant into holes, when the
 // card rule reads this file.
-func (f sinkFile) cardHoles(holder ast.Expr, text string) []sinkHole {
+func (f sinkFile) cardHoles(holder ast.Expr, rows []cardRow) []sinkHole {
 	if !f.cards {
 		return nil
 	}
 	var holes []sinkHole
-	for _, row := range cardRows(text) {
+	for _, row := range rows {
 		holes = append(holes, sinkHole{expr: holder, ctx: ctxCard, verb: row.verb, text: row.text})
 	}
 	return holes

@@ -6,13 +6,14 @@
 // they end on, the declaration table they are held to, and the name a finding
 // gives the function it sits in.
 //
-// Four gates are built on it, each asking its own question of the program
+// Five gates are built on it, each asking its own question of the program
 // cmd/internal/goprogram loads. cmd/audit_test_closed_servers holds every
 // httptest server to being closed only once its address is no longer used,
 // cmd/audit_sdk_context holds every call into client-go to the caller's
 // context, cmd/audit_dead_consts holds every unexported constant to something
-// that reads it, and cmd/audit_tenancy holds the tenant policy register to the
-// code that enforces it. What each keeps is what makes it that gate: its load
+// that reads it, cmd/audit_tenancy holds the tenant policy register to the
+// code that enforces it, and cmd/audit_i18n holds every text shown to a
+// person directly to the message catalog. What each keeps is what makes it that gate: its load
 // options, its scanner, its findings and their order, the words of its report
 // and its summary, its declarations and their categories, and its binary.
 //
@@ -54,7 +55,9 @@
 // two ways the table itself fails, an entry that excused nothing in a package
 // the run scanned and an entry whose category nobody defined.
 // cmd/audit_test_closed_servers and cmd/audit_sdk_context are held to one this
-// way. cmd/audit_dead_consts keys its table by constant rather than by
+// way, and so is cmd/audit_i18n, which hands it only the findings a
+// declaration may answer and reports the rest as they stand.
+// cmd/audit_dead_consts keys its table by constant rather than by
 // function and passes over a key that names no package, and cmd/audit_tenancy
 // holds its exemptions to rules of its own, so both keep theirs.
 //
@@ -62,7 +65,7 @@
 //
 // [FuncDeclName] spells a declaration the way its file does, `Type.Method`
 // with the receiver's pointer and type parameters taken off, which is the
-// function half of a declaration key and of what a finding prints. All four
+// function half of a declaration key and of what a finding prints. All five
 // gates name functions by it: cmd/audit_dead_consts adds the constant's name
 // after it, and cmd/audit_tenancy keys by it the functions its register names
 // as sites. [IdentsAsExprs] is the one-line widening two of their walks need to

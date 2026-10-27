@@ -61,7 +61,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 788 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 488 test files under `internal/tools/`                                                                       |
-| Go packages               | 312 in the module (`go list ./...`); 339 directories hold tracked `.go` files, the twenty-seven more being what `go list` leaves out: twenty-six `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
+| Go packages               | 313 in the module (`go list ./...`); 349 directories hold tracked `.go` files, the thirty-six more being what `go list` leaves out: thirty-five `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
 
 ### Orbit live tests
 
@@ -96,6 +96,7 @@ gitlab-mcp-server/
 │   ├── audit_file_headers/           # Every source file opens with the copyright and license header (make check-file-headers, fix-file-headers)
 │   ├── godoc_tool/                   # Go doc auditor and fixer (make check-godocs)
 │   ├── audit_md_escaping/            # GitLab-authored values reaching Markdown unescaped (make check-md-escaping)
+│   ├── audit_i18n/                   # Person-facing texts rendered from the message catalog, every entry used (make check-i18n)
 │   ├── audit_metrics/                # Tool, resource and prompt metrics
 │   ├── audit_meta_descriptions/      # Meta-tool prose against the parameters its actions accept (make check-meta-descriptions)
 │   ├── audit_readonly_graphql/       # ReadOnly actions that can reach a GraphQL mutation (make check-readonly-graphql)

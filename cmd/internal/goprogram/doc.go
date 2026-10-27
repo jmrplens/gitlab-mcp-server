@@ -4,8 +4,9 @@
 // Package goprogram is the one go/packages front end for the gates that
 // type-check this repository's own source.
 //
-// Eleven packages load through it. cmd/audit_md_escaping walks the calls that
-// interpolate a GitLab-authored value into Markdown,
+// Twelve packages load through it. cmd/audit_md_escaping walks the calls that
+// interpolate a GitLab-authored value into Markdown, cmd/audit_i18n holds
+// every text shown to a person directly to the message catalog,
 // cmd/internal/actionrequests walks the calls an action can reach, for
 // cmd/audit_readonly_graphql and for the request derivation,
 // cmd/internal/graphqldocs folds every raw GraphQL document to the one string

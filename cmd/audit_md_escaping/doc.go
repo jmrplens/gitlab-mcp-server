@@ -45,7 +45,9 @@
 // of the two toolutil.Card writes whose value the caller renders,
 // Card.Markdown and CardTable.Row: every other Card method escapes what it is
 // given, so a raw value passed to it reaches no construct, while those two
-// write the value as given and the hole is the call site. The template is
+// write the value as given and the hole is the call site. A render of the
+// message catalog, i18n.T or i18n.New, is a sink too, read as described under
+// the catalog below. The template is
 // parsed with fmt's own grammar, flags, explicit argument indices, '*' widths
 // and '%%' included, so a verb is never paired with the wrong expression: one
 // formatter in this repository writes "[%[1]s](%[1]s)", which a regular
@@ -153,6 +155,63 @@
 // that value is; what can excuse one is a claim about the function rather than
 // about the value, and is declared as the function-scoped directive below.
 //
+// # Texts rendered from the message catalog
+//
+// The texts a person reads directly, the questions and summaries of an
+// elicitation and the progress messages, are to be rendered from
+// internal/i18n rather than written with fmt once issue 1547 moves them into
+// the catalog, and a summary will still carry values GitLab sent. So a call
+// of i18n.T(ctx, key, args...) or i18n.New(key, args...) is a sink whose
+// template is the English one of its key, i18n.EnglishTemplate, the text
+// every translation is held to. The key has to be a constant, as an fmt
+// template does, and is resolved through the type checker; a render whose key
+// is not one is a finding of its own, "catalog-key", in every run whatever
+// contexts it judges, since with no template none of its placeholders can be
+// placed and no selection could say the render reaches none of them. So is a
+// key that arrives in the results of one call that fills the context before
+// it too, i18n.T(pair(ctx)), which Go accepts for a variadic parameter.
+//
+// Each {name} placeholder is a hole, at the offset it sits at, judged by the
+// line it sits on and the fence state the template opens, exactly as a verb
+// of an fmt template is. It is filled by the argument the call names it by,
+// and when two arguments name one placeholder the first fills it, as in the
+// render's own replacer. An i18n.S value is the expression judged, and i18n.N
+// renders an integer in decimal, which no construct can be changed by, so it
+// is no hole. i18n.M and i18n.L fill the placeholder with messages, and a
+// message lands whole where the placeholder sits, the values of its own S
+// arguments with it, whatever construct its own template wraps them in. So
+// every value an S of a nested message carries is judged in the outer
+// placeholder's construct, through any depth of M, L and i18n.Concat, the way
+// a value of a nested Sprintf is judged where the Sprintf lands; the nested
+// render is also a sink of its own, read from its own template. A nested
+// message that carries no S value is no hole. A message the call does not
+// build inline out of arguments it names (one held in a variable or returned
+// by a function, a list of messages spread into the call, a New whose key and
+// arguments arrive in the results of one call) stands in the hole unresolved,
+// and so does an argument of a nested New the call cannot bind.
+//
+// A placeholder no argument names is filled, if at all, by an argument the
+// call does not name a placeholder by: a value built elsewhere and handed
+// over, an S whose name is not a constant, a list spread into the call. The
+// first such argument stands in its hole, and the hole is unresolved, because
+// which value lands there cannot be read from the call. cmd/audit_i18n
+// refuses those arguments outright, at the top of a render and in a nested
+// one alike, while a message M or L takes from a variable is one it accepts,
+// since a Message is only ever made by the catalog.
+//
+// The card rule reads the template's lines with every placeholder taken as
+// the %s an fmt template would hold in its place, so a row written through
+// the catalog is a row ("**Title**: {title}") and a bold placeholder
+// ("- **{author}**") is a value in emphasis, and a //gitlab:allow-card
+// directive on the function holding the call answers the rows it renders.
+// The finding names the row as the catalog spells it.
+//
+// The catalog package's own calls are not renders: i18n.T builds its message
+// with New from the key it was handed, which is no constant. The template is
+// read from the catalog compiled into this binary, which is the one the
+// server ships; the package's tests hand the audit templates of their own,
+// against fixture packages under testdata that render keys no catalog holds.
+//
 // # The second verdict: flags and instants
 //
 // The "bool-time" rule asks a different question of the same holes: not where
@@ -210,7 +269,9 @@
 // A format string assembled at runtime carries no template to parse, so a
 // formatter that builds one is invisible. A value reaching a cell through a
 // function value, through a call with several results, or out of a struct
-// built positionally is reported unresolved rather than judged. Whether a
+// built positionally is reported unresolved rather than judged, and so is a
+// catalog message a render nests from a variable, a function's result or a
+// spread list, whose own arguments the walk does not follow. Whether a
 // struct is GitLab-derived at all is assumed rather than proven, which is what
 // the directive is for.
 //

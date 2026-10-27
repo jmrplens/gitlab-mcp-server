@@ -19,6 +19,7 @@
 	audit-md-escaping check-md-escaping \
 	check-em-dash check-pr-description check-plan-untracked check-dco check-file-headers fix-file-headers \
 	audit-action-ids check-action-ids \
+	audit-i18n check-i18n \
 	audit-dead-consts check-dead-consts \
 	audit-sdk-context check-sdk-context \
 	audit-closed-servers check-closed-servers \
@@ -1159,38 +1160,39 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/32] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/32] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/32] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/32] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/32] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/32] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
-	run_check "[7/32] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/32] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/32] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/32] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/32] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/32] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/32] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/32] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/32] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/32] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/32] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
-	run_check "[18/32] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/32] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/32] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/32] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/32] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/32] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/32] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/32] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
-	run_check "[26/32] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
-	run_check "[27/32] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
-	run_check "[28/32] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/32] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
-	run_check "[30/32] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
-	run_check "[31/32] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
-	run_check "[32/32] copyright and license headers" go run ./cmd/audit_file_headers/; \
+	run_check "[1/33] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/33] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/33] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/33] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/33] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/33] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
+	run_check "[7/33] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/33] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/33] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/33] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/33] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/33] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/33] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/33] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/33] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/33] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/33] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
+	run_check "[18/33] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/33] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/33] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/33] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/33] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/33] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/33] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/33] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/33] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/33] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
+	run_check "[28/33] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
+	run_check "[29/33] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[30/33] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
+	run_check "[31/33] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
+	run_check "[32/33] copyright and license headers" go run ./cmd/audit_file_headers/; \
+	run_check "[33/33] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -2229,6 +2231,25 @@ audit-action-ids:
 ## describes no call. CI gate.
 check-action-ids:
 	go run ./cmd/audit_action_ids/ -check -json ''
+
+## audit-i18n: report every text shown to a person directly that bypasses the
+## message catalog (internal/i18n, issue 1547): a render of i18n.T or i18n.New
+## that does not fill exactly the placeholders of its English template through
+## inline i18n.S, N, M or L calls with a literal name (I1), a key that is not a
+## key constant of the catalog or a conversion to its Key type (I2), an English
+## entry nothing outside the catalog files references or a key constant with
+## no English template (I3), i18n.Verbatim outside a test file (I4), and an
+## i18n.Text or i18n.Message literal outside the catalog or an i18n.Concat of
+## nothing (I5). internal/ and cmd/ are read
+## without test files. -v also lists the conversions declarations.go excuses.
+audit-i18n:
+	go run ./cmd/audit_i18n/ -v
+
+## check-i18n: the same rules as a gate, which also fails on a declaration
+## that excuses nothing or names an undefined category, and on a file a build
+## constraint hid that imports the catalog. CI gate.
+check-i18n:
+	go run ./cmd/audit_i18n/ -check
 
 ## audit-dead-consts: report every unexported constant in internal/ and cmd/
 ## that nothing reads. staticcheck's unused judges a const group as one unit,

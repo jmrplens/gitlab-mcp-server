@@ -4,6 +4,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -317,6 +318,37 @@ func TestCardRows_Lines_ReadsTheFourShapesAndNothingElse(t *testing.T) {
 				t.Errorf("cardRows(%q) = %v, want one %s", tc.text, rows, tc.want)
 			}
 		})
+	}
+}
+
+// TestCardRowsRead_CatalogLines_MatchesTheRenderingAndNamesTheLine holds the
+// two halves of reading a line through a rendering: the shape is decided by
+// the line as the rendering writes it, so a placeholder reads as a verb, and
+// the row is named by the line as the text wrote it, indentation removed.
+func TestCardRowsRead_CatalogLines_MatchesTheRenderingAndNamesTheLine(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want []cardRow
+	}{
+		{name: "a bare row", text: "Create it?\n\n**Title**: {title}", want: []cardRow{{text: "**Title**: {title}", verb: "row"}}},
+		{name: "an indented list row", text: "  - **State**: {state}", want: []cardRow{{text: "- **State**: {state}", verb: "row"}}},
+		{name: "a two-cell row", text: "| Name | {name} |", want: []cardRow{{text: "| Name | {name} |", verb: "row"}}},
+		{name: "an emoji placeholder before the label", text: "- {icon} **State**: {state}", want: []cardRow{{text: "- {icon} **State**: {state}", verb: "row"}}},
+		{name: "a field header", text: "| Field | Value |", want: []cardRow{{text: "| Field | Value |", verb: "header"}}},
+		{name: "a placeholder in emphasis", text: "- **{author}**"},
+		{name: "a bare placeholder in emphasis", text: "**{name}**: {value}"},
+		{name: "a two-cell row of values", text: "| {a} | {b} |"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cardRowsRead(tc.text, asFormat); !slices.Equal(got, tc.want) {
+				t.Errorf("cardRowsRead(%q) = %v, want %v", tc.text, got, tc.want)
+			}
+		})
+	}
+	if got := cardRows("- **{author}**"); len(got) != 1 {
+		t.Errorf("cardRows reads a brace as text, so a bold placeholder is a row there; got %v", got)
 	}
 }
 

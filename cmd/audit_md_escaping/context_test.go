@@ -76,6 +76,7 @@ func TestMdContext_Values_NameTheHelperTheyNeed(t *testing.T) {
 		{name: "fence", ctx: ctxFence, label: "fence", wants: "toolutil.MarkdownFencedBlock", structural: true},
 		{name: "card", ctx: ctxCard, label: "card", wants: "toolutil.Card", structural: true},
 		{name: "bool or time", ctx: ctxRaw, label: "bool-time", wants: "toolutil.BoolEmoji or Card.Bool for a flag, toolutil.FormatTime or Card.Time for a timestamp", structural: true},
+		{name: "catalog key", ctx: ctxCatalogKey, label: "catalog-key", wants: "a key constant declared in internal/i18n", structural: true},
 		{name: "prose", ctx: ctxProse, label: "prose", wants: "", structural: false},
 		{name: "a value that names nothing", ctx: mdContext(99), label: "prose", wants: "", structural: true},
 	}

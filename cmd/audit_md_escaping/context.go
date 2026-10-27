@@ -48,6 +48,11 @@ const (
 	// has a display helper, and a formatter that bypasses it renders the same
 	// fact three different ways across the tree.
 	ctxRaw
+	// ctxCatalogKey is a render of the message catalog whose key is not a
+	// constant. It is not a place a value lands either: with no key there is
+	// no template to read, so no placeholder of the text it renders can be
+	// placed in a construct, and the call is reported as it stands.
+	ctxCatalogKey
 )
 
 // structuralContexts are the contexts a value can change the shape of, in the
@@ -67,15 +72,16 @@ var stagedContexts = []mdContext{ctxCard, ctxRaw}
 
 // contextLabels name each context for the command line and for a report.
 var contextLabels = map[mdContext]string{
-	ctxProse:     "prose",
-	ctxCell:      "table-cell",
-	ctxHeading:   "heading",
-	ctxListItem:  "list-item",
-	ctxLinkLabel: "link-label",
-	ctxLinkDest:  "link-destination",
-	ctxFence:     "fence",
-	ctxCard:      "card",
-	ctxRaw:       "bool-time",
+	ctxProse:      "prose",
+	ctxCell:       "table-cell",
+	ctxHeading:    "heading",
+	ctxListItem:   "list-item",
+	ctxLinkLabel:  "link-label",
+	ctxLinkDest:   "link-destination",
+	ctxFence:      "fence",
+	ctxCard:       "card",
+	ctxRaw:        "bool-time",
+	ctxCatalogKey: "catalog-key",
 }
 
 // String names the context for a report.
@@ -102,6 +108,8 @@ func (c mdContext) wants() string {
 		return "toolutil.Card"
 	case ctxRaw:
 		return "toolutil.BoolEmoji or Card.Bool for a flag, toolutil.FormatTime or Card.Time for a timestamp"
+	case ctxCatalogKey:
+		return "a key constant declared in internal/i18n"
 	default:
 		return ""
 	}

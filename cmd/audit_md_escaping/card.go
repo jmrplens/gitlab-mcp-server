@@ -45,15 +45,32 @@ var (
 	cardHeader = regexp.MustCompile(`^\|\s*(?:Field|Property|Setting|Attribute)\s*\|\s*Value\s*\|\s*$`)
 )
 
-// cardRows reads the card-shaped lines out of one piece of constant text.
+// cardRows reads the card-shaped lines out of one piece of constant text,
+// each line matched as it is written, which is how an fmt template and a
+// builder's own write are read.
 func cardRows(text string) []cardRow {
+	return cardRowsRead(text, func(line string) string { return line })
+}
+
+// cardRowsRead reads the card-shaped lines out of one piece of constant text,
+// matching each line as read renders it and naming the row by the line as the
+// text wrote it.
+//
+// It is how a template of the message catalog is read by the same rules as a
+// template of fmt: read writes each {name} placeholder as the %s an fmt
+// template would hold in its place, so "**Title**: {title}" is matched as
+// "**Title**: %s" is, and a bold placeholder, "- **{author}**", is a value in
+// emphasis as "- **%s**" is, while the finding still names the row the way
+// the catalog spells it.
+func cardRowsRead(text string, read func(line string) string) []cardRow {
 	var rows []cardRow
 	for line := range strings.SplitSeq(text, "\n") {
 		line = strings.TrimLeft(line, " \t")
+		shape := read(line)
 		switch {
-		case cardHeader.MatchString(line):
+		case cardHeader.MatchString(shape):
 			rows = append(rows, cardRow{text: line, verb: "header"})
-		case cardListRow.MatchString(line), cardBareRow.MatchString(line), cardPairRow.MatchString(line):
+		case cardListRow.MatchString(shape), cardBareRow.MatchString(shape), cardPairRow.MatchString(shape):
 			rows = append(rows, cardRow{text: line, verb: "row"})
 		}
 	}

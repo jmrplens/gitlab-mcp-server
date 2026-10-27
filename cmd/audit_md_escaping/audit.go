@@ -95,8 +95,18 @@ type auditPass struct {
 // verdict, on what the value is. The last two are asked of the same hole
 // independently, so a timestamp excused for escaping is still reported for
 // display, and each is excused by its own directive.
+//
+// A catalog render whose key is not a constant is a finding whatever the run
+// judges: with no template, none of its placeholders can be placed, so no
+// selection of contexts could say the render reaches none of them.
 func (r *auditPass) auditSink(s sink) {
 	for _, h := range s.holes {
+		if h.ctx == ctxCatalogKey {
+			r.report.Summary.Holes++
+			r.report.Findings = append(r.report.Findings, newFinding(r.prog, s, h,
+				"the key is not a constant, so the template the values land in cannot be read", r.root))
+			continue
+		}
 		judged := false
 		if h.ctx == ctxCard && r.sel.judges(ctxCard) {
 			judged = true
@@ -118,7 +128,7 @@ func (r *auditPass) auditSink(s sink) {
 
 // auditEscaping applies the escaping verdict to one hole.
 func (r *auditPass) auditEscaping(s sink, h sinkHole) {
-	got, why := r.classifier.classifyExpr(s.pkg, h.expr, nil, 0)
+	got, why := r.verdictOf(s, h)
 	if got == safe {
 		r.report.Summary.Safe++
 		return
@@ -132,6 +142,21 @@ func (r *auditPass) auditEscaping(s sink, h sinkHole) {
 		return
 	}
 	r.report.Unresolved = append(r.report.Unresolved, finding)
+}
+
+// verdictOf classifies the value one hole carries.
+//
+// A placeholder of a catalog render the call does not show the value of is
+// the exception, unresolved for the reason the hole carries: the expression
+// standing in it is an argument the call does not name a placeholder by, so
+// following it would answer a question about some other placeholder, or a
+// message whose arguments the call does not show, so following it would
+// answer a question about the catalog's own machinery.
+func (r *auditPass) verdictOf(s sink, h sinkHole) (got verdict, why string) {
+	if h.unbound != "" {
+		return unresolved, h.unbound
+	}
+	return r.classifier.classifyExpr(s.pkg, h.expr, nil, 0)
 }
 
 // auditCard applies the card verdict to one hole.
