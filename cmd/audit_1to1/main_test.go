@@ -803,7 +803,7 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 		{name: "structs", scope: "structs", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
 		{name: "actions", scope: "actions", wantKeys: []string{"schema_version", "client_go_path", "summary", "services"}},
 		{name: "enums", scope: "enums", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
-		{name: "sdk", scope: "sdk", wantKeys: []string{"schema_version", "client_go_path", "summary", "services", "graphql_operations", "enum_fields", "option_structs", "upstream_waits", "captures"}},
+		{name: "sdk", scope: "sdk", wantKeys: []string{"schema_version", "client_go_path", "summary", "services", "graphql_operations", "enum_fields", "option_structs", "upstream_waits", "captures", "identifiers"}},
 		{name: "merged", scope: "all", wantKeys: []string{"schema_version", "note", "summary", "packages"}},
 	}
 	for _, tc := range cases {

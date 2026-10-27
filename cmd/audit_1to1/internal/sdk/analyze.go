@@ -46,10 +46,16 @@ type report struct {
 	// every key both read to a declaration that says why it is read twice,
 	// and every such struct paired with none to why it has no SDK half.
 	Captures capturesReport `json:"captures"`
-	// StaleDeclarations joins the six tables' stale entries: a service
+	// Identifiers holds every integer a handler hands a client-go parameter
+	// of type any, by name or through a method value, to what the live API
+	// record says the placeholder it fills takes, lists every method value
+	// the walk does not follow, and every integer parameter of client-go
+	// that narrows a placeholder taking a name or a path.
+	Identifiers identifiersReport `json:"identifiers"`
+	// StaleDeclarations joins the seven tables' stale entries: a service
 	// declaration, a GraphQL decision, an enum exemption, an option struct
-	// declaration, an upstream wait or a capture declaration that no longer
-	// describes the code.
+	// declaration, an upstream wait, a capture declaration or an identifier
+	// declaration that no longer describes the code.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
 }
 
@@ -91,19 +97,48 @@ type reportSummary struct {
 	CapturesObsolete        int `json:"captures_obsolete"`
 	CapturesAnswerNoStruct  int `json:"captures_answer_no_struct"`
 	CapturesUnpaired        int `json:"captures_unpaired"`
+	IdentifierArguments     int `json:"identifier_arguments"`
+	IdentifiersIDOnly       int `json:"identifiers_id_only"`
+	IdentifiersDeclared     int `json:"identifiers_declared"`
+	IdentifiersNotFromInput int `json:"identifiers_not_from_input"`
+	IdentifiersNarrowed     int `json:"identifiers_narrowed"`
+	IdentifiersUndescribed  int `json:"identifiers_undescribed"`
+	IdentifiersUnplaced     int `json:"identifiers_unplaced"`
+	IdentifiersUntraced     int `json:"identifiers_untraced"`
+	IdentifiersUnfollowed   int `json:"identifiers_unfollowed"`
+	SDKNarrowed             int `json:"sdk_narrowed"`
 	StaleDeclarations       int `json:"stale_declarations"`
 }
 
 // clean reports whether the audited tree has no finding, i.e. whether the gate
 // passes.
 func (s reportSummary) clean() bool {
+	return s.surfaceClean() && s.waitsClean() && s.capturesClean() && s.identifiersClean() && s.StaleDeclarations == 0
+}
+
+// surfaceClean reports whether the services, the GraphQL operations, the
+// enum values and the option structs hold no finding.
+func (s reportSummary) surfaceClean() bool {
 	return s.ServicesUndeclared == 0 && s.GraphQLUnadjudicated == 0 &&
 		s.EnumMissingValues == 0 && s.EnumExtraValues == 0 &&
-		s.OptionUnpaired == 0 && s.OptionCopyMissing == 0 && s.OptionNestedMissing == 0 &&
-		s.WaitsStalePredicate == 0 && s.WaitsObsolete == 0 && s.WorkaroundsUndeclared == 0 && s.BodyEditKeysUnanswered == 0 &&
-		s.BodyEditsUnread == 0 && s.SupersetNeedsUnanswered == 0 && s.OptionMethodsUnanswered == 0 &&
-		s.CapturesRedundant == 0 && s.CapturesStalePredicate == 0 && s.CapturesObsolete == 0 && s.CapturesUnpaired == 0 &&
-		s.StaleDeclarations == 0
+		s.OptionUnpaired == 0 && s.OptionCopyMissing == 0 && s.OptionNestedMissing == 0
+}
+
+// waitsClean reports whether the upstream waits hold no finding.
+func (s reportSummary) waitsClean() bool {
+	return s.WaitsStalePredicate == 0 && s.WaitsObsolete == 0 && s.WorkaroundsUndeclared == 0 && s.BodyEditKeysUnanswered == 0 &&
+		s.BodyEditsUnread == 0 && s.SupersetNeedsUnanswered == 0 && s.OptionMethodsUnanswered == 0
+}
+
+// capturesClean reports whether the captures hold no finding.
+func (s reportSummary) capturesClean() bool {
+	return s.CapturesRedundant == 0 && s.CapturesStalePredicate == 0 && s.CapturesObsolete == 0 && s.CapturesUnpaired == 0
+}
+
+// identifiersClean reports whether the identifiers hold no finding.
+func (s reportSummary) identifiersClean() bool {
+	return s.IdentifiersNarrowed == 0 && s.IdentifiersUndescribed == 0 && s.IdentifiersUnplaced == 0 &&
+		s.IdentifiersUntraced == 0 && s.IdentifiersUnfollowed == 0
 }
 
 // Seams for the failures the real tree cannot produce: the JSON encoder never
@@ -177,11 +212,17 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 
 	captures, capturesStale := analyzeCaptures(pkgs, clientGo, captureDeclarations)
 
-	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale, waitsStale, capturesStale)
+	// The identifiers are held to the live API record, a pinned oracle a
+	// re-pin moves and a stack never regenerates, so reading it does not
+	// defer the scope.
+	identifiers, identifiersStale := analyzeIdentifiers(root, pkgs, usage, identifierDeclarations)
+
+	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale, waitsStale, capturesStale, identifiersStale)
 	summary := summarize(services, operations, enumRep.Summary, stale)
 	summarizeOptionStructs(&summary, options)
 	summarizeUpstreamWaits(&summary, upstream)
 	summarizeCaptures(&summary, captures)
+	summarizeIdentifiers(&summary, identifiers)
 
 	if gapsOnly {
 		services = keepUndeclaredServices(services)
@@ -189,6 +230,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		options = keepOptionFindings(options)
 		upstream = keepWaitFindings(upstream)
 		captures = keepCaptureFindings(captures)
+		identifiers = keepIdentifierFindings(identifiers)
 	}
 	return report{
 		SchemaVersion:     shared.SchemaVersion,
@@ -200,6 +242,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		OptionStructs:     options,
 		UpstreamWaits:     upstream,
 		Captures:          captures,
+		Identifiers:       identifiers,
 		StaleDeclarations: stale,
 	}, nil
 }

@@ -126,9 +126,15 @@ func TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone(t *testing.T) 
 				OptionStructs: 9, OptionPaired: 5, OptionConverted: 1, OptionCopied: 1, OptionDeclared: 2,
 				UpstreamWaits: 47, WaitsHolding: 41, Workarounds: 55,
 				CapturedTypes: 86, CapturedKeysShared: 77, CapturesKept: 77, CapturesAnswerNoStruct: 2,
+				IdentifierArguments: 10, IdentifiersIDOnly: 6, IdentifiersDeclared: 3, IdentifiersNotFromInput: 1, SDKNarrowed: 18,
 			},
 			want: true,
 		},
+		{name: "an integer handed where the record takes a name or a path", summary: reportSummary{IdentifiersNarrowed: 1}},
+		{name: "an integer handed where the record describes nothing", summary: reportSummary{IdentifiersUndescribed: 1}},
+		{name: "an integer handed where the record holds no route", summary: reportSummary{IdentifiersUnplaced: 1}},
+		{name: "an integer whose trace stopped where the record takes a name", summary: reportSummary{IdentifiersUntraced: 1}},
+		{name: "a client-go method value the walk does not follow", summary: reportSummary{IdentifiersUnfollowed: 1}},
 		{name: "a captured key the client-go struct beside it models", summary: reportSummary{CapturesRedundant: 1}},
 		{name: "a captured struct the walk pairs with nothing", summary: reportSummary{CapturesUnpaired: 1}},
 		{name: "a capture declaration with a predicate to edit", summary: reportSummary{CapturesStalePredicate: 1}},
@@ -529,6 +535,7 @@ func TestRun_Repository_GateIsGreenAndShapeIsStable(t *testing.T) {
 		t.Errorf("gaps-only report kept option structs %+v, want none", options)
 	}
 	checkGapsOnlyCaptures(t, rep)
+	checkGapsOnlyIdentifiers(t, rep)
 	if s := rep.Summary; s.OptionStructs != s.OptionPaired+s.OptionConverted+s.OptionCopied+s.OptionDeclared+s.OptionUnpaired || s.OptionStructs < 400 {
 		t.Errorf("option struct statuses do not add up to the SDK's request surface: %+v", s)
 	}
@@ -550,6 +557,22 @@ func checkGapsOnlyCaptures(t *testing.T, rep report) {
 	}
 	if s := rep.Summary; s.CapturedKeysShared != s.CapturesKept+s.CapturesRedundant+s.CapturesStalePredicate+s.CapturesObsolete || s.CapturedTypes < 50 {
 		t.Errorf("capture statuses do not add up to the captures the tree decodes: %+v", s)
+	}
+}
+
+// checkGapsOnlyIdentifiers holds the identifiers section of a gaps-only
+// report on the real tree to keeping nothing, since there is no finding, no
+// method value the walk does not follow, and the client-go narrowings are
+// no finding of this gate, and its counters to adding up over the integers
+// the handlers hand a parameter of type any.
+func checkGapsOnlyIdentifiers(t *testing.T, rep report) {
+	t.Helper()
+	if identifiers := rep.Identifiers; len(identifiers.Arguments) != 0 || len(identifiers.Unfollowed) != 0 || len(identifiers.SDKNarrowed) != 0 {
+		t.Errorf("gaps-only report kept identifiers %+v, want none", identifiers)
+	}
+	s := rep.Summary
+	if s.IdentifierArguments != s.IdentifiersIDOnly+s.IdentifiersDeclared+s.IdentifiersNotFromInput+s.IdentifiersNarrowed+s.IdentifiersUndescribed+s.IdentifiersUnplaced+s.IdentifiersUntraced || s.IdentifierArguments == 0 {
+		t.Errorf("identifier statuses do not add up to the integers the tree hands client-go: %+v", s)
 	}
 }
 

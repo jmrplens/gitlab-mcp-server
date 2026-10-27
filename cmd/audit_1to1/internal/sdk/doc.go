@@ -59,6 +59,22 @@
 // declaration whose category requires a predicate on the pinned SDK, so the
 // pin that takes the reason away fails the gate the day it lands.
 //
+// The identifiers rule is folded in because its universe is the parameters
+// client-go takes as any: a handler that hands one an integer narrows what a
+// model can send wherever GitLab takes a name or a path too, and nothing
+// compared the two. Every such integer, whether the method is called by name
+// or through a method value, is followed to the input field it is read from
+// and held to what the live API record says the placeholder it fills takes,
+// at the segment cmd/internal/sdkroutes places the parameter in; a
+// placeholder that takes a name or a path, or that the record does not
+// describe, fails the gate until the input is widened or a declaration says
+// why. So does an integer whose trace stops where the walk cannot follow it,
+// and a method value the walk does not follow to its calls, until the walk
+// is taught the shape. The record is a pinned oracle a stack never
+// regenerates, so reading it does not defer the scope. The rule lists beside
+// them the integer parameters client-go itself narrows, which only an
+// upstream change widens.
+//
 // Unlike the three candidate-backlog scopes, this one is a gate: Run reports
 // whether the tree is clean, and the command exits non-zero when it is not.
 package sdk
