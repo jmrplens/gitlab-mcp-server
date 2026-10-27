@@ -813,6 +813,35 @@ func admitDecisions() []Decision {
 				enforce(pkgServer, "listenerIsHostLocal"),
 			},
 		},
+		{
+			// The hardened mode: a deployment that sets the plain HTTP opt-in
+			// to false refuses to open a door that would carry every caller's
+			// token across the network in the clear. Unset or true, the
+			// listener is served, which is the default the maintainer kept
+			// on 2026-10-27 (docs/development/plaintext-http-refusal-analysis.md);
+			// startup then warns, or says at INFO that the hop was declared.
+			ID: "ADM-015", Question: Admit, Kind: Rule, Class: ClassP, Disposition: Ruled,
+			Resource: "a plain HTTP listener off loopback, refused in the hardened mode",
+			Key:      KeyDeployment, StdioKey: KeyNone,
+			// A value the flag package or the overlay's reader cannot read
+			// as a boolean refuses startup, as every flag's does.
+			Flags: []string{"--allow-plaintext-http"}, Envs: []string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP"},
+			Malformed: RefuseStartup,
+			Decided:   []string{"issue 1269"},
+			Refusals: []Refusal{
+				{
+					Methods: []string{MethodStartup}, Channel: Startup,
+					Prefix: "--allow-plaintext-http=false, or GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false, refuses a listener " +
+						"that serves plain HTTP on an address other machines can reach, and --http-addr ",
+					Answer: AskOperator,
+					At:     refuse(pkgServer, "checkPlaintextListener"),
+				},
+			},
+			Sites: []Site{
+				enforce(pkgServer, "checkPlaintextListener"),
+				enforce(pkgServer, "listenerIsHostLocal"),
+			},
+		},
 	}
 }
 

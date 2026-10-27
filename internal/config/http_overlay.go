@@ -83,11 +83,13 @@ type HTTPEnvOverlay struct {
 	// sets [DefaultMaxFileSize].
 	UploadMaxFileSize *int64
 
-	// The operator's statement that something in front of a plain HTTP
-	// listener off loopback encrypts the hop, which turns the startup warning
-	// about that listener into a line at INFO. A container sets it here
-	// because the image's command already names --http-addr, and any argument
-	// after the image name replaces that command wholesale.
+	// What the operator said about a plain HTTP listener off loopback: true
+	// declares that something in front of it encrypts the hop, which turns
+	// the startup warning about that listener into a line at INFO, and false
+	// is the hardened mode, which refuses to start it; nil is neither, and the
+	// listener is served with the warning. A container sets it here because
+	// the image's command already names --http-addr, and any argument after
+	// the image name replaces that command wholesale.
 	AllowPlaintextHTTP *bool
 }
 

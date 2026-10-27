@@ -391,7 +391,7 @@ func overlaySettings() []overlaySetting {
 		},
 		{
 			"allow-plaintext-http", func(o *config.HTTPEnvOverlay) { o.AllowPlaintextHTTP = yes() },
-			func(h *httpConfig) { h.allowPlaintextHTTP = true },
+			func(h *httpConfig) { h.plaintextHTTP = plaintextHTTPAllowed },
 		},
 		{
 			"max-http-clients", func(o *config.HTTPEnvOverlay) { o.MaxHTTPClients = num(250) },
@@ -501,6 +501,46 @@ func TestApplyHTTPEnvOverlay_EachSettingLandsInItsOwnFieldAndYieldsToItsOwnFlag(
 			}
 			if !reflect.DeepEqual(held, untouched) {
 				t.Errorf("--%s was passed, and the environment changed the configuration to\n%+v\nwant\n%+v", tc.flag, held, untouched)
+			}
+		})
+	}
+}
+
+// TestApplyHTTPEnvOverlay_PlaintextHTTP_KeepsWhichValueTheOperatorGave
+// verifies the plain HTTP setting's precedence and its three values: the
+// variable at true or false sets it when the flag was not passed, an unset
+// variable leaves the default, and a passed flag keeps the value it gave
+// whatever the variable says, the hardened mode included in both directions.
+func TestApplyHTTPEnvOverlay_PlaintextHTTP_KeepsWhichValueTheOperatorGave(t *testing.T) {
+	t.Parallel()
+
+	allowed, refused := true, false
+	for _, tc := range []struct {
+		name     string
+		flag     plaintextHTTP
+		passed   bool
+		variable *bool
+		want     plaintextHTTP
+	}{
+		{name: "neither", want: plaintextHTTPUnset},
+		{name: "the variable at true", variable: &allowed, want: plaintextHTTPAllowed},
+		{name: "the variable at false", variable: &refused, want: plaintextHTTPRefused},
+		{name: "the flag at true over the variable at false", flag: plaintextHTTPAllowed, passed: true, variable: &refused, want: plaintextHTTPAllowed},
+		{name: "the flag at false over the variable at true", flag: plaintextHTTPRefused, passed: true, variable: &allowed, want: plaintextHTTPRefused},
+		{name: "the flag with no variable", flag: plaintextHTTPRefused, passed: true, want: plaintextHTTPRefused},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var hcfg *httpConfig
+			if tc.passed {
+				hcfg = newOverlayConfig("allow-plaintext-http")
+			} else {
+				hcfg = newOverlayConfig()
+			}
+			hcfg.plaintextHTTP = tc.flag
+			applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{AllowPlaintextHTTP: tc.variable})
+			if hcfg.plaintextHTTP != tc.want {
+				t.Errorf("the setting is %d, want %d", hcfg.plaintextHTTP, tc.want)
 			}
 		})
 	}

@@ -320,6 +320,10 @@ that terminates TLS ([Behind a reverse proxy](#behind-a-reverse-proxy)),
 `-e GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true` says so, and the
 line is written at `INFO` instead
 ([Plain HTTP on an address other machines can reach](/gitlab-mcp-server/operations/http-server/#plain-http-on-an-address-other-machines-can-reach)).
+In the hardened mode, `-e GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false`, that
+container does not start. The host's network, a sidecar, a unix socket in a
+mounted directory or TLS on the listener do, each with what it needs
+([The listener rule and the container's network](/gitlab-mcp-server/operations/http-server/#the-listener-rule-and-the-containers-network)).
 
 **`--read-only` works because the image writes nothing at runtime.** The one
 exception is a unix socket, whose bind needs a writable parent directory for the

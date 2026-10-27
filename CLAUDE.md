@@ -451,7 +451,7 @@ Settings this project defines are read as `GITLAB_MCP_<NAME>` and under no other
 | `GITLAB_MCP_ALLOW_PRIVATE_INSTANCES` | Permit private addresses for destinations the operator did not choose (ADR-0022) |
 | `GITLAB_MCP_AUTH_MODE`, `GITLAB_MCP_PUBLIC_URL` | HTTP authentication, `legacy` or `oauth`, and the public https origin `oauth` requires |
 | `GITLAB_MCP_TRUSTED_ORIGINS` | Origins allowed to make cross-origin requests |
-| `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP` | HTTP: declare that a proxy encrypts the hop to a plain HTTP listener off loopback, which startup otherwise warns about |
+| `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP` | HTTP: plain HTTP on a listener off loopback without TLS (`true`, warned about while unset); `false` is the hardened mode, which refuses to start one (`ADM-015`) |
 | `GITLAB_MCP_OAUTH_CACHE_TTL`, `GITLAB_MCP_OAUTH_CLIENT_UID` | OAuth identity cache TTL (`15m`) and the application uids admitted |
 | `GITLAB_MCP_POOL_IDLE_TIMEOUT` | HTTP: reclaim an unused credential entry (`1h`) |
 | `GITLAB_MCP_ACTION_TIMEOUT` | Cancel an action still running (`65m`) |

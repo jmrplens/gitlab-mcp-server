@@ -195,11 +195,11 @@ type httpConfig struct {
 	uploadMaxFileSize int64
 	tlsCert           string
 	tlsKey            string
-	// allowPlaintextHTTP is the operator's statement that something in front
-	// of a plain HTTP listener off loopback encrypts the hop; it turns the
-	// startup warning about that listener into a line at INFO. See
-	// [announcePlaintextListener].
-	allowPlaintextHTTP bool
+	// plaintextHTTP is what the operator said about a plain HTTP listener
+	// off loopback: nothing (served, with a warning), true (served, said at
+	// INFO) or false (the hardened mode, which refuses it). See
+	// [checkPlaintextListener].
+	plaintextHTTP plaintextHTTP
 	// discoveryRateLimitRPS and discoveryRateLimitBurst are the bucket each
 	// client address draws on for the discovery documents (RTC-008).
 	discoveryRateLimitRPS   float64
@@ -325,7 +325,7 @@ func main() {
 	flag.BoolVar(&hcfg.jsonResponse, "json-response", false, "Return application/json responses instead of text/event-stream (SSE)")
 	flag.StringVar(&hcfg.tlsCert, "tls-cert", "", "PEM certificate file; serves HTTPS on the listener itself (requires --tls-key)")
 	flag.StringVar(&hcfg.tlsKey, "tls-key", "", "PEM private key file matching --tls-cert")
-	flag.BoolVar(&hcfg.allowPlaintextHTTP, "allow-plaintext-http", false, "Declare that something in front of a plain HTTP listener off loopback, such as a reverse proxy that terminates TLS, encrypts the hop; startup then says so at INFO instead of warning that tokens cross the network in the clear. Also read from GITLAB_MCP_ALLOW_PLAINTEXT_HTTP")
+	flag.Var(&hcfg.plaintextHTTP, "allow-plaintext-http", "Serve plain HTTP on a TCP listener off loopback without TLS (default true): unset, startup warns that tokens cross the network in the clear; true declares that something in front of the listener, such as a reverse proxy that terminates TLS, encrypts the hop, and startup says so at INFO; false is the hardened mode, which refuses to start such a listener. Also read from GITLAB_MCP_ALLOW_PLAINTEXT_HTTP")
 	flag.StringVar(&hcfg.socketMode, "http-socket-mode", "", "Permission mode for a unix socket named by --http-addr, in octal (default 0660)")
 	// Both transports, not just HTTP: a stdio deployment is exactly the case an
 	// operator monitoring their own machine cares about. Off by default for
@@ -531,10 +531,11 @@ FLAGS
   -http-socket-mode str     Octal permission mode for a unix socket (default "0660")
   -tls-cert string          PEM certificate; serves HTTPS on the listener (requires -tls-key)
   -tls-key string           PEM private key matching -tls-cert
-  -allow-plaintext-http     A TCP listener off loopback without -tls-cert serves plain HTTP and warns at
-                            startup that tokens cross the network in the clear. This declares that
-                            something in front of it, such as a proxy terminating TLS, encrypts the hop,
-                            so the line is written at INFO instead (default false). The environment
+  -allow-plaintext-http     A TCP listener off loopback without -tls-cert serves plain HTTP (default true).
+                            Unset, startup warns that tokens cross the network in the clear; true
+                            declares that something in front of it, such as a proxy terminating TLS,
+                            encrypts the hop, so the line is written at INFO instead; false is the
+                            hardened mode, which refuses to start such a listener. The environment
                             sets it with GITLAB_MCP_ALLOW_PLAINTEXT_HTTP
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28)
   -json-response            Return application/json responses instead of SSE (default false)
@@ -732,9 +733,10 @@ ENVIRONMENT VARIABLES (HTTP mode)
   is not passed. Precedence: an explicitly passed flag, then the environment,
   then the built-in default. The variables below have no stdio equivalent:
 
-  GITLAB_MCP_ALLOW_PLAINTEXT_HTTP   Declare that something in front of a plain HTTP listener off loopback,
-                                    such as a proxy terminating TLS, encrypts the hop: startup says so at
-                                    INFO instead of warning (default false)
+  GITLAB_MCP_ALLOW_PLAINTEXT_HTTP   Serve plain HTTP on a TCP listener off loopback without TLS (default
+                                    true, with a warning): true declares that a proxy terminating TLS
+                                    encrypts the hop, so startup says so at INFO; false refuses to start
+                                    such a listener (the hardened mode)
   GITLAB_MCP_AUTH_MODE              Authentication mode: legacy|oauth (default legacy)
   GITLAB_MCP_PUBLIC_URL             Externally reachable https origin; required with oauth auth mode
   GITLAB_MCP_TRUSTED_ORIGINS        Origins allowed to make cross-origin browser requests
@@ -1030,8 +1032,11 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	}
 	// After the TLS pair was validated, so a certificate named here is one
 	// the listener will serve, and before the bind, so a listener that fails
-	// to come up is still described as the one the operator asked for.
-	announcePlaintextListener(ctx, hcfg.addr, cfg.TLSCertFile, hcfg.allowPlaintextHTTP)
+	// to come up is still described as the one the operator asked for, and a
+	// refused one is never bound.
+	if plaintextErr := checkPlaintextListener(ctx, hcfg.addr, cfg.TLSCertFile, hcfg.plaintextHTTP); plaintextErr != nil {
+		return plaintextErr
+	}
 	// The description-substitution knob is parsed here so a typo in it fails
 	// startup with a clear message; createServer parses it again per pool
 	// entry, but that build happens hours later, on somebody's request.

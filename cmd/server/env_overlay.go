@@ -94,7 +94,18 @@ func applyOverlayBools(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 	overlayBool(hcfg, "safe-mode", &hcfg.safeMode, o.SafeMode)
 	overlayBool(hcfg, "embedded-resources", &hcfg.embeddedResources, o.EmbeddedResources)
 	overlayBool(hcfg, "ignore-scopes", &hcfg.ignoreScopes, o.IgnoreScopes)
-	overlayBool(hcfg, "allow-plaintext-http", &hcfg.allowPlaintextHTTP, o.AllowPlaintextHTTP)
+	overlayPlaintextHTTP(hcfg, o.AllowPlaintextHTTP)
+}
+
+// overlayPlaintextHTTP applies GITLAB_MCP_ALLOW_PLAINTEXT_HTTP to the plain
+// HTTP setting when --allow-plaintext-http was not passed. The setting tells
+// a value the operator gave from the default, which is why it is not a plain
+// boolean: the variable at true is a declaration, said at INFO, and unset is
+// not.
+func overlayPlaintextHTTP(hcfg *httpConfig, value *bool) {
+	if value != nil && !hcfg.setFlags["allow-plaintext-http"] {
+		hcfg.plaintextHTTP.setAllowed(*value)
+	}
 }
 
 func applyOverlayNumbers(hcfg *httpConfig, o *config.HTTPEnvOverlay) {

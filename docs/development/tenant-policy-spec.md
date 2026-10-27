@@ -831,6 +831,13 @@ caller as a TCP proxy does, and the host guard reads the same set. The two pairi
 trust nobody refuse startup: a socket listener whose list names addresses and no `unix`,
 which used to start with its header inert, and `unix` on a TCP listener.
 
+The listener is judged once more at startup (`ADM-015`). A TCP listener another machine
+can reach that serves plain HTTP is served by default, with a warning, and in the hardened
+mode, `--allow-plaintext-http=false` or `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false`, the process
+refuses to start it, so no caller's token crosses that hop in the clear. The row is keyed
+on the deployment, since only the operator sets it, and a value neither the flag package
+nor the overlay reads as a boolean refuses startup.
+
 Sixteen findings are answered, and stay in the list with their issues. F-03, the listing
 bucket with no process partner, is answered by `RTC-007`, the first of issue 951's three
 changes: a `tools/list` bucket keyed on the process and counted in the tools a listing

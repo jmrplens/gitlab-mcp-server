@@ -44,7 +44,7 @@ func requirementIDs() []string {
 		count  int
 	}{
 		{"IDN", 14},
-		{"ADM", 14},
+		{"ADM", 15},
 		{"AUB", 6},
 		{"RTC", 8},
 		{"HLD", 11},

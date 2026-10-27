@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"flag"
 	"io/fs"
 	"net"
 	"net/http"
@@ -591,74 +592,111 @@ func TestStaleSocketDialTimeout_BoundsTheProbeRatherThanDisablingIt(t *testing.T
 	}
 }
 
-// TestAnnouncePlaintextListener_SaysWhatTheListenerExposes verifies the one
-// line startup writes about a listener that serves plain HTTP, and the
-// listeners it writes nothing about.
+// TestCheckPlaintextListener_SaysWhatTheListenerExposes verifies what startup
+// does about a listener that serves plain HTTP, under each value of the
+// setting, and the listeners it says nothing about.
 //
 // The warning is for a TCP listener another machine can open a connection to,
-// with no TLS on it and no word from the operator that something in front of
-// it encrypts the hop: that is the configuration that puts every caller's
-// token on a network segment in the clear, and it is also what the default
-// --http-addr and the container image's command bind. A loopback address and
-// a unix socket carry nothing across a network, and TLS on the listener is the
-// remedy itself, so all three are silent. The opt-in turns the warning into a
+// with no TLS on it and no word from the operator about it: that is the
+// configuration that puts every caller's token on a network segment in the
+// clear, and it is also what the default --http-addr and the container
+// image's command bind. A loopback address and a unix socket carry nothing
+// across a network, and TLS on the listener is the remedy itself, so all three
+// are silent whatever the setting. The opt-in at true turns the warning into a
 // line at INFO rather than into silence, so a deployment that declared it
-// still says what it serves.
+// still says what it serves, and at false, the hardened mode, it refuses the
+// listener and logs nothing, since the refusal is the error startup returns.
 //
 // Every case names its addr, because the address is what an operator reading
 // the line has to change, and the message is a constant so that a log
 // pipeline can match it.
-func TestAnnouncePlaintextListener_SaysWhatTheListenerExposes(t *testing.T) {
+func TestCheckPlaintextListener_SaysWhatTheListenerExposes(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		addr    string
 		tlsCert string
-		allowed bool
+		setting plaintextHTTP
 		// resolve is what the name in addr resolves to; nil leaves a literal
 		// unresolved, as listenerIsHostLocal does.
 		resolve []string
 		level   string
 		msg     string
+		refused bool
 	}{
 		{name: "a wildcard bind", addr: "0.0.0.0:8080", level: "WARN", msg: plaintextListenerWarning},
 		{name: "a port-only bind, the default address", addr: ":8080", level: "WARN", msg: plaintextListenerWarning},
 		{name: "an ipv6 wildcard bind", addr: "[::]:8080", level: "WARN", msg: plaintextListenerWarning},
 		{name: "a routable address", addr: "10.0.0.7:8080", level: "WARN", msg: plaintextListenerWarning},
 		{name: "a name resolving off the machine", addr: "mcp.internal:8080", resolve: []string{"10.0.0.7"}, level: "WARN", msg: plaintextListenerWarning},
-		{name: "a wildcard bind under the opt-in", addr: "0.0.0.0:8080", allowed: true, level: "INFO", msg: plaintextListenerAllowed},
-		{name: "a routable address under the opt-in", addr: "10.0.0.7:8080", allowed: true, level: "INFO", msg: plaintextListenerAllowed},
+		{name: "a wildcard bind under the opt-in", addr: "0.0.0.0:8080", setting: plaintextHTTPAllowed, level: "INFO", msg: plaintextListenerAllowed},
+		{name: "a routable address under the opt-in", addr: "10.0.0.7:8080", setting: plaintextHTTPAllowed, level: "INFO", msg: plaintextListenerAllowed},
+		{name: "a wildcard bind in the hardened mode", addr: "0.0.0.0:8080", setting: plaintextHTTPRefused, refused: true},
+		{name: "a port-only bind in the hardened mode", addr: ":8080", setting: plaintextHTTPRefused, refused: true},
+		{name: "a name resolving off the machine in the hardened mode", addr: "mcp.internal:8080", resolve: []string{"10.0.0.7"}, setting: plaintextHTTPRefused, refused: true},
 		{name: "a wildcard bind serving TLS", addr: "0.0.0.0:8443", tlsCert: "/etc/ssl/mcp.crt"},
-		{name: "a wildcard bind serving TLS under the opt-in", addr: "0.0.0.0:8443", tlsCert: "/etc/ssl/mcp.crt", allowed: true},
+		{name: "a wildcard bind serving TLS under the opt-in", addr: "0.0.0.0:8443", tlsCert: "/etc/ssl/mcp.crt", setting: plaintextHTTPAllowed},
+		{name: "a wildcard bind serving TLS in the hardened mode", addr: "0.0.0.0:8443", tlsCert: "/etc/ssl/mcp.crt", setting: plaintextHTTPRefused},
 		{name: "a loopback address", addr: "127.0.0.1:8080"},
 		{name: "an ipv6 loopback address", addr: "[::1]:8080"},
 		{name: "a name resolving to loopback", addr: "localhost:8080", resolve: []string{"127.0.0.1", "::1"}},
-		{name: "a loopback address under the opt-in", addr: "127.0.0.1:8080", allowed: true},
+		{name: "a loopback address under the opt-in", addr: "127.0.0.1:8080", setting: plaintextHTTPAllowed},
+		{name: "a loopback address in the hardened mode", addr: "127.0.0.1:8080", setting: plaintextHTTPRefused},
+		{name: "a name resolving to loopback in the hardened mode", addr: "localhost:8080", resolve: []string{"127.0.0.1", "::1"}, setting: plaintextHTTPRefused},
 		{name: "a unix socket", addr: "/run/gitlab-mcp/server.sock"},
+		{name: "a unix socket in the hardened mode", addr: "/run/gitlab-mcp/server.sock", setting: plaintextHTTPRefused},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resolveListenerHostTo(t, tc.resolve)
 			logged := captureJSONLog(t)
 
-			announcePlaintextListener(t.Context(), tc.addr, tc.tlsCert, tc.allowed)
+			err := checkPlaintextListener(t.Context(), tc.addr, tc.tlsCert, tc.setting)
 
 			records := decodeRecords(t, logged)
-			if tc.level == "" {
-				if len(records) != 0 {
-					t.Fatalf("a listener that crosses no network in the clear was announced: %v", records)
-				}
+			if tc.refused {
+				assertPlaintextRefusal(t, tc.addr, err, records)
 				return
 			}
-			if len(records) != 1 {
-				t.Fatalf("logged %d records, want the one line about the listener: %v", len(records), records)
+			if err != nil {
+				t.Fatalf("checkPlaintextListener() = %v, want the listener served", err)
 			}
-			record := records[0]
-			if record["level"] != tc.level || record["msg"] != tc.msg {
-				t.Errorf("logged %v %q, want %s %q", record["level"], record["msg"], tc.level, tc.msg)
-			}
-			if record["addr"] != tc.addr {
-				t.Errorf("addr = %v, want the address the listener binds, %q", record["addr"], tc.addr)
-			}
+			assertPlaintextAnnouncement(t, tc.addr, tc.level, tc.msg, records)
 		})
+	}
+}
+
+// assertPlaintextRefusal holds the hardened mode's answer for addr: the
+// refusal, opening with the register's text and the quoted address, and
+// nothing logged beside it.
+func assertPlaintextRefusal(t *testing.T, addr string, err error, records []map[string]any) {
+	t.Helper()
+	if err == nil || !strings.HasPrefix(err.Error(), plaintextRefusalPrefix+strconv.Quote(addr)) {
+		t.Errorf("checkPlaintextListener() = %v, want the hardened mode's refusal naming %q", err, addr)
+	}
+	if len(records) != 0 {
+		t.Errorf("a refused listener was logged as well: %v", records)
+	}
+}
+
+// assertPlaintextAnnouncement holds what a served listener at addr logged:
+// nothing when level is empty, and otherwise the one line at that level,
+// with that message and the address.
+func assertPlaintextAnnouncement(t *testing.T, addr, level, msg string, records []map[string]any) {
+	t.Helper()
+	if level == "" {
+		if len(records) != 0 {
+			t.Fatalf("a listener that crosses no network in the clear was announced: %v", records)
+		}
+		return
+	}
+	if len(records) != 1 {
+		t.Fatalf("logged %d records, want the one line about the listener: %v", len(records), records)
+	}
+	record := records[0]
+	if record["level"] != level || record["msg"] != msg {
+		t.Errorf("logged %v %q, want %s %q", record["level"], record["msg"], level, msg)
+	}
+	if record["addr"] != addr {
+		t.Errorf("addr = %v, want the address the listener binds, %q", record["addr"], addr)
 	}
 }
 
@@ -683,33 +721,57 @@ func resolveListenerHostTo(t *testing.T, addresses []string) {
 	t.Cleanup(func() { lookupHost = previous })
 }
 
-// TestPlaintextListenerLines_NameEveryWayOut holds the two lines to what an
-// operator needs from them.
+// plaintextRefusalPrefix is how the hardened mode's refusal opens, up to the
+// quoted address, which is the stable text register row ADM-015 pins.
+const plaintextRefusalPrefix = "--allow-plaintext-http=false, or GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false, refuses a listener that serves plain HTTP " +
+	"on an address other machines can reach, and --http-addr "
+
+// TestPlaintextListenerLines_NameEveryWayOut holds the two lines and the
+// refusal to what an operator needs from them.
 //
 // The warning is read by somebody deciding what to change, so it names each
 // remedy by the flag or variable that applies it: TLS on the listener, a
 // loopback address or a unix socket for a proxy on the same machine, and the
 // opt-in in both spellings, since a container takes the variable without
-// replacing the image's command line. The line written under the opt-in names
-// the opt-in, so a reader of a deployment's log can tell a declared plaintext
-// listener from one nobody looked at.
+// replacing the image's command line; and it names the hardened mode, in both
+// spellings too, for an operator who would rather the listener did not start.
+// The line written under the opt-in names the opt-in, so a reader of a
+// deployment's log can tell a declared plaintext listener from one nobody
+// looked at. The refusal names the address, the remedies, and the opt-in for
+// a hop something in front of the listener encrypts.
 func TestPlaintextListenerLines_NameEveryWayOut(t *testing.T) {
 	t.Parallel()
 
+	refusal := checkPlaintextListener(t.Context(), "0.0.0.0:8080", "", plaintextHTTPRefused)
+	if refusal == nil {
+		t.Fatal("the hardened mode served a wildcard bind in plain HTTP")
+	}
 	for _, tc := range []struct {
 		name  string
 		line  string
 		names []string
 	}{
 		{
-			name:  "the warning",
-			line:  plaintextListenerWarning,
-			names: []string{"--http-addr", "plain HTTP", "--tls-cert", "--tls-key", "loopback", "unix socket", "--allow-plaintext-http", "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true"},
+			name: "the warning",
+			line: plaintextListenerWarning,
+			names: []string{
+				"--http-addr", "plain HTTP", "--tls-cert", "--tls-key", "loopback", "unix socket", "--allow-plaintext-http",
+				"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true", "hardened mode", "--allow-plaintext-http=false",
+				"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false",
+			},
 		},
 		{
 			name:  "the line under the opt-in",
 			line:  plaintextListenerAllowed,
 			names: []string{"--http-addr", "plain HTTP", "--allow-plaintext-http"},
+		},
+		{
+			name: "the refusal",
+			line: refusal.Error(),
+			names: []string{
+				`"0.0.0.0:8080"`, "plain HTTP", "--tls-cert", "--tls-key", "loopback", "unix socket",
+				"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true", "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false",
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -718,6 +780,93 @@ func TestPlaintextListenerLines_NameEveryWayOut(t *testing.T) {
 				if !strings.Contains(tc.line, name) {
 					t.Errorf("%s does not name %q: %s", tc.name, name, tc.line)
 				}
+			}
+		})
+	}
+}
+
+// TestPlaintextHTTP_ReadsAsTheBooleanFlagItIs verifies that the setting reads
+// its value as a boolean flag does, and remembers that the operator gave one.
+//
+// The flag defaults to true, which serves plain HTTP as every release before
+// it did, but true given is not the default: it is the declaration startup
+// reports at INFO, so the setting keeps three values where a bool keeps two.
+// A bare --allow-plaintext-http means true, as it does for any boolean flag; a
+// value strconv.ParseBool does not read is refused, which stops startup with
+// the flag named; and the value it shows is true unless the operator chose
+// the hardened mode, which is also what the flag package prints as the
+// default and reads off a value it has not been handed yet.
+func TestPlaintextHTTP_ReadsAsTheBooleanFlagItIs(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		value string
+		want  plaintextHTTP
+		shown string
+	}{
+		{value: "true", want: plaintextHTTPAllowed, shown: "true"},
+		{value: "1", want: plaintextHTTPAllowed, shown: "true"},
+		{value: "false", want: plaintextHTTPRefused, shown: "false"},
+		{value: "0", want: plaintextHTTPRefused, shown: "false"},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Parallel()
+			var setting plaintextHTTP
+			if err := setting.Set(tc.value); err != nil {
+				t.Fatalf("Set(%q) = %v", tc.value, err)
+			}
+			if setting != tc.want || setting.String() != tc.shown {
+				t.Errorf("Set(%q) left %d, shown %q; want %d, shown %q", tc.value, setting, setting.String(), tc.want, tc.shown)
+			}
+		})
+	}
+
+	t.Run("a value it does not read", func(t *testing.T) {
+		t.Parallel()
+		setting := plaintextHTTPAllowed
+		if err := setting.Set("sometimes"); err == nil || setting != plaintextHTTPAllowed {
+			t.Errorf("Set(%q) = %v and left %d, want an error and the setting as it was", "sometimes", err, setting)
+		}
+	})
+
+	t.Run("the default", func(t *testing.T) {
+		t.Parallel()
+		var setting plaintextHTTP
+		var unset *plaintextHTTP
+		if setting != plaintextHTTPUnset || setting.String() != "true" || unset.String() != "true" {
+			t.Errorf("the zero setting is %d, shown %q and %q through a nil pointer; want unset, shown true", setting, setting.String(), unset.String())
+		}
+		if !setting.IsBoolFlag() {
+			t.Error("the setting is not a boolean flag, so a bare --allow-plaintext-http would want a value")
+		}
+	})
+}
+
+// TestPlaintextHTTP_OnTheCommandLine_ParsesAsABooleanFlag verifies the
+// setting registered as the server registers it: absent it stays unset, bare
+// it reads as true, with =false it is the hardened mode, and the default the
+// flag package shows is true.
+func TestPlaintextHTTP_OnTheCommandLine_ParsesAsABooleanFlag(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		args []string
+		want plaintextHTTP
+	}{
+		{args: nil, want: plaintextHTTPUnset},
+		{args: []string{"-allow-plaintext-http"}, want: plaintextHTTPAllowed},
+		{args: []string{"-allow-plaintext-http=false"}, want: plaintextHTTPRefused},
+	} {
+		t.Run(strings.Join(append([]string{"args"}, tc.args...), " "), func(t *testing.T) {
+			t.Parallel()
+			flags := flag.NewFlagSet("server", flag.ContinueOnError)
+			var setting plaintextHTTP
+			flags.Var(&setting, "allow-plaintext-http", "")
+			if err := flags.Parse(tc.args); err != nil || setting != tc.want {
+				t.Errorf("Parse(%q) = %v and left %d, want %d", tc.args, err, setting, tc.want)
+			}
+			if registered := flags.Lookup("allow-plaintext-http"); registered.DefValue != "true" {
+				t.Errorf("the flag's default is %q, want true", registered.DefValue)
 			}
 		})
 	}

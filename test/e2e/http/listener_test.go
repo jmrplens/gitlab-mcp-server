@@ -414,6 +414,10 @@ func TestListener_TLS_ServesHTTPS(t *testing.T) {
 const (
 	plaintextWarningPrefix = "--http-addr serves plain HTTP on an address other machines can reach, so"
 	plaintextAllowedPrefix = "--http-addr serves plain HTTP on an address other machines can reach, as --allow-plaintext-http declares"
+	// plaintextRefusalPrefix opens the hardened mode's refusal, up to the
+	// quoted address.
+	plaintextRefusalPrefix = "--allow-plaintext-http=false, or GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false, refuses a listener that serves plain HTTP " +
+		"on an address other machines can reach, and --http-addr "
 )
 
 // TestListener_PlaintextOffLoopback_WarnsAtStartup verifies that the real
@@ -469,6 +473,8 @@ func TestListener_PlaintextOffLoopback_TheOptInIsReadFromTheFlagAndTheVariable(t
 	}{
 		{name: "the flag", flags: []string{"--allow-plaintext-http"}},
 		{name: "the variable", env: []string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true"}},
+		// The flag wins over the variable, the hardened mode included.
+		{name: "the flag over the variable at false", env: []string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false"}, flags: []string{"--allow-plaintext-http=true"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			port := freePort(t)
@@ -494,9 +500,54 @@ func TestListener_PlaintextOffLoopback_TheOptInIsReadFromTheFlagAndTheVariable(t
 	}
 }
 
+// TestListener_PlaintextOffLoopback_TheHardenedModeRefusesToStart verifies
+// that the real binary, told by the flag or by the variable that it must not
+// serve plain HTTP to the network, refuses to start on a wildcard bind with
+// an error naming the address and the ways to serve it, and that the flag
+// wins over the variable in that direction too.
+//
+// A refusal is an exit, so what is asserted is the exit and its output; the
+// listener never binds, which the address being free for the next case shows
+// nothing about, so it is not asserted.
+func TestListener_PlaintextOffLoopback_TheHardenedModeRefusesToStart(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	for _, tc := range []struct {
+		name  string
+		env   map[string]string
+		flags []string
+	}{
+		{name: "the flag", flags: []string{"--allow-plaintext-http=false"}},
+		{name: "the variable", env: map[string]string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP": "false"}},
+		{name: "the flag over the variable at true", env: map[string]string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP": "true"}, flags: []string{"--allow-plaintext-http=false"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := "0.0.0.0:" + strconv.Itoa(freePort(t))
+			out, err := runServerWithEnvExpectingExit(t, serverBinary(t), tc.env,
+				append([]string{"--http", "--http-addr=" + addr, "--gitlab-url=" + gitlab.url}, tc.flags...)...,
+			)
+			if err == nil {
+				t.Fatalf("the hardened mode started a plaintext listener on %s; output:\n%s", addr, out)
+			}
+			// The refusal reaches the output inside the JSON line the server
+			// logs on its way out, where the quotes around the address are
+			// escaped, so the register's text and the address are looked for
+			// apart.
+			if !strings.Contains(out, plaintextRefusalPrefix) || !strings.Contains(out, addr) {
+				t.Errorf("the refusal does not carry the register's text and the address %q; output:\n%s", addr, out)
+			}
+			for _, remedy := range []string{"--tls-cert", "loopback", "unix socket"} {
+				if !strings.Contains(out, remedy) {
+					t.Errorf("the refusal does not name %q as a way out; output:\n%s", remedy, out)
+				}
+			}
+		})
+	}
+}
+
 // TestListener_ListenersThatCrossNoNetworkInTheClear_AreNotAnnounced verifies
 // the other side: a loopback address, a unix socket and a wildcard bind
-// serving TLS write neither line.
+// serving TLS write neither line, in the hardened mode too, where each of
+// them starts.
 //
 // Absence is only proved once the output that would have held the line has
 // arrived, and an answer from /health does not prove that: the process writes
@@ -524,6 +575,25 @@ func TestListener_ListenersThatCrossNoNetworkInTheClear_AreNotAnnounced(t *testi
 			t.Helper()
 			port := strconv.Itoa(freePort(t))
 			return startServerWithClient(t, tlsClientTrusting(t, pool), "https://127.0.0.1:"+port,
+				"--http-addr=0.0.0.0:"+port,
+				"--gitlab-url="+gitlab.url,
+				"--tls-cert="+certFile,
+				"--tls-key="+keyFile,
+			)
+		}},
+		{name: "loopback in the hardened mode", start: func(t *testing.T) *server {
+			t.Helper()
+			return startServer(t, nil, "--gitlab-url="+gitlab.url, "--allow-plaintext-http=false")
+		}},
+		{name: "unix socket in the hardened mode", start: func(t *testing.T) *server {
+			t.Helper()
+			return startServerOnUnixSocket(t, filepath.Join(socketDir(t), "mcp.sock"), "--gitlab-url="+gitlab.url, "--allow-plaintext-http=false")
+		}},
+		{name: "every interface serving TLS in the hardened mode", start: func(t *testing.T) *server {
+			t.Helper()
+			port := strconv.Itoa(freePort(t))
+			return startServerWithClientEnv(t, tlsClientTrusting(t, pool), "https://127.0.0.1:"+port,
+				[]string{"GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false"},
 				"--http-addr=0.0.0.0:"+port,
 				"--gitlab-url="+gitlab.url,
 				"--tls-cert="+certFile,

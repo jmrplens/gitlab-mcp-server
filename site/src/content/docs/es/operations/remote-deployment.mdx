@@ -329,6 +329,10 @@ que termina TLS ([Tras un proxy inverso](#tras-un-proxy-inverso)),
 `-e GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true` lo dice, y la línea
 se escribe en `INFO`
 ([HTTP en claro en una dirección que otras máquinas alcanzan](/gitlab-mcp-server/es/operations/http-server/#http-en-claro-en-una-dirección-que-otras-máquinas-alcanzan)).
+En el modo endurecido, `-e GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false`, ese
+contenedor no arranca. La red del host, un sidecar, un socket unix en un
+directorio montado o TLS en el listener sí arrancan, cada uno con lo que pide
+([La regla del listener y la red del contenedor](/gitlab-mcp-server/es/operations/http-server/#la-regla-del-listener-y-la-red-del-contenedor)).
 
 **`--read-only` funciona porque la imagen no escribe nada en ejecución.** La
 única excepción es un socket unix, cuya vinculación necesita un directorio padre

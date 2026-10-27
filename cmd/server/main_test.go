@@ -1653,9 +1653,11 @@ func TestPrintHelp_ExcludeTools_NamesEverySpellingItAccepts(t *testing.T) {
 // TestPrintHelp_AllowPlaintextHTTP_SaysWhatItDeclaresAndWhereItIsRead holds
 // the help of the plaintext listener opt-in to what an operator deciding
 // whether to set it has to know: that a TCP listener off loopback without TLS
-// warns at startup, that the opt-in is a statement that something in front of
-// the listener encrypts the hop, and that it is read from the environment too,
-// which is the one way a container that keeps the image's command can set it.
+// is served by default and warns at startup, that the opt-in at true is a
+// statement that something in front of the listener encrypts the hop, that at
+// false it is the hardened mode, which refuses such a listener, and that it is
+// read from the environment too, which is the one way a container that keeps
+// the image's command can set it.
 // Both entries are checked, the flag's and the variable's, since an operator
 // reads whichever they arrived at.
 func TestPrintHelp_AllowPlaintextHTTP_SaysWhatItDeclaresAndWhereItIsRead(t *testing.T) {
@@ -1668,8 +1670,8 @@ func TestPrintHelp_AllowPlaintextHTTP_SaysWhatItDeclaresAndWhereItIsRead(t *test
 		entry string
 		says  []string
 	}{
-		{entry: "-allow-plaintext-http", says: []string{"plain HTTP", "loopback", "warns", "TLS", "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP"}},
-		{entry: "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP", says: []string{"plain HTTP", "loopback", "TLS"}},
+		{entry: "-allow-plaintext-http", says: []string{"plain HTTP", "loopback", "warns", "TLS", "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP", "default true", "false", "hardened mode", "refuses"}},
+		{entry: "GITLAB_MCP_ALLOW_PLAINTEXT_HTTP", says: []string{"plain HTTP", "loopback", "TLS", "default", "true", "false", "hardened mode", "refuses"}},
 	} {
 		t.Run(tc.entry, func(t *testing.T) {
 			entry := helpEntry(help, tc.entry)
@@ -13836,6 +13838,7 @@ func TestMain_RegistersEachFlagWithItsDocumentedDefault(t *testing.T) {
 		"stateless":                  "true",
 		"json-response":              "false",
 		"max-request-body-bytes":     "0",
+		"allow-plaintext-http":       "true",
 	} {
 		t.Run(name, func(t *testing.T) {
 			registered := flag.CommandLine.Lookup(name)
@@ -15425,29 +15428,38 @@ func TestRunHTTP_AllowAnyGitLabURLStarts(t *testing.T) {
 
 // TestRunHTTP_AnnouncesThePlaintextListenerItWasConfiguredFor verifies that
 // runHTTP judges the listener it was given: the address it binds, the
-// certificate it serves, and the opt-in, from the flag and from the
-// environment alike. [announcePlaintextListener] is held to its cases by its
-// own test; this one holds the call to the configuration it is made from.
+// certificate it serves, and the plain HTTP setting, from the flag and from
+// the environment alike, the flag winning. [checkPlaintextListener] is held
+// to its cases by its own test; this one holds the call to the configuration
+// it is made from.
 //
 // The address is 192.0.2.1, a documentation address (RFC 5737) no host
 // running the suite holds, so the bind fails and runHTTP returns without
 // serving. The announcement comes before the bind, which is the order that
 // matters: a listener that fails to come up is still one the operator asked
-// to serve in plain HTTP, and saying so then costs nothing.
+// to serve in plain HTTP, and saying so then costs nothing. The hardened
+// mode's refusal comes before the bind too, so it is the error runHTTP
+// returns, and nothing is announced beside it.
 func TestRunHTTP_AnnouncesThePlaintextListenerItWasConfiguredFor(t *testing.T) {
 	certPath, keyPath := rotatingPair(t, t.TempDir(), 1, time.Now())
 	for _, tc := range []struct {
 		name    string
-		flag    bool
+		flag    string
 		env     string
 		tlsCert string
 		tlsKey  string
 		want    string
+		refused bool
 	}{
-		{name: "plain HTTP without the opt-in", want: plaintextListenerWarning},
-		{name: "plain HTTP with the flag", flag: true, want: plaintextListenerAllowed},
+		{name: "plain HTTP with neither", want: plaintextListenerWarning},
+		{name: "plain HTTP with the flag", flag: "true", want: plaintextListenerAllowed},
 		{name: "plain HTTP with the variable", env: "true", want: plaintextListenerAllowed},
+		{name: "plain HTTP with the flag at false", flag: "false", refused: true},
+		{name: "plain HTTP with the variable at false", env: "false", refused: true},
+		{name: "plain HTTP with the flag at true over the variable at false", flag: "true", env: "false", want: plaintextListenerAllowed},
+		{name: "plain HTTP with the flag at false over the variable at true", flag: "false", env: "true", refused: true},
 		{name: "TLS on the listener", tlsCert: certPath, tlsKey: keyPath},
+		{name: "TLS on the listener with the variable at false", env: "false", tlsCert: certPath, tlsKey: keyPath},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GITLAB_MCP_ALLOW_PLAINTEXT_HTTP", tc.env)
@@ -15455,33 +15467,59 @@ func TestRunHTTP_AnnouncesThePlaintextListenerItWasConfiguredFor(t *testing.T) {
 
 			// The error is the failed bind, or nil from a machine that does
 			// hold the address, which the bounded run then stops; either way
-			// what is asserted is the line written before it.
-			_ = runHTTPExpectingRefusal(t, &httpConfig{
-				addr:               "192.0.2.1:0",
-				gitlabURL:          "https://gitlab.example.com",
-				maxHTTPClients:     config.DefaultMaxHTTPClients,
-				sessionTimeout:     config.DefaultSessionTimeout,
-				oauthCacheTTL:      config.DefaultOAuthCacheTTL,
-				allowPlaintextHTTP: tc.flag,
-				tlsCert:            tc.tlsCert,
-				tlsKey:             tc.tlsKey,
-			})
-
-			var announced []string
-			for _, record := range decodeRecords(t, logged) {
-				if msg, _ := record["msg"].(string); msg == plaintextListenerWarning || msg == plaintextListenerAllowed {
-					announced = append(announced, msg)
-				}
+			// what is asserted is the line written before it, unless the
+			// hardened mode refused the listener first.
+			err := runHTTPExpectingRefusal(t, plaintextListenerConfig(t, tc.flag, tc.tlsCert, tc.tlsKey))
+			if refusal := err != nil && strings.HasPrefix(err.Error(), "--allow-plaintext-http=false"); refusal != tc.refused {
+				t.Errorf("runHTTP() = %v, want the hardened mode's refusal: %t", err, tc.refused)
 			}
+
 			var want []string
 			if tc.want != "" {
 				want = []string{tc.want}
 			}
-			if !slices.Equal(announced, want) {
+			if announced := plaintextAnnouncements(t, logged); !slices.Equal(announced, want) {
 				t.Errorf("announced %q, want %q", announced, want)
 			}
 		})
 	}
+}
+
+// plaintextListenerConfig is the HTTP configuration of the runHTTP case
+// above: a documentation address no host holds, the TLS pair it names, and
+// --allow-plaintext-http passed with value unless value is empty.
+func plaintextListenerConfig(t *testing.T, value, tlsCert, tlsKey string) *httpConfig {
+	t.Helper()
+	hcfg := &httpConfig{
+		addr:           "192.0.2.1:0",
+		gitlabURL:      "https://gitlab.example.com",
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+		oauthCacheTTL:  config.DefaultOAuthCacheTTL,
+		tlsCert:        tlsCert,
+		tlsKey:         tlsKey,
+		setFlags:       map[string]bool{},
+	}
+	if value != "" {
+		if err := hcfg.plaintextHTTP.Set(value); err != nil {
+			t.Fatal(err)
+		}
+		hcfg.setFlags["allow-plaintext-http"] = true
+	}
+	return hcfg
+}
+
+// plaintextAnnouncements are the lines about a plaintext listener among the
+// records logged into buf, in order.
+func plaintextAnnouncements(t *testing.T, buf *bytes.Buffer) []string {
+	t.Helper()
+	var announced []string
+	for _, record := range decodeRecords(t, buf) {
+		if msg, _ := record["msg"].(string); msg == plaintextListenerWarning || msg == plaintextListenerAllowed {
+			announced = append(announced, msg)
+		}
+	}
+	return announced
 }
 
 // TestRequireExplicitInstance verifies that a request leaving the instance

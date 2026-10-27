@@ -21,6 +21,7 @@ var specRequirementIDs = []string{
 	"IDN-008", "IDN-009", "IDN-010", "IDN-011", "IDN-012", "IDN-013", "IDN-014",
 	"ADM-001", "ADM-002", "ADM-003", "ADM-004", "ADM-005", "ADM-006", "ADM-007",
 	"ADM-008", "ADM-009", "ADM-010", "ADM-011", "ADM-012", "ADM-013", "ADM-014",
+	"ADM-015",
 	"AUB-001", "AUB-002", "AUB-003", "AUB-004", "AUB-005", "AUB-006",
 	"RTC-001", "RTC-002", "RTC-003", "RTC-004", "RTC-005", "RTC-006", "RTC-007",
 	"RTC-008",
@@ -116,7 +117,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 33},
-		{"ruled", Ruled, 37},
+		{"ruled", Ruled, 38},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 12},
@@ -1108,6 +1109,7 @@ func TestDecisions_UploadLimit_RefusesAMalformedValueByIssue1170(t *testing.T) {
 // default by issue 957's decision.
 func TestDecisions_ASettingOnARowWithNoValueSource_StatesItsMalformedPolicy(t *testing.T) {
 	want := map[string]Malformed{
+		"ADM-015": RefuseStartup,
 		"DST-002": RefuseStartup,
 		"RQB-001": RefuseStartup,
 		"RQB-004": WarnKeepDefault,
@@ -1460,6 +1462,14 @@ func rowPins() map[string]rowPin {
 		"DST-002": {Admit, Rule, ClassP, Ruled, KeyDeployment, KeyNone, KeyNone, KeyNone, []refusalPin{
 			{
 				methods: "startup", channel: Startup, prefix: "--allow-any-gitlab-url names no instance and --http-addr ",
+				answer: AskOperator,
+			},
+		}},
+		"ADM-015": {Admit, Rule, ClassP, Ruled, KeyDeployment, KeyNone, KeyNone, KeyNone, []refusalPin{
+			{
+				methods: "startup", channel: Startup,
+				prefix: "--allow-plaintext-http=false, or GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false, refuses a listener " +
+					"that serves plain HTTP on an address other machines can reach, and --http-addr ",
 				answer: AskOperator,
 			},
 		}},
