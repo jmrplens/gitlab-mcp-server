@@ -255,8 +255,8 @@ func TestRead_FixturePackage_ReadsOnlyExportedServiceMethods(t *testing.T) {
 // and sorted.
 func TestSDK_Methods_ListsEveryEntryInKeyOrder(t *testing.T) {
 	methods := fixture(t).Methods()
-	if len(methods) != 35 {
-		t.Errorf("Methods() listed %d, want 35", len(methods))
+	if len(methods) != 38 {
+		t.Errorf("Methods() listed %d, want 38", len(methods))
 	}
 	for i := 1; i < len(methods); i++ {
 		if methods[i-1].Key() >= methods[i].Key() {

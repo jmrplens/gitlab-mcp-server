@@ -52,6 +52,19 @@
 // ":", which is client-go's own normalization of a route template, so the
 // shapes produced here meet the ones its route registry reports.
 //
+// # Where a parameter lands
+//
+// [SDK.Placements] answers which of those placeholders each parameter of a
+// method fills, which the sdk scope's identifiers rule asks of a parameter
+// that takes an ID or a path as any. It reads the method again with every
+// parameter folded to a mark that names it, carried wherever a piece of a
+// path is (into a delegated function, through a format) and through what the
+// reading cannot name but builds out of a marked parameter (ProjectID{pid},
+// the string parseID returns), so a segment that comes out as one mark is the
+// segment that parameter fills. The marks change nothing the first reading
+// spells: Methods and Method read without them, so the routes every other
+// reader asks of are what they were.
+//
 // # What it cannot read
 //
 // A legacy request whose path folds to nothing static (a parameter passed

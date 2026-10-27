@@ -173,12 +173,7 @@ func verbOf(named string) string {
 // spellings its arguments fold to, and keeps each shape that names something
 // static. A spelling past the bound is reported as unresolved instead.
 func (r *reading) templatePaths(fn *function, use templateUse, env map[string]string) (paths, unresolved []string) {
-	pieces := make([][]string, 0, len(use.args))
-	for _, arg := range use.args {
-		pieces = append(pieces, spellings(r.fold(fn, arg, env, map[string]bool{})))
-	}
-	for _, values := range combinations(pieces) {
-		raw := substitute(use.template, values)
+	for _, raw := range r.templateSpellings(fn, use, env) {
 		if strings.Contains(raw, overflow) {
 			unresolved = append(unresolved, fn.key+": a path it formats "+boundReason)
 			continue
@@ -190,6 +185,29 @@ func (r *reading) templatePaths(fn *function, use templateUse, env map[string]st
 	return paths, unresolved
 }
 
+// templateSpellings formats one withPath template with every combination of
+// the spellings its arguments fold to, the bound's overflow included.
+func (r *reading) templateSpellings(fn *function, use templateUse, env map[string]string) []string {
+	pieces := make([][]string, 0, len(use.args))
+	for _, arg := range use.args {
+		pieces = append(pieces, spellings(r.fold(fn, arg, env, map[string]bool{})))
+	}
+	var out []string
+	for _, values := range combinations(pieces) {
+		out = append(out, substitute(use.template, values))
+	}
+	return out
+}
+
+// legacyVerb is the verb one NewRequest or UploadRequest sends: the one the
+// body reassigns on the request, or the net/http constant it is built with.
+func legacyVerb(fn *function, use legacyUse) (string, bool) {
+	if fn.override != "" {
+		return fn.override, true
+	}
+	return httpVerb(use.verb)
+}
+
 // legacyRoutes reads one NewRequest or UploadRequest: its verb, reassigned or
 // not, and every path its argument folds to.
 //
@@ -198,13 +216,9 @@ func (r *reading) templatePaths(fn *function, use templateUse, env map[string]st
 // cannot be told from any other route and is recorded as unresolved rather
 // than guessed at, and so is one that multiplied past the bound.
 func (r *reading) legacyRoutes(fn *function, use legacyUse, env map[string]string) (routes []Route, unresolved []string) {
-	verb := fn.override
-	if verb == "" {
-		named, ok := httpVerb(use.verb)
-		if !ok {
-			return nil, []string{fn.key + ": the verb of a request it builds is not a net/http constant"}
-		}
-		verb = named
+	verb, ok := legacyVerb(fn, use)
+	if !ok {
+		return nil, []string{fn.key + ": the verb of a request it builds is not a net/http constant"}
 	}
 	for _, raw := range r.fold(fn, use.path, env, map[string]bool{}) {
 		if raw == "" {
@@ -232,7 +246,32 @@ func (r *reading) legacyRoutes(fn *function, use legacyUse, env map[string]strin
 // so a variable reassigned from itself (u = fmt.Sprintf("%s.%s", u, x)) reads
 // the other assignments for its own name, and a helper that calls itself folds
 // the call back to an unknown piece, instead of either recursing.
+//
+// An expression it cannot name but that is built out of a parameter bound
+// to a mark folds to that mark rather than to an unknown piece. Only
+// [SDK.Placements] binds a mark, so every other reading folds as though
+// this were not here.
 func (r *reading) fold(fn *function, expr ast.Expr, env map[string]string, active map[string]bool) []string {
+	values := r.foldExpr(fn, expr, env, active)
+	if !slices.Contains(values, unknown) {
+		return values
+	}
+	names := r.mentioned(fn, expr, env, map[string]bool{})
+	if len(names) == 0 {
+		return values
+	}
+	marked := make([]string, len(values))
+	for i, value := range values {
+		if value == unknown {
+			value = mark(names)
+		}
+		marked[i] = value
+	}
+	return marked
+}
+
+// foldExpr is [reading.fold] without the marks.
+func (r *reading) foldExpr(fn *function, expr ast.Expr, env map[string]string, active map[string]bool) []string {
 	switch typed := expr.(type) {
 	case *ast.BasicLit:
 		if literal, ok := stringLiteral(typed); ok {
@@ -401,15 +440,18 @@ func limit(values []string) []string {
 	var out []string
 	seen := map[string]bool{}
 	bounded := false
+	// A sequence of ifs rather than an untagged switch, so the mutation tool
+	// can measure each condition; it cannot see a case expression.
 	for _, value := range values {
-		switch {
-		case seen[value]:
-		case len(out) == maxFolds:
-			bounded = true
-		default:
-			seen[value] = true
-			out = append(out, value)
+		if seen[value] {
+			continue
 		}
+		if len(out) == maxFolds {
+			bounded = true
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
 	}
 	if bounded {
 		out = append(out, overflow)
@@ -456,10 +498,7 @@ func substitute(format string, values []string) string {
 // reports whether any segment is literal text, since a path made only of
 // placeholders names no endpoint anybody could tell from another.
 func shape(raw string) (string, bool) {
-	if i := strings.IndexAny(raw, "?#"); i >= 0 {
-		raw = raw[:i]
-	}
-	segments := strings.Split(strings.Trim(raw, "/"), "/")
+	segments := pathSegments(raw)
 	literal := false
 	for i, segment := range segments {
 		if segment == unknown {
@@ -470,6 +509,15 @@ func shape(raw string) (string, bool) {
 		literal = literal || segments[i] != ""
 	}
 	return "/" + strings.Join(segments, "/"), literal
+}
+
+// pathSegments splits a formatted path into its segments, its query string
+// and fragment left out, the way [shape] reads it.
+func pathSegments(raw string) []string {
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		raw = raw[:i]
+	}
+	return strings.Split(strings.Trim(raw, "/"), "/")
 }
 
 // separatedUnknown drops an unknown piece, and the separator in front of it

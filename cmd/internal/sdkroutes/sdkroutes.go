@@ -58,6 +58,9 @@ type SDK struct {
 	methods map[string]Method
 	keys    []string
 	reading *reading
+	// entries maps a method's key to the body it was resolved from, which
+	// [SDK.Placements] reads a second time.
+	entries map[string]*function
 }
 
 // Read parses the client-go root package in dir and resolves every exported
@@ -69,11 +72,12 @@ type SDK struct {
 // reports rather than gates on what it finds missing.
 func Read(dir string) *SDK {
 	parsed := parseDir(dir)
-	sdk := &SDK{methods: map[string]Method{}, reading: parsed}
+	sdk := &SDK{methods: map[string]Method{}, reading: parsed, entries: map[string]*function{}}
 	for _, entry := range parsed.entries {
 		method := parsed.resolve(entry)
 		key := method.Key()
 		sdk.methods[key] = method
+		sdk.entries[key] = entry
 		sdk.keys = append(sdk.keys, key)
 	}
 	sort.Strings(sdk.keys)

@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"slices"
@@ -88,7 +89,10 @@ type function struct {
 	recvVar  string
 	name     string
 	params   []string
-	decl     *ast.FuncDecl
+	// paramTypes spells the type of each of params as the signature writes
+	// it, in the same order.
+	paramTypes []string
+	decl       *ast.FuncDecl
 	// verb is the verb withMethod names, "" when none is named.
 	verb string
 	// override is the verb the body reassigns on a request it built, "" when
@@ -279,6 +283,8 @@ func (r *reading) addFunction(file parsedFile, decl *ast.FuncDecl) {
 		start:  file.fileSet.Position(decl.Pos()).Line,
 		end:    file.fileSet.Position(decl.End()).Line,
 		params: paramNames(decl.Type.Params),
+		// The types are read off the same list, so they line up with params.
+		paramTypes: paramTypes(decl.Type.Params),
 	}
 	fn.key = fn.name
 	if decl.Recv != nil {
@@ -418,6 +424,18 @@ func paramNames(params *ast.FieldList) []string {
 		}
 	}
 	return names
+}
+
+// paramTypes spells the type of each parameter [paramNames] names, in the
+// same order, an unnamed one included.
+func paramTypes(params *ast.FieldList) []string {
+	var spelled []string
+	for _, field := range params.List {
+		for range max(1, len(field.Names)) {
+			spelled = append(spelled, types.ExprString(field.Type))
+		}
+	}
+	return spelled
 }
 
 // answers names the struct a method's first result carries.
