@@ -138,6 +138,23 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestGroupSAMLOptions_UnknownTool_KeepsTheGenericMetadata verifies that a
+// tool name none of the five cases names is given the package's generic
+// metadata and no schema override, so the switch's last case is measured
+// both ways rather than only for the tool it names.
+func TestGroupSAMLOptions_UnknownTool_KeepsTheGenericMetadata(t *testing.T) {
+	options := groupSAMLOptions("gitlab_unknown_tool")
+	if !strings.HasPrefix(options.Usage, "Manage a group's SAML group links") {
+		t.Errorf("Usage = %q, want the generic one", options.Usage)
+	}
+	if options.IndividualTool.Description != "" || len(options.InputSchemaOverrides) != 0 {
+		t.Errorf("options = %+v, want no description and no schema override", options)
+	}
+	if !slices.Equal(options.Aliases, []string{"gitlab_unknown_tool"}) {
+		t.Errorf("Aliases = %v, want the tool name alone", options.Aliases)
+	}
+}
+
 // TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
 // The mock GitLab API at /api/v4/groups/42/saml_group_links (GET) responds with HTTP OK.
 // It asserts the route returns the expected error or result.
