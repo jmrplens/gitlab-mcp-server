@@ -221,10 +221,10 @@ func TestClientGoDir_AnImportGraph_IsResolvedToTheModuleRoot(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got := clientGoDir([]*packages.Package{{PkgPath: "tools", Imports: testCase.imports}})
+			got := ClientGoDir([]*packages.Package{{PkgPath: "tools", Imports: testCase.imports}})
 
 			if got != testCase.want {
-				t.Errorf("clientGoDir() = %q, want %q", got, testCase.want)
+				t.Errorf("ClientGoDir() = %q, want %q", got, testCase.want)
 			}
 		})
 	}

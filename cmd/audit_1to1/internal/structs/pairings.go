@@ -75,7 +75,7 @@ func CollectOutputPairings(root string) (Pairings, error) {
 	if err != nil {
 		return Pairings{}, err
 	}
-	found := Pairings{ClientGoDir: clientGoDir(pkgs)}
+	found := Pairings{ClientGoDir: ClientGoDir(pkgs)}
 	for _, pkg := range pkgs {
 		short := shared.ShortPackage(pkg.PkgPath)
 		for _, pair := range CollectPairs(pkg) {
@@ -143,15 +143,16 @@ func DiffInputPairs(pkgs []*packages.Package) []InputPairDiff {
 	return out
 }
 
-// clientGoDir finds the directory of the client-go root package in the import
-// graph of the loaded tool packages.
+// ClientGoDir finds the directory of the client-go root package in the import
+// graph of the loaded tool packages. The sdk scope reads it too, to ask
+// cmd/internal/sdkroutes which routes the pinned SDK sends.
 //
 // The root is identified by the Client struct rather than by its import path,
 // because the path carries a major-version suffix that moves with every major
 // release and several client-go packages share the prefix. A package with no
 // files on disk is passed over: the answer is a directory to parse, and one
 // that names nothing is worse than none.
-func clientGoDir(pkgs []*packages.Package) string {
+func ClientGoDir(pkgs []*packages.Package) string {
 	for _, pkg := range pkgs {
 		for path, imported := range pkg.Imports {
 			if !strings.Contains(path, shared.ClientGoPkgPath) || imported.Types == nil {

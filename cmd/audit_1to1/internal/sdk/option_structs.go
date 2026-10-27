@@ -300,21 +300,7 @@ func identVar(info *types.Info, ident *ast.Ident) *types.Var {
 // origin for an instantiation, or a variable holding one. Nil for a call of
 // anything else.
 func calledObject(info *types.Info, call *ast.CallExpr) types.Object {
-	fun := ast.Unparen(call.Fun)
-	switch typed := fun.(type) {
-	case *ast.IndexExpr:
-		fun = typed.X
-	case *ast.IndexListExpr:
-		fun = typed.X
-	}
-	var ident *ast.Ident
-	switch typed := fun.(type) {
-	case *ast.Ident:
-		ident = typed
-	case *ast.SelectorExpr:
-		ident = typed.Sel
-	}
-	obj := info.Uses[ident]
+	obj := info.Uses[calledIdent(call)]
 	if fn, isFunc := obj.(*types.Func); isFunc {
 		return fn.Origin()
 	}

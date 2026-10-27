@@ -11,6 +11,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/waits"
 )
 
 // Service and operation statuses.
@@ -35,33 +36,48 @@ type report struct {
 	// carries to an input, and every copy of one struct into another to the
 	// fields the two share.
 	OptionStructs optionStructsReport `json:"option_structs"`
-	// StaleDeclarations joins the four tables' stale entries: a service
-	// declaration, a GraphQL decision, an enum exemption or an option struct
-	// declaration that no longer describes the code.
+	// UpstreamWaits holds every workaround waiting on client-go to the
+	// predicate that says it is still needed, and every raw request,
+	// request option written by hand and body edit the walk finds to an
+	// entry that answers it.
+	UpstreamWaits upstreamWaitsReport `json:"upstream_waits"`
+	// StaleDeclarations joins the five tables' stale entries: a service
+	// declaration, a GraphQL decision, an enum exemption, an option struct
+	// declaration or an upstream wait that no longer describes the code.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
 }
 
 type reportSummary struct {
-	SDKServices          int `json:"sdk_services"`
-	ServicesCovered      int `json:"services_covered"`
-	ServicesDeclared     int `json:"services_declared"`
-	ServicesUndeclared   int `json:"services_undeclared"`
-	GraphQLOperations    int `json:"graphql_operations"`
-	GraphQLAdjudicated   int `json:"graphql_adjudicated"`
-	GraphQLUnadjudicated int `json:"graphql_unadjudicated"`
-	EnumFields           int `json:"enum_fields"`
-	EnumFieldsWithGaps   int `json:"enum_fields_with_gaps"`
-	EnumMissingValues    int `json:"enum_missing_values"`
-	EnumExtraValues      int `json:"enum_extra_values"`
-	OptionStructs        int `json:"option_structs"`
-	OptionPaired         int `json:"option_structs_paired"`
-	OptionConverted      int `json:"option_structs_converted"`
-	OptionCopied         int `json:"option_structs_copied"`
-	OptionDeclared       int `json:"option_structs_declared"`
-	OptionUnpaired       int `json:"option_structs_unpaired"`
-	OptionCopyMissing    int `json:"option_copy_missing_fields"`
-	OptionNestedMissing  int `json:"option_nested_missing_fields"`
-	StaleDeclarations    int `json:"stale_declarations"`
+	SDKServices             int `json:"sdk_services"`
+	ServicesCovered         int `json:"services_covered"`
+	ServicesDeclared        int `json:"services_declared"`
+	ServicesUndeclared      int `json:"services_undeclared"`
+	GraphQLOperations       int `json:"graphql_operations"`
+	GraphQLAdjudicated      int `json:"graphql_adjudicated"`
+	GraphQLUnadjudicated    int `json:"graphql_unadjudicated"`
+	EnumFields              int `json:"enum_fields"`
+	EnumFieldsWithGaps      int `json:"enum_fields_with_gaps"`
+	EnumMissingValues       int `json:"enum_missing_values"`
+	EnumExtraValues         int `json:"enum_extra_values"`
+	OptionStructs           int `json:"option_structs"`
+	OptionPaired            int `json:"option_structs_paired"`
+	OptionConverted         int `json:"option_structs_converted"`
+	OptionCopied            int `json:"option_structs_copied"`
+	OptionDeclared          int `json:"option_structs_declared"`
+	OptionUnpaired          int `json:"option_structs_unpaired"`
+	OptionCopyMissing       int `json:"option_copy_missing_fields"`
+	OptionNestedMissing     int `json:"option_nested_missing_fields"`
+	UpstreamWaits           int `json:"upstream_waits"`
+	WaitsHolding            int `json:"upstream_waits_holding"`
+	WaitsStalePredicate     int `json:"upstream_waits_stale_predicate"`
+	WaitsObsolete           int `json:"upstream_waits_obsolete"`
+	Workarounds             int `json:"workarounds"`
+	WorkaroundsUndeclared   int `json:"workarounds_undeclared"`
+	BodyEditKeysUnanswered  int `json:"body_edit_keys_unanswered"`
+	BodyEditsUnread         int `json:"body_edits_unread"`
+	SupersetNeedsUnanswered int `json:"superset_needs_unanswered"`
+	OptionMethodsUnanswered int `json:"option_methods_unanswered"`
+	StaleDeclarations       int `json:"stale_declarations"`
 }
 
 // clean reports whether the audited tree has no finding, i.e. whether the gate
@@ -70,6 +86,8 @@ func (s reportSummary) clean() bool {
 	return s.ServicesUndeclared == 0 && s.GraphQLUnadjudicated == 0 &&
 		s.EnumMissingValues == 0 && s.EnumExtraValues == 0 &&
 		s.OptionUnpaired == 0 && s.OptionCopyMissing == 0 && s.OptionNestedMissing == 0 &&
+		s.WaitsStalePredicate == 0 && s.WaitsObsolete == 0 && s.WorkaroundsUndeclared == 0 && s.BodyEditKeysUnanswered == 0 &&
+		s.BodyEditsUnread == 0 && s.SupersetNeedsUnanswered == 0 && s.OptionMethodsUnanswered == 0 &&
 		s.StaleDeclarations == 0
 }
 
@@ -112,7 +130,12 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	if err != nil {
 		return report{}, err
 	}
-	services := adjudicateServices(declared, shared.CollectServiceUsage(pkgs), declaredServices)
+	// A service a workaround replaces whole is declared COVERED_RAW by the
+	// entry, which is where its reason lives.
+	entries := waits.Entries()
+	serviceDeclarations, declaredTwice := withCoveredRawServices(declaredServices, entries)
+	usage := shared.CollectServiceUsage(pkgs)
+	services := adjudicateServices(declared, usage, serviceDeclarations)
 
 	graphQL, err := shared.GraphQLInterface(clientGo)
 	if err != nil {
@@ -132,14 +155,21 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	// with, read from the same packages the structs scope reads.
 	options, optionStale := buildOptionStructs(collectOptionUniverse(pkgs), structs.DiffInputPairs(pkgs), optionStructDeclarations)
 
-	stale := mergeStale(staleServiceDeclarations(services, declaredServices), staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale)
+	upstream, waitsStale, err := analyzeUpstreamWaits(root, pkgs, clientGo, usage, entries)
+	if err != nil {
+		return report{}, err
+	}
+
+	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale, waitsStale)
 	summary := summarize(services, operations, enumRep.Summary, stale)
 	summarizeOptionStructs(&summary, options)
+	summarizeUpstreamWaits(&summary, upstream)
 
 	if gapsOnly {
 		services = keepUndeclaredServices(services)
 		operations = keepUnadjudicatedOperations(operations)
 		options = keepOptionFindings(options)
+		upstream = keepWaitFindings(upstream)
 	}
 	return report{
 		SchemaVersion:     shared.SchemaVersion,
@@ -149,6 +179,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		GraphQLOperations: operations,
 		EnumFields:        flattenEnumFindings(enumRep),
 		OptionStructs:     options,
+		UpstreamWaits:     upstream,
 		StaleDeclarations: stale,
 	}, nil
 }

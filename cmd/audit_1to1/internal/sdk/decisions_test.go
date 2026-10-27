@@ -25,11 +25,12 @@ const minReasonLength = 40
 // TestDeclaredServices_Entries_CarryAKnownCategoryAndEvidence verifies every
 // service declaration is well formed: a category from the agreed set, a
 // substantial reason, and a key that is a bare service name rather than a
-// Client struct field or an interface name.
+// Client struct field or an interface name. COVERED_RAW is not in the set: a
+// service a raw request stands in for is declared by the waits entry that
+// holds the request to the pinned SDK, and only from there.
 func TestDeclaredServices_Entries_CarryAKnownCategoryAndEvidence(t *testing.T) {
 	known := map[string]bool{
-		coveredRaw: true, coveredGraphQL: true,
-		supersededUpstream: true, unwrappedTracked: true,
+		coveredGraphQL: true, supersededUpstream: true, unwrappedTracked: true,
 	}
 	for service, declared := range declaredServices {
 		t.Run(service, func(t *testing.T) {

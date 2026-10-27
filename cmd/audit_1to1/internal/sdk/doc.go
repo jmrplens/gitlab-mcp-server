@@ -39,6 +39,18 @@
 // input a model sends, converted from a held struct, copied from one field
 // for field, or declared.
 //
+// The upstream waits rule is folded in because its predicates are about the
+// pinned SDK: a workaround carried because client-go does something wrong
+// (a raw request, a request option written by hand, a body edit, a raw
+// request of the e2e fixture or of an e2e scenario) is held to an entry of
+// the waits table, and the entry to a predicate on client-go that says the
+// workaround is still needed, so the pin that makes it obsolete fails the
+// gate the day it lands. Every reason the walk can read off a workaround (a
+// key a raw request carries beside the client-go struct it embeds, a body
+// key, a method a request option pages) has to be one of those predicates,
+// or a pin that fixes only the reasons written down would retire a
+// workaround still needed.
+//
 // Unlike the three candidate-backlog scopes, this one is a gate: Run reports
 // whether the tree is clean, and the command exits non-zero when it is not.
 package sdk

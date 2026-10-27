@@ -93,6 +93,20 @@ func TestRun_SeamFailures_AreReported(t *testing.T) {
 	}
 }
 
+// TestRun_AnE2EFixtureThatDoesNotParse_FailsTheRun verifies the one failure
+// the upstream waits section can raise reaches Run's caller as an error
+// rather than as a report that read none of the fixture's raw requests.
+func TestRun_AnE2EFixtureThatDoesNotParse_FailsTheRun(t *testing.T) {
+	root := fixtureModule(t, map[string]string{fixtureDir + "/broken.go": "package fixture\n\nfunc {\n"})
+	content, clean, err := Run(root, true)
+	if err == nil || !strings.Contains(err.Error(), "parse the e2e fixture") {
+		t.Fatalf("Run = %v, want the fixture's parse error", err)
+	}
+	if clean || content != nil {
+		t.Errorf("failed run returned clean=%v content=%d bytes, want false and nil", clean, len(content))
+	}
+}
+
 // TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone verifies the
 // verdict the command's exit status is taken from: every counter the summary
 // carries a finding in fails the gate on its own, and the counters that merely
@@ -110,6 +124,7 @@ func TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone(t *testing.T) 
 			summary: reportSummary{
 				SDKServices: 120, ServicesCovered: 118, ServicesDeclared: 2, GraphQLOperations: 9, GraphQLAdjudicated: 9, EnumFields: 40,
 				OptionStructs: 9, OptionPaired: 5, OptionConverted: 1, OptionCopied: 1, OptionDeclared: 2,
+				UpstreamWaits: 47, WaitsHolding: 41, Workarounds: 55,
 			},
 			want: true,
 		},
@@ -120,6 +135,13 @@ func TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone(t *testing.T) 
 		{name: "an option struct nothing holds", summary: reportSummary{OptionUnpaired: 1}},
 		{name: "a field a copy leaves out", summary: reportSummary{OptionCopyMissing: 1}},
 		{name: "a field of a nested struct its input lacks", summary: reportSummary{OptionNestedMissing: 1}},
+		{name: "a workaround with a predicate to edit", summary: reportSummary{WaitsStalePredicate: 1}},
+		{name: "a workaround the pinned SDK made obsolete", summary: reportSummary{WaitsObsolete: 1}},
+		{name: "a workaround no entry answers", summary: reportSummary{WorkaroundsUndeclared: 1}},
+		{name: "a body key no predicate explains", summary: reportSummary{BodyEditKeysUnanswered: 1}},
+		{name: "a body edit whose keys the walk cannot read", summary: reportSummary{BodyEditsUnread: 1}},
+		{name: "a key a superset carries that no predicate explains", summary: reportSummary{SupersetNeedsUnanswered: 1}},
+		{name: "a method a request option is handed to that no predicate names", summary: reportSummary{OptionMethodsUnanswered: 1}},
 		{name: "a declaration that no longer describes the code", summary: reportSummary{StaleDeclarations: 1}},
 	}
 	for _, tc := range cases {

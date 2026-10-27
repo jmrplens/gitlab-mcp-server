@@ -75,7 +75,7 @@ var loadPackages = packages.Load
 // needtypes regardless of NeedDeps ("Complete type information is required
 // for the immediate dependencies of each source package"), and client-go is
 // a direct import of the tool packages, so shared.ClientGoTypes still finds
-// its *types.Package and structs.clientGoDir still finds its GoFiles.
+// its *types.Package and structs.ClientGoDir still finds its GoFiles.
 // Measured on this tree, with the build cache warm as it is whenever a test
 // or a build has run: 1.0s to 0.4s per load, and the six reports come out
 // byte for byte identical.

@@ -10,7 +10,7 @@ package sdk
 // scanner records a method value as reached, so such a service is called.
 const (
 	// coveredRaw: reached through client.GL().NewRequest + Do rather than the
-	// wrapper, for a reason the handler documents.
+	// wrapper, for the reason the waits entry that replaces it gives.
 	coveredRaw = "COVERED_RAW"
 	// coveredGraphQL: the domain is reached over GraphQL (ADR-0006). The
 	// decision about whether that is still right lives in graphqlDecisions,
@@ -62,10 +62,10 @@ type declaration struct {
 // directly, so listing them here as exceptions would describe a gap that does
 // not exist.
 var declaredServices = map[string]declaration{
-	// COVERED_RAW
-	"ApplicationStatistics": {coveredRaw, "internal/tools/appstatistics.Get issues a raw GET application/statistics: client-go's ApplicationStatistics declares int64 fields and GitLab renders every count through number_with_delimiter, a string grouped in the caller's language (\"1,234\", \"1.234\", \"1 234\"), so the wrapper cannot decode a successful response. Recorded in docs/development/upstream-bugs.md, entry 7"},
-	"GroupEpicBoards":       {coveredRaw, "internal/tools/groupepicboards issues raw GETs for groups/:id/epic_boards and .../:board_id: the wrapper's GroupEpicBoard type omits documented response fields (hide_backlog_list, hide_closed_list, labels, lists), and the raw request decodes the full documented shape"},
-	"Epics":                 {coveredRaw, "internal/tools/epics issues raw GETs for groups/:id/epics and .../:epic_iid/epics: the wrapper's Epic type omits fourteen documented response fields (parent_iid, color, text_color, web_edit_url, work_item_id, subscribed, reference, references, imported, imported_from, _links, end_date and the two inherited-source dates), declares two the endpoint never sends (user_notes_count, url), types labels []string so the documented with_labels_details parameter makes the response undecodable, and its EpicAuthor omits the locked and public_email keys the live author carries. The other four epic actions take the Work Items GraphQL API, which the interface's own upstream doc comment directs to. Recorded in docs/development/upstream-bugs.md"},
+	// COVERED_RAW is not declared here: a service a raw request stands in
+	// for whole is replaced by an entry of the waits table, which holds the
+	// workaround to the pinned SDK, and withCoveredRawServices declares it
+	// from there.
 
 	// COVERED_GRAPHQL — see graphqlDecisions for the per-operation decision.
 	"EpicIssues":             {coveredGraphQL, "internal/tools/epicissues drives the work-item hierarchy widget over GraphQL. The interface itself is documented upstream as 'Will be removed in v5 of the API, use Work Items API instead'"},

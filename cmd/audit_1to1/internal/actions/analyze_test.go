@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/waits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
 )
@@ -57,15 +58,41 @@ func TestSummarize_AggregatesServiceCounts(t *testing.T) {
 	}
 }
 
-// withAdjudication installs table as the adjudication for the duration of the
-// test. It is what lets a test say how much of the backlog is answered instead
+// withAdjudication installs table as the whole adjudication for the duration
+// of the test, the COVERED_RAW methods the waits table derives emptied with
+// it. It is what lets a test say how much of the backlog is answered instead
 // of inheriting whatever the tree answers today, so an assertion about the
 // filter does not turn into an assertion about the size of the backlog.
 func withAdjudication(t *testing.T, table map[string]string) {
 	t.Helper()
-	original := acceptedMissingMethods
-	t.Cleanup(func() { acceptedMissingMethods = original })
-	acceptedMissingMethods = table
+	original, originalRaw := acceptedMissingMethods, coveredRaw
+	t.Cleanup(func() { acceptedMissingMethods, coveredRaw = original, originalRaw })
+	acceptedMissingMethods, coveredRaw = table, map[string]string{}
+}
+
+// TestCoveredRaw_WaitsTable_IsTheOnlyPlaceAMethodIsCoveredRaw verifies the
+// derivation: every method the waits table replaces is adjudicated
+// COVERED_RAW with the entry's reason, and acceptedMissingMethods declares
+// none of its own, so a method cannot be adjudicated twice by two tables that
+// can disagree, and it retires from here the day its entry does.
+func TestCoveredRaw_WaitsTable_IsTheOnlyPlaceAMethodIsCoveredRaw(t *testing.T) {
+	derived := waits.CoveredRawMethods(waits.Entries())
+	if len(coveredRaw) != len(derived) || len(derived) == 0 {
+		t.Fatalf("coveredRaw holds %d methods, the waits table replaces %d", len(coveredRaw), len(derived))
+	}
+	for key, reason := range derived {
+		if coveredRaw[key] != coveredRawCategory+reason {
+			t.Errorf("coveredRaw[%s] = %q, want %q", key, coveredRaw[key], coveredRawCategory+reason)
+		}
+		if _, twice := acceptedMissingMethods[key]; twice {
+			t.Errorf("%s is adjudicated in acceptedMissingMethods as well as by the waits table", key)
+		}
+	}
+	for key, reason := range acceptedMissingMethods {
+		if strings.HasPrefix(reason, coveredRawCategory) {
+			t.Errorf("acceptedMissingMethods declares %s COVERED_RAW, which only a waits entry may", key)
+		}
+	}
 }
 
 // TestBuildReport_GapsOnly_KeepsExactlyTheServicesWithFindings holds the
@@ -293,6 +320,7 @@ func TestIsAcceptedMissingMethod_Keys_MatchServiceAndMethod(t *testing.T) {
 	}{
 		{name: "adjudicated_variant", service: "DraftNotes", method: "PublishAllDraftNotes", want: true},
 		{name: "adjudicated_graphql_epic", service: "Epics", method: "GetEpic", want: true},
+		{name: "replaced_by_a_waits_entry", service: "Features", method: "SetFeatureFlag", want: true},
 		{name: "unlisted_method", service: "DraftNotes", method: "ListDraftNotes", want: false},
 		{name: "service_suffix_is_not_part_of_the_key", service: "DraftNotesServiceInterface", method: "PublishAllDraftNotes", want: false},
 	}
