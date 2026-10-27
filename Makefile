@@ -42,7 +42,7 @@ PKGS=./cmd/... ./internal/...
 # Keep in lockstep with MCP_PUBLISHER_VERSION in .github/workflows/release.yml:
 # this one validates the manifest, that one publishes it. check-server-json
 # refuses to run when the two disagree.
-MCP_PUBLISHER_VERSION=v1.8.1
+MCP_PUBLISHER_VERSION=v1.8.6
 # The publisher is installed once per pinned version into a directory named
 # after that version, so a stale binary can never validate with another
 # release, and CI caches that directory by version instead of resolving the

@@ -120,7 +120,7 @@ env:
   # Pinned exactly, not by range: goreleaser-action and sbom-action download
   # these binaries at run time into a job that holds the signing identity, so
   # SHA-pinning the action alone leaves the code that actually runs unpinned.
-  GORELEASER_VERSION: "v2.18.3"
+  GORELEASER_VERSION: "v2.19.0"
   SYFT_VERSION: "v1.55.0"
   # Fetched by hand in the docker job, never through an action (see Install
   # Trivy there). A test of cmd/audit_image_vulns holds it to the weekly scan
@@ -314,8 +314,9 @@ jobs:
         id: version
         run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
-      # cosign-release is pinned here and in the eight other installs of this
-      # action, because the cosign major decides how a signature is attached
+      # cosign-release is pinned here and in the eleven other installs of this
+      # action (ten more in this workflow, one in image-vulns.yml), because the
+      # cosign major decides how a signature is attached
       # and therefore who can find it afterwards. cosign 2.x writes a legacy
       # `sha256-<digest>.sig` tag; cosign 3.x attaches an OCI 1.1 referrer,
       # falling back to a tag on a registry that serves no referrers API
@@ -326,7 +327,7 @@ jobs:
       # release could change that behaviour without a commit here.
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       # No registry login in a rehearsal: the smoke builds pull through the
       # Actions cache and the multi-platform build is exported to disk, so a
@@ -830,7 +831,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       # Nothing is signed or attested in a rehearsal, so nothing below runs and
       # this job needs no credential then either.
@@ -1083,8 +1084,8 @@ jobs:
       # before a tag does.
       - name: Install oras
         env:
-          ORAS_VERSION: "1.3.5"
-          ORAS_SHA256: "f48a73ea6d026a862c3919fc773da9a8c86fc259c2c737d5baed3b8b9614ad22"
+          ORAS_VERSION: "1.3.6"
+          ORAS_SHA256: "66fb0ad7206f3f6fa77ed5b552049d364ccf4b50b1684554f731f76302b52ca0"
         run: |
           set -euo pipefail
           TARBALL="oras_${ORAS_VERSION}_linux_amd64.tar.gz"
@@ -1149,10 +1150,11 @@ jobs:
       # (go-containerregistry v0.21.3), and its entry on ghcr.io reads
       # "application/vnd.oci.empty.v1+json" with no annotations; v3.1.3
       # (v0.21.7) writes the artifactType and still no annotations, measured
-      # against a registry:2. cosign main carries v0.22.1 since 2026-09-05
-      # (sigstore/cosign#5098) and no release ships it yet, and even that
-      # repairs nothing already written, since the update path skips a digest
-      # the index already lists.
+      # against a registry:2. v3.1.4, the release installed here, is the first
+      # to ship v0.22.1 (sigstore/cosign#5098), so the entries it appends
+      # should carry the annotations as well; that is still to be measured as
+      # the earlier ones were, and it repairs nothing already written, since
+      # the update path skips a digest the index already lists.
       #
       # Who reads the descriptor rather than the manifest: `gh attestation
       # verify --bundle-from-oci`, Kyverno's ClusterPolicy SigstoreBundle
@@ -1167,8 +1169,9 @@ jobs:
       # Docker Hub.
       #
       # The script reads each listed manifest and rewrites the tag only when
-      # an entry says less than its manifest does, so it is a no-op once
-      # cosign ships the fix and a guard for any client that regresses. Last
+      # an entry says less than its manifest does, so it leaves alone an entry
+      # a cosign with the fix appended, repairs the ones earlier releases
+      # wrote, and guards against any client that regresses. Last
       # because it rewrites what every step above appended to.
       #
       # A failure here warns and does not fail the job. This job gates every
@@ -1243,7 +1246,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       # Fetched by hand rather than through anchore/sbom-action/download-syft.
       # That action is SHA-pinned, but on Linux it downloads
@@ -1454,7 +1457,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -1495,7 +1498,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       # This job produces no binaries of its own: it downloads what the release
       # actually published and verifies it against the cosign-signed
@@ -1575,7 +1578,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -1658,7 +1661,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -1791,7 +1794,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -1865,7 +1868,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -1906,8 +1909,8 @@ jobs:
           # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
           # Bump when a new mcp-publisher release is verified. Server version published comes from
           # the git tag (handled in the previous step by update-server-json-sha.sh).
-          MCP_PUBLISHER_VERSION: "v1.8.1"
-          MCP_PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+          MCP_PUBLISHER_VERSION: "v1.8.6"
+          MCP_PUBLISHER_SHA256: "1fbe93fc0783c2394d8012c8d6e50a59e98cb2cc2d216264cc69f405d0e21340"
         run: |
           set -euo pipefail
           TARBALL="mcp-publisher_linux_amd64.tar.gz"
@@ -1947,7 +1950,7 @@ jobs:
             # only errors the registry itself labels transient, plus a
             # not-yet-visible npm, PyPI or NuGet version, which is
             # indistinguishable from registry-side propagation lag. Strings
-            # are quoted from the v1.8.1 validators
+            # are quoted from the v1.8.6 validators
             # (internal/validators/registries/{npm,pypi,nuget,oci}.go); a
             # genuine "not found (status: 404)" is deliberately absent, so a
             # truly unpublished package fails fast. "wait for validation to
@@ -1995,7 +1998,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -2100,7 +2103,7 @@ jobs:
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.1.3"
+          cosign-release: "v3.1.4"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'

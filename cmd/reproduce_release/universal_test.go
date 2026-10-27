@@ -33,7 +33,7 @@ func syntheticThin(arch fatArch, size int, fill byte) []byte {
 	return data
 }
 
-// goreleaserFat joins thin Mach-O files the way GoReleaser v2.18.3 does
+// goreleaserFat joins thin Mach-O files the way GoReleaser v2.19.0 does
 // (internal/pipe/universalbinary, makeUniversalBinary), in the order given: a
 // big-endian fat header, each slice at the next multiple of 2^14, zeros in
 // between. It is written out here from that source rather than shared with
