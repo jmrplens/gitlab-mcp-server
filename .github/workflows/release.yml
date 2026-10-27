@@ -333,7 +333,7 @@ jobs:
       # rehearsal never needs a credential for either registry and is not
       # given one. The dispatched code runs in this job, and code that runs
       # without a login cannot push.
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         if: env.REHEARSAL != 'true'
         with:
           registry: ${{ env.REGISTRY }}
@@ -354,7 +354,7 @@ jobs:
           fi
 
       - if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -834,14 +834,14 @@ jobs:
 
       # Nothing is signed or attested in a rehearsal, so nothing below runs and
       # this job needs no credential then either.
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         if: env.REHEARSAL != 'true'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
         with:
           registry: docker.io

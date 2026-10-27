@@ -2,7 +2,7 @@
   "schema": 1,
   "about": "What each action the workflows pin holds at its commit: the metadata file of every action a step reaches, and the files a credentialed job's steps read from an action's own directory. Written by go run ./cmd/audit_supply_chain -record, which reads them from raw.githubusercontent.com; read offline by make check-supply-chain, which judges a composite action's steps from it and refuses a pin it holds no entry for. Every file is kept as its lines, in ASCII.",
   "actions": {
-    "DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff": {
+    "DavidAnson/markdownlint-cli2-action@696eb3f2509270d7b882d2aa68347bc676e7af34": {
       "metadata": "action.yml",
       "lines": [
         "name: markdownlint-cli2-action",
@@ -67,7 +67,7 @@
         ""
       ]
     },
-    "SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9": {
+    "SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304": {
       "metadata": "action.yml",
       "lines": [
         "name: Official SonarQube Scan",
@@ -91,7 +91,7 @@
         "    description: Version of the Sonar Scanner CLI to use",
         "    required: false",
         "    # to be kept in sync with sonar-scanner-version",
-        "    default: 8.1.0.6389",
+        "    default: 8.3.0.16463",
         "  scannerBinariesUrl:",
         "    description: URL to download the Sonar Scanner CLI binaries from",
         "    required: false",
@@ -102,9 +102,8 @@
         "    default: \"false\"",
         "  scannerBinariesAuthHeader:",
         "    description: >",
-        "      Authorization header value to use when downloading the SonarScanner CLI binaries",
-        "      (e.g. 'Bearer mytoken' or 'Basic base64creds'). Use this when scannerBinariesUrl",
-        "      points to a private server that requires authentication.",
+        "      Authorization header value to use when downloading the SonarScanner CLI binaries (e.g. 'Bearer mytoken' or 'Basic base64creds'). Use this when scannerBinariesUrl points to a private server that requires authentication.",
+        "",
         "    required: false",
         "    default: \"\"",
         "runs:",
@@ -908,7 +907,7 @@
         ""
       ]
     },
-    "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+    "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0": {
       "metadata": "action.yml",
       "lines": [
         "---",
@@ -929,8 +928,14 @@
         "    description: \"Set this option if you want the action to check for the latest available version that satisfies the version spec.\"",
         "    default: false",
         "  token:",
-        "    description: \"The token used to authenticate when fetching Python distributions from https://github.com/actions/python-versions. When running this action on github.com, the default value is sufficient. When running on GHES, you can pass a personal access token for github.com if you are experiencing rate limiting.\"",
+        "    description: \"The token used to authenticate when fetching Python distributions from https://github.com/actions/python-versions. When running this action on github.com, the default value is sufficient. When running on GHES, you can pass a personal access token for github.com if you are experiencing rate limiting. This token is only sent to GitHub-owned hosts, never to a custom 'mirror'.\"",
         "    default: ${{ github.server_url == 'https://github.com' && github.token || '' }}",
+        "  mirror:",
+        "    description: \"Base URL for downloading Python distributions (only applies to CPython; PyPy and GraalPy are unaffected). Defaults to https://raw.githubusercontent.com/actions/python-versions/main. See docs/advanced-usage.md for details.\"",
+        "    default: \"https://raw.githubusercontent.com/actions/python-versions/main\"",
+        "  mirror-token:",
+        "    description: \"Token used to authenticate requests to the host named in 'mirror'. Sent verbatim as the Authorization header, so include a scheme if your mirror needs one (e.g. 'Bearer <token>').\"",
+        "    required: false",
         "  cache-dependency-path:",
         "    description: \"Used to specify the path to dependency files. Supports wildcards or a list of file names for caching multiple dependencies.\"",
         "  update-environment:",
@@ -1351,7 +1356,7 @@
         ""
       ]
     },
-    "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": {
+    "docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6": {
       "metadata": "action.yml",
       "lines": [
         "# https://help.github.com/en/articles/metadata-syntax-for-github-actions",
@@ -1516,7 +1521,7 @@
         ""
       ]
     },
-    "github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee": {
+    "github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370": {
       "metadata": "action.yml",
       "lines": [
         "name: \"CodeQL: Finish\"",
@@ -1621,7 +1626,7 @@
         ""
       ]
     },
-    "github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee": {
+    "github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370": {
       "metadata": "action.yml",
       "lines": [
         "name: 'CodeQL: Init'",
@@ -1779,7 +1784,10 @@
         "    required: false",
         "  trap-caching:",
         "    description: >-",
-        "      Explicitly enable or disable TRAP caching rather than respecting the feature flag for it.",
+        "      Explicitly enable or disable TRAP caching instead of using the automatically determined default.",
+        "      TRAP caching is disabled by default when improved incremental analysis is enabled,",
+        "      because improved incremental analysis of a pull request only extracts changed files,",
+        "      which rarely benefit from TRAP caching.",
         "    required: false",
         "  dependency-caching:",
         "    description: >-",
@@ -1809,7 +1817,7 @@
         ""
       ]
     },
-    "github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee": {
+    "github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370": {
       "metadata": "action.yml",
       "lines": [
         "name: 'Code Scanning : Upload SARIF'",
