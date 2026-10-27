@@ -1678,7 +1678,7 @@ publish-nuget:
 # Pinned: the CLI has already changed its verb contract under this target
 # once (publish -> update, a new positional gitUrl); bump deliberately after
 # verifying `plugin update --dir` still holds.
-LOBEHUB_MARKET_CLI_VERSION := 0.0.42
+LOBEHUB_MARKET_CLI_VERSION := 0.0.44
 
 publish-lobehub: check-lhm-manifest
 	@command -v node >/dev/null || { echo "ERROR: Node.js >= 22 is required"; exit 1; }
