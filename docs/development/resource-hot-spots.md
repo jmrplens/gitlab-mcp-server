@@ -465,7 +465,9 @@ code does.
 tool surface, capability surface, meta parameter-schema mode, tier and whether
 it was pinned, whether the instance is GitLab.com, read-only, the narrowing a
 token carrying `read_api` and not `api` causes, safe mode, the excluded tools,
-the token scopes and the transport's statelessness (`serverShapeKey` in `cmd/server/shape.go`). The
+the token scopes, the transport's statelessness and the language the texts a
+person reads are rendered in, which is set per process and so splits nothing
+(`serverShapeKey` in `cmd/server/shape.go`). The
 instance URL is not in it, since two instances of one tier share a catalog and
 the client is per credential either way. `shapeServers` builds each shape at
 most once, and registration runs behind that server's readiness gate, so the

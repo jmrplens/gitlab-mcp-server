@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing verifies the property the
@@ -66,6 +67,7 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"DiscoveryRateLimitBurst": overlay.DiscoveryRateLimitBurst == nil,
 
 		"UploadMaxFileSize": overlay.UploadMaxFileSize == nil,
+		"Language":          overlay.Language == nil,
 
 		"AllowPlaintextHTTP": overlay.AllowPlaintextHTTP == nil,
 	}
@@ -314,7 +316,37 @@ func presentVariableCases() []presentVariableCase {
 			},
 		},
 	}
-	return slices.Concat(cases, authBudgetPresentCases(), discoveryRatePresentCases(), uploadLimitPresentCases())
+	return slices.Concat(cases, authBudgetPresentCases(), discoveryRatePresentCases(), uploadLimitPresentCases(), languagePresentCases())
+}
+
+// languagePresentCases are the language's rows of the table above, which HTTP
+// mode reads through the overlay with the reader stdio's Load calls: a value
+// in any case and with a region is read as the language it names, and a
+// blank one is no value here as it is to that reader, so the caller keeps the
+// default.
+func languagePresentCases() []presentVariableCase {
+	return []presentVariableCase{
+		{
+			name: "a blank language counts as absent",
+			env:  map[string]string{"GITLAB_MCP_LANGUAGE": "   "},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.Language != nil {
+					t.Errorf("Language = %q, want nil for a blank value", *o.Language)
+				}
+			},
+		},
+		{
+			name: "a language in upper case with a region",
+			env:  map[string]string{"GITLAB_MCP_LANGUAGE": " EN-GB "},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.Language == nil || *o.Language != i18n.English {
+					t.Errorf("Language = %v, want %q", o.Language, i18n.English)
+				}
+			},
+		},
+	}
 }
 
 // uploadLimitPresentCases are the upload limit's rows of the table above
@@ -556,6 +588,12 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "0", "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
 		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "1025GB", "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB"},
 		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "17179869185GB", "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
+		// The language, refused with the words stdio's reader uses, before
+		// the listener opens: a language without a catalog, Spanish until its
+		// catalog exists, and a value that is not a language tag.
+		{"GITLAB_MCP_LANGUAGE", "fr", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`},
+		{"GITLAB_MCP_LANGUAGE", "es", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "es"`},
+		{"GITLAB_MCP_LANGUAGE", "es_ES", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "es_ES"`},
 	}
 
 	for _, tt := range tests {

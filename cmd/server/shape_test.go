@@ -31,6 +31,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // shapeTestConfig is the configuration every shape-key case starts from, so a
@@ -98,6 +99,10 @@ func TestServerShapeKey_EveryCatalogDecidingFieldChangesTheShape(t *testing.T) {
 		{name: "excluded tools", change: func(c *config.ServerConfig) { c.ExcludeTools = []string{"gitlab_project"} }},
 		{name: "the token scopes", change: func(c *config.ServerConfig) { c.TokenScopes = []string{"read_api"} }},
 		{name: "statelessness", change: func(c *config.ServerConfig) { c.Stateless = true }},
+		// The language is set per process, so every shape of one deployment
+		// carries the same; it is in the key because the shell installs it, and
+		// a shape built for one language must not serve another.
+		{name: "the language", change: func(c *config.ServerConfig) { c.Language = "xx" }},
 	}
 
 	for _, tt := range tests {
@@ -133,6 +138,25 @@ func TestServerShapeKey_IsStableForOneConfiguration(t *testing.T) {
 	if serverShapeKey(first, false) != serverShapeKey(second, false) {
 		t.Errorf("one configuration produced two shapes:\n %s\n %s",
 			serverShapeKey(first, false), serverShapeKey(second, false))
+	}
+}
+
+// TestServerShapeKey_AnUnsetLanguageIsEnglish pins that the key carries the
+// language a server is served in rather than the field as written: a
+// snapshot built by hand (a generator's, a test's) leaves it empty, and that
+// is the same server as one configured for English, so the two must not form
+// two shapes.
+func TestServerShapeKey_AnUnsetLanguageIsEnglish(t *testing.T) {
+	unset := shapeTestConfig()
+	english := shapeTestConfig()
+	english.Language = i18n.English
+
+	if serverShapeKey(unset, false) != serverShapeKey(english, false) {
+		t.Errorf("an unset language and English produced different shapes:\n %s\n %s",
+			serverShapeKey(unset, false), serverShapeKey(english, false))
+	}
+	if key := serverShapeKey(unset, false); !strings.HasSuffix(key, "|lang=en") {
+		t.Errorf("the shape key %q does not end with the language it is served in", key)
 	}
 }
 
@@ -755,7 +779,7 @@ func TestStartShapeRegistration_ForgetsThroughTheRegistry(t *testing.T) {
 // three flags set one at a time, since a key in which two flags agree cannot
 // show that they traded places.
 func TestServerShapeKey_NamesTheFieldsItHashes(t *testing.T) {
-	named := []string{"surface=meta|", "capability=minimal|", "schema=compact|", "tier=premium|"}
+	named := []string{"surface=meta|", "capability=minimal|", "schema=compact|", "tier=premium|", "|lang=xx"}
 	for _, tc := range []struct {
 		name   string
 		set    func(*config.ServerConfig)
@@ -785,6 +809,7 @@ func TestServerShapeKey_NamesTheFieldsItHashes(t *testing.T) {
 			cfg.MetaParamSchema = "compact"
 			cfg.Tier = edition.Premium
 			cfg.TierExplicit = false
+			cfg.Language = "xx"
 			if tc.set != nil {
 				tc.set(cfg)
 			}

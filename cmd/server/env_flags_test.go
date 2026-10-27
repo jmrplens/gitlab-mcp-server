@@ -19,6 +19,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -132,6 +133,7 @@ func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) 
 		"pprof-addr":                "GITLAB_MCP_PPROF_ADDR",
 		"allow-private-instances":   "GITLAB_MCP_ALLOW_PRIVATE_INSTANCES",
 		"max-listen-streams":        "GITLAB_MCP_MAX_LISTEN_STREAMS",
+		"language":                  "GITLAB_MCP_LANGUAGE",
 	}
 
 	got := make(map[string]string, len(envBackedFlags))
@@ -148,6 +150,58 @@ func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) 
 	}
 	if len(got) != len(want) {
 		t.Errorf("%d env-backed flags declared, expected %d; a new one needs a case here", len(got), len(want))
+	}
+}
+
+// TestEnvBackedFlags_Language_TheFlagIsReadByTheSettingsOneReader pins the
+// language's flag to the reader both transports call. --language writes the
+// variable, so a passed flag beats an exported GITLAB_MCP_LANGUAGE the reader
+// would refuse, and a flag the reader refuses is refused with the variable's
+// name, the words an exported value gets. The usage names the default and
+// what the setting changes, so an operator reading -h is not left to guess
+// whether the model's replies change too.
+func TestEnvBackedFlags_Language_TheFlagIsReadByTheSettingsOneReader(t *testing.T) {
+	for _, tc := range []struct {
+		name, flag, env, says string
+	}{
+		{name: "the flag beats the variable", flag: "-language=en", env: "fr"},
+		{name: "a flag the reader refuses", flag: "-language=fr", env: "en", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withFreshFlagSet(t)
+			t.Setenv("GITLAB_MCP_LANGUAGE", tc.env)
+
+			registerEnvBackedFlags()
+			if err := flag.CommandLine.Parse([]string{tc.flag}); err != nil {
+				t.Fatalf("parsing: %v", err)
+			}
+			applyEnvBackedFlags()
+
+			got, err := config.LanguageFromEnv()
+			if tc.says != "" {
+				if err == nil || err.Error() != tc.says {
+					t.Errorf("LanguageFromEnv() = %q, %v; want the refusal %q", got, err, tc.says)
+				}
+				return
+			}
+			if err != nil || got != i18n.English {
+				t.Errorf("LanguageFromEnv() = %q, %v; want the flag's %q", got, err, i18n.English)
+			}
+		})
+	}
+
+	var usage string
+	for _, entry := range envBackedFlags {
+		if entry.flagName == "language" {
+			usage = entry.usage
+		}
+	}
+	for _, want := range []string{"elicitation", "progress", "en (default)"} {
+		t.Run("usage names "+want, func(t *testing.T) {
+			if !strings.Contains(usage, want) {
+				t.Errorf("-language usage %q does not mention %q", usage, want)
+			}
+		})
 	}
 }
 

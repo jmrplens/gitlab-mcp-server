@@ -67,6 +67,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/prompts"
@@ -183,6 +184,9 @@ type createdServerKey struct {
 	// substitution env var: createServer reads it at build time, so two
 	// builds under different values are different servers.
 	descriptionSubs string
+	// language is the one the shell installs, so a test served in one
+	// language is never handed a server built for another.
+	language i18n.Language
 }
 
 var (
@@ -245,6 +249,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 		rateLimitBurst:    cfg.RateLimitBurst,
 		clientCompat:      clientcompat.Enabled(),
 		descriptionSubs:   os.Getenv(gatewaycompat.EnvVar),
+		language:          config.EffectiveLanguage(cfg.Language),
 	}
 	createdServersMu.Lock()
 	defer createdServersMu.Unlock()
@@ -1480,6 +1485,8 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"json-response flag", "-json-response"},
 		{"max-request-body-bytes flag", "-max-request-body-bytes"},
 		{"pprof-addr flag", "-pprof-addr"},
+		{"language flag", "-language string"},
+		{"GITLAB_MCP_LANGUAGE env", "GITLAB_MCP_LANGUAGE"},
 		{"env section", "ENVIRONMENT VARIABLES"},
 		{"GITLAB_MCP_PPROF_ADDR env", "GITLAB_MCP_PPROF_ADDR"},
 		{"GITLAB_URL env", "GITLAB_URL"},
@@ -1807,6 +1814,37 @@ func helpBlock(help, start, end string) string {
 		return ""
 	}
 	return block
+}
+
+// TestPrintHelp_StdioParagraph_NamesEveryFlagThatSetsAVariable holds the
+// paragraph that tells a stdio user which flags their server reads to the
+// table of the flags that write a variable, which every transport reads. The
+// paragraph names them outside the General group, which it counts whole, so
+// every such flag must sit in that group or be named in its list: one in
+// neither is a flag a stdio user is told nothing about, or worse, is left to
+// assume is HTTP-only.
+func TestPrintHelp_StdioParagraph_NamesEveryFlagThatSetsAVariable(t *testing.T) {
+	stdout := captureStdout(t)
+	printHelp()
+	help := stdout()
+
+	general := helpBlock(help, " General\n", " Transport\n")
+	_, rest, found := strings.Cut(help, "the ones that set a variable")
+	if !found {
+		t.Fatal("the help has no paragraph naming the flags that set a variable")
+	}
+	list, _, _ := strings.Cut(rest, ")")
+	listed := strings.Fields(strings.ReplaceAll(strings.Trim(list, " \n("), ",", " "))
+	for _, entry := range envBackedFlags {
+		t.Run(entry.flagName, func(t *testing.T) {
+			inGeneral := strings.Contains(general, "  -"+entry.flagName+" ")
+			named := slices.Contains(listed, "-"+entry.flagName)
+			if inGeneral == named {
+				t.Errorf("-%s is in the General group %v and in the list of flags that set a variable %v; want exactly one of the two (list: %v)",
+					entry.flagName, inGeneral, named, listed)
+			}
+		})
+	}
 }
 
 // TestPrintHelp_HTTPEnvironmentBlock_ListsTheSettingsStdioDoesNotRead holds
@@ -9645,6 +9683,7 @@ func TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField(t *testing.T) {
 		drainDelay:            7 * time.Second,
 		maxRequestBodyBytes:   4097,
 		uploadMaxFileSize:     7340033,
+		language:              "language-value",
 		authMode:              "auth-mode-value",
 		publicURL:             "https://public.example.test/prefix",
 		resourceDocumentation: "https://docs.example.test/app",
@@ -9681,6 +9720,7 @@ func TestConfigFromHTTPFlags_EveryFlagLandsInItsOwnField(t *testing.T) {
 		DrainDelay:             7 * time.Second,
 		MaxRequestBodyBytes:    4097,
 		UploadMaxFileSize:      7340033,
+		Language:               "language-value",
 		AuthMode:               "auth-mode-value",
 		PublicURL:              "https://public.example.test/prefix",
 		ResourceDocumentation:  "https://docs.example.test/app",

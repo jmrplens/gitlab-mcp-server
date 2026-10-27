@@ -38,6 +38,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/prompts"
@@ -196,8 +197,12 @@ type httpConfig struct {
 	// flag of this struct holds: --upload-max-file-size writes its variable,
 	// and [applyOverlayUploadLimit] fills this from the overlay.
 	uploadMaxFileSize int64
-	tlsCert           string
-	tlsKey            string
+	// language is what the texts a person reads are rendered in, which no
+	// flag of this struct holds either: --language writes its variable, and
+	// [applyOverlayLanguage] fills this from the overlay.
+	language i18n.Language
+	tlsCert  string
+	tlsKey   string
 	// plaintextHTTP is what the operator said about a plain HTTP listener
 	// off loopback: nothing (served, with a warning), true (served, said at
 	// INFO) or false (the hardened mode, which refuses it). See
@@ -496,9 +501,9 @@ FLAGS
   A stdio server takes its configuration from the environment. Of these flags
   it reads the General ones, -transport, -http, the ones that set a variable
   (-upload-max-file-size, -allow-private-instances, -client-compat,
-  -description-substitutions, -max-listen-streams, -yolo-mode) and the
-  Telemetry group. Every other flag is read in HTTP mode only, and a stdio run
-  given one names it at startup with the variable to set instead. Where
+  -description-substitutions, -language, -max-listen-streams, -yolo-mode) and
+  the Telemetry group. Every other flag is read in HTTP mode only, and a stdio
+  run given one names it at startup with the variable to set instead. Where
   ignoring it would cost more than a setting, the run refuses to start:
   -read-only, -safe-mode or -exclude-tools asking to withhold what stdio would
   then serve, and -gitlab-url naming an instance other than the one GITLAB_URL
@@ -581,6 +586,9 @@ FLAGS
   -exclude-tools string     Comma-separated tool names, group names or canonical action IDs
                             to exclude, on every surface
   -client-compat string     Per-client response compatibility: auto|off (default auto)
+  -language string          Language of the texts the client shows a person (elicitation questions, form
+                            field titles, progress messages): en (default). What the model reads, the
+                            catalog and the logs stay English. Both transports
   -description-substitutions string
                             Rewrite listed descriptions and titles for strict gateway validators:
                             comma-separated old=new pairs, backslash escapes \, \= \\ (default empty)
@@ -727,6 +735,9 @@ ENVIRONMENT VARIABLES (stdio mode)
                                     (default: process lifetime)
   GITLAB_MCP_TELEMETRY_TOOL_NAME    Whether gen_ai.tool.name and gitlab_mcp.action are metric
                                     dimensions, the two together: auto|on|off (default auto)
+  GITLAB_MCP_LANGUAGE               Language of the texts the client shows a person (elicitation
+                                    questions, form field titles, progress messages): en (default).
+                                    Never read from LANG, LC_* or gettext's LANGUAGE. Both transports
   GITLAB_MCP_LOG_LEVEL              Logging: debug/info/warn/error (default info)
   GITLAB_MCP_PPROF_ADDR             Loopback address for Go's profiling handlers, e.g. 127.0.0.1:6060
                                     (default empty: nothing served). Both transports
@@ -1249,6 +1260,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, tier edition.Tier
 		JSONResponse:           hcfg.jsonResponse,
 		MaxRequestBodyBytes:    hcfg.maxRequestBodyBytes,
 		UploadMaxFileSize:      hcfg.uploadMaxFileSize,
+		Language:               hcfg.language,
 		AuthMode:               hcfg.authMode,
 		PublicURL:              hcfg.publicURL,
 		ResourceDocumentation:  hcfg.resourceDocumentation,
@@ -2261,6 +2273,13 @@ func newServerShell(
 	// [readinessGate.middleware] for why the gate wants to act last.
 	gate := newReadinessGate(ctx)
 	server.AddReceivingMiddleware(gate.middleware())
+
+	// The language the texts a person reads are rendered in, for every method.
+	// Added right after the gate, so it is the second innermost: it runs just
+	// outside the gate and inside every middleware added below, and the
+	// handler, with the elicitation and progress it sends, runs under it. No
+	// middleware outside it writes a text a person reads.
+	server.AddReceivingMiddleware(languageMiddleware(config.EffectiveLanguage(cfg.Language)))
 
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
 	// tier-dependent, so almost every cacheable result is stamped "private".

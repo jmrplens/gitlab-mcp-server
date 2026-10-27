@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -237,6 +238,12 @@ type Config struct {
 
 	UploadMaxFileSize int64
 
+	// Language is what the texts a client shows a person are rendered in
+	// (elicitation questions, form field titles, progress messages), in both
+	// transports, and for every credential of a process alike. What the model
+	// reads stays English whatever it is.
+	Language i18n.Language
+
 	MaxHTTPClients int           // Maximum unique tokens in the server pool (HTTP mode only)
 	SessionTimeout time.Duration // Idle MCP session timeout (HTTP mode only)
 	// RevalidateInterval is how often a credential is read again, in both
@@ -438,6 +445,9 @@ type ServerConfig struct {
 	// outside an open request, which decides whether the legacy
 	// resources/subscribe path can be honored at all.
 	Stateless bool
+	// Language mirrors Config.Language. Empty, as a snapshot built by hand
+	// leaves it, means [i18n.Default] ([EffectiveLanguage]).
+	Language i18n.Language
 }
 
 // ServerConfig returns the server-scoped subset of Config. Callers may enrich
@@ -460,6 +470,7 @@ func (c *Config) ServerConfig() *ServerConfig {
 		RateLimitBurst:    c.RateLimitBurst,
 		MetaParamSchema:   c.MetaParamSchema,
 		Stateless:         c.Stateless,
+		Language:          c.Language,
 	}
 }
 
@@ -530,6 +541,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid META_PARAM_SCHEMA value: %w", err)
 	}
 
+	language, err := LanguageFromEnv()
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		GitLabURL:          gitLabURLFromEnv(),
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
@@ -542,6 +558,7 @@ func Load() (*Config, error) {
 		SafeMode:           bools.safeMode,
 		EmbeddedResources:  bools.embeddedResources,
 		UploadMaxFileSize:  limits.maxFileSize,
+		Language:           language,
 		RevalidateInterval: limits.revalidateInterval,
 		ActionTimeout:      limits.actionTimeout,
 		ExcludeTools:       ParseCSV(Getenv("EXCLUDE_TOOLS")),
@@ -1112,4 +1129,38 @@ func UploadMaxFileSizeFromEnv() (int64, error) {
 		return 0, fmt.Errorf("%sUPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB (got %d bytes)", EnvPrefix, size)
 	}
 	return size, nil
+}
+
+// LanguageFromEnv resolves the language the texts a client shows a person are
+// rendered in, from GITLAB_MCP_LANGUAGE, or returns [i18n.Default] when it is
+// unset or blank.
+//
+// It is the setting's one reader, the shape of [UploadMaxFileSizeFromEnv]:
+// [Load] calls it for stdio and [LoadHTTPEnvOverlay] for HTTP mode, and
+// --language writes the variable, so the flag is read here too and a value
+// either transport cannot serve refuses both starts with the same words,
+// naming the variable. The value is a language tag read by [i18n.Parse].
+//
+// Nothing else decides the language. The machine's locale (LANG, LC_ALL,
+// LC_MESSAGES and gettext's bare LANGUAGE) is never read, so a deployment
+// that sets nothing is served English wherever it runs, which is what it was
+// served before the setting existed.
+func LanguageFromEnv() (i18n.Language, error) {
+	language, err := i18n.Parse(Getenv("LANGUAGE"))
+	if err != nil {
+		return "", fmt.Errorf("invalid %sLANGUAGE value: %w", EnvPrefix, err)
+	}
+	return language, nil
+}
+
+// EffectiveLanguage returns the language a configuration snapshot is served
+// in: [i18n.Default] for the empty language a snapshot built by hand carries
+// (a generator's, a test's), and the language named otherwise, which
+// [LanguageFromEnv] has already held to one a catalog answers. A server built
+// from either of the two spellings of English is the same server.
+func EffectiveLanguage(language i18n.Language) i18n.Language {
+	if language == "" {
+		return i18n.Default
+	}
+	return language
 }

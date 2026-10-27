@@ -13,12 +13,13 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // newOverlayConfig returns an httpConfig carrying the flag defaults, with the
-// named flags marked as explicitly passed. The upload limit carries the
-// default an overlay with no variable leaves it at, since no flag declaration
-// holds it.
+// named flags marked as explicitly passed. The upload limit and the language
+// carry the default an overlay with no variable leaves them at, since no flag
+// declaration holds either.
 func newOverlayConfig(setFlags ...string) *httpConfig {
 	hcfg := &httpConfig{
 		sessionTimeout:     config.DefaultSessionTimeout,
@@ -27,6 +28,7 @@ func newOverlayConfig(setFlags ...string) *httpConfig {
 		maxHTTPClients:     config.DefaultMaxHTTPClients,
 		capabilitySurface:  config.DefaultCapabilitySurface,
 		uploadMaxFileSize:  config.DefaultMaxFileSize,
+		language:           i18n.Default,
 		setFlags:           map[string]bool{},
 	}
 	for _, name := range setFlags {
@@ -125,6 +127,19 @@ func TestApplyHTTPEnvOverlay_UploadLimit_IsTheDefaultWithNoVariable(t *testing.T
 
 	if hcfg.uploadMaxFileSize != config.DefaultMaxFileSize {
 		t.Errorf("uploadMaxFileSize = %d, want the default %d", hcfg.uploadMaxFileSize, int64(config.DefaultMaxFileSize))
+	}
+}
+
+// TestApplyHTTPEnvOverlay_Language_IsTheDefaultWithNoVariable covers the
+// other setting the overlay gives a default to: --language writes its
+// variable, so no flag declaration holds the language either, and with the
+// variable absent the field the flag layer leaves empty becomes English.
+func TestApplyHTTPEnvOverlay_Language_IsTheDefaultWithNoVariable(t *testing.T) {
+	hcfg := &httpConfig{setFlags: map[string]bool{}}
+	applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{})
+
+	if hcfg.language != i18n.Default {
+		t.Errorf("language = %q, want the default %q", hcfg.language, i18n.Default)
 	}
 }
 
@@ -463,6 +478,14 @@ func overlaySettings() []overlaySetting {
 		{
 			"upload-max-file-size", func(o *config.HTTPEnvOverlay) { size := int64(50 << 20); o.UploadMaxFileSize = &size },
 			func(h *httpConfig) { h.uploadMaxFileSize = 50 << 20 },
+		},
+		{
+			// English is the only language the parser accepts in this layer and
+			// it is the default, so the row carries a language the overlay
+			// could only hold if a catalog answered it: what is checked is where
+			// the value lands, which a default would not show.
+			"language", func(o *config.HTTPEnvOverlay) { lang := i18n.Language("xx"); o.Language = &lang },
+			func(h *httpConfig) { h.language = "xx" },
 		},
 	}
 }

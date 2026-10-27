@@ -40,6 +40,11 @@ import (
 //     safe mode, the excluded tools and the token scopes: these are the
 //     narrowing [gitlabtools.FilterActionCatalog] applies, and two credentials
 //     narrowed differently are served different catalogs.
+//   - The language the texts a person reads are rendered in, which the shell
+//     installs. It is set per process, so every shape of one deployment
+//     carries the same and it splits nothing in practice; it is the effective
+//     one ([config.EffectiveLanguage]), so a snapshot built by hand with no
+//     language shares the shape of English.
 //
 // # What is deliberately not in it
 //
@@ -56,7 +61,7 @@ import (
 func serverShapeKey(cfg *config.ServerConfig, dotcom bool) string {
 	toolSurface := config.EffectiveToolSurface(cfg.ToolSurface)
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
-	return fmt.Sprintf("surface=%s|capability=%s|schema=%s|tier=%s|tierPinned=%t|dotcom=%t|%s|stateless=%t",
+	return fmt.Sprintf("surface=%s|capability=%s|schema=%s|tier=%s|tierPinned=%t|dotcom=%t|%s|stateless=%t|lang=%s",
 		toolSurface,
 		capabilitySurface,
 		cfg.MetaParamSchema,
@@ -65,6 +70,7 @@ func serverShapeKey(cfg *config.ServerConfig, dotcom bool) string {
 		dotcom,
 		gitlabtools.CatalogFilterKey(cfg),
 		cfg.Stateless,
+		config.EffectiveLanguage(cfg.Language),
 	)
 }
 

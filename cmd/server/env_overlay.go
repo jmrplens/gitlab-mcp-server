@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // applyHTTPEnvOverlay fills in every HTTP setting whose flag the operator did
@@ -36,6 +37,20 @@ func applyHTTPEnvOverlay(hcfg *httpConfig, overlay *config.HTTPEnvOverlay) {
 	applyOverlayDurations(hcfg, overlay)
 	applyOverlayTier(hcfg, overlay)
 	applyOverlayUploadLimit(hcfg, overlay)
+	applyOverlayLanguage(hcfg, overlay)
+}
+
+// applyOverlayLanguage resolves the language the texts a person reads are
+// rendered in, which has no flag of its own in httpConfig either: --language
+// writes the variable (env_flags.go), so the overlay's value is the flag's
+// when it was passed. With neither it is the default, set here because no
+// flag declaration holds it. The overlay has already refused a language the
+// server has no catalog for, before any listener opens.
+func applyOverlayLanguage(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
+	hcfg.language = i18n.Default
+	if o.Language != nil {
+		hcfg.language = *o.Language
+	}
 }
 
 // applyOverlayUploadLimit resolves the upload limit (register row RQB-007),

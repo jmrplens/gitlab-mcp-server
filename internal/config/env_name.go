@@ -49,6 +49,13 @@ const EnvPrefix = "GITLAB_MCP_"
 // the exporters read them directly, so a prefixed spelling would not be seen.
 // AUTOPILOT is not ours either; it is a convention other agent tooling sets,
 // consulted as an alias of YOLO_MODE and never warned about.
+//
+// LANGUAGE shows why the list is not a formality. The bare name is GNU
+// gettext's, which many Linux desktops export as a priority list (es_ES:es),
+// so a setting read under it would take that list for the operator's choice
+// and refuse to start on every such machine. Listed, it is read as
+// GITLAB_MCP_LANGUAGE alone; it had no other spelling, so it is not on
+// [hadOldSpelling] and the bare name is never reported either.
 var prefixedNames = []string{
 	"ACTION_TIMEOUT",
 	"ALLOWED_DOWNLOAD_DIRS",
@@ -70,6 +77,7 @@ var prefixedNames = []string{
 	"EMBEDDED_RESOURCES",
 	"EXCLUDE_TOOLS",
 	"IGNORE_SCOPES",
+	"LANGUAGE",
 	"LOG_LEVEL",
 	"MAX_HTTP_CLIENTS",
 	"MAX_LISTEN_STREAMS",

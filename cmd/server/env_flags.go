@@ -22,8 +22,9 @@ import (
 // and AUTOPILOT, and the upload limit is read by config.UploadMaxFileSizeFromEnv,
 // which stdio's config.Load and HTTP mode's overlay both call, so a malformed
 // value is refused the same way from the flag and from the variable (issue
-// 1170). Threading a flag value to each of those would mean four new
-// parameters through four unrelated call paths, and it would create a second
+// 1170). The language is read the same way, by config.LanguageFromEnv.
+// Threading a flag value to each of those would mean five new
+// parameters through five unrelated call paths, and it would create a second
 // source of truth in every one of them: a reader that consults the flag and a
 // reader that consults the variable, disagreeing the first time somebody adds a
 // caller.
@@ -94,6 +95,14 @@ var envBackedFlags = []struct {
 		flagName: "max-listen-streams",
 		envName:  maxListenStreamsEnv,
 		usage:    "Concurrent subscriptions/listen streams one credential may hold open (default 64; 0 removes this ceiling, and the process-wide one of 512 stays). A value that is not a whole number of 0 or more warns and keeps the default",
+	},
+	{
+		// Read by config.LanguageFromEnv, which stdio's config.Load and HTTP
+		// mode's overlay both call, so a language without a catalog is refused
+		// before either transport serves, as the variable is.
+		flagName: "language",
+		envName:  "GITLAB_MCP_LANGUAGE",
+		usage:    "Language of the texts the client shows a person (elicitation questions, form field titles, progress messages): en (default)",
 	},
 }
 

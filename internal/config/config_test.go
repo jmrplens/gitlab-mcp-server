@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // Test fixtures used across configuration tests.
@@ -890,9 +891,15 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 		MetaParamSchema:   MetaParamSchemaFull,
 		ToolSurface:       ToolSurfaceDynamic,
 		CapabilitySurface: CapabilitySurfaceMinimal,
+		Language:          i18n.English,
 	}
 
 	snapshot := cfg.ServerConfig()
+	// Every pool entry is built from this snapshot, so a language left behind
+	// here would serve each of them the zero value rather than the setting.
+	if snapshot.Language != i18n.English {
+		t.Fatalf("Language = %q, want %q", snapshot.Language, i18n.English)
+	}
 	if snapshot.GitLabURL != cfg.GitLabURL || !snapshot.Enterprise() || !snapshot.ReadOnly || !snapshot.SafeMode {
 		t.Fatalf("ServerConfig snapshot does not preserve boolean/url fields: %+v", snapshot)
 	}
@@ -1037,6 +1044,173 @@ func TestLoad_InvalidUploadMaxFileSize(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for invalid UPLOAD_MAX_FILE_SIZE")
+	}
+}
+
+// TestLanguageFromEnv_ReadsTheSettingUnderItsPrefixedName holds the one
+// reader of the language, which stdio's Load and HTTP mode's overlay both
+// call, and which --language reaches by writing the variable. Unset and blank
+// are English, as is a value of any case, padded or carrying a region. A
+// language the server has no catalog for refuses, naming the variable an
+// operator exports, the languages it accepts and the value as written, and so
+// does Spanish until its catalog exists.
+func TestLanguageFromEnv_ReadsTheSettingUnderItsPrefixedName(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		unset       bool
+		says        string
+	}{
+		{name: "unset", unset: true},
+		{name: "empty", value: ""},
+		{name: "padded", value: " en "},
+		{name: "upper case", value: "EN"},
+		{name: "a region", value: "en-GB"},
+		{name: "a language without a catalog", value: "fr", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`},
+		{name: "spanish before its catalog exists", value: "es", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "es"`},
+		{name: "a language name", value: "spanish", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "spanish"`},
+		{name: "the POSIX locale form", value: "es_ES", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "es_ES"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.unset {
+				absentForTest(t, EnvPrefix+"LANGUAGE")
+			} else {
+				t.Setenv(EnvPrefix+"LANGUAGE", tc.value)
+			}
+			got, err := LanguageFromEnv()
+			if tc.says != "" {
+				if err == nil || err.Error() != tc.says {
+					t.Errorf("LanguageFromEnv() = %q, %v; want the refusal %q", got, err, tc.says)
+				}
+				return
+			}
+			if err != nil || got != i18n.English {
+				t.Errorf("LanguageFromEnv() = %q, %v; want %q", got, err, i18n.English)
+			}
+		})
+	}
+}
+
+// TestEffectiveLanguage_TheEmptyLanguageIsTheDefault pins what a snapshot
+// built by hand is served in. A generator or a test leaves the language
+// empty, and that has to be the same server as one configured for English,
+// or a hand-built snapshot would form a configuration shape of its own; a
+// language named is kept as it is.
+func TestEffectiveLanguage_TheEmptyLanguageIsTheDefault(t *testing.T) {
+	for _, tc := range []struct{ in, want i18n.Language }{
+		{in: "", want: i18n.Default},
+		{in: i18n.English, want: i18n.English},
+		{in: "xx", want: "xx"},
+	} {
+		t.Run(string(tc.in), func(t *testing.T) {
+			if got := EffectiveLanguage(tc.in); got != tc.want {
+				t.Errorf("EffectiveLanguage(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLoad_Language_IsTheSettingOrARefusal is the stdio half of the reader
+// above, through Load: the language lands in the configuration, and a value
+// the reader refuses ends the start with the reader's own words.
+func TestLoad_Language_IsTheSettingOrARefusal(t *testing.T) {
+	if cfg := loadWithNothingSet(t); cfg.Language != i18n.English {
+		t.Errorf("Language = %q with nothing set, want %q", cfg.Language, i18n.English)
+	}
+
+	t.Setenv(EnvPrefix+"LANGUAGE", "en-GB")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.Language != i18n.English {
+		t.Errorf("Language = %q for en-GB, want %q", cfg.Language, i18n.English)
+	}
+
+	t.Setenv(EnvPrefix+"LANGUAGE", "fr")
+	cfg, err = Load()
+	if want := `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`; err == nil || err.Error() != want {
+		t.Errorf("Load() = %+v, %v; want the refusal %q", cfg, err, want)
+	}
+	if cfg != nil {
+		t.Errorf("Load() returned a configuration beside its refusal: %+v", cfg)
+	}
+}
+
+// TestLoad_Language_IsReadFromTheDotenvFileItNames pins that the language is
+// a setting like any other where it can come from: a dotenv file the server
+// loads configures it exactly as the environment does, so a value the file
+// sets is read, and refused when it is a language the server has no catalog
+// for.
+func TestLoad_Language_IsReadFromTheDotenvFileItNames(t *testing.T) {
+	for _, tc := range []struct {
+		name, value, says string
+	}{
+		{name: "a value the file sets", value: "EN-gb"},
+		{name: "a value the file sets that is refused", value: "fr", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clearEnvFileKeys(t)
+			clearOverlayEnv(t)
+			useHomeDir(t, t.TempDir())
+			path := writeEnvFile(t, t.TempDir(), "deployment.env",
+				"GITLAB_URL="+testGitLabURL, "GITLAB_TOKEN="+testGitLabToken, EnvPrefix+"LANGUAGE="+tc.value)
+			t.Setenv(EnvFileVar, path)
+
+			cfg, err := Load()
+			if tc.says != "" {
+				if err == nil || err.Error() != tc.says {
+					t.Errorf("Load() = %+v, %v; want the refusal %q, which only a read of the file produces", cfg, err, tc.says)
+				}
+				return
+			}
+			if err != nil || cfg.Language != i18n.English {
+				t.Errorf("Load() = %+v, %v; want Language %q", cfg, err, i18n.English)
+			}
+		})
+	}
+}
+
+// TestLoad_TheMachinesLocale_IsNeverTheLanguage pins the rule that keeps
+// English unchanged for every deployment that sets nothing. A Linux desktop
+// exports gettext's LANGUAGE (es_ES:es) beside LANG, LC_ALL and LC_MESSAGES,
+// and none of them is this server's: the setting is read under its prefixed
+// name alone, so a bare LANGUAGE is never read as a value (which, in the
+// gettext form, would refuse the start on such a machine), never reported as
+// a retired spelling of this server's, and never named as an HTTP-only
+// variable a stdio run ignores. Both readers load English.
+func TestLoad_TheMachinesLocale_IsNeverTheLanguage(t *testing.T) {
+	clearOverlayEnv(t)
+	t.Setenv(EnvFileVar, "")
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	for name, value := range map[string]string{
+		"LANGUAGE":    "es_ES:es",
+		"LANG":        "es_ES.UTF-8",
+		"LC_ALL":      "es_ES.UTF-8",
+		"LC_MESSAGES": "es_ES.UTF-8",
+	} {
+		t.Setenv(name, value)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() under a Spanish locale: %v", err)
+	}
+	if cfg.Language != i18n.English {
+		t.Errorf("Language = %q under a Spanish locale, want %q", cfg.Language, i18n.English)
+	}
+	if refuse, warn := RetiredEnvUses(); len(refuse) != 0 || len(warn) != 0 {
+		t.Errorf("RetiredEnvUses() = %v, %v under a Spanish locale, want nothing reported", refuse, warn)
+	}
+	if named := HTTPOnlyEnvUses(); len(named) != 0 {
+		t.Errorf("HTTPOnlyEnvUses() = %v under a Spanish locale, want nothing named", named)
+	}
+	overlay, err := LoadHTTPEnvOverlay()
+	if err != nil {
+		t.Fatalf("LoadHTTPEnvOverlay() under a Spanish locale: %v", err)
+	}
+	if overlay.Language != nil {
+		t.Errorf("the HTTP overlay read the language %q from a Spanish locale, want nothing", *overlay.Language)
 	}
 }
 

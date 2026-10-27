@@ -77,6 +77,7 @@ gitlab-mcp-server/
 │   ├── gatewaycompat/           # Description/title rewriting for strict MCP gateway validators
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
 │   ├── graphqlschema/           # The pinned GitLab GraphQL schema (embedded SDL as text + source.json provenance) and Validate(); loaded once per process behind a sync.Once. Validate walks the variables itself for enum case, since gqlparser compares enum values with EqualFold and GitLab does not
+│   ├── i18n/                    # The texts a person reads directly (an elicitation's questions and summaries, its form field titles, progress messages), each a typed key with a template per language in a Go map, English the source every translation is held to, rendered with named placeholders in one pass and falling back to English and then to the key; `Parse` reads GITLAB_MCP_LANGUAGE (issue 1547), and the server's middleware puts the language on every request's context. Standard library only, so internal/config can read the setting through it
 │   ├── mcpotel/                 # OpenTelemetry instrumentation of MCP request handling (API only, no SDK)
 │   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
 │   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)

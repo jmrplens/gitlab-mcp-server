@@ -129,6 +129,39 @@ func TestGetenv_UnlistedName_IsReadVerbatim(t *testing.T) {
 	}
 }
 
+// TestGetenv_Language_IsNeverGettextsVariable pins why the language is on
+// [prefixedNames] rather than a detail of it. GNU gettext reads a bare
+// LANGUAGE, and many Linux desktops export one (es_ES:es), so a reader of the
+// bare name would take that list for this server's setting and refuse to
+// start on such a machine. Read under its prefixed name alone, the bare one
+// is ignored, and since the setting never had another spelling it is not on
+// [hadOldSpelling] either: a report of it as "no longer read" would send an
+// operator renaming a variable their desktop owns. Nor is it on
+// [httpOnlyNames], since both transports read it.
+func TestGetenv_Language_IsNeverGettextsVariable(t *testing.T) {
+	absentForTest(t, EnvPrefix+"LANGUAGE")
+	t.Setenv("LANGUAGE", "es_ES:es")
+
+	if got := Getenv("LANGUAGE"); got != "" {
+		t.Errorf(`Getenv("LANGUAGE") = %q with only gettext's variable set, want nothing`, got)
+	}
+	if !slices.Contains(PrefixedEnvNames(), "LANGUAGE") {
+		t.Error("LANGUAGE is not on prefixedNames, so the language would be read from gettext's variable")
+	}
+	if slices.Contains(hadOldSpelling, "LANGUAGE") {
+		t.Error("LANGUAGE is on hadOldSpelling, so gettext's variable would be reported as a spelling this server removed")
+	}
+	if slices.Contains(httpOnlyNames, "LANGUAGE") {
+		t.Error("LANGUAGE is on httpOnlyNames, so a stdio run would name a setting it reads as one it ignores")
+	}
+	refuse, warn := RetiredEnvUses()
+	for _, line := range slices.Concat(refuse, warn) {
+		if strings.HasPrefix(line, "LANGUAGE ") {
+			t.Errorf("RetiredEnvUses() reports gettext's variable: %q", line)
+		}
+	}
+}
+
 // TestRetiredEnvUses_SplitsByWhatIgnoringOneWouldCost verifies that a retired
 // name present in the environment is reported, that it names the replacement,
 // and that the three which withhold part of what a deployment serves are

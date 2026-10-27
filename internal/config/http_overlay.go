@@ -25,13 +25,15 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // HTTPEnvOverlay holds the HTTP-relevant settings found in the environment.
 // A nil field means the variable was absent or empty, and the caller keeps
-// whatever the flag layer resolved, except for UploadMaxFileSize, whose flag
-// writes the variable and leaves the flag layer nothing to keep.
+// whatever the flag layer resolved, except for UploadMaxFileSize and
+// Language, whose flags write the variable and leave the flag layer nothing
+// to keep.
 type HTTPEnvOverlay struct {
 	GitLabURL         *string
 	SkipTLSVerify     *bool
@@ -86,6 +88,12 @@ type HTTPEnvOverlay struct {
 	// sets [DefaultMaxFileSize].
 	UploadMaxFileSize *int64
 
+	// Language is what the texts a client shows a person are rendered in.
+	// Like the upload limit, --language writes the variable, so the value
+	// read here is the flag's when it was passed, and a nil is answered with
+	// [i18n.Default] rather than with a flag layer that holds none.
+	Language *i18n.Language
+
 	// What the operator said about a plain HTTP listener off loopback: true
 	// declares that something in front of it encrypts the hop, which turns
 	// the startup warning about that listener into a line at INFO, and false
@@ -123,6 +131,7 @@ func LoadHTTPEnvOverlay() (*HTTPEnvOverlay, error) {
 		loadOverlayAuthAndRate,
 		loadOverlayDiscoveryRate,
 		loadOverlayUploadLimit,
+		loadOverlayLanguage,
 	} {
 		if err := load(overlay); err != nil {
 			return nil, err
@@ -328,6 +337,22 @@ func loadOverlayUploadLimit(o *HTTPEnvOverlay) error {
 		return err
 	}
 	o.UploadMaxFileSize = &value
+	return nil
+}
+
+// loadOverlayLanguage overlays the language through the reader stdio's
+// [Load] calls, so a value either transport cannot serve refuses both starts
+// with the same words, before the listener opens, and a blank one is unset in
+// both.
+func loadOverlayLanguage(o *HTTPEnvOverlay) error {
+	if !envPresent("LANGUAGE") {
+		return nil
+	}
+	value, err := LanguageFromEnv()
+	if err != nil {
+		return err
+	}
+	o.Language = &value
 	return nil
 }
 

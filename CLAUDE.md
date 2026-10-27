@@ -61,7 +61,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 788 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 488 test files under `internal/tools/`                                                                       |
-| Go packages               | 311 in the module (`go list ./...`); 338 directories hold tracked `.go` files, the twenty-seven more being what `go list` leaves out: twenty-six `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
+| Go packages               | 312 in the module (`go list ./...`); 339 directories hold tracked `.go` files, the twenty-seven more being what `go list` leaves out: twenty-six `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read and the platform module the condition measurement's discovery lists) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
 
 ### Orbit live tests
 
@@ -140,6 +140,7 @@ gitlab-mcp-server/
 │   ├── gatewaycompat/                # Description and title rewriting for strict MCP gateways
 │   ├── gitlab/                       # GitLab API client wrapper (client.GL() accessor)
 │   ├── graphqlschema/                # The pinned GitLab GraphQL schema and Validate()
+│   ├── i18n/                         # Person-facing message catalog (English source) and the request language (GITLAB_MCP_LANGUAGE)
 │   ├── mcpotel/                      # OpenTelemetry instrumentation of MCP request handling (API only)
 │   ├── oauth/                        # OAuth HTTP mode: token cache, verifier, RFC 9728 metadata
 │   ├── serverpool/                   # HTTP mode: bounded LRU pool of per-token+URL entries
@@ -478,6 +479,7 @@ Settings this project defines are read as `GITLAB_MCP_<NAME>` and under no other
 | `GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS`, `GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST` | HTTP: one bucket per address for the two server cards and the RFC 9728 metadata (20 req/s, burst 200; `0` turns it off) |
 | `GITLAB_MCP_CLIENT_COMPAT` | Per-client response compatibility (`auto`) |
 | `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | Rewrite listed text for strict gateway validators |
+| `GITLAB_MCP_LANGUAGE` | Language of the texts a client shows a person directly (`en`, the only one so far) |
 | `GITLAB_MCP_TELEMETRY`, `GITLAB_MCP_TELEMETRY_*` | OTLP export (off), identity policy, its key and rotation, tool-name metric dimensions |
 | `GITLAB_MCP_LOG_LEVEL` | Logging verbosity |
 | `GITLAB_MCP_PPROF_ADDR` | Loopback-only `net/http/pprof` listener |
