@@ -125,9 +125,14 @@ func TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone(t *testing.T) 
 				SDKServices: 120, ServicesCovered: 118, ServicesDeclared: 2, GraphQLOperations: 9, GraphQLAdjudicated: 9, EnumFields: 40,
 				OptionStructs: 9, OptionPaired: 5, OptionConverted: 1, OptionCopied: 1, OptionDeclared: 2,
 				UpstreamWaits: 47, WaitsHolding: 41, Workarounds: 55,
+				CapturedTypes: 86, CapturedKeysShared: 77, CapturesKept: 77, CapturesAnswerNoStruct: 2,
 			},
 			want: true,
 		},
+		{name: "a captured key the client-go struct beside it models", summary: reportSummary{CapturesRedundant: 1}},
+		{name: "a captured struct the walk pairs with nothing", summary: reportSummary{CapturesUnpaired: 1}},
+		{name: "a capture declaration with a predicate to edit", summary: reportSummary{CapturesStalePredicate: 1}},
+		{name: "a capture the pinned SDK made obsolete", summary: reportSummary{CapturesObsolete: 1}},
 		{name: "an undeclared service", summary: reportSummary{ServicesUndeclared: 1}},
 		{name: "an unadjudicated GraphQL operation", summary: reportSummary{GraphQLUnadjudicated: 1}},
 		{name: "an enum value the SDK declares and we do not", summary: reportSummary{EnumMissingValues: 1}},
@@ -523,6 +528,7 @@ func TestRun_Repository_GateIsGreenAndShapeIsStable(t *testing.T) {
 	if options := rep.OptionStructs; len(options.Structs) != 0 || len(options.Copies) != 0 || len(options.Conversions) != 0 {
 		t.Errorf("gaps-only report kept option structs %+v, want none", options)
 	}
+	checkGapsOnlyCaptures(t, rep)
 	if s := rep.Summary; s.OptionStructs != s.OptionPaired+s.OptionConverted+s.OptionCopied+s.OptionDeclared+s.OptionUnpaired || s.OptionStructs < 400 {
 		t.Errorf("option struct statuses do not add up to the SDK's request surface: %+v", s)
 	}
@@ -531,6 +537,19 @@ func TestRun_Repository_GateIsGreenAndShapeIsStable(t *testing.T) {
 	}
 	if rep.Summary.SDKServices < 100 {
 		t.Errorf("sdk_services = %d, want the SDK's full service surface", rep.Summary.SDKServices)
+	}
+}
+
+// checkGapsOnlyCaptures holds the captures section of a gaps-only report on
+// the real tree to keeping nothing, since there is no finding, and its
+// counters to adding up over the captures the tree decodes.
+func checkGapsOnlyCaptures(t *testing.T, rep report) {
+	t.Helper()
+	if captures := rep.Captures; len(captures.Types) != 0 || len(captures.Keys) != 0 || len(captures.Unpaired) != 0 {
+		t.Errorf("gaps-only report kept captures %+v, want none", captures)
+	}
+	if s := rep.Summary; s.CapturedKeysShared != s.CapturesKept+s.CapturesRedundant+s.CapturesStalePredicate+s.CapturesObsolete || s.CapturedTypes < 50 {
+		t.Errorf("capture statuses do not add up to the captures the tree decodes: %+v", s)
 	}
 }
 

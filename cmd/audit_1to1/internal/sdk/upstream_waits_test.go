@@ -116,8 +116,9 @@ var _ = http.MethodGet
 `
 
 // waitsToolutil is the stand-in shared package: the body edit, its null
-// helper and a function that builds one, three request options and a
-// function that returns none.
+// helper and a function that builds one, three request options, an
+// unexported one no tool package can call, which is no site, and a function
+// that returns none.
 const waitsToolutil = `package toolutil
 
 import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
@@ -148,6 +149,8 @@ func TimestampParam(name string) gl.RequestOptionFunc { return nil }
 func Paginate() gl.RequestOptionFunc { return nil }
 
 func Continue() gl.RequestOptionFunc { return nil }
+
+func nullOption() gl.RequestOptionFunc { return Continue() }
 
 func Do(req, v any) error { return nil }
 

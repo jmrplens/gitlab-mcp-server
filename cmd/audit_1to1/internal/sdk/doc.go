@@ -51,6 +51,14 @@
 // or a pin that fixes only the reasons written down would retire a
 // workaround still needed.
 //
+// The captures rule is folded in on the same ground: a struct a handler
+// decodes off a captured response (ADR-0021) reads what the client-go
+// struct decoded from the same answer does not model, and a pin that models
+// one of its keys leaves the key read twice with nothing to say so. Every key
+// a capture shares with the client-go struct beside it is held to a
+// declaration whose category requires a predicate on the pinned SDK, so the
+// pin that takes the reason away fails the gate the day it lands.
+//
 // Unlike the three candidate-backlog scopes, this one is a gate: Run reports
 // whether the tree is clean, and the command exits non-zero when it is not.
 package sdk

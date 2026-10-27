@@ -628,7 +628,9 @@ func spellOptions(info *types.Info, expr ast.Expr) string {
 // exports, and lists as a request option each one that returns a
 // RequestOptionFunc, but EditJSONBody, whose every call the walk judges on
 // its own. The package is read from the types the tool packages import, so
-// it is known by its signatures and not walked.
+// it is known by its signatures and not walked. Only what it exports is a
+// site: a tool package can call nothing else, and an unexported function is
+// reached through an exported one, which is the site an entry names.
 func toolutilWorkarounds(pkgs []*packages.Package, clientGo *types.Package) (found []workaround, sites map[string]bool) {
 	sites = map[string]bool{}
 	toolutil := importedPackage(pkgs, toolutilPathSuffix)
@@ -638,7 +640,7 @@ func toolutilWorkarounds(pkgs []*packages.Package, clientGo *types.Package) (fou
 	}
 	for _, name := range toolutil.Scope().Names() {
 		fn, isFunc := toolutil.Scope().Lookup(name).(*types.Func)
-		if !isFunc {
+		if !isFunc || !fn.Exported() {
 			continue
 		}
 		sites[toolutilSitePrefix+name] = true

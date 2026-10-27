@@ -41,9 +41,15 @@ type report struct {
 	// request option written by hand and body edit the walk finds to an
 	// entry that answers it.
 	UpstreamWaits upstreamWaitsReport `json:"upstream_waits"`
-	// StaleDeclarations joins the five tables' stale entries: a service
+	// Captures holds every struct a tool package decodes off a captured
+	// response to the client-go structs decoded from the same response,
+	// every key both read to a declaration that says why it is read twice,
+	// and every such struct paired with none to why it has no SDK half.
+	Captures capturesReport `json:"captures"`
+	// StaleDeclarations joins the six tables' stale entries: a service
 	// declaration, a GraphQL decision, an enum exemption, an option struct
-	// declaration or an upstream wait that no longer describes the code.
+	// declaration, an upstream wait or a capture declaration that no longer
+	// describes the code.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
 }
 
@@ -77,6 +83,14 @@ type reportSummary struct {
 	BodyEditsUnread         int `json:"body_edits_unread"`
 	SupersetNeedsUnanswered int `json:"superset_needs_unanswered"`
 	OptionMethodsUnanswered int `json:"option_methods_unanswered"`
+	CapturedTypes           int `json:"captured_types"`
+	CapturedKeysShared      int `json:"captured_keys_shared"`
+	CapturesKept            int `json:"captures_kept"`
+	CapturesRedundant       int `json:"captures_redundant"`
+	CapturesStalePredicate  int `json:"captures_stale_predicate"`
+	CapturesObsolete        int `json:"captures_obsolete"`
+	CapturesAnswerNoStruct  int `json:"captures_answer_no_struct"`
+	CapturesUnpaired        int `json:"captures_unpaired"`
 	StaleDeclarations       int `json:"stale_declarations"`
 }
 
@@ -88,6 +102,7 @@ func (s reportSummary) clean() bool {
 		s.OptionUnpaired == 0 && s.OptionCopyMissing == 0 && s.OptionNestedMissing == 0 &&
 		s.WaitsStalePredicate == 0 && s.WaitsObsolete == 0 && s.WorkaroundsUndeclared == 0 && s.BodyEditKeysUnanswered == 0 &&
 		s.BodyEditsUnread == 0 && s.SupersetNeedsUnanswered == 0 && s.OptionMethodsUnanswered == 0 &&
+		s.CapturesRedundant == 0 && s.CapturesStalePredicate == 0 && s.CapturesObsolete == 0 && s.CapturesUnpaired == 0 &&
 		s.StaleDeclarations == 0
 }
 
@@ -160,16 +175,20 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		return report{}, err
 	}
 
-	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale, waitsStale)
+	captures, capturesStale := analyzeCaptures(pkgs, clientGo, captureDeclarations)
+
+	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale, waitsStale, capturesStale)
 	summary := summarize(services, operations, enumRep.Summary, stale)
 	summarizeOptionStructs(&summary, options)
 	summarizeUpstreamWaits(&summary, upstream)
+	summarizeCaptures(&summary, captures)
 
 	if gapsOnly {
 		services = keepUndeclaredServices(services)
 		operations = keepUnadjudicatedOperations(operations)
 		options = keepOptionFindings(options)
 		upstream = keepWaitFindings(upstream)
+		captures = keepCaptureFindings(captures)
 	}
 	return report{
 		SchemaVersion:     shared.SchemaVersion,
@@ -180,6 +199,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		EnumFields:        flattenEnumFindings(enumRep),
 		OptionStructs:     options,
 		UpstreamWaits:     upstream,
+		Captures:          captures,
 		StaleDeclarations: stale,
 	}, nil
 }

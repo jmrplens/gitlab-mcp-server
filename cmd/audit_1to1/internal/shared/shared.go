@@ -5,6 +5,8 @@ package shared
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -40,6 +42,13 @@ const (
 // types successfully. It is shared by the structs and actions analyzers, which
 // both need the same typed package set. A package-load error aborts the run.
 // The result is memoized per root and must be treated as read-only.
+//
+// The shared ./internal/toolutil package, when root has one, is loaded from
+// its source in the same pass and left out of the result: a tool package's
+// Imports hand it over with its syntax and type information, the same
+// objects the tool packages compile against, so a walk can follow a call
+// into one of its bodies (the sdk scope's captures rule follows a capture
+// into the reader that decodes it).
 func LoadToolPackages(root string) ([]*packages.Package, error) {
 	entry, _ := loadCache.LoadOrStore(root, &loadResult{})
 	result, _ := entry.(*loadResult)
@@ -68,7 +77,9 @@ var loadPackages = packages.Load
 // source on every run. Nothing here reads a dependency's syntax: the audit
 // asks client-go for its struct fields, their json tags and its service
 // method signatures, all of which export data carries, and gives each object
-// the same identity the tool packages themselves see.
+// the same identity the tool packages themselves see. The one package read
+// from source beside the tool packages is internal/toolutil, which is a root
+// of the load rather than a dependency, so its imports stay export data.
 //
 // What the two readers of the import graph need stays populated without it.
 // go/packages marks the *immediate* dependencies of every source package
@@ -82,13 +93,23 @@ var loadPackages = packages.Load
 const loadMode = packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
 	packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
 
+// toolutilDir is the shared package the tool packages import, relative to the
+// module root, which LoadToolPackages loads from its source beside them.
+const toolutilDir = "internal/toolutil"
+
 // loadToolPackages performs the actual load; see LoadToolPackages.
 func loadToolPackages(root string) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: loadMode,
 		Dir:  root,
 	}
-	loaded, err := loadPackages(cfg, "./internal/tools/...")
+	patterns := []string{"./internal/tools/..."}
+	// A module without the shared package, as most test fixtures are, would
+	// fail the whole load on a pattern that names no directory.
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(toolutilDir))); err == nil {
+		patterns = append(patterns, "./"+toolutilDir)
+	}
+	loaded, err := loadPackages(cfg, patterns...)
 	if err != nil {
 		return nil, fmt.Errorf("load packages: %w", err)
 	}

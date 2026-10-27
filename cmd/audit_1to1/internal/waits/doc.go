@@ -24,7 +24,10 @@
 // a raw request carries in place of client-go's, for the predicate each key
 // it carries beside the client-go struct it embeds needs, and the register's
 // rows with the text that describes each, which an entry's names are held
-// to.
+// to. It compares a struct a captured response is decoded into with the
+// client-go struct decoded beside it ([Compare]), for the keys both read and
+// the keys client-go does not model, which the sdk scope holds the capture
+// declarations to with the same predicates.
 //
 // The package is a leaf so that every reader can import it: R-ACTION derives
 // its COVERED_RAW methods from the entries rather than declaring them a

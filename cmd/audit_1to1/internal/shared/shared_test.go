@@ -84,6 +84,33 @@ func TestLoadToolPackages_Module_ReturnsTypedToolPackagesOnce(t *testing.T) {
 	}
 }
 
+// TestLoadToolPackages_TheSharedToolutilPackage_IsLoadedFromItsSource
+// verifies that the shared internal/toolutil package is loaded beside the
+// tool packages and left out of the result: a tool package's Imports hand it
+// over with its syntax and type information, and its unexported declarations,
+// which export data leaves out, are in its scope, the same package object the
+// tool package compiles against.
+func TestLoadToolPackages_TheSharedToolutilPackage_IsLoadedFromItsSource(t *testing.T) {
+	root := writeModule(t, map[string]string{
+		"internal/toolutil/toolutil.go": "package toolutil\n\ntype row struct{ ID int }\n\n// Rows is exported, row is not.\nfunc Rows() int { return len([]row{}) }\n",
+		"internal/tools/alpha/alpha.go": "package alpha\n\nimport \"example.com/fixture/internal/toolutil\"\n\n// A calls the shared package.\nfunc A() int { return toolutil.Rows() }\n",
+	})
+	pkgs, err := LoadToolPackages(root)
+	if err != nil {
+		t.Fatalf("LoadToolPackages: %v", err)
+	}
+	if len(pkgs) != 1 || pkgs[0].PkgPath != "example.com/fixture/internal/tools/alpha" {
+		t.Fatalf("loaded %v, want the one tool package", pkgs)
+	}
+	toolutil := pkgs[0].Imports["example.com/fixture/internal/toolutil"]
+	if toolutil == nil || len(toolutil.Syntax) == 0 || toolutil.TypesInfo == nil || toolutil.Types.Scope().Lookup("row") == nil {
+		t.Fatalf("toolutil = %+v, want it loaded from its source", toolutil)
+	}
+	if used := pkgs[0].Types.Imports()[0]; used != toolutil.Types {
+		t.Errorf("alpha compiles against %v, want the toolutil package the load hands over", used)
+	}
+}
+
 // TestLoadToolPackages_UntypedPackage_IsLeftOut verifies the filter's last
 // guard: a package under internal/tools that the loader hands back with no
 // type information is dropped rather than passed to an analyzer that would
