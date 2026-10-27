@@ -1362,6 +1362,27 @@ func TestCentralTierFilter_ProjectSettings_AreOfferedFromTheTierGitLabHonorsThem
 	assertInputsOfferedFrom(t, cases)
 }
 
+// TestCentralTierFilter_ProjectChecksumFilters_AreOfferedOnNoTier holds the
+// repository and wiki checksum filters out of every project list's schema
+// (issue 1240). GitLab's API page marks both Premium and Ultimate only, and
+// Enterprise Edition declares them on every route that takes the project
+// list filters (ee/lib/ee/api/helpers/projects_helpers.rb, at v19.5.0-ee),
+// but nothing reads them: the finder parameters the routes build carry
+// neither (EE::API::Helpers#project_finder_params_ee), so a list asked for
+// the failed checksums answered every project on every tier.
+func TestCentralTierFilter_ProjectChecksumFilters_AreOfferedOnNoTier(t *testing.T) {
+	var cases []tieredInput
+	for _, id := range []actioncatalog.ActionID{
+		"project.list", "project.list_forks", "project.list_user_projects", "project.list_user_contributed", "project.list_user_starred",
+	} {
+		cases = append(cases,
+			tieredInput{name: string(id) + "_repository_checksum_failed", id: id, field: "repository_checksum_failed"},
+			tieredInput{name: string(id) + "_wiki_checksum_failed", id: id, field: "wiki_checksum_failed"},
+		)
+	}
+	assertInputsOfferedOnNoTier(t, cases)
+}
+
 // TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
 // half of the tier filter, across the three tiers built in one process.
 //

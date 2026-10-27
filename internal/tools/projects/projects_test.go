@@ -5442,8 +5442,6 @@ func TestBuildListOpts_AllBranches(t *testing.T) {
 		IDBefore:                 500,
 		Active:                   new(true),
 		Imported:                 new(true),
-		RepositoryChecksumFailed: new(true),
-		WikiChecksumFailed:       new(true),
 		RepositoryStorage:        "nfs-01",
 		WithCustomAttributes:     new(true),
 
@@ -5471,12 +5469,7 @@ func assertListProjectAdminOpts(t *testing.T, opts *gl.ListProjectsOptions) {
 	if opts.Imported == nil || !*opts.Imported {
 		t.Error("Imported not set")
 	}
-	if opts.RepositoryChecksumFailed == nil || !*opts.RepositoryChecksumFailed {
-		t.Error("RepositoryChecksumFailed not set")
-	}
-	if opts.WikiChecksumFailed == nil || !*opts.WikiChecksumFailed {
-		t.Error("WikiChecksumFailed not set")
-	}
+	assertNoChecksumFilters(t, opts)
 	if opts.RepositoryStorage == nil || *opts.RepositoryStorage != "nfs-01" {
 		t.Error("RepositoryStorage not set")
 	}
@@ -8912,8 +8905,6 @@ func TestBuildForkListOpts_AllBranches(t *testing.T) {
 		IDBefore:                 500,
 		Active:                   new(true),
 		Imported:                 new(true),
-		RepositoryChecksumFailed: new(true),
-		WikiChecksumFailed:       new(true),
 		RepositoryStorage:        "nfs-01",
 		WithCustomAttributes:     new(true),
 
@@ -8951,13 +8942,24 @@ func assertAllListProjectFiltersSet(t *testing.T, opts *gl.ListProjectsOptions) 
 		opts.IDAfter != nil, opts.IDBefore != nil,
 	}
 	admin := []bool{
-		opts.Active != nil, opts.Imported != nil, opts.RepositoryChecksumFailed != nil,
-		opts.WikiChecksumFailed != nil, opts.RepositoryStorage != nil,
+		opts.Active != nil, opts.Imported != nil, opts.RepositoryStorage != nil,
 		opts.WithCustomAttributes != nil,
 	}
 	assertAllTrue(t, "scalar filters", scalars)
 	assertAllTrue(t, "pointer filters", pointers)
 	assertAllTrue(t, "admin filters", admin)
+	assertNoChecksumFilters(t, opts)
+}
+
+// assertNoChecksumFilters fails the test if the options carry either checksum
+// filter. Enterprise Edition declares both and no finder reads them, so a
+// list built with every filter a caller can set still sends neither (issue
+// 1240).
+func assertNoChecksumFilters(t *testing.T, opts *gl.ListProjectsOptions) {
+	t.Helper()
+	if opts.RepositoryChecksumFailed != nil || opts.WikiChecksumFailed != nil {
+		t.Errorf("checksum filters = %v, %v, want neither sent", opts.RepositoryChecksumFailed, opts.WikiChecksumFailed)
+	}
 }
 
 // assertAllTrue fails the test if any flag in the group is false.
@@ -9019,8 +9021,6 @@ func TestBuildUserProjectOpts_FullFilterSet(t *testing.T) {
 		IncludeHidden:            new(true),
 		Active:                   new(true),
 		Imported:                 new(true),
-		RepositoryChecksumFailed: new(true),
-		WikiChecksumFailed:       new(true),
 		RepositoryStorage:        "nfs-02",
 		WithCustomAttributes:     new(true),
 

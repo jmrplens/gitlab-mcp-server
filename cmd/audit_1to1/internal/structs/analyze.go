@@ -176,6 +176,9 @@ const (
 	// events leave out new_epic, which client-go's options carry for all three
 	// update routes.
 	notificationNewEpicNotProjects = "declared for PUT /notification_settings and PUT /groups/:id/notification_settings and not for PUT /projects/:id/notification_settings (EE::NotificationSetting::EMAIL_EVENTS_MAPPING, ee/app/models/ee/notification_setting.rb:7-17 at v19.5.0-ee; gitlab-api-live.json, 19.5.0), so Grape drops it from a project's update on every tier; the account-wide and group inputs embed it as epicEvent and their handlers send it"
+	// projectChecksumFiltersUnread is the reason the project lists offer
+	// neither checksum filter, which client-go's options carry.
+	projectChecksumFiltersUnread = "declared by every route that takes the project list filters (optional_filter_params_ee, ee/lib/ee/api/helpers/projects_helpers.rb:38-42 at v19.5.0-ee) and read by nothing: the finder parameters the routes build carry neither (EE::API::Helpers#project_finder_params_ee, ee/lib/ee/api/helpers.rb:119-127), and no finder, model or service names them, so a list asked for the failed checksums answered every project on every tier"
 	// skypeDiscarded is the reason the user create and modify inputs offer no
 	// skype, which client-go's options still carry.
 	skypeDiscarded = "GitLab discards it: the users.skype column is ignored since 18.4 and neither POST /users nor PUT /users/:id declares the param, so a caller who set it changed nothing"
@@ -1125,6 +1128,11 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// shared events the builder copies leave it out and the two inputs that
 	// take it embed it on their own.
 	"notifications.eventFields.new_epic": notificationNewEpicNotProjects,
+	// SDK options fields every route that takes them declares and none reads.
+	// Every project list goes through userProjectFilter, so the two keys
+	// answer all five lists at once.
+	"projects.userProjectFilter.repository_checksum_failed": projectChecksumFiltersUnread,
+	"projects.userProjectFilter.wiki_checksum_failed":       projectChecksumFiltersUnread,
 
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).

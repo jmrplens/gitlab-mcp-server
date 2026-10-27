@@ -490,13 +490,11 @@ type ListInput struct {
 	IDBefore                 int64  `json:"id_before,omitempty"                 jsonschema:"Return projects with ID less than this value (keyset pagination)"`
 
 	// Additional filters (additive 1:1 SDK parity with ListProjectsOptions)
-	Active                   *bool             `json:"active,omitempty"                    jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
-	Imported                 *bool             `json:"imported,omitempty"                  jsonschema:"Limit to projects imported from an external source by the current user"`
-	RepositoryChecksumFailed *bool             `json:"repository_checksum_failed,omitempty" jsonschema:"Limit to projects where the repository checksum calculation failed (admin only)"`
-	WikiChecksumFailed       *bool             `json:"wiki_checksum_failed,omitempty"       jsonschema:"Limit to projects where the wiki checksum calculation failed (admin only)"`
-	RepositoryStorage        string            `json:"repository_storage,omitempty"         jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
-	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"     jsonschema:"Include custom attributes in the response (admin only)"`
-	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"     jsonschema:"Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
+	Active               *bool             `json:"active,omitempty"                    jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
+	Imported             *bool             `json:"imported,omitempty"                  jsonschema:"Limit to projects imported from an external source by the current user"`
+	RepositoryStorage    string            `json:"repository_storage,omitempty"         jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
+	WithCustomAttributes *bool             `json:"with_custom_attributes,omitempty"     jsonschema:"Include custom attributes in the response (admin only)"`
+	CustomAttributes     map[string]string `json:"custom_attributes,omitempty"     jsonschema:"Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
 
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -1278,7 +1276,6 @@ func (input ListInput) toFilter() userProjectFilter {
 		LastActivityAfter: input.LastActivityAfter, LastActivityBefore: input.LastActivityBefore,
 		IDAfter: input.IDAfter, IDBefore: input.IDBefore, IncludePendingDelete: input.IncludePendingDelete,
 		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
-		RepositoryChecksumFailed: input.RepositoryChecksumFailed, WikiChecksumFailed: input.WikiChecksumFailed,
 		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
 		CustomAttributes: input.CustomAttributes,
 		PaginationInput:  input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
@@ -1998,8 +1995,6 @@ type ListForksInput struct {
 	IDBefore                 int64             `json:"id_before,omitempty"                   jsonschema:"Return forks with ID less than this value (keyset pagination)"`
 	Active                   *bool             `json:"active,omitempty"                      jsonschema:"Limit to active (non-archived, non-pending-deletion) forks"`
 	Imported                 *bool             `json:"imported,omitempty"                    jsonschema:"Limit to forks imported from an external source by the current user"`
-	RepositoryChecksumFailed *bool             `json:"repository_checksum_failed,omitempty"  jsonschema:"Limit to forks where the repository checksum calculation failed (admin only)"`
-	WikiChecksumFailed       *bool             `json:"wiki_checksum_failed,omitempty"        jsonschema:"Limit to forks where the wiki checksum calculation failed (admin only)"`
 	RepositoryStorage        string            `json:"repository_storage,omitempty"          jsonschema:"Limit to forks on the given repository storage shard (admin only)"`
 	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"      jsonschema:"Include custom attributes in the response (admin only)"`
 	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"      jsonschema:"Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
@@ -2039,7 +2034,6 @@ func (input ListForksInput) toFilter() userProjectFilter {
 		LastActivityAfter: input.LastActivityAfter, LastActivityBefore: input.LastActivityBefore,
 		IDAfter: input.IDAfter, IDBefore: input.IDBefore, IncludePendingDelete: input.IncludePendingDelete,
 		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
-		RepositoryChecksumFailed: input.RepositoryChecksumFailed, WikiChecksumFailed: input.WikiChecksumFailed,
 		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
 		CustomAttributes: input.CustomAttributes,
 		PaginationInput:  input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
@@ -3141,8 +3135,14 @@ func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, i
 
 // userProjectFilterInput is the embeddable, JSON-schema-bearing filter set
 // shared by the user-scoped project list tools (owned, contributed, starred).
-// All three endpoints accept the full ListProjectsOptions filter set, so they
-// surface the complete filter surface for 1:1 SDK parity.
+// The owned and starred routes take the full ListProjectsOptions filter set,
+// which it surfaces for 1:1 SDK parity, but for the repository and wiki
+// checksum filters: Enterprise Edition declares both and no finder reads
+// either (EE::API::Helpers#project_finder_params_ee, at v19.5.0-ee), so they
+// are offered by no project list (issue 1240). The contributed route takes
+// only order_by, sort and simple of them: it declares those, user_id and the
+// pagination alone (lib/api/projects.rb, at v19.5.0-ee), and Grape drops
+// the rest there.
 type userProjectFilterInput struct {
 	Search                   string            `json:"search,omitempty"             jsonschema:"Search query for project name"`
 	Visibility               string            `json:"visibility,omitempty"         jsonschema:"Filter by visibility (private, internal, public)"`
@@ -3168,8 +3168,6 @@ type userProjectFilterInput struct {
 	IncludeHidden            *bool             `json:"include_hidden,omitempty"     jsonschema:"Include hidden projects in results"`
 	Active                   *bool             `json:"active,omitempty"             jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
 	Imported                 *bool             `json:"imported,omitempty"           jsonschema:"Limit to projects imported from an external source by the current user"`
-	RepositoryChecksumFailed *bool             `json:"repository_checksum_failed,omitempty"  jsonschema:"Limit to projects where the repository checksum calculation failed (admin only)"`
-	WikiChecksumFailed       *bool             `json:"wiki_checksum_failed,omitempty"        jsonschema:"Limit to projects where the wiki checksum calculation failed (admin only)"`
 	RepositoryStorage        string            `json:"repository_storage,omitempty"          jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
 	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"      jsonschema:"Include custom attributes in the response (admin only)"`
 	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"     jsonschema:"Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
@@ -3186,7 +3184,8 @@ func (f userProjectFilterInput) toFilter() userProjectFilter {
 }
 
 // userProjectFilter holds the resolved filter parameters for user-scoped
-// project listings, mirroring the full ListProjectsOptions filter set.
+// project listings, mirroring the ListProjectsOptions filter set but for the
+// two checksum filters no GitLab finder reads (see [userProjectFilterInput]).
 //
 // The json tags mirror the SDK url tags on gl.ListProjectsOptions so the
 // struct-completeness auditor (R-INPUT) can confirm 1:1 parity against the SDK
@@ -3219,8 +3218,6 @@ type userProjectFilter struct {
 	IncludeHidden            *bool             `json:"include_hidden,omitempty"`
 	Active                   *bool             `json:"active,omitempty"`
 	Imported                 *bool             `json:"imported,omitempty"`
-	RepositoryChecksumFailed *bool             `json:"repository_checksum_failed,omitempty"`
-	WikiChecksumFailed       *bool             `json:"wiki_checksum_failed,omitempty"`
 	RepositoryStorage        string            `json:"repository_storage,omitempty"`
 	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"`
 	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"`
@@ -3315,12 +3312,6 @@ func applyUserProjectFilterPtrs(opts *gl.ListProjectsOptions, f userProjectFilte
 	}
 	if f.Imported != nil {
 		opts.Imported = f.Imported
-	}
-	if f.RepositoryChecksumFailed != nil {
-		opts.RepositoryChecksumFailed = f.RepositoryChecksumFailed
-	}
-	if f.WikiChecksumFailed != nil {
-		opts.WikiChecksumFailed = f.WikiChecksumFailed
 	}
 	if f.RepositoryStorage != "" {
 		opts.RepositoryStorage = new(f.RepositoryStorage)
