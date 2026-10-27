@@ -10,9 +10,12 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
@@ -268,6 +271,61 @@ func TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext(t *testing.T) {
 	t.Run("the summary still counts everything", func(t *testing.T) {
 		if decode(t, gaps).Summary.ActionsSilent != 2 {
 			t.Errorf("summary = %+v, want the counts unchanged by the filter", decode(t, gaps).Summary)
+		}
+	})
+}
+
+// TestRun_GapsOnly_KeepsTheKeysetWorkAndDropsItsDeclaredFindings verifies the
+// flag on the keyset half of R-PAGE: a list a route declaration answers is
+// context, so -gaps-only leaves it out while the full report keeps it, and the
+// summary counts the half's findings by problem either way.
+func TestRun_GapsOnly_KeepsTheKeysetWorkAndDropsItsDeclaredFindings(t *testing.T) {
+	withPaginationDeclarations(t, nil)
+	withKeysetDeclarations(t, []keysetRouteDeclaration{{
+		Route: "GET /projects/:id/anonymous", Category: categoryKeysetNotFollowable, Reason: "only a signed-out caller reaches it",
+	}})
+	withDeclarations(t, map[string]silentOwnerDeclaration{})
+	root := recordIn(t, map[string]response{
+		"GET /projects/:id/anonymous": cursorRoute,
+		"GET /projects/:id/things":    {Params: []string{"id", "page", "per_page"}},
+	})
+	makeToolsPackage(t, root, "things")
+	writeActionRequests(t, root, []actionrequests.RecordAction{
+		sending("thing.list", "things.List", "GET /projects/:id/things"),
+		sending("thing.search", "things.Search", "GET /projects/:id/anonymous"),
+	})
+	stubInputs(t, []requestinventory.Row{
+		{Package: "internal/tools/things", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:project_id/things"},
+	}, []requestinventory.Action{
+		listAction("thing.list", "things", reflect.TypeFor[fixturePaginatedListOutput](), withPageToken),
+		listAction("thing.search", "things", reflect.TypeFor[fixturePaginatedListOutput](), withoutPageToken),
+	}, graphqldocs.Result{})
+
+	full, _, err := Run(t.Context(), root, Options{})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	gaps, _, err := Run(t.Context(), root, Options{GapsOnly: true})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if got := decode(t, full).Pagination.Keyset.Findings; len(got) != 2 {
+		t.Errorf("the full report lists %+v, want the offset finding and the declared list", got)
+	}
+	kept := decode(t, gaps).Pagination.Keyset.Findings
+	if len(kept) != 1 || kept[0].Action != "thing.list" || kept[0].Problem != keysetOnOffsetRoute {
+		t.Errorf("the gaps-only report lists %+v, want the one finding no declaration answers", kept)
+	}
+	t.Run("the summary counts the half by problem", func(t *testing.T) {
+		summary := decode(t, gaps).Summary
+		got := []int{
+			summary.PageTokenActions, summary.PageTokenOnKeysetRoutes, summary.PageTokenOnOffsetRoutes,
+			summary.KeysetRoutesNotOffered, summary.KeysetNoNextPageToken, summary.KeysetNeverFollowed,
+			summary.KeysetFindingsUndeclared,
+		}
+		if want := []int{1, 0, 1, 1, 0, 0, 1}; !slices.Equal(got, want) {
+			t.Errorf("keyset summary = %v, want %v", got, want)
 		}
 	})
 }
@@ -633,5 +691,31 @@ func TestRun_TheRealTree_PassesItsOwnGate(t *testing.T) {
 	if accounted*10 < report.Summary.CatalogActions*9 {
 		t.Errorf("only %d of %d catalog actions are owned by a package that recorded a request or declared why it did not; the recording has regressed",
 			accounted, report.Summary.CatalogActions)
+	}
+	// The keyset half has to have run for its route declarations to have been
+	// held to the tree at all, and the summary quotes its findings: each
+	// figure is the count of the findings it names.
+	keyset := report.Pagination.Keyset
+	if !keyset.Ran || keyset.Offering == 0 || keyset.OnKeyset == 0 {
+		t.Errorf("keyset half = ran %t, %d offering page_token, %d on keyset routes; want it run over the catalog",
+			keyset.Ran, keyset.Offering, keyset.OnKeyset)
+	}
+	problems := map[string]int{}
+	for _, finding := range keyset.Findings {
+		problems[finding.Problem]++
+	}
+	summary := report.Summary
+	got := []int{
+		summary.PageTokenActions, summary.PageTokenOnKeysetRoutes, summary.PageTokenOnOffsetRoutes,
+		summary.KeysetRoutesNotOffered, summary.KeysetNoNextPageToken, summary.KeysetNeverFollowed,
+		summary.KeysetFindingsUndeclared,
+	}
+	want := []int{
+		keyset.Offering, keyset.OnKeyset, problems[keysetOnOffsetRoute],
+		problems[keysetNotOffered], problems[keysetNoNextPageToken], problems[keysetNeverFollowed],
+		keyset.undeclared(),
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("keyset summary = %v, want the counts of the findings it names, %v", got, want)
 	}
 }

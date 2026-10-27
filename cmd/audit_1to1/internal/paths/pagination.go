@@ -89,6 +89,17 @@ import (
 // here. What would remove them is an inventory that named the action, which is a
 // different piece of work: nothing the recorder sees today can supply it.
 //
+// # Keyset pagination
+//
+// Everything above is about a list that says nothing of where it ends. A list
+// GitLab can page by keyset says where it ends in a next link, and is asked
+// different questions, at the action's own grain rather than the package's:
+// whether page_token is offered where GitLab can page by keyset and only
+// there, and whether the next_page_token it is followed by is published and
+// was ever sent back. Those are [KeysetPagination], the Keyset field below,
+// read off the keyset field of the live record's schema 5 and the request
+// record the handlers were derived into.
+//
 // # It reports and does not gate
 //
 // A finding is a surface change, and the surface is not this command's to
@@ -119,6 +130,10 @@ type PaginationCheck struct {
 	// Unpaginated is the finding list: an action reading a collection, in a
 	// package recorded calling a paginated endpoint, publishing no pagination.
 	Unpaginated []UnpaginatedCollection `json:"unpaginated,omitempty"`
+	// Keyset is the other half of the question: whether page_token is offered
+	// where GitLab can page by keyset, and only there, and whether a keyset
+	// page can be followed. See [KeysetPagination].
+	Keyset KeysetPagination `json:"keyset"`
 }
 
 // RoutePagination is what the live record says about pagination, before any of
@@ -129,10 +144,10 @@ type RoutePagination struct {
 	// Offset declares page and per_page: the answer's headers carry the page,
 	// the total and the pages either side of it.
 	Offset int `json:"offset_paginated"`
-	// Keyset declares per_page without page, so the next page is asked for with
-	// the cursor or page_token the Link header carries. A page-and-total block
-	// is the wrong shape to publish for one of these, which is why they are
-	// counted apart rather than folded in.
+	// Keyset is every route whose code reaches a keyset paginator, as the
+	// record's keyset field says, so the next page is asked for with the
+	// cursor or page_token the Link header carries. Most of them page by
+	// offset too, which is GitLab's default, so a route can count in both.
 	Keyset int `json:"keyset_paginated"`
 }
 
@@ -256,10 +271,11 @@ func paginationCheck(root string, requests []requestinventory.Row, actions []req
 	check := PaginationCheck{Ran: true, Record: apilive.FileName, Grain: paginationGrain}
 	for _, route := range record.Routes {
 		check.Routes.Routes++
-		switch offset, keyset := routePagination(route); {
-		case offset:
+		offset, keyset := routePagination(route)
+		if offset {
 			check.Routes.Offset++
-		case keyset:
+		}
+		if keyset {
 			check.Routes.Keyset++
 		}
 	}
@@ -276,6 +292,7 @@ func paginationCheck(root string, requests []requestinventory.Row, actions []req
 	check.Recorded.KeysetPackages = len(keysetByPackage)
 
 	check.Collections, check.Unpaginated = unpaginatedCollections(actions, offsetByPackage, keysetByPackage)
+	check.Keyset = keysetPagination(root, record, requests, actions)
 	return check
 }
 

@@ -181,13 +181,112 @@ func classifyUnpaginated(found []UnpaginatedCollection) []UnpaginatedCollection 
 	return classified
 }
 
+// keysetRouteDeclaration records a route the live record marks as reaching a
+// keyset paginator where GitLab serves this server no keyset page it can
+// follow, which the record cannot say: it records where a route's code calls a
+// keyset paginator, and whether a page comes of it depends on what GitLab's
+// handler hands that paginator and on who is asking ([apilive.KeysetSite]).
+//
+// A declared route is held to as one this server cannot page by keyset. An
+// action offering page_token on it is therefore on the offset list, with the
+// route named in its not_followable, since offering the parameter there is the
+// finding; and a list sending it without offering page_token is declared, by
+// this entry, rather than reported as a list that cannot ask for the cheaper
+// way through it. The bar for an entry is the one [paginationDeclaration] sets:
+// what GitLab's handler does, read from its source at the recorded release,
+// with the file and line.
+type keysetRouteDeclaration struct {
+	// Route is spelled as the request record spells a route
+	// ([apilive.RouteName]).
+	Route string
+	// Category says what kind of non-defect this is.
+	Category string
+	// Reason says why, in the words a reviewer needs to judge whether it still
+	// holds.
+	Reason string
+}
+
+// categoryKeysetNotFollowable is the one keyset category: the record marks the
+// route as reaching a keyset paginator, and no request this server sends gets
+// a keyset page there whose next link leads anywhere.
+const categoryKeysetNotFollowable = "keyset-not-followable"
+
+// declaredKeysetRoutes are the routes the record marks as reaching a keyset
+// paginator that this server cannot page by keyset, each read in GitLab's
+// source at v19.5.0-ee, the release the record was taken from.
+//
+// Each reason is one literal rather than lines joined with +, for the reason
+// [paginationGrain] gives: gremlins reads a + in a package-level initializer as
+// arithmetic, reports its mutant as not covered, and the - it would become does
+// not compile.
+var declaredKeysetRoutes = []keysetRouteDeclaration{
+	{
+		Route:    "GET /groups",
+		Category: categoryKeysetNotFollowable,
+		Reason:   "the record finds paginate_with_strategies through present_groups_with_pagination_strategies (lib/api/groups.rb:181), and that helper returns present_groups, which pages by offset with paginate (lib/api/groups.rb:152), whenever current_user is present (line 171). Only an anonymous request reaches the keyset branch, and this server always signs in, so pagination=keyset and its cursor are ignored.",
+	},
+	{
+		Route:    "GET /groups/:id/service_accounts/:user_id/personal_access_tokens",
+		Category: categoryKeysetNotFollowable,
+		Reason:   "the handler pages PersonalAccessTokensFinder's relation with paginate_with_strategies (lib/api/group_service_accounts.rb:240), and PersonalAccessToken declares no supported_keyset_orderings, so keyset_paginator takes Keyset::Pager, whose availability check admits Project alone, and answers every keyset request with 405 (lib/api/helpers/pagination_strategies.rb:30-43). The record's cursor is CursorPager's, which GitLab never reaches here.",
+	},
+	{
+		Route:    "GET /projects/:id/service_accounts/:user_id/personal_access_tokens",
+		Category: categoryKeysetNotFollowable,
+		Reason:   "the handler pages PersonalAccessTokensFinder's relation with paginate_with_strategies (lib/api/project_service_accounts.rb:217), and PersonalAccessToken declares no supported_keyset_orderings, so keyset_paginator takes Keyset::Pager, whose availability check admits Project alone, and answers every keyset request with 405 (lib/api/helpers/pagination_strategies.rb:30-43). The record's cursor is CursorPager's, which GitLab never reaches here.",
+	},
+	{
+		Route:    "GET /users/:user_id/contributed_projects",
+		Category: categoryKeysetNotFollowable,
+		Reason:   "present_projects reaches Keyset::Pager as on the other project lists (lib/api/projects.rb:248), but the handler builds ContributedProjectsFinder with no params (lib/api/projects.rb:396) and Keyset::Pager#paginate only limits the relation (lib/gitlab/pagination/keyset/pager.rb:13), so the id_after or id_before of the next link GitLab writes is never applied and every keyset page is the first again (upstream-bugs row 112).",
+	},
+}
+
+// declaredKeysetRoute finds the declaration of one route.
+func declaredKeysetRoute(route string) (keysetRouteDeclaration, bool) {
+	for _, declaration := range declaredKeysetRoutes {
+		if declaration.Route == route {
+			return declaration, true
+		}
+	}
+	return keysetRouteDeclaration{}, false
+}
+
+// unusedKeysetDeclarations names the route declarations no finding used: none
+// names the route as one this server cannot follow, and none is a list the
+// declaration answers. A declaration stops being used when the record stops
+// marking its route, which is GitLab no longer reaching a keyset paginator
+// there or the walk no longer seeing it, or when no action sends the route.
+func unusedKeysetDeclarations(found []KeysetFinding) []string {
+	used := map[string]bool{}
+	for _, finding := range found {
+		for _, route := range finding.NotFollowable {
+			used[route] = true
+		}
+		if finding.declared() {
+			used[finding.Routes[0]] = true
+		}
+	}
+	unused := make([]string, 0)
+	for _, declaration := range declaredKeysetRoutes {
+		if used[declaration.Route] {
+			continue
+		}
+		unused = append(unused, declaration.Route+
+			" is declared a route this server cannot page by keyset ("+declaration.Category+
+			") and no finding uses it: the record no longer marks it as reaching a keyset paginator, or no action sends it")
+	}
+	return unused
+}
+
 // staleDeclarations names the declarations that accounted for no finding.
 //
 // A declaration stops matching when the action gained its pagination, was
 // renamed, moved package, or stopped reading a collection, and in each case the
 // excuse now outlives the thing it excused. This is the half of the rule that
 // gates, on the same terms every declaration table here is held to: the findings
-// report and the table's own integrity does not.
+// report and the table's own integrity does not. The keyset half's route
+// declarations join it, from [KeysetPagination.UnusedDeclarations].
 func (c PaginationCheck) staleDeclarations() []string {
 	if !c.Ran {
 		return nil
@@ -207,6 +306,7 @@ func (c PaginationCheck) staleDeclarations() []string {
 			" is declared to read a collection GitLab does not paginate ("+declaration.Category+
 			") and matches no finding: it either publishes pagination now, stopped reading a collection, or was renamed")
 	}
+	stale = append(stale, c.Keyset.UnusedDeclarations...)
 	sort.Strings(stale)
 	return stale
 }

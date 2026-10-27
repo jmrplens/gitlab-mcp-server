@@ -41,6 +41,9 @@ type response struct {
 	// ParamsRequired are declared the same way and marked required, which is
 	// what makes writing them on every call correct rather than a finding.
 	ParamsRequired []string
+	// Keyset are the places the route's code reaches a keyset paginator,
+	// which is what says GitLab can page it by keyset.
+	Keyset []apilive.KeysetSite
 }
 
 // recordIn writes a live GitLab record a test can join against, from a map of
@@ -72,7 +75,7 @@ func fixtureDocument(operations map[string]response) apilive.Document {
 		if !found {
 			continue
 		}
-		route := apilive.Route{Method: method, Path: apilive.EndpointPrefix + trimAPIPrefix(path)}
+		route := apilive.Route{Method: method, Path: apilive.EndpointPrefix + trimAPIPrefix(path), Keyset: answer.Keyset}
 		for _, name := range answer.Params {
 			if route.Params == nil {
 				route.Params = map[string]apilive.Param{}
@@ -475,6 +478,7 @@ const (
 func mergedRouteIndex() *operationIndex {
 	offsetParams := map[string]apilive.Param{"page": {}, "per_page": {}}
 	keysetParams := map[string]apilive.Param{"per_page": {}, "cursor": {}}
+	sites := []apilive.KeysetSite{fixtureKeysetSite("cursor")}
 	return newOperationIndex(apilive.Document{
 		SchemaVersion: apilive.SchemaVersion,
 		Entities: map[string]apilive.Entity{
@@ -482,14 +486,23 @@ func mergedRouteIndex() *operationIndex {
 			secondEntity: {Fields: []apilive.Field{{Name: "id"}, {Name: "name"}, {Name: "path"}}},
 		},
 		Routes: []apilive.Route{
-			{Method: "GET", Path: apilive.EndpointPrefix + "/things", Entity: firstEntity, Params: keysetParams},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/things", Entity: firstEntity, Params: keysetParams, Keyset: sites},
 			{Method: "GET", Path: apilive.EndpointPrefix + "/things", Entity: secondEntity, Params: offsetParams},
 			{Method: "GET", Path: apilive.EndpointPrefix + "/others", Entity: firstEntity, Params: offsetParams},
-			{Method: "GET", Path: apilive.EndpointPrefix + "/others", Entity: secondEntity, Params: keysetParams},
-			{Method: "GET", Path: apilive.EndpointPrefix + "/projects/:id/widgets", Entity: firstEntity, Params: keysetParams},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/others", Entity: secondEntity, Params: keysetParams, Keyset: sites},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/projects/:id/widgets", Entity: firstEntity, Params: keysetParams, Keyset: sites},
 			{Method: "GET", Path: apilive.EndpointPrefix + "/projects/:name/widgets", Entity: secondEntity, Params: offsetParams},
 		},
 	})
+}
+
+// fixtureKeysetSite is one place a route's code reaches a keyset paginator,
+// asked by the cursors given, in the shape 19.5.0 records the commonest one.
+func fixtureKeysetSite(cursors ...string) apilive.KeysetSite {
+	return apilive.KeysetSite{
+		Paginator: apilive.PaginatorStrategies, File: "lib/api/fixture.rb", Line: 10,
+		Text: "present paginate_with_strategies(records)", Cursor: cursors,
+	}
 }
 
 // TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeThePagination

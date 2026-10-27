@@ -289,11 +289,13 @@
 // which returns a bare array of tokens while GitLab serves twenty at a time. A
 // caller cannot tell it has one page and cannot ask for the next.
 //
-// The oracle is the live record's params: 318 of its 2152 mounted routes declare
-// per_page at 19.4.1-ee, 311 of those declare page beside it and the other seven
-// take a cursor or a page_token. That is a far stronger statement than a guess
-// from an endpoint's name, and it is available because the record asks the
-// router rather than reading prose.
+// The oracle is the live record. For offset pagination it is the params: 312 of
+// its 2192 mounted routes declare page beside per_page at 19.5.0-ee. That is a
+// far stronger statement than a guess from an endpoint's name, and it is
+// available because the record asks the router rather than reading prose. For
+// keyset pagination the params cannot say, since GitLab reads pagination=keyset
+// without declaring it, and the oracle is the keyset field of the record's
+// schema 5, the 53 routes whose code reaches a keyset paginator.
 //
 // An action is judged when its output is a collection envelope, which is exactly
 // one content field that is a list of objects, with this server's own framing
@@ -338,6 +340,19 @@
 // fix it and issue 1341 did: the list sends a document of its own, taking
 // first and after and publishing the connection's count and the forward half
 // of pageInfo, and upstream-bugs row 104 records the client-go half.
+//
+// A keyset page says where it ends in a next link, so the rule asks a list
+// GitLab can page by keyset other questions (issue 1165), at the action's own
+// grain, since the request record the handlers were derived into names the
+// routes each action sends: whether page_token is offered where a route can be
+// paged by keyset and only there, whether a list on such a route offers it,
+// and whether an action that offers it publishes the next_page_token its next
+// page is asked with and was recorded sending a route its cursor. A route the
+// record marks and GitLab serves this server no followable keyset page on, a
+// helper whose keyset branch only a signed-out caller reaches or a model
+// paginate_with_strategies answers 405 for, is declared in
+// pagination_declarations.go with what GitLab's handler does. See
+// [KeysetPagination].
 //
 // # Is a param sent that the caller never asked to send
 //

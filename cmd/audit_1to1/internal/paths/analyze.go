@@ -190,6 +190,17 @@ type Summary struct {
 	// PaginationGrain says what the collection counts were asked at, for the
 	// same reason Grain does above: the number is what gets quoted.
 	PaginationGrain string `json:"pagination_endpoint_grain"`
+	// The keyset counts are R-PAGE's other half: how many actions offer
+	// page_token, how many of them on a route this server can page by
+	// keyset, and the findings by problem, with the ones no declaration
+	// accounts for. See [KeysetPagination].
+	PageTokenActions         int `json:"page_token_actions"`
+	PageTokenOnKeysetRoutes  int `json:"page_token_actions_on_keyset_routes"`
+	PageTokenOnOffsetRoutes  int `json:"page_token_on_offset_routes"`
+	KeysetRoutesNotOffered   int `json:"keyset_routes_without_page_token"`
+	KeysetNoNextPageToken    int `json:"keyset_routes_without_next_page_token"`
+	KeysetNeverFollowed      int `json:"keyset_routes_never_followed"`
+	KeysetFindingsUndeclared int `json:"keyset_findings_undeclared"`
 	// SDKGraphQLDocuments and SDKGraphQLRefused count the documents client-go
 	// builds inside its own module and the ones the pinned schema will not
 	// accept. They are beside GraphQLDocuments and GraphQLRefused rather than
@@ -419,6 +430,13 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 			CollectionsUnpaginated:    pagination.Collections.Unpaginated,
 			CollectionsUndeclared:     pagination.Collections.Undeclared,
 			PaginationGrain:           paginationGrain,
+			PageTokenActions:          pagination.Keyset.Offering,
+			PageTokenOnKeysetRoutes:   pagination.Keyset.OnKeyset,
+			PageTokenOnOffsetRoutes:   pagination.Keyset.count(keysetOnOffsetRoute),
+			KeysetRoutesNotOffered:    pagination.Keyset.count(keysetNotOffered),
+			KeysetNoNextPageToken:     pagination.Keyset.count(keysetNoNextPageToken),
+			KeysetNeverFollowed:       pagination.Keyset.count(keysetNeverFollowed),
+			KeysetFindingsUndeclared:  pagination.Keyset.undeclared(),
 			SDKGraphQLDocuments:       sdkGraphQL.Documents,
 			SDKGraphQLRefused:         len(sdkGraphQL.Refusals),
 			E2EActionsObserved:        len(e2e.Issuing),
@@ -434,6 +452,7 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 		report.SilentOwners = keepUndeclared(report.SilentOwners)
 		report.Endpoints.Undocumented = keepUndeclaredEndpoints(report.Endpoints.Undocumented)
 		report.Pagination.Unpaginated = keepUndeclaredCollections(report.Pagination.Unpaginated)
+		report.Pagination.Keyset.Findings = keepUndeclaredKeyset(report.Pagination.Keyset.Findings)
 		// The SDK document listing and the per-action observation keep only
 		// their findings too: the document set and the observed actions are
 		// context, and -gaps-only asks for the work.

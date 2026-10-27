@@ -4,8 +4,14 @@
 package paths
 
 import (
+	"reflect"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
 // withPaginationDeclarations replaces the declaration table for the length of a
@@ -16,6 +22,182 @@ func withPaginationDeclarations(t *testing.T, table []paginationDeclaration) {
 	original := declaredUnpaginatedCollections
 	declaredUnpaginatedCollections = table
 	t.Cleanup(func() { declaredUnpaginatedCollections = original })
+}
+
+// withKeysetDeclarations replaces the keyset route declarations for the length
+// of a test, for the reasons withPaginationDeclarations gives.
+func withKeysetDeclarations(t *testing.T, table []keysetRouteDeclaration) {
+	t.Helper()
+	original := declaredKeysetRoutes
+	declaredKeysetRoutes = table
+	t.Cleanup(func() { declaredKeysetRoutes = original })
+}
+
+// TestKeysetPagination_ADeclaredRoute_IsOneThisServerCannotPageByKeyset
+// verifies what a keyset route declaration does to the judgment of the routes
+// it names. The record marks the route as reaching a keyset paginator and the
+// declaration says GitLab serves this server no page there it can follow, so:
+// an action offering page_token on it is on the offset list, with the route
+// named as the reason it is there; a list sending it without page_token is
+// declared rather than reported as a list that cannot ask for keyset; and an
+// action sending it beside a route it can follow is held to that one alone.
+func TestKeysetPagination_ADeclaredRoute_IsOneThisServerCannotPageByKeyset(t *testing.T) {
+	withPaginationDeclarations(t, nil)
+	withKeysetDeclarations(t, []keysetRouteDeclaration{{
+		Route: "GET /projects/:id/anonymous", Category: categoryKeysetNotFollowable, Reason: "only a signed-out caller reaches it",
+	}})
+	half := keysetFixture{
+		operations: map[string]response{
+			"GET /projects/:id/anonymous": cursorRoute,
+			"GET /projects/:id/cursors":   cursorRoute,
+		},
+		requests: []actionrequests.RecordAction{
+			sending("thing.list", "things.List", "GET /projects/:id/anonymous"),
+			sending("thing.search", "things.Search", "GET /projects/:id/anonymous"),
+			sending("thing.both", "things.Both", "GET /projects/:id/anonymous", "GET /projects/:id/cursors"),
+		},
+		rows: []requestinventory.Row{followed("internal/tools/things", "cursor")},
+		actions: []requestinventory.Action{
+			listAction("thing.list", "things", reflect.TypeFor[fixturePaginatedListOutput](), withPageToken),
+			listAction("thing.search", "things", reflect.TypeFor[fixturePaginatedListOutput](), withoutPageToken),
+			listAction("thing.both", "things", reflect.TypeFor[fixturePaginatedListOutput](), withPageToken),
+		},
+	}.run(t)
+
+	want := []keysetFindingJSON{
+		{
+			Action: "thing.list", Package: "internal/tools/things", Problem: keysetOnOffsetRoute,
+			Routes: []string{"GET /projects/:id/anonymous"}, NotFollowable: []string{"GET /projects/:id/anonymous"},
+		},
+		{
+			Action: "thing.search", Package: "internal/tools/things", Problem: keysetNotOffered,
+			Routes: []string{"GET /projects/:id/anonymous"}, Cursors: []string{"cursor"},
+			Category: categoryKeysetNotFollowable, Reason: "only a signed-out caller reaches it",
+		},
+	}
+	if !reflect.DeepEqual(half.Findings, want) {
+		t.Errorf("findings = %+v, want %+v", half.Findings, want)
+	}
+	if half.OnKeyset != 1 {
+		t.Errorf("on keyset routes = %d, want the action sending a route it can follow beside the declared one", half.OnKeyset)
+	}
+	if len(half.Unused) != 0 {
+		t.Errorf("unused declarations = %v, want the declaration used", half.Unused)
+	}
+}
+
+// TestUnusedKeysetDeclarations_ADeclarationNoFindingUses_IsStale verifies the
+// half of the table that gates: a route declaration is used when a finding
+// names its route as one this server cannot follow or is a list it answers,
+// and one neither does is reported, after the used ones are read past, since
+// it would otherwise outlive the route it was written for.
+func TestUnusedKeysetDeclarations_ADeclarationNoFindingUses_IsStale(t *testing.T) {
+	withKeysetDeclarations(t, []keysetRouteDeclaration{
+		{Route: "GET /named", Category: categoryKeysetNotFollowable, Reason: "named"},
+		{Route: "GET /answered", Category: categoryKeysetNotFollowable, Reason: "answered"},
+		{Route: "GET /retired", Category: categoryKeysetNotFollowable, Reason: "retired"},
+	})
+
+	unused := unusedKeysetDeclarations([]KeysetFinding{
+		{Action: "a.list", Problem: keysetOnOffsetRoute, Routes: []string{"GET /named", "GET /x"}, NotFollowable: []string{"GET /named"}},
+		{Action: "b.list", Problem: keysetNotOffered, Routes: []string{"GET /answered"}, Category: categoryKeysetNotFollowable},
+		// An undeclared finding on a route keeps no declaration of it alive.
+		{Action: "c.list", Problem: keysetNotOffered, Routes: []string{"GET /retired"}},
+	})
+
+	want := []string{"GET /retired is declared a route this server cannot page by keyset (keyset-not-followable) and no " +
+		"finding uses it: the record no longer marks it as reaching a keyset paginator, or no action sends it"}
+	if !reflect.DeepEqual(unused, want) {
+		t.Errorf("unusedKeysetDeclarations() = %q, want %q", unused, want)
+	}
+}
+
+// TestPaginationStaleDeclarations_TheKeysetHalfsUnusedOnes_JoinThem verifies
+// that an unused route declaration reaches the gate the way every stale
+// declaration does, through the pagination check's stale list.
+func TestPaginationStaleDeclarations_TheKeysetHalfsUnusedOnes_JoinThem(t *testing.T) {
+	withPaginationDeclarations(t, nil)
+	check := PaginationCheck{Ran: true, Keyset: KeysetPagination{Ran: true, UnusedDeclarations: []string{"GET /retired is declared"}}}
+
+	if stale := check.staleDeclarations(); !reflect.DeepEqual(stale, []string{"GET /retired is declared"}) {
+		t.Errorf("staleDeclarations() = %v, want the keyset half's unused declaration", stale)
+	}
+}
+
+// TestKeepUndeclaredKeyset_DropsWhatADeclarationAnswers verifies what
+// -gaps-only asks of the keyset half, on the terms of the collection half: a
+// declared finding is context rather than work.
+func TestKeepUndeclaredKeyset_DropsWhatADeclarationAnswers(t *testing.T) {
+	kept := keepUndeclaredKeyset([]KeysetFinding{
+		{Action: "a.list", Category: categoryKeysetNotFollowable, Reason: "GitLab refuses keyset there"},
+		{Action: "b.list"},
+	})
+
+	if len(kept) != 1 || kept[0].Action != "b.list" {
+		t.Errorf("keepUndeclaredKeyset() = %+v, want only the undeclared finding", kept)
+	}
+}
+
+// TestKeysetPagination_Counts_DivideTheFindingsByProblem verifies the figures
+// the summary quotes: how many findings name each problem, and how many of
+// them no declaration accounts for.
+func TestKeysetPagination_Counts_DivideTheFindingsByProblem(t *testing.T) {
+	check := KeysetPagination{Findings: []KeysetFinding{
+		{Problem: keysetOnOffsetRoute},
+		{Problem: keysetOnOffsetRoute},
+		{Problem: keysetNotOffered, Category: categoryKeysetNotFollowable},
+		{Problem: keysetNeverFollowed},
+	}}
+
+	for problem, want := range map[string]int{
+		keysetOnOffsetRoute: 2, keysetNotOffered: 1, keysetNoNextPageToken: 0, keysetNeverFollowed: 1,
+	} {
+		t.Run(problem, func(t *testing.T) {
+			if got := check.count(problem); got != want {
+				t.Errorf("count(%q) = %d, want %d", problem, got, want)
+			}
+		})
+	}
+	if got := check.undeclared(); got != 3 {
+		t.Errorf("undeclared() = %d, want the three findings no declaration answers", got)
+	}
+}
+
+// keysetReasonSite is how a reason cites what it read in GitLab's source: a
+// repository-relative Ruby file and a line in it.
+var keysetReasonSite = regexp.MustCompile(`(?:ee/)?lib/[a-z0-9_/]+\.rb:[0-9]+`)
+
+// TestDeclaredKeysetRoutes_EveryEntry_ExplainsItself verifies the committed
+// table on the bar it sets: each entry is a route spelled the way the request
+// record spells one, declared once, in the one category, with a reason that
+// argues rather than labels and cites the handler it read, by file and line,
+// since a reason that only asserts GitLab cannot page the route is the kind
+// of entry that excused real findings in the collection half's table.
+func TestDeclaredKeysetRoutes_EveryEntry_ExplainsItself(t *testing.T) {
+	seen := map[string]bool{}
+	for _, declaration := range declaredKeysetRoutes {
+		t.Run(declaration.Route, func(t *testing.T) {
+			if !strings.HasPrefix(declaration.Route, "GET /") {
+				t.Errorf("route = %q, want a GET route spelled as the request record spells one", declaration.Route)
+			}
+			if declaration.Category != categoryKeysetNotFollowable {
+				t.Errorf("category = %q, want %q", declaration.Category, categoryKeysetNotFollowable)
+			}
+			if len(declaration.Reason) < 80 {
+				t.Errorf("reason = %q, want an argument rather than a label", declaration.Reason)
+			}
+			if !keysetReasonSite.MatchString(declaration.Reason) {
+				t.Errorf("reason = %q, want it to cite the handler it read by file and line", declaration.Reason)
+			}
+			if seen[declaration.Route] {
+				t.Errorf("%s is declared twice", declaration.Route)
+			}
+			seen[declaration.Route] = true
+		})
+	}
+	if !slices.IsSortedFunc(declaredKeysetRoutes, func(a, b keysetRouteDeclaration) int { return strings.Compare(a.Route, b.Route) }) {
+		t.Error("the declarations are not in route order, which is the order a reader looks one up in")
+	}
 }
 
 // TestClassifyUnpaginated_ADeclaration_CarriesItsReasonIntoTheFinding verifies

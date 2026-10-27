@@ -69,26 +69,34 @@ func TestTypeName_FollowsPointers_ToTheTypeAFindingNames(t *testing.T) {
 	}
 }
 
-// TestRoutePagination_PerPageDecidesTheShape verifies the oracle's own reading.
-// per_page is the signal rather than page because it is the one both shapes
-// declare, and reading page instead would drop the four cursor routes entirely
-// and count them as endpoints GitLab sends whole.
-func TestRoutePagination_PerPageDecidesTheShape(t *testing.T) {
+// TestRoutePagination_ParamsSayOffsetAndTheRecordSaysKeyset verifies the
+// oracle's own reading. Offset is what the route declares, page beside
+// per_page. Keyset is the record's keyset field and never the params: GitLab
+// reads pagination=keyset without declaring it, so most of the routes it can
+// page by keyset declare no cursor, and a route declaring one with no keyset
+// site is one the walk would have refused to write. The two are independent,
+// since a keyset route still pages by offset unless a caller asks otherwise.
+func TestRoutePagination_ParamsSayOffsetAndTheRecordSaysKeyset(t *testing.T) {
+	sites := []apilive.KeysetSite{fixtureKeysetSite("cursor")}
 	cases := []struct {
 		name       string
 		params     []string
+		keyset     []apilive.KeysetSite
 		wantOffset bool
 		wantKeyset bool
 	}{
 		{name: "page and per_page is offset pagination", params: []string{"id", "page", "per_page"}, wantOffset: true},
-		{name: "per_page with a cursor is keyset pagination", params: []string{"id", "per_page", "cursor"}, wantKeyset: true},
-		{name: "per_page with a page token is keyset pagination", params: []string{"per_page", "page_token"}, wantKeyset: true},
+		{name: "page without per_page is not", params: []string{"id", "page"}},
+		{name: "per_page without page is not", params: []string{"id", "per_page"}},
+		{name: "a declared cursor alone is not keyset pagination", params: []string{"id", "per_page", "cursor"}},
+		{name: "a keyset site is keyset pagination", params: []string{"id"}, keyset: sites, wantKeyset: true},
+		{name: "a keyset site beside page and per_page is both", params: []string{"page", "per_page"}, keyset: sites, wantOffset: true, wantKeyset: true},
 		{name: "no per_page is an endpoint that sends everything", params: []string{"id", "sort"}},
 		{name: "a route declaring nothing at all", params: nil},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			route := apilive.Route{Method: "GET", Path: "/api/:version/things"}
+			route := apilive.Route{Method: "GET", Path: "/api/:version/things", Keyset: testCase.keyset}
 			for _, name := range testCase.params {
 				if route.Params == nil {
 					route.Params = map[string]apilive.Param{}
@@ -111,9 +119,11 @@ func TestRoutePagination_PerPageDecidesTheShape(t *testing.T) {
 // calling that GitLab pages, once each, with the rows that say nothing left out.
 func TestPaginatedEndpoints_JoinsRecordedRequestsToTheRoute(t *testing.T) {
 	index, _ := fixtureRecord(map[string]response{
-		"GET /groups/:id/ssh_certificates":  {Params: []string{"id", "page", "per_page"}},
-		"GET /groups/:id/saml_group_links":  {},
-		"GET /projects/:id/-/work_items/:w": {Params: []string{"per_page", "cursor"}},
+		"GET /groups/:id/ssh_certificates": {Params: []string{"id", "page", "per_page"}},
+		"GET /groups/:id/saml_group_links": {},
+		"GET /projects/:id/-/work_items/:w": {
+			Params: []string{"per_page", "cursor"}, Keyset: []apilive.KeysetSite{fixtureKeysetSite("cursor")},
+		},
 	})
 	rows := []requestinventory.Row{
 		{Package: "internal/tools/groupsshcerts", Kind: requestinventory.KindREST, Method: "GET", Path: "/groups/:group_id/ssh_certificates"},
@@ -241,9 +251,11 @@ func TestPaginationCheck_AListWithNoPaginationAndAPaginatedEndpoint_IsAFinding(t
 func TestPaginationCheck_ShapesThatAreNotFindings_AreCountedApart(t *testing.T) {
 	withPaginationDeclarations(t, nil)
 	operations := map[string]response{
-		"GET /projects/:id/things":  {Params: []string{"id", "page", "per_page"}},
-		"GET /projects/:id/whole":   {Params: []string{"id"}},
-		"GET /projects/:id/cursors": {Params: []string{"id", "per_page", "cursor"}},
+		"GET /projects/:id/things": {Params: []string{"id", "page", "per_page"}},
+		"GET /projects/:id/whole":  {Params: []string{"id"}},
+		"GET /projects/:id/cursors": {
+			Params: []string{"id", "per_page", "cursor"}, Keyset: []apilive.KeysetSite{fixtureKeysetSite("cursor")},
+		},
 	}
 	rows := []requestinventory.Row{
 		{Package: "internal/tools/paged", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:project_id/things"},
@@ -377,17 +389,26 @@ func TestPaginationCheck_Findings_AreOrderedByPackageThenAction(t *testing.T) {
 // TestPaginationCheck_TheRecordCountsItsOwnRoutes verifies the oracle's size is
 // published, because a finding that cites an endpoint means nothing to a reader
 // who cannot see how much of GitLab the record held.
+//
+// The keyset count is the record's keyset field: a route whose code reaches a
+// keyset paginator counts whatever it declares, the same route counts as
+// offset as well when it declares page and per_page, and a route declaring a
+// cursor and reaching no paginator is not keyset at all, which is how the
+// count used to be read off the params.
 func TestPaginationCheck_TheRecordCountsItsOwnRoutes(t *testing.T) {
 	withPaginationDeclarations(t, nil)
+	sites := []apilive.KeysetSite{fixtureKeysetSite("cursor")}
 	operations := map[string]response{
 		"GET /a": {Params: []string{"page", "per_page"}},
 		"GET /b": {Params: []string{"per_page", "cursor"}},
 		"GET /c": {},
+		"GET /d": {Params: []string{"page", "per_page"}, Keyset: sites},
+		"GET /e": {Keyset: sites},
 	}
 
 	check := paginationCheck(recordIn(t, operations), nil, nil)
 
-	want := RoutePagination{Routes: 3, Offset: 1, Keyset: 1}
+	want := RoutePagination{Routes: 5, Offset: 2, Keyset: 2}
 	if check.Routes != want {
 		t.Errorf("routes = %+v, want %+v", check.Routes, want)
 	}

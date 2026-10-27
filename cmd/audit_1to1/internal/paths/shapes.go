@@ -319,10 +319,11 @@ type operation struct {
 	// declares, and a route that takes per_page is a route whose answer is one
 	// page of something longer. See [PaginationCheck].
 	Offset bool
-	// Keyset is true for a route that declares per_page and no page, which is
-	// GitLab's cursor pagination: the next page is asked for with the cursor or
-	// page_token the Link header carries, and a page/total block would be the
-	// wrong shape to publish for it.
+	// Keyset is true for a route whose code the record says reaches a keyset
+	// paginator, which is GitLab's cursor pagination: the next page is asked
+	// for with the cursor or page_token the Link header carries, and a
+	// page/total block would be the wrong shape to publish for it. A route can
+	// be both, since keyset is a caller's choice and offset GitLab's default.
 	Keyset bool
 	// Params is what the route declares it accepts, keyed by the name GitLab
 	// spells, a nested one in subscripts under its parent. It is the half of
@@ -449,20 +450,21 @@ func (index *operationIndex) as(found operation, entity string) operation {
 	return found
 }
 
-// routePagination reads what a route's declared params say about pagination.
+// routePagination reads what the record says about a route's pagination.
 //
-// per_page is the signal rather than page, because it is the one both shapes
-// declare: 308 routes of the pinned record take it, 304 of them take page too
-// and the other four take a cursor or a page_token instead. A route taking
-// neither answers with everything it has.
+// Offset is the route's declared params: page beside per_page is GitLab's
+// offset pagination, 312 routes of the pinned record. Keyset is the record's
+// keyset field, the places the route's code reaches a keyset paginator, and
+// not the params: GitLab reads pagination=keyset without declaring it, so 22
+// of the 53 routes whose code reaches one declare no cursor, and the ten that
+// declare per_page without page, which is how this used to be read, are
+// among those 53 and are the smallest part of them. The two are independent,
+// since a route GitLab can page by keyset still pages by offset by default.
+// A route taking neither answers with everything it has.
 func routePagination(route apilive.Route) (offset, keyset bool) {
-	if _, ok := route.Params["per_page"]; !ok {
-		return false, false
-	}
-	if _, ok := route.Params["page"]; ok {
-		return true, false
-	}
-	return false, true
+	_, perPage := route.Params["per_page"]
+	_, page := route.Params["page"]
+	return perPage && page, route.PagesByKeyset()
 }
 
 // unionParams merges two routes' declared params. A param both declare keeps
