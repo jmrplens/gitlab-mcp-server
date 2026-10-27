@@ -194,25 +194,34 @@
 // image it pulls, which passes when named by its digest and is a finding when
 // named by a tag or by its name alone; a value whose last path segment ends in
 // Dockerfile or starts with Dockerfile., in any case, is built from the
-// action's files at its pin, and passes; and any other value, which the runner
-// refuses, is a finding, as is metadata that names no image. One that
+// action's files at its pin, with no --pull and no --build-arg, and every
+// image that Dockerfile has the build pull is held to its digest the same way:
+// each FROM that is neither scratch nor a stage, each COPY --from and RUN
+// --mount from= that names an image, and the frontend a syntax directive
+// names, read as BuildKit reads the file (keywords in any case, the escape
+// directive, continuation lines, heredoc bodies skipped) with the defaults
+// of the global ARGs substituted, a variable no default sets being a finding;
+// the Dockerfile is read from the record for a pinned action and from the
+// workspace for one of this repository; and any other value, which the runner
+// refuses, is a finding, as is metadata that names no image. An image that
 // somebody else's action names can be accepted under write-free-job in
 // declarations.go, keyed by the action and the image without its tag, so a
 // bump that moves the tag keeps the declaration and one that moves the image
 // elsewhere does not; every job that runs it is then held to a token, declared
 // by the job or its workflow, that writes nothing but id-token, to cache-mode
 // none and to reading no secret (an undeclared token is the repository's
-// default, a setting the tree does not hold),
-// what the workflow hands down included, since whatever a push to the tag
-// puts there runs with the job's token, its secrets and the runtime token the
-// runner hands every container action, which permissions: does not reach and
-// which saves to the Actions cache on a push or a schedule unless cache-mode
-// is none. Its one entry is ossf/scorecard-action, whose action.yaml runs
+// default, a setting the tree does not hold), what the workflow hands down
+// included, since whatever a push to the tag puts there runs with the job's
+// token, its secrets and the runtime token the runner hands every container
+// action, which permissions: does not reach and which saves to the Actions
+// cache on a push or a schedule unless cache-mode is none. Its one entry is
+// ossf/scorecard-action, whose action.yaml runs
 // docker://ghcr.io/ossf/scorecard-action at its release tag.
 //
 // The record holds, for every pinned action a step reaches, the metadata file
-// at its commit, and the files of its directory a credentialed job's steps
-// read, each as its lines and in ASCII. It is written by -record, which runs
+// at its commit, the files of its directory a credentialed job's steps read,
+// and the Dockerfile a container action builds, each as its lines and in
+// ASCII. It is written by -record, which runs
 // the same walk fetching each file from raw.githubusercontent.com, so it holds
 // exactly what the audit reads, and is read offline by every other run, so the
 // gate needs no network. The default run holds the record to the pins: a pin
@@ -227,10 +236,10 @@
 //
 // What opening an action does not reach, by construction: a JavaScript action
 // runs the bundle committed at its pin, which is as pinned as its metadata and
-// is not read; a container action built from a Dockerfile pulls the images its
-// FROM lines name, which a registry can move and this audit does not open; and
-// a reusable workflow named by a job's uses: is not an action and is not
-// opened.
+// is not read; what a container action's Dockerfile fetches other than the
+// images its build pulls, a RUN line that downloads at build time and an ADD of
+// a URL or a git repository, is not read; and a reusable workflow named by a
+// job's uses: is not an action and is not opened.
 //
 // Usage:
 //

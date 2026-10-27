@@ -111,10 +111,12 @@ func TestAuditWorkflows_PinnedAction_IsUnjudgedWithoutARecord(t *testing.T) {
 }
 
 // TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord verifies that an
-// action whose code is the bundle committed at its pin, or a container built
-// from the Dockerfile committed there, is recorded and read no further, so it
-// passes with its metadata in the record and nothing else, and that a
-// docker:// image named by its digest is not opened either.
+// action whose code is the bundle committed at its pin is recorded and read no
+// further, so it passes with its metadata in the record and nothing else, that
+// a container built from the Dockerfile committed there needs that Dockerfile
+// in the record beside its metadata and nothing more when it builds from an
+// image named by its digest, and that a docker:// image named by its digest is
+// not opened either.
 func TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord(t *testing.T) {
 	t.Parallel()
 
@@ -129,10 +131,12 @@ func TestAuditWorkflows_NodeAndDockerActions_NeedOnlyTheirRecord(t *testing.T) {
       - uses: docker://alpine@`+testDigest+`
       - uses: docker://example/image:3@`+testDigest+`
 `)
-	writeRecord(t, root, recordOf(map[string]string{
+	record := recordOf(map[string]string{
 		attestKey: "runs:\n  using: 'node24'\n  main: dist/index.js\n",
 		dockerKey: "runs:\n  using: Docker\n  image: Dockerfile\n",
-	}))
+	})
+	recordFile(record, dockerKey, "Dockerfile", "FROM alpine@"+testDigest+"\n")
+	writeRecord(t, root, record)
 
 	problems, err := auditTree(root, tables{})
 	if err != nil {
@@ -234,7 +238,8 @@ const (
 // TestAuditWorkflows_ContainerActionImage_IsHeldToItsDigest verifies that the
 // image a container action runs is held to rule 1 as a docker:// step is: an
 // image named by its sha256 digest, a tag before it or not, and a Dockerfile
-// the action's commit holds pass; an image named by a tag, or by its name
+// the action's commit holds that builds from an image named by its digest
+// pass; an image named by a tag, or by its name
 // alone, is a finding, made once however many jobs and actions reach it, in a
 // pinned action, in one an action of the record names and in one of this
 // repository; and metadata that names no image cannot be judged.
@@ -300,7 +305,7 @@ func TestAuditWorkflows_ContainerActionImage_IsHeldToItsDigest(t *testing.T) {
       - uses: `+upperKey+`
       - uses: ./.github/actions/box
 `)
-	writeRecord(t, root, recordOf(map[string]string{
+	record := recordOf(map[string]string{
 		builtKey:       "runs:\n  using: docker\n  image: Dockerfile\n",
 		lowerKey:       "runs:\n  using: docker\n  image: docker/app.dockerfile\n",
 		suffixedKey:    "runs:\n  using: docker\n  image: build/DOCKERFILE.ci\n",
@@ -317,7 +322,12 @@ func TestAuditWorkflows_ContainerActionImage_IsHeldToItsDigest(t *testing.T) {
 		emptyKey:       "runs:\n  using: docker\n  image: 7\n",
 		nestedKey:      "runs:\n  using: composite\n  steps:\n    - uses: " + taggedKey + "\n    - uses: " + innerKey + "\n",
 		innerKey:       "runs:\n  using: docker\n",
-	}))
+	})
+	pinnedBase := "FROM alpine@" + testDigest + "\n"
+	recordFile(record, builtKey, "Dockerfile", pinnedBase)
+	recordFile(record, lowerKey, "docker/app.dockerfile", pinnedBase)
+	recordFile(record, suffixedKey, "build/DOCKERFILE.ci", pinnedBase)
+	writeRecord(t, root, record)
 
 	problems, err := auditTree(root, tables{})
 	if err != nil {
@@ -339,6 +349,139 @@ func TestAuditWorkflows_ContainerActionImage_IsHeldToItsDigest(t *testing.T) {
 	}
 	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
 		t.Errorf("auditWorkflows() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestAuditWorkflows_ContainerActionDockerfile_HoldsItsImagesToTheirDigest
+// verifies that the Dockerfile a container action's runs.image names is read
+// where the runner reads it, from the record for a pinned action and from the
+// workspace for one of this repository, and that every image its build pulls
+// is held to its digest as a docker:// image is: a base named by its digest
+// passes, a tag-named base, a syntax directive's frontend named by a tag and
+// a base named through a variable no default sets are findings, and a
+// tag-named base declarations.go accepts holds every job that runs it to what
+// the declaration promises. A Dockerfile the record has no answer for is
+// unjudged, one the commit or the workspace does not hold, or one outside the
+// action's directory, is a finding, and so is a heredoc no line ends. Each
+// finding about the action is made once however many jobs reach it.
+//
+// The runner builds the image at job start with docker build, no --pull and no
+// --build-arg, so a FROM named by a tag is whatever its registry serves then.
+// hadolint/hadolint-action, the one such action here, names its base by digest
+// at v3.5.0 but by tag alone at v3.1.0 to v3.3.0, and the audit returned at
+// the Dockerfile without opening it, so a bump to one of those passed.
+func TestAuditWorkflows_ContainerActionDockerfile_HoldsItsImagesToTheirDigest(t *testing.T) {
+	t.Parallel()
+
+	const (
+		pinnedKey     = "example/pinned-base@" + testSHA
+		taggedKey     = "example/tagged-base@" + testSHA
+		syntaxKey     = "example/syntax@" + testSHA
+		argKey        = "example/arg@" + testSHA
+		heredocKey    = "example/heredoc@" + testSHA
+		unrecordedKey = "example/unrecorded@" + testSHA
+		absentKey     = "example/absent@" + testSHA
+		absoluteKey   = "example/absolute@" + testSHA
+		acceptedKey   = "example/accepted@" + testSHA
+		built         = "runs:\n  using: docker\n  image: Dockerfile\n"
+	)
+	root := t.TempDir()
+	writeFile(t, root, ".github/actions/built/action.yml", built)
+	writeFile(t, root, ".github/actions/built/Dockerfile", "FROM alpine:3\n")
+	writeFile(t, root, ".github/actions/missing/action.yml", built)
+	writeWorkflow(t, root, "ci.yml", `jobs:
+  lint:
+    permissions: {}
+    cache-mode: none
+    steps:
+      - uses: `+pinnedKey+`
+      - uses: `+taggedKey+`
+      - uses: `+syntaxKey+`
+      - uses: `+argKey+`
+      - uses: `+heredocKey+`
+      - uses: `+unrecordedKey+`
+      - uses: `+absentKey+`
+      - uses: `+absoluteKey+`
+      - uses: `+acceptedKey+`
+      - uses: ./.github/actions/built
+      - uses: ./.github/actions/missing
+  undeclared:
+    cache-mode: none
+    steps:
+      - uses: `+taggedKey+`
+      - uses: `+acceptedKey+`
+      - uses: ./.github/actions/built
+`)
+	record := recordOf(map[string]string{
+		pinnedKey: built, taggedKey: built, syntaxKey: built, argKey: built, heredocKey: built,
+		unrecordedKey: built, absentKey: built, acceptedKey: built,
+		absoluteKey: "runs:\n  using: docker\n  image: /Dockerfile\n",
+	})
+	recordFile(record, pinnedKey, "Dockerfile", "FROM ghcr.io/example/base:v2@"+testDigest+"\nCOPY --from=ghcr.io/example/tools@"+testDigest+" /t /t\n")
+	recordFile(record, taggedKey, "Dockerfile", "FROM ghcr.io/hadolint/hadolint:v2.14.0-debian\n")
+	recordFile(record, syntaxKey, "Dockerfile", "# syntax=docker/dockerfile:1\nFROM alpine@"+testDigest+"\n")
+	recordFile(record, argKey, "Dockerfile", "ARG BASE\nFROM $BASE\n")
+	recordFile(record, heredocKey, "Dockerfile", "FROM alpine@"+testDigest+"\nRUN <<EOF\necho\n")
+	recordFile(record, acceptedKey, "Dockerfile", "FROM ghcr.io/example/base:v1\n")
+	absent := record.Actions[absentKey]
+	absent.Files = map[string]recordedFile{"Dockerfile": {Absent: true}}
+	record.Actions[absentKey] = absent
+	writeRecord(t, root, record)
+	declared := tables{taggedImages: map[string]declaration{
+		"example/accepted docker://ghcr.io/example/base": {category: categoryWriteFreeJob, reason: "the job writes nothing"},
+	}}
+
+	problems, err := auditTree(root, declared)
+	if err != nil {
+		t.Fatalf("auditWorkflows: %v", err)
+	}
+	const cannot = ", so what the container action builds cannot be judged"
+	want := []string{
+		taggedKey + "/Dockerfile:1: FROM ghcr.io/hadolint/hadolint:v2.14.0-debian" + undigestedImage,
+		syntaxKey + "/Dockerfile:1: # syntax=docker/dockerfile:1" + undigestedImage,
+		argKey + "/Dockerfile:2: FROM $BASE names its image through a variable this audit cannot resolve " +
+			"(an ARG with no default, a build argument, or a substitution form it does not read)" + cannot,
+		heredocKey + "/Dockerfile:2: opens a heredoc no line ends, which BuildKit refuses" + cannot,
+		unrecordedKey + "/action.yml: runs.image Dockerfile: " + actionRecordPath + " holds no record of " + unrecordedKey + "/Dockerfile" + cannot + "; run " + recordCommand,
+		absentKey + "/action.yml: runs.image Dockerfile names " + absentKey + "/Dockerfile, which is not a readable file" + cannot,
+		absoluteKey + "/action.yml: runs.image /Dockerfile names a Dockerfile outside the action's directory" + cannot,
+		".github/actions/built/Dockerfile:1: FROM alpine:3" + undigestedImage,
+		".github/actions/missing/action.yml: runs.image Dockerfile names .github/actions/missing/Dockerfile, which is not a readable file" + cannot,
+		".github/workflows/ci.yml: job undeclared: step 1: uses: " + acceptedKey + " runs docker://ghcr.io/example/base:v1, which " + declarationsFile +
+			" accepts by its tag only in a job whose token writes nothing but id-token, and neither this job nor its workflow declares permissions, " +
+			"so its token is the repository's default, which a setting this audit cannot read decides",
+	}
+	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
+		t.Errorf("auditWorkflows() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestAuditWorkflows_Record_FetchesAContainerActionsDockerfile verifies that
+// -record fetches the Dockerfile a pinned container action names from the
+// action's directory at its commit and records it beside the metadata, so the
+// offline run that follows reads the same bytes the runner builds from.
+func TestAuditWorkflows_Record_FetchesAContainerActionsDockerfile(t *testing.T) {
+	t.Parallel()
+
+	const key = "example/tools/lint@" + testSHA
+	served := map[string]string{
+		"example/tools/" + testSHA + "/lint/action.yml":       "runs:\n  using: docker\n  image: build/Dockerfile\n",
+		"example/tools/" + testSHA + "/lint/build/Dockerfile": "FROM alpine@" + testDigest + "\n",
+	}
+	root := t.TempDir()
+	writeWorkflow(t, root, "ci.yml", "jobs:\n  lint:\n    steps:\n      - uses: "+key+"\n")
+	store := newRecordingStore(func(repository, sha, filePath string) (string, bool, error) {
+		body, found := served[repository+"/"+sha+"/"+filePath]
+		return body, found, nil
+	})
+
+	problems, err := auditWorkflows(root, tables{}, store)
+	if err != nil || len(problems) != 0 || store.err != nil {
+		t.Fatalf("auditWorkflows() = %v, %v (store: %v), want no findings", problems, err, store.err)
+	}
+	recorded := store.record.Actions[key].Files["build/Dockerfile"]
+	if recorded.Absent || strings.Join(recorded.Lines, "\n") != strings.Join(textLines("FROM alpine@"+testDigest+"\n"), "\n") {
+		t.Errorf("record of %s/build/Dockerfile = %#v, want the fetched text", key, recorded)
 	}
 }
 

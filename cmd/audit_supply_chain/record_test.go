@@ -424,6 +424,17 @@ func writeRecord(t *testing.T, root string, record actionRecord) {
 	writeFile(t, root, actionRecordPath, string(renderActionRecord(record)))
 }
 
+// recordFile records a file of an action's directory, filePath relative to
+// it, in a record recordOf built, as -record writes a file the commit holds.
+func recordFile(record actionRecord, key, filePath, text string) {
+	action := record.Actions[key]
+	if action.Files == nil {
+		action.Files = map[string]recordedFile{}
+	}
+	action.Files[filePath] = recordedFile{Lines: textLines(text)}
+	record.Actions[key] = action
+}
+
 // recordOf builds a record from each action's metadata text, keyed by the
 // pinned reference, with every action's metadata named action.yml.
 func recordOf(actions map[string]string) actionRecord {

@@ -365,8 +365,8 @@ func (a *supplyChainAudit) excusedByGuard(action openedAction, index int, rule s
 // the job starts, so an image named by a tag, or by its name alone, is
 // whatever its registry serves for it then, and a push to the tag replaces
 // what a pinned action runs with no pull request, no cooldown and no review. A
-// Dockerfile is built from the action's own files at its pin, and passes; the
-// images its FROM lines name are not opened, which doc.go states as a limit.
+// Dockerfile is built from the action's own files at its pin, and the images
+// it has the build pull are held to their digest in turn (judgeDockerfile).
 //
 // The value is told apart as the runner tells it apart, white space and all
 // (actions/runner, ActionManager and DockerUtil.IsDockerfile): the docker://
@@ -389,7 +389,7 @@ func (a *supplyChainAudit) judgeContainerImage(walk actionWalk, where string, ac
 	pulled, isPulled := pulledImage(image)
 	if !isPulled {
 		if isDockerfile(image) {
-			return nil
+			return a.judgeDockerfile(walk, where, action, image)
 		}
 		return a.once(reportKey, fmt.Sprintf(
 			"%s: runs.image %q is neither a Dockerfile nor a docker:// image, which the runner refuses, so what the container action runs cannot be judged",
@@ -406,6 +406,67 @@ func (a *supplyChainAudit) judgeContainerImage(walk actionWalk, where string, ac
 	}
 	a.taggedImagesUsed[key] = true
 	return writeFreeJobProblems(walk, where, action.name, image)
+}
+
+// judgeDockerfile judges the Dockerfile a container action's runs.image names,
+// which the runner builds with docker build from the action's own directory,
+// with no --pull and no --build-arg (actions/runner, ContainerActionHandler and
+// DockerCommandManager): every image the build pulls (dockerfileImages) is
+// held to its sha256 digest as a docker:// image is, since a tag is resolved
+// against its registry when the job starts. A tag-named one is a finding, made
+// once however many jobs reach it, unless declarations.go accepts it for the
+// action as it accepts a docker:// image, and every job that runs an accepted
+// one is then held to what the declaration promises.
+//
+// The Dockerfile is read where the runner reads it: from the workspace for an
+// action of this repository, and from the record for a pinned one, which
+// -record fetches it into. One the record has no answer for is unjudged, and
+// one the commit or the workspace does not hold, or that lies outside the
+// action's directory, is a finding, as is a heredoc no line ends, after which
+// nothing of the file can be read as BuildKit reads it.
+func (a *supplyChainAudit) judgeDockerfile(walk actionWalk, where string, action openedAction, image string) []string {
+	reportKey := "dockerfile " + action.label
+	file := place{action: action.root.action, path: joinPath(action.root.path, image)}
+	if !filepath.IsLocal(filepath.FromSlash(file.path)) {
+		return a.once(reportKey, fmt.Sprintf("%s: runs.image %s names a Dockerfile outside the action's directory, so what the container action builds cannot be judged",
+			action.label, image))
+	}
+	text, readable, recorded := a.readPlace(file, true)
+	if !recorded {
+		return a.once(reportKey, fmt.Sprintf("%s: runs.image %s: %s holds no record of %s, so what the container action builds cannot be judged; run %s",
+			action.label, image, actionRecordPath, file, recordCommand))
+	}
+	if !readable {
+		return a.once(reportKey, fmt.Sprintf("%s: runs.image %s names %s, which is not a readable file, so what the container action builds cannot be judged",
+			action.label, image, file))
+	}
+	pulls, unterminated := dockerfileImages(text)
+	var problems []string
+	if unterminated > 0 {
+		problems = a.once(reportKey, fmt.Sprintf("%s:%d: opens a heredoc no line ends, which BuildKit refuses, so what the container action builds cannot be judged",
+			file, unterminated))
+	}
+	for _, pull := range pulls {
+		named := fmt.Sprintf("%s:%d: %s%s", file, pull.line, pull.instruction, pull.reference)
+		if !pull.resolved {
+			problems = append(problems, a.once(reportKey+" "+named, named+" names its image through a variable this audit cannot resolve "+
+				"(an ARG with no default, a build argument, or a substitution form it does not read), so what the container action builds cannot be judged")...)
+			continue
+		}
+		reference := dockerScheme + pull.reference
+		if pinnedImage.MatchString(reference) {
+			continue
+		}
+		key := action.writer + " " + untaggedImage(reference)
+		if _, declared := a.taggedImages[key]; !declared {
+			problems = append(problems, a.once(reportKey+" "+named, fmt.Sprintf("%s is not pinned to a sha256 image digest, and %s gives no reason to accept it",
+				named, declarationsFile))...)
+			continue
+		}
+		a.taggedImagesUsed[key] = true
+		problems = append(problems, writeFreeJobProblems(walk, where, action.name, reference)...)
+	}
+	return problems
 }
 
 // pulledImage reports whether a container action's runs.image is one the
