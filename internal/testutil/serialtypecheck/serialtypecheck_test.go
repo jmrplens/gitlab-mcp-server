@@ -261,6 +261,14 @@ func importsOfThePackage(t *testing.T, dir string) []string {
 	}
 	var imports []string
 	for _, name := range names {
+		// gobco measures this package from a copy into which it writes files
+		// of its own, gobco_fixed.go and a test file that imports testing
+		// among them, and these tests run there too. Those files are its
+		// instrumentation rather than this package, and no other binary
+		// links them.
+		if strings.HasPrefix(filepath.Base(name), "gobco_") {
+			continue
+		}
 		file, parseErr := parser.ParseFile(token.NewFileSet(), name, nil, parser.ImportsOnly)
 		if parseErr != nil {
 			t.Fatalf("parse %s: %v", name, parseErr)
