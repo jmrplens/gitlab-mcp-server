@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,213 |
-| Unit test functions                                   | 20,574 |
-| E2E test functions                                    |  1,639 |
-| cmd test functions                                    |  4,948 |
+| Total test functions                                  | 22,477 |
+| Unit test functions                                   | 20,833 |
+| E2E test functions                                    |  1,644 |
+| cmd test functions                                    |  5,207 |
 | Test files (internal/)                                |    731 |
-| Test files (cmd/)                                     |    349 |
+| Test files (cmd/)                                     |    389 |
 | Test files (test/e2e/)                                |    430 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     34 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,469 | 60.6% |
-| `TestFunc` (no underscore)             |    909 |  4.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |  7,835 | 35.3% |
+| `TestFunc_Scenario` (2-part)           | 13,564 | 60.3% |
+| `TestFunc` (no underscore)             |    909 |  4.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,004 | 35.6% |
 
 ## Test Distribution
 
@@ -50,9 +50,9 @@
 | Core packages           |          4,094 |        243 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            421 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,111 |        472 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,639 |        430 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          4,948 |        349 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,213** |  **1,510** |                                                                                                 |
+| E2E integration         |          1,644 |        430 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          5,207 |        389 | server entry point and developer command utilities                                              |
+| **Total**               |     **22,477** |  **1,550** |                                                                                                 |
 
 ### Core Packages
 
@@ -336,21 +336,25 @@
 | cmd/audit_action_ids                      |   100.0% |
 | cmd/audit_binary_vulns                    |   100.0% |
 | cmd/audit_catalog_first                   |   100.0% |
+| cmd/audit_dco                             |   100.0% |
 | cmd/audit_dead_consts                     |   100.0% |
 | cmd/audit_discovery_completeness          |   100.0% |
 | cmd/audit_doc_tool_names                  |   100.0% |
 | cmd/audit_dynamic_aliases                 |   100.0% |
 | cmd/audit_e2e_coverage                    |   100.0% |
 | cmd/audit_edition_tier                    |   100.0% |
+| cmd/audit_file_headers                    |   100.0% |
 | cmd/audit_gateway_chars                   |   100.0% |
 | cmd/audit_graphql_documents               |   100.0% |
 | cmd/audit_graphql_shapes                  |   100.0% |
+| cmd/audit_image_vulns                     |   100.0% |
 | cmd/audit_install_buttons                 |    99.1% |
 | cmd/audit_md_escaping                     |   100.0% |
 | cmd/audit_meta_descriptions               |    98.2% |
 | cmd/audit_metrics                         |   100.0% |
 | cmd/audit_readonly_graphql                |   100.0% |
 | cmd/audit_sdk_context                     |   100.0% |
+| cmd/audit_site_headers                    |   100.0% |
 | cmd/audit_supply_chain                    |   100.0% |
 | cmd/audit_surface_quality                 |    99.8% |
 | cmd/audit_tenancy                         |   100.0% |
@@ -361,6 +365,7 @@
 | cmd/audit_tokens                          |   100.0% |
 | cmd/bench_resources                       |   100.0% |
 | cmd/format_md_tables                      |    98.2% |
+| cmd/fuzz_targets                          |   100.0% |
 | cmd/gen_action_catalog_manifest           |   100.0% |
 | cmd/gen_action_grants                     |   100.0% |
 | cmd/gen_action_grants/internal/derive     |   100.0% |
@@ -386,6 +391,7 @@
 | cmd/internal/apilive                      |   100.0% |
 | cmd/internal/auditshared                  |   100.0% |
 | cmd/internal/docgen                       |   100.0% |
+| cmd/internal/fileheader                   |      n/a |
 | cmd/internal/golist                       |   100.0% |
 | cmd/internal/goprogram                    |   100.0% |
 | cmd/internal/grantwords                   |   100.0% |
@@ -399,6 +405,7 @@
 | cmd/internal/sourcegate                   |   100.0% |
 | cmd/internal/testsource                   |   100.0% |
 | cmd/measure_conditions                    |   100.0% |
+| cmd/reproduce_release                     |   100.0% |
 | cmd/server                                |   100.0% |
 
 ### Core Packages
