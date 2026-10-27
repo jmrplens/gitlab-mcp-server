@@ -64,6 +64,20 @@ const (
 	categoryNotGated = "not-gated"
 )
 
+// Reasons. Each is one literal, as every declaration table here writes its
+// reasons, since a constant expression is code no test runs.
+const (
+	// reasonMinimalAccessOnAGroup answers a group membership row whose tier is
+	// the one of Minimal access.
+	reasonMinimalAccessOnAGroup = "The row's tier is the one of 5 (Minimal access), which GitLab grants a member only on a top-level group whose license includes the role (EE::GroupMember#access_level_inclusion, ee/app/models/ee/group_member.rb:85-96 at v19.5.0-ee), and every other level on every tier. The description says so beside the 5 it offers (issue 1280)."
+	// reasonMinimalAccessOnAShare answers the group share's row, which a
+	// group link rather than a member validates.
+	reasonMinimalAccessOnAShare = "The row's tier is the one of 5 (Minimal access), which a group share takes only from a top-level group whose license includes the role (EE::GroupGroupLink#minimal_access_role_allowed, ee/app/models/ee/group_group_link.rb:20 and 32-36 at v19.5.0-ee), and every other level on every tier. The description says so beside the 5 it offers (issue 1280)."
+	// reasonMinimalAccessNeverOnAProject answers the project half of a page
+	// that documents a project and a group membership route in one table.
+	reasonMinimalAccessNeverOnAProject = "The page documents the project and the group route in one table, and the value the row's tier gates, 5 (Minimal access), is one a project grants on no tier: ProjectMember#access_level_inclusion takes Gitlab::Access.all_values, Guest to Owner (app/models/members/project_member.rb:65-70 and lib/gitlab/access.rb:54-56 at v19.5.0-ee). The schema offers no 5 (issue 1280)."
+)
+
 // declaredParamAnswers holds the answer to every parameter finding that is
 // not a tier tag, keyed by "action param".
 //
@@ -72,7 +86,21 @@ const (
 // overtaken fails the unit suite; and a report that read all of the action's
 // pages lists an entry that answered no finding as stale, which is the half that
 // needs GitLab's pages and therefore gates nothing.
-var declaredParamAnswers = map[string]paramDeclaration{}
+//
+// The seven entries are the Minimal access rows GitLab's pages gained after
+// the 19.5 release ("On Premium and Ultimate, 5 (Minimal access) is also
+// valid when id is a top-level group"), which the access level work of issue
+// 1280 settled in the schemas: a group's description states the condition
+// beside the 5 it offers, and a project's enum leaves the 5 out.
+var declaredParamAnswers = map[string]paramDeclaration{
+	"access.approve_group access_level":    {Documented: tierPremium, Category: categoryValueLevelGate, Values: []int{5}, Reason: reasonMinimalAccessOnAGroup},
+	"access.invite_group access_level":     {Documented: tierPremium, Category: categoryValueLevelGate, Values: []int{5}, Reason: reasonMinimalAccessOnAGroup},
+	"group.group_member_add access_level":  {Documented: tierPremium, Category: categoryValueLevelGate, Values: []int{5}, Reason: reasonMinimalAccessOnAGroup},
+	"group.group_member_edit access_level": {Documented: tierPremium, Category: categoryValueLevelGate, Values: []int{5}, Reason: reasonMinimalAccessOnAGroup},
+	"group.share_with_group group_access":  {Documented: tierPremium, Category: categoryValueLevelGate, Values: []int{5}, Reason: reasonMinimalAccessOnAShare},
+	"access.approve_project access_level":  {Documented: tierPremium, Category: categoryGatedValueNotOffered, Values: []int{5}, Reason: reasonMinimalAccessNeverOnAProject},
+	"access.invite_project access_level":   {Documented: tierPremium, Category: categoryGatedValueNotOffered, Values: []int{5}, Reason: reasonMinimalAccessNeverOnAProject},
+}
 
 // answeredParamFinding is a finding a declaration answers, with the answer.
 type answeredParamFinding struct {

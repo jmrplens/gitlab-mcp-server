@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -483,5 +485,55 @@ func TestDeclaredParamAnswers_TheRealTable_HoldsAgainstTheServedSchemas(t *testi
 	}
 	if len(answers) != len(declaredParamAnswers) {
 		t.Errorf("%d of %d declarations hold", len(answers), len(declaredParamAnswers))
+	}
+}
+
+// approvalPage is the section of doc/api/access_requests.md that documents
+// both approvals in one table, with the row GitLab's page carries on master
+// since the 19.5 release: the value 5 is valid on a top-level group with a
+// Premium or Ultimate license.
+const approvalPage = "## Approve an access request\n\n" +
+	"```plaintext\nPUT /groups/:id/access_requests/:user_id/approve\nPUT /projects/:id/access_requests/:user_id/approve\n```\n\n" +
+	"| Attribute | Type | Required | Description |\n| --- | --- | --- | --- |\n" +
+	"| `access_level` | integer | no | Possible values: `10` (Guest) to `50` (Owner). On Premium and Ultimate, `5` (Minimal access) " +
+	"is also valid when `id` is a top-level group. Default: `30`. |\n"
+
+// TestRunMain_RealTable_AnswersTheApprovalsMinimalAccessRow drives the entry
+// point over a module root whose record names both approvals and whose cache
+// holds their section, so the table runMain hands the report is the real one:
+// the group approval's row is answered as a value-level gate its description
+// states, the project approval's as a gated value its schema leaves out, and
+// no declaration of the real table is stale.
+func TestRunMain_RealTable_AnswersTheApprovalsMinimalAccessRow(t *testing.T) {
+	root := fakeModuleRoot(t)
+	seedRecord(t, root,
+		actionrequests.RecordAction{ID: "access.approve_group", Requests: []actionrequests.RecordRequest{
+			{Kind: actionrequests.KindREST, Route: "PUT /groups/:id/access_requests/:user_id/approve"},
+		}},
+		actionrequests.RecordAction{ID: "access.approve_project", Requests: []actionrequests.RecordRequest{
+			{Kind: actionrequests.KindREST, Route: "PUT /projects/:id/access_requests/:user_id/approve"},
+		}},
+	)
+	seedDoc(t, apidocs.CacheDir(root), "access_requests", approvalPage)
+	t.Chdir(root)
+
+	rep := runReport(t, "-offline")
+	access := findDomain(t, rep, "accessrequests")
+	if access.ParamFindings != nil || access.NeedsWork {
+		t.Errorf("accessrequests = open %+v, needs work %v; want both rows answered", access.ParamFindings, access.NeedsWork)
+	}
+	got := map[string]string{}
+	for _, answered := range access.ParamFindingsAnswered {
+		got[answered.Action+" "+answered.Param] = answered.Category
+	}
+	want := map[string]string{
+		"access.approve_group access_level":   categoryValueLevelGate,
+		"access.approve_project access_level": categoryGatedValueNotOffered,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("answered = %v, want %v", got, want)
+	}
+	if rep.StaleParamDeclarations != nil {
+		t.Errorf("stale = %+v, want none of the real table", rep.StaleParamDeclarations)
 	}
 }
