@@ -58,16 +58,18 @@ var (
 )
 
 // releaseNotesAttribution are the shapes in which a text credits an assistant
-// with writing it: a commit trailer, a footer naming the assistant or calling
-// itself machine written, and a link to an assistant's session. Naming a
-// client or a tool in prose, which a release note does, is none of them.
+// with writing it: a commit trailer, a footer or a line naming the assistant
+// as the one that generated, wrote, created, drafted, authored or co-authored
+// the text, its name plain, linked, in emphasis or in code, or calling the
+// text machine written, and a link to an assistant's session. Naming a client
+// or a tool in prose, which a release note does, is none of them.
 var releaseNotesAttribution = []struct {
 	pattern *regexp.Regexp
 	what    string
 }{
 	{pattern: regexp.MustCompile(`(?i)^\s*co-authored-by\s*:`), what: "a Co-Authored-By trailer"},
 	{
-		pattern: regexp.MustCompile(`(?i)\b(?:generated|written|created|drafted)\s+(?:with|by|using)\s+\[?(?:claude|copilot|chatgpt|codex|gemini|cursor|an?\s+(?:ai|assistant|llm)\b)`),
+		pattern: regexp.MustCompile(`(?i)\b(?:(?:co-?)?authored|generated|written|created|drafted)\s+(?:with|by|using):?\s+[\[*_\x60]*(?:claude|copilot|chatgpt|codex|gemini|cursor|an?\s+(?:ai|assistant|llm)\b)`),
 		what:    "a credit to an assistant",
 	},
 	{pattern: regexp.MustCompile(`(?i)\bclaude\.ai/(?:code|chat|share)/`), what: "a link to an assistant's session"},
