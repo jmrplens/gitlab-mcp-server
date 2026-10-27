@@ -12,17 +12,15 @@ import (
 // published as.
 //
 // A spec is registered under its bare name and the catalog publishes it under
-// the group it is aggregated into, so the ID a model calls is domainGroup plus
-// that name. The two used to be written separately, and every RelatedActions
-// entry in this file spelled the bare form: "group_member_edit" resolves to no
-// action, and a model that followed one was answered "unknown action". Each ID
-// below is now concatenated from the same constant the spec is built from, so
-// renaming an action moves both at once.
+// the group it is aggregated into, buildGroupActionSpecs in
+// internal/tools/action_specs.go, so the ID a model calls is "group." plus
+// that name. Every RelatedActions entry in this file used to spell the bare
+// form: "group_member_edit" resolves to no action, and a model that followed
+// one was answered "unknown action". Each ID below is written out whole, as a
+// join of two constants is an expression no coverage profile reaches, and
+// TestActionIDs_EachIsTheGroupDomainAndItsSpecName holds each to the spec it
+// names, so renaming an action without its ID fails there.
 const (
-	// domainGroup is the catalog group these specs are aggregated into, by
-	// buildGroupActionSpecs in internal/tools/action_specs.go.
-	domainGroup = "group."
-
 	specMemberGet            = "group_member_get"
 	specMemberGetInherited   = "group_member_get_inherited"
 	specMemberAdd            = "group_member_add"
@@ -37,15 +35,15 @@ const (
 	actionGroupGet     = "group.get"
 	actionGroupMembers = "group.members"
 
-	actionMemberGet            = domainGroup + specMemberGet
-	actionMemberGetInherited   = domainGroup + specMemberGetInherited
-	actionMemberEdit           = domainGroup + specMemberEdit
-	actionMemberRemove         = domainGroup + specMemberRemove
-	actionMemberShare          = domainGroup + specMemberShare
-	actionMemberUnshare        = domainGroup + specMemberUnshare
-	actionBillableMembers      = domainGroup + specBillableMembers
-	actionBillableMemberships  = domainGroup + specBillableMemberships
-	actionBillableMemberRemove = domainGroup + specBillableMemberRemove
+	actionMemberGet            = "group.group_member_get"
+	actionMemberGetInherited   = "group.group_member_get_inherited"
+	actionMemberEdit           = "group.group_member_edit"
+	actionMemberRemove         = "group.group_member_remove"
+	actionMemberShare          = "group.group_member_share"
+	actionMemberUnshare        = "group.group_member_unshare"
+	actionBillableMembers      = "group.group_billable_members_list"
+	actionBillableMemberships  = "group.group_billable_member_memberships_list"
+	actionBillableMemberRemove = "group.group_billable_member_remove"
 
 	toolBillableMembers           = "gitlab_list_billable_group_members"
 	toolBillableMemberMemberships = "gitlab_list_billable_member_memberships"

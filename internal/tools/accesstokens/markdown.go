@@ -16,15 +16,18 @@ import (
 // granularScopeNamespace names what one granular scope reaches. GitLab sends
 // project_id on a project scope and group_id on a group one, never both, so a
 // scope that names neither renders as a dash rather than as an empty cell.
+//
+// It is written as two ifs rather than a tagless switch so the mutation run
+// can measure both conditions: the coverage profile gremlins reads holds no
+// block for a case expression, and reported both as not covered.
 func granularScopeNamespace(scope toolutil.TokenGranularScopeOutput) string {
-	switch {
-	case scope.ProjectID != 0:
+	if scope.ProjectID != 0 {
 		return "project #" + strconv.FormatInt(scope.ProjectID, 10)
-	case scope.GroupID != 0:
-		return "group #" + strconv.FormatInt(scope.GroupID, 10)
-	default:
-		return "-"
 	}
+	if scope.GroupID != 0 {
+		return "group #" + strconv.FormatInt(scope.GroupID, 10)
+	}
+	return "-"
 }
 
 // writeGranularScopes writes the granular scopes a token carries as a nested

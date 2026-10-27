@@ -341,3 +341,29 @@ func groupMemberSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 	}
 	return byTool
 }
+
+// TestActionIDs_EachIsTheGroupDomainAndItsSpecName verifies that every
+// catalog ID this package publishes is the group domain followed by the name
+// of the spec it names. The IDs are written out whole, so this is what keeps
+// a renamed spec from leaving its published ID behind; the external
+// TestPublishedActionIDs_EveryID_NamesACatalogAction holds the same IDs to
+// the catalog the server builds.
+func TestActionIDs_EachIsTheGroupDomainAndItsSpecName(t *testing.T) {
+	for spec, id := range map[string]string{
+		specMemberGet:            actionMemberGet,
+		specMemberGetInherited:   actionMemberGetInherited,
+		specMemberEdit:           actionMemberEdit,
+		specMemberRemove:         actionMemberRemove,
+		specMemberShare:          actionMemberShare,
+		specMemberUnshare:        actionMemberUnshare,
+		specBillableMembers:      actionBillableMembers,
+		specBillableMemberships:  actionBillableMemberships,
+		specBillableMemberRemove: actionBillableMemberRemove,
+	} {
+		t.Run(spec, func(t *testing.T) {
+			if want := "group." + spec; id != want {
+				t.Errorf("the ID published for spec %q is %q, want %q", spec, id, want)
+			}
+		})
+	}
+}
