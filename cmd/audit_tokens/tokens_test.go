@@ -65,6 +65,10 @@ func (c stubCodec) Encode(string) ([]uint, []string, error) {
 
 func (c stubCodec) Decode([]uint) (string, error) { return "", c.encErr }
 
+func (c stubCodec) ErrorMode() tokenizer.ErrorMode { return tokenizer.ErrorModeNone }
+
+func (c stubCodec) SetErrorMode(tokenizer.ErrorMode) {}
+
 // TestCountTokens_TokenizerUnavailable_UsesByteHeuristic verifies the two ways
 // the tokenizer can drop out — an unavailable codec and an encode failure —
 // both fall back to the documented bytes/4 approximation rather than

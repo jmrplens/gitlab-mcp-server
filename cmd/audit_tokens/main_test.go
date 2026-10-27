@@ -380,6 +380,10 @@ func (thirdCodec) Encode(s string) ([]uint, []string, error) { return make([]uin
 
 func (thirdCodec) Decode([]uint) (string, error) { return "", nil }
 
+func (thirdCodec) ErrorMode() tokenizer.ErrorMode { return tokenizer.ErrorModeNone }
+
+func (thirdCodec) SetErrorMode(tokenizer.ErrorMode) {}
+
 // TestMeasureTools_EqualCost_RanksByName verifies each record carries the
 // tool's own name, domain, token count and byte length, that the costliest
 // tool comes first, and that tools of equal cost follow in name order rather
