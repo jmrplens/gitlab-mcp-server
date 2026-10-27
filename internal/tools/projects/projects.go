@@ -2202,6 +2202,7 @@ func hookOutputFromGL(h *gl.ProjectHook) HookOutput {
 		EnableSSLVerification:     h.EnableSSLVerification,
 		RepositoryUpdateEvents:    h.RepositoryUpdateEvents,
 		ResourceAccessTokenEvents: h.ResourceAccessTokenEvents,
+		ResourceDeployTokenEvents: h.ResourceDeployTokenEvents,
 		AlertStatus:               h.AlertStatus,
 		URLVariables:              projectHookURLVariablesToOutput(h.URLVariables),
 		BranchFilterStrategy:      h.BranchFilterStrategy,
@@ -2254,10 +2255,12 @@ func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCust
 	return out
 }
 
+// projectHookAPI is a project hook as GitLab answers it: client-go's
+// ProjectHook and duo_flow_callback_enabled, which GitLab 19.4 added and
+// ProjectHook does not model (row 58 of docs/development/upstream-bugs.md).
 type projectHookAPI struct {
 	gl.ProjectHook
-	ResourceDeployTokenEvents bool  `json:"resource_deploy_token_events"`
-	DuoFlowCallbackEnabled    *bool `json:"duo_flow_callback_enabled"`
+	DuoFlowCallbackEnabled *bool `json:"duo_flow_callback_enabled"`
 }
 
 func projectHooksPath(projectID string) string {
@@ -2284,7 +2287,6 @@ func doProjectRequest[T any](ctx context.Context, client *gitlabclient.Client, m
 
 func hookOutputFromAPI(h *projectHookAPI) HookOutput {
 	out := hookOutputFromGL(&h.ProjectHook)
-	out.ResourceDeployTokenEvents = h.ResourceDeployTokenEvents
 	out.DuoFlowCallbackEnabled = h.DuoFlowCallbackEnabled
 	return out
 }
