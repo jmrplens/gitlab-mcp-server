@@ -165,6 +165,7 @@ for the fork, branch, fix, test and MR workflow.
   - [Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token](#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token)
   - [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet)
   - [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses)
+  - [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -392,6 +393,7 @@ readable without opening the tracker:
 | 139 | client-go | [The protected environment approval rule options model an `access_level_description` no route declares](#the-protected-environment-approval-rule-options-model-an-access_level_description-no-route-declares) | No | No | No | No | Yes, the four project and group protect and update actions no longer offer it |
 | 140 | gobco | [gobco bridges a black box test package through an import it may not find](#gobco-bridges-a-black-box-test-package-through-an-import-it-may-not-find) | Yes, by another user, [rillig/gobco#33](https://github.com/rillig/gobco/issues/33) | Yes, by another contributor, [rillig/gobco#39](https://github.com/rillig/gobco/pull/39), open | No | No; the condition gate could not measure a package it reaches | Yes, temporarily: the staged copy of `scripts/coverage-conditions.sh` since 2026-10-27, by the decision of row 97, until a gobco release carries a fix |
 | 141 | gitlab-org/gitlab | [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses) | No | No | No | No; GitLab answers both with `400` | Yes, the two custom role creates offer Guest to Maintainer and the two broadcast message writes every target but Security Manager |
+| 142 | gitlab-org/gitlab | [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does) | No; a documentation merge request is drafted, not sent | No | No | No; the schemas followed the pages | Yes ([issue 1240](https://github.com/jmrplens/gitlab-mcp-server/issues/1240)): each row is declared with the source that settles it, and a parameter no tier honors is no longer offered |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -15565,6 +15567,71 @@ routes.
 **How we found it**: reading the routes at v19.5.0-ee for issue 1280's
 correction, after the merge request of
 [row 110](#the-api-pages-list-access-levels-the-api-refuses) had merged.
+
+### The API pages mark parameters for a paid tier that every tier applies, or none does
+
+- **Reported**: no. A documentation merge request on gitlab-org/gitlab is the
+  next step for the rows the source settles; it is drafted and not sent. The
+  rows where the code applies a parameter its page sells as a paid feature
+  are a question for GitLab before they are a merge request, since either the
+  page or the missing license check can be the defect.
+- **In review**: no.
+- **Merged**: no. Read at `v19.5.0-ee` and on master on 2026-10-27, where
+  every row below still carries its tier.
+- **Blocking**: no. A tier marker on a parameter every tier applies hides it
+  from nobody who reads the code, and the two filters no tier reads were
+  answered with every project rather than refused. The cost is a schema that
+  followed the page.
+- **Workaround**: yes, since
+  [issue 1240](https://github.com/jmrplens/gitlab-mcp-server/issues/1240):
+  each row is answered in `cmd/audit_edition_tier/param_declarations.go`
+  with the source line that settles it, or, for a parameter no tier honors,
+  removed from the input. Nothing upstream retires it: a corrected page only
+  stops disagreeing with the schemas.
+
+**Where and what**, read against GitLab's Grape params and services:
+
+- The source settles the row, and the page is what is wrong:
+  - `doc/api/groups.md`, `marked_for_deletion_on` on the group list: Community
+    Edition declares and applies it (`lib/api/groups.rb:37`, whose own
+    description repeats the tier, and `app/finders/groups_finder.rb:158-162`).
+  - `doc/api/group_level_variables.md`, `filter` on the get, update and
+    delete: read from the raw params on every tier and edition
+    (`lib/api/helpers/variables_helpers.rb:16-22` and
+    `app/finders/ci/variables_finder.rb:26-29`).
+  - `doc/api/notification_settings.md`, `new_epic` in the table the page
+    shares between the group and the project update: a project's update does
+    not declare it (`EE::NotificationSetting::EMAIL_EVENTS_MAPPING`,
+    `ee/app/models/ee/notification_setting.rb:7-17`), so the row is the
+    group's alone.
+  - `doc/api/projects.md`, `repository_checksum_failed` and
+    `wiki_checksum_failed` on the project lists: declared
+    (`ee/lib/ee/api/helpers/projects_helpers.rb:38-42`) and read by nothing,
+    so the filter returns every project on every tier.
+  - `doc/api/projects.md`, `auto_duo_code_review_enabled` on the update,
+    "Ultimate only": the update keeps it where the instance's license carries
+    `review_merge_request`, a Premium feature, and the project has Duo code
+    review (`ee/lib/ee/api/helpers/projects_helpers.rb:144-149`).
+- Enterprise Edition applies the parameter on every tier with no license
+  check, while the feature page sells it as Premium:
+  - `doc/api/groups.md`, `membership_lock` on the create and update (only the
+    settings page checks `member_lock`), and both compute minute limits,
+    which an administrator sets on every tier
+    (`ee/app/services/ee/groups/update_service.rb:80-86`).
+  - `doc/api/remote_mirrors.md`, `mirror_branch_regex` on the push mirror
+    create and update (`ee/lib/ee/api/helpers/remote_mirrors_helpers.rb:11-14`
+    and `ee/app/models/ee/remote_mirror.rb:22-35`).
+  - `doc/api/projects.md`, `include_hidden` on the project list, kept for an
+    administrator (`ee/lib/ee/api/projects.rb:116-121`).
+
+**What it costs this server**: nothing at run time now. Its schemas followed
+the pages, and since issue 1240 they follow the routes: the rows above are
+declared, `new_epic` is offered only where it is declared, and the two
+checksum filters are offered by no list.
+
+**How we found it**: answering the 65 parameter findings of
+`make audit-edition-tier` for issue 1240, each read against the source at
+v19.5.0-ee.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 
