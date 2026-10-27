@@ -198,11 +198,13 @@
 // Dockerfile or starts with Dockerfile., in any case, is built from the
 // action's files at its pin, with no --pull and no --build-arg, and every
 // image that Dockerfile has the build pull is held to its digest the same way:
-// each FROM that is neither scratch nor a stage, each COPY --from and RUN
-// --mount from= that names an image, and the frontend a syntax directive
-// names, read as BuildKit reads the file (keywords in any case, the escape
-// directive, continuation lines, heredoc bodies skipped) with the defaults
-// of the global ARGs substituted, a variable no default sets being a finding;
+// each FROM that names neither scratch nor a stage an earlier FROM declares,
+// each COPY --from and RUN --mount from= that names an image, and the
+// frontend a syntax directive names (behind # or //, past a #! line, or as a
+// JSON file's syntax member), read as BuildKit reads the file (keywords in
+// any case, the escape directive, continuation lines, heredoc bodies
+// skipped) with the defaults of the global ARGs substituted, a variable no
+// default sets and a heredoc whose end the audit cannot name being findings;
 // the Dockerfile is read from the record for a pinned action and from the
 // workspace for one of this repository; and any other value, which the runner
 // refuses, is a finding, as is metadata that names no image. An image that

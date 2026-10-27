@@ -422,8 +422,9 @@ func (a *supplyChainAudit) judgeContainerImage(walk actionWalk, where string, ac
 // action of this repository, and from the record for a pinned one, which
 // -record fetches it into. One the record has no answer for is unjudged, and
 // one the commit or the workspace does not hold, or that lies outside the
-// action's directory, is a finding, as is a heredoc no line ends, after which
-// nothing of the file can be read as BuildKit reads it.
+// action's directory, is a finding, as is a heredoc no line ends or one in a
+// form this audit does not read, after which nothing of the file can be read
+// as BuildKit reads it.
 func (a *supplyChainAudit) judgeDockerfile(walk actionWalk, where string, action openedAction, image string) []string {
 	reportKey := "dockerfile " + action.label
 	file := place{action: action.root.action, path: joinPath(action.root.path, image)}
@@ -440,11 +441,11 @@ func (a *supplyChainAudit) judgeDockerfile(walk actionWalk, where string, action
 		return a.once(reportKey, fmt.Sprintf("%s: runs.image %s names %s, which is not a readable file, so what the container action builds cannot be judged",
 			action.label, image, file))
 	}
-	pulls, unterminated := dockerfileImages(text)
+	pulls, unreadable := dockerfileImages(text)
 	var problems []string
-	if unterminated > 0 {
-		problems = a.once(reportKey, fmt.Sprintf("%s:%d: opens a heredoc no line ends, which BuildKit refuses, so what the container action builds cannot be judged",
-			file, unterminated))
+	if unreadable.line > 0 {
+		problems = a.once(reportKey, fmt.Sprintf("%s:%d: %s, so what the container action builds cannot be judged",
+			file, unreadable.line, unreadable.reason))
 	}
 	for _, pull := range pulls {
 		named := fmt.Sprintf("%s:%d: %s%s", file, pull.line, pull.instruction, pull.reference)

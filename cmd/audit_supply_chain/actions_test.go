@@ -368,7 +368,7 @@ func TestAuditWorkflows_ContainerActionImage_IsHeldToItsDigest(t *testing.T) {
 // The runner builds the image at job start with docker build, no --pull and no
 // --build-arg, so a FROM named by a tag is whatever its registry serves then.
 // hadolint/hadolint-action, the one such action here, names its base by digest
-// at v3.5.0 but by tag alone at v3.1.0 to v3.3.0, and the audit returned at
+// at v3.5.0 but by tag alone at v3.1.0 to v3.4.0, and the audit returned at
 // the Dockerfile without opening it, so a bump to one of those passed.
 func TestAuditWorkflows_ContainerActionDockerfile_HoldsItsImagesToTheirDigest(t *testing.T) {
 	t.Parallel()
