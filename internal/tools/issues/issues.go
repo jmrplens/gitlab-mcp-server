@@ -35,7 +35,7 @@ type CreateInput struct {
 
 	// Assignment and tracking
 	AssigneeID  int64    `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
-	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
+	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first"`
 	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
 	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate. Mutually exclusive with milestone"`
 	Milestone   string   `json:"milestone,omitempty" jsonschema:"Title of a project or ancestor-group milestone to associate, matched exactly (case-sensitive). GitLab leaves the issue without a milestone when no milestone has that title. Mutually exclusive with milestone_id"`
@@ -204,7 +204,7 @@ type UpdateInput struct {
 	Description      *string              `json:"description,omitempty"   jsonschema:"New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched"`
 	StateEvent       string               `json:"state_event,omitempty"   jsonschema:"State transition (close, reopen)"`
 	AssigneeID       *int64               `json:"assignee_id,omitempty"       jsonschema:"Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched"`
-	AssigneeIDs      []int64              `json:"assignee_ids,omitempty"  jsonschema:"User IDs that replace the issue's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched"`
+	AssigneeIDs      []int64              `json:"assignee_ids,omitempty"  jsonschema:"User IDs that replace the issue's assignees. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first. Pass [] to remove every assignee. Omit the field to leave them untouched"`
 	Labels           []string             `json:"labels,omitempty"        jsonschema:"Label names that replace all labels on the issue. Pass [] to remove every label. Omit the field to leave them untouched"`
 	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
 	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`

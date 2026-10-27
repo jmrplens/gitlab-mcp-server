@@ -605,6 +605,13 @@ const (
 	routeGroupVariableDelete = "DELETE " + routeGroupVariable
 )
 
+// The assignee row of doc/api/issues.md, as GitLab's page carries it on master
+// on 2026-10-27, and the route it documents.
+const (
+	rowIssueAssigneeIDs = "| `assignee_ids` | integer array | No | The IDs of the users to assign the issue to. Premium and Ultimate only.|"
+	routeIssueCreate    = "POST /projects/:id/issues"
+)
+
 // TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles drives the entry
 // point over a module root whose record names the actions of one page and
 // whose cache holds that page's sections, for each page whose rows issue 1240
@@ -715,6 +722,16 @@ func TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles(t *testing.T) {
 				"ci_variable.group_update environment_scope": categoryNotGated,
 				"ci_variable.group_update filter":            categoryNotGated,
 				"ci_variable.group_delete filter":            categoryNotGated,
+			},
+		},
+		{
+			name:   "issues",
+			area:   "issues",
+			domain: "issues",
+			page:   endpointSection("New issue", routeIssueCreate, rowIssueAssigneeIDs),
+			record: []actionrequests.RecordAction{restRecord("issue.create", routeIssueCreate)},
+			want: map[string]string{
+				"issue.create assignee_ids": categoryValueLevelGate,
 			},
 		},
 	}

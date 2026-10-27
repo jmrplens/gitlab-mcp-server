@@ -100,6 +100,8 @@ const (
 	// reasonDuoNeedsAPaidTierOrAnAddOn answers the two Duo settings of a group
 	// update.
 	reasonDuoNeedsAPaidTierOrAnAddOn = "GitLab stores the setting on every Enterprise Edition tier (ee/lib/ee/api/helpers/groups_helpers.rb:102-107 at v19.5.0-ee), and GitLab Duo, which it switches, answers where the group's licensed AI features are available: Premium carries ai_chat, Ultimate ai_features, and a Free namespace has them only with a GitLab Credits add-on (EE::Group#licensed_ai_features_available?, ee/app/models/ee/group.rb:368-372, and EE::Namespace#has_active_gitlab_credits_add_on? on the root ancestor, ee/app/models/ee/namespace.rb:336-348). The response carries the setting only there (ee/lib/ee/api/entities/group.rb:47-56). A tag would take it from a Free namespace with credits, so the description says so instead (issue 1240)."
+	// reasonOneAssigneeBelowPremium answers the assignees of an issue create.
+	reasonOneAssigneeBelowPremium = "Every tier takes the parameter, and what needs Premium is a second assignee: IssuableBaseService#filter_assignees_using_checks keeps only the first ID unless the issue allows multiple assignees (app/services/issuable_base_service.rb:117-122 at v19.5.0-ee), which Community Edition never does (Issuable#allows_multiple_assignees?, app/models/concerns/issuable.rb:189-191) and Enterprise Edition does where multiple_issue_assignees is licensed (EE::Issue#allows_multiple_assignees?, ee/app/models/ee/issue.rb:195-197), a feature of the starter list every Premium license carries (ee/app/models/gitlab_subscriptions/features.rb:67 and 363). On GitLab.com, whose license carries every feature, the namespace's plan decides (EE::Project#load_licensed_feature_available, ee/app/models/ee/project.rb:1876-1886), so a Free namespace keeps the first as an unlicensed instance does, and the description says both (issue 1240)."
 )
 
 // declaredParamAnswers holds the answer to every parameter finding that is
@@ -145,6 +147,8 @@ var declaredParamAnswers = map[string]paramDeclaration{
 	"ci_variable.group_delete filter":            {Documented: tierPremium, Category: categoryNotGated, Reason: reasonVariableFilterOnEveryTier},
 	"ci_variable.group_update environment_scope": {Documented: tierPremium, Category: categoryNotGated, Reason: reasonUpdateScopeIsTheFilter},
 	"ci_variable.group_create environment_scope": {Documented: tierPremium, Category: categoryValueLevelGate, Reason: reasonVariableScopeOnCreate},
+
+	"issue.create assignee_ids": {Documented: tierPremium, Category: categoryValueLevelGate, Reason: reasonOneAssigneeBelowPremium},
 }
 
 // answeredParamFinding is a finding a declaration answers, with the answer.
