@@ -612,6 +612,16 @@ const (
 	routeIssueCreate    = "POST /projects/:id/issues"
 )
 
+// The approver row of doc/api/merge_requests.md, which the page writes the
+// same way for its three lists, as GitLab's page carries it on master on
+// 2026-10-27, and the routes it documents.
+const (
+	rowMergeRequestApproverIDs = "| `approver_ids[]` | integer array | No | Returns merge requests which have all users with the specified `id` as eligible approvers according to the approval rules. `None` returns merge requests with no eligible approvers. `Any` returns merge requests with at least one eligible approver. Premium and Ultimate only. |"
+	routeMergeRequestsGlobal   = "GET /merge_requests"
+	routeMergeRequestsProject  = "GET /projects/:id/merge_requests"
+	routeMergeRequestsGroup    = "GET /groups/:id/merge_requests"
+)
+
 // TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles drives the entry
 // point over a module root whose record names the actions of one page and
 // whose cache holds that page's sections, for each page whose rows issue 1240
@@ -733,6 +743,20 @@ func TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles(t *testing.T) {
 			want: map[string]string{
 				"issue.create assignee_ids": categoryValueLevelGate,
 			},
+		},
+		{
+			name:   "merge_requests",
+			area:   "merge_requests",
+			domain: "mergerequests",
+			page: endpointSection("List merge requests", routeMergeRequestsGlobal, rowMergeRequestApproverIDs) +
+				endpointSection("List project merge requests", routeMergeRequestsProject, rowMergeRequestApproverIDs) +
+				endpointSection("List group merge requests", routeMergeRequestsGroup, rowMergeRequestApproverIDs),
+			record: []actionrequests.RecordAction{
+				restRecord("merge_request.list_global", routeMergeRequestsGlobal),
+				restRecord("merge_request.list", routeMergeRequestsProject),
+				restRecord("merge_request.list_group", routeMergeRequestsGroup),
+			},
+			want: map[string]string{},
 		},
 	}
 	for _, tc := range cases {

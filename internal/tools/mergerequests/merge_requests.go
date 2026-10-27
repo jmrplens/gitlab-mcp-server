@@ -118,7 +118,7 @@ type ListInput struct {
 	AuthorID               int64                      `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
 	AssigneeID             toolutil.StringOrInt       `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is"`
 	ReviewerID             toolutil.StringOrInt       `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one"`
-	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
+	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        tier:"premium" jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
 	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
 	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	WithLabelsDetails      *bool                      `json:"with_labels_details,omitempty"        jsonschema:"Include full label details (color, description) in the response"`
@@ -1348,7 +1348,7 @@ type ListGlobalInput struct {
 	AuthorID               int64                      `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
 	AssigneeID             toolutil.StringOrInt       `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is"`
 	ReviewerID             toolutil.StringOrInt       `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one"`
-	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
+	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        tier:"premium" jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
 	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
 	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	WithLabelsDetails      *bool                      `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
@@ -1560,7 +1560,7 @@ type ListGroupInput struct {
 	AuthorID               int64                      `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
 	AssigneeID             toolutil.StringOrInt       `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee: a user ID, None for merge requests nobody is assigned, or Any for those somebody is"`
 	ReviewerID             toolutil.StringOrInt       `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer: a user ID, None for merge requests with no reviewer, or Any for those with one"`
-	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
+	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"        tier:"premium" jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
 	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
 	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	WithLabelsDetails      *bool                      `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`

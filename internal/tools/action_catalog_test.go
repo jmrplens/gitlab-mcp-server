@@ -1238,6 +1238,24 @@ func TestCentralTierFilter_CustomMemberRoles_AreOfferedFromTheTierGitLabHonorsTh
 	})
 }
 
+// TestCentralTierFilter_MergeRequestApproverFilter_IsOfferedFromPremium holds
+// the eligible approver filter of the three merge request lists to Premium
+// (issue 1240). Enterprise Edition applies it on every tier, but it matches
+// approval rules, which a project gets only through the approval rule routes,
+// refused without the Premium merge_request_approvers feature, so below
+// Premium it finds the rules left from a licensed time, and None answers every
+// merge request. The approved-by filters stay on Free, since approving is a
+// Free feature.
+func TestCentralTierFilter_MergeRequestApproverFilter_IsOfferedFromPremium(t *testing.T) {
+	assertInputsOfferedFrom(t, []tieredInput{
+		{name: "list_approver_ids", id: "merge_request.list", field: "approver_ids", from: edition.Premium},
+		{name: "list_global_approver_ids", id: "merge_request.list_global", field: "approver_ids", from: edition.Premium},
+		{name: "list_group_approver_ids", id: "merge_request.list_group", field: "approver_ids", from: edition.Premium},
+		{name: "list_approved_by_ids", id: "merge_request.list", field: "approved_by_ids", from: edition.Free},
+		{name: "list_global_approved_by_usernames", id: "merge_request.list_global", field: "approved_by_usernames", from: edition.Free},
+	})
+}
+
 // TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
 // half of the tier filter, across the three tiers built in one process.
 //
