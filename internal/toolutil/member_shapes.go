@@ -87,7 +87,7 @@ type MemberExtra struct {
 }
 
 // MemberRoleOutput mirrors gl.MemberRole (the member_role object). Custom
-// member roles are an Enterprise (Premium/Ultimate) feature; the object is nil
+// member roles are an Enterprise Ultimate feature; the object is nil
 // on instances or members without a custom role. All permission flags are
 // surfaced for 1:1 SDK fidelity.
 type MemberRoleOutput struct {

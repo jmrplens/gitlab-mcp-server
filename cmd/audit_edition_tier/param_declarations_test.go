@@ -579,6 +579,19 @@ const (
 	rowShareGroupAccess    = "| `group_access` | integer | yes | The default `access_level` to assign to the invited group. Possible values: `10` (Guest) to `50` (Owner). On Premium and Ultimate, `5` (Minimal access) is also valid when `id` is a top-level group. |"
 )
 
+// The custom role rows of doc/api/group_members.md, project_members.md and
+// group_ldap_links.md, and the Minimal access row the group member routes
+// carry beside them, as GitLab's pages carry them on master on 2026-10-27.
+const (
+	rowMemberAccessLevel   = "| `access_level` | integer | yes | A valid access level. Possible values: `10` (Guest) to `50` (Owner). On Premium and Ultimate, `5` (Minimal access) is also valid when `id` is a top-level group. |"
+	rowMemberRoleAdd       = "| `member_role_id` | integer | no | Ultimate only. The ID of a custom member role. |"
+	rowMemberRoleEdit      = "| `member_role_id` | integer | no | Ultimate only. The ID of a custom member role. If no value is specified, removes all roles. |"
+	rowLDAPLinkMemberRole  = "| `member_role_id` | integer | no | The ID of the member role. Ultimate only. |"
+	routeGroupMemberAdd    = "POST /groups/:id/members"
+	routeGroupMemberEdit   = "PUT /groups/:id/members/:user_id"
+	routeProjectMemberAdd  = "POST /projects/:id/members"
+	routeProjectMemberEdit = "PUT /projects/:id/members/:user_id"
+)
 
 // TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles drives the entry
 // point over a module root whose record names the actions of one page and
@@ -629,6 +642,46 @@ func TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles(t *testing.T) {
 				"group.update lock_duo_features_enabled":          categoryValueLevelGate,
 				"group.list marked_for_deletion_on":               categoryNotGated,
 			},
+		},
+		{
+			name:   "group_members",
+			area:   "group_members",
+			domain: "groupmembers",
+			page: endpointSection("Add a group member", routeGroupMemberAdd, rowMemberAccessLevel, rowMemberRoleAdd) +
+				endpointSection("Update a group member", routeGroupMemberEdit, rowMemberAccessLevel, rowMemberRoleEdit),
+			record: []actionrequests.RecordAction{
+				restRecord("group.group_member_add", routeGroupMemberAdd),
+				restRecord("group.group_member_edit", routeGroupMemberEdit),
+			},
+			want: map[string]string{
+				"group.group_member_add access_level":    categoryValueLevelGate,
+				"group.group_member_edit access_level":   categoryValueLevelGate,
+				"group.group_member_edit member_role_id": categoryValueLevelGate,
+			},
+		},
+		{
+			name:   "project_members",
+			area:   "project_members",
+			domain: "members",
+			page: endpointSection("Add a member to a project", routeProjectMemberAdd, rowMemberRoleAdd) +
+				endpointSection("Update a member of a project", routeProjectMemberEdit, rowMemberRoleEdit),
+			record: []actionrequests.RecordAction{
+				restRecord("project.member_add", routeProjectMemberAdd),
+				restRecord("project.member_edit", routeProjectMemberEdit),
+			},
+			want: map[string]string{
+				"project.member_edit member_role_id": categoryValueLevelGate,
+			},
+		},
+		{
+			name:   "group_ldap_links",
+			area:   "group_ldap_links",
+			domain: "groupldap",
+			page:   endpointSection("Add an LDAP group link with CN or filter", "POST /groups/:id/ldap_group_links", rowLDAPLinkMemberRole),
+			record: []actionrequests.RecordAction{
+				restRecord("group.ldap_link_add", "POST /groups/:id/ldap_group_links"),
+			},
+			want: map[string]string{},
 		},
 	}
 	for _, tc := range cases {

@@ -1214,6 +1214,30 @@ func TestCentralTierFilter_GroupSettingsAndFilters_AreOfferedFromTheTierGitLabHo
 	})
 }
 
+// TestCentralTierFilter_CustomMemberRoles_AreOfferedFromTheTierGitLabHonorsThem
+// holds member_role_id to the tier GitLab v19.5.0-ee assigns a custom role at
+// (issue 1240). Custom roles are the Ultimate custom_roles feature, and every
+// route that creates a membership or a link with one drops the ID below it
+// and answers with success: a member add keeps it only where the top-level
+// group's custom roles are enabled (EE::Members::CreatorService#member_attributes),
+// and the LDAP and SAML link creates and a group share delete it where they
+// are not. A member edit stays on every tier's schema, since GitLab takes its
+// null, the 0 this server sends as one, to remove a custom role on every tier
+// (EE::Members::UpdateService#member_role_param_allowed?) and its description
+// says that a role ID needs Ultimate.
+func TestCentralTierFilter_CustomMemberRoles_AreOfferedFromTheTierGitLabHonorsThem(t *testing.T) {
+	assertInputsOfferedFrom(t, []tieredInput{
+		{name: "project_member_add", id: "project.member_add", field: "member_role_id", from: edition.Ultimate},
+		{name: "group_member_add", id: "group.group_member_add", field: "member_role_id", from: edition.Ultimate},
+		{name: "ldap_link_add", id: "group.ldap_link_add", field: "member_role_id", from: edition.Ultimate},
+		{name: "saml_link_add", id: "group.saml_link_add", field: "member_role_id", from: edition.Ultimate},
+		{name: "group_member_share", id: "group.group_member_share", field: "member_role_id", from: edition.Ultimate},
+		{name: "share_with_group", id: "group.share_with_group", field: "member_role_id", from: edition.Ultimate},
+		{name: "project_member_edit", id: "project.member_edit", field: "member_role_id", from: edition.Free},
+		{name: "group_member_edit", id: "group.group_member_edit", field: "member_role_id", from: edition.Free},
+	})
+}
+
 // TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
 // half of the tier filter, across the three tiers built in one process.
 //

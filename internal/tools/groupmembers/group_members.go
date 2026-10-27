@@ -71,7 +71,7 @@ type SAMLIdentityOutput = toolutil.SAMLIdentityOutput
 type SCIMIdentityOutput = toolutil.SCIMIdentityOutput
 
 // MemberRoleOutput mirrors gl.MemberRole (the member_role object). Custom
-// member roles are an Enterprise (Premium/Ultimate) feature; the object is nil
+// member roles are an Enterprise Ultimate feature; the object is nil
 // on instances or members without a custom role. Canonical shape shared via
 // toolutil.
 type MemberRoleOutput = toolutil.MemberRoleOutput
@@ -194,7 +194,7 @@ type AddInput struct {
 	Username     string               `json:"username,omitempty" jsonschema:"Username to add (provide user_id or username)"`
 	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level,required"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Membership expiration date (YYYY-MM-DD)"`
-	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" tier:"ultimate" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level"`
 }
 
 // EditInput contains parameters for editing a group member.
@@ -203,7 +203,7 @@ type EditInput struct {
 	UserID       int64                `json:"user_id" jsonschema:"User ID,required"`
 	AccessLevel  int                  `json:"access_level,omitempty" jsonschema:"New access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level,required"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"New membership expiration date (YYYY-MM-DD)"`
-	MemberRoleID *int64               `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign. Ultimate only. The role's base access level must match access_level. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched"`
+	MemberRoleID *int64               `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. The role's base access level must match access_level. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched"`
 }
 
 // RemoveInput contains parameters for removing a group member.

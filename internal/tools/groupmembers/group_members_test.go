@@ -224,7 +224,7 @@ func TestAddMember_Success(t *testing.T) {
 }
 
 // TestAddMember_MemberRoleID verifies that a non-zero member_role_id is sent
-// in the AddGroupMember request body (Premium/Ultimate custom-role path).
+// in the AddGroupMember request body (the Ultimate custom-role path).
 func TestAddMember_MemberRoleID(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, r *http.Request) {

@@ -289,10 +289,10 @@ func shareGroupIDGuidance(valueSource string) toolutil.ParameterGuidance {
 }
 
 // The member_role_id guidance the add and edit actions share: a membership's
-// custom role is Premium or Ultimate and matches its access_level.
+// custom role is Ultimate and matches its access_level.
 const (
-	memberRoleIDValueSource = "ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level."
-	memberRoleIDConfusion   = "member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate."
+	memberRoleIDValueSource = "ID of a custom member role to assign (Ultimate). Its base access level must match access_level."
+	memberRoleIDConfusion   = "member_role_id references a custom role definition, not access_level. Only Ultimate assigns one."
 )
 
 // memberRoleIDGuidance returns parameter guidance for the member_role_id
@@ -332,7 +332,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		description: "Get a single member of a group including inherited memberships from ancestor groups. Returns: effective access level, custom member role, created_by, expiry, public email, SAML identity, and seat usage. See also: gitlab_group_member_get, gitlab_group_members_list, gitlab_group_member_edit.",
 	},
 	"gitlab_group_member_add": {
-		usage:   "Add a user as a direct member of a group with a chosen access level. Use this to grant a known user a role in a group. Supply user_id or username plus access_level, and optionally member_role_id for a custom role (Premium/Ultimate) or expires_at.",
+		usage:   "Add a user as a direct member of a group with a chosen access level. Use this to grant a known user a role in a group. Supply user_id or username plus access_level, and optionally expires_at and, on Ultimate, member_role_id for a custom role.",
 		aliases: []string{"add group member", "add existing user to group", "grant group access"},
 		related: []string{actionGroupMembers, actionMemberEdit, actionMemberGet},
 		guidance: map[string]toolutil.ParameterGuidance{

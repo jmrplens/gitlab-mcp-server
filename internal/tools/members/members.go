@@ -77,7 +77,7 @@ type SAMLIdentityOutput = toolutil.SAMLIdentityOutput
 type SCIMIdentityOutput = toolutil.SCIMIdentityOutput
 
 // MemberRoleOutput mirrors [gl.MemberRole], the custom member role attached
-// to a membership (Premium/Ultimate). All permission flags are surfaced for
+// to a membership (Ultimate). All permission flags are surfaced for
 // 1:1 SDK fidelity. Canonical shape shared via toolutil.
 type MemberRoleOutput = toolutil.MemberRoleOutput
 
@@ -214,7 +214,7 @@ type AddInput struct {
 	Username     string               `json:"username,omitempty"      jsonschema:"Username to add (provide user_id or username)"`
 	AccessLevel  int                  `json:"access_level"            jsonschema:"Access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level,required"`
 	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
-	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" tier:"ultimate" jsonschema:"Custom member role ID (Ultimate)"`
 }
 
 // EditInput defines parameters for editing a project member.
@@ -223,7 +223,7 @@ type EditInput struct {
 	UserID       int64                `json:"user_id"                 jsonschema:"User ID of the member to edit,required"`
 	AccessLevel  int                  `json:"access_level"            jsonschema:"New access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level,required"`
 	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
-	MemberRoleID *int64               `json:"member_role_id,omitempty" jsonschema:"Custom member role ID. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched"`
+	MemberRoleID *int64               `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched"`
 }
 
 // DeleteInput defines parameters for removing a project member.
@@ -288,7 +288,7 @@ func GetInherited(ctx context.Context, client *gitlabclient.Client, input GetInp
 // Add adds a user as a member of a project via the GitLab Project
 // members API (POST /projects/:id/members). The user may be identified
 // by either user_id or username. The AccessLevel must be one of
-// [toolutil.ProjectAccessLevels]; a MemberRoleID (Premium/Ultimate) may be
+// [toolutil.ProjectAccessLevels]; a MemberRoleID (Ultimate) may be
 // provided instead to attach a custom role.
 func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Output, error) {
 	if input.ProjectID == "" {
@@ -376,7 +376,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 			return Output{}, toolutil.WrapErrWithHint("memberEdit", err, "you need at least the same or higher access level as the target member")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("memberEdit", err, http.StatusBadRequest,
-			"access_level must be one of "+toolutil.ProjectAccessLevels.Choices()+"; expires_at must be YYYY-MM-DD format; member_role_id (if provided) must exist for the namespace (Premium/Ultimate)")
+			"access_level must be one of "+toolutil.ProjectAccessLevels.Choices()+"; expires_at must be YYYY-MM-DD format; member_role_id (if provided) must exist for the namespace (Ultimate)")
 	}
 	extra, err := toolutil.CapturedMember(captured)
 	if err != nil {

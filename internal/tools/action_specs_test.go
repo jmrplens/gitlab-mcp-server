@@ -1159,12 +1159,6 @@ func missingRouteNames(want, got toolutil.ActionMap) []string {
 // so the action must NOT be Edition-gated (gating would hide a CE feature from
 // CE clients). Each entry carries a one-line rationale.
 var premiumGatingExempt = map[string]string{
-	// Adding a group member is CE; only the optional member_role_id custom role
-	// is Premium/Ultimate. The tool itself works on Free.
-	"gitlab_group_member_add": "CE feature; only the optional member_role_id custom role is Premium/Ultimate.",
-	// Adding a project member is CE; only the optional member_role_id custom role
-	// is Premium/Ultimate. The tool itself works on Free.
-	"gitlab_project_member_add": "CE feature; only the optional member_role_id custom role is Premium/Ultimate.",
 	// Sharing a group with a group is CE; only the optional member_role_id
 	// custom role (Ultimate) and the Minimal access level (a Premium or
 	// Ultimate top-level group) need a license. The tool itself works on Free.

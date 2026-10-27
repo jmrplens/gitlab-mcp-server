@@ -148,7 +148,7 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 		// the anyOf says and a required list cannot.
 		opts.InputSchemaOverrides = append(opts.InputSchemaOverrides, toolutil.SchemaAnyOfRequired(paramUserID, "username"),
 			toolutil.ProjectAccessLevels.SchemaOverride(paramAccessLevel))
-		opts.Usage = "Add a user to a project team by user_id or username with an access_level. Optionally set expires_at and member_role_id (Premium/Ultimate custom role). Idempotent for already-existing members."
+		opts.Usage = "Add a user to a project team by user_id or username with an access_level. Optionally set expires_at and, on Ultimate, member_role_id for a custom role. Idempotent for already-existing members."
 		opts.Aliases = []string{individualTool, "add project member", "grant project access", "add existing user to project", "give user access"}
 		opts.RelatedActions = []string{actionMembersList, actionMemberGet, actionMemberEdit, actionUserGet}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -163,10 +163,10 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 				SemanticRole:     paramAccessLevel,
 				ValueSource:      "Numeric access level: " + toolutil.ProjectAccessLevels.Choices() + ". A project grants no other level.",
 				ExampleBinding:   "params.access_level:30",
-				CommonConfusions: []string{"Use the numeric level, not a role name. Set member_role_id for a custom role."},
+				CommonConfusions: []string{"Use the numeric level, not a role name. On Ultimate, set member_role_id for a custom role."},
 			},
 		}
-		opts.IndividualTool.Description = "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users."
+		opts.IndividualTool.Description = "Add a user to a project team by user_id or username with an access level. Optional: expires_at and, on Ultimate, member_role_id. Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users."
 	case "gitlab_project_member_edit":
 		opts.InputSchemaOverrides = []toolutil.InputSchemaOverride{toolutil.ProjectAccessLevels.SchemaOverride(paramAccessLevel)}
 		opts.Usage = "Edit an existing project member's access_level, expires_at, or member_role_id. Requires at least the same access level as the target member."
