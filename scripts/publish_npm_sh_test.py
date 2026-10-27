@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/publish-npm.sh against a stand-in npm.
 
 The script publishes the six platform packages and then the launcher that

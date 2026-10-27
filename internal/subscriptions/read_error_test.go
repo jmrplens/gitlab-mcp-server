@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // read_error_test.go validates the mapping from GitLab API failures onto
 // the sentinels a watcher acts on.
 //

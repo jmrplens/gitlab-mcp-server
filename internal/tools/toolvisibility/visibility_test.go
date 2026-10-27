@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // visibility_test.go pins the one pass that decides which registered tool a
 // narrowed deployment serves: what each of its four steps removes or wraps,
 // what it leaves alone, which tools safe mode exempts on each surface, and

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // kind_test.go validates the subscribable-URI whitelist: which concrete
 // resource URIs a client may subscribe to, and — just as load-bearing —
 // which ones must be rejected. The rejection half is not defensive

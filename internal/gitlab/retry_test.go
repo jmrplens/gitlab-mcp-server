@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // retry_test.go contains unit tests for the bounded retry and backoff policy
 // this package imposes on client-go.
 package gitlab

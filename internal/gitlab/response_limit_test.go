@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // response_limit_test.go contains unit tests for the ceiling this package puts
 // on a single GitLab response body.
 package gitlab

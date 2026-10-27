@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package mrdraftnotes implements MCP tools for GitLab merge request draft
 // note operations.
 //

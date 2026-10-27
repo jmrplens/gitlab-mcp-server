@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Guards heading structure and accessible names across the built site.
 //
 // html-validate and htmlhint check markup validity; neither checks that every

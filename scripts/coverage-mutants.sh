@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Run gremlins over one package and make its verdicts mean what they say.
 #
 # gremlins decides which package to run the tests in by walking up from the

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go contains unit tests for the group Markdown formatters
 // covering the single-group card, the group, member, project and hook lists,
 // provisioned-user lists and transfer-location lists.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build e2e
 
 // google.go is the Gemini generateContent shape: the model is in the path, a

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // signoff_test.go covers how a commit is judged: reading a trailer as an
 // identity, comparing two identities, and the outcome each kind of commit
 // reaches.

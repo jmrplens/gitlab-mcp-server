@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build stdioe2e && race
 
 // harness_race_test.go is the race-detector half of the harness build seam. The

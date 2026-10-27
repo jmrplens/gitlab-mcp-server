@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_binary_vulns builds every binary the release publishes and
 // holds each one to the vulnerability database at module grain, which is how
 // every scanner that reads a shipped binary or its SBOM judges it.

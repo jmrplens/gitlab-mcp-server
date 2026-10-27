@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // pagination_test.go contains unit tests for PaginationFromResponse,
 // PaginationRequestOption, KeysetContinuation and DeleteResult. Tests cover
 // nil response, fully populated headers, single-page results, the keyset

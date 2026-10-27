@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package freshness reads the one harness setting that decides whether a test
 // comparing a committed, generated artifact runs that comparison now or leaves
 // it to the run where the artifact is refreshed.

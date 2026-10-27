@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // fairness_run.go drives a fairness comparison: two populations, two arms, and
 // a tally that keeps served and refused apart.
 //

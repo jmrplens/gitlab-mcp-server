@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package attestations implements MCP tools for GitLab package attestation
 // operations.
 //

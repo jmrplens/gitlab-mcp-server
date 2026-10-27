@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build e2e
 
 // slice_test.go checks the one decision the individual surface forces: which

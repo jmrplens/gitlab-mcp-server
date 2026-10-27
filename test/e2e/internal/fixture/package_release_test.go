@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build e2e
 
 // package_release_test.go drives both halves of the package fixture: the

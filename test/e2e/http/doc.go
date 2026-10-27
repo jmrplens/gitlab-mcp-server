@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package httpe2e drives the real gitlab-mcp-server binary over HTTP the way a
 // client does: cross-origin decisions, preflight, the authentication modes,
 // rate limiting, the JSON-RPC shape of a refusal, shutdown and draining, and

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package collectore2e proves that a real OTLP receiver accepts what the
 // server exports: traces, metrics and logs reach a collector started for the
 // test, with the identity policy and the metric views applied as configured.

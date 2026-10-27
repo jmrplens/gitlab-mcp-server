@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Make Playwright's Chromium launchable for the documentation site's build,
 # and touch apt only when the browser cannot start without it.
 #

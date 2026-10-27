@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build httpe2e
 
 // cross_origin_test.go pins the decisions the HTTP handler makes about browser

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build e2e
 
 // record_test.go drives the recorder the way a run drives it: the real binary,

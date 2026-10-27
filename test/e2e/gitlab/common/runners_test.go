@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build e2e
 
 // runners_test.go covers what a session can say about the instance runner

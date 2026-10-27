@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package telemetry is the only place in this server that knows about
 // OpenTelemetry.
 //

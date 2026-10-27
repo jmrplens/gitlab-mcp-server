@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // orphan_specs_test.go covers the rule that holds every exported ActionSpecs
 // under internal/tools to something that aggregates it.
 package main

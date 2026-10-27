@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package main
 
 // The blank import is what go:embed requires: the directive below is refused

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Fulfillment helpers — touch the `Order` type from models so the indexer
 records cross-module references via `ImportedSymbol`."""
 

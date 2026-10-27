@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package projectdiscovery implements MCP tools that resolve Git remote URLs to
 // GitLab project metadata.
 //

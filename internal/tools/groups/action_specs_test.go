@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains catalog and direct route regression tests for group actions.
 package groups
 

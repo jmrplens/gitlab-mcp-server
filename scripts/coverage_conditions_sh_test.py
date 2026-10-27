@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/coverage-conditions.sh, the recipe behind `make coverage-conditions`.
 
 gobco parses every file of a directory whose name ends in .go and

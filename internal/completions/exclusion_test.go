@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // exclusion_test.go covers the narrowing --exclude-tools applies to the
 // completion surface, and the drift guards on the hand-kept table it reads.
 

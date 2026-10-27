@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // render.go draws the five managed blocks of the reference page from the
 // committed record: a worked example, and four tables carrying the seven
 // columns, the counts the columns leave out, what the row cost and what

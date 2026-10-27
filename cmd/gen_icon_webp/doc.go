@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_icon_webp rasterizes the SVG icon constants declared in
 // internal/toolutil/icons.go into lossless WebP fallbacks for MCP clients
 // that reject image/svg+xml (VS Code Copilot's mcpIcons.ts MIME allowlist,

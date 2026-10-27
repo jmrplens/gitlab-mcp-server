@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build collectore2e
 
 // example_test.go holds the worked telemetry example under examples/telemetry/

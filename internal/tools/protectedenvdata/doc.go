@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package protectedenvdata contains the protected environment shapes the
 // project and the group protected environment tools share: the four entry
 // shapes a protect and an update send, the deploy access levels and approval

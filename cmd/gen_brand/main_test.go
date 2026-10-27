@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go validates the brand-asset generator: every emitted SVG is
 // well-formed, the shared geometry reaches each emitter, and the check
 // mode detects both a missing and an edited asset.

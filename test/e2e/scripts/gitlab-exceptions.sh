@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # gitlab-exceptions.sh: keep what GitLab logged as an exception during a run.
 #
 # Sourced by run-docker-e2e.sh, and by scripts/e2e_gitlab_exceptions_test.py,

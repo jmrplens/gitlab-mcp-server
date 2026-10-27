@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go holds the CI/CD Catalog action IDs this package
 // publishes against the catalog the server really builds. It is an external
 // test package because internal/tools imports this one, so only a package

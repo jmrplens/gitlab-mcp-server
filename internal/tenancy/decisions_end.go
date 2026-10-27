@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package tenancy
 
 // endDecisions are the rows that answer "what happens when the server ends

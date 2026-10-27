@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Build the Claude Desktop extension bundles (.mcpb).
 #
 # One run builds four bundles from the same release binaries produced by

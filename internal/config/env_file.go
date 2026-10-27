@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // env_file.go decides which dotenv files are allowed to configure this process.
 //
 // A stdio MCP server inherits its working directory from the client, and every

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // download_ceiling_test.go holds the shared download ceiling to its two
 // promises: a body that fits is returned whole, and one that does not, or
 // that a response ceiling stopped on the way in, is refused with the way out

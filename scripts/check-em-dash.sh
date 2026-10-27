@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Refuse an em dash (U+2014) in the text a pull request lands in main, and
 # refuse a review bot's generated block or a skip command in its description.
 #

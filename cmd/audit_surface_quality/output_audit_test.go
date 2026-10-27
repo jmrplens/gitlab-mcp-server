@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // output_audit_test.go covers the output audit helpers that score
 // individual and meta tools for output quality.
 //

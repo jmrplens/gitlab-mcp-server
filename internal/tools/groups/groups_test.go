@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // groups_test.go contains unit tests for GitLab group operations (list, get,
 // list members, list subgroups). Tests use httptest to mock the GitLab API
 // and verify success paths, search/query filtering, ownership filters,

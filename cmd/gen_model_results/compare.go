@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // compare.go holds the two keys that decide which rows may be read down one
 // table, and nothing else.
 //

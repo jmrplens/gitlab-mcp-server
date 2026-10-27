@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The answers to what the schema offers at an object a client-go decoder
 // reads and no document of its service selects: the one-time triage of
 // issue 1022, against client-go v3.15.0 and the 19.5.0-pre pin, and the four

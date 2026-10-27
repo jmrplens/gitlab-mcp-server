@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // What one record contributes to the mechanism, and the per-record registry
 // that holds its writers apart from every other record's.
 

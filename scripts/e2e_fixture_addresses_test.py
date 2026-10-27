@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests where the e2e Docker fixture's side services are looked for.
 
 test/e2e/scripts/run-docker-e2e.sh reads the host out of the GitLab URL and

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package main tests the meta description auditor: the extraction rule for
 // both blocks a description enumerates parameters in, the comparison against
 // the routes' input schemas, the report and its exit codes, and the served

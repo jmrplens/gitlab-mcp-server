@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // clear_guard.go guards the work item update paths that silently discard data:
 // an explicit empty assignee or CRM contact list replaces the current one with
 // nothing.

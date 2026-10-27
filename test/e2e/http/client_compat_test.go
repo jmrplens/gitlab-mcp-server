@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build httpe2e
 
 // client_compat_test.go covers the ways real MCP clients differ from each other

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // destination_test.go contains unit tests for the outbound destination guard:
 // which addresses a client may open a connection to, and the exemption that
 // keeps every self-hosted deployment working.

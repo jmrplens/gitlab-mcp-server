@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // project_iterations_test.go contains unit tests for GitLab project iteration
 // operations. Tests use httptest to mock the GitLab Project Iterations API.
 package projectiterations

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // snippet_storage_moves_test.go contains unit tests for GitLab snippet storage
 // move operations. Tests use httptest to mock the GitLab Snippet Storage Moves API.
 package snippetstoragemoves

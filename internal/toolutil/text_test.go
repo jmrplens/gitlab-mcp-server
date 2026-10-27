@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // text_test.go contains table-driven tests for the NormalizeText function,
 // verifying that literal escape sequences are converted to real characters.
 package toolutil

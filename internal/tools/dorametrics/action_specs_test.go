@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains unit tests for the DORA metrics
 // [toolutil.ActionSpec] entries. GitLab serves DORA metrics at two scopes,
 // project and group, and the package publishes one spec for each.

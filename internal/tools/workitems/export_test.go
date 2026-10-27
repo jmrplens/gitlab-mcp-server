@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package workitems
 
 // PublishedActionIDs is every canonical action ID this package hands a model:

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests which image a Docker e2e run tests, and when it pulls a newer one.
 
 test/e2e/scripts/run-docker-e2e.sh used to leave the images to `docker

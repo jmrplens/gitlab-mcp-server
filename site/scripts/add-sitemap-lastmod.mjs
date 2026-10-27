@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Injects <lastmod> into the generated sitemap.
 //
 // Starlight's built-in sitemap (via @astrojs/sitemap) emits <loc> entries with

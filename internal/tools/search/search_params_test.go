@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // search_params_test.go holds the two code search parameters client-go's
 // SearchOptions does not model, num_context_lines and regex, to what GitLab
 // declares for them: each reaches the query of every scope exactly as the

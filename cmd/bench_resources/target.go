@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // target.go starts the server the way a client starts it, on each transport.
 //
 // The measured process is the real binary, built from cmd/server, and not a

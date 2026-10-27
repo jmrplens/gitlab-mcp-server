@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go covers the route this package contributes to the
 // canonical action catalog. The specs themselves live in
 // internal/tools/adminspecs and are tested there.

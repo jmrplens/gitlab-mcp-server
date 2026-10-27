@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // declarations_test.go holds the declaration table to what an entry has to
 // say, and the validation to every way an entry can fail to say it.
 package main

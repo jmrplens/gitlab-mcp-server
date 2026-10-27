@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the seventh property: the release VERSION names opens with a
 // written summary, kept in .github/release-notes, which carries the four
 // sections a reader needs to decide whether to upgrade and nothing the

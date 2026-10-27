@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // project_mirrors_test.go contains unit tests for GitLab project mirror
 // operations. Tests use httptest to mock the GitLab Project Mirrors API.
 package projectmirrors

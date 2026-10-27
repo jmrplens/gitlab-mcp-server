@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // rejected_test.go contains unit tests for the bounded negative cache that
 // stops a replayed invalid token from costing an upstream verification call.
 package oauth

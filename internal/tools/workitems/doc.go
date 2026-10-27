@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package workitems implements MCP tools for GitLab work item operations
 // exposed through issue workflows.
 //

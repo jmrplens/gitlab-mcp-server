@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package elicitationtools implements interactive MCP tools that gather missing
 // values through the MCP elicitation capability before calling GitLab actions.
 //

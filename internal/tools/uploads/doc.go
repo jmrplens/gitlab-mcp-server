@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package uploads implements MCP tools for GitLab project upload operations.
 //
 // The package wraps the GitLab Project uploads API:

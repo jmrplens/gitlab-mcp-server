@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build httpe2e
 
 // gate_test.go pins how the HTTP gate answers a request it will not serve:

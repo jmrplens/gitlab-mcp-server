@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // group_service_accounts_test.go contains unit tests for GitLab group service account MCP tool handlers.
 package groupserviceaccounts
 

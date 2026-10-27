@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package golist holds the row shape two commands ask `go list` for, and the
 // one answer to which `go` they ask it of.
 //

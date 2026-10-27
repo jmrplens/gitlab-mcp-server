@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // bearer_guard_test.go verifies the OAuth pre-authentication guard: what it
 // costs upstream, what it charges to the rate limiter, and what it tells the
 // client in the RFC 6750 challenge.

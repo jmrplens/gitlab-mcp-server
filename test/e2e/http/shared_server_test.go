@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build httpe2e
 
 // shared_server_test.go drives the one thing a shared MCP server has to get

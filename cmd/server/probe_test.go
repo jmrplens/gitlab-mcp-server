@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // probe_test.go covers --probe: how a peer's command line is read, where the
 // probe connects for each listener a deployment can choose, and what exit code
 // each outcome earns.

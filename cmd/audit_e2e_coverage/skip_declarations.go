@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package main
 
 // skipDeclaration excuses one skip a complete Docker run may end with.

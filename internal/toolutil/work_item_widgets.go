@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // work_item_widgets.go reads the inputs of a work item update that GitLab can
 // be asked to remove, and makes a removal reach GitLab as the null its schema
 // asks for, which client-go cannot send.

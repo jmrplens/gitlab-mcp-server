@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // access_level_test.go verifies the human-readable label mapping for GitLab
 // access level constants used in project/group member outputs.
 package toolutil

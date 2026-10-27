@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package toolutil
 
 // Polling bounds and defaults (all values in seconds) for tools that wait on

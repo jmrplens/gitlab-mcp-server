@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // manager_test.go validates the watcher lifecycle: what a subscription
 // costs to start, when it notifies, when it backs off, and — the part that
 // actually keeps the server honest — every way it must stop.

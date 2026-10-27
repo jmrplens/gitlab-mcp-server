@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build httpe2e
 
 // session_not_found_test.go holds what the go-sdk client this module is built

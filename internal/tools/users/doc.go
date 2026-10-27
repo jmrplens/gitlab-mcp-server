@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package users implements GitLab user MCP tools for the current authenticated
 // user, administrator user management, user CRUD, SSH keys, service accounts,
 // personal access tokens, memberships, activities, runner details, and identity

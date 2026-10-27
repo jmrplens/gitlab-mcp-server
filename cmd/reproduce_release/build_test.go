@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // build_test.go covers how one recipe is built: where the binary is written,
 // the environment the go command sees, and the refusal when it cannot build.
 package main

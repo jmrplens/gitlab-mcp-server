@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // notices_test.go holds the generator to what it reads and refuses: the
 // build information merged across binaries, the module cache spelling, the
 // files that count as license texts, and the layout of the notices.

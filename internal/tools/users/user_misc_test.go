@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // user_misc_test.go contains unit tests for miscellaneous GitLab user
 // operations (impersonation tokens, memberships, etc.).
 // Tests use httptest to mock the GitLab Users API.

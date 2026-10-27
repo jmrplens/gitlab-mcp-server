@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // prompt_cross_project_test.go contains unit tests for cross-project MCP prompts.
 package prompts
 

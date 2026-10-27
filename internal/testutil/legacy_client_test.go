@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // legacy_client_test.go covers the failure paths of the fake legacy client,
 // none of which a passing run takes: the transport is a net.Pipe in this
 // process, so it connects, writes and closes without ever failing. They are

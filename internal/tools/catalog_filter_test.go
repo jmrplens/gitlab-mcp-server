@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // catalog_filter_test.go covers the bookkeeping behind a narrowed catalog: what
 // a filter removed and on whose decision, which is what lets the dynamic
 // surface tell a model "this credential cannot" apart from "this server

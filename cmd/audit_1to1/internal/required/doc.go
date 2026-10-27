@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package required is the requiredness rule of R-INPUT: every parameter an
 // action's input schema requires, held to what GitLab requires of the
 // parameter it is sent as (issue 1100).

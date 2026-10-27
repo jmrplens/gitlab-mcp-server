@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // search_test.go contains unit tests for GitLab search operations
 // (code search and merge request search). Tests use httptest to mock
 // the GitLab Search API and verify both success and error paths.

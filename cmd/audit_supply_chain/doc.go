@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_supply_chain audits the release supply chain's configuration
 // invariants.
 //

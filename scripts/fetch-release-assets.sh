@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # fetch-release-assets.sh — download published release assets and verify them
 # before anything repackages them.
 #

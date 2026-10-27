@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package e2erelease decides what an end-to-end run does on the GitLab
 // release it found, measured against the release the fine-grained action
 // table was recorded from (issue 1155).

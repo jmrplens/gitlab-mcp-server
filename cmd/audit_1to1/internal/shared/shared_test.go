@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package shared tests the memoized typed-package loader the structs and
 // actions analyzers share, against small throwaway modules so the tests
 // state exactly which packages resolve and which errors abort a run.

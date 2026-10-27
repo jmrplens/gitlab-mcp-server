@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package issues implements MCP tools for GitLab issue lifecycle operations.
 //
 // The package covers project issue CRUD, listing, filtering, assignee and

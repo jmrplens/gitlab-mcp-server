@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // profiles.go reads profiles off the server's pprof listener and writes
 // them beside the record.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_gateway_chars scans everything a client receives from
 // tools/list, prompts/list and resources/list, on every tool surface and at the
 // widest tier, for characters that MCP gateway validators reject.

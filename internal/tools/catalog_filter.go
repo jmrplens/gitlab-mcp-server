@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // catalog_filter.go narrows an action catalog to what one deployment serves,
 // and records what the narrowing removed and on whose decision.
 //

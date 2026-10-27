@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // attempt.go is the pure function this package exists for: one attempt's lines
 // and one case's key in, one verdict out.
 //

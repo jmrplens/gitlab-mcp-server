@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers LobeHub manifest generation: the capability arrays are
 // filled from the registered MCP surface, every other manifest field survives a
 // regeneration, and a malformed or misspelled manifest fails loudly instead of

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shapes_test.go exercises the client-go sub-object mirrors and list-option
 // helpers added for the 1:1 audit (full nested objects on canonical keys).
 package jobs

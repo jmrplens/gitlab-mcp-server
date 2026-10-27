@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Auth helpers — every function in this module has a security weakness
 on purpose so the SAST analyzer emits findings."""
 

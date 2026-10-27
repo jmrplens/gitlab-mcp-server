@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // impersonation_tokens_test.go contains unit tests for GitLab impersonation
 // token operations. Tests use httptest to mock the GitLab API, including the
 // fields GitLab sends that client-go's token structs do not carry.

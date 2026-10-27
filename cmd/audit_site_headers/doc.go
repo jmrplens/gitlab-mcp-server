@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_site_headers fetches the documentation site and judges the
 // security headers its responses carry: the four the OpenSSF Best Practices
 // criterion hardened_site names, Content-Security-Policy,

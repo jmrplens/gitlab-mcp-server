@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // proc_sample_test.go covers the parsers that turn what the operating system
 // says into the resident-set and processor-time figures the page publishes,
 // and the goroutine count read out of a runtime traceback.

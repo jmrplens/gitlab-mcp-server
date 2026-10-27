@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # audit-command.sh: run cmd/audit_e2e_coverage the way the Docker run's gates
 # need it run.
 #

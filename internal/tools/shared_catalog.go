@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shared_catalog.go builds each catalog once per configuration and hands every
 // server a copy bound to its own client.
 //

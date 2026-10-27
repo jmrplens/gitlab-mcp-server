@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Metadata-quality audit functions (formerly audit_tools).
 
 package main

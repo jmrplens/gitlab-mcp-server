@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // render_test.go covers the artifacts a record turns into: the chart files and
 // the generated block in each language of the site, and the -check mode that
 // gates all of them.

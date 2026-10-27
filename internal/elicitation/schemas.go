@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // schemas.go holds the JSON Schema builders and
 // response-content parsers shared by the synchronous [Client] path and the
 // multi round-trip [Flow] path, so both mechanisms request and validate

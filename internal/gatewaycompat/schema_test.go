@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // schema_test.go verifies the shared schema prose walk directly: which keys
 // count as prose, which as data, and how the walk reads a keyword position
 // differently from a property-name position.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package common holds the end-to-end tests that run on every GitLab runtime.
 //
 // The actions it covers are Free ones, and a license changes how they are

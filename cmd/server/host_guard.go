@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // host_guard.go decides which Host header this deployment answers.
 //
 // The check exists against DNS rebinding: an attacker resolves a name they

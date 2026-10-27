@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build stdioe2e
 
 // gateway_compat_test.go drives the description-substitution knob over the

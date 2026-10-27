@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The record a client-go run writes where -report names, for the review of
 // what client-go selects of what GitLab sends.
 

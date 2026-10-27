@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go contains unit and integration-style tests for the server entry
 // point. Tests cover CLI flag handling, configuration validation, GitLab client
 // setup, HTTP and stdio transport modes, MCP protocol handshakes, tool catalog

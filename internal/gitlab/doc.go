@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package gitlab provides a wrapper around the GitLab REST API v4 client.
 // Some domains additionally use the GitLab GraphQL API for endpoints not covered
 // by client-go service wrappers (see ADR-0006).

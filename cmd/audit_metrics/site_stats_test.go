@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // site_stats_test.go verifies the single-sourced documentation stats payload.
 //
 // These tests ensure the committed site/src/data/stats.json stays in lock-step

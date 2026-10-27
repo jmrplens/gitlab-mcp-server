@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_orbit_record records what GitLab.com's Orbit routes answer and
 // commits the key tree of each answer to docs/development/orbit-responses.json.
 //

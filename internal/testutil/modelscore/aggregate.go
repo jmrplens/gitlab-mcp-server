@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // aggregate.go adds verdicts up into the seven columns a row publishes.
 //
 // Every column is a numerator and a denominator, both printed, and a dash when

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build race
 
 // main_race_test.go is the race-detector half of this package's test seam. The

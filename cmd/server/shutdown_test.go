@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shutdown_test.go verifies --shutdown: how this binary recognizes other
 // copies of itself, and what it does to them.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains canonical action spec and route tests for the
 // Dependency Firewall domain: the metadata the catalog projects, the input
 // schema enum, and the 404 path that names the feature flag.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // alias_audit_test.go contains unit tests for the dynamic-tool-surface alias audit logic.
 package dynamic
 

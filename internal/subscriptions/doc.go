@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package subscriptions implements MCP resource subscriptions
 // (resources/subscribe) over GitLab resources.
 //

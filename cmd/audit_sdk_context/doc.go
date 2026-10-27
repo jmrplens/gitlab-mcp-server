@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_sdk_context reports every call into client-go that does not
 // hand the SDK the caller's context.
 //

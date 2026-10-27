@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // judge_test.go covers how the findings of every platform are merged, held to
 // the severity rule and the declaration table, and printed.
 package main

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_meta_descriptions checks the prose a meta-tool serves against
 // the parameters its actions actually accept.
 //

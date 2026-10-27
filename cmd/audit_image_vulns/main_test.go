@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go drives the command end to end: the reports and the database
 // read from disk, the verdict reached and the exit code the gate turns on, and
 // holds the platforms and the Trivy it is run with to the workflows and the

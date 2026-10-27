@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // collection_shape_test.go pins CollectionShapeOf, the one reading of an
 // output type that R-PAGE and ResolveContentKind both rest on: which types are
 // the envelope of a list, and which publish a pagination block.

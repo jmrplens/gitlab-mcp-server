@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // geo_test.go contains unit tests for GitLab Geo site operations.
 // Tests use httptest to mock the GitLab Geo API.
 package geo

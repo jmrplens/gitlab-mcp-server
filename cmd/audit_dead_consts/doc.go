@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_dead_consts reports every unexported constant in this
 // repository that nothing reads.
 //

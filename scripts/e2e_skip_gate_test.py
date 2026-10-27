@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests how a complete Docker e2e run reaches the skip gate.
 
 A complete run, make test-e2e-ce or make test-e2e-ee, fails on a skip nobody

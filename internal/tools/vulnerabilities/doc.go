@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package vulnerabilities implements MCP tools for GitLab vulnerability
 // management through the GraphQL API.
 //

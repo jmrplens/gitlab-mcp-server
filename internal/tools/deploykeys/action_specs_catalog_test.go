@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_catalog_test.go holds this package's published action IDs
 // against the catalog that has to resolve them.
 //

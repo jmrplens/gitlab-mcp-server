@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package tenancy
 
 // authorizeDecisions are the rows that answer "what may it do?" (spec:

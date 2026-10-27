@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_test_subtests finds case loops in test functions that assert
 // without opening a subtest, and can rewrite the mechanical ones.
 //

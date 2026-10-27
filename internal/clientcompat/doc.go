@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package clientcompat applies per-client response compatibility profiles to
 // MCP results. Most MCP clients ignore fields they do not understand, so the
 // server ships its full surface (icons, content annotations, structured

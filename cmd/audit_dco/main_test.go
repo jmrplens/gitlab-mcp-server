@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the command end to end over real repositories: what it
 // judges, what it prints and the status it exits with, the arguments it
 // refuses, and the CI job and the make target that run it.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command fuzz_targets lists this module's fuzz targets as the matrix that
 // .github/workflows/fuzz.yml fans out over.
 //

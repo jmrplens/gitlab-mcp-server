@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // mr_changes_test.go contains unit tests for merge request diff/changes
 // retrieval and diff version operations. Tests use httptest to mock the
 // GitLab Merge Request Diffs API and verify success, not-found, and

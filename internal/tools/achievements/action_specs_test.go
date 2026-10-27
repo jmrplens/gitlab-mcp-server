@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go asserts the canonical metadata every achievement action
 // carries: the twelve routes, their declared individual-tool names, their
 // annotations, and the discovery metadata the catalog audits require.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package provenance holds the one age verdict the commands that pin an
 // external truth pass on their committed record.
 //

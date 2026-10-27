@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package modelrecord declares what one model evaluation run writes down: the
 // stimulus a model was given, every request that went to a provider, every
 // tool call the model made, what the server dispatched for it, and what GitLab

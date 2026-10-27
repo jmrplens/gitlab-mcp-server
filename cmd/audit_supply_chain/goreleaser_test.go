@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the GoReleaser configuration rule 2 reads: the commands GoReleaser
 // runs in a credentialed job are judged as though the job's run blocks had
 // written them.

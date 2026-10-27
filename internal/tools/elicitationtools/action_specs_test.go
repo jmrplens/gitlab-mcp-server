@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go validates that catalog-backed interactive tools translate
 // elicitation cancellation into CancelledResult responses.
 package elicitationtools

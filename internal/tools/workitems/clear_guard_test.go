@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // clear_guard_test.go covers the guard that stands between a work item update
 // and the two lists GitLab replaces wholesale. An explicit empty array is a
 // legitimate way to remove every assignee or CRM contact, and it is also what

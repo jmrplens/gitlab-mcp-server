@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // edition_tier_test.go covers the edition-tier rule: the tier phrases a
 // served description states, the sentence they have to be stated in, and the
 // comparison with the tier the surface actually serves each tool at.

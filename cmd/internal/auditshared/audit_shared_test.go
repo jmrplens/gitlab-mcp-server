@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // audit_shared_test.go covers the analysis helpers the discovery auditors
 // share: the placeholder-usage probe, the projected individual-description
 // check, owner-package resolution, the per-process caches, and the offline

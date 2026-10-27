@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build collectore2e
 
 // collector_test.go runs a genuine OpenTelemetry Collector and reads back what

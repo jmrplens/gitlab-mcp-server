@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go contains unit tests for group SAML Markdown formatting
 // functions. Each case compares the whole document the formatter renders.
 package groupsaml

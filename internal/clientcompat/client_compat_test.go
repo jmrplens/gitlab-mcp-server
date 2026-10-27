@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package clientcompat_test verifies the per-client response compatibility
 // middleware end to end: a real mcp.Server with the middleware installed is
 // connected over in-memory transports by clients that identify as Codex and

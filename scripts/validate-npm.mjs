@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // validate-npm.mjs checks the assembled npm distribution before it is
 // published. A published npm version is permanent — the registry refuses to
 // replace it — so a broken tarball caught here is cheap and caught after

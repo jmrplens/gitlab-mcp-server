@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package externalstatuschecks implements MCP tools for GitLab external status
 // check operations.
 //

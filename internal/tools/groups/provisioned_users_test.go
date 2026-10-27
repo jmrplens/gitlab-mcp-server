@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // provisioned_users_test.go contains unit tests for listing a group's
 // provisioned users, including filters, validation, not-found handling and
 // output mapping. Tests use httptest to mock the GitLab API.

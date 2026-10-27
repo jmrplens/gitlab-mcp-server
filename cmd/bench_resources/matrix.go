@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // matrix.go declares what gets measured.
 //
 // The axes are the ones that actually move the numbers: the transport, because

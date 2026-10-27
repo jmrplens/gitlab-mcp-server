@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // constant_index_test.go covers the constant-index rule: the fixture text
 // that makes two elements of a slice tell each other apart, the rule that
 // reads a render for one element printed in every element's place, and the

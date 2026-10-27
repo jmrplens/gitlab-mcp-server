@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_action_ids holds every canonical action ID this repository
 // publishes to a model against the IDs the catalog really builds.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // grant_test.go holds the reads a fine-grained token's authority is judged
 // from: the grant, bounded where it is read, and the version beside it.
 package gitlab

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // health.go answers /health: whether this process is serving or draining,
 // which build it is, and a fingerprint of the configuration that shapes what
 // it serves.

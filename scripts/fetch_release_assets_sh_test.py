@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests how scripts/fetch-release-assets.sh fetches and verifies the Claude Desktop bundles.
 
 A release publishes one bundle per operating system (gitlab-mcp-server-darwin

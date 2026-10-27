@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_image_vulns holds the operating-system packages of the
 // container image to Trivy's vulnerability database, one Trivy report per
 // platform, before the image is pushed.

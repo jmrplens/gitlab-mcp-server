@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build stdioe2e
 
 // upload_limit_test.go drives a stdio server whose upload limit it cannot

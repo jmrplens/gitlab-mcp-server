@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_readonly_graphql fails when an action the canonical catalog
 // classifies ReadOnly can reach a GraphQL mutation.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package main
 
 // peerStdinIsNull reads a peer's file descriptor 0 from procfs, which is what

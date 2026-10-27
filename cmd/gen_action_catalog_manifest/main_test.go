@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the gen_action_catalog_manifest generator.
 //
 // Tests verify deterministic builder discovery (sorted output, exclusion of

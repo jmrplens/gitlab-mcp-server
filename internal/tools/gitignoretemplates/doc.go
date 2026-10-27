@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package gitignoretemplates implements MCP tools for GitLab gitignore
 // template operations.
 //

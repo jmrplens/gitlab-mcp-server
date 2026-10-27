@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package dependencyfirewall implements the MCP tool for GitLab's Dependency
 // Firewall package evaluation endpoint.
 //

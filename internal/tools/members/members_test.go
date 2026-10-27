@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // members_test.go contains unit tests for GitLab project member operations.
 // Tests use httptest to mock the GitLab API and verify member listing with
 // query filters, pagination, access level description mapping, and error

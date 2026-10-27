@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // model_facing.go narrows what the token footprint counts to what a model
 // actually receives.
 //

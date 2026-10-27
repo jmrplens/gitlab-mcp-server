@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package ce holds the end-to-end tests that only hold on a GitLab with no
 // license.
 //

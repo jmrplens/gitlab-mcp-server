@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // dependency_proxy_test.go contains unit tests for the dependencyproxy MCP tool handlers.
 // Tests use httptest to mock GitLab API responses and verify success, error,
 // and edge-case paths.

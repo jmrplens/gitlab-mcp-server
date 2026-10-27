@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // merge_requests_test.go contains unit tests for GitLab merge request CRUD
 // operations (create, get, list, update, merge, approve, unapprove). Tests use
 // httptest to mock the GitLab API and verify both success and error paths.

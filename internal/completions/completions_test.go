@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // completions_test.go contains unit tests for the [Handler.Complete] dispatch
 // logic. Tests cover prompt and resource argument completion for project IDs,
 // group IDs, usernames, MR IIDs, issue IIDs, branches, and tags using

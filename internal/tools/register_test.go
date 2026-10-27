@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // register_test.go contains unit tests for tool registration: the individual
 // surface through RegisterAll, and the meta surface through the assembly
 // cmd/server makes. Tests verify tool names, annotation presence, and

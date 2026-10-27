@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package sdk holds the two 1:1 audit rules whose universe comes from the SDK
 // rather than from this repository's own call sites (R-SERVICE, R-GRAPHQL).
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // rate_limit_test.go contains unit tests for the HTTP server per-IP rate
 // limiter, verifying token-bucket behavior and cleanup of idle limiters.
 package serverpool

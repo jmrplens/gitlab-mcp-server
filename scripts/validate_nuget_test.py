@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/build_nuget.py, scripts/validate_nuget.py and
 scripts/publish-nuget.sh against packages packed from fake binaries.
 

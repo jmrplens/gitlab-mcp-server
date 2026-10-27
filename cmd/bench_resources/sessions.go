@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // sessions.go measures what a stateful session costs the server, and what the
 // process does with more of them than it can hold: the measurement the
 // stateful-session ceiling (register row HLD-010, issue 951) is sized from.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // target_test.go covers what a measured process is handed before it starts:
 // the environment it inherits, the buffer that collects its two output streams
 // while it is still running, and the port reservation.

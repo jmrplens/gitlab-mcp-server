@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package ee holds the end-to-end tests that need a licensed GitLab, Premium
 // or Ultimate.
 //

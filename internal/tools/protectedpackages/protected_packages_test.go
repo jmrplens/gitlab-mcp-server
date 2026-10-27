@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // protected_packages_test.go contains unit tests for GitLab protected package
 // operations. Tests use httptest to mock the GitLab Protected Packages API.
 package protectedpackages

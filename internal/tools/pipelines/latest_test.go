@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // latest_test.go covers pipeline.latest: the latest pipeline GitLab reports
 // for a ref, and what the action answers when GitLab answers that route 403.
 package pipelines

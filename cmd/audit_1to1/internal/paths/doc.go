@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package paths holds the 1:1 audit rule about the request an action actually
 // issues (R-PATH).
 //

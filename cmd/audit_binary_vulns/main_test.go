@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go drives the command end to end: the release configuration read,
 // every target built, every binary scanned against a database the test wrote,
 // and the exit code the gate turns on.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package graphqlintrospect asks a GitLab instance for its GraphQL schema and
 // converts the answer to SDL.
 //

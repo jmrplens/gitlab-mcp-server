@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build windows
 
 // socket_mode_windows_test.go covers the Windows half of unix socket binding,

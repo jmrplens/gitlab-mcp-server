@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // avatar_test.go contains unit tests for group avatar uploads: base64 and
 // file-path sources, multipart encoding, validation, and error statuses.
 // Tests use httptest to mock the GitLab API.

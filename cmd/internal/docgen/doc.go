@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package docgen contains helpers for generated project documentation.
 //
 // The package renders source-readable Markdown tables and normalizes existing

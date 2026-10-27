@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go contains tests for the to-do Markdown formatters. Every
 // expectation is the whole rendered document: the card used to be four
 // bullet-less label lines that a renderer joins into one run-on paragraph, and

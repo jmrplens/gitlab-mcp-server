@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the two human-maintained adjudication tables. They check the shape
 // an entry must have, not the judgement it records: a category from the agreed
 // vocabulary, a reason long enough to be evidence rather than a shrug, and keys

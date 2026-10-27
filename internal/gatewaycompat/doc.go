@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package gatewaycompat rewrites the human-readable text this server lists —
 // tool, prompt, resource and resource-template descriptions and titles, and
 // the description and title annotations embedded in tool schemas — according

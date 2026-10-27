@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // sent_shapes_test.go covers the reader that takes off a captured response the
 // twelve keys API::Entities::Ci::Pipeline adds to the basic entity, and the
 // converter that places them on the list output.

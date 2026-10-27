@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // group_scim_test.go contains unit tests for GitLab group SCIM token
 // operations. Tests use httptest to mock the GitLab Group SCIM API.
 package groupscim

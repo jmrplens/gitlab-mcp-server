@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # release-order.sh decides, for the tag a release is cut from, whether it may
 # be released at all and whether it is the newest release, which is what the
 # release workflow's preflight asks before anything publishes (issue 1323).

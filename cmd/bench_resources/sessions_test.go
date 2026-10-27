@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // sessions_test.go covers the stateful-session mode: the flags it reads, the
 // client that opens, pings and ends a session, how a step files each open and
 // counts the sessions the server still holds, and the whole ladder driven

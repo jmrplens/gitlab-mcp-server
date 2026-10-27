@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package serverpool manages a pool of credential entries keyed by GitLab token and URL.
 //
 // Each unique GitLab Personal Access Token and GitLab URL pair gets its own

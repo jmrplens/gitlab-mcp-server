@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # smoke-test-image.sh — start the container image on every platform it claims
 # to support and check it prints the expected version, that its binary records
 # that version in its build information, and that it carries the licence and

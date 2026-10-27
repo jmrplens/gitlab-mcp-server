@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shapes_test.go covers the nested-object converters that mirror client-go
 // sub-objects on the project Output (namespace, owner, permissions,
 // forked_from_project, _links, statistics, shared_with_groups, license,

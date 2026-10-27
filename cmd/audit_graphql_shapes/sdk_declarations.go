@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The answers the client-go run is held to: one table for each kind of
 // finding it makes, and every entry stale the moment client-go or the schema
 // stops producing what it answers.

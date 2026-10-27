@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/smoke-test-image.sh against a stand-in docker.
 
 The smoke test starts the image on each platform it claims and checks four

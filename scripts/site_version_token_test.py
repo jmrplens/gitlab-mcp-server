@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests how the documentation site names the current release.
 
 A page writes %%VERSION%% where it means the release you install today, and

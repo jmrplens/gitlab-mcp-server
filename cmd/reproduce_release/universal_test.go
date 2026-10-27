@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // universal_test.go covers the universal darwin binary: the order its header
 // lists its slices in, and the file joined from rebuilt darwin binaries in
 // that order, laid out the way GoReleaser lays it out.

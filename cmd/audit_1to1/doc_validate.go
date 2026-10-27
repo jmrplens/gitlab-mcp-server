@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // doc_validate.go implements the -validate-docs mode: it cross-checks the
 // `doc/api/<area>.md` citations that justify the 1:1 adjudication tables against
 // the live GitLab API reference docs (via internal/apidocs). The official API

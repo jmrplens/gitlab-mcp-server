@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package main tests the case-loop subtest auditor and its rewriter against
 // fixture files covering every table shape, the escape hatch, and the
 // control-flow blockers.

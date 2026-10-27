@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go contains unit tests for external status check Markdown
 // formatting functions.
 package externalstatuschecks

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // prompts_test.go contains unit tests for the happy-path behavior of each
 // MCP prompt handler. Tests use httptest to mock the GitLab API and verify
 // that prompt responses contain expected content, formatting, and structure.

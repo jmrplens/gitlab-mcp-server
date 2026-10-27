@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package terraformstates implements MCP tools for GitLab Terraform state
 // operations.
 //

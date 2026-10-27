@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // sharing_test.go contains unit tests for the group sharing and shared-project
 // listing MCP tool handlers. Tests use httptest to mock GitLab API responses
 // and verify request method/path/body and output parsing.

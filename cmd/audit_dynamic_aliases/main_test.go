@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go verifies the audit_dynamic_aliases command exit code and
 // output contract against the generated dynamic alias catalog, the command
 // line it accepts, and the TSV/JSON rendering of findings against synthetic

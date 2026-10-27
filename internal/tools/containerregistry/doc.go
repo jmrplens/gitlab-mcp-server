@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package containerregistry implements MCP tools for GitLab container registry
 // operations.
 //

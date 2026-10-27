@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package serialtypecheck
 
 // The tests live in the external package serialtypecheck_test, and this file

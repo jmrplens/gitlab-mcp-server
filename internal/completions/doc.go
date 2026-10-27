@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package completions provides a CompletionHandler for GitLab-aware autocomplete
 // of prompt arguments and resource URI template parameters.
 //

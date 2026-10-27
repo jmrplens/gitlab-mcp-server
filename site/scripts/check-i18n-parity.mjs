@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Validates EN/ES translation parity: every English page under
 // src/content/docs/ (outside es/) must have a Spanish counterpart at the same
 // relative path under src/content/docs/es/, and vice-versa. Exits non-zero on

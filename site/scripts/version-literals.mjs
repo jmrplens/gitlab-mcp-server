@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The release numbers a page keeps literal in a shape that usually means "the
 // release you install today", each with the reason it is not the current one.
 //

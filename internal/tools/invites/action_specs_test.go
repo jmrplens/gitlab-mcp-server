@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go holds the invitations' input schemas to what GitLab
 // takes as an invitation's email: one address or several separated by
 // commas, which no single-address format describes.

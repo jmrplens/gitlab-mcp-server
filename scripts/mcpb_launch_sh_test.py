@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests mcpb/linux/launch.sh, the Linux entry point of the Claude Desktop bundle.
 
 The bundle's linux override runs `/bin/sh ${__dirname}/server/linux/launch.sh`,

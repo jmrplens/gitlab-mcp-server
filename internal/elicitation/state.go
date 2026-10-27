@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // state.go signs and binds the opaque RequestState that
 // carries a multi round-trip flow's accumulated answers between rounds.
 

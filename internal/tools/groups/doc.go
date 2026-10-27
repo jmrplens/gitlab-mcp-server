@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package groups implements MCP tools for GitLab group operations.
 //
 // The package wraps client-go group APIs for listing groups, retrieving group

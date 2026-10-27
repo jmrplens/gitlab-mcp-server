@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the sixth property: every script in another language than Go the
 // repository holds is declared with the reason it has to stay, so a new one
 // fails the gate the day it is added.

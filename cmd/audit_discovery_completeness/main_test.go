@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go contains unit tests for the discovery-completeness auditor.
 // The gold-standard fixtures pin the link_create_batch BEFORE/AFTER signature
 // so future regressions in the check logic (or in the underlying specs) are

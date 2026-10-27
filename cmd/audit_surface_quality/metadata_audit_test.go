@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // metadata_audit_test.go contains focused tests for the metadata audit
 // helpers. Tests cover the small pure-function audits (naming, descriptions,
 // annotations, schema validity) without spinning up the full MCP server.

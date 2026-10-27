@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // client_ip_test.go covers which address a request is charged to: the peer
 // unless a trusted proxy vouched for another, and then the first hop from the
 // right that is not itself a trusted proxy; and the keys the authentication

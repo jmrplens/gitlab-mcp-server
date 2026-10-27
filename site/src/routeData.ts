@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Starlight route middleware.
 //
 // Normalises `siteTitleHref` so the site-title link always carries a trailing

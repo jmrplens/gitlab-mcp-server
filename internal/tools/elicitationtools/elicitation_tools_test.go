@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // elicitation_tools_test.go contains unit tests for interactive MCP tool
 // handlers powered by the elicitation capability. Tests cover helper
 // functions, confirmation flows, input validation, elicitation-unsupported

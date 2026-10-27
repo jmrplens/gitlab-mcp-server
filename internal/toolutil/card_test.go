@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // card_test.go pins the one card shape byte for byte: every test compares the
 // whole rendered document with an expected string, never a substring, because
 // a substring is what let two interleaved cards in the tree print a table row

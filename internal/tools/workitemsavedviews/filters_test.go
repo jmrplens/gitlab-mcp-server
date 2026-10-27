@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // filters_test.go contains unit tests for the conversion between the MCP filter
 // shape and the SDK's WorkItemSavedViewFilters, covering every nested
 // sub-filter, the pointer/empty-string distinction, and timestamp parsing.

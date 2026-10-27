@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // packages_composite_test.go contains unit tests for composite package
 // operations: publish-and-link and publish-directory, including the
 // progress scale a single tool call reports against.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // state_test.go validates the polling cadence: how a watcher reads a
 // resource's own content to decide whether the next change is seconds away
 // or probably never, and how that maps onto an interval.

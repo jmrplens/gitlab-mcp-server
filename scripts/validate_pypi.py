@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Validate the PyPI wheelhouse before anything is uploaded.
 
 A published PyPI file name is burned forever (deleting a release does not

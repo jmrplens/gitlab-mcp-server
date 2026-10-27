@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // snippet_window_test.go holds the window the Markdown shows of a code search
 // snippet to the line that matched. GitLab sends no match line, so where the
 // match sits is read from what each backend builds a snippet from: the

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package enums holds the 1:1 audit rule for enumerated values (R-ENUM).
 //
 // The struct rule (R-INPUT/R-OUTPUT) asks whether every SDK field has an MCP

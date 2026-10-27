@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // subscriptions_test.go covers the wiring that turns the subscriptions
 // package into a working resources/subscribe implementation: whether the
 // capability is advertised, and whether a real client actually receives a

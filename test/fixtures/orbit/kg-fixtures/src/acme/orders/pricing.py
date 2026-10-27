@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Pricing helpers — small enough to read in one pass but rich enough for
 the indexer to populate several `Definition` entities and a few
 `ImportedSymbol` cross-references (OrderItem is imported from models)."""

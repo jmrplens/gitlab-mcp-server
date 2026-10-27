@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // rpc_code.go classifies errors with the JSON-RPC codes the MCP specification
 // names, so a client can tell what it is expected to do about a failure.
 

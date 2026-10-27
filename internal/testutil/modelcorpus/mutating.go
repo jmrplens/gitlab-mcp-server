@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package modelcorpus
 
 // The mutating partition: cases that create or change something and destroy

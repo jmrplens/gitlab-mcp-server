@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/release-order.sh, the release workflow's decision about latest.
 
 Every v* tag used to publish the image as :latest, mark the GitHub release

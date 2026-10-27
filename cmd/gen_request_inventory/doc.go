@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_request_inventory merges the request shards the unit suite
 // records into the committed inventory of what this server sends GitLab.
 //

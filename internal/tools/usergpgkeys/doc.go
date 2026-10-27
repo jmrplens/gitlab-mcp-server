@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package usergpgkeys implements MCP tools for GitLab user GPG key operations.
 //
 // The package wraps the GitLab User GPG keys API:

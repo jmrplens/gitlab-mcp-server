@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // refusal_log_test.go covers the throttle on the refusal lines a caller can
 // trigger before any credential is checked.
 package main

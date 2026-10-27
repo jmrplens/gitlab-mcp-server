@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build !race
 
 // norace.go is the ordinary half of the build seam, compiled by every build

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the judgement of the actions a workflow's steps name: what a
 // pinned composite action runs is read from the committed record and held to
 // rule 1 and, in a credentialed job, rule 2, as though it were written in the

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Fix generates and inserts godoc-compliant comments (formerly add_docs).
 
 package main

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Holds the documentation to the one way it names the current release.
 //
 // A page writes %%VERSION%% where it means the release you install today, and

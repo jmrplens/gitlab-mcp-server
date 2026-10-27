@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // branches_test.go contains unit tests for GitLab branch operations
 // (create, list, get, delete, protect, unprotect, update, and list
 // protected branches). Tests use httptest to mock the GitLab API and

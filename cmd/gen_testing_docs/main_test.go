@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the gen_testing_docs generator.
 //
 // Tests verify the AST-based test counter, naming-pattern classification,

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Post-build HTML normalisation.
 //
 // Three fixes, all applied in one pass over dist/**/*.html:

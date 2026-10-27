@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // rpc_code_test.go verifies the JSON-RPC classification wrapper: which code a
 // failure travels out under, and that wrapping nothing produces nothing.
 package toolutil

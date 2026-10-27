@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // refusal_log.go throttles the log lines a caller can trigger at will.
 //
 // Every refusal the gates write before a credential is checked is a line an

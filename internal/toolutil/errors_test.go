@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // errors_test.go contains unit tests for ToolError formatting, the WrapErr
 // helper, ClassifyError semantic classification, isConnectionRefused, and
 // ClassifyHTTPStatus.

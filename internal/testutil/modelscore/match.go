@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // match.go decides which call reached which step.
 //
 // The order is the key's. Step i is reached by the first event after step

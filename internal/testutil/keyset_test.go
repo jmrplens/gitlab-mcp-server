@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // keyset_test.go holds the keyset listing mock and its driver to what they
 // promise: the mock answers each page the way GitLab answers a keyset page and
 // records what it was asked, and [FollowKeyset] passes a handler that follows

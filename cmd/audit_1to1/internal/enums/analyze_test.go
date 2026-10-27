@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package enums tests the enum value rule (R-ENUM): that every field of a
 // client-go enum type an action exposes offers exactly the values the SDK
 // declares. The end-to-end cases run against a throwaway module carrying a

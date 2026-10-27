@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package sourcegate is the scaffolding the gates that judge this repository's
 // own source share above the load: the command line they read, the exit code
 // they end on, the declaration table they are held to, and the name a finding

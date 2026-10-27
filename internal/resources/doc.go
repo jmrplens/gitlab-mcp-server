@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package resources registers read-only MCP resources for GitLab and server
 // metadata.
 //

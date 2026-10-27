@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // tool_manifest_test.go contains unit tests for the surface-aware
 // tool manifest resources registered by [RegisterToolSurfaceResources].
 // Tests build a small action catalog, register the manifest against an

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // scope_filter_test.go contains unit tests for PAT scope-based tool filtering.
 package tools
 

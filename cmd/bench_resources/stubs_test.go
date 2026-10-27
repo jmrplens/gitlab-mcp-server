@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // stubs_test.go covers the two stand-in servers a scenario runs against.
 //
 // They exist so a measurement needs no GitLab instance, no credentials and no

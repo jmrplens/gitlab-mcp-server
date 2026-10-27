@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package capguard keeps the methods this server answers in step with the
 // capabilities it declares.
 //

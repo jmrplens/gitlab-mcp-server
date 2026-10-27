@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Assemble the PyPI distribution from released binaries.
 
 Builds one platform wheel per release binary, the esbuild/uv/ruff model

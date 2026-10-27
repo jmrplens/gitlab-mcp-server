@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Run gobco over one package, over exactly the files the go command builds.
 #
 # gobco reads a package by handing every file whose name ends in .go to

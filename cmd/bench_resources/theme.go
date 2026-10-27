@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // theme.go reads the chart palette out of the documentation site's stylesheet.
 //
 // The charts are published beside the site's own prose, so they are painted

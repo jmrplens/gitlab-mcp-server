@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go tests the Markdown the project and the group protected
 // environment formatters share: the rules a card carries and the table a page
 // of environments is listed in.

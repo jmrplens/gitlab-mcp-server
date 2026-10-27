@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build unix
 
 // download_output_unix.go syncs the directory a download was renamed into,

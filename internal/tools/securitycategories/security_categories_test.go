@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // security_categories_test.go contains unit tests for GitLab security category operations.
 //
 // The tests mock GitLab GraphQL mutations with [testutil.GraphQLHandler], then

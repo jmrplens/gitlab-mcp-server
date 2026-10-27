@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # skip-gate.sh: hold a complete Docker run's skips to the declared ones.
 #
 # Sourced by run-docker-e2e.sh, and by scripts/e2e_skip_gate_test.py, which

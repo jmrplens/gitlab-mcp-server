@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // files_test.go covers the -check-files mode: the test-file naming
 // convention and each of its codified exemptions, exercised against
 // directory trees written into t.TempDir().

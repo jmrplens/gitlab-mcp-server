@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // projects_test.go contains unit tests for GitLab project operations
 // (create, get, list, delete, update). Tests use httptest to mock the GitLab
 // API and verify both success and error paths including pagination.

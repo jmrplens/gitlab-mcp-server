@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains catalog-surface and route tests for behavior that
 // used to live in register.go: destructive confirmation, not-found formatting,
 // and route error propagation.

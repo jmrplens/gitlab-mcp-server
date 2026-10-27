@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Holds every code block of a Spanish page to its English twin.
 //
 // A code block is something a reader copies and runs, pastes into a client

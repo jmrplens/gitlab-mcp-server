@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Derives the manifest of the bundle for one operating system from the
 # manifest beside this file, which describes the universal bundle:
 #

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package tenancy
 
 // Meter is the bucket an MCP method is charged to, which also decides how its

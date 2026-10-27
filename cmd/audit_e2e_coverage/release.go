@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // -check-release: whether a run may go ahead on the GitLab release it found,
 // measured against the release the fine-grained action table was recorded
 // from (issue 1155).

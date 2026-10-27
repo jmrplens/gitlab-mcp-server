@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Update server.json (MCP Registry manifest) and .plugin/plugin.json
 # (Open Plugins manifest) with the release version, version-pinned download
 # URLs, and SHA256 hashes from GoReleaser's checksums.txt.

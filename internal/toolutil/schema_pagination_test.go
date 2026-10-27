@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // schema_pagination_test.go verifies pagination constraint enrichment across
 // root and nested JSON Schema nodes.
 package toolutil

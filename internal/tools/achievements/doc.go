@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package achievements implements MCP tools for GitLab achievements: the
 // badges a namespace defines and the awards handed out from them.
 //

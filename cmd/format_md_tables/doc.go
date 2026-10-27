@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command format_md_tables normalizes Markdown pipe tables in README.md, docs/
 // and the Astro documentation site under site/src/content/docs/.
 //

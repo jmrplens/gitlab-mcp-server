@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package orbit implements MCP tools for the experimental GitLab Orbit
 // Knowledge Graph API on GitLab.com.
 //

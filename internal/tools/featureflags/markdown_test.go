@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document each feature flag
 // formatter writes: the flag card with its strategies as the nested collection
 // they are, and the list table.

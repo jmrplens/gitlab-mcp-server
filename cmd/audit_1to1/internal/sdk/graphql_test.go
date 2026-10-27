@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Unit tests for the raw-GraphQL rule: how a declaration is named, how a
 // package resolves to a service, and how sites become adjudicated operations.
 

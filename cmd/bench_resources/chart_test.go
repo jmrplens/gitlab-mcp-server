@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // chart_test.go covers the SVG renderer: the axis arithmetic, the properties a
 // published figure has to have, and above all determinism, since a chart that
 // changed between renderings could never be verified against the record it

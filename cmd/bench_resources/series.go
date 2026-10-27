@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // series.go steps one HTTP process through more and more credentials, and
 // profiles it at each step.
 //

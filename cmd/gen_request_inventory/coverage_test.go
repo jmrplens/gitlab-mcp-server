@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // coverage_test.go covers the summary the command prints beside the artifact:
 // how much of the catalog the recording could see, and how honestly it says
 // what it could not.

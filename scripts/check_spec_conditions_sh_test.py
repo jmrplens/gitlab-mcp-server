@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/check-spec-conditions.sh, the gate behind `make check-spec-conditions`.
 
 The gate runs gobco, through scripts/coverage-conditions.sh, over every

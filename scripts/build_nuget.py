@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Assemble the NuGet distribution from released binaries.
 
 Builds the seven packages of a .NET tool whose entry point is a native

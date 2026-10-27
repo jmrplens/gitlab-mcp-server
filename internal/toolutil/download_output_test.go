@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // download_output_test.go covers WriteDownloadOutputFile: that a download
 // reaches its destination only when every byte of it did, and that anything
 // short of that leaves the destination as it was and takes the temporary file

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // host_test.go covers recording the machine a measurement came from: the two
 // /proc parsers, and the sentence the documentation page prints.
 package main

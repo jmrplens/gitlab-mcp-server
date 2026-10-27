@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package graphqldocs reads every raw GraphQL document this repository writes
 // out of the source and judges each one against a GitLab schema.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package dynamiccatalog builds the catalog the dynamic surface executes over,
 // for every caller that needs one built the way the server builds it.
 //

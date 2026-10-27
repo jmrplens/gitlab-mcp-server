@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // figures_test.go covers turning a record into figures: which scenario each
 // series is drawn from, what happens to a partial record, and the language
 // bundles the Spanish page depends on.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package useremails implements MCP tools for GitLab user email operations.
 //
 // The package wraps the GitLab User emails API:

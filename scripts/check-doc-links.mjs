@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";

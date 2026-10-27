@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_test_closed_servers reports every httptest server closed while
 // its address is still used later in the same function.
 //

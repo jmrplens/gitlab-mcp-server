@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package sdkroutes is the one reader of which request each client-go service
 // method sends: the HTTP verb and the path for a REST method, and the GraphQL
 // documents for one that posts to the GraphQL endpoint.

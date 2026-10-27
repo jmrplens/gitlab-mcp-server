@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // flow_test.go contains unit and integration tests for the multi round-trip
 // (MRTR, SEP-2322) elicitation flow. Unit tests construct Flow values
 // directly to validate pending-request queueing, answer replay, action

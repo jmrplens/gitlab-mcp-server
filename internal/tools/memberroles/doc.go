@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package memberroles implements MCP tools for GitLab member role operations.
 //
 // The package wraps the GitLab Member roles API:

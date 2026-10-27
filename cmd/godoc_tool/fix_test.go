@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // fix_test.go covers the fix subcommand's documentation generation
 // heuristics (formerly the add_docs command).
 //

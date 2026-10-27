@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command peer is a stand-in for a running gitlab-mcp-server process, built by
 // the --shutdown tests under the name they expect to find and then left to
 // block until somebody stops it.

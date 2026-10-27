@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // epic_issues_test.go validates all epic-issue tool handlers via the Work Items
 // GraphQL API: List, Assign, Remove, and UpdateOrder. Covers success paths,
 // input validation, API errors, mutation errors, context cancellation,

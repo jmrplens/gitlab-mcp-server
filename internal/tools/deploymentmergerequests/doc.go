@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package deploymentmergerequests implements MCP tools for merge requests
 // associated with GitLab deployments.
 //

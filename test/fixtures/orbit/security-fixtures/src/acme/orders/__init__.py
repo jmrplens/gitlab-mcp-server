@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """acme.orders — fixture package with intentional vulnerable patterns.
 
 The code in this module is intentionally insecure. It exists so the

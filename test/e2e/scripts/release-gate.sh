@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # release-gate.sh: stop a Docker run before go test when the GitLab it booted is
 # newer than the release the fine-grained action table was recorded from.
 #

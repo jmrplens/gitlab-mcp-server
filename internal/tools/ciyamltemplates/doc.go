@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package ciyamltemplates implements MCP tools for GitLab CI/CD YAML template
 // operations.
 //

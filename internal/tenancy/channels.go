@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package tenancy
 
 // The pseudo-methods a [Refusal] names where no MCP method carries it.

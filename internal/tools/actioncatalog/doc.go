@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package actioncatalog provides the canonical GitLab action catalog shared by
 // catalog-backed MCP tool surfaces.
 //

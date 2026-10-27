@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package projectimportexport implements MCP tools for GitLab project import
 // and export operations.
 //

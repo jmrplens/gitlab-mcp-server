@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build stdioe2e
 
 // revalidate_interval_test.go drives a stdio server holding a fine-grained

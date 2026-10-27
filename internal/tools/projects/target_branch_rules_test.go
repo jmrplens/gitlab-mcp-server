@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // target_branch_rules_test.go contains unit tests for GitLab project target
 // branch rule operations (list, create, delete). The operations are backed by
 // the GitLab GraphQL API, so tests use testutil.GraphQLHandler to mock the

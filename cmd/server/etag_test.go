@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // etag_test.go verifies the validator this server publishes for the documents
 // it renders once and then serves unchanged, and the conditional request that
 // validator exists to make possible.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // listen_test.go covers the listener the HTTP server binds: a unix socket
 // when the address is a path, a TCP port otherwise, plus the TLS pair and the
 // socket permission mode that go with them.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build !race
 
 // main_norace_test.go is the ordinary half of this package's test seam, used

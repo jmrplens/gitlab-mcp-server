@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // fine_grained_test.go pins what a fine-grained session is listed and what a
 // call to a registered tool is checked against before its arguments are
 // decoded: the per-tool action sets of each surface, the listing decision, the

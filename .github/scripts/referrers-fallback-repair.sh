@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Make the referrers fallback tag say what the referrers it lists are.
 #
 # A registry without the OCI referrers API (ghcr.io answers 404 on

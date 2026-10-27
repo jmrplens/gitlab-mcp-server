@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The constant-index rule: a list formatter that renders the head of a slice
 // where it means to render every element.
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains route and catalog-surface tests for behavior that
 // used to live in register.go: mutation error paths and destructive confirmation.
 package boards

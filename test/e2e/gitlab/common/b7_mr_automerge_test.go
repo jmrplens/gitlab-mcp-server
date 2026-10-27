@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build e2e
 
 // b7_mr_automerge_test.go covers the cancel that disarms auto-merge, which is

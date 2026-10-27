@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package modelcorpus is the model evaluation corpus: for each case, the
 // stimulus a model is given and the key that stimulus is scored against, held
 // apart so that no code which produces a stimulus can read a key.

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Hold each Linux release binary to the ELF interpreter its channels promise.
 
 The release binaries are built with -buildmode=pie, which makes them

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The rehearsal: the whole publishing path run against a throwaway tree, so a
 // maintainer can read the pages a run would produce before spending anything.
 //

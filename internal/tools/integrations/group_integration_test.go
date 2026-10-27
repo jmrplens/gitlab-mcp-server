@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // group_integration_test.go holds the tests of how an integration's path is
 // built: integrationPath, the one place the project and group integration
 // handlers build the path of a single integration, and the four handlers that

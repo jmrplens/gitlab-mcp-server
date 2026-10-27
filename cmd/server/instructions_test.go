@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // instructions_test.go verifies the handshake instructions built by
 // instructions.go. The instructions are injected into every model's system
 // prompt, so a tool named there that the active surface does not expose sends

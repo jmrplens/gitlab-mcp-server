@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Decide a fan-in job's verdict from the results of the jobs it needs.
 #
 # Reads RESULTS, the JSON of the `needs` context, and prints one line per job.

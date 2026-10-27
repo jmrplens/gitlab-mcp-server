@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build stdioe2e
 
 // retry_later_test.go holds, on stdio, what issue 956 decided about the code a

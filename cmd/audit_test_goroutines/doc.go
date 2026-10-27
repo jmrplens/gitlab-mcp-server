@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_test_goroutines detects testing.T abort calls made from
 // goroutines other than the one running the test.
 //

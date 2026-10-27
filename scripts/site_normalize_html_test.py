@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests the site's post-build pass over dist/, site/scripts/normalize-html.mjs.
 
 The pass rewrites what html-validate refuses in the built pages, and since

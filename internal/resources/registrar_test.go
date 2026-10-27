@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // registrar_test.go validates the seam that lets this server read its own
 // resources: the recording registrars and the handler index a subscription
 // watcher reads through.

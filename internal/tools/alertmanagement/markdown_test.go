@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document each alert metric image
 // formatter writes: the list table, which now carries the file path and labels
 // the link with the caption whoever uploaded the image typed, and the card one

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/build_pypi.py and scripts/validate_pypi.py on wheels built
 from fake binaries.
 

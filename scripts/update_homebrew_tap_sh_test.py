@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/update-homebrew-tap.sh in its dry-run mode.
 
 The script renders the tap formula from a release's checksums.txt, checks it

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // user_gpg_keys_test.go contains unit tests for GitLab user GPG key operations.
 // Tests use httptest to mock the GitLab User GPG Keys API.
 package usergpgkeys

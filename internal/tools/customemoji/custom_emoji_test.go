@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // custom_emoji_test.go contains unit tests for GitLab custom emoji operations.
 // Tests use httptest to mock the GitLab Custom Emoji API.
 package customemoji

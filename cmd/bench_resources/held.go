@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // held.go measures what a request the server holds open costs it, and what
 // the process does once it is asked to hold more than it can: the measurement
 // the held-request ceiling (register row HLD-011, issue 951) is sized from.

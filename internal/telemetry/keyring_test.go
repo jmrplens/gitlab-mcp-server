@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // keyring_test.go covers where a pseudonymisation key comes from and how long
 // it lives, which is the choice an operator makes and the one this package
 // exists to honor exactly.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_catalog_first generates a source-discovered inventory of
 // internal/tools domain coverage for the ActionSpec migration.
 //

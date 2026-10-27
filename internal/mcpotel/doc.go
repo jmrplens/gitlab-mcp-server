@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package mcpotel instruments MCP request handling with OpenTelemetry.
 //
 // It imports only the OpenTelemetry API, never the SDK. Which providers exist,

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Condition coverage over the action_specs.go of the packages a branch
 # touches, which is the one shape mutation testing keeps finding and no gate
 # reads: a per-action metadata table plus a dispatch on the tool name, where

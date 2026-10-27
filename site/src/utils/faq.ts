@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Shared FAQ helpers.
 //
 // A page's FAQ lives in one place — the `faq:` frontmatter array — and feeds two

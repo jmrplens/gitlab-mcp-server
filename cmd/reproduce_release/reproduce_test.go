@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // reproduce_test.go drives a release's reproduction end to end: a fixture
 // repository tagged as a release, its binaries built the way the release
 // builds them and published beside a checksum file, and this command

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package gitlab is a stand-in for client-go's root package: parsed by the
 // tests of sdkroutes and never compiled, so it spells each shape the reader has
 // to handle once, the odd ones included, rather than being a working client.

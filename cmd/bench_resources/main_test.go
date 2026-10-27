@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the command's own decisions: which matrix a set of flags
 // selects, and the guard that keeps a smoke run from overwriting published
 // measurements.

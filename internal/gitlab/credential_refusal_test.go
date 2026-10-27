@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // credential_refusal_test.go contains unit tests for the one rule that says
 // whether a 401 GitLab answered names the credential.
 package gitlab

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 import { execFileSync } from "node:child_process";
 import { rehypeWideTables } from "./src/lib/wide-tables.mjs";
 import { readRelease, remarkVersionToken } from "./src/lib/version-token.mjs";

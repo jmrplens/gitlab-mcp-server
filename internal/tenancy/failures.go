@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package tenancy
 
 // Failure is one refusal an authentication path returns, and whether it is

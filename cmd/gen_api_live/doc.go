@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_api_live pins what a booted GitLab says its own REST API is.
 //
 // It boots a released gitlab-ee image, runs one Ruby script inside it through

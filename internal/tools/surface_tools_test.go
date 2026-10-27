@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // surface_tools_test.go covers the projection of standalone surface tools: the
 // utility tools that are registered directly rather than through a meta-tool
 // dispatcher, and what happens when one of them cannot be projected at all.

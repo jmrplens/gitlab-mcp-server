@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_metrics generates a comprehensive metrics summary for the
 // gitlab-mcp-server MCP server. It counts tools, meta-tools, resources, and
 // prompts by reading the served surface through cmd/internal/mcpsurface —

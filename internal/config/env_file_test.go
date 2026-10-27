@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // env_file_test.go verifies where the server is willing to take configuration
 // from: the process environment, an explicitly named dotenv file, and the
 // operator's home file — but never an unannounced .env in whatever directory

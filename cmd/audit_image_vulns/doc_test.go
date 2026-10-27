@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // doc_test.go holds the command to what its package comment promises about
 // what it is built from.
 package main

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package main tests the gateway character auditor: the per-string scan and
 // its excerpt window, the schema walk that skips data keywords, the report
 // formatting and exit codes, the command line main assembles out of its three

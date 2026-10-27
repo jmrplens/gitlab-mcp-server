@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The translation keys src/content/i18n/*.json adds on top of Starlight's own.
 //
 // Starlight types Astro.locals.t from StarlightApp.I18n (see its global.d.ts),

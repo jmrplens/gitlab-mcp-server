@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_install_buttons checks the one-click install buttons against
 // what the pages around them claim.
 //

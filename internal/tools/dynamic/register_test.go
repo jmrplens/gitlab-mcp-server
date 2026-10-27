@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // register_test.go contains unit tests for registering the dynamic tool surface with the MCP server.
 package dynamic
 

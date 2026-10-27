@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // resources_test.go contains integration tests verifying the happy-path
 // behavior of each MCP resource registered by [Register]. Tests use httptest
 // to mock GitLab API responses and an in-memory MCP transport to exercise

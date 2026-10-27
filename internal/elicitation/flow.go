@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // flow.go implements the multi round-trip request
 // (MRTR, SEP-2322) elicitation flow required by MCP protocol version
 // 2026-07-28, where server-initiated elicitation/create requests are

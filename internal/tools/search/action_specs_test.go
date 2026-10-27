@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go holds the tests over the canonical action IDs the
 // search specs publish as cross-links.
 package search

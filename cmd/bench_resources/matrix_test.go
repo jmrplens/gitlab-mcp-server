@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // matrix_test.go covers what gets measured: the published matrix's shape, the
 // filter that selects part of it, and the per-surface tool call, whose name
 // differs per surface and must exist on the surface it is used with.

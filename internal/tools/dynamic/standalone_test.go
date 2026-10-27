@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // standalone_test.go contains unit tests for the dynamic surface standalone MCP server (used by inspector and integration tests).
 package dynamic
 

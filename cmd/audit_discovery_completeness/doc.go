@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_discovery_completeness reports discovery-metadata gaps that
 // affect how well models can find and choose the right action. It extends the
 // existing R-META auditor (cmd/audit_metadata_completeness) with two new

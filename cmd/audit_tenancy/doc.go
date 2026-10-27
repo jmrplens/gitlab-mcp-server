@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_tenancy holds the tenant policy register, internal/tenancy,
 // to the code that enforces it.
 //

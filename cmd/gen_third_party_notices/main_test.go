@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go drives the command from its arguments: the exit code each
 // kind of failure gets, the file a successful run writes, and one run against
 // a real binary with the real `go env`, which is the path the release takes.

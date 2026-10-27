@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // proc_sample.go reads what the operating system says about the server
 // processes under measurement.
 //

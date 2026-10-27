@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // files_test.go contains unit tests for GitLab repository file operations
 // (get, create, update, delete, blame, metadata, raw). Tests use httptest to
 // mock the GitLab Repository Files API and verify success and error paths.

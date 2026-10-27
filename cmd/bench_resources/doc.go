@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command bench_resources measures what this server costs to run, and draws
 // the charts the documentation publishes.
 //

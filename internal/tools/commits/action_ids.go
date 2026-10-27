@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package commits
 
 // Canonical action IDs this package publishes, the one form every surface

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // md_registry_test.go contains unit tests for the type-based Markdown formatter
 // registry: RegisterMarkdown, RegisterMarkdownResult, MarkdownForResult dispatch,
 // result formatter priority over string formatters, concurrent-safety of

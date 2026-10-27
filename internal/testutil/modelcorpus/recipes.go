@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package modelcorpus
 
 // Recipe names the world a case runs in. The builders live in the end-to-end

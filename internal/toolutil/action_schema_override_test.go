@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_schema_override_test.go tests the canonical parameter injections
 // applied to every action input schema: the pagination bounds, the date/time,
 // URI and email formats, and the instance-wide enums; the patterns an action

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // graphql_test.go contains unit tests for the GraphQL test helpers in
 // graphql.go. Each test exercises a public helper ([RespondGraphQL],
 // [RespondGraphQLError], [GraphQLHandler], [ParseGraphQLVariables]) in

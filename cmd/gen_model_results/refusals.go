@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // refusals.go is what may not be published, as a table.
 //
 // It is a table rather than a chain of conditions in the fold for the reason

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_test_names scans all Go test files and classifies test
 // function names by their naming pattern. It outputs a CSV report with
 // columns: file, current_name, pattern, suggested_name.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package testsource answers the three questions every command that reads
 // _test.go files in this repository used to answer for itself: whether a
 // function name is a Go test entry point, which naming bucket that name falls

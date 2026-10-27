@@ -1,4 +1,7 @@
 #!/usr/bin/env pwsh
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 <#
 .SYNOPSIS
     Download the gitlab-mcp-server binary for Windows from the latest GitHub

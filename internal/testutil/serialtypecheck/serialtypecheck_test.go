@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The tests are an external package on purpose: export_test.go says why.
 package serialtypecheck_test
 

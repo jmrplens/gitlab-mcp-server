@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_tool_reference writes the per-domain tool reference of the
 // documentation site: one page per catalog group, in English under
 // site/src/content/docs/reference/tools/ and in Spanish under its es/ twin,

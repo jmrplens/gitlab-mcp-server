@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go holds the commit actions' schemas to the SHA each
 // route reads: a full one where GitLab compares it as written, any revision
 // elsewhere.

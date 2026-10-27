@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // args.go compares the values a model sent against the four truths a case
 // declares.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // events.go reads a shard's lines into attempts, and one attempt's calls into
 // the events a step is matched against.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shapes_test.go validates the documented group-epic-board sub-object mirrors
 // (group, label details with the raw-superset fields, and board list label
 // scope), covering both the fully-populated and nil branches of every

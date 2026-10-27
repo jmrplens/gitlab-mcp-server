@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package fixture is the GitLab state an end-to-end test stands on.
 //
 // Everything here is created through client-go rather than through the server

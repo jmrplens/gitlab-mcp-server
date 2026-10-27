@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // etag.go gives the documents this server renders once and then serves
 // unchanged a validator, so a client that already holds a copy is answered
 // 304 rather than handed a second one.

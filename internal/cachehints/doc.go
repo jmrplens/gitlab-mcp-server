@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package cachehints applies SEP-2549 cache hints (ttlMs/cacheScope) to MCP
 // results. Almost every catalog in this server is token- and tier-dependent
 // (PAT scope filtering, licensing-tier gating), so almost every cacheable

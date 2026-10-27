@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // report_test.go covers what a run prints, in both of its modes, and the
 // verdict the exit code is taken from.
 package main

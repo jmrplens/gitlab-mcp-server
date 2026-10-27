@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // readiness.go answers the handshake before the tool catalog exists.
 //
 // A stdio client writes initialize the instant it has spawned the process.

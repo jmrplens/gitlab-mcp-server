@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // report_test.go covers what a run prints: one line per commit with the
 // reason under each that is not simply signed off, the count, how to sign a
 // failing commit off, the workflow commands of -annotate, and the escaping of

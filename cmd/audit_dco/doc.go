@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_dco holds the commits of a branch to the Developer Certificate
 // of Origin (https://developercertificate.org/): every commit it judges has to
 // carry a Signed-off-by trailer naming its author, which is how the author

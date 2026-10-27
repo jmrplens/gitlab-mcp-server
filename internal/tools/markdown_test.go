@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go contains unit tests for every Markdown formatter function
 // in markdown.go. Each test verifies that the rendered output contains expected
 // headings, field values, table rows, and empty-state messages.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // pipeline_inputs_test.go verifies BuildPipelineInputs, the shared conversion
 // from JSON-decoded spec:inputs values to the SDK's PipelineInputsOption, and
 // PipelineInputsSchema, the input-schema override that advertises exactly the

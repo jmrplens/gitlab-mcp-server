@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // prompt_milestone_label_test.go contains unit tests for milestone and label MCP prompts.
 package prompts
 

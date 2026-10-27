@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package modelcorpus
 
 // The licensed read partition: cases whose steps read something a Premium or

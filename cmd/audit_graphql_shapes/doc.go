@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_graphql_shapes fails when a struct this repository decodes a
 // GraphQL response into cannot hold what the document it is sent with asks
 // for.

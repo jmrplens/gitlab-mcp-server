@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go contains focused tests for the audit_metrics command. Tests use
 // an httptest GitLab version endpoint so MCP resource registration can be
 // inspected without external credentials.

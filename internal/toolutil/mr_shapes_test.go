@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // mr_shapes_test.go contains unit tests for the shared MR-shape
 // converters exposed by toolutil. The previous per-package tests were
 // retained by deleting the local shapes.go definitions; this file

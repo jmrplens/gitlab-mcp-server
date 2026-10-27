@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // channels_integration_test.go holds the carried-channel matrix,
 // tenancy.Carriages(), to the go-sdk this module pins. It drives the SDK in
 // process, in both protocol eras, over its in-memory transport and over its

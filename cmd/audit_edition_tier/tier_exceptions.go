@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package main
 
 // tierException records the doc-grounded expected tier for an action whose

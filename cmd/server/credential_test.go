@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // credential_test.go covers the per-credential half of a server shared by every
 // credential of one configuration shape: the registry that holds it, the
 // context values that carry it, and the middleware that puts it back in front

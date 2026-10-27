@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // freshness_test.go verifies the harness switch in both directions, and holds
 // its two ends to the workflow that drives it.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document each system hook
 // formatter writes: the list table with the delivery status GitLab records, the
 // hook card with its redacted key tables, and the test result, which reports

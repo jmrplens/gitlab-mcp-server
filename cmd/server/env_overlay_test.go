@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // env_overlay_test.go verifies the HTTP-mode configuration precedence:
 // an explicitly passed flag, then the environment, then the built-in default.
 package main

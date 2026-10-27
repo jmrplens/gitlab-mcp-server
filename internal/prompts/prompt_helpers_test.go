@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // prompt_helpers_unit_test.go contains unit tests for prompt helper functions.
 package prompts
 

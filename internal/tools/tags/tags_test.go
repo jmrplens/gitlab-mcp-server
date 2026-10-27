@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // tags_test.go contains unit tests for GitLab tag operations (create, delete,
 // get, list, signature, protected tag CRUD). Tests use httptest to mock the
 // GitLab API and verify success, error, canceled-context, and markdown paths.

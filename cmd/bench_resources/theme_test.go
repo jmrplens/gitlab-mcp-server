@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // theme_test.go covers reading the chart palette out of the site's stylesheet,
 // including the failure the arrangement exists to catch: a token that moved,
 // was renamed, or became a var() reference a chart cannot resolve.

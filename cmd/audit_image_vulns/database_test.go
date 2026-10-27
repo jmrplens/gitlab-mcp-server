@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // database_test.go covers how the run learns which vulnerability database
 // Trivy judged against, and the databases it refuses to be judged against.
 package main

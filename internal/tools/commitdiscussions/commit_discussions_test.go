@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // commit_discussions_test.go contains unit tests for the commit discussion MCP tool handlers.
 // Tests use httptest to mock GitLab API responses and verify success, error,
 // and edge-case paths.

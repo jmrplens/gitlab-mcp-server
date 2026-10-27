@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package compliancepolicy implements MCP tools for GitLab security and
 // compliance policy operations.
 //

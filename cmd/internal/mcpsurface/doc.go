@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package mcpsurface is the one reader of the MCP surface this server serves.
 //
 // Several commands under cmd/ need the same thing: the tools, prompts and

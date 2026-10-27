@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Provision a test user and Personal Access Token on the ephemeral GitLab instance.

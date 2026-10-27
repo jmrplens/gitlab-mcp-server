@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // buildinfo_test.go covers what the build information of a published binary
 // is held to before it is rebuilt, and how two binaries that differ are told
 // apart.

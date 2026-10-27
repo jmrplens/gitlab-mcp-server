@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // tls_reload.go serves the certificate that is on disk now, not the one that
 // was there when the process started.
 //

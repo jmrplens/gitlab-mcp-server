@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Validate the Agent Plugins manifests (root plugin.json + mcp.json) and the
 # legacy Open Plugins manifest (.plugin/plugin.json) kept for older hosts.
 #

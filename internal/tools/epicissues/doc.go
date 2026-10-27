@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package epicissues implements MCP tools for GitLab epic issue relation
 // operations.
 //

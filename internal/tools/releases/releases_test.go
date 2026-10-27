@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // releases_test.go contains unit tests for GitLab release operations
 // (create, update, delete, get, list). Tests use httptest to mock the
 // GitLab Releases API and verify both success and error paths.

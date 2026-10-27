@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the command line: which arguments make a run, which
 // are refused before one starts, and the exit code main hands the process.
 package main

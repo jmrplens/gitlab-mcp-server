@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package elicitation provides a Client for requesting structured user input
 // via the MCP elicitation protocol.
 //

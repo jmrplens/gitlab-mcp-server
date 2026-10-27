@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // telemetry_identity_test.go covers how this binary resolves the identity
 // policy into the redactor every signal shares.
 package main

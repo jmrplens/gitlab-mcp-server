@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests how a Docker e2e run keeps what GitLab logged as an exception.
 
 A scenario that meets a 500 learns only that GitLab raised something: the

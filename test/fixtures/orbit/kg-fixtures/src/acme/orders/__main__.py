@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Entry-point shim so the package can be invoked as `python -m acme.orders`."""
 
 from acme.orders.cli import main

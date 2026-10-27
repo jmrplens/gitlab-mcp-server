@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command standin is the server the benchmark's tests measure instead of the
 // real one.
 //

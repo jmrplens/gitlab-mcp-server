@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package toolvisibility decides which registered tool a narrowed deployment
 // serves, for every caller that registers a tool surface the way the server
 // does.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // build-npm.mjs assembles the npm publish set from the release binaries.
 //
 // The npm distribution is one thin launcher package plus one package per

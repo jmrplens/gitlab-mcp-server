@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // chart.go draws the figures, in Go, as SVG, with no browser and no
 // JavaScript anywhere in the pipeline.
 //

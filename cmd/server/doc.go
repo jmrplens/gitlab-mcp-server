@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command server is the MCP server entry point for gitlab-mcp-server.
 // In stdio mode, configuration comes from environment variables (.env / exports).
 // In HTTP mode, configuration comes from CLI flags; no GITLAB_TOKEN is required

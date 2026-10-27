@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The worked example: one made-up row of each table on this page, with what
 // every column means beside it.
 //

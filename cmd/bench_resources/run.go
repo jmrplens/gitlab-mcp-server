@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // run.go executes one scenario end to end.
 //
 // The order of the phases is the measurement. A server is started, sampled

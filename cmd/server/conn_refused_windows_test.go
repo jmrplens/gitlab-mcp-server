@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build windows
 
 // conn_refused_windows_test.go pins the one constant that decides whether a

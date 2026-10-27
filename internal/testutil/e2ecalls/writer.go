@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The writing half: the spec this record hands the shared shard mechanism, and
 // the three calls that reach it.
 

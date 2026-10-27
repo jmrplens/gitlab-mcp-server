@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_llms generates llms.txt and llms-full.txt files. It creates an
 // in-memory MCP server with all tools, resources, and prompts registered,
 // introspects them via the SDK, and writes two files to the project root:

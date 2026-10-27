@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_doc_tool_names checks every name the documentation teaches a
 // reader to call against what the server really serves: the `gitlab_*` tool
 // names against the names it registers, and the `domain.action` IDs against

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // summary_test.go contains unit tests for GitLab vulnerability summary
 // retrieval operations. Tests use httptest to mock the GitLab Vulnerabilities API.
 package vulnerabilities

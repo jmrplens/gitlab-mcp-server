@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Register a GitLab Runner against the ephemeral GitLab instance.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // polling_test.go contains unit tests for the polling helper functions
 // ClampPollInterval, ClampPollTimeout, and IsTerminalStatus.
 package toolutil

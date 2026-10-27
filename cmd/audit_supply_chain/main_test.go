@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the supply-chain configuration auditor.
 //
 // Each test feeds the checker the shape the repository had when the

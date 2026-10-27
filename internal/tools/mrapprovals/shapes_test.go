@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shapes_test.go contains unit tests for the MR approval sub-object converters
 // that mirror client-go types (basic users, approver users, approver groups,
 // project approval rules, protected branches, and groups). Tests cover full

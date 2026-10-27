@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package sdk tests the two SDK-sourced audit rules: that every client-go
 // service is either called or declared, and that every raw-GraphQL operation
 // whose wrapper exists carries a decision. The end-to-end cases run against a

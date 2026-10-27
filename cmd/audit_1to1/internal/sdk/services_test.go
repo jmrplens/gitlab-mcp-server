@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Unit tests for the service universe: how a Client struct field becomes a
 // service entry, how a status is assigned, and when a declaration goes stale.
 

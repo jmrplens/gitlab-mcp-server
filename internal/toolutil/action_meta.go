@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package toolutil
 
 // ActionMetaEntry holds the per-action discovery metadata that domains overlay

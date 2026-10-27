@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // model_facing_test.go verifies that the footprint measurement counts what a
 // model receives rather than what crosses the wire.
 package main

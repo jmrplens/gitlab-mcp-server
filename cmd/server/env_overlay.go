@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // env_overlay.go applies environment variables underneath the HTTP-mode flags.
 //
 // HTTP mode built its configuration purely from flags, so every documented

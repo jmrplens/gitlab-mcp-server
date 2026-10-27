@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // logging_test.go contains unit tests for the LogToolCall, LogToolCallAll,
 // and logToolCallWithUser helpers. Tests capture slog output and assert that
 // the correct log level, tool name, and structured fields are present.

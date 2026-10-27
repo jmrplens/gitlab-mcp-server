@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the Markdown rendering of every achievement output
 // type: the whole document each formatter writes, the optional rows that only
 // appear when the API returned them, and the next-step hints each result

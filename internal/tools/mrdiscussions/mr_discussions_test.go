@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // mr_discussions_test.go contains unit tests for merge request discussion
 // operations (create general, create inline, resolve, reply, list). Tests use
 // httptest to mock the GitLab Discussions API and verify success paths and

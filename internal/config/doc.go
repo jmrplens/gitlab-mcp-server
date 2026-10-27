@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package config loads, normalizes, and validates runtime configuration for the
 // GitLab MCP server.
 //

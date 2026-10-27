@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the hand-over of a tool binary to a credentialed job: a job that
 // runs what another job built with go downloads it from this run, from a job it
 // needs, built from this run's commit, and checks it against the SHA-256 that

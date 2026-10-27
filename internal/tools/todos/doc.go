@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package todos implements MCP tools for GitLab todo operations.
 //
 // The package wraps the GitLab Todos API:

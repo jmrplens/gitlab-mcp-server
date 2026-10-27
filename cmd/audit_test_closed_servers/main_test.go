@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package main
 
 import (
@@ -59,7 +62,7 @@ func TestRun_FindingsWithoutCheck_ReportAndSucceed(t *testing.T) {
 	if !strings.HasSuffix(stdout, "\n\n"+plantedSummary) {
 		t.Fatalf("stdout does not end with a blank line and %q:\n%s", plantedSummary, stdout)
 	}
-	if !strings.HasPrefix(stdout, "declared/declared_test.go:15: srv is closed while its address is still used, through url at line 16 (in TestPlanted_ExcusedByADeclaration_Excused)\n") {
+	if !strings.HasPrefix(stdout, "declared/declared_test.go:18: srv is closed while its address is still used, through url at line 19 (in TestPlanted_ExcusedByADeclaration_Excused)\n") {
 		t.Fatalf("stdout does not open with the first finding in file order:\n%s", stdout)
 	}
 	if stderr != "" {
@@ -167,7 +170,7 @@ func TestRunMain_ParsesTheCommandLine(t *testing.T) {
 		{name: "verbose", args: []string{"-dir", dir, "-v", "./clean/..."}, wantCode: 0, wantStdout: "\n" + cleanSummary},
 		{
 			name: "findings under check", args: []string{"-dir", dir, "-check", "./flagged/..."}, wantCode: 1,
-			wantStdout: "flagged/external_test.go:18: ",
+			wantStdout: "flagged/external_test.go:21: ",
 		},
 	}
 	for _, tt := range tests {

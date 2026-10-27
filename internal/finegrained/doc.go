@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package finegrained holds what a fine-grained personal access token needs
 // for each catalog action, and the decision this server takes on it.
 //

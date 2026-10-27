@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # fixture-addresses.sh: where the Docker fixture's side services are reached,
 # read off the address GitLab is reached at.
 #

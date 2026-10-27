@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // export_test.go exposes the package's canonical action ID block to the
 // external catalog test, which cannot see package-local constants.
 package mrnotes

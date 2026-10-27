@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_edition_tier reports the doc-grounded licensing tier of every
 // canonical MCP action and compares it to the action's current gating.
 //

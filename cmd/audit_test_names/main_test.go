@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the audit_test_names command's classification rules
 // and CSV/stderr output contract.
 //

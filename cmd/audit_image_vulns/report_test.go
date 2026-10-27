@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // report_test.go covers how one Trivy report is read: the fields the judge
 // uses, every shape of report it refuses to vouch for, and how the reports of
 // a run are held to the platforms the release pushes.

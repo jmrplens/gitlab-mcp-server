@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // scan_test.go covers the govulncheck run over one binary and the reading of
 // what it prints, against a vulnerability database written by the test so
 // nothing here reaches the network.

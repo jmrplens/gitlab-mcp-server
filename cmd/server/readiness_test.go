@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // readiness_test.go verifies the gate that lets a stdio server answer the
 // handshake while its tool catalog is still being built.
 //

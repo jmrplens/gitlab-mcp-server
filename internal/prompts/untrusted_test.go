@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // untrusted_test.go contains table-driven tests for the helpers that render
 // GitLab-authored text into a prompt message, and for the boundary sentence
 // every prompt message carries.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // rpc_test.go covers the JSON-RPC client the measurements are taken with: the
 // request shape protocol 2026-07-28 requires, the two response framings the
 // server uses, and the demultiplexing that lets parallel requests share one

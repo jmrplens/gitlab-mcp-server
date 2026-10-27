@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // meta_tool_test.go tests the generic meta-tool dispatch infrastructure:
 // UnmarshalParams, WrapAction, WrapVoidAction, MakeMetaHandler,
 // defaultFormatResult, ValidActionsString, MetaToolSchema,

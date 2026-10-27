@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // work_item_widgets_test.go holds the work item update inputs GitLab can be
 // asked to remove to the request client-go sends: a value reaches the option
 // struct, a removal reaches the mutation as null, and nothing else changes.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // render.go writes everything the record implies: the SVG pairs and the block
 // of tables, in each language of the documentation site.
 //

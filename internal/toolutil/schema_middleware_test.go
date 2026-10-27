@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // schema_middleware_test.go contains unit tests for the receiving middleware
 // that visits the tools of the first successful tools/list response, which the
 // schema lockdown and the pagination schema rewrite both register.

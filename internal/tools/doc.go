@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package tools provides the MCP tool orchestration layer for the GitLab MCP
 // server.
 //

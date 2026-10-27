@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // run_test.go covers the parts of a scenario run that can be decided without
 // starting a server: what the record is allowed to claim about processor time
 // when a sample is missing or goes backwards, which processes the sampler is

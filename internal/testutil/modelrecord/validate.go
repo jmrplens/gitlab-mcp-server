@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The payload half of validation: what each line type must carry to mean
 // anything, checked before a reader hands it to anything that scores.
 //

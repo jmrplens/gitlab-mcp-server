@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package main tests the documentation tool-name auditor: the in-memory name
 // registry built from every surface, the per-file token scan with its
 // exemptions, the root walk, the report ordering and exit codes, and the

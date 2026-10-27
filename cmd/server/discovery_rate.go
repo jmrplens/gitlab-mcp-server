@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // discovery_rate.go bounds how fast one client address may ask for the
 // documents this server publishes without a credential (issue 1053, register
 // row RTC-008): the SEP-2127 server card, the legacy enumerating card and, in

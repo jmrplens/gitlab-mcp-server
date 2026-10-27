@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package tags implements MCP tools for GitLab tag and protected tag
 // operations.
 //

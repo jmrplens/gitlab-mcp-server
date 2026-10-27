@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build !windows
 
 // packages_stream_unix_test.go covers the destination-type rule of

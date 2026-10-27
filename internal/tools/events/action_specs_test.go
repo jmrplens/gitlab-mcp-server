@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains unit tests for the events ActionSpec
 // metadata, verifying every action carries a description, that both listings
 // serve the filter values GitLab filters on, and that an action GitLab would

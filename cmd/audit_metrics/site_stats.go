@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // site_stats.go generates the single-sourced statistics file consumed by the
 // Astro Starlight documentation site (site/src/data/stats.json). Every value is
 // derived from the canonical action catalog projection, the in-memory MCP

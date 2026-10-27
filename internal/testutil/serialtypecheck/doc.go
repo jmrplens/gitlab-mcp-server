@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package serialtypecheck makes golang.org/x/tools/go/packages type-check one
 // package at a time in a race build, and does nothing in any other build.
 //

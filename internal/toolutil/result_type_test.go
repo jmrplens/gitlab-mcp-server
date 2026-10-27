@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // result_type_test.go verifies LabelForRevision, which gives a tools/call
 // result a receiving middleware makes the resultType revision 2026-07-28
 // requires, and pins the go-sdk behavior it works around.

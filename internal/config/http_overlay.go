@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // http_overlay.go layers environment variables underneath the HTTP-mode CLI
 // flags.
 //

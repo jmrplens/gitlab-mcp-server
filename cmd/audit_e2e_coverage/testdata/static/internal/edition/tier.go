@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package edition mirrors the real tier model's constants, in the same order,
 // so the fake harness's Tier takes the same values the static gate compares.
 package edition

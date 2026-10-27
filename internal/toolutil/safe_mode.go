@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // safe_mode.go carries the shared Safe Mode preview contract used by every
 // tool surface: individual tool wrapping, meta-tool dispatch, and the dynamic
 // execute tool.

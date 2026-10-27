@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // resource_events_test.go contains unit tests for the resource event MCP tool handlers.
 // Tests use httptest to mock GitLab API responses and verify success, error,
 // and edge-case paths.

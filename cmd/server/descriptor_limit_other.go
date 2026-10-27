@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build !linux && !darwin
 
 // descriptor_limit_other.go answers for the platforms with no RLIMIT_NOFILE this

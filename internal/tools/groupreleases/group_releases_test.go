@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // group_releases_test.go contains unit tests for GitLab group release operations.
 // Tests use httptest to mock the GitLab Group Releases API.
 package groupreleases

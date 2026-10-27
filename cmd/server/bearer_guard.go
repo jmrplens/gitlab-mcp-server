@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // bearer_guard.go authenticates OAuth-mode requests before the SDK's bearer
 // middleware runs.
 //

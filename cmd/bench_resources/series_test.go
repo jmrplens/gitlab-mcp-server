@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // series_test.go covers the concurrency series: the guard that keeps it from
 // taking the host down, the reasons it records for stopping, the batched
 // admission, the steady phase, and a walk through the steps against fakes,

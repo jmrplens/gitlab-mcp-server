@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package actionfixture holds the fixture packages the suites of
 // cmd/internal/actionrequests and cmd/audit_readonly_graphql both load: Go
 // source written as strings, put into the loader's overlay under [Dir], a

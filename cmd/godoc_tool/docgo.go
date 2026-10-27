@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // docgo.go moves package comments into a doc.go of their own, which is the
 // one place the audit accepts them.
 

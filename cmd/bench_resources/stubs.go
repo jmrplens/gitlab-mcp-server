@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // stubs.go stands in for the two services the server talks to, so a benchmark
 // needs neither a GitLab instance nor a collector.
 //

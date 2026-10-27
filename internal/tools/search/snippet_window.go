@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package search
 
 // GitLab sends no match line with a code search result (API::Entities::Blob

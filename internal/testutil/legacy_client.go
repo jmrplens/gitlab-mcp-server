@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // legacy_client.go provides a minimal hand-rolled MCP
 // client that performs the legacy initialize handshake at protocol version
 // 2025-11-25 and serves server-initiated elicitation/create requests.

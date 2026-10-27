@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // profiles_test.go covers reading profiles off a pprof listener and writing
 // them beside the record, against the real handlers served in-process rather
 // than a canned answer, so the parsing cannot drift from what the runtime

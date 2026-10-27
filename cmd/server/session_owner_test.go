@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // session_owner_test.go covers the table that records which pooled credential
 // each MCP session belongs to, and the sending middleware that keeps a
 // resource-updated notification to that credential's own sessions.

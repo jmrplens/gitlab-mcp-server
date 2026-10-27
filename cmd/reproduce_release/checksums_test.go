@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // checksums_test.go covers the checksum file a release publishes and the
 // published binaries read against it.
 package main

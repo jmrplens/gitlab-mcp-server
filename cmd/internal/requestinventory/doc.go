@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package requestinventory holds the committed record of what this server
 // sends GitLab, and the one definition of which catalog actions it covers.
 //

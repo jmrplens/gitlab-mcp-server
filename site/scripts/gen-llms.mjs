@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Builds what the documentation domain serves under /llms.txt, and republishes
 // the repository's machine-readable references alongside it.
 //

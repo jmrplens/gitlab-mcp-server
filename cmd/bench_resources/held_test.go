@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // held_test.go covers the held-request mode: the flags it reads, how a step
 // files each call, when a step is sampled, what a sample takes from the
 // process, and the whole ladder driven against the stand-in.

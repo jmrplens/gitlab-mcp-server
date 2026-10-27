@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shape_test.go covers what a server is built for, and how many of them a
 // process ends up with.
 //

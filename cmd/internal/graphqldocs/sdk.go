@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The other half of this server's GraphQL surface: the documents client-go
 // builds inside its own module, which nothing in this repository writes and
 // every one of which still reaches GitLab through us.

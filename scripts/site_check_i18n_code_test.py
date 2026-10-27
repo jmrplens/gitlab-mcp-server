@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests how site/scripts/check-i18n-code.mjs holds a Spanish page's code blocks to English.
 
 Issue 1110 decided that a code block on a Spanish page is the English block

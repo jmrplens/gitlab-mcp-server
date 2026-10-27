@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shapes_test.go holds the blocking merge request converter to the answer
 // GitLab sends, one key at a time, through the dependencies listing that
 // reaches it.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // What a merge refuses, and why each refusal is a refusal rather than a
 // warning.
 //

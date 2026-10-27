@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // surface_tools_test.go holds the unit tests for standalone surface
 // projection: which visible tools this package publishes outside the ordinary
 // GitLab meta-tool dispatchers, what metadata each of them carries, and how

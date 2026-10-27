@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package modeleval runs a language model against the real
 // gitlab-mcp-server binary and writes down what it did.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the client-go type resolution the audit scopes share: which
 // receiver is a service interface, which method is a REST endpoint, and how a
 // package path reduces to a domain name.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // write_test.go covers the two ways a command puts bytes on disk: the
 // whole-file freshness convention for a committed artifact (WriteOrCheck) and
 // the "-" means stdout convention for an auditor's report (WriteReport).

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.
 //
 // It verifies bearer tokens against GitLab's user endpoint, caches verified

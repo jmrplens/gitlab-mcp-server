@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/build-mcpb.sh, which packs the Claude Desktop bundles and checks what it packed.
 
 One run packs four bundles: one per operating system, which server.json

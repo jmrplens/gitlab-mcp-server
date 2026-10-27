@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // branch_rules_test.go contains unit tests for GitLab branch rule operations.
 // Tests use httptest to mock the GitLab Branch Rules API.
 package branchrules

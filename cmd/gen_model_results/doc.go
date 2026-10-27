@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_model_results turns what a model evaluation run observed into
 // what this repository publishes: the committed record and the reference page.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains unit tests for the snippets ActionSpec
 // metadata: the decorator no-op on unknown tools, populated metadata, and
 // the expected action count.

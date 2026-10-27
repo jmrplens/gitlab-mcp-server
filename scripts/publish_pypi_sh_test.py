@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/publish-pypi.sh against a stand-in python3, curl, dirname and venv.
 
 Release.yml's pypi job published through pypa/gh-action-pypi-publish, whose

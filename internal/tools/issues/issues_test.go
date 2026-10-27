@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // issues_test.go contains unit tests for GitLab issue operations (create,
 // get, list, update, delete). Tests use httptest to mock the GitLab API
 // and verify success paths, error handling, filtering, pagination, and

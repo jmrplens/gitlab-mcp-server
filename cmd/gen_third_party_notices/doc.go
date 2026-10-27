@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_third_party_notices writes THIRD_PARTY_NOTICES: the license,
 // notice and patent texts of every module built into the release binaries,
 // read from the binaries' own build information and from the module cache.

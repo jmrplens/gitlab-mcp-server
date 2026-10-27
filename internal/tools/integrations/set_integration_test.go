@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // set_integration_test.go contains unit tests for the generic slug-dispatched
 // project and group integration MCP tool handlers (set_integration and the
 // group list/get/set/delete actions). The tests use httptest to assert that

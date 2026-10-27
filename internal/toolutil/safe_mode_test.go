@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // safe_mode_test.go verifies the preview safe mode returns instead of executing
 // a mutating action.
 package toolutil

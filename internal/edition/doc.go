@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package edition defines the GitLab licensing tier model used to gate tool
 // availability across the MCP server.
 //

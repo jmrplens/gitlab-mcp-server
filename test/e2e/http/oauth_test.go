@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build httpe2e
 
 // oauth_test.go pins --auth-mode=oauth over real HTTP: what a rejection tells

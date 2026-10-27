@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests how scripts/update-server-json-sha.sh declares the Claude Desktop bundles in server.json.
 
 The release stamps server.json with the bundles it built. A registry entry has

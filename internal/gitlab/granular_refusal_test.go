@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // granular_refusal_test.go holds the reader of GitLab's fine-grained refusal
 // sentences to the texts authorize_granular_scopes_service.rb writes at
 // v19.4.1-ee, and to nothing else.

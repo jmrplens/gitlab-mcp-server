@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Rendering the documents a module writes with holes in them: the format
 // strings fmt.Sprintf fills and the text/template shells a template set
 // executes, which is how client-go writes six of its documents.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // graphql_test.go contains unit tests for GraphQL shared utilities:
 // FormatGID and ParseGID round-tripping, the two pagination inputs
 // (EffectiveFirst, Resolve, Variables and the declaration scan that keeps a

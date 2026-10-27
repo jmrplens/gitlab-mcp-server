@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package hints collects the canonical action IDs a package's Markdown
 // invites a model to call, by rendering the package's own formatters rather
 // than by reading its constants: a hint spelled as a literal at the call site

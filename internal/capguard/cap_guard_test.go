@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // cap_guard_test.go verifies the Undeclared middleware refuses exactly the
 // gated methods with the SDK's own method-not-found code and passes every
 // other method through to the wrapped handler unchanged.

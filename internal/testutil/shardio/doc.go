@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package shardio is the shard mechanism the records written by a test process
 // and read back by a command are built on: one shard file per process, one JSON
 // line per record, a directory tree read in one pass, and a line nobody can

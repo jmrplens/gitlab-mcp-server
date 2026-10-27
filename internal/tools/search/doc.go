@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package search implements MCP tools for GitLab global, group, project, code,
 // issue, and merge request search operations.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // middleware_test.go verifies the list-rewrite middleware over a real
 // in-memory client/server pair: what a gateway receives from the four
 // catalog listings is rewritten, everything that is contract rather than

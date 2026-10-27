@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go holds the fingerprint lookup's input schema to the
 // forms GitLab reads a fingerprint in.
 package keys

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document each feature flag user
 // list formatter writes: the card one list renders as, and the table a page of
 // them renders as.

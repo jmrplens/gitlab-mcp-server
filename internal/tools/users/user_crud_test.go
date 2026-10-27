@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // user_crud_test.go contains unit tests for GitLab user create, read, update,
 // and delete operations. Tests use httptest to mock the GitLab Users API.
 package users

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 /**
  * The release a page names: the one a reader can install today, which is the
  * top-level `version` of the repository's server.json.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // sent_shapes_test.go covers the readers that take what a Geo answer carries
 // beside client-go's decode, and the decomposition of the flat status keys
 // into the replicable matrix.

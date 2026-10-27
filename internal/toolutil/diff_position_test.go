@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // diff_position_test.go contains unit tests for unified diff parsing and
 // position validation helpers.
 package toolutil

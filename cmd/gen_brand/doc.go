@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_brand emits every vector brand asset from one parametric
 // geometry, so the mark cannot drift between its surfaces.
 //

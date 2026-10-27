@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go contains focused tests for the audit_tokens command. Tests use
 // a local GitLab version mock and exercise the resource token measurement path
 // that depends on the surface-aware tool manifest resources.

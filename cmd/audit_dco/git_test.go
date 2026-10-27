@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // git_test.go covers how a range is read from git: the records git log
 // prints, the check against the hashes git rev-list lists, which merges bring
 // no change of their own, and the answers of a real repository, git's own

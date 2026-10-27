@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command godoc_tool is the consolidated Go documentation auditor and fixer.
 // It combines the read-only audit (formerly audit_godocs — reports missing or
 // malformed doc comments) and the in-place fixer (formerly add_docs — generates

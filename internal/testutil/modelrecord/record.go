@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The line shapes a shard holds, and the one envelope they are written in.
 // Every field name here is the contract between the runner that writes a shard
 // and cmd/gen_model_results that reads it back to score and publish.

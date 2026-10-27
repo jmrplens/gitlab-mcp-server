@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go contains unit tests for the Markdown renderings of work item
 // saved views, covering the detail, list, and mutation shapes plus the empty and
 // undecodable edge cases.

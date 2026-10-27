@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build collectore2e && !race
 
 // harness_norace_test.go is the ordinary half of the harness build seam, used

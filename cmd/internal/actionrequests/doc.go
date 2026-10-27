@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package actionrequests answers, for a catalog action, which functions run
 // when it is called and what those functions put on the wire.
 //

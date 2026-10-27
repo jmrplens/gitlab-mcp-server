@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package geo implements MCP tools for GitLab Geo site management.
 //
 // The package wraps the GitLab Geo nodes API:

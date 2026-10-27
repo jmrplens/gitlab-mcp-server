@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // approver_ids_test.go contains unit tests for the approver filter that
 // mirrors GitLab's approver_ids / approved_by_ids parameters, covering the
 // numeric-ID form, the "Any"/"None" literals, and the invalid combinations

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // member_roles_test.go contains unit tests for GitLab member role operations.
 // Tests use httptest to mock the GitLab Member Roles API.
 package memberroles

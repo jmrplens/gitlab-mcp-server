@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests the Claude Desktop bundle checks of scripts/validate-server-json-packages.sh.
 
 `make check-server-json-packages` downloads every package server.json declares.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // dependencies_test.go contains unit tests for GitLab project dependency
 // listing operations. Tests use httptest to mock the GitLab Dependencies API.
 package dependencies

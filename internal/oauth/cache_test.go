@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // cache_test.go contains unit tests for the OAuth token identity cache,
 // verifying TTL expiration, concurrent access, and eviction behavior.
 package oauth

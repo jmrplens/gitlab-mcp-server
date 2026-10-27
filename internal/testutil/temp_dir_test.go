@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // temp_dir_test.go covers the temporary-directory isolation helper.
 package testutil
 

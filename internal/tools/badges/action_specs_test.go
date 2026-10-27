@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains unit tests for the badge action specs: the
 // discovery guidance each spec publishes, and the not-found wrapper the two get
 // routes are built with.

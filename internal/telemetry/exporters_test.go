@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // exporters_test.go verifies what the startup summary is allowed to say about
 // the collector it exports to.
 package telemetry

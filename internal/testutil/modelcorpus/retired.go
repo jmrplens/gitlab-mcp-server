@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package modelcorpus
 
 // The retired cases: identifiers the corpus this one replaces declared and

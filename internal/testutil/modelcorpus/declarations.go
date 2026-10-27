@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package modelcorpus
 
 // promptDeclaration records why one answer literal a case's own text carries is

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // names_test.go pins the tool-name heuristics that annotation derivation and
 // the surface-quality audit share, so the two keep agreeing on what a name
 // says about the operation behind it.

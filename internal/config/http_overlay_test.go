@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // http_overlay_test.go verifies the environment layer that sits underneath the
 // HTTP-mode CLI flags.
 package config

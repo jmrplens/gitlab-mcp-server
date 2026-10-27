@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // result_test.go covers the measurement record: the percentile summary the
 // published tables are built from, the unit conversions, and the round trip
 // through the JSON file every renderer reads.

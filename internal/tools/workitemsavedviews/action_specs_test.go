@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains unit tests for the canonical action metadata of
 // the work item saved view domain: the action set, its read/write/destructive
 // classification, the discovery metadata every action carries, and the

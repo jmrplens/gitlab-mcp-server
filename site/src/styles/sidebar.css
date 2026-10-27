@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 José M. Requena Plens */
+/* SPDX-License-Identifier: MIT */
+
 /* Visual hierarchy for the stock Starlight sidebar.
  *
  * The tree is Starlight's own: every group is a `<details>` with a `<summary>`

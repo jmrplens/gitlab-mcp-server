@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the committed record of what each pinned action's commit holds,
 // the store the audit reads it through, and the fetcher -record fills it with.
 package main

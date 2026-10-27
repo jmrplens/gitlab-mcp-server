@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // mr_notes_test.go contains unit tests for merge request note (comment)
 // operations (create, list, update, delete). Tests use httptest to mock the
 // GitLab Notes API and verify success, error, and pagination paths.

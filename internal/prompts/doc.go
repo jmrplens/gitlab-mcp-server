@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package prompts registers MCP prompt templates that generate AI-optimized
 // summaries, reviews, reports, and assessments from GitLab project, group, and
 // cross-project data.

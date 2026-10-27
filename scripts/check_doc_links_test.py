@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests how scripts/check-doc-links.mjs (`make check-doc-links`) reads a link to the site.
 
 Issue 1163 made the documentation site the one home of the user

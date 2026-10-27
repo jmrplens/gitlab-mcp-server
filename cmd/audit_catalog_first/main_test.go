@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the audit_catalog_first command, which
 // validates the catalog-first migration by walking internal/tools and
 // reporting the per-domain coverage of the action spec system.

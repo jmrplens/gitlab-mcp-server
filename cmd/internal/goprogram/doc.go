@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package goprogram is the one go/packages front end for the gates that
 // type-check this repository's own source.
 //

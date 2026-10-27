@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // registry_integration_test.go round-trips the subscription whitelist
 // against the real resource registry. It lives in the external test package
 // because internal/resources imports internal/subscriptions (the recorder

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document each error tracking
 // formatter writes: the settings card, the client key table, and the key card
 // whose public key and DSN are the values a reader copies into a client's

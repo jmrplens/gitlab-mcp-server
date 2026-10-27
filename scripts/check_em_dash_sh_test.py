@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests the description half of scripts/check-em-dash.sh (`make check-pr-description`).
 
 This repository squash merges, so a pull request's title and body become the

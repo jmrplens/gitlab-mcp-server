@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_md_escaping fails when a Markdown formatter interpolates a
 // value this server did not write into a construct that value can change the
 // shape of.

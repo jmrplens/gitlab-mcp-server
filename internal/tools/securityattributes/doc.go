@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package securityattributes implements MCP tools for GitLab security attributes.
 //
 // The package exposes catalog-backed actions for creating, updating, deleting,

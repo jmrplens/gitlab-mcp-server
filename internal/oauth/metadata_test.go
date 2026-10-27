@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // metadata_test.go contains unit tests for the RFC 9728 Protected Resource
 // Metadata endpoint handler.
 package oauth

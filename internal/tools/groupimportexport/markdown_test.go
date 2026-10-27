@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go contains unit tests for the group import/export Markdown
 // formatters: the two one-line confirmations and the download card.
 //

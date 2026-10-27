@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // embed_test.go verifies embedded MCP resource helpers that append JSON or raw
 // resource content to [mcp.CallToolResult] values when the feature flag is on.
 package toolutil

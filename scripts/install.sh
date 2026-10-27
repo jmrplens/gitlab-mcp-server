@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # install.sh — download the gitlab-mcp-server binary for this OS/arch from the
 # latest GitHub Release, verify its checksum, and install it onto PATH.
 #

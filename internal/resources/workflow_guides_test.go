@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // workflow_guides_test.go holds the guards over the five static guide bodies
 // registered by [RegisterWorkflowGuides]. The bodies are text/markdown a client
 // reads straight out of resources/read: no formatter, no registry and no schema

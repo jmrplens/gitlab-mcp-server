@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // probe.go answers the container HEALTHCHECK from inside the binary.
 //
 // The image used to probe http://localhost:8080/health with wget, which is

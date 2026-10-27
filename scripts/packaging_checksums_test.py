@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests that the npm, PyPI and NuGet builders refuse unverified release binaries.
 
 The first two distributions used to be assembled from an unverified copy of

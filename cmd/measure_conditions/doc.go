@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command measure_conditions plans, runs and reports the condition coverage
 // measurement that .github/workflows/conditions.yml runs on demand (issue
 // 1210), and takes the same measurement of the whole tree on the machine at

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go drives the llms generator end to end through run and covers
 // each renderer, validator and helper on its own.
 //

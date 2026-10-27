@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // identity_test.go contains unit tests for user identity resolution helpers:
 // UserIdentity.IsAuthenticated, IdentityToContext/IdentityFromContext
 // round-tripping, and ResolveIdentity priority (OAuth TokenInfo > context).

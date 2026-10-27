@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The parameter half of the audit: a request parameter GitLab's API pages mark
 // for a paid tier, against the input schema a lower tier is served.
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // group_epic_boards_test.go validates the List and Get handlers for GitLab
 // group epic board operations, covering success paths, input validation
 // (missing group_id, missing/zero board_id), API error responses and which of

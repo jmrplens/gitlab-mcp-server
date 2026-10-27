@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package mergetrains implements MCP tools for GitLab merge train operations.
 //
 // The package wraps the GitLab Merge trains API:

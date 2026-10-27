@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // protected_env_data_test.go tests the entry shapes the project and the group
 // protected environment tools share: what each hands the checks GitLab's
 // rules are held to before a protect or an update is sent.

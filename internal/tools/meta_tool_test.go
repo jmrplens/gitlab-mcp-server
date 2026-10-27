@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // meta_tool_test.go contains unit tests for the meta-tool dispatch mechanism
 // including action validation, parameter unmarshalling, and the wrapAction
 // and wrapVoidAction generic helpers.

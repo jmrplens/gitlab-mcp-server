@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // config_test.go contains unit tests for the config package.
 // Tests verify [Load] behavior with valid configuration, missing required
 // fields, and invalid boolean environment variable values.

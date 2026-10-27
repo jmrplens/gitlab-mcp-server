@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // prompt_team_test.go contains unit tests for team analysis MCP prompts.
 package prompts
 

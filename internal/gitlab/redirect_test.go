@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // redirect_test.go contains unit tests for the redirect policy that keeps
 // GitLab credential headers from leaving the configured instance.
 package gitlab

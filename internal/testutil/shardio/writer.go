@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The writing half: one shard per test process, opened when the first line is
 // written and never closed, because there is no shutdown hook to close it in.
 

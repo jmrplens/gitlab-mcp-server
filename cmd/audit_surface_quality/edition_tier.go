@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The edition-tier rule: the licensing tier a tool's own description states,
 // against the tier the surface registers that tool at.
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # setup-bitbucket.sh — provision the ephemeral Bitbucket Data Center fixture
 # for the import_bitbucket_server e2e coverage.
 #

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // surface_specs_test.go contains unit tests for the dynamic surface metadata and the two-tools contract.
 package dynamic
 

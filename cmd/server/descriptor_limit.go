@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build linux || darwin
 
 // descriptor_limit.go reads the number of file descriptors the process may

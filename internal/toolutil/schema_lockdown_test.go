@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // schema_lockdown_test.go verifies JSON Schema lockdown behavior for root,
 // nested, and preconfigured additionalProperties values in MCP tool schemas.
 package toolutil

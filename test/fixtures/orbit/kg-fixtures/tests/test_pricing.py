@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Minimal pytest coverage for the pricing helpers."""
 
 import pytest

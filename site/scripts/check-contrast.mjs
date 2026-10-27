@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Contrast audit for the site palette.
 //
 // Parses src/styles/theme.css, resolves the light and the dark theme exactly as

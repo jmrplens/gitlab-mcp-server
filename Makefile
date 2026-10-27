@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
 	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-conditions-tree coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab e2e-clean-orphans \

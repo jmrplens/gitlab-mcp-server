@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package workitemsavedviews implements MCP tools for GitLab work item saved
 // views through the GraphQL API.
 //

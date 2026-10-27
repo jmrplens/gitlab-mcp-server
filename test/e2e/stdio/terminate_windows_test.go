@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build stdioe2e && windows
 
 // terminate_windows_test.go is the termination path a Windows console uses:

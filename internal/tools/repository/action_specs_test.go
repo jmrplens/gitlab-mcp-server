@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go holds the changelog actions' input schemas to the
 // semantic version GitLab requires of a release's version.
 package repository

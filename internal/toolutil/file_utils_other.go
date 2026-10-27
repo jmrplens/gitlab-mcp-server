@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build !unix
 
 // file_utils_other.go carries the leaf-open primitives for platforms with no

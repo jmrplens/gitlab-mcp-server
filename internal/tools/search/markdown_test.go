@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go holds the code search Markdown to what GitLab sent for
 // each result: the table names each result and the line its snippet starts
 // on, and each snippet follows it in a fence of its own, cut to a bounded

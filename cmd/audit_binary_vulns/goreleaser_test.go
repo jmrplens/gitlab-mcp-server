@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // goreleaser_test.go covers how the release targets are read out of a
 // GoReleaser configuration, the repository's own included.
 package main

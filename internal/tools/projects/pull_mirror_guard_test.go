@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // pull_mirror_guard_test.go contains unit tests for the confirmation guard in
 // front of a pull-mirror configuration that overwrites diverged branches.
 package projects

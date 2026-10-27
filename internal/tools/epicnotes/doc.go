@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package epicnotes implements MCP tools for GitLab epic note operations.
 //
 // The package wraps the GitLab Notes API for epic notes:

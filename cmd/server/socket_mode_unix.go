@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build !windows
 
 // socket_mode_unix.go creates the unix socket with its permission mode already

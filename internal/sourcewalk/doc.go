@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package sourcewalk answers one question for everything here that walks this
 // repository's tree: which directories below a walk root are this
 // repository's own source, and which are something else that merely lives

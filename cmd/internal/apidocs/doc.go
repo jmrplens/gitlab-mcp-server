@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package apidocs is a shared fetcher for the GitLab API reference docs (the
 // doc/api/<area>.md files in the gitlab-org/gitlab monorepo) used as a source of
 // truth alongside the client-go SDK by the audit utilities.

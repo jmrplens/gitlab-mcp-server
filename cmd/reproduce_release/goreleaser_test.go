@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // goreleaser_test.go covers what this command reads of a GoReleaser
 // configuration, and every setting it refuses rather than read half right.
 package main

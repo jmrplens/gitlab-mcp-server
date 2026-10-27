@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers icon-asset generation: extracting svg<Name> constants
 // from icons.go's AST, naming their WebP files, and the check/generate
 // pipeline that reads or writes them. Every test here runs without

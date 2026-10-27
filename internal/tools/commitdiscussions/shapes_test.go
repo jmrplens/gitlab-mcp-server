@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shapes_test.go contains unit tests for the commit discussion output
 // converters and position-input builders, exercising the full 1:1 field
 // mapping (author, resolved_by, position, line range) plus nil-guard paths.

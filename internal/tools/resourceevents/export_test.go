@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package resourceevents
 
 // PublishedActionIDs is the block of canonical action ID constants at the top

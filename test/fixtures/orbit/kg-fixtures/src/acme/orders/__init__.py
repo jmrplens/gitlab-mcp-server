@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """acme.orders — tiny order-processing package used as Orbit KG fixture.
 
 The package is split into four modules so the Knowledge Graph indexer can

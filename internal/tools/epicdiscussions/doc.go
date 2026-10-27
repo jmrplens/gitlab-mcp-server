@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package epicdiscussions implements MCP tools for GitLab epic discussion
 // operations.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package harness is the only route from an end-to-end test to an MCP server.
 //
 // It starts the real cmd/server binary and speaks to it over stdio, the way a

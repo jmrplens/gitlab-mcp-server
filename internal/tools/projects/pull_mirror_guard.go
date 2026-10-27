@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // pull_mirror_guard.go guards the one pull-mirror configuration that destroys
 // commits: a mirror that overwrites diverged branches replaces the project's
 // own history with whatever the source repository holds.

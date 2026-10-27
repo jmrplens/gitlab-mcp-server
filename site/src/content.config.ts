@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 import { defineCollection } from "astro:content";
 // `z` re-exported from `astro:content` is deprecated in Astro 7; `astro/zod` is
 // the supported path and keeps `astro check` free of deprecation hints.

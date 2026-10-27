@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document each custom emoji
 // formatter writes: the list table, which now carries the global ID the delete
 // action takes, and the card one create returns.

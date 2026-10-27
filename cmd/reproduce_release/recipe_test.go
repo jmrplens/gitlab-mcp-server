@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // recipe_test.go covers how a configuration becomes the go command line,
 // the environment and the names of each binary: GoReleaser's templates
 // evaluated with the fields this command knows, an override's ldflags in

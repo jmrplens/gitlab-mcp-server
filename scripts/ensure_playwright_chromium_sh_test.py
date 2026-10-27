@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/ensure-playwright-chromium.sh, the Chromium step of both site builds.
 
 The site build renders its Mermaid diagrams with Playwright's Chromium, and

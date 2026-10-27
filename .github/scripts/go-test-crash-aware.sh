@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # go-test-crash-aware.sh — run a test suite through gotestsum and tell a Go
 # runtime crash apart from a failing test.
 #

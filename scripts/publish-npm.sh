@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # publish-npm.sh assembles and publishes the npm distribution for one release:
 # the six per-platform binary packages first, then the launcher that depends on
 # them. The order is load-bearing — a consumer installing between the two

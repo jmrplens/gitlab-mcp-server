@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The reading half: every shard of a directory tree, merged in one pass, with a
 // line nobody can read reported rather than dropped.
 

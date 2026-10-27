@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests mcpb/manifest.json, the Claude Desktop bundle's manifest, for what its schema cannot say.
 
 `make check-mcpb` validates the manifest against the MCPB schema, and the

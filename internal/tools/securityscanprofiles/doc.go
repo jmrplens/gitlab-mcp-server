@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package securityscanprofiles implements MCP tools for GitLab security scan
 // profiles through the GraphQL API.
 //

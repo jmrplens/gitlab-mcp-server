@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package grantwords is the one wording of what a fine-grained personal access
 // token needs for an action, in English and Spanish, for the two generators
 // that print it.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // progress_test.go contains unit and integration tests for the progress package.
 // Unit tests verify nil-safety and inactive [Tracker] behavior.
 // Integration tests use an in-memory MCP client/server pair to verify that

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs.go holds what this package contributes to the canonical action
 // catalog. The specs themselves are declared in internal/tools/adminspecs,
 // which is the one place the gitlab_admin group is assembled; what stays here

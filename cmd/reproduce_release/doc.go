@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command reproduce_release rebuilds the binaries a release publishes and
 // compares them with the published ones byte for byte, or builds every
 // release target of a tree twice and compares the two builds.

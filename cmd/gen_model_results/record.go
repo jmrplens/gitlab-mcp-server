@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // record.go is the committed document: what one published row is, and the fold
 // from the shards a run wrote to the rows a page is drawn from.
 //

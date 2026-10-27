@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/check_elf_interp.py, the release's PT_INTERP check.
 
 The images are built here, byte by byte, rather than read from a release:

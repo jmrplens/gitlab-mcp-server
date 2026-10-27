@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // protocol_test.go verifies where the recorded protocol version comes from
 // when several sources could supply one, and that only an admitted value is
 // ever recorded.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package apilive is the committed record of what a booted GitLab says its
 // own REST API is, and the one reader of it.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package progress provides a Tracker for sending MCP progress notifications
 // to the client during long-running tool operations.
 //

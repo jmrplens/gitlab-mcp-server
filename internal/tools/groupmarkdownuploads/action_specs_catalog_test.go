@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_catalog_test.go holds this package against the catalog: every
 // canonical action ID it publishes to a model, in an ActionSpec's
 // RelatedActions and in the hints its Markdown writes, must name an action the

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // variant.go builds the arm a bound with no switch is compared against.
 //
 // Every other bound here is put in force and taken out by the switches a

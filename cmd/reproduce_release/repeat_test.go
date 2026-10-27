@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // repeat_test.go drives the offline check end to end: every release target
 // of a tree built twice, the second time from an empty build cache, and the
 // two builds compared.

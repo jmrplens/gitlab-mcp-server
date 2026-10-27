@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # docker-images.sh: which image a Docker run tests, and whether it is the one
 # its tag names today.
 #

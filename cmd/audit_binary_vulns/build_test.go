@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // build_test.go covers how each release target is built: from the entry's
 // main package, with its env and flags, for the target's platform.
 package main

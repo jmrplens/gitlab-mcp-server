@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tiny CLI entry point — exercises every other module end-to-end so the
 `Definition` count and the `ImportedSymbol` edges show up clearly in
 the Knowledge Graph."""

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # publish-nuget.sh assembles, validates and pushes the NuGet distribution for
 # one release: the six runtime-identifier packages first, then the pointer
 # package that names them. The order is load-bearing, exactly as it is for

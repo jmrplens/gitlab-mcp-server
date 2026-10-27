@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document each integration
 // formatter writes: the project and group tables, the card one integration
 // renders as, and the group Datadog card with its configuration as the nested

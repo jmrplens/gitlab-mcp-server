@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package epicworkitems is the home for the shared GraphQL helpers used by
 // the epic-family sub-packages (epics, epicnotes, epicdiscussions,
 // epicissues). The exported functions in work_items.go (ResolveEpicGID,

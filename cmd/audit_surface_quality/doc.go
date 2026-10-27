@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_surface_quality is the consolidated MCP tool surface quality
 // audit. It combines the metadata-quality checks (naming, annotations, schema
 // shape — formerly audit_tools) and the output-quality checks (OutputSchema,

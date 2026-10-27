@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // elicitation_test.go contains unit and integration tests for the elicitation package.
 // Unit tests verify nil-safety, unsupported-client error paths, and context cancellation.
 // Integration tests use in-memory MCP transports to validate [Client.Confirm],

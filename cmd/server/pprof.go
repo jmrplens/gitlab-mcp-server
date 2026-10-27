@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // pprof.go serves Go's profiling handlers on a loopback listener of their
 // own, for the benchmark driver and for anybody asking where a running
 // server's memory and processor time go.

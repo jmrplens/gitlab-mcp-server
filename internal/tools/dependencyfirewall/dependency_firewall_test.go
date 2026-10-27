@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // dependency_firewall_test.go contains unit tests for the Dependency Firewall
 // package evaluation handler. Tests use httptest to mock the GitLab API and
 // cover the success, validation, and error paths.

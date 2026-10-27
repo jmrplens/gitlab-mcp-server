@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/install.sh against a local fixture release.
 
 The installer downloads a binary and a checksums.txt from the same GitHub

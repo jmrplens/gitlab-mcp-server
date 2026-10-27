@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package graphqlschema holds the pinned GitLab GraphQL schema and validates
 // documents against it.
 //

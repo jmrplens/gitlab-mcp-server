@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // client_ip.go decides which address a request is charged to, and the key the
 // authentication budgets read off it.
 //

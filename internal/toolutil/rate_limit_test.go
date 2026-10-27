@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // rate_limit_test.go verifies the token-bucket rate limiter and the MCP
 // receiving middleware that converts over-budget tools/call requests into
 // structured tool error results.

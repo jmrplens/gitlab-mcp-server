@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Tests for the Go-command demands of rule 2: what a credentialed job builds
 // with the go command is this module's code and the standard library's alone,
 // since any code the job runs holds the job's credential.

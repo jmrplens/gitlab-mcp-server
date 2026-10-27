@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # setup-orbit-fixtures.sh — create reproducible Orbit knowledge-graph
 # fixtures in any GitLab.com group. Idempotent: re-running it on an
 # already-provisioned namespace is a no-op.

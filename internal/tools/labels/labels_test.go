@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // labels_test.go contains unit tests for GitLab label operations.
 // Tests use httptest to mock the GitLab Labels API.
 package labels

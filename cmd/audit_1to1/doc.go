@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_1to1 is the consolidated 1:1 SDK↔API parity audit. It combines
 // the four gap streams — struct field mapping (R-INPUT/R-OUTPUT), action
 // coverage (R-ACTION), discovery metadata (R-META), and enum values (R-ENUM) —

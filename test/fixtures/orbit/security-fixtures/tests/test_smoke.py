@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Smoke tests for the security fixture.
 
 The point of this module is to make the CI pipeline include the `test`

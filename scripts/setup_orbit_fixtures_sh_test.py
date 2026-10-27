@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests what scripts/setup-orbit-fixtures.sh asks GitLab for.
 
 The script provisions the Orbit live test fixtures on GitLab.com, and every

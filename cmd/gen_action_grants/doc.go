@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_action_grants derives what every catalog action sends GitLab
 // from its handlers and joins each request to what the live GitLab record
 // says a fine-grained personal access token needs for it.

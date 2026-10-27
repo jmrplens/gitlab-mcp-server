@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 /**
  * Prepares the tables that cannot fit a phone to stack instead of scroll.
  *

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package join joins what each action requests to what GitLab demands of a
 // fine-grained token for each request, into the table the server carries.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package resourcegroups implements MCP tools for GitLab CI/CD resource group
 // operations.
 //

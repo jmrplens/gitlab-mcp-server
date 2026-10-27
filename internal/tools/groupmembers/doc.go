@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package groupmembers implements MCP tools for GitLab group member
 // operations.
 //

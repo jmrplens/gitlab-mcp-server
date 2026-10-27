@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // issue_statistics_catalog_test.go judges the canonical action IDs this
 // package publishes against the catalog the server really registers.
 //

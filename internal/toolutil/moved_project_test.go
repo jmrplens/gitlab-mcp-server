@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // moved_project_test.go verifies IsMovedProjectRefusal, the reading of
 // GitLab's refusal of a request that names a moved project by its old path.
 package toolutil

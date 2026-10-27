@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Linux entry point of the Claude Desktop extension: the Linux bundle
 # (gitlab-mcp-server-linux.mcpb) and the universal one (gitlab-mcp-server.mcpb).
 #

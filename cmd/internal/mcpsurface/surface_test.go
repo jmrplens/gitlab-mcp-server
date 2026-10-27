@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // surface_test.go covers the shared MCP introspection helpers the generator
 // commands build on: the per-surface listings and the memo behind them, the
 // pinned dynamic two-tool contract, resource and prompt discovery over a real

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package paths
 
 // silentOwnerDeclaration records why a package the catalog names as owning

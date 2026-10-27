@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_timeout_test.go covers the deadline every action runs under.
 package toolutil
 

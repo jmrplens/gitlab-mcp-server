@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/build-npm.mjs and scripts/validate-npm.mjs on packages
 assembled from stand-in binaries.
 

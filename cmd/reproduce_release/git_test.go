@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // git_test.go covers the clone a release is rebuilt in, and the two answers
 // read from git: the commit a ref names and the abbreviation of it.
 package main

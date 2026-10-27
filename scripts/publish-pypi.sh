@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # publish-pypi.sh assembles, validates and publishes the PyPI distribution for
 # one release: the six platform wheels scripts/build_pypi.py writes.
 #

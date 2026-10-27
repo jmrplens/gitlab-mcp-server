@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_timeout.go bounds how long one action may run.
 //
 // Every action passes through one of the four WrapAction functions, which

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests how a Docker e2e run reaches the release gate (issue 1155).
 
 A Docker run against a GitLab newer than the release the fine-grained action

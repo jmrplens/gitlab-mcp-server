@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package structs verifies the 1:1 field mapping between the
 // MCP tool input/output structs and the client-go SDK Options/result structs
 // they wrap.

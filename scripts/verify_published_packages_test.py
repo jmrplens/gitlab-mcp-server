@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests the retry behaviour of scripts/verify_published_packages.py.
 
 That script became a hard gate: mcp-registry and commit-manifests both wait on

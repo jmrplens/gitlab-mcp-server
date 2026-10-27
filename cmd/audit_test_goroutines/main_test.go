@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package main tests the goroutine-boundary assertion auditor against a
 // fixture file covering every boundary kind and both site categories.
 package main

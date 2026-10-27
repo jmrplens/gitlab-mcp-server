@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // tier_test.go contains unit tests for the edition tier type, its ordering
 // helpers, and the parsing/mapping functions used by configuration loading and
 // instance detection.

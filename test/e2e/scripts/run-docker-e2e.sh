@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # run-docker-e2e.sh: the Docker lifecycle of one end-to-end run, in one place.
 #
 # Usage: run-docker-e2e.sh <ce|ee> [--] <go test arguments>

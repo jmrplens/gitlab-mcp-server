@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package actions reports client-go SDK endpoints that no MCP
 // action invokes (R-ACTION). For every package under internal/tools it resolves,
 // with full Go type information, each call site of the form

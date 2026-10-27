@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_lhm_manifest regenerates the tools, prompts, and resources arrays
 // in lhm.plugin.json, the manifest published to the LobeHub Marketplace.
 //

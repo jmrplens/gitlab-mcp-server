@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Domain models for the orders package.
 
 The classes here are pure data containers. The Knowledge Graph indexes

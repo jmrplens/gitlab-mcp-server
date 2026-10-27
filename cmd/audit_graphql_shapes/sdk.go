@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The client-go half of this audit: the documents client-go builds and the
 // structs it decodes them into, for the client-go this repository's go.mod
 // requires, asked the questions this audit asks of our own: the three

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // rpc.go speaks JSON-RPC to the server directly, on both transports.
 //
 // The Go SDK's client is deliberately not used here, and the reason is a

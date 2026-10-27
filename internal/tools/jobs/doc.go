@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package jobs implements MCP tools for GitLab CI/CD job operations.
 //
 // It supports listing jobs, retrieving job details, downloading trace logs,

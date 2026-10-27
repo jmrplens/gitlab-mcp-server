@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package tenancy is the register of every decision this server makes about
 // who a caller is and what it may hold, spend or be told.
 //

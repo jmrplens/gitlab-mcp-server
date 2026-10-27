@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Which client-go functions this server can run: the ones its own source names
 // and everything they call inside client-go.
 

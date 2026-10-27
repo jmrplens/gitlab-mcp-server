@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Chip parity and link audit for the page-title chips.
 //
 // Two invariants, both of the kind a reviewer cannot hold in their head

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests npm/gitlab-mcp-server/cli.js, the launcher the npm package runs.
 
 The launcher resolves the platform package's binary and runs it with stdio

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_graphql_documents fails when a raw GraphQL document in this
 // repository is one the pinned GitLab schema refuses.
 //

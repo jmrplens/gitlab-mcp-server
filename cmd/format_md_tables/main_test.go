@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the format_md_tables command, which normalizes
 // Markdown pipe tables in README.md and docs/.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go validates Markdown formatting functions for group wiki
 // MCP tool output. Every expectation is the whole render: a substring
 // assertion is what let a table that had stopped rendering keep passing.

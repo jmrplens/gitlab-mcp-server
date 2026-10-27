@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // instructions.go builds the MCP handshake instructions, the text every client
 // injects into its model's system prompt. Because the same operation is named
 // differently on each tool surface, the guidance is assembled per surface

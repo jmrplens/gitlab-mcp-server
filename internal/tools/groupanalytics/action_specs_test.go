@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // action_specs_test.go contains integration tests for the group analytics tool
 // closures in ActionSpecs routes with a mock GitLab API.
 package groupanalytics

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // group_protected_envs_test.go contains unit tests for the GitLab group protected environment MCP tool handlers.
 package groupprotectedenvs
 

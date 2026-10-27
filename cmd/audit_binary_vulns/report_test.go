@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // report_test.go covers how the findings of every binary are merged, held to
 // the declaration table and printed.
 package main

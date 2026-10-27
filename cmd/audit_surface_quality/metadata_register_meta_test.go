@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // metadata_register_meta_test.go covers the package-level RegisterMeta
 // detection logic used by the metadata audit.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package stdioe2e drives the real gitlab-mcp-server binary over pipes the way
 // an MCP client does: process lifetime, stdout carrying nothing but JSON-RPC,
 // logs on stderr, readiness before the catalog is built, and the environment

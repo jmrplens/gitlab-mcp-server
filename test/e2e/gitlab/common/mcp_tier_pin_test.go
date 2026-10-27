@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build e2e
 
 // mcp_tier_pin_test.go drives GITLAB_MCP_TIER, the one setting that changes

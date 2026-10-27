@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package merge combines the four 1:1-audit gap reports — struct
 // completeness (R-INPUT/R-OUTPUT), action coverage (R-ACTION), metadata
 // completeness (R-META), and enum values (R-ENUM) — into a single per-package

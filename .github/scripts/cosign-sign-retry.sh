@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Sign a container image with cosign, retrying transient OIDC failures.
 #
 # Keyless signing resolves its identity token from the ambient GitHub OIDC

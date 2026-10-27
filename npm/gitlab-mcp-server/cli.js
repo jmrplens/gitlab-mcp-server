@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // cli.js resolves the prebuilt gitlab-mcp-server binary for the current
 // platform and hands control to it. The binary ships inside a per-platform
 // optional dependency (see the package's optionalDependencies); npm installs

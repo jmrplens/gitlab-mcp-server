@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Structural audit of the spec sheets (src/components/docs/Facts.astro).
 //
 // Three jobs, and the first two gate.

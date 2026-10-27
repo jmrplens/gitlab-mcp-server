@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // hints_test.go exercises the hint collector against formatters this file
 // registers itself, so the expectations are fixed by the test rather than by
 // whatever the domain packages happen to publish today.

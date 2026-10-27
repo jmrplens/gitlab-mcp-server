@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package testutil provides test helpers for gitlab-mcp-server.
 //
 // It wraps [net/http/httptest], the official

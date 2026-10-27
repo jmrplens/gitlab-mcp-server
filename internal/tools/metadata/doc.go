@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package metadata implements MCP tools for the GitLab Metadata API.
 //
 // The package fetches server version, revision, Enterprise edition status, and

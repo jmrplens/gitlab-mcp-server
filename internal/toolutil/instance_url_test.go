@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // instance_url_test.go holds InstanceWebURL and PathBelowInstanceWeb to the
 // rule GitLab's own SubmoduleHelper applies to a URL on the instance: a
 // prefix match on the web URL, relative root included, for http and https

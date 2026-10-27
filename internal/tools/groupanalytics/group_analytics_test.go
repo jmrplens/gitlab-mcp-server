@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // group_analytics_test.go contains unit tests for GitLab group analytics
 // operations. Tests use httptest to mock the GitLab Group Analytics API.
 package groupanalytics

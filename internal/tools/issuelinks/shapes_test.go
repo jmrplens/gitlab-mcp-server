@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shapes_test.go covers the additive 1:1 sub-object converters and the
 // full-field relation/link converters for the issuelinks package.
 package issuelinks

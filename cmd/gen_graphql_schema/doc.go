@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command gen_graphql_schema pins a GitLab GraphQL schema into the repository.
 //
 // It introspects a live instance, converts the answer to SDL, and writes the

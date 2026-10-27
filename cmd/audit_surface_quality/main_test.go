@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // main_test.go covers the shared command plumbing: registering a tool
 // surface on an in-process server through the stub GitLab client, the JSON
 // entry conversion, and the two audit entry points in their JSON mode.

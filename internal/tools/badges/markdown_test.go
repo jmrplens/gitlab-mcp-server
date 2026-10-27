@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document each badge formatter
 // writes: the project and group tables, the badge card, and the preview card a
 // preview gets instead of the stored badge's, since a preview has no ID, no

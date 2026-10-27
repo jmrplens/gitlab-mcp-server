@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Validate the NuGet packages before anything is pushed.
 
 A pushed NuGet version can be unlisted but never replaced or deleted, so

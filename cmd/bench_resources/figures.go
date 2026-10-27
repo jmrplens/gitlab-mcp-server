@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // figures.go turns one measurement record into the four figures the
 // documentation publishes, and carries the strings each language needs.
 //

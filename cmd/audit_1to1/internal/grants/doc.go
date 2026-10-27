@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package grants is R-GRANT, the dimension of the 1:1 audit that says what a
 // fine-grained personal access token needs for each action this server offers
 // (issue 952).

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // shapes_test.go covers the resource-event sub-object mirrors, the list-option
 // helper, and the metadata decorator branches not exercised by the
 // handler-level tests.

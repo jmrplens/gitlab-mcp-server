@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // register_meta_test.go contains benchmarks for meta-surface registration,
 // measuring it on the Ultimate catalog with a cold and a warm schema cache.
 package tools

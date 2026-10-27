@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // presenter.go presents the credentials a verification bound is reached by.
 //
 // A bound on verification cannot be reached by a lane's own credential, which

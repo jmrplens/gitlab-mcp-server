@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // annotations_test.go contains unit tests for the shared MCP annotation
 // presets applied to tool results and resource declarations.
 package toolutil

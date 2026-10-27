@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // What each case contributed to a row, and the arithmetic that lets a row be
 // assembled from more than one run.
 //

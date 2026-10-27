@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 # Ask a booted GitLab what its REST API is, by asking the loaded application
 # rather than by reading its source.
 #

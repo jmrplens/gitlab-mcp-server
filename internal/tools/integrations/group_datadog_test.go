@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // group_datadog_test.go contains unit tests for the group-level Datadog
 // integration MCP tool handlers. The tests cover happy paths, the validation
 // guard, and the most common API errors (404 not found, 403 forbidden,

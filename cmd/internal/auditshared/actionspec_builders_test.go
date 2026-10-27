@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // actionspec_builders_test.go covers the buildXxxActionSpecs naming rule and
 // the directory scan the manifest generator and the catalog-first auditor
 // both rely on to agree on the set of catalog builders.

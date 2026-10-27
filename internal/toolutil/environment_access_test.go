@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // environment_access_test.go tests the rules a protected environment's deploy
 // access levels and approval rules are held to before a protect or an update
 // is sent, and the input schema overrides that state the same rules.

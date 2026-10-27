@@ -1,3 +1,6 @@
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Legacy database accessors — these methods contain SQL injection
 vulnerabilities on purpose so SAST finds them."""
 

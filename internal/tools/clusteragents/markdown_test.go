@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts the whole Markdown document every cluster agent
 // formatter writes: the two list tables, the agent card with its configuration
 // project nested under it, and the token card whose secret is shown once.

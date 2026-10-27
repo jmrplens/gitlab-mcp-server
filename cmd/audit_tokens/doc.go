@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Command audit_tokens measures the LLM context window overhead of all
 // registered MCP tool definitions. It reads the individual, meta and dynamic
 // surfaces through cmd/internal/mcpsurface, serializes the definitions a

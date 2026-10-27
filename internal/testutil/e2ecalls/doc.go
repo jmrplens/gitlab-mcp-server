@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package e2ecalls declares the record the end-to-end suite writes down while
 // it runs, and the coverage audit reads back afterwards: what a test asked the
 // server to do, what the server dispatched, and on which runtime, surface and

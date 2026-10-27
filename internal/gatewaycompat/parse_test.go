@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // parse_test.go verifies the GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS format:
 // comma-separated old=new pairs with backslash escapes, strict about
 // everything it does not define, because a silently absorbed typo would ship

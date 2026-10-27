@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // discovery_test.go verifies the wrapper around the SDK's protected-resource
 // metadata handler: the HTTP rules that apply to any public document, which the
 // SDK handler does not meet on its own.

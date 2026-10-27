@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // markdown_test.go asserts that the merge request formatters contain the text
 // GitLab hands them, rather than letting it reshape the document around it.
 //

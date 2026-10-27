@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The one rule every record read back from a shard is held to, apart from
 // whatever else its own package checks.
 

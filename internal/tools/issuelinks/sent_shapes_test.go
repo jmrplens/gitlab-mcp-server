@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // sent_shapes_test.go covers the reader that takes off a captured response the
 // keys API::Entities::RelatedIssue sends and client-go's IssueRelation does not
 // model, and the two ways that reader refuses an answer it cannot hold.

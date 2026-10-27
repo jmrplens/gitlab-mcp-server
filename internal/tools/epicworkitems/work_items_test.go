@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // work_items_test.go contains unit tests for the shared epic-backed work item
 // GraphQL helpers (ResolveEpicGID, ResolveWorkItemGID).
 package epicworkitems

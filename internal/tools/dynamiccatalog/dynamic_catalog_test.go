@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // dynamic_catalog_test.go pins the two properties the server and the e2e suite
 // both rely on: the filter runs before the standalone actions are added, and
 // what read-only mode removed is reported with its cause.

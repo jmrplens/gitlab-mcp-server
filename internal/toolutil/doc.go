@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package toolutil provides shared utilities for MCP tool handler sub-packages.
 // It contains error handling, pagination, logging, text processing, Markdown
 // formatting helpers, and meta-tool infrastructure used across all domain

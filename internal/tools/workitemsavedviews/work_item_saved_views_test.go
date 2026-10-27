@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // work_item_saved_views_test.go contains unit tests for GitLab work item saved
 // view operations.
 //

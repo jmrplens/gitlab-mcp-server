@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 //go:build orbitlive
 
 // Package orbit contains live integration tests against the experimental

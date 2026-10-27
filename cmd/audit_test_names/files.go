@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // files.go implements the -check-files mode: the test-file naming
 // convention, as a gate.
 //

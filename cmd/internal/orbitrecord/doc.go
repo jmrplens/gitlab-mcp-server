@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package orbitrecord is the committed record of what GitLab.com's Orbit
 // routes answer, and the one reader of it.
 //

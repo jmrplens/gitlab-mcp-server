@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // register_mcp_meta_test.go verifies the gitlab_server diagnostics group: that
 // its hand-written route map and its action specs describe the same set of
 // actions, and that its description offers every one of them.

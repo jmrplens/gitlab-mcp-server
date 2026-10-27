@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 José M. Requena Plens
+# SPDX-License-Identifier: MIT
+
 """Tests scripts/coverage-mutants.sh, the recipe behind `make coverage-mutants`.
 
 The script decides how long gremlins gives each mutant. gremlins multiplies

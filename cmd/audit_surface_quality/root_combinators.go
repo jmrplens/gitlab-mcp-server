@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // The rule that no served tool input schema carries a combinator or a
 // conditional at its root.
 

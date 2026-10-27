@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // push_rules_test.go contains unit tests for the group push-rule MCP tool
 // handlers. Tests use httptest to mock GitLab API responses and verify request
 // method/path/body, output parsing, and error paths.

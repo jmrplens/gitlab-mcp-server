@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package metadata reports discovery-metadata gaps (R-META)
 // across the canonical ActionSpec catalog. For every action it flags:
 //

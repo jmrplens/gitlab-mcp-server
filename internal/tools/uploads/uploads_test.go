@@ -1,3 +1,6 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // uploads_test.go contains unit tests for GitLab project file upload
 // operations. Tests use httptest to mock the GitLab API and verify successful
 // uploads, base64 decoding validation, file content integrity, API errors,
