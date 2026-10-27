@@ -39,9 +39,7 @@ finding is tracked.
 - **Against:** the statements of SECURITY.md's
   [threat model](../../SECURITY.md#threat-model), its four trust boundaries, the
   six kinds of vulnerability it names and the assumptions it makes, and of its
-  [security considerations](../../SECURITY.md#security-considerations). Each
-  has its row below but one, whose row is held back with
-  [finding 8](#findings) and which this page records nowhere as holding.
+  [security considerations](../../SECURITY.md#security-considerations).
 - **Not reviewed:** GitLab itself, the code of the dependencies beyond the
   advisories against the versions shipped, and the documentation site's
   content.
@@ -58,9 +56,7 @@ finding is tracked.
 **Tracing.** Each requirement was traced to the code that enforces it, read at
 the commit, and to the tests or gates that would fail if it stopped holding. A
 requirement is recorded as holding only when both exist, and a statement this
-preparation found no code or no test for is recorded as not traced. The
-statement held back with finding 8 is the one exception to a row per
-statement.
+preparation found no code or no test for is recorded as not traced.
 
 **Automated analysis.** What GitHub ran on the commit:
 
@@ -212,7 +208,7 @@ code at the commit, and in particular:
 - the statements recorded as not traced, and whether each is enforced
   somewhere this preparation did not find, should be, or should leave
   SECURITY.md;
-- finding 8, the statement whose row waits with it, and whether it changes the
+- finding 8, once its advisory is published, and whether it changes the
   result of any row above;
 - whether each severity in [Findings](#findings) is the right one.
 
