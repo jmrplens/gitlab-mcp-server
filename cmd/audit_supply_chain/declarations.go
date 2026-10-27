@@ -133,7 +133,8 @@ var declaredGuardedMatches = map[string]guardedMatch{
 
 // categoryWriteFreeJob is the one reason an image that a pinned container
 // action names by a tag may be accepted: every job that runs it is held by the
-// audit to a token that writes nothing but its OIDC identity, to cache-mode
+// audit to a token, declared by the job or its workflow, that writes nothing
+// but its OIDC identity, to cache-mode
 // none and to reading no secret, so whatever a push to the tag puts there runs
 // with no write of this repository, no entry of the Actions cache to save or
 // restore, and no secret. The cache is held apart because permissions: does
@@ -149,7 +150,7 @@ const categoryWriteFreeJob = "write-free-job"
 // kept apart from [categories] because each table's reasons answer a
 // different question.
 var imageCategories = map[string]string{
-	categoryWriteFreeJob: "every job that runs the image holds a token that writes nothing but its OIDC identity, runs with cache-mode none and reads no secret, which the audit checks at each of them; the reason says why the image is not named by its digest and which verifiers accept the identity the job can mint",
+	categoryWriteFreeJob: "every job that runs the image holds a token, declared by the job or its workflow, that writes nothing but its OIDC identity, runs with cache-mode none and reads no secret, which the audit checks at each of them; the reason says why the image is not named by its digest and which verifiers accept the identity the job can mint",
 }
 
 // declaredTaggedImages are the images that pinned container actions run by a

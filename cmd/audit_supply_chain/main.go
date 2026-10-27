@@ -543,8 +543,11 @@ func appendUsesKeys(found []usesReference, node *yaml.Node) []usesReference {
 // present, else the workflow's.
 //
 // An empty mapping written on the job is a decision, not an absence, so it does
-// not fall back to the workflow's block. GitHub's own default is a read-only
-// token, so a job with no permissions anywhere is uncredentialed.
+// not fall back to the workflow's block. A job with no permissions anywhere
+// gets the repository's or the organization's default token, a setting this
+// repository keeps at read; the credentialed-job rules read it as
+// uncredentialed on that ground, and write-free-job, which cannot rest on a
+// setting the tree does not hold, refuses an undeclared token instead.
 func jobPermissions(doc, job map[string]any) map[string]any {
 	permissions := job["permissions"]
 	if permissions == nil {

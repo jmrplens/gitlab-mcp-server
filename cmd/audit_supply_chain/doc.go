@@ -199,8 +199,10 @@
 // somebody else's action names can be accepted under write-free-job in
 // declarations.go, keyed by the action and the image without its tag, so a
 // bump that moves the tag keeps the declaration and one that moves the image
-// elsewhere does not; every job that runs it is then held to a token that
-// writes nothing but id-token, to cache-mode none and to reading no secret,
+// elsewhere does not; every job that runs it is then held to a token, declared
+// by the job or its workflow, that writes nothing but id-token, to cache-mode
+// none and to reading no secret (an undeclared token is the repository's
+// default, a setting the tree does not hold),
 // what the workflow hands down included, since whatever a push to the tag
 // puts there runs with the job's token, its secrets and the runtime token the
 // runner hands every container action, which permissions: does not reach and

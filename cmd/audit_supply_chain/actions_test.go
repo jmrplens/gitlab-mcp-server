@@ -350,7 +350,9 @@ func TestAuditWorkflows_ContainerActionImage_IsHeldToItsDigest(t *testing.T) {
 // Every job that runs it is held to that, what it inherits from the workflow
 // included (the token, the cache-mode and the env block), a job's own
 // cache-mode overriding the workflow's either way, and the same action naming
-// an image the declaration does not name is not excused.
+// an image the declaration does not name is not excused. A job whose token
+// neither it nor its workflow declares is refused, since its token is then the
+// repository's or organization's default, a setting the tree does not hold.
 //
 // The cache is held apart from the token because permissions: does not reach
 // it: the runner hands every container action the job's runtime token, and on
@@ -383,6 +385,10 @@ jobs:
 	writeWorkflow(t, root, "plain.yml", `jobs:
   unset:
     permissions: {}
+    steps:
+      - uses: `+taggedKey+`
+  undeclared:
+    cache-mode: none
     steps:
       - uses: `+taggedKey+`
 `)
@@ -455,6 +461,7 @@ jobs:
 		inherit + "inheriting" + secrets + "secrets.READ_TOKEN",
 		inherit + "overriding" + secrets + "secrets.READ_TOKEN",
 		plain + "unset" + cache + "unset, so a push or a schedule can save to the Actions cache",
+		plain + "undeclared" + accepted + "whose token writes nothing but id-token, and neither this job nor its workflow declares permissions, so its token is the repository's default, which a setting this audit cannot read decides",
 		job + "upload" + writes + "security-events",
 		job + "everything" + writes + "contents, packages",
 		job + "inherited" + secrets + "secrets.READ_TOKEN",
@@ -480,7 +487,7 @@ func TestAuditWorkflows_TaggedImageDeclarations_AreHeldToTheTree(t *testing.T) {
 
 	const taggedKey = "example/tagged@" + testSHA
 	root := t.TempDir()
-	writeWorkflow(t, root, "ci.yml", "jobs:\n  scan:\n    cache-mode: none\n    steps:\n      - uses: "+taggedKey+"\n")
+	writeWorkflow(t, root, "ci.yml", "jobs:\n  scan:\n    permissions: {}\n    cache-mode: none\n    steps:\n      - uses: "+taggedKey+"\n")
 	writeRecord(t, root, recordOf(map[string]string{taggedKey: "runs:\n  using: docker\n  image: docker://ghcr.io/example/tool:v1\n"}))
 	valid := declaration{category: categoryWriteFreeJob, reason: "the job writes nothing"}
 	declared := tables{taggedImages: map[string]declaration{

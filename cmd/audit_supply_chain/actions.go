@@ -452,11 +452,16 @@ func cacheMode(doc, job map[string]any) string {
 // with cache-mode none, so the runtime token the runner hands every container
 // action can neither save to the Actions cache nor restore from it, and the
 // job reads no secret. What a job inherits from the workflow counts, as it
-// does everywhere this audit reads permissions.
+// does everywhere this audit reads permissions. A job whose token neither it
+// nor its workflow declares is refused, because its token is then the
+// repository's or the organization's default, which an administrator sets to
+// read or to write and the tree does not hold.
 func writeFreeJobProblems(walk actionWalk, where, action, image string) []string {
 	accepted := fmt.Sprintf("%s: uses: %s runs %s, which %s accepts by its tag only in a job ", where, action, image, declarationsFile)
 	var problems []string
-	if writes := tokenWrites(walk.doc, walk.definition); len(writes) > 0 {
+	if walk.definition["permissions"] == nil && walk.doc["permissions"] == nil {
+		problems = append(problems, accepted+"whose token writes nothing but id-token, and neither this job nor its workflow declares permissions, so its token is the repository's default, which a setting this audit cannot read decides")
+	} else if writes := tokenWrites(walk.doc, walk.definition); len(writes) > 0 {
 		problems = append(problems, accepted+"whose token writes nothing but id-token, and this job's can write "+strings.Join(writes, ", "))
 	}
 	if mode := cacheMode(walk.doc, walk.definition); mode != cacheModeNone {
