@@ -155,10 +155,12 @@
 //     generates, which tells a reader nothing about what breaks or what to do
 //     when upgrading. Every file of that directory is the notes of one
 //     release, named vX.Y.Z.md, and carries the sections Summary, Breaking
-//     changes, Upgrading and Security as level-two headings, once each, in
-//     that order, each with something under it (None. where there is nothing
-//     to say), and nothing above the first; a heading inside a fenced code
-//     block is code. No line carries an em or en dash, a command that makes
+//     changes, Upgrading and Security as level-two headings, read as
+//     CommonMark reads them, once each, in that order, each with something
+//     under it (None. where there is nothing to say), and nothing above the
+//     first; a heading inside a fenced code block is code, and a level-one or
+//     an underlined heading, which the release body would show as well, is a
+//     finding. No line carries an em or en dash, a command that makes
 //     GitHub skip workflows, or a credit to an assistant, since the body is
 //     published under the maintainer's name and the text is the one most
 //     likely to be pasted into the pull request that moves VERSION.

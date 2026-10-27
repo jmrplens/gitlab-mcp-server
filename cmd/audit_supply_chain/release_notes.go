@@ -147,18 +147,40 @@ type notesSection struct {
 }
 
 // readSections returns the level-two headings of a summary in the order it
-// writes them, and the line of the first text written before the first of
-// them, or 0. A heading is a line that opens with "## " outside a fenced code
-// block; a deeper heading, a list or a fenced block is text of the section it
-// sits in.
-func readSections(lines []string) (sections []notesSection, preamble int) {
+// writes them, the line of the first text written before the first of them,
+// or 0, and a finding, after the file's label, for each line the release body
+// shows as another heading. A heading is a line levelTwoHeading reads as one,
+// outside a fenced code block; a deeper heading, a list or a fenced block is
+// text of the section it sits in. A level-one heading and an underlined
+// (setext) one are refused, since GitHub renders both as headings that are
+// neither a section nor GoReleaser's ## Changelog, and are text of their
+// section beside that.
+func readSections(lines []string) (sections []notesSection, preamble int, refusals []string) {
 	fence := ""
+	paragraph := noParagraph
 	for index, line := range lines {
-		if fence != "" || fenceRun(line) != "" {
+		title, heading := levelTwoHeading(line)
+		switch {
+		case fence != "" || fenceRun(line) != "":
 			fence = nextFence(fence, line)
-		} else if title, heading := strings.CutPrefix(line, "## "); heading {
-			sections = append(sections, notesSection{title: strings.TrimSpace(title), line: index + 1})
+			paragraph = noParagraph
+		case heading:
+			sections = append(sections, notesSection{title: title, line: index + 1})
+			paragraph = noParagraph
 			continue
+		case strings.TrimSpace(line) == "":
+			paragraph = noParagraph
+			continue
+		case levelOneHeading(line):
+			refusals = append(refusals, fmt.Sprintf(":%d: is a level-one heading, which the release body would show above its sections "+
+				"and GoReleaser's ## Changelog: write a section as ## and a heading inside one as ###", index+1))
+			paragraph = noParagraph
+		case paragraph == underlinable && setextUnderline.MatchString(line):
+			refusals = append(refusals, fmt.Sprintf(":%d: underlines the text above it, which the release body then shows as a heading: "+
+				"write a section as ## Title, and leave a blank line above a rule", index+1))
+			paragraph = noParagraph
+		default:
+			paragraph = nextParagraph(paragraph, line)
 		}
 		if strings.TrimSpace(line) == "" {
 			continue
@@ -169,14 +191,99 @@ func readSections(lines []string) (sections []notesSection, preamble int) {
 			preamble = index + 1
 		}
 	}
-	return sections, preamble
+	return sections, preamble, refusals
+}
+
+// The paragraph readSections is in after a line: none, one an underline below
+// turns into a heading, and one inside a list item or a block quote, under
+// which a line of = or - is a rule or text rather than an underline.
+const (
+	noParagraph = iota
+	underlinable
+	contained
+)
+
+var (
+	// setextUnderline is a line of = or - that, right below a paragraph,
+	// makes the paragraph a heading.
+	setextUnderline = regexp.MustCompile(`^ {0,3}(?:=+|-+)[ \t]*$`)
+	// containerStart opens a block quote or a list item.
+	containerStart = regexp.MustCompile(`^ {0,3}(?:>|[-+*](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$))`)
+	// paragraphInterruption is a container start that can interrupt a
+	// paragraph: a block quote, a bullet item with text, and an ordered item
+	// with text that starts at 1. Any other continues the paragraph.
+	paragraphInterruption = regexp.MustCompile(`^ {0,3}(?:>|(?:[-+*]|1[.)])[ \t]+\S)`)
+	// atxHeading is a heading of any level written with #.
+	atxHeading = regexp.MustCompile(`^ {0,3}#{1,6}(?:[ \t]|$)`)
+	// thematicBreak is a rule of three or more *, _ or -.
+	thematicBreak = regexp.MustCompile(`^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$`)
+)
+
+// nextParagraph returns the paragraph a summary is in after a line of text
+// that is not blank, a fence or a heading readSections reads, given the one it
+// was in before: a rule or a heading of any level closes it; a container start
+// opens one an underline cannot reach, unless it is one that cannot interrupt
+// the paragraph open; any other line continues an open one; and a line that
+// opens none is a paragraph, or code when indented by four spaces or a tab.
+func nextParagraph(state int, line string) int {
+	switch {
+	case thematicBreak.MatchString(line), atxHeading.MatchString(line):
+		return noParagraph
+	case containerStart.MatchString(line) && (state != underlinable || paragraphInterruption.MatchString(line)):
+		return contained
+	case state != noParagraph:
+		return state
+	case strings.HasPrefix(strings.TrimLeft(line, " "), "\t") || len(line)-len(strings.TrimLeft(line, " ")) > 3:
+		return noParagraph
+	default:
+		return underlinable
+	}
+}
+
+// levelOneHeading reports whether CommonMark reads line as a level-one ATX
+// heading: # after at most three spaces, then a space, a tab or the end of
+// the line.
+func levelOneHeading(line string) bool {
+	indented := strings.TrimLeft(line, " ")
+	if len(line)-len(indented) > 3 {
+		return false
+	}
+	rest, marker := strings.CutPrefix(indented, "#")
+	return marker && (rest == "" || rest[0] == ' ' || rest[0] == '\t')
+}
+
+// levelTwoHeading returns the title of a line CommonMark reads as a level-two
+// ATX heading, and whether it is one: ## after at most three spaces of
+// indentation (a fourth, or a tab, makes the line code or the continuation of
+// a paragraph), then a space, a tab or the end of the line, with a closing run
+// of # set aside when a space or a tab comes before it. GitHub renders
+// "   ## Summary", "##<tab>Summary" and "## Summary ##" as the heading Summary.
+func levelTwoHeading(line string) (string, bool) {
+	indented := strings.TrimLeft(line, " ")
+	if len(line)-len(indented) > 3 {
+		return "", false
+	}
+	rest, marker := strings.CutPrefix(indented, "##")
+	if !marker || (rest != "" && rest[0] != ' ' && rest[0] != '\t') {
+		return "", false
+	}
+	title := strings.TrimRight(rest, " \t")
+	if open := strings.TrimRight(title, "#"); strings.HasSuffix(open, " ") || strings.HasSuffix(open, "\t") {
+		title = open
+	}
+	return strings.TrimSpace(title), true
 }
 
 // fenceRun returns the run of three or more backticks or tildes a line opens
-// with once its indentation is set aside, which opens or closes a fenced code
-// block, and nothing for any other line.
+// with after at most three spaces, which opens or closes a fenced code block,
+// and nothing for any other line: a fourth space, or a tab, makes the line
+// code, as CommonMark has it.
 func fenceRun(line string) string {
-	trimmed := strings.TrimSpace(line)
+	indented := strings.TrimLeft(line, " ")
+	if len(line)-len(indented) > 3 {
+		return ""
+	}
+	trimmed := strings.TrimRight(indented, " \t")
 	for _, marker := range []string{"`", "~"} {
 		if run := len(trimmed) - len(strings.TrimLeft(trimmed, marker)); run >= 3 {
 			return trimmed[:run]
@@ -204,8 +311,11 @@ func nextFence(fence, line string) string {
 // naming the file: each once, in order, with something under it, and nothing
 // written above the first.
 func sectionProblems(label string, lines []string) []string {
-	sections, preamble := readSections(lines)
-	var problems []string
+	sections, preamble, refusals := readSections(lines)
+	problems := make([]string, 0, len(refusals))
+	for _, refusal := range refusals {
+		problems = append(problems, label+refusal)
+	}
 	if preamble > 0 {
 		problems = append(problems, fmt.Sprintf("%s:%d: opens with text before its first section, where the release body has to open with ## %s",
 			label, preamble, releaseNotesSections[0]))

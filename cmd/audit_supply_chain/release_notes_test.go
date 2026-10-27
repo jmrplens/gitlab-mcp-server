@@ -194,10 +194,20 @@ func TestCheckReleaseNotes_UnreadableInput_IsAnError(t *testing.T) {
 // own commit list under ## Changelog, so a fifth section, or text above the
 // first, would read as part of that list rather than of the summary. A heading
 // inside a fenced code block is code, not a section.
+//
+// A ## heading is read as CommonMark reads one, which is what GitHub renders:
+// indented by up to three spaces, followed by a tab or closed by a run of #,
+// it is a section, and indented by four spaces or a tab it is code, as a
+// fence is. The gate read only lines opening with "## ", so a fifth section
+// written " ## Changelog" or "##<tab>Changelog" passed while the release body
+// showed it, and a fence closed by a run indented by four spaces, which
+// CommonMark leaves open, ended the fence for the gate and let the section
+// it hides count.
 func TestReleaseNotesProblems_Sections_AreTheFourInOrder(t *testing.T) {
 	t.Parallel()
 
 	const label = "notes.md"
+	four := " is not one of the four sections (Summary, Breaking changes, Upgrading, Security)"
 	cases := []struct {
 		name string
 		text string
@@ -303,6 +313,44 @@ func TestReleaseNotesProblems_Sections_AreTheFourInOrder(t *testing.T) {
 			text: strings.Replace(validReleaseNotes, "## Security", "##Security", 1),
 			want: []string{label + ": has no ## Security section"},
 		},
+		{
+			name: "headings indented by one to three spaces",
+			text: strings.NewReplacer("## Summary", " ## Summary", "## Upgrading", "   ## Upgrading").Replace(validReleaseNotes),
+		},
+		{
+			name: "a heading indented by four spaces is code",
+			text: strings.Replace(validReleaseNotes, "## Security", "    ## Security", 1),
+			want: []string{label + ": has no ## Security section"},
+		},
+		{
+			name: "a heading after a tab is code",
+			text: strings.Replace(validReleaseNotes, "## Security", "\t## Security", 1),
+			want: []string{label + ": has no ## Security section"},
+		},
+		{name: "a tab after the marker", text: strings.Replace(validReleaseNotes, "## Security", "##\tSecurity", 1)},
+		{
+			name: "a closing run of #",
+			text: strings.NewReplacer("## Upgrading", "## Upgrading\t#", "## Security", "## Security ##").Replace(validReleaseNotes),
+		},
+		{
+			name: "a # the title ends with",
+			text: strings.Replace(validReleaseNotes, "## Security", "## Security#", 1),
+			want: []string{label + ":13: ## Security#" + four, label + ": has no ## Security section"},
+		},
+		{name: "a heading with no title", text: validReleaseNotes + "\n##\n\nX.\n", want: []string{label + ":17: ## " + four}},
+		{name: "an indented fifth heading", text: validReleaseNotes + "\n ## Changelog\n\nX.\n", want: []string{label + ":17: ## Changelog" + four}},
+		{name: "a fifth heading after a tab", text: validReleaseNotes + "\n##\tChangelog\n\nX.\n", want: []string{label + ":17: ## Changelog" + four}},
+		{name: "a run indented by four spaces is code", text: strings.Replace(validReleaseNotes, "## Upgrading\n\nNone.\n", "## Upgrading\n\n    ```\n", 1)},
+		{name: "a run after a tab is code", text: strings.Replace(validReleaseNotes, "## Upgrading\n\nNone.\n", "## Upgrading\n\n\t```\n", 1)},
+		{
+			name: "a closing run indented by four spaces closes nothing",
+			text: strings.Replace(validReleaseNotes, "None.\n\n## Security", "```\ncode\n    ```\n\n## Security", 1),
+			want: []string{label + ": has no ## Security section"},
+		},
+		{
+			name: "a fence indented by three spaces",
+			text: strings.Replace(validReleaseNotes, "None.\n\n## Upgrading", "   ```\n## Changelog\n   ```\n\n## Upgrading", 1),
+		},
 	}
 
 	for _, testCase := range cases {
@@ -310,6 +358,72 @@ func TestReleaseNotesProblems_Sections_AreTheFourInOrder(t *testing.T) {
 			t.Parallel()
 
 			got := releaseNotesProblems(label, testCase.text)
+			if strings.Join(got, "\n") != strings.Join(testCase.want, "\n") {
+				t.Errorf("releaseNotesProblems() = %#v, want %#v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestReleaseNotesProblems_OtherHeadings_AreRefused verifies that a line the
+// release body shows as a heading other than a ## section is refused: a
+// level-one # heading, and a line of = or - that turns the paragraph above it
+// into a heading (a setext heading), as CommonMark reads both. A rule under a
+// blank line, a list item, a block quote, a heading, a rule or code is a rule
+// rather than an underline, and a # with no space after it, or indented by
+// four spaces, is text or code, so each of those passes.
+//
+// GitHub renders "None.\n---" as <h2>None.</h2> and "# Changelog" as <h1>,
+// so a gate reading only ## lines passed notes whose release body showed a
+// heading of neither section nor GoReleaser's ## Changelog. Only a list item
+// with text, an ordered one starting at 1, and a block quote interrupt a
+// paragraph; any other such line continues it, and the underline below it
+// makes the whole paragraph a heading.
+func TestReleaseNotesProblems_OtherHeadings_AreRefused(t *testing.T) {
+	t.Parallel()
+
+	const label = "notes.md"
+	levelOne := ": is a level-one heading, which the release body would show above its sections and GoReleaser's ## Changelog: " +
+		"write a section as ## and a heading inside one as ###"
+	underline := ": underlines the text above it, which the release body then shows as a heading: write a section as ## Title, " +
+		"and leave a blank line above a rule"
+	cases := []struct {
+		name string
+		body string
+		want []string
+	}{
+		{name: "a rule under a paragraph", body: "None.\n---", want: []string{label + ":4" + underline}},
+		{name: "a line of = under a paragraph", body: "None.\n===", want: []string{label + ":4" + underline}},
+		{name: "a single - under a paragraph", body: "None.\n-", want: []string{label + ":4" + underline}},
+		{name: "a rule under two lines", body: "First line\nsecond line\n---", want: []string{label + ":5" + underline}},
+		{name: "a rule under an indented continuation", body: "Text\n    more\n---", want: []string{label + ":5" + underline}},
+		{name: "a rule under an ordered item that cannot interrupt", body: "Text\n2. item\n---", want: []string{label + ":5" + underline}},
+		{name: "a rule under an empty item", body: "Text\n*\n---", want: []string{label + ":5" + underline}},
+		{name: "a level-one heading", body: "# Changelog", want: []string{label + ":3" + levelOne}},
+		{name: "an indented level-one heading", body: "   # Changelog", want: []string{label + ":3" + levelOne}},
+		{name: "an empty level-one heading", body: "#", want: []string{label + ":3" + levelOne}},
+		{name: "a rule after a blank line", body: "None.\n\n---"},
+		{name: "a rule indented by four spaces", body: "None.\n    ---"},
+		{name: "a rule under a list item", body: "- item\n---"},
+		{name: "a rule under a list item's continuation", body: "- item\ncontinued\n---"},
+		{name: "a rule under an ordered item", body: "1. item\n---"},
+		{name: "a rule under an ordered item that interrupts a paragraph", body: "Text\n1. item\n---"},
+		{name: "a rule under a block quote that interrupts a paragraph", body: "Text\n> quote\n---"},
+		{name: "a rule under a rule", body: "* * *\n---"},
+		{name: "a rule under a heading", body: "### Deeper\n---"},
+		{name: "a rule under code", body: "    code\n---"},
+		{name: "a rule under code after a tab", body: "\tcode\n---"},
+		{name: "a # with no space", body: "#Changelog"},
+		{name: "a # indented by four spaces", body: "    # Changelog"},
+		{name: "a rule of asterisks under a paragraph", body: "Text\n***"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			text := strings.Replace(validReleaseNotes, "What changed, for whom.\n", testCase.body+"\n", 1)
+			got := releaseNotesProblems(label, text)
 			if strings.Join(got, "\n") != strings.Join(testCase.want, "\n") {
 				t.Errorf("releaseNotesProblems() = %#v, want %#v", got, testCase.want)
 			}
