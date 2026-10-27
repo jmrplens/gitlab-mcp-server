@@ -10,6 +10,8 @@ package main
 
 import (
 	"bytes"
+	"flag"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -1014,6 +1016,28 @@ func TestRun_ServedSurface_IsClean(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "0 refused, every parameter and value they offer exists") {
 		t.Errorf("stdout = %q, want the all-clear summary with nothing refused", out.String())
+	}
+}
+
+// TestMain_ExitsWithTheCodeRunReturns verifies main parses its flags and exits
+// with run's code: -check over the served surface, which is clean, so the run
+// reports and exits 0. It is the one path the tests above do not take, since
+// they drive run directly.
+func TestMain_ExitsWithTheCodeRunReturns(t *testing.T) {
+	out := captureStdout(t)
+	restoreExit, restoreArgs, restoreFlags := osExit, os.Args, flag.CommandLine
+	t.Cleanup(func() { osExit, os.Args, flag.CommandLine = restoreExit, restoreArgs, restoreFlags })
+	code := -1
+	osExit = func(c int) { code = c }
+	os.Args = []string{"audit_meta_descriptions", "-check"}
+	flag.CommandLine = flag.NewFlagSet("audit_meta_descriptions", flag.ContinueOnError)
+
+	main()
+	if code != 0 {
+		t.Errorf("main exited %d, want 0 for -check over a clean served surface\nstdout:\n%s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "every parameter and value they offer exists") {
+		t.Errorf("stdout = %q, want the all-clear summary", out.String())
 	}
 }
 
