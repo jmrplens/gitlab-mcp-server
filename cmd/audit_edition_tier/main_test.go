@@ -551,7 +551,7 @@ func TestBuildDomainReport_ActionsOutOfOrder_AreReportedByAscendingID(t *testing
 		{ID: "branch.create", OwnerPkg: "branches", CurrentGate: "free"},
 		{ID: "branch.protect", OwnerPkg: "branches", CurrentGate: "free"},
 	}
-	dr := buildDomainReport(context.Background(), "branches", unsorted, res, nil)
+	dr := buildDomainReport(context.Background(), "branches", unsorted, res, nil, nil)
 
 	got := make([]string, 0, len(dr.ActionDetails))
 	for _, a := range dr.ActionDetails {
@@ -583,7 +583,7 @@ func TestBuildDomainReport_OverridePageAgreeingWithTheOwnerPage_RecordsNoOverrid
 	actions := []actionDetail{
 		{ID: "group.hook_list", OwnerPkg: "groups", CurrentGate: "enterprise", Edition: "premium"},
 	}
-	dr := buildDomainReport(context.Background(), "groups", actions, res, nil)
+	dr := buildDomainReport(context.Background(), "groups", actions, res, nil, nil)
 
 	if dr.PageTier != "premium" {
 		t.Fatalf("page tier = %q, want premium", dr.PageTier)
@@ -1277,7 +1277,7 @@ func TestDocResolver_TwoFetchers_EachPageIsReadFromItsOwnSource(t *testing.T) {
 	})
 	t.Run("owner_page_is_read_through_the_api_fetcher", func(t *testing.T) {
 		actions := []actionDetail{{ID: "group.get", OwnerPkg: "groups", CurrentGate: "free"}}
-		dr := buildDomainReport(ctx, "groups", actions, newResolver(t), nil)
+		dr := buildDomainReport(ctx, "groups", actions, newResolver(t), nil, nil)
 		if !dr.DocFetched || dr.PageTier != "free" {
 			t.Errorf("groups = fetched %v, page %q; want fetched, page free from the API cache", dr.DocFetched, dr.PageTier)
 		}
@@ -1470,7 +1470,7 @@ func TestBuildDomainReport_OverrideTiersFromBothSources_ListedLowestFirst(t *tes
 	seedDoc(t, dir, "group_webhooks", premiumBadgeDoc)
 	actions := []actionDetail{{ID: "group.hook_list", OwnerPkg: "groups", CurrentGate: "enterprise", Edition: "premium"}}
 
-	dr := buildDomainReport(context.Background(), "groups", actions, newOfflineResolver(t, dir), nil)
+	dr := buildDomainReport(context.Background(), "groups", actions, newOfflineResolver(t, dir), nil, nil)
 
 	if want := []string{"premium", "ultimate"}; !slices.Equal(dr.OverrideTiers, want) {
 		t.Errorf("override tiers = %v, want %v", dr.OverrideTiers, want)

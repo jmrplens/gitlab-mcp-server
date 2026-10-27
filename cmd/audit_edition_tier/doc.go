@@ -50,6 +50,27 @@
 // parameter for a tier that gates only some of its values, and the report
 // gates nothing.
 //
+// A lead read against GitLab's source is answered in one of two places
+// (issue 1240). A tier tag on the input field answers it in the schema: the
+// tier filter prunes the parameter from the lower tiers and the finding goes
+// away by itself. Any other answer is a declaration in param_declarations.go,
+// keyed "action param", naming the tier its row names, a category and a
+// reason: a value-level gate whose description says which values need the
+// tier, a gated value the action does not offer, or a row GitLab's source
+// contradicts. A declaration answers the findings of its tier, which the
+// report moves to param_findings_answered, and is stale when it answers
+// nothing. Half of that rule needs no page and is held by the unit suite: the
+// action has to offer the parameter below the row's tier, and the schema the
+// lowest tier offering it is served has to hold for the category: for a
+// value-level gate, a description naming the tier beside each gated value the
+// declaration names, which it has to name when the parameter enumerates its
+// values, or anywhere for a gate on something other than a value; for a
+// value not offered, an enum leaving out the gated values. The other half, a
+// declaration whose action's pages were all read, the owner page and any
+// override page, and that answered no finding, is reported under
+// stale_param_declarations, since it rests on GitLab's pages, which a gate
+// would have to fetch.
+//
 // Usage:
 //
 //	go run ./cmd/audit_edition_tier/                 # full report to stdout

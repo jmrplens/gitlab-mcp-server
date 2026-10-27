@@ -25,8 +25,11 @@ import (
 )
 
 // schemaVersion is 2 since the report grades request parameters as well
-// (param_rows_joined and param_findings, issue 1233).
-const schemaVersion = 2
+// (param_rows_joined and param_findings, issue 1233), and 3 since it reads
+// the answers to them: param_findings keeps the findings no declaration
+// answers, beside param_findings_answered and stale_param_declarations
+// (issue 1240).
+const schemaVersion = 3
 
 // tier is the canonical 3-tier licensing level, mirroring internal/edition.Tier
 // but kept local so the auditor has no dependency on runtime config.
@@ -135,6 +138,7 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 	userOpts.BaseURL = apidocs.DefaultUserDocBaseURL
 	res := newDocResolver(apidocs.New(root, opts), apidocs.New(root, userOpts))
 	res.routes = routes
+	res.declared = declaredParamAnswers
 	if runErr := run(ctx, res, *gapsOnly, *outputPath, stdout); runErr != nil {
 		fmt.Fprintf(stderr, "%v\n", runErr)
 		return 1
@@ -184,13 +188,16 @@ func run(ctx context.Context, res *docResolver, gapsOnly bool, outputPath string
 	return nil
 }
 
-// report is the top-level JSON output.
+// report is the top-level JSON output. StaleParamDeclarations lists the
+// declarations of [declaredParamAnswers] that answer nothing, which belong to
+// no one domain, since the reason may be that the action is gone.
 type report struct {
-	SchemaVersion   int            `json:"schema_version"`
-	GeneratedAt     string         `json:"generated_at"`
-	Summary         reportSummary  `json:"summary"`
-	UnmappedDomains []string       `json:"unmapped_domains,omitempty"`
-	Domains         []domainReport `json:"domains"`
+	SchemaVersion          int                     `json:"schema_version"`
+	GeneratedAt            string                  `json:"generated_at"`
+	Summary                reportSummary           `json:"summary"`
+	UnmappedDomains        []string                `json:"unmapped_domains,omitempty"`
+	StaleParamDeclarations []staleParamDeclaration `json:"stale_param_declarations,omitempty"`
+	Domains                []domainReport          `json:"domains"`
 }
 
 type reportSummary struct {
@@ -202,10 +209,14 @@ type reportSummary struct {
 	TierMismatches    int            `json:"tier_mismatches"`
 	Classification    map[string]int `json:"classification"`
 	// ParamRowsJoined counts the tier-marked request parameter rows joined to
-	// an action that sends their route, and ParamFindings the ones whose
-	// parameter a lower tier's input schema offers.
-	ParamRowsJoined int `json:"param_rows_joined"`
-	ParamFindings   int `json:"param_findings"`
+	// an action that sends their route, ParamFindings the ones whose parameter
+	// a lower tier's input schema offers and no declaration answers, and
+	// ParamFindingsAnswered the ones a declaration does. StaleParamDeclarations
+	// counts the declarations that answer nothing.
+	ParamRowsJoined        int `json:"param_rows_joined"`
+	ParamFindings          int `json:"param_findings"`
+	ParamFindingsAnswered  int `json:"param_findings_answered"`
+	StaleParamDeclarations int `json:"stale_param_declarations"`
 }
 
 // domainReport summarizes one owner domain (one doc area).
@@ -224,7 +235,11 @@ type domainReport struct {
 	Note              string         `json:"note,omitempty"`
 	ActionDetails     []actionDetail `json:"action_details,omitempty"`
 	ParamRowsJoined   int            `json:"param_rows_joined,omitempty"`
-	ParamFindings     []paramFinding `json:"param_findings,omitempty"`
+	// ParamFindings holds the findings no declaration answers, which are the
+	// ones that make a domain need work, and ParamFindingsAnswered the ones a
+	// declaration does, with its category and reason.
+	ParamFindings         []paramFinding         `json:"param_findings,omitempty"`
+	ParamFindingsAnswered []answeredParamFinding `json:"param_findings_answered,omitempty"`
 }
 
 type actionDetail struct {
@@ -242,12 +257,15 @@ type actionDetail struct {
 // (which may live outside doc/api/). Override pages are memoized so each page
 // is fetched and parsed once per run. routes holds the REST routes each action
 // sends, keyed by canonical action ID, which is what joins a page's parameter
-// rows to an action; a resolver without them grades no parameter.
+// rows to an action; a resolver without them grades no parameter. declared
+// holds the answers to the parameter findings ([declaredParamAnswers] in a
+// run); a resolver without them answers none.
 type docResolver struct {
-	api    *apidocs.Fetcher
-	user   *apidocs.Fetcher
-	memo   map[docRef]docPage
-	routes map[string][]string
+	api      *apidocs.Fetcher
+	user     *apidocs.Fetcher
+	memo     map[docRef]docPage
+	routes   map[string][]string
+	declared map[string]paramDeclaration
 }
 
 // docPage is the memoized parse result of one override page.
@@ -286,6 +304,15 @@ func (r *docResolver) page(ctx context.Context, ref docRef) docPage {
 	}
 	r.memo[ref] = p
 	return p
+}
+
+// overridePageRead reports whether the override page the action is graded
+// against beside its owner page was read, and true for an action that has
+// none. The page comes from the memo, so one the grading already asked for is
+// not fetched again.
+func (r *docResolver) overridePageRead(ctx context.Context, id string) bool {
+	ref, ok := docOverrideForAction(id)
+	return !ok || r.page(ctx, ref).err == nil
 }
 
 // expectedTierForAction returns the doc-grounded minimum tier expected for an
@@ -335,6 +362,9 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 		return nil, fmt.Errorf("build Premium catalog: %w", err)
 	}
 	offered := offeredTiers(ceCatalog, premiumCatalog, eeCatalog)
+	// The declarations are held to the schemas before any page is read, so a
+	// stale one answers no finding.
+	answers, stale := checkParamDeclarations(res.declared, offered, tierCatalogs{ceCatalog, premiumCatalog, eeCatalog})
 	ceIDs := make(map[string]struct{})
 	for _, a := range ceCatalog.Actions() {
 		ceIDs[string(a.ID)] = struct{}{}
@@ -381,8 +411,13 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 	}
 	sort.Strings(pkgNames)
 
+	// graded holds the actions whose pages were all read, the owner page and
+	// the override page beside it, and answered the declarations that
+	// answered a finding of one. An action with a page unread is not graded,
+	// since the row a declaration answers may be on that page.
+	graded, answered := map[string]bool{}, map[string]bool{}
 	for _, pkg := range pkgNames {
-		dr := buildDomainReport(ctx, pkg, domains[pkg].actions, res, offered)
+		dr := buildDomainReport(ctx, pkg, domains[pkg].actions, res, offered, answers)
 		if !dr.DocFetched && dr.Note == "no doc-area mapping" {
 			unmapped[pkg] = struct{}{}
 		}
@@ -393,8 +428,15 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 		rep.Summary.TierMismatches += dr.Mismatches
 		rep.Summary.ParamRowsJoined += dr.ParamRowsJoined
 		rep.Summary.ParamFindings += len(dr.ParamFindings)
+		rep.Summary.ParamFindingsAnswered += len(dr.ParamFindingsAnswered)
 		if dr.NeedsWork {
 			rep.Summary.DomainsNeedWork++
+		}
+		for _, a := range dr.ActionDetails {
+			graded[a.ID] = dr.DocFetched && res.overridePageRead(ctx, a.ID)
+		}
+		for _, a := range dr.ParamFindingsAnswered {
+			answered[a.Action+" "+a.Param] = true
 		}
 		rep.Domains = append(rep.Domains, dr)
 	}
@@ -403,6 +445,12 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 		rep.UnmappedDomains = append(rep.UnmappedDomains, k)
 	}
 	sort.Strings(rep.UnmappedDomains)
+	// Each declaration is stale for one reason at most, the schemas' or the
+	// pages', so the key orders the list.
+	stale = append(stale, unansweredDeclarations(answers, graded, answered)...)
+	slices.SortFunc(stale, func(a, b staleParamDeclaration) int { return strings.Compare(a.Declaration, b.Declaration) })
+	rep.StaleParamDeclarations = stale
+	rep.Summary.StaleParamDeclarations = len(stale)
 	return rep, nil
 }
 
@@ -410,8 +458,9 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 // doc area, fetches and parses the tier badges, tallies the current gating,
 // grades the request parameters the page marks for a paid tier against the
 // tier each action's input schema first offers them at (offered, from
-// [offeredTiers]), and classifies the domain for wave planning.
-func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, res *docResolver, offered map[string]map[string]tier) domainReport {
+// [offeredTiers]), sets aside the findings a declaration of answers holds
+// ([answerParams]), and classifies the domain for wave planning.
+func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, res *docResolver, offered map[string]map[string]tier, answers map[string]paramDeclaration) domainReport {
 	slices.SortFunc(actions, func(a, b actionDetail) int { return strings.Compare(a.ID, b.ID) })
 
 	docArea, mapped := docAreaForPackage(pkg)
@@ -474,7 +523,9 @@ func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, 
 	dr.Classification, dr.NeedsWork = classifyDomain(dr, overrideTiers, pageTier, docFetched)
 	if docFetched {
 		owner := pageSections{ref: docRef{area: docArea}, sections: sections}
-		dr.ParamFindings, dr.ParamRowsJoined = res.gradeParams(ctx, owner, dr.ActionDetails, offered)
+		findings, joined := res.gradeParams(ctx, owner, dr.ActionDetails, offered)
+		dr.ParamRowsJoined = joined
+		dr.ParamFindings, dr.ParamFindingsAnswered = answerParams(findings, answers)
 		dr.NeedsWork = dr.NeedsWork || len(dr.ParamFindings) > 0
 	}
 	return dr
