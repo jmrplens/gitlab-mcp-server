@@ -524,6 +524,10 @@ func TestCheckCredentialedJob_GoFlags_AreHeldToTheOptionsTheAuditReads(t *testin
 			want: []string{origin + "GOFLAGS is set to -trimpath $EXTRA, a value only the run knows" + cannot},
 		},
 		{
+			name: "a GoReleaser template, which a hook's run fills in", run: "GOFLAGS='{{ .Env.EXTRA }}' go build ./cmd/clean",
+			want: []string{origin + "GOFLAGS is set to {{ .Env.EXTRA }}, a value only the run knows" + cannot},
+		},
+		{
 			name: "the env of the step",
 			job:  map[string]any{"steps": []any{map[string]any{"run": "go build ./cmd/clean", "env": map[string]any{"GOFLAGS": "-overlay=/tmp/o.json"}}}},
 			want: []string{origin + "env: GOFLAGS passes -overlay, which builds files this audit does not read in place of the module's" + cannot},

@@ -89,8 +89,9 @@
 // sbom in dist, anything else in its own dir or where GoReleaser runs), which
 // is how the go run of cmd/gen_third_party_notices in the release job's sboms
 // entry is judged; a build made by a builder other than go's or by a tool other
-// than the go command, an option on a build's flags rule 2 refuses on a
-// command line, and a GOFLAGS any of its env lists sets are findings too.
+// than the go command, an option on a build's flags or an override's, written
+// as a list or as one string, that rule 2 refuses on a command line, and a
+// GOFLAGS any of its env lists sets are findings too.
 //
 // Rule 2 refuses what it cannot read rather than passing over it: a script
 // reference that resolves to no readable file in the repository, one rooted in
@@ -99,6 +100,7 @@
 // or --eval, or reads more than one makefile, a make behind a wrapper written
 // in a way it does not read (env -C, xargs, eval), a go command behind one, a
 // go option it does not know, a package only the run knows, a GoReleaser
+// template in a GOFLAGS or in a build flag that is not an option, a GoReleaser
 // configuration it cannot find or parse, a secret the table does not declare
 // and an expression that reads every secret at once are each a finding. Its
 // tables are held to the tree as well: a secret the workflows no longer read,

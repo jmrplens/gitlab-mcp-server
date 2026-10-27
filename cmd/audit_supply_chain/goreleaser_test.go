@@ -10,6 +10,8 @@ import (
 	"maps"
 	"strings"
 	"testing"
+
+	yaml "go.yaml.in/yaml/v3"
 )
 
 // goreleaserConfig is a configuration that runs a command at every place
@@ -272,6 +274,102 @@ publishers:
 	}
 	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
 		t.Errorf("checkCredentialedJob() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// buildProblemsOf parses a GoReleaser configuration and returns what
+// goreleaserBuildProblems finds in it under the label cfg.
+func buildProblemsOf(t *testing.T, config string) []string {
+	t.Helper()
+
+	var document map[string]any
+	if err := yaml.Unmarshal([]byte(config), &document); err != nil {
+		t.Fatalf("yaml.Unmarshal(%q): %v", config, err)
+	}
+	return goreleaserBuildProblems("cfg", document)
+}
+
+// TestGoreleaserBuildProblems_Template_IsAValueOnlyTheRunKnows verifies that
+// a GoReleaser template in a GOFLAGS an env list sets, or in a build flag that
+// is not an option, is a value only the run knows, as a shell expansion is.
+//
+// GoReleaser fills in the templates of every env list and of a build's flags,
+// from the job's environment among other things, so GOFLAGS={{ .Env.EXTRA }}
+// or a flags entry {{ .Env.F }} becomes whatever the run hands it, -toolexec
+// included. Both passed with no finding while the audit looked only for $ and
+// a backtick. A template inside a go option's value is still accepted, since
+// GoReleaser hands each flags entry to go as one argument, so it cannot add an
+// option of its own.
+func TestGoreleaserBuildProblems_Template_IsAValueOnlyTheRunKnows(t *testing.T) {
+	t.Parallel()
+
+	runKnows := ", a value only the run knows" + cannotJudgeBuild
+	cases := []struct {
+		name   string
+		config string
+		want   []string
+	}{
+		{name: "GOFLAGS set to a template", config: "env: [\"GOFLAGS={{ .Env.EXTRA }}\"]\n", want: []string{"cfg:env: GOFLAGS is set to {{ .Env.EXTRA }}" + runKnows}},
+		{name: "GOFLAGS set to a template without spaces", config: "env: [\"GOFLAGS={{.Env.EXTRA}}\"]\n", want: []string{"cfg:env: GOFLAGS is set to {{.Env.EXTRA}}" + runKnows}},
+		{name: "a template in an option GOFLAGS passes", config: "env: [\"GOFLAGS=-tags={{ .Env.T }}\"]\n", want: []string{"cfg:env: GOFLAGS is set to -tags={{ .Env.T }}" + runKnows}},
+		{name: "GOFLAGS a build's env sets", config: "builds:\n  - env: [\"GOFLAGS={{ .Env.EXTRA }}\"]\n", want: []string{"cfg:builds[0].env: GOFLAGS is set to {{ .Env.EXTRA }}" + runKnows}},
+		{name: "a flag that is a template", config: "builds:\n  - flags: [-trimpath, \"{{ .Env.F }}\"]\n", want: []string{"cfg:builds[0].flags holds {{ .Env.F }}" + runKnows}},
+		{name: "a flag a template chooses", config: "builds:\n  - flags: [\"{{ if .IsSnapshot }}-race{{ end }}\"]\n", want: []string{"cfg:builds[0].flags holds {{ if .IsSnapshot }}-race{{ end }}" + runKnows}},
+		{name: "a template in the value of a flag", config: "builds:\n  - flags: [\"-tags={{ .Env.T }}\"]\n"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			problems := buildProblemsOf(t, testCase.config)
+			if strings.Join(problems, "\n") != strings.Join(testCase.want, "\n") {
+				t.Errorf("goreleaserBuildProblems() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(testCase.want, "\n"))
+			}
+		})
+	}
+}
+
+// TestGoreleaserBuildProblems_OverridesAndAFlagsString_AreHeldAsTheBuild
+// verifies that the flags and env of a build's overrides are held as the
+// build's own are, and that flags written as one string are read word by word.
+//
+// GoReleaser merges an override's flags over the build's and appends its env
+// for the target it names, and reads a flags string as the words it holds, so
+// -toolexec on an override or inside one string reached the go command while
+// the audit, reading only the build's flags list, found nothing.
+func TestGoreleaserBuildProblems_OverridesAndAFlagsString_AreHeldAsTheBuild(t *testing.T) {
+	t.Parallel()
+
+	toolexec := " passes -toolexec, which runs every tool of the build through a program this audit does not read" + cannotJudgeBuild
+	cases := []struct {
+		name   string
+		config string
+		want   []string
+	}{
+		{
+			name:   "an override's flags",
+			config: "builds:\n  - overrides:\n      - goos: linux\n        goarch: amd64\n        flags: [-toolexec=/tmp/w]\n",
+			want:   []string{"cfg:builds[0].overrides[0].flags" + toolexec},
+		},
+		{
+			name:   "an override's env",
+			config: "builds:\n  - overrides:\n      - goos: linux\n        goarch: amd64\n        env: [GOFLAGS=-toolexec=/tmp/w]\n",
+			want:   []string{"cfg:builds[0].overrides[0].env: GOFLAGS" + toolexec},
+		},
+		{name: "flags written as one string", config: "builds:\n  - flags: -trimpath -toolexec=/tmp/w\n", want: []string{"cfg:builds[0].flags" + toolexec}},
+		{name: "an override that changes nothing judged", config: "builds:\n  - overrides:\n      - goos: linux\n        goarch: amd64\n        flags: [-trimpath]\n        env: [CGO_ENABLED=0]\n"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			problems := buildProblemsOf(t, testCase.config)
+			if strings.Join(problems, "\n") != strings.Join(testCase.want, "\n") {
+				t.Errorf("goreleaserBuildProblems() =\n%s\nwant\n%s", strings.Join(problems, "\n"), strings.Join(testCase.want, "\n"))
+			}
+		})
 	}
 }
 

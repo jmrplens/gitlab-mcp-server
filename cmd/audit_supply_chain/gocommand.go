@@ -360,7 +360,8 @@ func unquote(word string) string {
 // options a go command written out is held to: GOFLAGS is a list of options
 // every later go command reads before its own. Its own value carried along
 // adds nothing, an entry that is not an option is one go refuses to run with,
-// and a value only the run knows cannot be judged.
+// and a value only the run knows, a shell expansion or a GoReleaser template,
+// cannot be judged.
 func goFlagsProblems(label, value string) []string {
 	var problems []string
 	for word := range strings.FieldsSeq(value) {
@@ -368,7 +369,7 @@ func goFlagsProblems(label, value string) []string {
 		if goFlagsItself.MatchString(word) {
 			continue
 		}
-		if strings.ContainsAny(word, "$`") {
+		if strings.ContainsAny(word, "$`") || strings.Contains(word, goreleaserTemplate) {
 			return []string{label + ": GOFLAGS is set to " + value + ", a value only the run knows" + cannotJudgeBuild}
 		}
 		problems = append(problems, goOptionProblems(label+": GOFLAGS", []string{word})...)
@@ -378,11 +379,16 @@ func goFlagsProblems(label, value string) []string {
 
 // goOptionProblems holds standalone options of the go command, label naming
 // where they are set, to the ones this audit reads and does not refuse. A word
-// that is not an option names nothing to judge.
+// that is not an option names nothing to judge, unless it holds a GoReleaser
+// template, which the run can fill in with one. A template inside an option's
+// value is not refused: GoReleaser hands each flag to go as one argument.
 func goOptionProblems(label string, words []string) []string {
 	var problems []string
 	for _, word := range words {
 		if !strings.HasPrefix(word, "-") {
+			if strings.Contains(word, goreleaserTemplate) {
+				problems = append(problems, label+" holds "+word+", a value only the run knows"+cannotJudgeBuild)
+			}
 			continue
 		}
 		spelled, _, _ := strings.Cut(word, "=")
