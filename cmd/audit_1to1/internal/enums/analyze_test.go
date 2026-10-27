@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1114,6 +1115,33 @@ func TestRun_MarshalFailure_IsReported(t *testing.T) {
 	}
 	if _, _, err = Run(root, true); err == nil || !strings.Contains(err.Error(), "marshal report: boom") {
 		t.Fatalf("Run = %v, want the marshal failure", err)
+	}
+}
+
+// TestAcceptedEnumGaps_NotificationLevels_ExcuseEachValueAndNotAConstantClientGoAdds
+// verifies the notification level is excused value by value on each of the
+// three settings inputs: on a finding that misses a seventh constant beside
+// the six the SDK declares, and offers the names the input offers, every
+// value the table names is dropped and the new constant stays a finding.
+func TestAcceptedEnumGaps_NotificationLevels_ExcuseEachValueAndNotAConstantClientGoAdds(t *testing.T) {
+	cases := []struct {
+		input   string
+		offered []string
+	}{
+		{"UpdateGlobalInput", []string{"custom", "disabled", "mention", "participating", "watch"}},
+		{"UpdateGroupInput", []string{"custom", "disabled", "global", "mention", "participating", "watch"}},
+		{"UpdateProjectInput", []string{"custom", "disabled", "global", "mention", "participating", "watch"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			finding := Finding{MCPType: tc.input, Field: "level", Missing: []string{"0", "1", "2", "3", "4", "5", "6"}, Extra: tc.offered}
+
+			applyExemptions(&finding, "notifications", acceptedEnumGaps, map[string]bool{})
+
+			if !slices.Equal(finding.Missing, []string{"6"}) || len(finding.Extra) != 0 {
+				t.Errorf("missing = %v, extra = %v; want the new constant alone missing and no name extra", finding.Missing, finding.Extra)
+			}
+		})
 	}
 }
 

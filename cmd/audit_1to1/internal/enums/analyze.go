@@ -614,17 +614,16 @@ func compare(field exposedField, sdk sdkEnum, offer actionOffer) Finding {
 		Enum: sdk.Name, SDKValues: sdk.Values,
 		Source: sourceNone, Offered: []string{},
 	}
-	prop, present := offer.Properties[field.Tag]
-	switch {
-	case !present:
-		// The struct field exists but the schema never surfaced it (a
-		// hidden or pruned property): nothing is offered.
-	case prop.Enum != nil:
+	// A struct field the schema never surfaced (a hidden or pruned property)
+	// reads as the zero property, which has neither an enum nor a
+	// description, so nothing is offered.
+	prop := offer.Properties[field.Tag]
+	if prop.Enum != nil {
 		finding.Source = sourceEnum
 		finding.Offered = prop.Enum
-	case len(mentionedValues(prop.Description, sdk.Values)) > 0:
+	} else if mentioned := mentionedValues(prop.Description, sdk.Values); len(mentioned) > 0 {
 		finding.Source = sourceDescription
-		finding.Offered = mentionedValues(prop.Description, sdk.Values)
+		finding.Offered = mentioned
 	}
 	// An output field that surfaces no value set at all is not held to one:
 	// the output relays whatever GitLab answers, and its schema is reflected

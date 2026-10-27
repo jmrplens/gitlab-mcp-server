@@ -3,7 +3,10 @@
 
 package enums
 
-import "maps"
+import (
+	"maps"
+	"slices"
+)
 
 // Shared reasons. A client-go value type is declared once for the whole SDK,
 // while GitLab documents what each endpoint accepts, so the same type-wide
@@ -34,6 +37,13 @@ const (
 	// minAccessLevelFilter: the list filters take the membership roles a
 	// caller can hold.
 	minAccessLevelFilter = "every min_access_level and shared_min_access_level route declares values: Gitlab::Access.all_values at v19.5.0-ee, Guest (10) to Owner (50) in every edition: 0 filters nothing, 5 (Minimal access) is refused and 60 (Admin) is not a membership level (docs/development/upstream-bugs.md row 110)"
+	// resourceTokenLevels: a project or group access token is created with
+	// a membership role, which leaves out both ends of AccessLevelValue and
+	// the minimal access level.
+	resourceTokenLevels = "lib/api/resource_access_tokens.rb validates access_level against Gitlab::Access.options_with_owner, and doc/api/project_access_tokens.md#create-a-project-access-token and group_access_tokens.md#create-a-group-access-token list the same roles, 10 (Guest) through 50 (Owner): 0 (No access), 5 (Minimal access) and 60 (Admin) are no role a token is created with"
+	// notificationLevelNames: the type's constants are integers, and what
+	// goes out is the name each one stands for.
+	notificationLevelNames = "NotificationLevelValue is an int whose String and MarshalJSON write the level's name (client-go types.go), so its constants read 0 through 5 while doc/api/notification_settings.md documents the names disabled, participating, watch, global, mention and custom, which the input offers and notifications.buildUpdateOpts maps onto the constants; global is the level a group or project falls back to and is not one the global settings take"
 	// shareAccessLevel covers the two share endpoints, which grant a role.
 	shareAccessLevel = "a group share declares values_with_minimal_access and a project share Gitlab::Access.all_values at v19.5.0-ee: 0 grants nothing, 60 (Admin) is not a membership level, and a project share refuses 5 (Minimal access) as well (docs/development/upstream-bugs.md row 110)"
 	// protectedBranchLevels is the four-value set every protection level
@@ -146,6 +156,37 @@ func buildAcceptedEnumGaps() map[string]string {
 		"projects.ListProjectGroupsInput.shared_min_access_level=0":  minAccessLevelFilter,
 		"projects.ListProjectGroupsInput.shared_min_access_level=5":  minAccessLevelFilter,
 		"projects.ListProjectGroupsInput.shared_min_access_level=60": minAccessLevelFilter,
+		// The project lists build their options in a helper the handlers
+		// hand their input's fields, or their input whole, which is where the
+		// pairing meets them.
+		"projects.ListInput.min_access_level=0":                         minAccessLevelFilter,
+		"projects.ListInput.min_access_level=5":                         minAccessLevelFilter,
+		"projects.ListInput.min_access_level=60":                        minAccessLevelFilter,
+		"projects.ListForksInput.min_access_level=0":                    minAccessLevelFilter,
+		"projects.ListForksInput.min_access_level=5":                    minAccessLevelFilter,
+		"projects.ListForksInput.min_access_level=60":                   minAccessLevelFilter,
+		"projects.ListUserProjectsInput.min_access_level=0":             minAccessLevelFilter,
+		"projects.ListUserProjectsInput.min_access_level=5":             minAccessLevelFilter,
+		"projects.ListUserProjectsInput.min_access_level=60":            minAccessLevelFilter,
+		"projects.ListUserContributedProjectsInput.min_access_level=0":  minAccessLevelFilter,
+		"projects.ListUserContributedProjectsInput.min_access_level=5":  minAccessLevelFilter,
+		"projects.ListUserContributedProjectsInput.min_access_level=60": minAccessLevelFilter,
+		"projects.ListUserStarredProjectsInput.min_access_level=0":      minAccessLevelFilter,
+		"projects.ListUserStarredProjectsInput.min_access_level=5":      minAccessLevelFilter,
+		"projects.ListUserStarredProjectsInput.min_access_level=60":     minAccessLevelFilter,
+
+		// The group member role is built by the instance one's builder, and
+		// the two access token creates in a helper handed an intermediate.
+		"memberroles.CreateGroupInput.base_access_level=0":  memberRoleBaseLevels,
+		"memberroles.CreateGroupInput.base_access_level=5":  memberRoleBaseLevels,
+		"memberroles.CreateGroupInput.base_access_level=50": memberRoleBaseLevels,
+		"memberroles.CreateGroupInput.base_access_level=60": memberRoleBaseLevels,
+		"accesstokens.GroupCreateInput.access_level=0":      resourceTokenLevels,
+		"accesstokens.GroupCreateInput.access_level=5":      resourceTokenLevels,
+		"accesstokens.GroupCreateInput.access_level=60":     resourceTokenLevels,
+		"accesstokens.ProjectCreateInput.access_level=0":    resourceTokenLevels,
+		"accesstokens.ProjectCreateInput.access_level=5":    resourceTokenLevels,
+		"accesstokens.ProjectCreateInput.access_level=60":   resourceTokenLevels,
 
 		"groups.ShareGroupInput.group_access=0":      shareAccessLevel,
 		"groups.ShareGroupInput.group_access=60":     shareAccessLevel,
@@ -211,6 +252,7 @@ func buildAcceptedEnumGaps() map[string]string {
 		"users.ListContributionEventsInput.target_type=design":  eventFilterAccepted,
 	}
 	maps.Copy(table, projectFeatureAccessLevelExemptions())
+	maps.Copy(table, notificationLevelExemptions())
 	return table
 }
 
@@ -238,6 +280,35 @@ var projectFeatureAccessLevels = []string{
 	"security_and_compliance_access_level",
 	"snippets_access_level",
 	"wiki_access_level",
+}
+
+// notificationLevelConstants are the values of client-go's
+// NotificationLevelValue constants as the rule reads them, disabled (0)
+// through custom (5).
+var notificationLevelConstants = []string{"0", "1", "2", "3", "4", "5"}
+
+// notificationLevelOffers lists, per notification settings input, the level
+// names its schema offers: the global settings take every level but global,
+// which is the one a group or project falls back to.
+var notificationLevelOffers = map[string][]string{
+	"UpdateGlobalInput":  {"custom", "disabled", "mention", "participating", "watch"},
+	"UpdateGroupInput":   {"custom", "disabled", "global", "mention", "participating", "watch"},
+	"UpdateProjectInput": {"custom", "disabled", "global", "mention", "participating", "watch"},
+}
+
+// notificationLevelExemptions excuses the notification level value by value:
+// each integer the SDK's constants read as, and each name an input offers in
+// their place. It is spelled per value rather than per field so that a
+// constant client-go adds, or a name an input drops, is a finding instead of
+// being excused with the rest of the field.
+func notificationLevelExemptions() map[string]string {
+	out := map[string]string{}
+	for input, offered := range notificationLevelOffers {
+		for _, value := range slices.Concat(notificationLevelConstants, offered) {
+			out["notifications."+input+".level="+value] = notificationLevelNames
+		}
+	}
+	return out
 }
 
 // projectFeatureAccessLevelExemptions excuses the public constant on every

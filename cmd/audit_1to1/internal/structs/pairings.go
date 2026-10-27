@@ -94,6 +94,55 @@ func CollectOutputPairings(root string) (Pairings, error) {
 	return found, nil
 }
 
+// InputPairDiff is one input pair the field diff runs over, with the SDK
+// fields its input lacks, for a rule outside this package that holds a pair
+// to its fields.
+//
+// The option structs section of the sdk scope reads it twice: the pairs say
+// which client-go structs an input is compared with at all, and the missing
+// fields of a nested pair are the finding that section gates on, where the
+// structs scope only lists them. The missing fields come out of the same diff,
+// the declared omissions of acceptedMissingInputs already taken out, so the
+// two scopes answer a missing field with one table.
+type InputPairDiff struct {
+	// Package is the internal/tools domain name, spelled the way
+	// [shared.ShortPackage] spells it.
+	Package string
+	// MCPType is the input struct's Go name.
+	MCPType string
+	// SDKNamed is the client-go struct it is compared with.
+	SDKNamed *types.Named
+	// Via is how the pair was found, as [Pair.Via] has it.
+	Via string
+	// Missing lists the SDK tags the input carries no counterpart of and no
+	// declaration answers, sorted.
+	Missing []string
+}
+
+// DiffInputPairs returns the diff of every input pair of pkgs, package by
+// package in load order and within a package in the order [CollectPairs]
+// returns them.
+func DiffInputPairs(pkgs []*packages.Package) []InputPairDiff {
+	run := newDiffRun()
+	var out []InputPairDiff
+	for _, pkg := range pkgs {
+		short := shared.ShortPackage(pkg.PkgPath)
+		inputPairs, _ := discoverPairs(pkg)
+		for _, pair := range sortedPairs(inputPairs) {
+			if disjointPhantomInput(pair, inputPairs) {
+				continue
+			}
+			g := run.diffPair(short, "input", pair)
+			missing := make([]string, 0, len(g.MissingFields))
+			for _, field := range g.MissingFields {
+				missing = append(missing, field.Tag)
+			}
+			out = append(out, InputPairDiff{Package: short, MCPType: pair.mcpName, SDKNamed: pair.sdkNamed, Via: pair.via, Missing: missing})
+		}
+	}
+	return out
+}
+
 // clientGoDir finds the directory of the client-go root package in the import
 // graph of the loaded tool packages.
 //

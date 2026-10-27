@@ -2506,7 +2506,7 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 		// that merely prints alike.
 		want := structPair{
 			mcpName: "ListInput", mcpType: mcpStruct, mcpNamed: mcpNamed,
-			sdkName: "v2.ListBranchesOptions", sdkType: optionsStruct, sdkURLTags: true,
+			sdkName: "v2.ListBranchesOptions", sdkType: optionsStruct, sdkNamed: optionsNamed, sdkURLTags: true,
 		}
 		got, recorded := pairs[[2]string{"ListInput", "ListBranchesOptions"}]
 		if len(pairs) != 1 || !recorded || got != want {

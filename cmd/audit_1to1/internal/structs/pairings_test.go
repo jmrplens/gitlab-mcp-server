@@ -90,6 +90,72 @@ func TestCollectOutputPairings_ATreeThatDoesNotLoad_IsReported(t *testing.T) {
 	}
 }
 
+// TestDiffInputPairs_AStandInTree_ListsEveryPairWithTheFieldsItsInputLacks
+// verifies the export the option structs section of the sdk scope reads:
+// every input pair the field diff runs over, phantoms dropped, package by
+// package and within one in the diff's order, each with both sides, how it
+// was found and the SDK tags its input lacks that no declaration answers.
+func TestDiffInputPairs_AStandInTree_ListsEveryPairWithTheFieldsItsInputLacks(t *testing.T) {
+	pkgs := checkedTree(t, pairingSDK,
+		toolSource{path: "example.com/x/internal/tools/gadgets", source: `package gadgets
+
+import gl "` + fixtureSDKPath + `"
+
+type RunInput struct {
+	Text string ~json:"text"~
+}
+
+func Run(c *gl.Client, in RunInput) error { return c.Widgets.Run(gl.Query{Text: &in.Text}) }
+`},
+		toolSource{path: "example.com/x/internal/tools/widgets", source: `package widgets
+
+import gl "` + fixtureSDKPath + `"
+
+type ListInput struct {
+	Search string ~json:"search"~
+}
+
+func List(c *gl.Client, in ListInput) error {
+	_, err := c.Widgets.ListWidgets(&gl.ListWidgetsOptions{Search: &in.Search})
+	return err
+}
+
+type PermissionInput struct {
+	UserID int64 ~json:"user_id"~
+}
+
+type ProtectInput struct {
+	Name    string            ~json:"name"~
+	Allowed []PermissionInput ~json:"allowed"~
+}
+
+func Protect(c *gl.Client, in ProtectInput) error {
+	allowed := make([]*gl.PermissionOptions, 0, len(in.Allowed))
+	for _, p := range in.Allowed {
+		allowed = append(allowed, &gl.PermissionOptions{UserID: &p.UserID})
+	}
+	_ = gl.Query{}
+	return c.Widgets.Protect(1, &gl.ProtectOptions{Name: &in.Name, Allowed: &allowed})
+}
+`})
+	declare(t, acceptedMissingInputs, "widgets.ProtectInput.since", "a declared omission the export leaves out")
+
+	var got []string
+	for _, pair := range DiffInputPairs(pkgs) {
+		got = append(got, pair.Package+" "+pair.MCPType+" "+pair.SDKNamed.Obj().Name()+" "+pair.Via+" "+strings.Join(pair.Missing, ","))
+	}
+
+	want := []string{
+		"gadgets RunInput Query  ",
+		"widgets ListInput ListWidgetsOptions  page",
+		"widgets PermissionInput PermissionOptions nested level",
+		"widgets ProtectInput ProtectOptions  by_user,levels,page",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("DiffInputPairs = %q, want %q", got, want)
+	}
+}
+
 // clientGoPackage builds a package whose scope declares the Client struct,
 // which is what identifies the client-go root.
 func clientGoPackage(t *testing.T, path string, files []string) *packages.Package {
