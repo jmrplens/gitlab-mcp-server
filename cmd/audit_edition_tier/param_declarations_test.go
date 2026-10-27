@@ -593,6 +593,18 @@ const (
 	routeProjectMemberEdit = "PUT /projects/:id/members/:user_id"
 )
 
+// The rows of doc/api/group_level_variables.md, as GitLab's page carries them
+// on master on 2026-10-27, and the routes they document.
+const (
+	rowVariableFilter        = "| `filter` | hash | No | Filters results when multiple variables share the same key. Possible values: `[environment_scope]`. Premium and Ultimate only. |"
+	rowVariableScope         = "| `environment_scope` | string | No | The environment scope of a variable. Premium and Ultimate only. |"
+	routeGroupVariables      = "POST /groups/:id/variables"
+	routeGroupVariable       = "/groups/:id/variables/:key"
+	routeGroupVariableGet    = "GET " + routeGroupVariable
+	routeGroupVariableUpdate = "PUT " + routeGroupVariable
+	routeGroupVariableDelete = "DELETE " + routeGroupVariable
+)
+
 // TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles drives the entry
 // point over a module root whose record names the actions of one page and
 // whose cache holds that page's sections, for each page whose rows issue 1240
@@ -682,6 +694,28 @@ func TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles(t *testing.T) {
 				restRecord("group.ldap_link_add", "POST /groups/:id/ldap_group_links"),
 			},
 			want: map[string]string{},
+		},
+		{
+			name:   "group_level_variables",
+			area:   "group_level_variables",
+			domain: "groupvariables",
+			page: endpointSection("Retrieve details of a group variable", routeGroupVariableGet, rowVariableFilter) +
+				endpointSection("Create a group variable", routeGroupVariables, rowVariableScope) +
+				endpointSection("Update a group variable", routeGroupVariableUpdate, rowVariableScope, rowVariableFilter) +
+				endpointSection("Delete a group variable", routeGroupVariableDelete, rowVariableFilter),
+			record: []actionrequests.RecordAction{
+				restRecord("ci_variable.group_get", routeGroupVariableGet),
+				restRecord("ci_variable.group_create", routeGroupVariables),
+				restRecord("ci_variable.group_update", routeGroupVariableUpdate),
+				restRecord("ci_variable.group_delete", routeGroupVariableDelete),
+			},
+			want: map[string]string{
+				"ci_variable.group_get filter":               categoryNotGated,
+				"ci_variable.group_create environment_scope": categoryValueLevelGate,
+				"ci_variable.group_update environment_scope": categoryNotGated,
+				"ci_variable.group_update filter":            categoryNotGated,
+				"ci_variable.group_delete filter":            categoryNotGated,
+			},
 		},
 	}
 	for _, tc := range cases {

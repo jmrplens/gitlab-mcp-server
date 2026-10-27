@@ -88,6 +88,15 @@ const (
 	// reasonCustomRoleRemovedOnEveryTier answers the custom role of a project
 	// and a group member edit.
 	reasonCustomRoleRemovedOnEveryTier = "A role ID needs Ultimate: GitLab deletes a member_role_id that is not null where the top-level group's custom_roles feature is not available (EE::Members::UpdateService#handle_member_role_assignment and #member_role_param_allowed?, ee/app/services/ee/members/update_service.rb:88-115 at v19.5.0-ee, and EE::Namespace#custom_roles_enabled?, ee/app/models/ee/namespace.rb:839-841). Null passes on every tier and is assigned with the rest of the params (app/services/members/update_service.rb:51), removing a custom role a member kept from a licensed time, and this server sends 0 as that null. The description says a role ID needs Ultimate and 0 removes one on every tier (issue 1240)."
+	// reasonVariableFilterOnEveryTier answers the filter of a group variable
+	// get, update and delete.
+	reasonVariableFilterOnEveryTier = "GitLab reads filter[environment_scope] on every tier and edition, though no route declares it: find_variable hands the raw params to Ci::VariablesFinder (lib/api/helpers/variables_helpers.rb:16-22 at v19.5.0-ee), which narrows the variables by it (app/finders/ci/variables_finder.rb:26-29), and the get, update and delete routes call it (lib/api/group_variables.rb:48, 135-136 and 172). A Free group can hold one key in several scopes, created on Community Edition, which keeps any scope, or in a licensed time, and the filter is what picks one of them (issue 1240)."
+	// reasonUpdateScopeIsTheFilter answers the environment scope of a group
+	// variable update, which this server sends as the filter.
+	reasonUpdateScopeIsTheFilter = "This action's environment_scope is the shorthand of filter.environment_scope and goes out as filter[environment_scope] (resolveScope in internal/tools/groupvariables), never as the body parameter the row describes, which moves a variable to another scope. The filter is read on every tier and edition (lib/api/group_variables.rb:135-136 and app/finders/ci/variables_finder.rb:26-29 at v19.5.0-ee) (issue 1240)."
+	// reasonVariableScopeOnCreate answers the environment scope of a group
+	// variable create.
+	reasonVariableScopeOnCreate = "A scope other than * needs Premium on Enterprise Edition, which deletes environment_scope where the group's group_scoped_ci_variables feature is not available (EE::API::Helpers::VariablesHelpers#filter_variable_parameters, ee/lib/ee/api/helpers/variables_helpers.rb:16-23 at v19.5.0-ee, and EE::Group#scoped_variables_available?, ee/app/models/ee/group.rb:631-633), so the variable applies to every environment. Community Edition declares the parameter and keeps it (lib/api/group_variables.rb:74 and lib/api/helpers/variables_helpers.rb:12-14), so a tag would take it from an instance that honors it; the description says which scopes need the tier (issue 1240)."
 	// reasonDuoNeedsAPaidTierOrAnAddOn answers the two Duo settings of a group
 	// update.
 	reasonDuoNeedsAPaidTierOrAnAddOn = "GitLab stores the setting on every Enterprise Edition tier (ee/lib/ee/api/helpers/groups_helpers.rb:102-107 at v19.5.0-ee), and GitLab Duo, which it switches, answers where the group's licensed AI features are available: Premium carries ai_chat, Ultimate ai_features, and a Free namespace has them only with a GitLab Credits add-on (EE::Group#licensed_ai_features_available?, ee/app/models/ee/group.rb:368-372, and EE::Namespace#has_active_gitlab_credits_add_on? on the root ancestor, ee/app/models/ee/namespace.rb:336-348). The response carries the setting only there (ee/lib/ee/api/entities/group.rb:47-56). A tag would take it from a Free namespace with credits, so the description says so instead (issue 1240)."
@@ -130,6 +139,12 @@ var declaredParamAnswers = map[string]paramDeclaration{
 
 	"group.group_member_edit member_role_id": {Documented: tierUltimate, Category: categoryValueLevelGate, Reason: reasonCustomRoleRemovedOnEveryTier},
 	"project.member_edit member_role_id":     {Documented: tierUltimate, Category: categoryValueLevelGate, Reason: reasonCustomRoleRemovedOnEveryTier},
+
+	"ci_variable.group_get filter":               {Documented: tierPremium, Category: categoryNotGated, Reason: reasonVariableFilterOnEveryTier},
+	"ci_variable.group_update filter":            {Documented: tierPremium, Category: categoryNotGated, Reason: reasonVariableFilterOnEveryTier},
+	"ci_variable.group_delete filter":            {Documented: tierPremium, Category: categoryNotGated, Reason: reasonVariableFilterOnEveryTier},
+	"ci_variable.group_update environment_scope": {Documented: tierPremium, Category: categoryNotGated, Reason: reasonUpdateScopeIsTheFilter},
+	"ci_variable.group_create environment_scope": {Documented: tierPremium, Category: categoryValueLevelGate, Reason: reasonVariableScopeOnCreate},
 }
 
 // answeredParamFinding is a finding a declaration answers, with the answer.

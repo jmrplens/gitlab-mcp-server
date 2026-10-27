@@ -60,7 +60,7 @@ type CreateInput struct {
 	Masked           *bool                `json:"masked,omitempty"               jsonschema:"Mask variable value in job logs"`
 	MaskedAndHidden  *bool                `json:"masked_and_hidden,omitempty"    jsonschema:"Mask and hide variable value"`
 	Raw              *bool                `json:"raw,omitempty"                  jsonschema:"Treat variable value as raw string"`
-	EnvironmentScope string               `json:"environment_scope,omitempty"    jsonschema:"Environment scope (default: *)"`
+	EnvironmentScope string               `json:"environment_scope,omitempty"    jsonschema:"Environment scope (default: *). A scope other than * needs Premium or Ultimate: a Free Enterprise Edition instance drops it and the variable applies to every environment"`
 }
 
 // UpdateInput holds parameters for updating a group CI/CD variable.
