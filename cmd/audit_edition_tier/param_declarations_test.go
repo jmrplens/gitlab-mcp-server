@@ -634,6 +634,15 @@ const (
 	routesNotificationsScoped = routeNotificationsGroup + "\n" + routeNotificationsProject
 )
 
+// The branch regex rows of doc/api/remote_mirrors.md, as GitLab's page
+// carries them on master on 2026-10-27, and the routes they document.
+const (
+	rowMirrorBranchRegexCreate = "| `mirror_branch_regex` | string | No | Regular expression for branch names to mirror. Only branches with names matching the regex are mirrored. Requires `only_protected_branches` to be disabled. Premium and Ultimate only. |"
+	rowMirrorBranchRegexUpdate = "| `mirror_branch_regex` | string | No | Regular expression for branch names to mirror. Only branches with names matching the regex are mirrored. Does not work with `only_protected_branches` enabled. Premium and Ultimate only. |"
+	routeRemoteMirrorCreate    = "POST /projects/:id/remote_mirrors"
+	routeRemoteMirrorUpdate    = "PUT /projects/:id/remote_mirrors/:mirror_id"
+)
+
 // TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles drives the entry
 // point over a module root whose record names the actions of one page and
 // whose cache holds that page's sections, for each page whose rows issue 1240
@@ -782,6 +791,21 @@ func TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles(t *testing.T) {
 				restRecord("user.notification_project_update", routeNotificationsProject),
 			},
 			want: map[string]string{},
+		},
+		{
+			name:   "remote_mirrors",
+			area:   "remote_mirrors",
+			domain: "projectmirrors",
+			page: endpointSection("Create a push mirror", routeRemoteMirrorCreate, rowMirrorBranchRegexCreate) +
+				endpointSection("Update a remote mirror's attributes", routeRemoteMirrorUpdate, rowMirrorBranchRegexUpdate),
+			record: []actionrequests.RecordAction{
+				restRecord("project.mirror_add", routeRemoteMirrorCreate),
+				restRecord("project.mirror_edit", routeRemoteMirrorUpdate),
+			},
+			want: map[string]string{
+				"project.mirror_add mirror_branch_regex":  categoryNotGated,
+				"project.mirror_edit mirror_branch_regex": categoryNotGated,
+			},
 		},
 	}
 	for _, tc := range cases {
