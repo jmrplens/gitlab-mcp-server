@@ -335,9 +335,10 @@ func TestClient_StatefulSessionsStillWork(t *testing.T) {
 // TestClient_StatefulSessionsStillWork, on the default stateless transport: no
 // answer issues an Mcp-Session-Id, neither the initialize a pre-2026-07-28
 // client opens with nor a call made without a session, and neither under
-// --json-response nor without it. Each answer is the one the call asked for:
-// tools/list lists gitlab_find_action and a gitlab_find_action call finds the
-// project listing.
+// --json-response nor without it. Each answer is the result of the call it
+// answers rather than a JSON-RPC error: the initialize is answered at
+// 2025-11-25, tools/list lists gitlab_find_action and a gitlab_find_action
+// call finds the project listing.
 //
 // A session id on a stateless answer sends a conforming client back with it
 // to a server that keeps no session. scripts/validate-http-stateless.sh was
@@ -368,7 +369,7 @@ func TestClient_StatelessAnswersCarryNoSession(t *testing.T) {
 				version string
 				carries string
 			}{
-				{name: "an initialize at 2025-11-25", body: initialize, version: "2025-11-25"},
+				{name: "an initialize at 2025-11-25", body: initialize, version: "2025-11-25", carries: `"protocolVersion":"2025-11-25"`},
 				{name: "a tools/list at 2025-11-25 carrying no session", body: legacyToolsListBody, version: "2025-11-25", carries: "gitlab_find_action"},
 				{name: "a tools/list at 2026-07-28", body: toolsListBody, version: protocolVersion, carries: "gitlab_find_action"},
 				{name: "a gitlab_find_action call at 2026-07-28", body: find, version: protocolVersion, carries: "project.list"},
@@ -388,8 +389,13 @@ func TestClient_StatelessAnswersCarryNoSession(t *testing.T) {
 
 // assertStatelessAnswer holds one answer of the stateless transport to what
 // TestClient_StatelessAnswersCarryNoSession asks of it: a 200 carrying no
-// Mcp-Session-Id, the content type its mode answers with, and, when carries
-// names one, the text the call's answer has to hold.
+// Mcp-Session-Id, the content type its mode answers with, and a JSON-RPC
+// result, not an error, holding the text carries names.
+//
+// The result is decoded rather than the body searched, because a 200 is also
+// what a JSON-RPC error and an empty body arrive with, and neither carries a
+// session id: a refused initialize would pass the header check without the
+// transport having answered the call at all.
 func assertStatelessAnswer(t *testing.T, got response, contentType, carries string) {
 	t.Helper()
 	if got.status != http.StatusOK {
@@ -401,8 +407,18 @@ func assertStatelessAnswer(t *testing.T, got response, contentType, carries stri
 	if ct := got.header.Get("Content-Type"); !strings.HasPrefix(ct, contentType) {
 		t.Errorf("Content-Type = %q, want %s", ct, contentType)
 	}
-	if !strings.Contains(got.body, carries) {
-		t.Errorf("the answer does not carry %q: %s", carries, truncate(got.body))
+	var answer struct {
+		Result json.RawMessage `json:"result"`
+		Error  json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(jsonRPCPayload(t, got.body)), &answer); err != nil {
+		t.Fatalf("the answer is not a JSON-RPC message: %v: %s", err, truncate(got.body))
+	}
+	if len(answer.Error) > 0 || len(answer.Result) == 0 {
+		t.Fatalf("the answer is not a JSON-RPC result: %s", truncate(got.body))
+	}
+	if !strings.Contains(string(answer.Result), carries) {
+		t.Errorf("the result does not carry %s: %s", carries, truncate(got.body))
 	}
 }
 
