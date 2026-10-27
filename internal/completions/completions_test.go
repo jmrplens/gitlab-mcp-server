@@ -2132,17 +2132,26 @@ func argumentSwitchCases(t *testing.T, method string) []string {
 			}
 			// A clause with no expressions is `default`, which answers empty
 			// and is the one outcome that needs no credential.
+			//
+			// A label is looked for inside its expression rather than as the
+			// expression itself. gobco measures this package from a copy in
+			// which the switch compares the argument with each label inside a
+			// call of its own, GobcoCover(n, gobco0 == "label"), and these
+			// tests run there too; the labels read are the same in both.
 			for _, expr := range clause.List {
-				literal, isLiteral := expr.(*ast.BasicLit)
-				if !isLiteral || literal.Kind != token.STRING {
-					continue
-				}
-				value, unquoteErr := strconv.Unquote(literal.Value)
-				if unquoteErr != nil {
-					t.Errorf("case label %s in %s is not a string literal this can read", literal.Value, method)
-					continue
-				}
-				names = append(names, value)
+				ast.Inspect(expr, func(part ast.Node) bool {
+					literal, isLiteral := part.(*ast.BasicLit)
+					if !isLiteral || literal.Kind != token.STRING {
+						return true
+					}
+					value, unquoteErr := strconv.Unquote(literal.Value)
+					if unquoteErr != nil {
+						t.Errorf("case label %s in %s is not a string literal this can read", literal.Value, method)
+						return false
+					}
+					names = append(names, value)
+					return false
+				})
 			}
 			return true
 		})
