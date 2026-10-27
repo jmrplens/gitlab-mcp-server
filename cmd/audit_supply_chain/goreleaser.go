@@ -58,8 +58,9 @@ var goreleaserSigners = []struct {
 var goreleaserBuilders = map[string]bool{"": true, "go": true}
 
 // goreleaserCommand is one command a GoReleaser configuration runs: where the
-// configuration writes it, the repository-relative directory GoReleaser runs
-// it in, its text, and the env list it runs with.
+// configuration writes it, the directory GoReleaser runs it in (relative to
+// the repository, or absolute when the configuration names one, which is
+// outside it), its text, and the env list it runs with.
 type goreleaserCommand struct {
 	env       any
 	subject   string
@@ -185,14 +186,15 @@ func goFlagsInList(label string, value any) []string {
 }
 
 // goreleaserConfig is the configuration a GoReleaser run reads: the file its
-// command line names, relative to workdir, or the first of GoReleaser's names
-// workdir holds. problem says why there is none this audit can name.
+// command line names, relative to workdir unless it is absolute, which names
+// nothing in this repository, or the first of GoReleaser's names workdir
+// holds. problem says why there is none this audit can name.
 func (a *supplyChainAudit) goreleaserConfig(workdir, args string) (config, problem string) {
 	if match := goreleaserConfigFlag.FindStringSubmatch(args); match != nil {
 		if strings.Contains(match[1], "$") {
 			return "", readsConfig + match[1] + ", a value only the run knows"
 		}
-		return path.Join(workdir, match[1]), ""
+		return joinPath(workdir, match[1]), ""
 	}
 	for _, name := range goreleaserConfigNames {
 		candidate := path.Join(workdir, name)
@@ -219,11 +221,12 @@ func (a *supplyChainAudit) readRepositoryFile(relative string) (string, bool) {
 // image, every publisher, and the after hooks. A hook and a publisher run in
 // their dir when they name one, relative to workdir, an sbom in the dist
 // directory, and everything else in workdir, where GoReleaser itself runs: a
-// build's dir is where it compiles, not where its hooks run.
+// build's dir is where it compiles, not where its hooks run. An absolute dir
+// or dist stays absolute, and names nothing in this repository.
 func goreleaserCommands(config string, document map[string]any, workdir string) []goreleaserCommand {
 	dist := path.Join(workdir, "dist")
 	if written, ok := document["dist"].(string); ok {
-		dist = path.Join(workdir, written)
+		dist = joinPath(workdir, written)
 	}
 	before, _ := document["before"].(map[string]any)
 	commands := goreleaserHooks(nil, config+":before.hooks", before["hooks"], workdir)
@@ -305,10 +308,11 @@ func goreleaserHooks(commands []goreleaserCommand, subject string, value any, wo
 }
 
 // hookDirectory is the directory a hook or a publisher runs in: its dir,
-// relative to workdir, when it names one, and workdir otherwise.
+// relative to workdir unless it is absolute, which names nothing in this
+// repository, when it names one, and workdir otherwise.
 func hookDirectory(entry map[string]any, workdir string) string {
 	if dir, ok := entry["dir"].(string); ok {
-		return path.Join(workdir, dir)
+		return joinPath(workdir, dir)
 	}
 	return workdir
 }

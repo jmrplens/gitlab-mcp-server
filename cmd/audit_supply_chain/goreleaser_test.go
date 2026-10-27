@@ -373,6 +373,67 @@ func TestGoreleaserBuildProblems_OverridesAndAFlagsString_AreHeldAsTheBuild(t *t
 	}
 }
 
+// TestCheckCredentialedJob_GoReleaser_AbsolutePaths_AreOutsideTheRepository
+// verifies that an absolute --config, hook or publisher dir, or dist names
+// nothing in this repository, and is a finding rather than a file or package
+// of the checkout.
+//
+// goreleaser-action changes into workdir, and GoReleaser opens --config as
+// written and runs a hook or publisher with its dir, and an sbom with dist, as
+// the command's directory, so an absolute one is a path outside the checkout.
+// Joined onto workdir it lost its leading slash, and the audit judged the
+// file or package the checkout holds at that relative path instead: each case
+// below puts a harmless one there, and each passed with no finding.
+func TestCheckCredentialedJob_GoReleaser_AbsolutePaths_AreOutsideTheRepository(t *testing.T) {
+	t.Parallel()
+
+	const step = "wf.yml: job release: step 0: goreleaser-action "
+	const at = "wf.yml: job release: .goreleaser.yml:"
+	unresolved := ": go run ./clean names a package this audit cannot resolve (a value only the run knows, or a path outside this repository)" + cannotJudgeBuild
+	outside := "reads /abs/x.yml, which is not a readable file in this repository, so what it runs cannot be judged"
+	cases := []struct {
+		name   string
+		with   map[string]any
+		files  map[string]string
+		config string
+		want   string
+	}{
+		{name: "an absolute --config", with: map[string]any{"args": "release --config /abs/x.yml"}, files: map[string]string{"abs/x.yml": "version: 2\n"}, want: step + outside},
+		{
+			name: "an absolute -f under a workdir", with: map[string]any{"workdir": "release", "args": "release -f /abs/x.yml"},
+			files: map[string]string{"release/abs/x.yml": "version: 2\n"}, want: step + outside,
+		},
+		{name: "a hook's absolute dir", config: "builds:\n  - hooks:\n      pre:\n        - cmd: go run ./clean\n          dir: /cmd\n", want: at + "builds[0].hooks.pre[0]" + unresolved},
+		{name: "a publisher's absolute dir", config: "publishers:\n  - cmd: go run ./clean\n    dir: /cmd\n", want: at + "publishers[0]" + unresolved},
+		{
+			name: "an absolute dist, where an sbom runs", config: "dist: /cmd/x\nsboms:\n  - cmd: go\n    args: [run, ../clean]\n",
+			want: at + "sboms[0]: go run ../clean names a package this audit cannot resolve (a value only the run knows, or a path outside this repository)" + cannotJudgeBuild,
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := goModuleRoot(t)
+			for name, content := range testCase.files {
+				writeFile(t, root, name, content)
+			}
+			if testCase.config != "" {
+				writeFile(t, root, ".goreleaser.yml", testCase.config)
+			}
+			job := map[string]any{
+				"permissions": map[string]any{"id-token": "write"},
+				"steps":       []any{goreleaserStep(testCase.with)},
+			}
+			problems := newAudit(root, tables{}).checkCredentialedJob("wf.yml", "release", job, nil)
+			if len(problems) != 1 || problems[0] != testCase.want {
+				t.Errorf("checkCredentialedJob() = %v, want exactly [%q]", problems, testCase.want)
+			}
+		})
+	}
+}
+
 // TestCheckCredentialedJob_GoReleaserTwice_IsReadOnce verifies that a job
 // running GoReleaser in two steps reads its configuration once, as it reads a
 // script two steps run once.
