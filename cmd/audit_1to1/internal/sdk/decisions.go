@@ -178,3 +178,14 @@ var graphqlDecisions = map[string]decision{
 
 // orbitRoutesRemoved is the shared reason behind the Orbit GraphQL operations.
 const orbitRoutesRemoved = "client-go's Orbit.GetStatus, GetSchema and GetGraphStatus send GET /orbit/status, /orbit/schema and /orbit/graph_status, which GitLab.com answers 404 since gitlab-org/gitlab!265633 and !264745 removed them (2026-10-27 and -28); GitLab answers the same through GraphQL (Query.orbit.serviceStatus, Query.orbit.schema, Group.orbit and Project.orbit), which the service has no method for (docs/development/upstream-bugs.md)"
+
+// optionStructDeclarations answers the option structs nothing fills, keyed by
+// the struct's client-go name, and the fields a copy leaves out on purpose,
+// keyed by [copyKey]. Every struct a request a handler sends carries is
+// otherwise held to an input: paired with one by the field diff, converted
+// from a held struct, or copied from one field by field.
+var optionStructDeclarations = map[string]optionStructDeclaration{
+	"UpdateSettingsOptions":         {categoryMapInput, "internal/tools/settings.Update decodes the input's settings map into it (json.Unmarshal), after refusing every key the struct does not model or PUT /application/settings does not declare; TestModeledSettingKeys_ReadTheOptionsStructRatherThanAList and TestUndeclaredSettingKeys_AreTheModeledKeysTheUpdateRouteDoesNotDeclare hold those keys to the struct's json tags"},
+	"ListActiveIntegrationsOptions": {categorySDKModelsUnused, "it embeds gl.ListOptions and nothing else, and GET /groups/:id/integrations declares id alone (gitlab-api-live.json, 19.5.0-ee): GitLab answers the whole list unpaged, so internal/tools/integrations.ListGroupIntegrations sends nil"},
+	"GroupAccessLevel":              {categoryScalarList, "DefaultBranchProtectionDefaultsOptions takes allowed_to_push and allowed_to_merge as lists of {access_level}, and groups.BranchProtectionDefaultsInput offers each as []int, one access level per element, which groups.accessLevelOptions turns into one struct each"},
+}

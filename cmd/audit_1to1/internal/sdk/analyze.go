@@ -10,6 +10,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 )
 
 // Service and operation statuses.
@@ -30,9 +31,13 @@ type report struct {
 	// EnumFields lists the fields of an SDK enum type the actions expose,
 	// each held against the SDK's constant set (R-ENUM).
 	EnumFields []enums.Finding `json:"enum_fields"`
-	// StaleDeclarations joins the three tables' stale entries: a service
-	// declaration, a GraphQL decision or an enum exemption that no longer
-	// describes the code.
+	// OptionStructs holds every client-go struct a request a handler sends
+	// carries to an input, and every copy of one struct into another to the
+	// fields the two share.
+	OptionStructs optionStructsReport `json:"option_structs"`
+	// StaleDeclarations joins the four tables' stale entries: a service
+	// declaration, a GraphQL decision, an enum exemption or an option struct
+	// declaration that no longer describes the code.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
 }
 
@@ -48,6 +53,14 @@ type reportSummary struct {
 	EnumFieldsWithGaps   int `json:"enum_fields_with_gaps"`
 	EnumMissingValues    int `json:"enum_missing_values"`
 	EnumExtraValues      int `json:"enum_extra_values"`
+	OptionStructs        int `json:"option_structs"`
+	OptionPaired         int `json:"option_structs_paired"`
+	OptionConverted      int `json:"option_structs_converted"`
+	OptionCopied         int `json:"option_structs_copied"`
+	OptionDeclared       int `json:"option_structs_declared"`
+	OptionUnpaired       int `json:"option_structs_unpaired"`
+	OptionCopyMissing    int `json:"option_copy_missing_fields"`
+	OptionNestedMissing  int `json:"option_nested_missing_fields"`
 	StaleDeclarations    int `json:"stale_declarations"`
 }
 
@@ -55,7 +68,9 @@ type reportSummary struct {
 // passes.
 func (s reportSummary) clean() bool {
 	return s.ServicesUndeclared == 0 && s.GraphQLUnadjudicated == 0 &&
-		s.EnumMissingValues == 0 && s.EnumExtraValues == 0 && s.StaleDeclarations == 0
+		s.EnumMissingValues == 0 && s.EnumExtraValues == 0 &&
+		s.OptionUnpaired == 0 && s.OptionCopyMissing == 0 && s.OptionNestedMissing == 0 &&
+		s.StaleDeclarations == 0
 }
 
 // Seams for the failures the real tree cannot produce: the JSON encoder never
@@ -113,12 +128,18 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		return report{}, err
 	}
 
-	stale := mergeStale(staleServiceDeclarations(services, declaredServices), staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions)
+	// The option structs are held to the inputs the field diff pairs them
+	// with, read from the same packages the structs scope reads.
+	options, optionStale := buildOptionStructs(collectOptionUniverse(pkgs), structs.DiffInputPairs(pkgs), optionStructDeclarations)
+
+	stale := mergeStale(staleServiceDeclarations(services, declaredServices), staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale)
 	summary := summarize(services, operations, enumRep.Summary, stale)
+	summarizeOptionStructs(&summary, options)
 
 	if gapsOnly {
 		services = keepUndeclaredServices(services)
 		operations = keepUnadjudicatedOperations(operations)
+		options = keepOptionFindings(options)
 	}
 	return report{
 		SchemaVersion:     shared.SchemaVersion,
@@ -127,6 +148,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		Services:          services,
 		GraphQLOperations: operations,
 		EnumFields:        flattenEnumFindings(enumRep),
+		OptionStructs:     options,
 		StaleDeclarations: stale,
 	}, nil
 }

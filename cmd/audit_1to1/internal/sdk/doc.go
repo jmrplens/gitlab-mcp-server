@@ -29,6 +29,16 @@
 // declares, and a constant added upstream is invisible to the struct rule,
 // which projects an enum type to a scalar and calls the field covered.
 //
+// The option structs rule is folded in on the same ground: its universe is
+// the structs client-go's methods take, and the field diff starts
+// from the literals our handlers build, so a struct a helper builds, a
+// struct nested in a request, and a copy of one struct into another were
+// compared with nothing or with the wrong input. Every struct a service
+// method takes, and every struct a raw request carries as its options (typed,
+// embedded in a struct of ours, or handed one call up as any), is held to an
+// input a model sends, converted from a held struct, copied from one field
+// for field, or declared.
+//
 // Unlike the three candidate-backlog scopes, this one is a gate: Run reports
 // whether the tree is clean, and the command exits non-zero when it is not.
 package sdk

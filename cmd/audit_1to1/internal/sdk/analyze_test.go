@@ -106,14 +106,20 @@ func TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone(t *testing.T) 
 		want    bool
 	}{
 		{
-			name:    "no finding",
-			summary: reportSummary{SDKServices: 120, ServicesCovered: 118, ServicesDeclared: 2, GraphQLOperations: 9, GraphQLAdjudicated: 9, EnumFields: 40},
-			want:    true,
+			name: "no finding",
+			summary: reportSummary{
+				SDKServices: 120, ServicesCovered: 118, ServicesDeclared: 2, GraphQLOperations: 9, GraphQLAdjudicated: 9, EnumFields: 40,
+				OptionStructs: 9, OptionPaired: 5, OptionConverted: 1, OptionCopied: 1, OptionDeclared: 2,
+			},
+			want: true,
 		},
 		{name: "an undeclared service", summary: reportSummary{ServicesUndeclared: 1}},
 		{name: "an unadjudicated GraphQL operation", summary: reportSummary{GraphQLUnadjudicated: 1}},
 		{name: "an enum value the SDK declares and we do not", summary: reportSummary{EnumMissingValues: 1}},
 		{name: "an enum value we publish and the SDK does not", summary: reportSummary{EnumExtraValues: 1}},
+		{name: "an option struct nothing holds", summary: reportSummary{OptionUnpaired: 1}},
+		{name: "a field a copy leaves out", summary: reportSummary{OptionCopyMissing: 1}},
+		{name: "a field of a nested struct its input lacks", summary: reportSummary{OptionNestedMissing: 1}},
 		{name: "a declaration that no longer describes the code", summary: reportSummary{StaleDeclarations: 1}},
 	}
 	for _, tc := range cases {
@@ -491,6 +497,12 @@ func TestRun_Repository_GateIsGreenAndShapeIsStable(t *testing.T) {
 	}
 	if len(rep.Services) != 0 || len(rep.GraphQLOperations) != 0 {
 		t.Errorf("gaps-only report kept %d services and %d operations, want none", len(rep.Services), len(rep.GraphQLOperations))
+	}
+	if options := rep.OptionStructs; len(options.Structs) != 0 || len(options.Copies) != 0 || len(options.Conversions) != 0 {
+		t.Errorf("gaps-only report kept option structs %+v, want none", options)
+	}
+	if s := rep.Summary; s.OptionStructs != s.OptionPaired+s.OptionConverted+s.OptionCopied+s.OptionDeclared+s.OptionUnpaired || s.OptionStructs < 400 {
+		t.Errorf("option struct statuses do not add up to the SDK's request surface: %+v", s)
 	}
 	if rep.Summary.SDKServices != rep.Summary.ServicesCovered+rep.Summary.ServicesDeclared+rep.Summary.ServicesUndeclared {
 		t.Errorf("service statuses do not add up: %+v", rep.Summary)
