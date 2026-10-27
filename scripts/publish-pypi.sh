@@ -33,7 +33,8 @@
 #
 # --no-assemble publishes the wheelhouse already in pypi/dist, which the
 # workflow's previous step validated, instead of building an equivalent one,
-# and refuses a wheelhouse holding anything but wheels of <version>.
+# and refuses a wheelhouse holding anything but the six platform wheels of
+# <version>, or missing one of them.
 #
 # twine and pypi-attestations, with everything they import, are installed into
 # a throwaway venv from .github/requirements/pypi-publish.txt in hash-checking
@@ -96,32 +97,59 @@ elif [ "$DRY_RUN" = 0 ] && [ -z "$PYPI_TOKEN_VALUE" ]; then
   exit 1
 fi
 
-# assert_wheelhouse holds pypi/dist to what is about to be uploaded: one wheel
-# or more, each a wheel of $VERSION, and nothing else, a hidden file included.
-# An attestation left behind would be uploaded beside a wheel it does not
-# describe, and a wheel of another version would be published with this one.
+# The six platform tags scripts/build_pypi.py builds a wheel for, and so the
+# only wheels a publish uploads, named here as publish-npm.sh names its
+# PLATFORM_KEYS. validate_pypi.py's EXPECTED_TAGS holds the same six; they are
+# listed in the order of their file names, the order twine and the signer are
+# handed the wheels in. The list is built with a loop rather than a pattern
+# substitution, which bash 5.2 would apply to an & in the checkout's path.
+PLATFORM_TAGS=(
+  macosx_11_0_arm64
+  macosx_11_0_x86_64
+  manylinux_2_17_aarch64.manylinux2014_aarch64
+  manylinux_2_17_x86_64.manylinux2014_x86_64
+  win_amd64
+  win_arm64
+)
+WHEELS=()
+for tag in "${PLATFORM_TAGS[@]}"; do
+  WHEELS+=("$WHEELHOUSE/$DIST-$VERSION-py3-none-$tag.whl")
+done
+
+# assert_wheelhouse holds pypi/dist to what is about to be uploaded: the six
+# wheels of $VERSION, each a regular file, and nothing else, a hidden file
+# included. build_pypi.py stops at the first release binary it cannot find and
+# leaves the wheels it built before it, and a published file name is burned
+# forever, so a missing platform is refused here rather than found by the
+# read-back once the others are permanent. A wheel of another tag or version
+# would be published with this one, and an attestation left behind would be
+# uploaded beside a wheel it does not describe.
 assert_wheelhouse() {
-  local file name count=0
+  local file wheel known
   if [ ! -d "$WHEELHOUSE" ]; then
     echo "ERROR: $WHEELHOUSE does not exist; run 'make validate-pypi-local PYPI_BINARIES=<dir>' first, or drop --no-assemble" >&2
     exit 1
   fi
+  for wheel in "${WHEELS[@]}"; do
+    if [ -L "$wheel" ] || [ ! -f "$wheel" ]; then
+      echo "ERROR: $WHEELHOUSE holds no wheel ${wheel##*/} as a regular file; rebuild the wheelhouse" >&2
+      exit 1
+    fi
+  done
   shopt -s nullglob dotglob
   for file in "$WHEELHOUSE"/*; do
-    name="${file##*/}"
-    case "$name" in
-      "$DIST-$VERSION-"*.whl) count=$((count + 1)) ;;
-      *)
-        echo "ERROR: $WHEELHOUSE holds $name, which is not a wheel of $VERSION; rebuild the wheelhouse" >&2
-        exit 1
-        ;;
-    esac
+    known=0
+    for wheel in "${WHEELS[@]}"; do
+      if [ "$file" = "$wheel" ]; then
+        known=1
+      fi
+    done
+    if [ "$known" = 0 ]; then
+      echo "ERROR: $WHEELHOUSE holds ${file##*/}, which is not one of the six wheels of $VERSION; rebuild the wheelhouse" >&2
+      exit 1
+    fi
   done
-  shopt -u dotglob
-  if [ "$count" = 0 ]; then
-    echo "ERROR: $WHEELHOUSE holds no wheel of $VERSION; rebuild the wheelhouse" >&2
-    exit 1
-  fi
+  shopt -u nullglob dotglob
 }
 
 # json_member prints the string member $1 of the JSON object on standard input,
@@ -171,7 +199,6 @@ if [ "$ASSEMBLE" = 1 ]; then
   python3 "$ROOT/scripts/validate_pypi.py" --wheels "$WHEELHOUSE" --version "$VERSION"
 fi
 assert_wheelhouse
-WHEELS=("$WHEELHOUSE"/*.whl)
 
 VENVDIR="$(mktemp -d)"
 trap 'rm -rf "$VENVDIR"' EXIT

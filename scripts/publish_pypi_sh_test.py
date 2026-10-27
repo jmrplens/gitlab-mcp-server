@@ -45,6 +45,7 @@ Run with:
     python3 -m unittest discover -s scripts -p 'publish_pypi_sh_test.py'
 """
 
+import ast
 import base64
 import json
 import os
@@ -547,6 +548,8 @@ class PublishPypiTest(unittest.TestCase):
             ("an attestation left behind", [f"{DIST}-{VERSION}-py3-none-win_amd64.whl.publish.attestation"],
              "publish.attestation"),
             ("a hidden file", [".partial"], ".partial"),
+            ("a wheel of a tag build_pypi.py does not make", [f"{DIST}-{VERSION}-py3-none-linux_riscv64.whl"],
+             "linux_riscv64"),
         ]
         for name, extra, said in cases:
             with self.subTest(name):
@@ -559,6 +562,48 @@ class PublishPypiTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                 self.assertIn(said, result.stderr)
                 self.assertEqual(self.calls(), [])
+
+    def test_no_assemble_refuses_a_wheelhouse_missing_any_of_the_six_wheels(self):
+        # build_pypi.py stops at the first release binary it cannot find and
+        # leaves the wheels it built before it, with nothing else beside them.
+        for tag in TAGS:
+            with self.subTest(tag):
+                self.start_over()
+                self.write_wheels()
+                missing = f"{DIST}-{VERSION}-py3-none-{tag}.whl"
+                os.remove(os.path.join(self.wheelhouse, missing))
+                result = self.run_script("--no-assemble", env={"PYPI_TOKEN": STORED})
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(f"holds no wheel {missing} as a regular file", result.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_no_assemble_refuses_a_wheel_that_is_not_a_regular_file(self):
+        def directory(wheel):
+            os.remove(wheel)
+            os.makedirs(wheel)
+
+        def symlink(wheel):
+            elsewhere = os.path.join(self.work, "elsewhere.whl")
+            os.replace(wheel, elsewhere)
+            os.symlink(elsewhere, wheel)
+
+        for name, replace in [("a directory", directory), ("a symbolic link", symlink)]:
+            with self.subTest(name):
+                self.start_over()
+                self.write_wheels()
+                wheel = self.wheels()[0]
+                replace(wheel)
+                result = self.run_script("--no-assemble", "--dry-run")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(f"holds no wheel {os.path.basename(wheel)} as a regular file", result.stderr)
+                self.assertEqual(self.calls(), [])
+
+    def test_the_platform_tags_are_the_six_validate_pypi_requires(self):
+        with open(os.path.join(ROOT, "scripts", "validate_pypi.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        required = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
+                        and any(getattr(target, "id", None) == "EXPECTED_TAGS" for target in node.targets))
+        self.assertEqual(sorted(TAGS), sorted(required))
 
     def test_an_unknown_option_is_refused(self):
         result = self.run_script("--skip-existing")
