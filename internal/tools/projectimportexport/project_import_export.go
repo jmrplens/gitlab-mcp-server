@@ -62,19 +62,18 @@ func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input Sche
 	}
 
 	// Prefer the structured nested upload options; fall back to the deprecated
-	// flat fields for backward compatibility.
-	uploadURL := input.UploadURL
-	uploadHTTP := input.UploadHTTP
-	if input.Upload != nil {
-		uploadURL = input.Upload.URL
-		uploadHTTP = input.Upload.HTTPMethod
+	// flat fields for backward compatibility, read as the nested input they
+	// stand for, so the upload destination is built from one shape.
+	upload := input.Upload
+	if upload == nil {
+		upload = &ScheduleExportUploadInput{URL: input.UploadURL, HTTPMethod: input.UploadHTTP}
 	}
-	if uploadURL != "" {
+	if upload.URL != "" {
 		opts.Upload = gl.ScheduleExportUploadOptions{
-			URL: new(uploadURL),
+			URL: new(upload.URL),
 		}
-		if uploadHTTP != "" {
-			opts.Upload.HTTPMethod = new(uploadHTTP)
+		if upload.HTTPMethod != "" {
+			opts.Upload.HTTPMethod = new(upload.HTTPMethod)
 		}
 	}
 

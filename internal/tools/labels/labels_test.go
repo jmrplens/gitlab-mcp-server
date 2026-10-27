@@ -277,6 +277,48 @@ func TestLabelList_OrderBySortKeyset(t *testing.T) {
 	}
 }
 
+// TestLabelList_Archived_FiltersByTheArchivedState verifies the archived
+// filter GET /projects/:id/labels declares: true and false each reach the
+// query as given, since false asks for the active labels alone, and an
+// omitted filter sends no archived at all, so GitLab lists both.
+func TestLabelList_Archived_FiltersByTheArchivedState(t *testing.T) {
+	cases := []struct {
+		name     string
+		archived *bool
+		want     string
+		sent     bool
+	}{
+		{name: "archived only", archived: new(true), want: "true", sent: true},
+		{name: "active only", archived: new(false), want: "false", sent: true},
+		{name: "both", archived: nil, sent: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			var sent bool
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathProjectLabels {
+					got, sent = r.URL.Query().Get("archived"), r.URL.Query().Has("archived")
+					testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"bug","color":"#d9534f","is_project_label":true,"archived":true}]`)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := List(context.Background(), client, ListInput{ProjectID: "42", Archived: tc.archived})
+			if err != nil {
+				t.Fatalf("List() unexpected error: %v", err)
+			}
+			if sent != tc.sent || got != tc.want {
+				t.Errorf("archived sent = %v as %q, want sent = %v as %q", sent, got, tc.sent, tc.want)
+			}
+			if len(out.Labels) != 1 {
+				t.Errorf("len(Labels) = %d, want 1", len(out.Labels))
+			}
+		})
+	}
+}
+
 // TestLabelList_EmptyProjectID verifies LabelList when empty project ID.
 func TestLabelList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

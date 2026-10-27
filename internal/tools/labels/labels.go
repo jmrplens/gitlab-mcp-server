@@ -73,6 +73,7 @@ type ListInput struct {
 	Search                string               `json:"search,omitempty"                 jsonschema:"Filter labels by keyword search"`
 	WithCounts            bool                 `json:"with_counts,omitempty"            jsonschema:"Include issue and merge request counts"`
 	IncludeAncestorGroups bool                 `json:"include_ancestor_groups,omitempty" jsonschema:"Include labels from ancestor groups"`
+	Archived              *bool                `json:"archived,omitempty"               jsonschema:"Filter by archived state: true returns only archived labels, false only active labels. Omit for both"`
 	OrderBy               string               `json:"order_by,omitempty"               jsonschema:"Column to order results by (e.g. name, created_at, updated_at)"`
 	Sort                  string               `json:"sort,omitempty"                   jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -91,8 +92,8 @@ type ListOutput struct {
 
 // List retrieves a paginated list of project labels via the GitLab
 // Labels API (GET /projects/:id/labels). Supports filtering by search
-// keyword, including ancestor group labels, and including issue/MR
-// counts.
+// keyword and by archived state, including ancestor group labels, and
+// including issue/MR counts.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -109,6 +110,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	opts.Archived = input.Archived
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	labels, resp, err := client.GL().Labels.ListLabels(string(input.ProjectID), opts, gl.WithContext(ctx))

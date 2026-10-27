@@ -373,6 +373,7 @@ type CommitsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query string,required"`
+	Ref       string               `json:"ref,omitempty"        jsonschema:"Branch or tag whose commits a project search reads (default: the default branch). Group and instance searches do not take it"`
 	TypeInput
 	toolutil.PaginationInput
 }
@@ -397,7 +398,7 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 	searchClient := client.GL().Search
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	_, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Commit]{
-		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, ref: input.Ref, page: input.Page, perPage: input.PerPage,
 		searchType: input.SearchType, operation: "searchCommits", projectSearch: searchClient.CommitsByProject,
 		groupSearch: searchClient.CommitsByGroup, globalSearch: searchClient.Commits,
 		capturesPage: true,
@@ -739,6 +740,7 @@ type WikiInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id,omitempty" jsonschema:"Project ID or URL-encoded path (optional)"`
 	GroupID   toolutil.StringOrInt `json:"group_id,omitempty"   jsonschema:"Group ID or URL-encoded path (optional)"`
 	Query     string               `json:"query"                jsonschema:"Search query string,required"`
+	Ref       string               `json:"ref,omitempty"        jsonschema:"Branch or tag of the wiki repository a project search reads (default: the default branch). Group and instance searches do not take it"`
 	TypeInput
 	toolutil.PaginationInput
 }
@@ -783,7 +785,7 @@ func Wiki(ctx context.Context, client *gitlabclient.Client, input WikiInput) (Wi
 	searchClient := client.GL().Search
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	_, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Wiki]{
-		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, ref: input.Ref, page: input.Page, perPage: input.PerPage,
 		searchType: input.SearchType, operation: "searchWiki", projectSearch: searchClient.WikiBlobsByProject,
 		groupSearch: searchClient.WikiBlobsByGroup, globalSearch: searchClient.WikiBlobs,
 		capturesPage: true,

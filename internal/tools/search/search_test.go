@@ -1513,6 +1513,57 @@ func TestSearchCode_WithRef(t *testing.T) {
 	}
 }
 
+// TestSearchCommitsAndWiki_WithRef_SendsTheRef verifies the ref GET
+// /projects/:id/search declares for the commits and wiki_blobs scopes: each
+// search sends the branch or tag it was given, and sends no ref when none is
+// given, so GitLab searches the default branch.
+func TestSearchCommitsAndWiki_WithRef_SendsTheRef(t *testing.T) {
+	cases := []struct {
+		name  string
+		scope string
+		ref   string
+		run   func(*gitlabclient.Client, string) error
+	}{
+		{name: "commits on a branch", scope: "commits", ref: "develop", run: func(client *gitlabclient.Client, ref string) error {
+			_, err := Commits(context.Background(), client, CommitsInput{ProjectID: "42", Query: "fix", Ref: ref})
+			return err
+		}},
+		{name: "commits on the default branch", scope: "commits", run: func(client *gitlabclient.Client, ref string) error {
+			_, err := Commits(context.Background(), client, CommitsInput{ProjectID: "42", Query: "fix", Ref: ref})
+			return err
+		}},
+		{name: "wiki on a branch", scope: "wiki_blobs", ref: "wiki-main", run: func(client *gitlabclient.Client, ref string) error {
+			_, err := Wiki(context.Background(), client, WikiInput{ProjectID: "42", Query: "home", Ref: ref})
+			return err
+		}},
+		{name: "wiki on the default branch", scope: "wiki_blobs", run: func(client *gitlabclient.Client, ref string) error {
+			_, err := Wiki(context.Background(), client, WikiInput{ProjectID: "42", Query: "home", Ref: ref})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			var sent bool
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != pathSearchProject || r.URL.Query().Get(queryScope) != tc.scope {
+					http.NotFound(w, r)
+					return
+				}
+				got, sent = r.URL.Query().Get("ref"), r.URL.Query().Has("ref")
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, defaultPagination)
+			}))
+
+			if err := tc.run(client, tc.ref); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if sent != (tc.ref != "") || got != tc.ref {
+				t.Errorf("ref sent = %v as %q, want %q", sent, got, tc.ref)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Notes with nil fields
 // ---------------------------------------------------------------------------.
