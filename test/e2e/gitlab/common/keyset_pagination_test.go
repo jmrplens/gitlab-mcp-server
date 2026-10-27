@@ -10,6 +10,12 @@
 // Gitaly's page_token on the repository tree. Until each page published its
 // next link, a caller who asked for keyset pagination got the first page and
 // no way to ask for the second (issue 1165).
+//
+// It also holds the two lists GitLab can never page by keyset to the offset
+// pagination they offer instead: the personal access tokens of a group's and
+// of a project's service account, which GitLab answers 405 for every keyset
+// request, refuse the keyset arguments before sending anything and page by
+// page number, in the named order their routes document.
 
 package common
 
@@ -17,11 +23,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupserviceaccounts"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectserviceaccounts"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
@@ -201,5 +210,190 @@ func TestKeysetPagination_RepositoryTree_FollowsThePageTokenToTheEnd(t *testing.
 		}
 		got := followKeyset(e, s, actionRepositoryTree, params, names)
 		assertSameRows(e, "the repository tree", got, whole)
+	})
+}
+
+// tokenListKeysetArguments are the three fields of client-go's list options
+// the service account token lists no longer take. GitLab pages those tokens
+// with paginate_with_strategies over PersonalAccessToken, which has no keyset
+// ordering, so it answers pagination=keyset with 405, pages by offset
+// otherwise, which reads no page_token, and declares no order_by on either
+// route (issue 1165).
+var tokenListKeysetArguments = []struct {
+	name  string
+	value any
+}{
+	{name: "pagination", value: "keyset"},
+	{name: "page_token", value: "1"},
+	{name: "order_by", value: "created_at"},
+}
+
+// tokenNameSuffixes are what the two tokens minted beside the fixture's add to
+// its name, which is the account's username, so the three sort by name in the
+// order they were made.
+var tokenNameSuffixes = []string{"-b", "-c"}
+
+// serviceAccountTokens is a service account holding three tokens, as its
+// group's or its project's token list is asked about them.
+type serviceAccountTokens struct {
+	// params names the account the way its token list takes it.
+	params map[string]any
+	// names are the three tokens' names in ascending order.
+	names []string
+}
+
+// withTwoMoreTokens mints the two tokens [tokenNameSuffixes] names beside the
+// one the fixture gave account, through mint, and returns the three with the
+// parameters scope names the account's owner by.
+func withTwoMoreTokens(e *harness.Env, scope map[string]any, account fixture.ServiceAccount, mint func(name string, expiry *gl.ISOTime) error) serviceAccountTokens {
+	e.T.Helper()
+	names := []string{account.Username}
+	for _, suffix := range tokenNameSuffixes {
+		name := account.Username + suffix
+		expiry := gl.ISOTime(time.Now().Add(serviceAccountTokenLifetime))
+		if err := mint(name, &expiry); err != nil {
+			e.T.Fatalf("minting token %q for service account %d: %v", name, account.ID, err)
+		}
+		names = append(names, name)
+	}
+	return serviceAccountTokens{params: withParams(scope, map[string]any{"service_account_id": account.ID}), names: names}
+}
+
+// newGroupServiceAccountTokens creates a group and a service account in it
+// holding three tokens.
+func newGroupServiceAccountTokens(e *harness.Env) serviceAccountTokens {
+	e.T.Helper()
+	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("keysetsa"))
+	account := fixture.NewGroupServiceAccount(e, group)
+	return withTwoMoreTokens(e, map[string]any{"group_id": group.IDParam()}, account, func(name string, expiry *gl.ISOTime) error {
+		_, _, err := e.Client().GL().Groups.CreateServiceAccountPersonalAccessToken(group.ID, account.ID,
+			&gl.CreateServiceAccountPersonalAccessTokenOptions{Name: new(name), Scopes: new([]string{"read_api"}), ExpiresAt: expiry},
+			gl.WithContext(e.Ctx))
+		return err
+	})
+}
+
+// newProjectServiceAccountTokens creates a project and a service account in
+// it holding three tokens.
+func newProjectServiceAccountTokens(e *harness.Env) serviceAccountTokens {
+	e.T.Helper()
+	project := fixture.NewProject(e, fixture.WithNamePrefix("keysetsa"))
+	account := fixture.NewProjectServiceAccount(e, project)
+	return withTwoMoreTokens(e, map[string]any{"project_id": project.IDParam()}, account, func(name string, expiry *gl.ISOTime) error {
+		_, _, err := e.Client().GL().Projects.CreateProjectServiceAccountPersonalAccessToken(project.ID, account.ID,
+			&gl.CreateProjectServiceAccountPersonalAccessTokenOptions{Name: new(name), Scopes: new([]string{"read_api"}), ExpiresAt: expiry},
+			gl.WithContext(e.Ctx))
+		return err
+	})
+}
+
+// refuseTokenListKeysetArguments sends each of [tokenListKeysetArguments] to a
+// token list and holds the answer to a refusal naming the argument, made
+// before any request. Who refuses depends on the surface: the individual
+// tool's schema admits no property it does not list, so the SDK refuses the
+// argument before the handler runs; execute holds the params to the action's
+// schema and lists the ones it does not know; and the meta dispatcher decodes
+// the action's input strictly and names the field it does not know. Sent to
+// GitLab, the first would be answered 405 and the other two would be ignored.
+func refuseTokenListKeysetArguments(e *harness.Env, s *harness.Session, surface harness.Surface, id harness.ActionID, params map[string]any) {
+	e.T.Helper()
+	for _, argument := range tokenListKeysetArguments {
+		call := withParams(params, map[string]any{argument.name: argument.value})
+		switch surface {
+		case harness.SurfaceIndividual:
+			refusal := harness.Refused(s, id, call, harness.FailureInvalidParams)
+			assertMentions(e, "the refusal of "+argument.name, refusal, argument.name)
+		case harness.SurfaceDynamic:
+			harness.ExpectToolError(s, id, call, "Unknown params: "+argument.name+".")
+		default:
+			harness.ExpectToolError(s, id, call, `unknown field "`+argument.name+`"`)
+		}
+	}
+}
+
+// followOffset reads a listing to its end by page number, one row a page,
+// passing next_page back as page while has_more holds. It returns every row in
+// the order the pages gave them, and fails the test when a page publishes a
+// next_page_token, which an offset page never carries, when a page saying more
+// follow names any page but the next, or when a three-row listing is still
+// naming a next page after [keysetPageLimit] pages.
+func followOffset[O any](e *harness.Env, s *harness.Session, id harness.ActionID, params map[string]any, rows func(O) ([]string, toolutil.PaginationOutput)) []string {
+	e.T.Helper()
+	var read []string
+	page := int64(1)
+	for range keysetPageLimit {
+		got, pagination := rows(harness.Do[O](s, id, withParams(params, map[string]any{"page": page, "per_page": 1})))
+		read = append(read, got...)
+		if pagination.NextPageToken != "" {
+			e.T.Errorf("%s page %d publishes next_page_token %q, which an offset page never carries", id, page, pagination.NextPageToken)
+		}
+		if !pagination.HasMore {
+			return read
+		}
+		if pagination.NextPage != page+1 {
+			e.T.Fatalf("%s page %d says more follow and names page %d next, want %d", id, page, pagination.NextPage, page+1)
+		}
+		page = pagination.NextPage
+	}
+	e.T.Fatalf("%s was still naming a next page after %d pages of a three-row listing: read %q", id, keysetPageLimit, read)
+	return nil
+}
+
+// assertTokensPageByName follows a token list by page in name_asc order and
+// reads it whole in name_desc order, two of the eight named orders the routes
+// document, and holds both to the tokens' names: the first in their order and
+// the second in reverse, so an order GitLab ignored, which leaves the tokens
+// unsorted, reads as a failure rather than as a listing.
+func assertTokensPageByName[O any](e *harness.Env, s *harness.Session, id harness.ActionID, tokens serviceAccountTokens, rows func(O) ([]string, toolutil.PaginationOutput)) {
+	e.T.Helper()
+	ascending := followOffset(e, s, id, withParams(tokens.params, map[string]any{"sort": "name_asc"}), rows)
+	if !slices.Equal(ascending, tokens.names) {
+		e.T.Errorf("following %s by page in name_asc order read %q, want %q in that order", id, ascending, tokens.names)
+	}
+	descending, _ := rows(harness.Do[O](s, id, withParams(tokens.params, map[string]any{"sort": "name_desc", "per_page": 100})))
+	want := slices.Clone(tokens.names)
+	slices.Reverse(want)
+	if !slices.Equal(descending, want) {
+		e.T.Errorf("%s in name_desc order read %q, want %q in that order", id, descending, want)
+	}
+}
+
+// TestKeysetPagination_GroupServiceAccountTokens_PageByOffsetAlone holds the
+// token list of a group's service account to the pagination GitLab gives it:
+// the keyset arguments are refused before any request, and three tokens are
+// read one a page by page number, in the name order asked for.
+func TestKeysetPagination_GroupServiceAccountTokens_PageByOffsetAlone(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, newGroupServiceAccountTokens, func(e *harness.Env, surface harness.Surface, tokens serviceAccountTokens) {
+		s := e.On(surface)
+		refuseTokenListKeysetArguments(e, s, surface, actionGroupServiceAccountPATList, tokens.params)
+		assertTokensPageByName(e, s, actionGroupServiceAccountPATList, tokens,
+			func(out groupserviceaccounts.ListPATOutput) ([]string, toolutil.PaginationOutput) {
+				names := make([]string, 0, len(out.Tokens))
+				for _, token := range out.Tokens {
+					names = append(names, token.Name)
+				}
+				return names, out.Pagination
+			})
+	})
+}
+
+// TestKeysetPagination_ProjectServiceAccountTokens_PageByOffsetAlone is the
+// same for the token list of a project's service account.
+func TestKeysetPagination_ProjectServiceAccountTokens_PageByOffsetAlone(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, newProjectServiceAccountTokens, func(e *harness.Env, surface harness.Surface, tokens serviceAccountTokens) {
+		s := e.On(surface)
+		refuseTokenListKeysetArguments(e, s, surface, actionProjectServiceAccountPATList, tokens.params)
+		assertTokensPageByName(e, s, actionProjectServiceAccountPATList, tokens,
+			func(out projectserviceaccounts.ListPATOutput) ([]string, toolutil.PaginationOutput) {
+				names := make([]string, 0, len(out.Tokens))
+				for _, token := range out.Tokens {
+					names = append(names, token.Name)
+				}
+				return names, out.Pagination
+			})
 	})
 }
