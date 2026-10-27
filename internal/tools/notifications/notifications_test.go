@@ -353,7 +353,7 @@ func TestBuildUpdateOpts_AllBooleans(t *testing.T) {
 		Level: "custom", NotificationEmail: "email@test.com",
 		CloseIssue: &tr, CloseMergeRequest: &fa, FailedPipeline: &tr, FixedPipeline: &fa,
 		IssueDue: &tr, MergeMergeRequest: &fa, MergeWhenPipelineSucceeds: &tr, MovedProject: &fa,
-		NewEpic: &tr, NewIssue: &fa, NewMergeRequest: &tr, NewNote: &fa,
+		NewIssue: &fa, NewMergeRequest: &tr, NewNote: &fa,
 		PushToMergeRequest: &tr, ReassignIssue: &fa, ReassignMergeRequest: &tr, ReopenIssue: &fa,
 		ReopenMergeRequest: &tr, SuccessPipeline: &fa,
 	}, scopedLevels)
@@ -600,34 +600,36 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 // request-option builder and the card. A line that names the wrong one of the
 // eighteen is a pure assignment, so neither the mutation nor the condition gate
 // can see it, and only a fixture that moves one event at a time can. That is
-// why all three tests below share this table.
+// why all three tests below share this table. send sets the event on an
+// account-wide update, the one input that carries all eighteen, since a
+// project's takes no new_epic.
 type eventFieldCase struct {
 	key   string
 	label string
 	set   func(*EventOutput)
-	send  func(*eventFields, *bool)
+	send  func(*UpdateGlobalInput, *bool)
 }
 
 // eventFieldCases lists every event the notification settings carry.
 var eventFieldCases = []eventFieldCase{
-	{"close_issue", "Close Issue", func(e *EventOutput) { e.CloseIssue = true }, func(f *eventFields, v *bool) { f.CloseIssue = v }},
-	{"close_merge_request", "Close MR", func(e *EventOutput) { e.CloseMergeRequest = true }, func(f *eventFields, v *bool) { f.CloseMergeRequest = v }},
-	{"failed_pipeline", "Failed Pipeline", func(e *EventOutput) { e.FailedPipeline = true }, func(f *eventFields, v *bool) { f.FailedPipeline = v }},
-	{"fixed_pipeline", "Fixed Pipeline", func(e *EventOutput) { e.FixedPipeline = true }, func(f *eventFields, v *bool) { f.FixedPipeline = v }},
-	{"issue_due", "Issue Due", func(e *EventOutput) { e.IssueDue = true }, func(f *eventFields, v *bool) { f.IssueDue = v }},
-	{"merge_merge_request", "Merge MR", func(e *EventOutput) { e.MergeMergeRequest = true }, func(f *eventFields, v *bool) { f.MergeMergeRequest = v }},
-	{"merge_when_pipeline_succeeds", "Merge When Pipeline Succeeds", func(e *EventOutput) { e.MergeWhenPipelineSucceeds = true }, func(f *eventFields, v *bool) { f.MergeWhenPipelineSucceeds = v }},
-	{"moved_project", "Moved Project", func(e *EventOutput) { e.MovedProject = true }, func(f *eventFields, v *bool) { f.MovedProject = v }},
-	{"new_issue", "New Issue", func(e *EventOutput) { e.NewIssue = true }, func(f *eventFields, v *bool) { f.NewIssue = v }},
-	{"new_merge_request", "New MR", func(e *EventOutput) { e.NewMergeRequest = true }, func(f *eventFields, v *bool) { f.NewMergeRequest = v }},
-	{"new_epic", "New Epic", func(e *EventOutput) { e.NewEpic = true }, func(f *eventFields, v *bool) { f.NewEpic = v }},
-	{"new_note", "New Note", func(e *EventOutput) { e.NewNote = true }, func(f *eventFields, v *bool) { f.NewNote = v }},
-	{"push_to_merge_request", "Push to MR", func(e *EventOutput) { e.PushToMergeRequest = true }, func(f *eventFields, v *bool) { f.PushToMergeRequest = v }},
-	{"reassign_issue", "Reassign Issue", func(e *EventOutput) { e.ReassignIssue = true }, func(f *eventFields, v *bool) { f.ReassignIssue = v }},
-	{"reassign_merge_request", "Reassign MR", func(e *EventOutput) { e.ReassignMergeRequest = true }, func(f *eventFields, v *bool) { f.ReassignMergeRequest = v }},
-	{"reopen_issue", "Reopen Issue", func(e *EventOutput) { e.ReopenIssue = true }, func(f *eventFields, v *bool) { f.ReopenIssue = v }},
-	{"reopen_merge_request", "Reopen MR", func(e *EventOutput) { e.ReopenMergeRequest = true }, func(f *eventFields, v *bool) { f.ReopenMergeRequest = v }},
-	{"success_pipeline", "Success Pipeline", func(e *EventOutput) { e.SuccessPipeline = true }, func(f *eventFields, v *bool) { f.SuccessPipeline = v }},
+	{"close_issue", "Close Issue", func(e *EventOutput) { e.CloseIssue = true }, func(f *UpdateGlobalInput, v *bool) { f.CloseIssue = v }},
+	{"close_merge_request", "Close MR", func(e *EventOutput) { e.CloseMergeRequest = true }, func(f *UpdateGlobalInput, v *bool) { f.CloseMergeRequest = v }},
+	{"failed_pipeline", "Failed Pipeline", func(e *EventOutput) { e.FailedPipeline = true }, func(f *UpdateGlobalInput, v *bool) { f.FailedPipeline = v }},
+	{"fixed_pipeline", "Fixed Pipeline", func(e *EventOutput) { e.FixedPipeline = true }, func(f *UpdateGlobalInput, v *bool) { f.FixedPipeline = v }},
+	{"issue_due", "Issue Due", func(e *EventOutput) { e.IssueDue = true }, func(f *UpdateGlobalInput, v *bool) { f.IssueDue = v }},
+	{"merge_merge_request", "Merge MR", func(e *EventOutput) { e.MergeMergeRequest = true }, func(f *UpdateGlobalInput, v *bool) { f.MergeMergeRequest = v }},
+	{"merge_when_pipeline_succeeds", "Merge When Pipeline Succeeds", func(e *EventOutput) { e.MergeWhenPipelineSucceeds = true }, func(f *UpdateGlobalInput, v *bool) { f.MergeWhenPipelineSucceeds = v }},
+	{"moved_project", "Moved Project", func(e *EventOutput) { e.MovedProject = true }, func(f *UpdateGlobalInput, v *bool) { f.MovedProject = v }},
+	{"new_issue", "New Issue", func(e *EventOutput) { e.NewIssue = true }, func(f *UpdateGlobalInput, v *bool) { f.NewIssue = v }},
+	{"new_merge_request", "New MR", func(e *EventOutput) { e.NewMergeRequest = true }, func(f *UpdateGlobalInput, v *bool) { f.NewMergeRequest = v }},
+	{"new_epic", "New Epic", func(e *EventOutput) { e.NewEpic = true }, func(f *UpdateGlobalInput, v *bool) { f.NewEpic = v }},
+	{"new_note", "New Note", func(e *EventOutput) { e.NewNote = true }, func(f *UpdateGlobalInput, v *bool) { f.NewNote = v }},
+	{"push_to_merge_request", "Push to MR", func(e *EventOutput) { e.PushToMergeRequest = true }, func(f *UpdateGlobalInput, v *bool) { f.PushToMergeRequest = v }},
+	{"reassign_issue", "Reassign Issue", func(e *EventOutput) { e.ReassignIssue = true }, func(f *UpdateGlobalInput, v *bool) { f.ReassignIssue = v }},
+	{"reassign_merge_request", "Reassign MR", func(e *EventOutput) { e.ReassignMergeRequest = true }, func(f *UpdateGlobalInput, v *bool) { f.ReassignMergeRequest = v }},
+	{"reopen_issue", "Reopen Issue", func(e *EventOutput) { e.ReopenIssue = true }, func(f *UpdateGlobalInput, v *bool) { f.ReopenIssue = v }},
+	{"reopen_merge_request", "Reopen MR", func(e *EventOutput) { e.ReopenMergeRequest = true }, func(f *UpdateGlobalInput, v *bool) { f.ReopenMergeRequest = v }},
+	{"success_pipeline", "Success Pipeline", func(e *EventOutput) { e.SuccessPipeline = true }, func(f *UpdateGlobalInput, v *bool) { f.SuccessPipeline = v }},
 }
 
 // TestGetGlobalSettings_OneEventAtATime_LandsInItsOwnOutputField verifies that
@@ -674,7 +676,7 @@ func TestUpdateGlobalSettings_OneEventAtATime_SendsOnlyThatKey(t *testing.T) {
 			sent := captureUpdateBody(t, func(client *gitlabclient.Client) error {
 				off := false
 				var input UpdateGlobalInput
-				tc.send(&input.eventFields, &off)
+				tc.send(&input, &off)
 				_, err := UpdateGlobalSettings(t.Context(), client, input)
 				return err
 			})
@@ -713,6 +715,27 @@ func TestUpdateSettingsForGroup_Level_SendsTheSpellingGitLabAccepts(t *testing.T
 				t.Errorf("level = %q, want %q", got, level)
 			}
 		})
+	}
+}
+
+// TestUpdateSettingsForGroup_NewEpic_SendsTheFlagAlone verifies that the group
+// update sends the new epic flag the caller set, false included, and nothing
+// beside it. The flag is the group's own rather than one of the shared events,
+// since GitLab declares it for a group and not for a project, so the request
+// option builder never sees it and a handler that forgot to copy it would
+// drop it silently.
+func TestUpdateSettingsForGroup_NewEpic_SendsTheFlagAlone(t *testing.T) {
+	off := false
+	sent := captureUpdateBody(t, func(client *gitlabclient.Client) error {
+		_, err := UpdateSettingsForGroup(t.Context(), client, UpdateGroupInput{GroupID: "grp", NewEpic: &off})
+		return err
+	})
+
+	if len(sent) != 1 {
+		t.Fatalf("request body = %v, want only new_epic", sent)
+	}
+	if flag, ok := sent["new_epic"].(bool); !ok || flag {
+		t.Errorf("new_epic = %v, want the false the caller asked for", sent["new_epic"])
 	}
 }
 

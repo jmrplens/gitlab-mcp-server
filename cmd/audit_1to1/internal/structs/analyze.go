@@ -172,6 +172,10 @@ const (
 	// deploymentMergeRequestsInert is the reason three merge request list
 	// options are absent from the deployment merge request input.
 	deploymentMergeRequestsInert = "declared by GET /projects/:id/deployments/:deployment_id/merge_requests through merge_requests_base_params and read by nothing there: lib/api/deployments.rb presents MergeRequestBasic with current_user alone, and only serializer_options_for in lib/api/merge_requests.rb turns the option into a presenter option; exposed on the merge request list inputs, where it takes effect"
+	// notificationNewEpicNotProjects is the reason the shared notification
+	// events leave out new_epic, which client-go's options carry for all three
+	// update routes.
+	notificationNewEpicNotProjects = "declared for PUT /notification_settings and PUT /groups/:id/notification_settings and not for PUT /projects/:id/notification_settings (EE::NotificationSetting::EMAIL_EVENTS_MAPPING, ee/app/models/ee/notification_setting.rb:7-17 at v19.5.0-ee; gitlab-api-live.json, 19.5.0), so Grape drops it from a project's update on every tier; the account-wide and group inputs embed it as epicEvent and their handlers send it"
 	// skypeDiscarded is the reason the user create and modify inputs offer no
 	// skype, which client-go's options still carry.
 	skypeDiscarded = "GitLab discards it: the users.skype column is ignored since 18.4 and neither POST /users nor PUT /users/:id declares the param, so a caller who set it changed nothing"
@@ -1114,6 +1118,13 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// route declares the param.
 	"users.CreateInput.job_title": jobTitleDiscarded,
 	"users.ModifyInput.job_title": jobTitleDiscarded,
+	// An SDK options field one of the routes it is sent to does not declare.
+	// The three notification updates share one options struct, and GitLab
+	// declares new_epic for the account-wide and the group settings and not
+	// for a project's (EE::NotificationSetting::EMAIL_EVENTS_MAPPING), so the
+	// shared events the builder copies leave it out and the two inputs that
+	// take it embed it on their own.
+	"notifications.eventFields.new_epic": notificationNewEpicNotProjects,
 
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).

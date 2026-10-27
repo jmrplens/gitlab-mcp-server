@@ -622,6 +622,18 @@ const (
 	routeMergeRequestsGroup    = "GET /groups/:id/merge_requests"
 )
 
+// The new epic row of doc/api/notification_settings.md, which the page writes
+// the same way for the account-wide update and for the update it documents
+// for a group and a project in one table, as GitLab's page carries it on
+// master on 2026-10-27, and the routes it documents.
+const (
+	rowNotificationNewEpic    = "| `new_epic` | boolean | No | Turn on notifications when a new epic is created (in the Premium and Ultimate tier) |"
+	routeNotificationsGlobal  = "PUT /notification_settings"
+	routeNotificationsGroup   = "PUT /groups/:id/notification_settings"
+	routeNotificationsProject = "PUT /projects/:id/notification_settings"
+	routesNotificationsScoped = routeNotificationsGroup + "\n" + routeNotificationsProject
+)
+
 // TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles drives the entry
 // point over a module root whose record names the actions of one page and
 // whose cache holds that page's sections, for each page whose rows issue 1240
@@ -755,6 +767,19 @@ func TestRunMain_RealTable_AnswersTheRowsGitLabsSourceSettles(t *testing.T) {
 				restRecord("merge_request.list_global", routeMergeRequestsGlobal),
 				restRecord("merge_request.list", routeMergeRequestsProject),
 				restRecord("merge_request.list_group", routeMergeRequestsGroup),
+			},
+			want: map[string]string{},
+		},
+		{
+			name:   "notification_settings",
+			area:   "notification_settings",
+			domain: "notifications",
+			page: endpointSection("Update global notification settings", routeNotificationsGlobal, rowNotificationNewEpic) +
+				endpointSection("Update group or project notification settings", routesNotificationsScoped, rowNotificationNewEpic),
+			record: []actionrequests.RecordAction{
+				restRecord("user.notification_global_update", routeNotificationsGlobal),
+				restRecord("user.notification_group_update", routeNotificationsGroup),
+				restRecord("user.notification_project_update", routeNotificationsProject),
 			},
 			want: map[string]string{},
 		},

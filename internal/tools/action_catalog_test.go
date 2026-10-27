@@ -1256,6 +1256,53 @@ func TestCentralTierFilter_MergeRequestApproverFilter_IsOfferedFromPremium(t *te
 	})
 }
 
+// assertInputsOfferedOnNoTier builds the catalog of each tier and holds every
+// input in cases absent from every schema that serves its action, which is
+// what a parameter GitLab's route never reads must be. As in
+// [assertInputsOfferedFrom], a case whose action the Ultimate catalog does
+// not serve names no action and fails.
+func assertInputsOfferedOnNoTier(t *testing.T, cases []tieredInput) {
+	t.Helper()
+	tiers := []edition.Tier{edition.Free, edition.Premium, edition.Ultimate}
+	catalogs := make(map[edition.Tier]*actioncatalog.Catalog, len(tiers))
+	for _, tier := range tiers {
+		catalogs[tier] = mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, served := catalogs[edition.Ultimate].Action(tc.id); !served {
+				t.Fatalf("%s is not an action of the Ultimate catalog", tc.id)
+			}
+			for _, tier := range tiers {
+				if _, served := catalogs[tier].Action(tc.id); served && actionHasInputProp(t, catalogs[tier], tc.id, tc.field) {
+					t.Errorf("%s %s input schema offers %q, which its route never reads", tier, tc.id, tc.field)
+				}
+			}
+		})
+	}
+}
+
+// TestCentralTierFilter_EpicNotification_IsOfferedWhereGitLabTakesIt holds the
+// new epic notification flag to the scopes and the tier GitLab v19.5.0-ee
+// takes it at (issue 1240). Enterprise Edition declares new_epic for the
+// account-wide and the group settings and not for a project's
+// (EE::NotificationSetting::EMAIL_EVENTS_MAPPING), so a project's schema
+// offering it invited a flag Grape drops on every tier. Where it is declared
+// it is stored on every tier, but an epic exists only from Premium, so it
+// follows the Premium gate of the epic actions. The other event flags stay on
+// every tier and every scope.
+func TestCentralTierFilter_EpicNotification_IsOfferedWhereGitLabTakesIt(t *testing.T) {
+	assertInputsOfferedFrom(t, []tieredInput{
+		{name: "global_new_epic", id: "user.notification_global_update", field: "new_epic", from: edition.Premium},
+		{name: "group_new_epic", id: "user.notification_group_update", field: "new_epic", from: edition.Premium},
+		{name: "group_new_issue", id: "user.notification_group_update", field: "new_issue", from: edition.Free},
+		{name: "project_new_issue", id: "user.notification_project_update", field: "new_issue", from: edition.Free},
+	})
+	assertInputsOfferedOnNoTier(t, []tieredInput{
+		{name: "project_new_epic", id: "user.notification_project_update", field: "new_epic"},
+	})
+}
+
 // TestCentralTierFilter_OutputSchemasArePrunedLenientlyPerTier is the output
 // half of the tier filter, across the three tiers built in one process.
 //

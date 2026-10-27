@@ -30,7 +30,9 @@ type GetGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 }
 
-// eventFields holds all notification event boolean flags shared across update inputs.
+// eventFields holds the notification event boolean flags all three update
+// inputs share. new_epic, which a project's settings do not take, is
+// [epicEvent].
 //
 // The Level description names no values on purpose: the account-wide settings
 // accept one level fewer than a project's or a group's, and one embedded struct
@@ -49,7 +51,6 @@ type eventFields struct {
 	MergeMergeRequest         *bool  `json:"merge_merge_request,omitempty" jsonschema:"Notify on MR merge"`
 	MergeWhenPipelineSucceeds *bool  `json:"merge_when_pipeline_succeeds,omitempty" jsonschema:"Notify on merge when pipeline succeeds"`
 	MovedProject              *bool  `json:"moved_project,omitempty" jsonschema:"Notify on project move"`
-	NewEpic                   *bool  `json:"new_epic,omitempty" jsonschema:"Notify on new epic"`
 	NewIssue                  *bool  `json:"new_issue,omitempty" jsonschema:"Notify on new issue"`
 	NewMergeRequest           *bool  `json:"new_merge_request,omitempty" jsonschema:"Notify on new MR"`
 	NewNote                   *bool  `json:"new_note,omitempty" jsonschema:"Notify on new note"`
@@ -61,9 +62,21 @@ type eventFields struct {
 	SuccessPipeline           *bool  `json:"success_pipeline,omitempty" jsonschema:"Notify on pipeline success"`
 }
 
+// epicEvent holds the one event flag the account-wide and the group settings
+// take and a project's do not. Enterprise Edition declares new_epic for a
+// group, where epics live, and for the account-wide settings a group falls
+// back to, and not for a project, whose route Grape would drop it from
+// (EE::NotificationSetting::EMAIL_EVENTS_MAPPING, at v19.5.0-ee). Where it is
+// declared it is stored on every tier, but an epic exists only from Premium,
+// so the flag is offered from Premium, as every epic action is (issue 1240).
+type epicEvent struct {
+	NewEpic *bool `json:"new_epic,omitempty" tier:"premium" jsonschema:"Notify on new epic"`
+}
+
 // UpdateGlobalInput is the input for updating global notification settings.
 type UpdateGlobalInput struct {
 	eventFields
+	epicEvent
 }
 
 // UpdateProjectInput is the input for updating project notification settings.
@@ -76,6 +89,7 @@ type UpdateProjectInput struct {
 type UpdateGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	eventFields
+	epicEvent
 }
 
 // Output type.
@@ -162,6 +176,7 @@ func UpdateGlobalSettings(ctx context.Context, client *gitlabclient.Client, inpu
 	if err != nil {
 		return Output{}, err
 	}
+	opts.NewEpic = input.NewEpic
 	settings, _, err := client.GL().NotificationSettings.UpdateGlobalSettings(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("notification_global_update", err, http.StatusBadRequest,
@@ -200,6 +215,7 @@ func UpdateSettingsForGroup(ctx context.Context, client *gitlabclient.Client, in
 	if err != nil {
 		return Output{}, err
 	}
+	opts.NewEpic = input.NewEpic
 	settings, _, err := client.GL().NotificationSettings.UpdateSettingsForGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("notification_group_update", err, http.StatusBadRequest,
@@ -255,8 +271,10 @@ func levelHint(levels []string) string {
 
 // buildUpdateOpts assembles a [gl.NotificationSettingsOptions] from
 // the shared [eventFields], translating the Level string via
-// [levelMap] and copying every event flag onto the options. levels names the
-// values the caller's scope accepts, and a Level outside them is refused here.
+// [levelMap] and copying every shared event flag onto the options; the two
+// handlers whose scope takes [epicEvent] copy new_epic themselves. levels
+// names the values the caller's scope accepts, and a Level outside them is
+// refused here.
 //
 // Refusing matters more than it looks. An unrecognized level used to be dropped
 // on the floor: the PUT went out carrying every other field and no level, GitLab
@@ -284,7 +302,6 @@ func buildUpdateOpts(e eventFields, levels []string) (*gl.NotificationSettingsOp
 	opts.MergeMergeRequest = e.MergeMergeRequest
 	opts.MergeWhenPipelineSucceeds = e.MergeWhenPipelineSucceeds
 	opts.MovedProject = e.MovedProject
-	opts.NewEpic = e.NewEpic
 	opts.NewIssue = e.NewIssue
 	opts.NewMergeRequest = e.NewMergeRequest
 	opts.NewNote = e.NewNote
