@@ -1,39 +1,42 @@
 # Refusing Plain HTTP off Loopback
 
-This page weighs one change and decides nothing: refusing to start an HTTP
-listener that serves plain HTTP on an address other machines can reach, unless
-TLS or an explicit opt-in is given. The maintainer's position is that such a
-refusal, if it happens, ships in 3.4.0 rather than waiting for a 4.0.0, and
-only after this analysis has been read. It is the second half of the work the
-OpenSSF Best Practices issue 1269 opened for the gold criterion
-`crypto_used_network`, recorded as finding 6 of the
+This page weighed one change: refusing, by default, to start an HTTP listener
+that serves plain HTTP on an address other machines can reach, unless TLS or an
+explicit opt-in is given. It is the second half of the work the OpenSSF Best
+Practices issue 1269 opened for the gold criterion `crypto_used_network`,
+recorded as finding 6 of the
 [Security Review, October 2026](security-review-2026-10.md#findings).
 
-The first half is in the tree: the warning and the opt-in described below.
-Everything this page says about a refusal is a proposal.
+**The maintainer decided on 27 October 2026, after reading it, against a
+default refusal** ([Decision](#decision)). Plain HTTP stays served by default,
+with the warning, and the refusal is the hardened mode an operator asks for by
+setting the opt-in to `false`. The analysis below is kept as the record of what
+a default refusal would have cost.
 
-## What the server does today
+## What the server does
 
 The binary serves stdio unless it is told otherwise, so a client install
 (Homebrew, winget, npm, PyPI, NuGet, the Claude Desktop extension, `docker run
 -i`) opens no listener at all. HTTP mode needs `--http`, `--transport=http`, or
 `--transport=auto` with stdin on the null device, and then `--http-addr` decides
-the listener:
+the listener, with `--allow-plaintext-http` (or
+`GITLAB_MCP_ALLOW_PLAINTEXT_HTTP`, which the flag wins over) saying what becomes
+of one that serves plain HTTP to the network:
 
-| `--http-addr` and TLS                                                                                                                     | What startup writes                                       |
-| ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| A unix socket path                                                                                                                        | Nothing about the transport                               |
-| A loopback address, or a name that resolves only to loopback                                                                              | Nothing about the transport                               |
-| Any TCP address with `--tls-cert` and `--tls-key`                                                                                         | Nothing about the transport                               |
-| Any other TCP address: a wildcard bind (the default `:8080`, `0.0.0.0`, `[::]`), a routable address, a name that resolves off the machine | `WARN`, naming the address and the three remedies         |
-| The same, under `--allow-plaintext-http` or `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true`                                                        | `INFO`, saying the listener serves plain HTTP as declared |
+| `--http-addr` and TLS                                                                                                                     | Setting unset (the default)                                                        | Setting `true`                                                      | Setting `false` (the hardened mode)                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| A unix socket path                                                                                                                        | Served, nothing written                                                            | Served, nothing written                                             | Served, nothing written                                             |
+| A loopback address, or a name that resolves only to loopback                                                                              | Served, nothing written                                                            | Served, nothing written                                             | Served, nothing written                                             |
+| Any TCP address with `--tls-cert` and `--tls-key`                                                                                         | Served, nothing written                                                            | Served, nothing written                                             | Served, nothing written                                             |
+| Any other TCP address: a wildcard bind (the default `:8080`, `0.0.0.0`, `[::]`), a routable address, a name that resolves off the machine | Served, with a `WARN` naming the address, the three remedies and the hardened mode | Served, with an `INFO` line saying it serves plain HTTP as declared | Refused: exit `1` with an error naming the address and the remedies |
 
 The classification is `cmd/server.listenerIsHostLocal`, the same test that
-admits `--allow-any-gitlab-url` (register row DST-002), and the lines are
+admits `--allow-any-gitlab-url` (register row DST-002), the lines are
 `plaintextListenerWarning` and `plaintextListenerAllowed` in
-`cmd/server/listen.go`. `announcePlaintextListener` runs in `runHTTP` after the
-TLS pair is validated and before the bind. Nothing refuses: a listener that
-warned serves exactly as it did before the warning existed.
+`cmd/server/listen.go`, and the refusal is register row ADM-015.
+`checkPlaintextListener` runs in `runHTTP` after the TLS pair is validated and
+before the bind. Unset or `true`, a listener serves exactly as it did before
+the setting existed.
 
 Two defaults put plain HTTP on a network without anyone asking for it. The
 binary's `--http-addr` defaults to `:8080`, every interface, so
@@ -55,12 +58,14 @@ At gold, `crypto_used_network` is a MUST: the software must support secure
 protocols for all its network communications, and insecure protocols such as
 HTTP "MUST be disabled by default, and only enabled if the user specifically
 configures it" ([criteria](https://www.bestpractices.dev/en/criteria/2#2.crypto_used_network)).
-The silver form is a SHOULD and is met already: stdio needs no network, and
-GitLab is reached over https by default. The gold reading turns on the image:
-its default command serves plain HTTP on every interface, so a
-`docker run -d -e GITLAB_URL=…` deployment has plain HTTP enabled without
-configuring it. The warning does not change that reading, since it reports a
-default rather than changing it.
+The silver form is a SHOULD and is met already: stdio, the default transport,
+needs no network, HTTP mode is served only when `--http` or a transport asks
+for it, and GitLab is reached over https by default. Passing has no such
+criterion. The gold reading turns on the image: its default command serves
+plain HTTP on every interface, so a `docker run -d -e GITLAB_URL=…` deployment
+has plain HTTP enabled without configuring it. Neither the warning nor the
+hardened mode changes that reading, since one reports a default and the other
+is asked for, so the gold criterion stays unmet by the decision below.
 
 Gold is out of reach while the project has one maintainer: `bus_factor`,
 `contributors_unassociated` and `two_person_review` need a second person and
@@ -70,10 +75,11 @@ protection itself: an operator who starts the binary with its defaults, or
 publishes the image on every interface, stops sending tokens across the
 network in the clear by accident.
 
-## Who a refusal would stop
+## Who a default refusal would have stopped
 
-The Today column is what startup writes now. Under a refusal, a row that warns
-today exits `1` at startup instead.
+The Today column is what startup writes by default. Under a default refusal, a
+row that warns today would exit `1` at startup instead, which is what each of
+them does now only in the hardened mode.
 
 | Deployment                                                                                                                                                                                                                                                                                                                 | Listener                                                                                                                                   | Today                              | Under a refusal                       | What it would have to change                                                                                                                                                                                                                                                              |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -89,7 +95,7 @@ today exits `1` at startup instead.
 | `examples/telemetry/compose.yaml`                                                                                                                                                                                                                                                                                          | `0.0.0.0:8080` in the container                                                                                                            | `WARN`                             | Refused                               | The variable in its environment; it is a local demo, so declaring the hop is the honest setting                                                                                                                                                                                           |
 | Kubernetes (no manifest ships here; every one is the operator's)                                                                                                                                                                                                                                                           | `0.0.0.0:8080` in the pod                                                                                                                  | `WARN`                             | Refused                               | The variable in the container spec behind an ingress that terminates TLS, or TLS from a mounted Secret with the ingress talking HTTPS to the backend; the listener re-reads a rotated pair without a restart                                                                              |
 | A service mesh whose sidecar terminates mTLS                                                                                                                                                                                                                                                                               | Whatever the pod binds                                                                                                                     | `WARN` unless loopback             | Refused unless loopback               | The opt-in, unless the sidecar reaches the container on loopback, which depends on the mesh                                                                                                                                                                                               |
-| The hosted endpoint, `https://mcp.jmrp.io/gitlab`                                                                                                                                                                                                                                                                          | The image behind nginx on the same host, over the Docker bridge                                                                            | `WARN`                             | Refused                               | The variable in its deployment, set before that host takes the refusing release, or a unix socket shared with nginx. Its configuration lives in the mcp.jmrp.io repository, not here                                                                                                      |
+| The hosted endpoint, `https://mcp.jmrp.io/gitlab`                                                                                                                                                                                                                                                                          | Whatever its own deployment binds; that is configured in the mcp.jmrp.io repository                                                        | `WARN` off loopback without TLS    | Refused off loopback without TLS      | The variable in its deployment, set before it takes the refusing release, or a listener the refusal starts: TLS, loopback or a unix socket. Its configuration lives in the mcp.jmrp.io repository, not here                                                                               |
 | This repository's own suites                                                                                                                                                                                                                                                                                               | A loopback address, except the plaintext cases of `test/e2e/http/listener_test.go` and the wildcard starts of `test/e2e/http/gate_test.go` | Nothing, the plaintext cases aside | Unaffected, the plaintext cases aside | The plaintext cases would assert the refusal and the opt-in instead of the warning. `test/e2e/gitlab` drives stdio, and HTTP on a loopback address; the wildcard starts of `gate_test.go` are refused by DST-002 before the listener is judged; `cmd/bench_resources` binds `127.0.0.1`   |
 
 Three properties of the containers in that table decide most of the cost. A
@@ -102,34 +108,30 @@ listener setting does. And a container that starts into the refusal exits,
 and under a restart policy starts and exits again, with the reason in its log
 and nowhere a dashboard looks first.
 
-## What the opt-in would look like
+## What a default refusal would have looked like
 
-The opt-in exists already, and a refusal would change what it does without
-renaming it: under `--allow-plaintext-http` or
-`GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true` the listener would start and write the
-same INFO line it writes now, and without either it would exit `1` with an
-error built like the warning, naming the address and the three ways out: TLS on
-the listener, a loopback address or unix socket, or the opt-in in both
+The opt-in would have changed what it does without being renamed: under
+`--allow-plaintext-http` or `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true` the listener
+would start and write the INFO line, and without either it would exit `1` with
+an error built like the warning, naming the address and the three ways out: TLS
+on the listener, a loopback address or unix socket, or the opt-in in both
 spellings.
 
-The change in code is small. `announcePlaintextListener` returns an error
-where it now warns, `runHTTP` returns that error before the bind, the unit
-cases of `TestAnnouncePlaintextListener_SaysWhatTheListenerExposes` and
-`TestRunHTTP_AnnouncesThePlaintextListenerItWasConfiguredFor` expect the error,
-and the three plaintext cases of `test/e2e/http/listener_test.go` expect a
-refused start and an opt-in that still serves. It needs no row in
-`internal/tenancy`: the register holds decisions about who a caller is and
-what it may hold, spend or be told, and this one is about how the operator's
-process listens. DST-002 is in the register because its startup refusal decides
-which instance a caller may name; a plaintext refusal decides nothing about any
-caller.
+The code is the hardened mode's, which is in the tree now with the opposite
+default: `checkPlaintextListener` returns the refusal before the bind when the
+setting is `false`, and a default refusal would have returned it when the
+setting is unset as well. The refusal is register row ADM-015, since a refusal
+of startup is a decision of the register like DST-002's: that row refuses a
+deployment that would let any caller name any instance, and this one a
+deployment that would carry every caller's token across the network in the
+clear.
 
-The image would not set the opt-in. Setting it there keeps every container
-working and also keeps plain HTTP the image's default, which is the one thing
-the criterion asks to change.
+The image would not have set the opt-in. Setting it there keeps every
+container working and also keeps plain HTTP the image's default, which is the
+one thing the criterion asks to change.
 
-The rest of the change is documentation, and it is most of the work: every
-example in the table above, the HTTP Server, Security, Command Line,
+The rest of the change would have been documentation, and most of the work:
+every example in the table above, the HTTP Server, Security, Command Line,
 Environment, Configuration, Docker and Remote Deployment pages in both
 languages, the assurance case's cleartext section and residual risk, finding 6,
 and the version policy of the changelog page, which today names 3.1.0 as the
@@ -183,24 +185,62 @@ reach the listener. Not proposed.
 
 ## Recommendation
 
-Warn in 3.4.0, the release this change is planned for, and refuse in the minor
-release after it, with the 3.4.0 notes announcing the refusal and naming the
-variable. Before the refusing release is tagged: the hosted endpoint sets
-`GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=true` or moves to a unix socket,
-`docker-compose.yml` publishes on loopback and sets the variable,
-`examples/telemetry/compose.yaml` sets it, the examples published on every
-interface move to loopback, and every example in the table gains the variable
-or TLS. The reasons are the precedent of the retired names, warned about in
-3.0.0 and broken in 3.1.0, the compose file that pulls `latest` on every
-start, and the absence of a deadline: gold stays out of reach whatever this
-decides, so one release of notice costs nothing the criterion would have paid
-for.
+The page recommended warning in 3.4.0 and refusing in the minor release after
+it, for the precedent of the retired names, warned about in 3.0.0 and broken in
+3.1.0, the compose file that pulls `latest` on every start, and the absence of
+a deadline, since gold stays out of reach whatever this decides.
 
-If the refusal goes into 3.4.0 instead, the same list holds, with two
-additions: the hosted endpoint has to set the variable before 3.4.0 is
-published rather than before it is deployed, and the summary at the top of the
-3.4.0 release names the refusal as the one configuration change, the way
-3.1.0's named the variables it stopped reading.
+## Decision
 
-Either way, the decision is the maintainer's, and nothing here is implemented
-until he makes it.
+On 27 October 2026 the maintainer decided against a default refusal, in 3.4.0
+or later, and for a hardened mode an operator asks for:
+
+- **`--allow-plaintext-http` and `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP` default to
+  `true`**, so plain HTTP is served as it was. The flag wins over the variable,
+  which wins over the default, and a value neither reads as a boolean fails
+  startup, as for every HTTP setting.
+- **Unset**, a plaintext listener off loopback is served with the warning, which
+  now names the hardened mode as well as the three remedies.
+- **`true`** is the declaration that something in front of the listener
+  encrypts the hop: served, with the INFO line, as before.
+- **`false`** is the hardened mode: startup refuses a listener that would serve
+  plain HTTP off loopback, and starts only with `--tls-cert` and `--tls-key`, a
+  loopback address or a name that resolves only to loopback, or a unix socket.
+  The error names the address and the remedies (register row ADM-015).
+
+Nothing in the table above that starts today stops starting, so no example,
+compose file or hosted deployment has to change, and no release note announces
+a break. What it costs is the criterion: at gold, `crypto_used_network` asks
+that plain HTTP be off by default, and it stays unmet by design, beside the
+three gold criteria a single maintainer cannot meet. The silver form, a SHOULD,
+is met (above), and passing has no such criterion. Finding 6 of the security
+review is recorded as a design choice.
+
+## The hardened mode and a container's network
+
+Whether a container starts in the hardened mode depends on its network, since
+`listenerIsHostLocal` reads the address the server binds and a container's
+loopback is its own. HTTP Server's
+[The listener rule and the container's network](https://docs.jmrp.io/gitlab-mcp-server/operations/http-server/#the-listener-rule-and-the-containers-network)
+is the operator's version of this list, in both languages:
+
+- **Its own bridge network**: a proxy on the host arrives through a published
+  port, which Docker forwards to the bridge address, so the server binds
+  `0.0.0.0` and is off loopback even when the port is published on
+  `127.0.0.1`. Refused in the hardened mode, warned about by default.
+- **The host's network** (`network_mode: host`, Linux): the host's loopback is
+  the container's, so `--http-addr=127.0.0.1:<port>` starts. `ports:` is
+  ignored, each replica needs its own port, the proxy's peer is `127.0.0.1`,
+  so `--trusted-proxies` names `127.0.0.1/32` or the authentication budgets
+  charge every caller to it, and the container loses its network isolation.
+- **Another container's network** (`network_mode: service:<other>`, a
+  sidecar): loopback reaches only that namespace, whose owner publishes the
+  port; a proxy on the host still arrives off loopback.
+- **A unix socket in a directory bind-mounted from the host**: works across
+  namespaces, with `--http-socket-mode` for the proxy's user, a directory
+  writable by UID 10001 (a mount of its own under `--read-only`) and
+  `--trusted-proxies=unix`. `--probe` reads the socket path off the server's
+  command line (`discoveredTarget`) and dials it, so the image's health check
+  keeps working.
+- **TLS on the listener**, with the proxy verifying the certificate: starts on
+  any of them.
