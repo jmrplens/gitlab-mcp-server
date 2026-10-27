@@ -60,7 +60,11 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement by email to
-[mail@jmrp.io](mailto:mail@jmrp.io).
+[mail@jmrp.io](mailto:mail@jmrp.io). Email is not encrypted on its own, so to
+keep a report private on its way, encrypt it if you can to the maintainer's
+OpenPGP key, published at <https://github.com/jmrplens.gpg> with the
+fingerprint `0A99 3B26 8654 DBBA 52B7 E8D3 FCF6 5339 1E2C 91FC`, which carries
+that address.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
