@@ -377,7 +377,7 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 		return ConfigOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalConfig", err, http.StatusForbidden,
 			"the caller must be able to see the merge request; verify project_id + merge_request_iid")
 	}
-	state, err := CapturedEnterpriseState(captured)
+	state, err := CapturedEnterpriseState(cfg, captured)
 	if err != nil {
 		return ConfigOutput{}, toolutil.WrapErr("mrApprovalConfig", err)
 	}

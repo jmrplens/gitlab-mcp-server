@@ -4,8 +4,6 @@
 package mrapprovals
 
 import (
-	"time"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -128,17 +126,20 @@ func approverUserOutputs(users []*gl.MergeRequestApproverUser) []*MergeRequestAp
 // below. The routes keep the Community Edition annotation, so GitLab's
 // generated OpenAPI document lists the four alone for all three.
 //
-// Every field is read off the captured answer (ADR-0021) and is absent when
-// GitLab did not send it: a Community Edition answer publishes none of them,
-// while an Enterprise one keeps its zeros, since approvals_left 0 says no
-// approval is missing and has_approval_rules false says no rule exists. That is
-// why the scalars are pointers, save the two timestamps, which are strings left
-// empty when GitLab sent none, and the lists are omitted only when GitLab sent
-// no list. client-go's MergeRequestApprovals cannot carry that difference: its
-// fields read zero either way. It also has no invalid_approvers_rules, types
-// approval_rules_left with the whole approval rule where GitLab sends the short
-// reference, and declares approvals_before_merge, which no edition sends here
-// and which is not published.
+// Every field is absent when GitLab did not send it: a Community Edition
+// answer publishes none of them, while an Enterprise one keeps its zeros,
+// since approvals_left 0 says no approval is missing and has_approval_rules
+// false says no rule exists. That is why the scalars are pointers, save the
+// two timestamps, which are strings left empty when GitLab sent none, and the
+// lists are omitted only when GitLab sent no list. client-go's
+// MergeRequestApprovals cannot carry that difference for a scalar, which it
+// reads as zero either way, so the scalars are read off the captured answer
+// (ADR-0021), and so are the lists whose users and groups carry keys its
+// structs do not model, and invalid_approvers_rules, which it does not model
+// at all. The two timestamps and approval_rules_left, which it decodes as
+// GitLab sends them (a nil time and a nil list for a key not sent), are read
+// off its decode. It also declares approvals_before_merge, which no edition
+// sends here and which is not published.
 type EnterpriseApprovalState struct {
 	ID                             *int64                     `json:"id,omitempty"                                jsonschema:"Merge request ID (Enterprise Edition only)"`
 	IID                            *int64                     `json:"iid,omitempty"                               jsonschema:"Merge request IID (Enterprise Edition only)"`
@@ -188,32 +189,80 @@ type ApprovalRuleShortOutput struct {
 	RuleType string `json:"rule_type"`
 }
 
-// enterpriseApprovalCapture is the decoding of a captured approvals answer
-// into [EnterpriseApprovalState]. The two timestamps are read as times, so
-// they are published in the RFC 3339 form every other timestamp here takes
-// rather than in whatever precision GitLab wrote; each shadows the string
-// field of the same name in the embedded state, which encoding/json leaves
-// alone because the shallower field wins.
+// enterpriseApprovalCapture is what a captured approvals answer is read for:
+// the keys of [EnterpriseApprovalState] client-go's MergeRequestApprovals
+// does not decode the way the state publishes them.
 type enterpriseApprovalCapture struct {
-	EnterpriseApprovalState
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
+	ID                             *int64                     `json:"id"`
+	IID                            *int64                     `json:"iid"`
+	ProjectID                      *int64                     `json:"project_id"`
+	Title                          *string                    `json:"title"`
+	Description                    *string                    `json:"description"`
+	State                          *string                    `json:"state"`
+	MergeStatus                    *string                    `json:"merge_status"`
+	ApprovalsRequired              *int64                     `json:"approvals_required"`
+	ApprovalsLeft                  *int64                     `json:"approvals_left"`
+	RequirePasswordToApprove       *bool                      `json:"require_password_to_approve"`
+	SuggestedApprovers             []toolutil.UserBasicOutput `json:"suggested_approvers"`
+	Approvers                      []ApproverOutput           `json:"approvers"`
+	ApproverGroups                 []ApproverGroupOutput      `json:"approver_groups"`
+	HasApprovalRules               *bool                      `json:"has_approval_rules"`
+	MergeRequestApproversAvailable *bool                      `json:"merge_request_approvers_available"`
+	MultipleApprovalRulesAvailable *bool                      `json:"multiple_approval_rules_available"`
+	InvalidApproversRules          []ApprovalRuleShortOutput  `json:"invalid_approvers_rules"`
 }
 
-// CapturedEnterpriseState reads the Enterprise Edition approval state off the
-// captured answer to an approvals, approve or unapprove request. A Community
+// CapturedEnterpriseState reads the Enterprise Edition approval state of an
+// approvals, approve or unapprove answer: off client-go's decode of it,
+// approvals, the two timestamps, published in the RFC 3339 form every other
+// timestamp here takes rather than in whatever precision GitLab wrote, and
+// the rules still to satisfy; off the captured answer the rest. A Community
 // Edition answer carries none of its keys and yields the zero value, which
 // publishes nothing. A body that does not decode is an error, since the fault
 // is then in the type rather than in the answer.
-func CapturedEnterpriseState(capture *gitlabclient.ResponseCapture) (EnterpriseApprovalState, error) {
+func CapturedEnterpriseState(approvals *gl.MergeRequestApprovals, capture *gitlabclient.ResponseCapture) (EnterpriseApprovalState, error) {
 	var decoded enterpriseApprovalCapture
 	if err := capture.Decode(&decoded); err != nil {
 		return EnterpriseApprovalState{}, err
 	}
-	state := decoded.EnterpriseApprovalState
-	state.CreatedAt = toolutil.RFC3339Ptr(decoded.CreatedAt)
-	state.UpdatedAt = toolutil.RFC3339Ptr(decoded.UpdatedAt)
-	return state, nil
+	return EnterpriseApprovalState{
+		ID:                             decoded.ID,
+		IID:                            decoded.IID,
+		ProjectID:                      decoded.ProjectID,
+		Title:                          decoded.Title,
+		Description:                    decoded.Description,
+		State:                          decoded.State,
+		CreatedAt:                      toolutil.RFC3339Ptr(approvals.CreatedAt),
+		UpdatedAt:                      toolutil.RFC3339Ptr(approvals.UpdatedAt),
+		MergeStatus:                    decoded.MergeStatus,
+		ApprovalsRequired:              decoded.ApprovalsRequired,
+		ApprovalsLeft:                  decoded.ApprovalsLeft,
+		RequirePasswordToApprove:       decoded.RequirePasswordToApprove,
+		SuggestedApprovers:             decoded.SuggestedApprovers,
+		Approvers:                      decoded.Approvers,
+		ApproverGroups:                 decoded.ApproverGroups,
+		ApprovalRulesLeft:              shortRules(approvals.ApprovalRulesLeft),
+		HasApprovalRules:               decoded.HasApprovalRules,
+		MergeRequestApproversAvailable: decoded.MergeRequestApproversAvailable,
+		MultipleApprovalRulesAvailable: decoded.MultipleApprovalRulesAvailable,
+		InvalidApproversRules:          decoded.InvalidApproversRules,
+	}, nil
+}
+
+// shortRules keeps the reference GitLab sent of each rule client-go decoded
+// whole: nil when GitLab sent no list, and an empty list when it sent one
+// with nothing in it, so the state publishes the one and not the other.
+func shortRules(rules []*gl.MergeRequestApprovalRule) []ApprovalRuleShortOutput {
+	if rules == nil {
+		return nil
+	}
+	out := make([]ApprovalRuleShortOutput, 0, len(rules))
+	for _, rule := range rules {
+		if rule != nil {
+			out = append(out, ApprovalRuleShortOutput{ID: rule.ID, Name: rule.Name, RuleType: rule.RuleType})
+		}
+	}
+	return out
 }
 
 // GroupOutput is the documented reference subset of the group object embedded

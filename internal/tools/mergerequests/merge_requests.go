@@ -1037,9 +1037,10 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 }
 
 // approvalOutput builds the approval state an approve or an unapprove was
-// answered with: the keys every edition sends off client-go's decode, and off
-// the captured answer each approver whole and the Enterprise Edition approval
-// state, which a Community Edition answer leaves empty. An answer either read
+// answered with: the keys every edition sends off client-go's decode, off the
+// captured answer each approver whole, and the Enterprise Edition approval
+// state, which [mrapprovals.CapturedEnterpriseState] reads off both and a
+// Community Edition answer leaves empty. An answer either read
 // refuses is the operation's error, since client-go accepted the same bytes and
 // the fault is then in the type that read them.
 func approvalOutput(op string, approvals *gl.MergeRequestApprovals, captured *gitlabclient.ResponseCapture) (ApproveOutput, error) {
@@ -1047,7 +1048,7 @@ func approvalOutput(op string, approvals *gl.MergeRequestApprovals, captured *gi
 	if err := captured.Decode(&extra); err != nil {
 		return ApproveOutput{}, toolutil.WrapErr(op, err)
 	}
-	state, err := mrapprovals.CapturedEnterpriseState(captured)
+	state, err := mrapprovals.CapturedEnterpriseState(approvals, captured)
 	if err != nil {
 		return ApproveOutput{}, toolutil.WrapErr(op, err)
 	}

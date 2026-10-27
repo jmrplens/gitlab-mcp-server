@@ -24,7 +24,7 @@ import (
 // Edition answer, which would publish no approval state where one was never
 // asked for.
 func TestCapturedEnterpriseState_NothingCaptured_IsAnError(t *testing.T) {
-	_, err := CapturedEnterpriseState(&gitlabclient.ResponseCapture{})
+	_, err := CapturedEnterpriseState(&gl.MergeRequestApprovals{}, &gitlabclient.ResponseCapture{})
 	if !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
 		t.Fatalf("CapturedEnterpriseState() error = %v, want ErrNoResponseCaptured", err)
 	}
@@ -34,9 +34,12 @@ func TestCapturedEnterpriseState_NothingCaptured_IsAnError(t *testing.T) {
 // that the four keys every edition sends leave the Enterprise state empty, so
 // it publishes nothing.
 func TestCapturedEnterpriseState_ACommunityEditionAnswer_IsTheZeroValue(t *testing.T) {
-	state, err := CapturedEnterpriseState(gitlabclient.CapturedBody([]byte(
-		`{"approved": true, "approved_by": [], "user_has_approved": false, "user_can_approve": true}`,
-	)))
+	body := []byte(`{"approved": true, "approved_by": [], "user_has_approved": false, "user_can_approve": true}`)
+	var approvals gl.MergeRequestApprovals
+	if err := json.Unmarshal(body, &approvals); err != nil {
+		t.Fatalf("decode the answer as client-go does: %v", err)
+	}
+	state, err := CapturedEnterpriseState(&approvals, gitlabclient.CapturedBody(body))
 	if err != nil {
 		t.Fatalf("CapturedEnterpriseState() unexpected error: %v", err)
 	}
@@ -46,6 +49,52 @@ func TestCapturedEnterpriseState_ACommunityEditionAnswer_IsTheZeroValue(t *testi
 	}
 	if string(encoded) != "{}" {
 		t.Errorf("state = %s, want {} for a Community Edition answer", encoded)
+	}
+}
+
+// TestCapturedEnterpriseState_TimestampsAndPendingRules_ComeFromClientGo
+// verifies that the two timestamps and the rules still to satisfy are read off
+// client-go's decode, which carries them as GitLab sent them, and not off the
+// captured answer: the capture here carries other values for all three, and
+// none of them is published.
+func TestCapturedEnterpriseState_TimestampsAndPendingRules_ComeFromClientGo(t *testing.T) {
+	created := time.Date(2026, 10, 2, 10, 32, 16, 589000000, time.UTC)
+	updated := time.Date(2026, 10, 5, 4, 28, 5, 0, time.UTC)
+	approvals := &gl.MergeRequestApprovals{
+		CreatedAt: &created, UpdatedAt: &updated,
+		ApprovalRulesLeft: []*gl.MergeRequestApprovalRule{{ID: 3, Name: "Security", RuleType: "regular"}},
+	}
+	state, err := CapturedEnterpriseState(approvals, gitlabclient.CapturedBody([]byte(
+		`{"id": 9, "created_at": "2001-01-01T00:00:00Z", "updated_at": "2001-01-01T00:00:00Z", "approval_rules_left": []}`,
+	)))
+	if err != nil {
+		t.Fatalf("CapturedEnterpriseState() unexpected error: %v", err)
+	}
+	if state.ID == nil || *state.ID != 9 {
+		t.Errorf("ID = %v, want 9 off the captured answer", state.ID)
+	}
+	if state.CreatedAt != "2026-10-02T10:32:16Z" || state.UpdatedAt != "2026-10-05T04:28:05Z" {
+		t.Errorf("timestamps = %q and %q, want client-go's in RFC 3339", state.CreatedAt, state.UpdatedAt)
+	}
+	want := []ApprovalRuleShortOutput{{ID: 3, Name: "Security", RuleType: "regular"}}
+	if len(state.ApprovalRulesLeft) != 1 || state.ApprovalRulesLeft[0] != want[0] {
+		t.Errorf("approval_rules_left = %+v, want %+v", state.ApprovalRulesLeft, want)
+	}
+}
+
+// TestShortRules_NilEmptyAndNilElements verifies that no list stays no list,
+// an empty one stays an empty one, which the state publishes as [], and a nil
+// rule in the list is passed over.
+func TestShortRules_NilEmptyAndNilElements(t *testing.T) {
+	if got := shortRules(nil); got != nil {
+		t.Errorf("shortRules(nil) = %v, want nil", got)
+	}
+	if got := shortRules([]*gl.MergeRequestApprovalRule{}); got == nil || len(got) != 0 {
+		t.Errorf("shortRules([]) = %#v, want an empty list", got)
+	}
+	got := shortRules([]*gl.MergeRequestApprovalRule{nil, {ID: 4, Name: "QA", RuleType: "any_approver"}})
+	if len(got) != 1 || got[0] != (ApprovalRuleShortOutput{ID: 4, Name: "QA", RuleType: "any_approver"}) {
+		t.Errorf("shortRules with a nil rule = %+v, want the one rule", got)
 	}
 }
 
