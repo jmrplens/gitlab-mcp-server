@@ -46,6 +46,10 @@ func TestDockerfileImages_Dockerfile_NamesEveryImageTheBuildPulls(t *testing.T) 
 		{name: "scratch", text: "FROM scratch\n"},
 		{name: "a stage named after the line that uses it, in another case", text: "FROM base\nFROM alpine:3 as Base\n", want: []string{"2: FROM alpine:3"}},
 		{name: "a FROM naming no image", text: "FROM\nFROM --platform=linux/amd64\n"},
+		{name: "a FROM whose second word is not AS", text: "FROM alpine:3 to x\nFROM x\n", want: []string{"1: FROM alpine:3", "2: FROM x"}},
+		{name: "a file of directives alone", text: "# syntax=docker/dockerfile:1", want: []string{"1: # syntax=docker/dockerfile:1"}},
+		{name: "a --from flag on RUN, which reads none", text: "FROM x\nRUN --from=alpine:3 make\n", want: []string{"1: FROM x"}},
+		{name: "a --mount flag on COPY, which reads none", text: "FROM x\nCOPY --mount=from=alpine:3 a b\n", want: []string{"1: FROM x"}},
 		{
 			name: "COPY --from a stage, an index and an image",
 			text: "FROM alpine AS builder\nCOPY --from=builder /a /b\nCOPY --from=0 /a /b\nCOPY --chown=1 --from=alpine:3 /a /b\nCOPY a b\n",
@@ -91,6 +95,7 @@ func TestDockerfileImages_Dockerfile_NamesEveryImageTheBuildPulls(t *testing.T) 
 			want: []string{"1: FROM x", "11: FROM y", "16: FROM z"},
 		},
 		{name: "a heredoc on an instruction that reads none", text: "FROM x\nLABEL a=<<EOF\nFROM y\nEOF\n", want: []string{"1: FROM x", "3: FROM y"}},
+		{name: "a heredoc on the first line", text: "RUN <<EOF\nFROM evil:1\nEOF\nFROM x\n", want: []string{"4: FROM x"}},
 		{name: "a heredoc no line ends", text: "FROM x\nRUN \\\n  <<EOF\necho\n", want: []string{"1: FROM x"}, unterminated: 2},
 	}
 

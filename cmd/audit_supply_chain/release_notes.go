@@ -159,28 +159,20 @@ func readSections(lines []string) (sections []notesSection, preamble int, refusa
 	fence := ""
 	paragraph := noParagraph
 	for index, line := range lines {
-		title, heading := levelTwoHeading(line)
-		switch {
-		case fence != "" || fenceRun(line) != "":
+		if fence != "" || fenceRun(line) != "" {
 			fence = nextFence(fence, line)
 			paragraph = noParagraph
-		case heading:
-			sections = append(sections, notesSection{title: title, line: index + 1})
-			paragraph = noParagraph
-			continue
-		case strings.TrimSpace(line) == "":
-			paragraph = noParagraph
-			continue
-		case levelOneHeading(line):
-			refusals = append(refusals, fmt.Sprintf(":%d: is a level-one heading, which the release body would show above its sections "+
-				"and GoReleaser's ## Changelog: write a section as ## and a heading inside one as ###", index+1))
-			paragraph = noParagraph
-		case paragraph == underlinable && setextUnderline.MatchString(line):
-			refusals = append(refusals, fmt.Sprintf(":%d: underlines the text above it, which the release body then shows as a heading: "+
-				"write a section as ## Title, and leave a blank line above a rule", index+1))
-			paragraph = noParagraph
-		default:
-			paragraph = nextParagraph(paragraph, line)
+		} else {
+			if title, heading := levelTwoHeading(line); heading {
+				sections = append(sections, notesSection{title: title, line: index + 1})
+				paragraph = noParagraph
+				continue
+			}
+			var refusal string
+			refusal, paragraph = readNotesLine(paragraph, line)
+			if refusal != "" {
+				refusals = append(refusals, fmt.Sprintf(":%d: %s", index+1, refusal))
+			}
 		}
 		if strings.TrimSpace(line) == "" {
 			continue
@@ -192,6 +184,25 @@ func readSections(lines []string) (sections []notesSection, preamble int, refusa
 		}
 	}
 	return sections, preamble, refusals
+}
+
+// readNotesLine reads a line of a summary that is neither in a fenced block
+// nor a section heading: why it is refused, when the release body would show
+// it as another heading, and the paragraph after it. A blank line closes the
+// paragraph open.
+func readNotesLine(paragraph int, line string) (refusal string, next int) {
+	if strings.TrimSpace(line) == "" {
+		return "", noParagraph
+	}
+	if levelOneHeading(line) {
+		return "is a level-one heading, which the release body would show above its sections " +
+			"and GoReleaser's ## Changelog: write a section as ## and a heading inside one as ###", noParagraph
+	}
+	if paragraph == underlinable && setextUnderline.MatchString(line) {
+		return "underlines the text above it, which the release body then shows as a heading: " +
+			"write a section as ## Title, and leave a blank line above a rule", noParagraph
+	}
+	return "", nextParagraph(paragraph, line)
 }
 
 // The paragraph readSections is in after a line: none, one an underline below
@@ -226,18 +237,19 @@ var (
 // the paragraph open; any other line continues an open one; and a line that
 // opens none is a paragraph, or code when indented by four spaces or a tab.
 func nextParagraph(state int, line string) int {
-	switch {
-	case thematicBreak.MatchString(line), atxHeading.MatchString(line):
+	if thematicBreak.MatchString(line) || atxHeading.MatchString(line) {
 		return noParagraph
-	case containerStart.MatchString(line) && (state != underlinable || paragraphInterruption.MatchString(line)):
-		return contained
-	case state != noParagraph:
-		return state
-	case strings.HasPrefix(strings.TrimLeft(line, " "), "\t") || len(line)-len(strings.TrimLeft(line, " ")) > 3:
-		return noParagraph
-	default:
-		return underlinable
 	}
+	if containerStart.MatchString(line) && (state != underlinable || paragraphInterruption.MatchString(line)) {
+		return contained
+	}
+	if state != noParagraph {
+		return state
+	}
+	if strings.HasPrefix(strings.TrimLeft(line, " "), "\t") || len(line)-len(strings.TrimLeft(line, " ")) > 3 {
+		return noParagraph
+	}
+	return underlinable
 }
 
 // levelOneHeading reports whether CommonMark reads line as a level-one ATX

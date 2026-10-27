@@ -393,6 +393,8 @@ func TestReleaseNotesProblems_OtherHeadings_AreRefused(t *testing.T) {
 		want []string
 	}{
 		{name: "a rule under a paragraph", body: "None.\n---", want: []string{label + ":4" + underline}},
+		{name: "a rule under a paragraph indented by three spaces", body: "   Text\n---", want: []string{label + ":4" + underline}},
+		{name: "a rule under an empty list item", body: "*\n---"},
 		{name: "a line of = under a paragraph", body: "None.\n===", want: []string{label + ":4" + underline}},
 		{name: "a single - under a paragraph", body: "None.\n-", want: []string{label + ":4" + underline}},
 		{name: "a rule under two lines", body: "First line\nsecond line\n---", want: []string{label + ":5" + underline}},
@@ -402,6 +404,7 @@ func TestReleaseNotesProblems_OtherHeadings_AreRefused(t *testing.T) {
 		{name: "a level-one heading", body: "# Changelog", want: []string{label + ":3" + levelOne}},
 		{name: "an indented level-one heading", body: "   # Changelog", want: []string{label + ":3" + levelOne}},
 		{name: "an empty level-one heading", body: "#", want: []string{label + ":3" + levelOne}},
+		{name: "a level-one heading after a tab", body: "#\tChangelog", want: []string{label + ":3" + levelOne}},
 		{name: "a rule after a blank line", body: "None.\n\n---"},
 		{name: "a rule indented by four spaces", body: "None.\n    ---"},
 		{name: "a rule under a list item", body: "- item\n---"},

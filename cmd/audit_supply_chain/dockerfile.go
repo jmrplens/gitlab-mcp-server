@@ -305,16 +305,13 @@ func substituteDockerfileArgs(word string, globals map[string]dockerfileArg) (st
 		rest := word[index+1:]
 		name := dockerfileArgName.FindString(rest)
 		index += len(name)
-		if strings.HasPrefix(rest, "{") {
-			end := strings.IndexByte(rest, '}')
-			if end < 0 {
+		if braced, ok := strings.CutPrefix(rest, "{"); ok {
+			inner, _, closed := strings.Cut(braced, "}")
+			if !closed || dockerfileArgName.FindString(inner) != inner {
 				return "", false
 			}
-			name = rest[1:end]
-			index += end + 1
-			if dockerfileArgName.FindString(name) != name {
-				return "", false
-			}
+			name = inner
+			index += len(inner) + 2
 		}
 		arg := globals[name]
 		if name == "" || !arg.set {
