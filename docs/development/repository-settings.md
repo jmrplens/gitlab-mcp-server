@@ -566,8 +566,8 @@ documentation of the setting says, so it passes the job like one made with
 message by hand. The setting reaches only commits made in the web interface:
 a commit made with git still needs `--signoff`.
 
-**Current state.** Not applied. Read on 2026-10-26, the repository answers
-`web_commit_signoff_required: false`.
+**Current state.** Applied on 2026-10-28, after the DCO check merged in #1562:
+the repository answers `web_commit_signoff_required: true`.
 
 **How to check.**
 
