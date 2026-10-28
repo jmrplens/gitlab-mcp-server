@@ -639,7 +639,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		description: "Create an instance project topic. Returns: the created topic with id, name, title, and description. See also: gitlab_update_topic, gitlab_list_topics.",
 	},
 	"gitlab_update_topic": {
-		usage:       "Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, or avatar.",
+		usage:       "Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, avatar, or remove_avatar to remove the image.",
 		aliases:     []string{"update topic", "edit topic", "rename topic"},
 		related:     []string{actionTopicGet, actionTopicList, actionTopicDelete},
 		description: "Update a project topic. Returns: the updated topic. See also: gitlab_get_topic, gitlab_delete_topic.",

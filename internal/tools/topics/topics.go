@@ -5,6 +5,8 @@ package topics
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -122,6 +124,34 @@ type CreateInput struct {
 	Name        string `json:"name" jsonschema:"Topic name (slug-like unique identifier),required"`
 	Title       string `json:"title,omitempty" jsonschema:"Topic display title,required"`
 	Description string `json:"description,omitempty" jsonschema:"Topic description"`
+	// Avatar is uploaded with the create, which GitLab takes only as a
+	// multipart form.
+	Avatar *AvatarInput `json:"avatar,omitempty" jsonschema:"Avatar image to upload with the topic, from a local file or base64 content"`
+}
+
+// AvatarInput is an image a topic create or update uploads as the topic's
+// avatar, as [gl.TopicAvatar] carries it: the file name GitLab reads the
+// image type from, and the content, from a local file or as base64.
+type AvatarInput struct {
+	Filename      string `json:"filename" jsonschema:"Avatar file name such as avatar.png, whose extension GitLab reads the image type from,required"`
+	FilePath      string `json:"file_path,omitempty" jsonschema:"Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided."`
+	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"Base64-encoded image content. Only one of file_path or content_base64 should be provided."`
+}
+
+// openAvatar opens the image an avatar input names, nil for no avatar, with
+// the function that releases it.
+func openAvatar(op string, in *AvatarInput) (*gl.TopicAvatar, func(), error) {
+	if in == nil {
+		return nil, func() { /* no avatar: nothing to release */ }, nil
+	}
+	if in.Filename == "" {
+		return nil, nil, fmt.Errorf("%s: avatar.filename is required with an avatar, since GitLab reads the image type from its extension", op)
+	}
+	reader, _, release, err := toolutil.OpenFileOrBase64Source(op+" avatar", in.FilePath, in.ContentBase64)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &gl.TopicAvatar{Filename: in.Filename, Image: reader}, release, nil
 }
 
 // CreateOutput is the output after creating a topic.
@@ -141,6 +171,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
+	avatar, release, err := openAvatar("create_topic", input.Avatar)
+	if err != nil {
+		return CreateOutput{}, err
+	}
+	defer release()
+	opts.Avatar = avatar
 	topic, _, err := client.GL().Topics.CreateTopic(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_topic", err, http.StatusForbidden,
@@ -157,6 +193,12 @@ type UpdateInput struct {
 	Name        string  `json:"name,omitempty" jsonschema:"New topic name"`
 	Title       string  `json:"title,omitempty" jsonschema:"New topic title"`
 	Description *string `json:"description,omitempty" jsonschema:"New topic description. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	// Avatar is uploaded with the change, which GitLab takes only as a
+	// multipart form.
+	Avatar *AvatarInput `json:"avatar,omitempty" jsonschema:"New avatar image to upload for the topic, from a local file or base64 content. Cannot be combined with remove_avatar"`
+	// RemoveAvatar sends avatar as an empty value, which PUT /topics/:id
+	// answers by removing the topic's avatar (lib/api/topics.rb).
+	RemoveAvatar bool `json:"remove_avatar,omitempty" jsonschema:"Remove the topic's avatar. Cannot be combined with avatar"`
 }
 
 // UpdateOutput is the output after updating a topic.
@@ -180,6 +222,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	// Presence decides, never emptiness: an empty description is the caller
 	// removing it (issue 1306).
 	opts.Description = input.Description
+	if input.RemoveAvatar && input.Avatar != nil {
+		return UpdateOutput{}, errors.New("update_topic: avatar and remove_avatar cannot be combined. Give avatar to replace the image or remove_avatar to remove it")
+	}
+	avatar, release, err := openAvatar("update_topic", input.Avatar)
+	if err != nil {
+		return UpdateOutput{}, err
+	}
+	defer release()
+	opts.Avatar = avatar
+	if input.RemoveAvatar {
+		// An avatar with neither a file name nor an image is the one
+		// client-go writes as "avatar": "" in the JSON body rather than
+		// uploading.
+		opts.Avatar = &gl.TopicAvatar{}
+	}
 	topic, _, err := client.GL().Topics.UpdateTopic(input.TopicID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("update_topic", err, http.StatusForbidden,

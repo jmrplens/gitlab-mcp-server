@@ -8,11 +8,14 @@ package topics
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"maps"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -620,4 +623,162 @@ func TestTopics_UnreadableOrganizationID(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// topicAvatarForm is what a mock reads off a topic create or update sent
+// with an avatar: the method, the file part's name and bytes, and the value
+// fields.
+type topicAvatarForm struct {
+	method, filename, content string
+	values                    map[string][]string
+}
+
+// topicAvatarHandler answers a create or an update with the topic, handing
+// the multipart form it was sent to the test goroutine.
+func topicAvatarHandler(t *testing.T, forms chan<- topicAvatarForm) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("the request was not a multipart form: %v", err)
+			http.Error(w, "not multipart", http.StatusBadRequest)
+			return
+		}
+		part, header, err := testutil.FormFile(form, "avatar")
+		if err != nil {
+			t.Errorf("the request carried no avatar part: %v", err)
+			http.Error(w, "no avatar", http.StatusBadRequest)
+			return
+		}
+		content, _ := io.ReadAll(part)
+		_ = part.Close()
+		forms <- topicAvatarForm{method: r.Method, filename: header.Filename, content: string(content), values: form.Value}
+		testutil.RespondJSON(w, http.StatusOK, topicJSON)
+	})
+}
+
+// TestCreateAndUpdate_WithAvatar_UploadIt verifies that a topic create and a
+// topic update given an avatar send the image under avatar with its file
+// name, read from base64 content or from a local file, and every option as
+// a field of the form beside it.
+func TestCreateAndUpdate_WithAvatar_UploadIt(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "go.png")
+	if err := os.WriteFile(file, []byte("file-image"), 0o600); err != nil {
+		t.Fatalf("write the avatar file: %v", err)
+	}
+	fromBase64 := &AvatarInput{Filename: "go.png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("b64-image"))}
+	fromFile := &AvatarInput{Filename: "go.png", FilePath: file}
+	cases := []struct {
+		name        string
+		call        func(*gitlabclient.Client) (TopicItem, error)
+		wantMethod  string
+		wantContent string
+		wantValues  map[string]string
+	}{
+		{
+			name: "create from base64", wantMethod: http.MethodPost, wantContent: "b64-image",
+			wantValues: map[string]string{"name": "go", "title": "Go", "description": "The language"},
+			call: func(client *gitlabclient.Client) (TopicItem, error) {
+				out, err := Create(t.Context(), client, CreateInput{Name: "go", Title: "Go", Description: "The language", Avatar: fromBase64})
+				return out.Topic, err
+			},
+		},
+		{
+			name: "update from a local file", wantMethod: http.MethodPut, wantContent: "file-image",
+			wantValues: map[string]string{"title": "Golang"},
+			call: func(client *gitlabclient.Client) (TopicItem, error) {
+				out, err := Update(t.Context(), client, UpdateInput{TopicID: 1, Title: "Golang", Avatar: fromFile})
+				return out.Topic, err
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			forms := make(chan topicAvatarForm, 1)
+			client := testutil.NewTestClient(t, topicAvatarHandler(t, forms))
+			topic, err := tc.call(client)
+			if err != nil {
+				t.Fatalf("%s error: %v", tc.name, err)
+			}
+			if topic != wantTopic {
+				t.Errorf("topic = %+v, want %+v", topic, wantTopic)
+			}
+			form := <-forms
+			if form.method != tc.wantMethod || form.filename != "go.png" || form.content != tc.wantContent {
+				t.Errorf("form = %s %q holding %q, want %s go.png holding %q", form.method, form.filename, form.content, tc.wantMethod, tc.wantContent)
+			}
+			sent := map[string]string{}
+			for name, values := range form.values {
+				sent[name] = strings.Join(values, "|")
+			}
+			if !maps.Equal(sent, tc.wantValues) {
+				t.Errorf("form fields = %v, want %v", sent, tc.wantValues)
+			}
+		})
+	}
+}
+
+// TestCreateAndUpdate_AvatarTheyCannotSend_AreRefusedBeforeAnyRequest
+// verifies that an avatar with no file name or no readable content, and an
+// update asked both to upload an avatar and to remove it, are refused naming
+// the action, and that nothing reaches GitLab.
+func TestCreateAndUpdate_AvatarTheyCannotSend_AreRefusedBeforeAnyRequest(t *testing.T) {
+	image := base64.StdEncoding.EncodeToString([]byte("img"))
+	cases := []struct {
+		name string
+		call func(*gitlabclient.Client) error
+		want string
+	}{
+		{name: "create with no file name", want: "create_topic: avatar.filename is required", call: func(client *gitlabclient.Client) error {
+			_, err := Create(t.Context(), client, CreateInput{Name: "go", Title: "Go", Avatar: &AvatarInput{ContentBase64: image}})
+			return err
+		}},
+		{name: "create with no source", want: "create_topic avatar: either file_path or content_base64 is required", call: func(client *gitlabclient.Client) error {
+			_, err := Create(t.Context(), client, CreateInput{Name: "go", Title: "Go", Avatar: &AvatarInput{Filename: "go.png"}})
+			return err
+		}},
+		{name: "update with no file name", want: "update_topic: avatar.filename is required", call: func(client *gitlabclient.Client) error {
+			_, err := Update(t.Context(), client, UpdateInput{TopicID: 1, Avatar: &AvatarInput{ContentBase64: image}})
+			return err
+		}},
+		{name: "update with both sources", want: "update_topic avatar: provide either file_path or content_base64", call: func(client *gitlabclient.Client) error {
+			_, err := Update(t.Context(), client, UpdateInput{TopicID: 1, Avatar: &AvatarInput{Filename: "go.png", FilePath: "/tmp/go.png", ContentBase64: image}})
+			return err
+		}},
+		{name: "update uploading and removing", want: "update_topic: avatar and remove_avatar cannot be combined", call: func(client *gitlabclient.Client) error {
+			_, err := Update(t.Context(), client, UpdateInput{TopicID: 1, RemoveAvatar: true, Avatar: &AvatarInput{Filename: "go.png", ContentBase64: image}})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				t.Errorf("a request with an avatar it cannot send reached GitLab: %s %s", r.Method, r.URL.Path)
+				http.NotFound(w, r)
+			}))
+			if err := tc.call(client); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %v, want one containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestUpdate_RemoveAvatar_SendsTheBlankAvatarGitLabRemovesItFor verifies
+// that remove_avatar sends avatar as an empty value in the JSON body, which
+// PUT /topics/:id answers with remove_avatar! (lib/api/topics.rb), and that
+// an update without it sends no avatar at all.
+func TestUpdate_RemoveAvatar_SendsTheBlankAvatarGitLabRemovesItFor(t *testing.T) {
+	client, recorder := testutil.RecordWrites(t, `{}`, topicJSON)
+	if _, err := Update(t.Context(), client, UpdateInput{TopicID: 1, RemoveAvatar: true}); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"avatar": `""`})
+
+	client, recorder = testutil.RecordWrites(t, `{}`, topicJSON)
+	if _, err := Update(t.Context(), client, UpdateInput{TopicID: 1, Title: "Golang"}); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	if got, ok := recorder.Member("avatar"); ok {
+		t.Errorf("an update without remove_avatar sent avatar = %s", got)
+	}
 }
