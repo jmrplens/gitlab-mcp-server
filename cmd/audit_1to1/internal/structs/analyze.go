@@ -230,6 +230,9 @@ const (
 	// groupMilestoneBurndownUnpaged is the reason the group milestone burndown
 	// offers none of the gl.ListOptions its options struct embeds.
 	groupMilestoneBurndownUnpaged = "GET /groups/:id/milestones/:milestone_id/burndown_events declares no page, per_page, order_by or sort (gitlab-api-live.json, 19.5.0-ee), and ee/lib/ee/api/group_milestones.rb answers it through milestone_burndown_events_for, which presents the whole Burndown without paginate (ee/lib/ee/api/milestone_responses.rb), so every gl.ListOptions field would be sent and ignored"
+	// overrideParamUndeclared is the reason the import's override_params input
+	// offers a field client-go's CreateProjectOptions carries.
+	overrideParamUndeclared = "not declared under override_params by POST /projects/import, which takes optional_project_params there (lib/api/project_import.rb, lib/api/helpers/projects_helpers.rb; gitlab-api-live.json, 19.5.0-ee), and import_params is declared_params, so Grape drops the key; client-go's CreateProjectOptions, the type of ImportFileOptions.OverrideParams, carries it for the project create"
 	// achievementAvatarUpload is the reason the avatar upload is absent under
 	// its SDK key.
 	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or avatar_content_base64), which the handler assembles into the *gl.GraphQLUpload opts.Avatar takes"
@@ -1240,11 +1243,26 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"releaselinks.CreateBatchInput.filepath":          "modeled on the links[] slice element (LinkEntry.FilePath, deprecated alias)",
 	"releaselinks.CreateBatchInput.link_type":         "modeled on the links[] slice element (LinkEntry.LinkType)",
 
-	// Whole-type curated subset: override_params accepts the full CreateProjectOptions
-	// set (~79 fields); the import tool exposes the commonly-overridden subset — full
-	// project configuration is available via the dedicated gitlab_project create/update
-	// tools. (topics/tag_list are also excluded due to an SDK multipart []string bug.)
-	"projectimportexport.ImportOverrideParamsInput": "override_params curated subset; full project config via gitlab_project create/update tools",
+	// The CreateProjectOptions fields GitLab does not declare under the
+	// override_params of an import.
+	"projectimportexport.ImportOverrideParamsInput.build_coverage_regex":            overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.ci_forward_deployment_enabled":   overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.group_with_project_templates_id": overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.import_url":                      overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.initialize_with_readme":          overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.issues_template":                 overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.merge_pipelines_enabled":         overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.merge_requests_template":         overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.merge_train_enforcement":         overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.merge_trains_enabled":            overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.merge_trains_skip_train_allowed": overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.operations_access_level":         overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.protect_merge_request_pipelines": overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.reviewer_assignment_strategy":    overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.template_name":                   overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.template_project_id":             overrideParamUndeclared,
+	"projectimportexport.ImportOverrideParamsInput.use_custom_template":             overrideParamUndeclared,
+	"projectimportexport.ImportContainerExpirationPolicyInput.name_regex_delete":    "GitLab declares no override_params[container_expiration_policy_attributes][name_regex_delete] (gitlab-api-live.json, 19.5.0-ee) and never read the key, which client-go v3.16.2 deprecated for name_regex; the new input has no caller written against the old name, which projects.ContainerExpirationPolicyInput keeps for its own",
 }}
 
 // isAcceptedMissingInput reports whether an input pair's missing field is an

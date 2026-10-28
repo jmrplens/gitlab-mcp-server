@@ -11,10 +11,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1164,71 +1166,173 @@ func TestScheduleExport_NestedUploadOverridesFlatFields(t *testing.T) {
 	}
 }
 
-// TestImportFromFile_OverrideParams verifies that override_params are mapped
-// onto the SDK ImportFileOptions and forwarded in the multipart request body.
-func TestImportFromFile_OverrideParams(t *testing.T) {
-	wantParams := map[string]string{
-		"override_params[visibility]":                      "private",
-		"override_params[description]":                     "overridden",
-		"override_params[name]":                            "renamed",
-		"override_params[path]":                            "renamed-path",
-		"override_params[namespace_id]":                    "42",
-		"override_params[shared_runners_enabled]":          "true",
-		"override_params[container_registry_access_level]": "private",
+// everyOverride sets every field of the override, each to a value its key
+// is checked for: a false among the booleans, since overriding a setting the
+// export carries as true is what a pointer is for.
+func everyOverride() *ImportOverrideParamsInput {
+	yes, no := true, false
+	return &ImportOverrideParamsInput{
+		Name: "renamed", Path: "renamed-path", NamespaceID: new(int64(42)), Description: "overridden",
+		Visibility: "private", DefaultBranch: "main", MergeMethod: "ff",
+		RequestAccessEnabled: &yes, LFSEnabled: &no, SharedRunnersEnabled: &yes,
+		IssuesAccessLevel: "enabled", MergeRequestsAccessLevel: "private", WikiAccessLevel: "disabled",
+		BuildsAccessLevel: "enabled", SnippetsAccessLevel: "private", ContainerRegistryAccessLevel: "disabled",
+		RepositoryAccessLevel: "enabled", ForkingAccessLevel: "private", AnalyticsAccessLevel: "disabled",
+		PagesAccessLevel: "public", PackageRegistryAccessLevel: "private", ReleasesAccessLevel: "enabled",
+		EnvironmentsAccessLevel: "private", FeatureFlagsAccessLevel: "disabled", InfrastructureAccessLevel: "enabled",
+		MonitorAccessLevel: "private", RequirementsAccessLevel: "disabled", SecurityAndComplianceAccessLevel: "enabled",
+		ModelExperimentsAccessLevel: "private", ModelRegistryAccessLevel: "disabled",
+		SquashOption: "default_on", OnlyAllowMergeIfPipelineSucceeds: &yes, OnlyAllowMergeIfAllDiscussionsAreResolved: &no,
+		OnlyAllowMergeIfAllStatusChecksPassed: &yes, AllowMergeOnSkippedPipeline: &no, RemoveSourceBranchAfterMerge: &yes,
+		AutocloseReferencedIssues: &no, ResolveOutdatedDiffDiscussions: &yes, PrintingMergeRequestLinkEnabled: &no,
+		MergeCommitTemplate: "merge %{title}", SquashCommitTemplate: "squash %{title}", MRDefaultTitleTemplate: "mr %{title}",
+		SuggestionCommitMessage: "apply %{file_path}", IssueBranchTemplate: "issue-%{id}", MergeRequestTitleRegex: "^feat",
+		MergeRequestTitleRegexDescription: "starts with feat", ApprovalsBeforeMerge: new(int64(2)),
+		ServiceDeskEnabled: &yes, EmailsEnabled: &no, ShowDefaultAwardEmojis: &yes, EnforceAuthChecksOnUploads: &no,
+		CICDCatalogEnabled: &yes, GroupRunnersEnabled: &no, PublicJobs: &yes, AutoDevopsEnabled: &no,
+		Mirror: &yes, MirrorTriggerBuilds: &no,
+		AutoDevopsDeployStrategy: "manual", AutoCancelPendingPipelines: "disabled", BuildGitStrategy: "clone",
+		BuildTimeout: new(int64(3600)), CIConfigPath: "ci/.gitlab-ci.yml", ResourceGroupDefaultProcessMode: "oldest_first",
+		RepositoryStorage: "default", ExternalAuthorizationClassificationLabel: "secret",
+		ContainerExpirationPolicyAttributes: &ImportContainerExpirationPolicyInput{
+			Cadence: "7d", KeepN: new(int64(5)), OlderThan: "14d", NameRegex: new(".*"), NameRegexKeep: new("^v"), Enabled: &yes,
+		},
+		Topics:        []string{"go", "mcp"},
+		IssuesEnabled: &yes, MergeRequestsEnabled: &no, WikiEnabled: &yes, JobsEnabled: &no, SnippetsEnabled: &yes,
+		ContainerRegistryEnabled: &no, PackagesEnabled: &yes, EmailsDisabled: &no, PublicBuilds: &yes,
+		TagList: []string{"legacy", "tags"},
 	}
+}
+
+// everyOverrideKey is the form field each override of everyOverride is sent
+// under, with its value.
+var everyOverrideKey = map[string]string{
+	"override_params[name]": "renamed", "override_params[path]": "renamed-path", "override_params[namespace_id]": "42",
+	"override_params[description]": "overridden", "override_params[visibility]": "private",
+	"override_params[default_branch]": "main", "override_params[merge_method]": "ff",
+	"override_params[request_access_enabled]": "true", "override_params[lfs_enabled]": "false",
+	"override_params[shared_runners_enabled]": "true",
+	"override_params[issues_access_level]":    "enabled", "override_params[merge_requests_access_level]": "private",
+	"override_params[wiki_access_level]": "disabled", "override_params[builds_access_level]": "enabled",
+	"override_params[snippets_access_level]": "private", "override_params[container_registry_access_level]": "disabled",
+	"override_params[repository_access_level]": "enabled", "override_params[forking_access_level]": "private",
+	"override_params[analytics_access_level]": "disabled", "override_params[pages_access_level]": "public",
+	"override_params[package_registry_access_level]": "private", "override_params[releases_access_level]": "enabled",
+	"override_params[environments_access_level]": "private", "override_params[feature_flags_access_level]": "disabled",
+	"override_params[infrastructure_access_level]": "enabled", "override_params[monitor_access_level]": "private",
+	"override_params[requirements_access_level]": "disabled", "override_params[security_and_compliance_access_level]": "enabled",
+	"override_params[model_experiments_access_level]": "private", "override_params[model_registry_access_level]": "disabled",
+	"override_params[squash_option]":                         "default_on",
+	"override_params[only_allow_merge_if_pipeline_succeeds]": "true", "override_params[only_allow_merge_if_all_discussions_are_resolved]": "false",
+	"override_params[only_allow_merge_if_all_status_checks_passed]": "true", "override_params[allow_merge_on_skipped_pipeline]": "false",
+	"override_params[remove_source_branch_after_merge]": "true", "override_params[autoclose_referenced_issues]": "false",
+	"override_params[resolve_outdated_diff_discussions]": "true", "override_params[printing_merge_request_link_enabled]": "false",
+	"override_params[merge_commit_template]": "merge %{title}", "override_params[squash_commit_template]": "squash %{title}",
+	"override_params[mr_default_title_template]": "mr %{title}", "override_params[suggestion_commit_message]": "apply %{file_path}",
+	"override_params[issue_branch_template]": "issue-%{id}", "override_params[merge_request_title_regex]": "^feat",
+	"override_params[merge_request_title_regex_description]": "starts with feat", "override_params[approvals_before_merge]": "2",
+	"override_params[service_desk_enabled]": "true", "override_params[emails_enabled]": "false",
+	"override_params[show_default_award_emojis]": "true", "override_params[enforce_auth_checks_on_uploads]": "false",
+	"override_params[cicd_catalog_enabled]": "true", "override_params[group_runners_enabled]": "false",
+	"override_params[public_jobs]": "true", "override_params[auto_devops_enabled]": "false",
+	"override_params[mirror]": "true", "override_params[mirror_trigger_builds]": "false",
+	"override_params[auto_devops_deploy_strategy]": "manual", "override_params[auto_cancel_pending_pipelines]": "disabled",
+	"override_params[build_git_strategy]": "clone", "override_params[build_timeout]": "3600",
+	"override_params[ci_config_path]": "ci/.gitlab-ci.yml", "override_params[resource_group_default_process_mode]": "oldest_first",
+	"override_params[repository_storage]": "default", "override_params[external_authorization_classification_label]": "secret",
+	"override_params[container_expiration_policy_attributes][cadence]":         "7d",
+	"override_params[container_expiration_policy_attributes][keep_n]":          "5",
+	"override_params[container_expiration_policy_attributes][older_than]":      "14d",
+	"override_params[container_expiration_policy_attributes][name_regex]":      ".*",
+	"override_params[container_expiration_policy_attributes][name_regex_keep]": "^v",
+	"override_params[container_expiration_policy_attributes][enabled]":         "true",
+	"override_params[topics]": "go,mcp", "override_params[issues_enabled]": "true",
+	"override_params[merge_requests_enabled]": "false", "override_params[wiki_enabled]": "true",
+	"override_params[jobs_enabled]": "false", "override_params[snippets_enabled]": "true",
+	"override_params[container_registry_enabled]": "false", "override_params[packages_enabled]": "true",
+	"override_params[emails_disabled]": "false", "override_params[public_builds]": "true",
+	"override_params[tag_list]": "legacy,tags",
+}
+
+// TestImportFromFile_OverrideParams_SendsEveryKeyItModels verifies that
+// every override reaches GitLab in the multipart body under the key GitLab
+// declares, with the value given, and nothing else under override_params.
+//
+// The two lists arrive as one comma-separated value each. client-go's
+// UploadRequest keeps the first value of a multipart field, so the list sent
+// element by element arrived as its first topic alone; GitLab splits the one
+// value back into the list.
+func TestImportFromFile_OverrideParams_SendsEveryKeyItModels(t *testing.T) {
+	received := make(chan map[string][]string, 1)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/import" && r.Method == http.MethodPost {
-			form, err := testutil.ReadMultipartForm(r, 1<<20)
-			if err != nil {
-				t.Errorf("parse multipart: %v", err)
-				http.Error(w, "parse multipart", http.StatusInternalServerError)
-				return
-			}
-			for key, want := range wantParams {
-				t.Run(key, func(t *testing.T) {
-					if got := testutil.FormValue(form, key); got != want {
-						t.Errorf("%s = %q, want %q", key, got, want)
-					}
-				})
-			}
-			testutil.RespondJSON(w, http.StatusCreated,
-				`{"id":99,"name":"p","path":"p","path_with_namespace":"g/p","import_status":"scheduled"}`)
+		if r.URL.Path != "/api/v4/projects/import" || r.Method != http.MethodPost {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("parse multipart: %v", err)
+			http.Error(w, "parse multipart", http.StatusInternalServerError)
+			return
+		}
+		received <- form.Value
+		testutil.RespondJSON(w, http.StatusCreated,
+			`{"id":99,"name":"p","path":"p","path_with_namespace":"g/p","import_status":"scheduled"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	lfs := true
-	nsID := int64(42)
 	out, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
-		ContentBase64: base64.StdEncoding.EncodeToString([]byte("archive")),
-		Name:          "p",
-		Path:          "p",
-		OverrideParams: &ImportOverrideParamsInput{
-			Name:                         "renamed",
-			Path:                         "renamed-path",
-			NamespaceID:                  &nsID,
-			Description:                  "overridden",
-			Visibility:                   "private",
-			DefaultBranch:                "main",
-			MergeMethod:                  "ff",
-			RequestAccessEnabled:         &lfs,
-			LFSEnabled:                   &lfs,
-			SharedRunnersEnabled:         &lfs,
-			IssuesAccessLevel:            "enabled",
-			MergeRequestsAccessLevel:     "private",
-			WikiAccessLevel:              "disabled",
-			BuildsAccessLevel:            "enabled",
-			SnippetsAccessLevel:          "private",
-			ContainerRegistryAccessLevel: "private",
-		},
+		ContentBase64:  base64.StdEncoding.EncodeToString([]byte("archive")),
+		Name:           "p",
+		Path:           "p",
+		OverrideParams: everyOverride(),
 	})
 	if err != nil {
 		t.Fatalf("ImportFromFile() error: %v", err)
 	}
 	if out.ID != 99 {
 		t.Errorf("ID = %d, want 99", out.ID)
+	}
+	form := <-received
+	sent := map[string]string{}
+	for key, values := range form {
+		if strings.HasPrefix(key, "override_params") {
+			sent[key] = strings.Join(values, " | ")
+		}
+	}
+	keys := slices.Sorted(maps.Keys(everyOverrideKey))
+	for _, key := range slices.Sorted(maps.Keys(sent)) {
+		if !slices.Contains(keys, key) {
+			keys = append(keys, key)
+		}
+	}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			if got, want := sent[key], everyOverrideKey[key]; got != want {
+				t.Errorf("%s = %q, want %q", key, got, want)
+			}
+		})
+	}
+}
+
+// TestBuildOverrideParams_OneFieldAlone_IsAnOverride verifies that each
+// override is enough on its own to send override_params, one of each kind of
+// field: a value the builder converts, a pointer it passes through and a
+// list it joins, the cleanup policy among them.
+func TestBuildOverrideParams_OneFieldAlone_IsAnOverride(t *testing.T) {
+	cases := map[string]*ImportOverrideParamsInput{
+		"visibility":         {Visibility: "public"},
+		"squash option":      {SquashOption: "never"},
+		"process mode":       {ResourceGroupDefaultProcessMode: "unordered"},
+		"a deprecated list":  {TagList: []string{"t"}},
+		"the cleanup policy": {ContainerExpirationPolicyAttributes: &ImportContainerExpirationPolicyInput{KeepN: new(int64(1))}},
+	}
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := buildOverrideParams(in); got == nil {
+				t.Errorf("buildOverrideParams(%+v) = nil, want the override sent", in)
+			}
+		})
 	}
 }
 
@@ -1327,6 +1431,9 @@ func TestBuildOverrideParams_NilAndEmpty(t *testing.T) {
 	}
 	if got := buildOverrideParams(&ImportOverrideParamsInput{}); got != nil {
 		t.Errorf("buildOverrideParams(empty) = %v, want nil", got)
+	}
+	if got := buildOverrideParams(&ImportOverrideParamsInput{ContainerExpirationPolicyAttributes: &ImportContainerExpirationPolicyInput{}}); got != nil {
+		t.Errorf("buildOverrideParams(an empty cleanup policy) = %v, want nil", got)
 	}
 }
 
