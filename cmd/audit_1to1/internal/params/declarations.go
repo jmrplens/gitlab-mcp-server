@@ -155,6 +155,10 @@ func paramDeclarations() []paramDeclaration {
 		reasonDuoOnCreate = "ee/lib/ee/api/helpers/projects_helpers.rb filter_duo_vulnerability_attributes! deletes " +
 			"duo_sast_fp_detection_enabled, duo_sast_vr_workflow_enabled, duo_secret_detection_fp_enabled and " +
 			"duo_dependency_bump_breaking_changes_enabled unless params[:id] is present, so a create applies none of them"
+		reasonDeploymentMRs = "lib/api/deployments.rb takes merge_requests_base_params on GET :id/deployments/:deployment_id/merge_requests " +
+			"and presents Entities::MergeRequestBasic with current_user alone: view, with_labels_details and " +
+			"with_merge_status_recheck become presenter options only through serializer_options_for in lib/api/merge_requests.rb, " +
+			"which this route does not call, and MergeRequestsFinder reads none of them, so the route applies none"
 		reasonMirrorWebhook = "ee/lib/api/project_mirror.rb declares action and the pull_request.* keys for the GitHub " +
 			"pull request event a webhook posts to the route (ProcessGithubEventService), which no caller of an action writes"
 		reasonPlanLimits    = "ChangePlanLimitOptions models eight of the twenty-nine limits PUT /application/plan_limits takes"
@@ -183,6 +187,12 @@ func paramDeclarations() []paramDeclaration {
 		} {
 			declared = append(declared, paramDeclaration{Route: route, Param: param, Category: categoryDeclaredNotApplied, Reason: reasonDuoOnCreate})
 		}
+	}
+	for _, param := range []string{"view", "with_labels_details", "with_merge_status_recheck"} {
+		declared = append(declared, paramDeclaration{
+			Route: "GET /projects/:id/deployments/:deployment_id/merge_requests", Param: param,
+			Category: categoryDeclaredNotApplied, Reason: reasonDeploymentMRs,
+		})
 	}
 	for _, param := range []string{
 		"action", "pull_request.base.ref", "pull_request.base.repo.full_name", "pull_request.base.sha",
