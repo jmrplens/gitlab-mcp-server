@@ -42,7 +42,7 @@ Say in the issue that you are taking it, so nobody else starts the same work, an
 ### Prerequisites
 
 - **Go 1.27+** — [Download](https://go.dev/dl/)
-- **Node.js 24.18+ with Corepack**, required for the documentation site and MCP Inspector. The `packageManager` field in `site/package.json` names the pnpm version (`pnpm@12.14.0` today) and is authoritative; pnpm settings live in `site/pnpm-workspace.yaml`.
+- **Node.js 24.18+ with Corepack**, required for the documentation site and MCP Inspector. The `packageManager` field in `site/package.json` names the pnpm version (`pnpm@12.16.1` today) and is authoritative; pnpm settings live in `site/pnpm-workspace.yaml`.
 - **Git** — configured with push access
 - **GitLab instance** — with a Personal Access Token (`api` scope)
 
