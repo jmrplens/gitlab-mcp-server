@@ -4,15 +4,14 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"slices"
-	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -23,13 +22,11 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
-// offendingChars lists the ASCII characters gateway validators are known to
-// reject in served text. Anything above U+007F is rejected as a class, not
-// listed here: the served-prose policy is pure ASCII, because a validator
-// that refuses "unsafe characters" usually matches a character class rather
-// than a codepoint list, and a class is a property the next gateway cannot
-// surprise.
-var offendingChars = []rune{';'}
+// offends is the served-prose policy a scanned character is judged by:
+// gatewaycompat.OffendingRune, the one statement of it, which the message
+// catalog's character policy applies too. It is a variable so a wiring test
+// can widen it to a letter the served text carries throughout.
+var offends = gatewaycompat.OffendingRune
 
 // appliedSubstitutions holds the operator's substitutions when -apply is
 // passed; nil otherwise, so the default scan judges the unmodified surface.
@@ -101,12 +98,13 @@ func run(check, apply bool) int {
 
 // report prints the offenders, sorted by surface then location, and returns
 // the exit code: 1 when check is set and anything offends, 0 otherwise.
+//
+// The sort is stable, so the rows of one location (a schema holding several
+// offending strings) keep the order the scan found them in and two runs over
+// one surface print one report.
 func report(found []offender, check bool) int {
-	sort.Slice(found, func(i, j int) bool {
-		if found[i].surface != found[j].surface {
-			return found[i].surface < found[j].surface
-		}
-		return found[i].where < found[j].where
+	slices.SortStableFunc(found, func(a, b offender) int {
+		return cmp.Or(strings.Compare(a.surface, b.surface), strings.Compare(a.where, b.where))
 	})
 
 	if len(found) == 0 {
@@ -215,15 +213,15 @@ func scanSchema(surface, where string, schema any) []offender {
 }
 
 // scanText reports each offending character in one served string, once per
-// string, with an excerpt centered on the first hit. A hit is any listed
-// ASCII character or any rune above U+007F. With -apply, the operator's
-// substitutions run first, so the scan judges the text a gateway would
-// actually receive.
+// string, with an excerpt centered on the first hit. A hit is any character
+// the policy refuses: an ASCII character gateway validators are known to
+// reject, or any rune above U+007F. With -apply, the operator's substitutions
+// run first, so the scan judges the text a gateway would actually receive.
 func scanText(surface, where, text string) []offender {
 	text = gatewaycompat.Apply(appliedSubstitutions, text)
 	index := -1
 	for i, r := range text {
-		if r > unicode.MaxASCII || slices.Contains(offendingChars, r) {
+		if offends(r) {
 			index = i
 			break
 		}

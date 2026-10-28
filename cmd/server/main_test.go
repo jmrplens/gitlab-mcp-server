@@ -350,6 +350,14 @@ func newTestMCPServer(t *testing.T) *mcp.Server {
 // finalized server catalog without opening an HTTP listener.
 func newInMemorySession(t *testing.T, server *mcp.Server) *mcp.ClientSession {
 	t.Helper()
+	return newInMemorySessionWith(t, server, mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil), nil)
+}
+
+// newInMemorySessionWith is newInMemorySession for a client of the caller's
+// own, one built with an elicitation handler or a middleware, connected with
+// sessionOptions; nil sessionOptions ask for the SDK's latest revision.
+func newInMemorySessionWith(t *testing.T, server *mcp.Server, client *mcp.Client, sessionOptions *mcp.ClientSessionOptions) *mcp.ClientSession {
+	t.Helper()
 
 	st, ct := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(t.Context(), st, nil)
@@ -358,8 +366,7 @@ func newInMemorySession(t *testing.T, server *mcp.Server) *mcp.ClientSession {
 	}
 	t.Cleanup(func() { serverSession.Close() })
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil)
-	session, err := mcpClient.Connect(t.Context(), ct, nil)
+	session, err := client.Connect(t.Context(), ct, sessionOptions)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
@@ -1486,6 +1493,7 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"max-request-body-bytes flag", "-max-request-body-bytes"},
 		{"pprof-addr flag", "-pprof-addr"},
 		{"language flag", "-language string"},
+		{"language values", "en|es (default en)"},
 		{"GITLAB_MCP_LANGUAGE env", "GITLAB_MCP_LANGUAGE"},
 		{"env section", "ENVIRONMENT VARIABLES"},
 		{"GITLAB_MCP_PPROF_ADDR env", "GITLAB_MCP_PPROF_ADDR"},
@@ -1929,6 +1937,25 @@ func TestPrintHelp_RevalidateIntervalVariable_SaysWhatStdioReadsItFor(t *testing
 				t.Errorf("help entry %s = %q, want it to carry %q", name, entry, want)
 			}
 		})
+	}
+}
+
+// TestPrintHelp_LanguageFlag_NamesTheListingsThatStayEnglish holds the
+// -language entry to what the setting leaves English. The package that holds
+// the translated texts is a message catalog, so an entry saying the catalog
+// stays English reads as the opposite of what es does; the entry names the
+// listings a gateway validates instead.
+func TestPrintHelp_LanguageFlag_NamesTheListingsThatStayEnglish(t *testing.T) {
+	stdout := captureStdout(t)
+	printHelp()
+	entry := helpEntry(stdout(), "-language")
+
+	const want = "What the model reads, the tool, prompt and resource listings and the logs stay English."
+	if !strings.Contains(entry, want) {
+		t.Errorf("the -language entry = %q, want it to carry %q", entry, want)
+	}
+	if strings.Contains(entry, "catalog") {
+		t.Errorf("the -language entry = %q, which says the catalog stays English", entry)
 	}
 }
 

@@ -163,9 +163,12 @@ func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) 
 func TestEnvBackedFlags_Language_TheFlagIsReadByTheSettingsOneReader(t *testing.T) {
 	for _, tc := range []struct {
 		name, flag, env, says string
+		want                  i18n.Language
 	}{
-		{name: "the flag beats the variable", flag: "-language=en", env: "fr"},
-		{name: "a flag the reader refuses", flag: "-language=fr", env: "en", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`},
+		{name: "the flag beats the variable", flag: "-language=en", env: "fr", want: i18n.English},
+		{name: "english as a flag beats spanish as a variable", flag: "-language=en", env: "es", want: i18n.English},
+		{name: "spanish as a flag beats english as a variable", flag: "-language=es-ES", env: "en", want: i18n.Spanish},
+		{name: "a flag the reader refuses", flag: "-language=fr", env: "en", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "fr"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			withFreshFlagSet(t)
@@ -184,8 +187,8 @@ func TestEnvBackedFlags_Language_TheFlagIsReadByTheSettingsOneReader(t *testing.
 				}
 				return
 			}
-			if err != nil || got != i18n.English {
-				t.Errorf("LanguageFromEnv() = %q, %v; want the flag's %q", got, err, i18n.English)
+			if err != nil || got != tc.want {
+				t.Errorf("LanguageFromEnv() = %q, %v; want the flag's %q", got, err, tc.want)
 			}
 		})
 	}
@@ -196,7 +199,7 @@ func TestEnvBackedFlags_Language_TheFlagIsReadByTheSettingsOneReader(t *testing.
 			usage = entry.usage
 		}
 	}
-	for _, want := range []string{"elicitation", "progress", "en (default)"} {
+	for _, want := range []string{"elicitation", "progress", "en|es (default en)"} {
 		t.Run("usage names "+want, func(t *testing.T) {
 			if !strings.Contains(usage, want) {
 				t.Errorf("-language usage %q does not mention %q", usage, want)

@@ -315,21 +315,22 @@ Key agents: `go-mcp-expert` (primary coding), `test-expert` (testing, coverage, 
 
 ## Language Policy
 
-> **All project artifacts must be written in English.** The Spanish half of the user documentation site is the one exception.
+> **All project artifacts must be written in English.** The Spanish half of the user documentation site and the server's Spanish message catalog are the two exceptions.
 
 | Artifact                                     | Language |
 | -------------------------------------------- | -------- |
-| Source code (all `.go` files)                | English  |
+| Source code (every `.go` file, except the templates of `internal/i18n/catalog_es.go`) | English  |
 | Comments and doc comments                    | English  |
 | Commit messages                              | English  |
 | Documentation (`README`, `docs/development`, the site's English pages, `plan/`) | English  |
 | The site's Spanish twin pages (`site/src/content/docs/es/`) and the Spanish text beside their English sources (an `es` field, a `labelEs`, `site/src/content/i18n/es.json`) | Spanish |
+| The templates of the Spanish message catalog (`internal/i18n/catalog_es.go`) and the Spanish its tests compare a render against | Spanish |
 | MCP tool names, descriptions, error messages | English  |
 | Test names and assertions                    | English  |
 | ADRs, specs, instructions                    | English  |
 | Git branch names                             | English  |
 
-Conversations with the developer may be in any language, but **every file committed to this repository must be in English**, with the one exception the table names: the Spanish half of the user documentation, which translates the English page it sits beside and changes with it.
+Conversations with the developer may be in any language, but **every file committed to this repository must be in English**, with the two exceptions the table names: the Spanish half of the user documentation, which translates the English page it sits beside and changes with it, and the Spanish message catalog, which translates the English catalog (`internal/i18n/catalog_en.go`) key by key and is what `GITLAB_MCP_LANGUAGE=es` shows a person (issue 1547). Its comments and the names around it stay English like any other Go file.
 
 - **Tests with HTTP mocks or goroutines**: never `t.Fatal` inside handler
   literals or `go` statements — follow

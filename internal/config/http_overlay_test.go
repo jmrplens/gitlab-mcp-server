@@ -346,6 +346,26 @@ func languagePresentCases() []presentVariableCase {
 				}
 			},
 		},
+		{
+			name: "spanish",
+			env:  map[string]string{"GITLAB_MCP_LANGUAGE": "es"},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.Language == nil || *o.Language != i18n.Spanish {
+					t.Errorf("Language = %v, want %q", o.Language, i18n.Spanish)
+				}
+			},
+		},
+		{
+			name: "spanish with a region",
+			env:  map[string]string{"GITLAB_MCP_LANGUAGE": "es-419"},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				if o.Language == nil || *o.Language != i18n.Spanish {
+					t.Errorf("Language = %v, want %q", o.Language, i18n.Spanish)
+				}
+			},
+		},
 	}
 }
 
@@ -589,11 +609,11 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "1025GB", "GITLAB_MCP_UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB"},
 		{"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "17179869185GB", "invalid GITLAB_MCP_UPLOAD_MAX_FILE_SIZE value"},
 		// The language, refused with the words stdio's reader uses, before
-		// the listener opens: a language without a catalog, Spanish until its
-		// catalog exists, and a value that is not a language tag.
-		{"GITLAB_MCP_LANGUAGE", "fr", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`},
-		{"GITLAB_MCP_LANGUAGE", "es", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "es"`},
-		{"GITLAB_MCP_LANGUAGE", "es_ES", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "es_ES"`},
+		// the listener opens: a language without a catalog, a language
+		// name, and the POSIX locale form, which is not a language tag.
+		{"GITLAB_MCP_LANGUAGE", "fr", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "fr"`},
+		{"GITLAB_MCP_LANGUAGE", "spanish", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "spanish"`},
+		{"GITLAB_MCP_LANGUAGE", "es_ES", `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "es_ES"`},
 	}
 
 	for _, tt := range tests {

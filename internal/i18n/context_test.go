@@ -18,14 +18,14 @@ func TestFromContext_WithNoLanguage_IsEnglish(t *testing.T) {
 	}
 }
 
-// TestFromContext_ReturnsTheLanguageTheContextCarries is the other direction,
-// run with a second language added for the test since English is the only one
-// this layer ships: a supported language set on the context is the one read
-// back, and English set explicitly is English.
+// TestFromContext_ReturnsTheLanguageTheContextCarries is the other direction:
+// a supported language set on the context is the one read back, Spanish as
+// shipped and one added for the test alike, and English set explicitly is
+// English.
 func TestFromContext_ReturnsTheLanguageTheContextCarries(t *testing.T) {
 	withSupported(t, "xx")
 
-	for _, lang := range []Language{"xx", English} {
+	for _, lang := range []Language{Spanish, "xx", English} {
 		t.Run(string(lang), func(t *testing.T) {
 			if got := FromContext(WithLanguage(context.Background(), lang)); got != lang {
 				t.Errorf("FromContext(WithLanguage(%q)) = %q", lang, got)
@@ -36,9 +36,11 @@ func TestFromContext_ReturnsTheLanguageTheContextCarries(t *testing.T) {
 
 // TestFromContext_AnUnsupportedLanguage_IsEnglish pins that a value no
 // catalog answers never reaches the renderer as a language: an empty one,
-// which a hand-built configuration carries, and one the parser would refuse.
+// which a hand-built configuration carries, one the parser would refuse, and
+// a tag the parser would have reduced (ES, es-ES) but that was stored as it
+// is written, which only Parse turns into a language.
 func TestFromContext_AnUnsupportedLanguage_IsEnglish(t *testing.T) {
-	for _, lang := range []Language{"", "fr", "EN"} {
+	for _, lang := range []Language{"", "fr", "EN", "ES", "es-ES"} {
 		t.Run(string(lang), func(t *testing.T) {
 			if got := FromContext(WithLanguage(context.Background(), lang)); got != English {
 				t.Errorf("FromContext(WithLanguage(%q)) = %q, want %q", lang, got, English)

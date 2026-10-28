@@ -16,7 +16,10 @@
 // The policy it enforces is pure ASCII prose plus a short list of rejected
 // ASCII characters (the semicolon): a validator that refuses "unsafe
 // characters" usually matches a character class, so holding a class is the
-// only version of clean that the next gateway cannot surprise.
+// only version of clean that the next gateway cannot surprise. The policy is
+// stated once, as gatewaycompat.OffendingRune, which the message catalog's
+// own character policy (internal/i18n) applies to the English it serves a
+// person as well.
 //
 // With -check it exits non-zero when any offending character is served, which
 // is the CI gate; without it, it prints every offender with enough context to

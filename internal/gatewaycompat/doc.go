@@ -10,10 +10,10 @@
 // it, and their rules are the gateway operator's to choose: one production
 // gateway (IBM mcp-context-forge before 0.7.0) refused any tool whose
 // description contained a semicolon. This server keeps its own text clean of
-// the characters known to be rejected (cmd/audit_gateway_chars gates that),
-// but the next gateway rule is not this project's to predict. The
-// substitution knob lets the operator comply with a rule the day they meet
-// it, without waiting for a release.
+// the characters known to be rejected ([OffendingRune] states which, and
+// cmd/audit_gateway_chars gates that), but the next gateway rule is not this
+// project's to predict. The substitution knob lets the operator comply with a
+// rule the day they meet it, without waiting for a release.
 //
 // The knob rewrites catalog metadata and nothing else: names, URIs, schema
 // constraints (pattern, const, enum values, defaults) and tool-call payloads

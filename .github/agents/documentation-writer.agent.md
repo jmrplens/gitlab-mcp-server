@@ -430,4 +430,4 @@ site/
 - Always include a References section with verified URLs in every document
 - Never create user documentation outside the site: `docs/guides/`, `docs/reference/`, `docs/concepts/` and `docs/getting-started.md` were copies of site pages that drifted from them, and were retired
 - Output the requested deliverable only; no unnecessary preamble
-- All documentation must be written in English per project language policy, except the Spanish twin of each site page
+- All documentation must be written in English per project language policy, except the Spanish twin of each site page (the policy's other exception, the server's Spanish message catalog in `internal/i18n/catalog_es.go`, is code rather than documentation)

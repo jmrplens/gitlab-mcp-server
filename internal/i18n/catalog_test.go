@@ -181,6 +181,28 @@ func TestPlaceholdersOf_ReadsEachNameOnce(t *testing.T) {
 	}
 }
 
+// TestTemplates_HandsOutACopyOfEachCatalog pins the reader a whole catalog is
+// taken through: every template of a supported language, a copy the caller
+// may change without changing what the server renders, and nothing for a
+// language no catalog holds.
+func TestTemplates_HandsOutACopyOfEachCatalog(t *testing.T) {
+	for _, lang := range Supported() {
+		t.Run(string(lang), func(t *testing.T) {
+			got := Templates(lang)
+			if !maps.Equal(got, catalogs[lang]) {
+				t.Fatalf("Templates(%s) = %v, want the catalog %v", lang, got, catalogs[lang])
+			}
+			got[CommonListAnd] = "changed"
+			if catalogs[lang][CommonListAnd] == "changed" {
+				t.Errorf("Templates(%s) handed out the catalog itself: a write changed what the server renders", lang)
+			}
+		})
+	}
+	if got := Templates("fr"); got != nil {
+		t.Errorf(`Templates("fr") = %v, want nil for a language no catalog holds`, got)
+	}
+}
+
 // TestEnglishTemplate_AnswersTheSourceText pins the reader the audit gates
 // use: the English template of a key, and whether there is one.
 func TestEnglishTemplate_AnswersTheSourceText(t *testing.T) {

@@ -95,15 +95,30 @@ func setScanMode(t *testing.T, full bool, subs []gatewaycompat.Substitution) {
 	t.Cleanup(func() { fullStrings, appliedSubstitutions = prevFull, prevSubs })
 }
 
-// setOffendingChars pins the policy's ASCII list for one test and restores it
+// setOffendingChars widens the policy to chars for one test and restores it
 // after. A wiring test needs the scan to produce rows for the strings the
 // server really serves, and those are clean by construction, so it declares an
 // ordinary letter offending instead of putting a semicolon into the catalog.
+// Everything gatewaycompat.OffendingRune refuses stays refused.
 func setOffendingChars(t *testing.T, chars ...rune) {
 	t.Helper()
-	prev := offendingChars
-	offendingChars = chars
-	t.Cleanup(func() { offendingChars = prev })
+	prev := offends
+	offends = func(r rune) bool { return gatewaycompat.OffendingRune(r) || slices.Contains(chars, r) }
+	t.Cleanup(func() { offends = prev })
+}
+
+// TestOffends_IsTheGatewayPolicy pins that the scan judges a character by the
+// one statement of the policy, gatewaycompat.OffendingRune, which the message
+// catalog's character policy applies as well, rather than by a copy that
+// could drift from it.
+func TestOffends_IsTheGatewayPolicy(t *testing.T) {
+	for _, r := range []rune{'a', ';', '\u007f', '\u0080', rune(0x2014)} {
+		t.Run(fmt.Sprintf("%U", r), func(t *testing.T) {
+			if got, want := offends(r), gatewaycompat.OffendingRune(r); got != want {
+				t.Errorf("offends(%U) = %v, while gatewaycompat.OffendingRune says %v", r, got, want)
+			}
+		})
+	}
 }
 
 // formatRows renders offenders as comparable rows, so two scans can be held to
@@ -286,6 +301,22 @@ func TestReport_Offenders_PrintsSortedAndReturnsExitCode(t *testing.T) {
 		{
 			name: "full_mode_is_tab_separated", found: offenders[:1], check: false, full: true, wantCode: 0,
 			wantOut: []string{"resources\tresource b description\tx; y\n", "1 served string(s)"},
+		},
+		{
+			// One schema can hold several offending strings under one
+			// location, and their rows keep the order the scan found them
+			// in, so two runs over one surface print one report.
+			name: "rows_sharing_a_location_keep_the_scan_order", check: false, wantCode: 0,
+			found: []offender{
+				{surface: "meta", where: "tool gitlab_issue input schema", excerpt: "first; one"},
+				{surface: "meta", where: "tool gitlab_issue input schema", excerpt: "second; two"},
+				{surface: "meta", where: "tool gitlab_issue input schema", excerpt: "third; three"},
+			},
+			wantOut: []string{
+				"meta        tool gitlab_issue input schema                       first; one\n" +
+					"meta        tool gitlab_issue input schema                       second; two\n" +
+					"meta        tool gitlab_issue input schema                       third; three\n",
+			},
 		},
 	}
 	for _, tc := range cases {

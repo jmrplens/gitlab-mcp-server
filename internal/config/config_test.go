@@ -1050,25 +1050,29 @@ func TestLoad_InvalidUploadMaxFileSize(t *testing.T) {
 // TestLanguageFromEnv_ReadsTheSettingUnderItsPrefixedName holds the one
 // reader of the language, which stdio's Load and HTTP mode's overlay both
 // call, and which --language reaches by writing the variable. Unset and blank
-// are English, as is a value of any case, padded or carrying a region. A
-// language the server has no catalog for refuses, naming the variable an
-// operator exports, the languages it accepts and the value as written, and so
-// does Spanish until its catalog exists.
+// are English, as is a value of any case, padded or carrying a region, and es
+// is Spanish the same way (ES, es-ES, es-419). A language the server has no
+// catalog for refuses, naming the variable an operator exports, the languages
+// it accepts and the value as written.
 func TestLanguageFromEnv_ReadsTheSettingUnderItsPrefixedName(t *testing.T) {
 	for _, tc := range []struct {
 		name, value string
 		unset       bool
+		want        i18n.Language
 		says        string
 	}{
-		{name: "unset", unset: true},
-		{name: "empty", value: ""},
-		{name: "padded", value: " en "},
-		{name: "upper case", value: "EN"},
-		{name: "a region", value: "en-GB"},
-		{name: "a language without a catalog", value: "fr", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`},
-		{name: "spanish before its catalog exists", value: "es", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "es"`},
-		{name: "a language name", value: "spanish", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "spanish"`},
-		{name: "the POSIX locale form", value: "es_ES", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "es_ES"`},
+		{name: "unset", unset: true, want: i18n.English},
+		{name: "empty", value: "", want: i18n.English},
+		{name: "padded", value: " en ", want: i18n.English},
+		{name: "upper case", value: "EN", want: i18n.English},
+		{name: "a region", value: "en-GB", want: i18n.English},
+		{name: "spanish", value: "es", want: i18n.Spanish},
+		{name: "spanish in upper case", value: "ES", want: i18n.Spanish},
+		{name: "spanish of spain", value: "es-ES", want: i18n.Spanish},
+		{name: "latin american spanish, padded", value: " es-419 ", want: i18n.Spanish},
+		{name: "a language without a catalog", value: "fr", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "fr"`},
+		{name: "a language name", value: "spanish", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "spanish"`},
+		{name: "the POSIX locale form", value: "es_ES", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "es_ES"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.unset {
@@ -1083,8 +1087,8 @@ func TestLanguageFromEnv_ReadsTheSettingUnderItsPrefixedName(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || got != i18n.English {
-				t.Errorf("LanguageFromEnv() = %q, %v; want %q", got, err, i18n.English)
+			if err != nil || got != tc.want {
+				t.Errorf("LanguageFromEnv() = %q, %v; want %q", got, err, tc.want)
 			}
 		})
 	}
@@ -1126,9 +1130,21 @@ func TestLoad_Language_IsTheSettingOrARefusal(t *testing.T) {
 		t.Errorf("Language = %q for en-GB, want %q", cfg.Language, i18n.English)
 	}
 
+	t.Setenv(EnvPrefix+"LANGUAGE", "es-ES")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.Language != i18n.Spanish {
+		t.Errorf("Language = %q for es-ES, want %q", cfg.Language, i18n.Spanish)
+	}
+	if got := cfg.ServerConfig().Language; got != i18n.Spanish {
+		t.Errorf("ServerConfig().Language = %q for es-ES, want %q, which every pool entry reads", got, i18n.Spanish)
+	}
+
 	t.Setenv(EnvPrefix+"LANGUAGE", "fr")
 	cfg, err = Load()
-	if want := `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`; err == nil || err.Error() != want {
+	if want := `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "fr"`; err == nil || err.Error() != want {
 		t.Errorf("Load() = %+v, %v; want the refusal %q", cfg, err, want)
 	}
 	if cfg != nil {
@@ -1144,9 +1160,12 @@ func TestLoad_Language_IsTheSettingOrARefusal(t *testing.T) {
 func TestLoad_Language_IsReadFromTheDotenvFileItNames(t *testing.T) {
 	for _, tc := range []struct {
 		name, value, says string
+		want              i18n.Language
 	}{
-		{name: "a value the file sets", value: "EN-gb"},
-		{name: "a value the file sets that is refused", value: "fr", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, got "fr"`},
+		{name: "a value the file sets", value: "EN-gb", want: i18n.English},
+		{name: "spanish, which the file sets", value: "es", want: i18n.Spanish},
+		{name: "spanish of spain, which the file sets", value: "es-ES", want: i18n.Spanish},
+		{name: "a value the file sets that is refused", value: "fr", says: `invalid GITLAB_MCP_LANGUAGE value: expected one of en, es, got "fr"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			clearEnvFileKeys(t)
@@ -1163,8 +1182,8 @@ func TestLoad_Language_IsReadFromTheDotenvFileItNames(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || cfg.Language != i18n.English {
-				t.Errorf("Load() = %+v, %v; want Language %q", cfg, err, i18n.English)
+			if err != nil || cfg.Language != tc.want {
+				t.Errorf("Load() = %+v, %v; want Language %q", cfg, err, tc.want)
 			}
 		})
 	}

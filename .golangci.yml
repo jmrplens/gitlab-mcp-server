@@ -269,6 +269,28 @@ linters:
           - gosec
         text: "G101: Potential hardcoded credentials"
 
+      # The Spanish message catalog and the test that compares its renders
+      # with the reviewed Spanish (issue 1547) are written in Spanish on
+      # purpose, and misspell, which reads strings against a US English
+      # dictionary, takes Spanish words for misspelled English ones
+      # (confidencial, contactos, Confirmas). The English catalog and its tests
+      # stay checked: they are the source every translation is held to. A new
+      # language's catalog is added to this path the day it is written. The
+      # catalog's own tests hold every translation to the English keys,
+      # placeholders, Markdown structure and its language's characters.
+      - path: "internal/i18n/catalog_es(_test)?\\.go"
+        linters:
+          - misspell
+
+      # Every catalog of the message catalog is one map literal of the same
+      # keys, which is its design: dupl compares syntax rather than values and
+      # reads each translation as a copy of the English source. That the
+      # catalogs agree key for key is what the completeness test holds, so a
+      # difference in shape is a test failure rather than a lint finding.
+      - path: "internal/i18n/catalog_[a-z]+\\.go"
+        linters:
+          - dupl
+
       # The GitLab-backed suite runs sequentially by design: its tests share
       # one instance and its fixtures across subtests, so the t.Parallel()
       # requirement is lifted there and nowhere else. The transport, collector

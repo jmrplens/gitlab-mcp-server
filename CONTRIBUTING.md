@@ -385,7 +385,7 @@ All project artifacts must be written in **English**:
 - MCP tool names, descriptions, error messages
 - Test names and assertions
 
-The one exception is the Spanish half of the user documentation: the Spanish twin of each site page under `site/src/content/docs/es/`, which translates its English page and changes with it, and the Spanish text kept beside its English source (the `es` fields of `cmd/gen_tool_reference/domains.json`, the Spanish strings of the generators that write both languages, `labelEs` in `site/scripts/gen-llms.mjs`, `site/src/content/i18n/es.json`).
+There are two exceptions. The first is the Spanish half of the user documentation: the Spanish twin of each site page under `site/src/content/docs/es/`, which translates its English page and changes with it, and the Spanish text kept beside its English source (the `es` fields of `cmd/gen_tool_reference/domains.json`, the Spanish strings of the generators that write both languages, `labelEs` in `site/scripts/gen-llms.mjs`, `site/src/content/i18n/es.json`). The second is the server's Spanish message catalog, `internal/i18n/catalog_es.go`, which translates the English catalog key by key and is what a deployment with `GITLAB_MCP_LANGUAGE=es` shows a person, and the Spanish its tests compare a render against (issue 1547). A new entry of the English catalog gets its Spanish in the same change, which the catalog's completeness test enforces.
 
 ## Release Process
 

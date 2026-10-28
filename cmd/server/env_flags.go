@@ -102,7 +102,7 @@ var envBackedFlags = []struct {
 		// before either transport serves, as the variable is.
 		flagName: "language",
 		envName:  "GITLAB_MCP_LANGUAGE",
-		usage:    "Language of the texts the client shows a person (elicitation questions, form field titles, progress messages): en (default)",
+		usage:    "Language of the texts the client shows a person (elicitation questions, form field titles, progress messages): en|es (default en)",
 	},
 }
 

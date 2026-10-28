@@ -480,12 +480,11 @@ func overlaySettings() []overlaySetting {
 			func(h *httpConfig) { h.uploadMaxFileSize = 50 << 20 },
 		},
 		{
-			// English is the only language the parser accepts in this layer and
-			// it is the default, so the row carries a language the overlay
-			// could only hold if a catalog answered it: what is checked is where
-			// the value lands, which a default would not show.
-			"language", func(o *config.HTTPEnvOverlay) { lang := i18n.Language("xx"); o.Language = &lang },
-			func(h *httpConfig) { h.language = "xx" },
+			// Spanish is a value the parser accepts that is not the default,
+			// so the row shows where the value lands, which a default would
+			// not.
+			"language", func(o *config.HTTPEnvOverlay) { lang := i18n.Spanish; o.Language = &lang },
+			func(h *httpConfig) { h.language = i18n.Spanish },
 		},
 	}
 }

@@ -18,13 +18,18 @@ type Language string
 // what a request carrying no language is served.
 const English Language = "en"
 
+// Spanish is the first translation, written to a glossary taken from the
+// Spanish half of the documentation site and held to the English source key
+// by key.
+const Spanish Language = "es"
+
 // Default is the language served when the operator chose none, and the one a
 // text missing from another catalog falls back to.
 const Default = English
 
 // supported lists the languages a catalog exists for, in the order a refusal
 // names them. It is a variable so a test can add a language of its own.
-var supported = []Language{English}
+var supported = []Language{English, Spanish}
 
 // Supported returns the languages the server can serve, in a slice the caller
 // may keep and change.
@@ -47,8 +52,9 @@ var languageTag = regexp.MustCompile(`^([A-Za-z]{2,8})(?:-[A-Za-z0-9]{1,8})*$`)
 // Surrounding blanks are dropped, and a value that is empty after that is no
 // choice at all, which is the default. Any other value is a BCP 47 tag read
 // without regard to case, whose subtags after the primary language are
-// accepted and dropped (en-GB is English): with one catalog per language they
-// choose nothing, which is the answer the RFC 4647 lookup would give.
+// accepted and dropped (en-GB is English, es-419 and es-MX are Spanish): with
+// one catalog per language they choose nothing, which is the answer the RFC
+// 4647 lookup would give.
 //
 // A tag of a language the server has no catalog for is refused, as is a value
 // that is not a tag at all (a name, the POSIX form es_ES, a gettext list), and

@@ -145,9 +145,12 @@ tracker.Step(ctx, 4, 4, i18n.T(ctx, i18n.InteractiveIssueCreateProgressCreating)
 A progress message is read by the person waiting rather than by the model, so
 `Update`, `Step` and `Done` take an `i18n.Text`, which only the message
 catalog in `internal/i18n` makes (issue 1547): a new message is a key in
-`internal/i18n/keys.go` and an English template in `catalog_en.go`, rendered
-with `i18n.T` in the language the request carries, and a literal at the call
-does not compile.
+`internal/i18n/keys.go`, an English template in `catalog_en.go` and its
+Spanish translation in `catalog_es.go`, rendered with `i18n.T` in the language
+the request carries, and a literal at the call does not compile. The catalog's
+tests refuse a translation that is missing a key, fills other placeholders,
+breaks the Markdown into other constructions or carries a character outside
+its language's policy.
 
 Each flow ends with `Done`, so the bar reaches 100% once the object exists.
 Outside the flows, progress is reported by the project upload (`uploads`,

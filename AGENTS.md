@@ -35,11 +35,14 @@ link to each for Claude Code. OpenCode wiring is per developer: `opencode.json` 
   tool surfaces. (ADR-0004.)
 - **English-only artifacts.** Every file committed to this repo must be
   in English, including doc comments, ADRs, branches, commits, and MCP
-  tool descriptions. The one exception is the Spanish half of the user
+  tool descriptions. The exceptions are the Spanish half of the user
   documentation: the twin pages under `site/src/content/docs/es/`, and the
   Spanish text the site and the generators that write it keep beside the
-  English (an `es` field, a `labelEs`, `site/src/content/i18n/es.json`).
-  Chat with the developer in any language you want.
+  English (an `es` field, a `labelEs`, `site/src/content/i18n/es.json`);
+  and the server's Spanish message catalog, `internal/i18n/catalog_es.go`,
+  with the Spanish the tests compare its renders against (issue 1547),
+  which translates the English catalog key by key. Chat with the developer
+  in any language you want.
 - **Conventional commits.** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`,
   `chore:`. Use the `git-commit` skill (`.claude/skills/git-commit/`) for
   auto-detected type/scope.

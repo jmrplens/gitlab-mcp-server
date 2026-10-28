@@ -587,8 +587,9 @@ FLAGS
                             to exclude, on every surface
   -client-compat string     Per-client response compatibility: auto|off (default auto)
   -language string          Language of the texts the client shows a person (elicitation questions, form
-                            field titles, progress messages): en (default). What the model reads, the
-                            catalog and the logs stay English. Both transports
+                            field titles, progress messages): en|es (default en). What the model reads,
+                            the tool, prompt and resource listings and the logs stay English. Both
+                            transports
   -description-substitutions string
                             Rewrite listed descriptions and titles for strict gateway validators:
                             comma-separated old=new pairs, backslash escapes \, \= \\ (default empty)
@@ -736,8 +737,9 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_MCP_TELEMETRY_TOOL_NAME    Whether gen_ai.tool.name and gitlab_mcp.action are metric
                                     dimensions, the two together: auto|on|off (default auto)
   GITLAB_MCP_LANGUAGE               Language of the texts the client shows a person (elicitation
-                                    questions, form field titles, progress messages): en (default).
-                                    Never read from LANG, LC_* or gettext's LANGUAGE. Both transports
+                                    questions, form field titles, progress messages): en|es
+                                    (default en). Never read from LANG, LC_* or gettext's LANGUAGE.
+                                    Both transports
   GITLAB_MCP_LOG_LEVEL              Logging: debug/info/warn/error (default info)
   GITLAB_MCP_PPROF_ADDR             Loopback address for Go's profiling handlers, e.g. 127.0.0.1:6060
                                     (default empty: nothing served). Both transports

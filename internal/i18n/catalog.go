@@ -3,12 +3,15 @@
 
 package i18n
 
+import "maps"
+
 // catalogs holds the template of every key in every supported language. A
 // template names its values as {name}, a name of lower-case letters, digits
 // and underscores that starts with a letter, and uses braces for nothing
 // else.
 var catalogs = map[Language]map[Key]string{
 	English: english,
+	Spanish: spanish,
 }
 
 // lookup returns the template of key in lang, falling back to English when
@@ -22,6 +25,16 @@ func lookup(lang Language, key Key) string {
 		return template
 	}
 	return string(key)
+}
+
+// Templates returns every template of lang's catalog, keyed by key, as a copy
+// the caller may change, and nil for a language no catalog holds. It is how a
+// whole catalog is read from outside this package: the character policy test,
+// which applies internal/gatewaycompat's predicate and so cannot be an
+// internal test of a package internal/config imports, reads each language
+// through it.
+func Templates(lang Language) map[Key]string {
+	return maps.Clone(catalogs[lang])
 }
 
 // EnglishTemplate returns the English template of key and whether there is

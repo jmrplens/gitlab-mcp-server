@@ -19,13 +19,16 @@
 // # How a text is written
 //
 // Each text has a [Key], declared as a constant in keys.go, and a template per
-// language in that language's catalog (catalog_en.go for English, the source
-// every translation is held to). A template names its values with
-// placeholders, {name}, filled by the arguments of the call: [S] for a text
-// the caller has already escaped for where it lands, [N] for an integer, [M]
-// for another catalog message and [L] for a list joined with the language's
-// own conjunction. Names rather than positions, because a translation puts the
-// values in its own order.
+// language in that language's catalog: catalog_en.go for English, the source
+// every translation is held to, and catalog_es.go for Spanish, the first
+// translation. A translation holds exactly the English keys with the same
+// placeholders and the same Markdown constructions, and keeps to the
+// characters its language needs, which the catalog tests check entry by
+// entry. A template names its values with placeholders, {name}, filled by the
+// arguments of the call: [S] for a text the caller has already escaped for
+// where it lands, [N] for an integer, [M] for another catalog message and [L]
+// for a list joined with the language's own conjunction. Names rather than
+// positions, because a translation puts the values in its own order.
 //
 // A message is built with [New] (and [Concat] for a summary whose rows are
 // optional) and rendered with [Message.In], or with [Message.Text] in the
@@ -43,7 +46,7 @@
 //
 // # Where the language comes from
 //
-// The operator's GITLAB_MCP_LANGUAGE (or --language), read once by
+// The operator's GITLAB_MCP_LANGUAGE (or --language), en or es, read once by
 // internal/config with [Parse], and put on the context of every request by
 // the server's middleware with [WithLanguage]. [FromContext] reads it back,
 // and answers English for a context that carries none, so a path the
