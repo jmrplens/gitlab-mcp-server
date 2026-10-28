@@ -15,6 +15,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // IsYOLOMode returns true when destructive action confirmation should be
@@ -83,7 +84,12 @@ func DynamicConfirmationDescription(confirmationSkipped bool) string {
 // a tool result asks it to fix a field its client mangled. Everything a caller
 // can act on (declined, cancelled, a client that cannot prompt) stays in the
 // result, which is where MCP wants tool-level failure.
-func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, params map[string]any, message string) (*mcp.CallToolResult, error) {
+//
+// The prompt has two readers, so it arrives unrendered: a person is asked it
+// in the request's language, and when the client cannot ask, the model reads
+// it in English as the refusal's opening sentence, as it reads every other
+// refusal.
+func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, params map[string]any, prompt i18n.Message) (*mcp.CallToolResult, error) {
 	tool := ""
 	if req != nil {
 		tool = req.Params.Name
@@ -110,12 +116,12 @@ func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, par
 	}
 	if !flow.IsSupported() {
 		slog.WarnContext(ctx, "blocked destructive action without explicit confirmation", "tool", tool)
-		return ErrorResult(message +
+		return ErrorResult(prompt.English() +
 			" The connected client cannot prompt for confirmation." +
 			" Re-send with confirm=true only after the user explicitly approves this operation."), nil
 	}
 
-	return ConfirmAction(ctx, req, message)
+	return ConfirmAction(ctx, req, prompt)
 }
 
 // hasExplicitConfirm checks whether params contains "confirm": true.
@@ -144,8 +150,9 @@ func hasExplicitConfirm(params map[string]any) bool {
 // Returns an error tool result if the user declined or canceled. On sessions negotiated at protocol
 // >= 2026-07-28 the confirmation travels as a multi round-trip input request
 // (SEP-2322): the first pass returns an input-required result and the client
-// retries the call with the user's answer attached.
-func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) (*mcp.CallToolResult, error) {
+// retries the call with the user's answer attached. The person is asked the
+// prompt in the request's language.
+func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, prompt i18n.Message) (*mcp.CallToolResult, error) {
 	tool := ""
 	if req != nil {
 		tool = req.Params.Name
@@ -159,7 +166,7 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 	if !flow.IsSupported() {
 		return nil, nil //nolint:nilnil // no result and no error is the "proceed" answer; see the doc comment
 	}
-	confirmed, err := flow.Confirm(ctx, elicitation.ConfirmExchangeID, message)
+	confirmed, err := flow.Confirm(ctx, elicitation.ConfirmExchangeID, prompt.Text(ctx))
 	if errors.Is(err, elicitation.ErrInputPending) {
 		slog.DebugContext(ctx, "destructive confirmation pending client input", "tool", tool)
 		return flow.InputRequiredResult(), nil

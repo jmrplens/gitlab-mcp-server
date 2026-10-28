@@ -36,6 +36,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
@@ -2463,7 +2464,7 @@ func TestMakeMetaHandler_RouteOwnPendingInputIsReturnedAsResult(t *testing.T) {
 			if err != nil {
 				return nil, err
 			}
-			confirmed, confirmErr := flow.Confirm(ctx, "own-exchange", "Proceed with side effect?")
+			confirmed, confirmErr := flow.Confirm(ctx, "own-exchange", i18n.Verbatim("Proceed with side effect?"))
 			if confirmErr != nil {
 				if errors.Is(confirmErr, elicitation.ErrInputPending) {
 					elicited++
@@ -2824,6 +2825,13 @@ func TestMakeMetaHandler_MetadataDestructive_TriggersConfirm(t *testing.T) {
 	}
 	if result == nil || !result.IsError {
 		t.Fatalf("result = %+v, want fail-closed error result", result)
+	}
+	// The refusal opens with the question a person would have been asked,
+	// in English for the model, and that question is the one asked before it
+	// became a catalog message.
+	const question = "Confirm test_tool/delete? This action may be irreversible."
+	if text, _ := result.Content[0].(*mcp.TextContent); text == nil || !strings.Contains(text.Text, question) {
+		t.Errorf("refusal = %+v, want it to carry %q", result.Content[0], question)
 	}
 
 	// confirm=true bypasses the guard and reaches the handler.

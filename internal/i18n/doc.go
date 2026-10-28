@@ -29,10 +29,17 @@
 //
 // A message is built with [New] (and [Concat] for a summary whose rows are
 // optional) and rendered with [Message.In], or with [Message.Text] in the
-// language of a request. A person-facing sink takes a [Text] once issue 1547
-// converts it, and only this package produces one, so from then on a literal
-// written at that sink's call site does not compile; [Verbatim] is the one way
-// around that and exists for tests.
+// language of a request. Every person-facing sink takes a [Text]: the
+// questions, fields and titles of internal/elicitation, the progress messages
+// of internal/progress and of the waits in internal/tools/waitpoll, and the
+// destructive confirmations of internal/toolutil, which take the [Message]
+// unrendered since the model reads the same question in English when the
+// client cannot ask it. Only this package produces a Text, so a literal written
+// at one of those call sites does not compile; [Verbatim] is the one way around
+// that and exists for tests.
+//
+// English is the text the server sent before the catalog existed, byte for
+// byte, which the test of the English catalog holds every entry to.
 //
 // # Where the language comes from
 //

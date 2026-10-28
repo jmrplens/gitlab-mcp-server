@@ -158,12 +158,11 @@
 // # Texts rendered from the message catalog
 //
 // The texts a person reads directly, the questions and summaries of an
-// elicitation and the progress messages, are to be rendered from
-// internal/i18n rather than written with fmt once issue 1547 moves them into
-// the catalog, and a summary will still carry values GitLab sent. So a call
-// of i18n.T(ctx, key, args...) or i18n.New(key, args...) is a sink whose
-// template is the English one of its key, i18n.EnglishTemplate, the text
-// every translation is held to. The key has to be a constant, as an fmt
+// elicitation and the progress messages, are rendered from internal/i18n
+// rather than written with fmt, and a summary still carries values GitLab
+// sent. So a call of i18n.T(ctx, key, args...) or i18n.New(key, args...) is a
+// sink whose template is the English one of its key, i18n.EnglishTemplate, the
+// text every translation is held to. The key has to be a constant, as an fmt
 // template does, and is resolved through the type checker; a render whose key
 // is not one is a finding of its own, "catalog-key", in every run whatever
 // contexts it judges, since with no template none of its placeholders can be

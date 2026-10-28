@@ -193,16 +193,3 @@ func TestEnglishTemplate_AnswersTheSourceText(t *testing.T) {
 		t.Errorf(`EnglishTemplate("no.such.key") = %q, %v; want "", false`, got, ok)
 	}
 }
-
-// TestEnglishCatalog_TheConjunctionIsTheOneServedToday pins the one entry
-// this layer ships. The work item guard joins what a clear removes with
-// " and ", and the list renderer joins with this entry, so the two have to
-// agree byte for byte for the guard's question to read as it does now.
-func TestEnglishCatalog_TheConjunctionIsTheOneServedToday(t *testing.T) {
-	if CommonListAnd != "common.list.and" {
-		t.Errorf("CommonListAnd = %q, want the stable key common.list.and", CommonListAnd)
-	}
-	if got := english[CommonListAnd]; got != " and " {
-		t.Errorf("the English conjunction = %q, want %q", got, " and ")
-	}
-}

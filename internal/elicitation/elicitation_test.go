@@ -19,6 +19,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -70,7 +71,7 @@ func TestZeroValue_Client(t *testing.T) {
 // [ErrElicitationNotSupported] on an unsupported (zero-value) client.
 func TestConfirm_NotSupported(t *testing.T) {
 	var c Client
-	_, err := c.Confirm(context.Background(), "test?")
+	_, err := c.Confirm(context.Background(), i18n.Verbatim("test?"))
 	if !errors.Is(err, ErrElicitationNotSupported) {
 		t.Errorf("Confirm() error = %v, want %v", err, ErrElicitationNotSupported)
 	}
@@ -80,7 +81,7 @@ func TestConfirm_NotSupported(t *testing.T) {
 // [ErrElicitationNotSupported] on an unsupported client.
 func TestPromptText_NotSupported(t *testing.T) {
 	var c Client
-	_, err := c.PromptText(context.Background(), "enter text", "value")
+	_, err := c.PromptText(context.Background(), i18n.Verbatim("enter text"), Field{Name: "value"})
 	if !errors.Is(err, ErrElicitationNotSupported) {
 		t.Errorf("PromptText() error = %v, want %v", err, ErrElicitationNotSupported)
 	}
@@ -90,7 +91,7 @@ func TestPromptText_NotSupported(t *testing.T) {
 // [ErrElicitationNotSupported] on an unsupported client.
 func TestSelectOne_NotSupported(t *testing.T) {
 	var c Client
-	_, err := c.SelectOne(context.Background(), "choose", []string{"a", "b"})
+	_, err := c.SelectOne(context.Background(), i18n.Verbatim("choose"), []string{"a", "b"})
 	if !errors.Is(err, ErrElicitationNotSupported) {
 		t.Errorf("SelectOne() error = %v, want %v", err, ErrElicitationNotSupported)
 	}
@@ -100,7 +101,7 @@ func TestSelectOne_NotSupported(t *testing.T) {
 // [ErrElicitationNotSupported] on an unsupported client.
 func TestGatherData_NotSupported(t *testing.T) {
 	var c Client
-	_, err := c.GatherData(context.Background(), "fill form", map[string]any{"type": "object"})
+	_, err := c.GatherData(context.Background(), i18n.Verbatim("fill form"), map[string]any{"type": "object"})
 	if !errors.Is(err, ErrElicitationNotSupported) {
 		t.Errorf("GatherData() error = %v, want %v", err, ErrElicitationNotSupported)
 	}
@@ -110,7 +111,7 @@ func TestGatherData_NotSupported(t *testing.T) {
 // the options slice and returns an error when it is empty.
 func TestSelectOne_EmptyOptions(t *testing.T) {
 	c := Client{session: &mcp.ServerSession{}} // non-nil but we'll check the validation before it reaches session
-	_, err := c.SelectOne(context.Background(), "choose", []string{})
+	_, err := c.SelectOne(context.Background(), i18n.Verbatim("choose"), []string{})
 	if err == nil || !strings.Contains(err.Error(), "options list must not be empty") {
 		t.Errorf("SelectOne(empty) error = %v, want 'options list must not be empty'", err)
 	}
@@ -161,7 +162,7 @@ func TestConfirm_Accept(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	confirmed, err := c.Confirm(ctx, testConfirmMsg)
+	confirmed, err := c.Confirm(ctx, i18n.Verbatim(testConfirmMsg))
 	if err != nil {
 		t.Fatalf("Confirm() error = %v", err)
 	}
@@ -183,7 +184,7 @@ func TestConfirm_AcceptFalse(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	confirmed, err := c.Confirm(ctx, testConfirmMsg)
+	confirmed, err := c.Confirm(ctx, i18n.Verbatim(testConfirmMsg))
 	if err != nil {
 		t.Fatalf("Confirm() error = %v", err)
 	}
@@ -202,7 +203,7 @@ func TestConfirm_Decline(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.Confirm(ctx, testConfirmMsg)
+	_, err := c.Confirm(ctx, i18n.Verbatim(testConfirmMsg))
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("Confirm(decline) error = %v, want %v", err, ErrDeclined)
 	}
@@ -218,7 +219,7 @@ func TestConfirm_Cancel(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.Confirm(ctx, testConfirmMsg)
+	_, err := c.Confirm(ctx, i18n.Verbatim(testConfirmMsg))
 	if !errors.Is(err, ErrCancelled) {
 		t.Errorf("Confirm(cancel) error = %v, want %v", err, ErrCancelled)
 	}
@@ -237,7 +238,7 @@ func TestPromptText_Accept(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	text, err := c.PromptText(ctx, "Enter issue title", "title")
+	text, err := c.PromptText(ctx, i18n.Verbatim("Enter issue title"), Field{Name: "title"})
 	if err != nil {
 		t.Fatalf("PromptText() error = %v", err)
 	}
@@ -259,12 +260,62 @@ func TestPromptText_DefaultFieldName(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	text, err := c.PromptText(ctx, testEnterTextMsg, "")
+	text, err := c.PromptText(ctx, i18n.Verbatim(testEnterTextMsg), Field{})
 	if err != nil {
 		t.Fatalf("PromptText() error = %v", err)
 	}
 	if text != testSomeText {
 		t.Errorf("PromptText() = %q, want %q", text, testSomeText)
+	}
+}
+
+// TestField_Keys_FallBackFromTitleToNameToValue pins how a prompt names its
+// property and titles it. A field with no name is asked for under value, as
+// it was before fields had titles, and a field with no title is titled with
+// its name, which is what a client was shown for every field before the
+// catalog existed, so a caller that sets neither serves the form it always
+// did.
+func TestField_Keys_FallBackFromTitleToNameToValue(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		field     Field
+		wantName  string
+		wantTitle string
+	}{
+		{name: "nothing set", field: Field{}, wantName: "value", wantTitle: "value"},
+		{name: "a name only", field: Field{Name: "title"}, wantName: "title", wantTitle: "title"},
+		{name: "a name and a title", field: Field{Name: "title", Title: i18n.Verbatim("Issue title")}, wantName: "title", wantTitle: "Issue title"},
+		{name: "a title only", field: Field{Title: i18n.Verbatim("Amount")}, wantName: "value", wantTitle: "Amount"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if name, title := tc.field.keys(); name != tc.wantName || title != tc.wantTitle {
+				t.Errorf("keys() = (%q, %q), want (%q, %q)", name, title, tc.wantName, tc.wantTitle)
+			}
+		})
+	}
+}
+
+// TestPromptText_SendsTheFieldTitle verifies that the title a caller gives a
+// field is the one the synchronous path puts in front of the person, while
+// the property keeps the field's name, which is what the answer is read back
+// under.
+func TestPromptText_SendsTheFieldTitle(t *testing.T) {
+	ctx := context.Background()
+	var sent map[string]any
+	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		sent, _ = req.Params.RequestedSchema.(map[string]any)
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"title": testIssueTitle}}, nil
+	})
+	defer cleanup()
+
+	text, err := clientFromSession(ss).PromptText(ctx, i18n.Verbatim("Enter the title"), Field{Name: "title", Title: i18n.Verbatim("Issue title")})
+	if err != nil || text != testIssueTitle {
+		t.Fatalf("PromptText() = (%q, %v), want (%q, nil)", text, err, testIssueTitle)
+	}
+	props, _ := sent["properties"].(map[string]any)
+	field, _ := props["title"].(map[string]any)
+	if field["title"] != "Issue title" {
+		t.Errorf("the property is titled %v, want the field's title %q", field["title"], "Issue title")
 	}
 }
 
@@ -278,7 +329,7 @@ func TestPromptText_Decline(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.PromptText(ctx, testEnterTextMsg, "value")
+	_, err := c.PromptText(ctx, i18n.Verbatim(testEnterTextMsg), Field{Name: "value"})
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("PromptText(decline) error = %v, want %v", err, ErrDeclined)
 	}
@@ -297,7 +348,7 @@ func TestSelectOne_Accept(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	sel, err := c.SelectOne(ctx, "Select label", []string{"bug", "feature", "docs"})
+	sel, err := c.SelectOne(ctx, i18n.Verbatim("Select label"), []string{"bug", "feature", "docs"})
 	if err != nil {
 		t.Fatalf("SelectOne() error = %v", err)
 	}
@@ -319,7 +370,7 @@ func TestSelectOne_InvalidOption(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOne(ctx, "Select label", []string{"bug", "feature"})
+	_, err := c.SelectOne(ctx, i18n.Verbatim("Select label"), []string{"bug", "feature"})
 	// SDK validates enum schema before our defense-in-depth check runs
 	if err == nil {
 		t.Error("SelectOne(invalid option) should return an error")
@@ -336,7 +387,7 @@ func TestSelectOne_Cancel(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOne(ctx, "Select", []string{"a", "b"})
+	_, err := c.SelectOne(ctx, i18n.Verbatim("Select"), []string{"a", "b"})
 	if !errors.Is(err, ErrCancelled) {
 		t.Errorf("SelectOne(cancel) error = %v, want %v", err, ErrCancelled)
 	}
@@ -369,7 +420,7 @@ func TestGatherData_Accept(t *testing.T) {
 	}
 
 	c := clientFromSession(ss)
-	data, err := c.GatherData(ctx, "Fill project details", schema)
+	data, err := c.GatherData(ctx, i18n.Verbatim("Fill project details"), schema)
 	if err != nil {
 		t.Fatalf("GatherData() error = %v", err)
 	}
@@ -391,7 +442,7 @@ func TestGatherData_Decline(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.GatherData(ctx, "Fill form", map[string]any{"type": "object"})
+	_, err := c.GatherData(ctx, i18n.Verbatim("Fill form"), map[string]any{"type": "object"})
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("GatherData(decline) error = %v, want %v", err, ErrDeclined)
 	}
@@ -407,7 +458,7 @@ func TestElicit_UnknownAction(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.Confirm(ctx, "test?")
+	_, err := c.Confirm(ctx, i18n.Verbatim("test?"))
 	if err == nil || !strings.Contains(err.Error(), "unknown action") {
 		t.Errorf("elicit(unknown action) error = %v, want 'unknown action'", err)
 	}
@@ -426,7 +477,7 @@ func TestPromptText_NonStringResponse(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.PromptText(ctx, testEnterTextMsg, "value")
+	_, err := c.PromptText(ctx, i18n.Verbatim(testEnterTextMsg), Field{Name: "value"})
 	// SDK validates type schema before our type assertion runs
 	if err == nil {
 		t.Error("PromptText(non-string) should return an error")
@@ -446,7 +497,7 @@ func TestSelectOne_NonStringResponse(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOne(ctx, "Select", []string{"a"})
+	_, err := c.SelectOne(ctx, i18n.Verbatim("Select"), []string{"a"})
 	// SDK validates type schema before our type assertion runs
 	if err == nil {
 		t.Error("SelectOne(non-string) should return an error")
@@ -468,7 +519,7 @@ func TestConfirm_MessagePassedThrough(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, _ = c.Confirm(ctx, testDeleteProjectMsg)
+	_, _ = c.Confirm(ctx, i18n.Verbatim(testDeleteProjectMsg))
 	if receivedMessage != testDeleteProjectMsg {
 		t.Errorf("message = %q, want %q", receivedMessage, testDeleteProjectMsg)
 	}
@@ -532,7 +583,7 @@ func TestFromRequest_WithElicitationCapability(t *testing.T) {
 // [ErrElicitationNotSupported] on an unsupported (zero-value) client.
 func TestSelectMulti_NotSupported(t *testing.T) {
 	var c Client
-	_, err := c.SelectMulti(context.Background(), "choose", []string{"a"}, 0, 0)
+	_, err := c.SelectMulti(context.Background(), i18n.Verbatim("choose"), []string{"a"}, 0, 0)
 	if !errors.Is(err, ErrElicitationNotSupported) {
 		t.Errorf("SelectMulti() error = %v, want %v", err, ErrElicitationNotSupported)
 	}
@@ -542,7 +593,7 @@ func TestSelectMulti_NotSupported(t *testing.T) {
 // the options slice and returns an error when it is empty.
 func TestSelectMulti_EmptyOptions(t *testing.T) {
 	c := Client{session: &mcp.ServerSession{}}
-	_, err := c.SelectMulti(context.Background(), "choose", []string{}, 0, 0)
+	_, err := c.SelectMulti(context.Background(), i18n.Verbatim("choose"), []string{}, 0, 0)
 	if err == nil || !strings.Contains(err.Error(), "options list must not be empty") {
 		t.Errorf("SelectMulti(empty) error = %v, want 'options list must not be empty'", err)
 	}
@@ -561,7 +612,7 @@ func TestSelectMulti_Accept(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	sel, err := c.SelectMulti(ctx, "Select labels", []string{"bug", "feature", "docs"}, 1, 3)
+	sel, err := c.SelectMulti(ctx, i18n.Verbatim("Select labels"), []string{"bug", "feature", "docs"}, 1, 3)
 	if err != nil {
 		t.Fatalf("SelectMulti() error = %v", err)
 	}
@@ -583,7 +634,7 @@ func TestSelectMulti_InvalidOption(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectMulti(ctx, "Select", []string{"a", "b"}, 0, 0)
+	_, err := c.SelectMulti(ctx, i18n.Verbatim("Select"), []string{"a", "b"}, 0, 0)
 	if err == nil {
 		t.Error("SelectMulti(invalid) should return an error")
 	}
@@ -599,7 +650,7 @@ func TestSelectMulti_Decline(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectMulti(ctx, "choose", []string{"a"}, 0, 0)
+	_, err := c.SelectMulti(ctx, i18n.Verbatim("choose"), []string{"a"}, 0, 0)
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("SelectMulti(decline) error = %v, want %v", err, ErrDeclined)
 	}
@@ -611,7 +662,7 @@ func TestSelectMulti_Decline(t *testing.T) {
 // [ErrElicitationNotSupported] on an unsupported client.
 func TestSelectOneInt_NotSupported(t *testing.T) {
 	var c Client
-	_, err := c.SelectOneInt(context.Background(), "choose", []int{1, 2})
+	_, err := c.SelectOneInt(context.Background(), i18n.Verbatim("choose"), []int{1, 2})
 	if !errors.Is(err, ErrElicitationNotSupported) {
 		t.Errorf("SelectOneInt() error = %v, want %v", err, ErrElicitationNotSupported)
 	}
@@ -621,7 +672,7 @@ func TestSelectOneInt_NotSupported(t *testing.T) {
 // the options slice and returns an error when it is empty.
 func TestSelectOneInt_EmptyOptions(t *testing.T) {
 	c := Client{session: &mcp.ServerSession{}}
-	_, err := c.SelectOneInt(context.Background(), "choose", []int{})
+	_, err := c.SelectOneInt(context.Background(), i18n.Verbatim("choose"), []int{})
 	if err == nil || !strings.Contains(err.Error(), "options list must not be empty") {
 		t.Errorf("SelectOneInt(empty) error = %v, want 'options list must not be empty'", err)
 	}
@@ -640,7 +691,7 @@ func TestSelectOneInt_Accept(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	val, err := c.SelectOneInt(ctx, "Select access level", []int{10, 20, 30, 40})
+	val, err := c.SelectOneInt(ctx, i18n.Verbatim("Select access level"), []int{10, 20, 30, 40})
 	if err != nil {
 		t.Fatalf("SelectOneInt() error = %v", err)
 	}
@@ -662,7 +713,7 @@ func TestSelectOneInt_InvalidValue(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOneInt(ctx, "Select", []int{10, 20})
+	_, err := c.SelectOneInt(ctx, i18n.Verbatim("Select"), []int{10, 20})
 	if err == nil {
 		t.Error("SelectOneInt(invalid) should return an error")
 	}
@@ -674,7 +725,7 @@ func TestSelectOneInt_InvalidValue(t *testing.T) {
 // [ErrElicitationNotSupported] on an unsupported client.
 func TestPromptNumber_NotSupported(t *testing.T) {
 	var c Client
-	_, err := c.PromptNumber(context.Background(), "enter", "val", 0, 100)
+	_, err := c.PromptNumber(context.Background(), i18n.Verbatim("enter"), Field{Name: "val"}, 0, 100)
 	if !errors.Is(err, ErrElicitationNotSupported) {
 		t.Errorf("PromptNumber() error = %v, want %v", err, ErrElicitationNotSupported)
 	}
@@ -693,7 +744,7 @@ func TestPromptNumber_Accept(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	val, err := c.PromptNumber(ctx, "Enter amount", "amount", 0, 100)
+	val, err := c.PromptNumber(ctx, i18n.Verbatim("Enter amount"), Field{Name: "amount"}, 0, 100)
 	if err != nil {
 		t.Fatalf("PromptNumber() error = %v", err)
 	}
@@ -715,7 +766,7 @@ func TestPromptNumber_DefaultFieldName(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	val, err := c.PromptNumber(ctx, "Enter value", "", 0, 100)
+	val, err := c.PromptNumber(ctx, i18n.Verbatim("Enter value"), Field{}, 0, 100)
 	if err != nil {
 		t.Fatalf("PromptNumber() error = %v", err)
 	}
@@ -734,7 +785,7 @@ func TestPromptNumber_Decline(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.PromptNumber(ctx, "Enter", "val", 0, 100)
+	_, err := c.PromptNumber(ctx, i18n.Verbatim("Enter"), Field{Name: "val"}, 0, 100)
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("PromptNumber(decline) error = %v, want %v", err, ErrDeclined)
 	}
@@ -810,7 +861,7 @@ func TestElicitURL_Accept(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/group/project/-/issues/1", "View issue")
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/group/project/-/issues/1", i18n.Verbatim("View issue"))
 	if err != nil {
 		t.Errorf("ElicitURL(accept) error = %v", err)
 	}
@@ -826,7 +877,7 @@ func TestElicitURL_Decline(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", i18n.Verbatim("Open page"))
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("ElicitURL(decline) error = %v, want %v", err, ErrDeclined)
 	}
@@ -836,7 +887,7 @@ func TestElicitURL_Decline(t *testing.T) {
 // ErrElicitationNotSupported on a zero-value Client with no session.
 func TestElicitURL_NotSupported(t *testing.T) {
 	c := Client{}
-	err := c.ElicitURL(context.Background(), "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
+	err := c.ElicitURL(context.Background(), "https://gitlab.example.com", "https://gitlab.example.com/test", i18n.Verbatim("Open page"))
 	if !errors.Is(err, ErrElicitationNotSupported) {
 		t.Errorf("ElicitURL(no session) error = %v, want %v", err, ErrElicitationNotSupported)
 	}
@@ -853,7 +904,7 @@ func TestElicitURL_URLModeNotSupported(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", i18n.Verbatim("Open page"))
 	if !errors.Is(err, ErrURLElicitationNotSupported) {
 		t.Errorf("ElicitURL(form-only) error = %v, want %v", err, ErrURLElicitationNotSupported)
 	}
@@ -869,7 +920,7 @@ func TestElicitURL_ExternalURLRejected(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://evil.com/exploit", "Click here")
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://evil.com/exploit", i18n.Verbatim("Click here"))
 	if err == nil {
 		t.Error("ElicitURL(external URL) should return error")
 	}
@@ -991,7 +1042,7 @@ func TestSelectOneInt_FloatTruncation(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOneInt(ctx, "Select", []int{2, 3})
+	_, err := c.SelectOneInt(ctx, i18n.Verbatim("Select"), []int{2, 3})
 	if err == nil {
 		t.Error("SelectOneInt(2.5) should return error for non-integer value")
 	}
@@ -1010,7 +1061,7 @@ func TestSelectOneInt_NotInOptions(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOneInt(ctx, "Select", []int{1, 2, 3})
+	_, err := c.SelectOneInt(ctx, i18n.Verbatim("Select"), []int{1, 2, 3})
 	if err == nil {
 		t.Error("SelectOneInt(99) should return error for value not in options")
 	}
@@ -1030,7 +1081,7 @@ func TestPromptNumber_BelowMin(t *testing.T) {
 
 	c := clientFromSession(ss)
 	// With min=0, max=100, value -5 should be rejected by schema validation.
-	_, err := c.PromptNumber(ctx, "Enter amount", "amount", 0, 100)
+	_, err := c.PromptNumber(ctx, i18n.Verbatim("Enter amount"), Field{Name: "amount"}, 0, 100)
 	if err == nil {
 		t.Error("PromptNumber(-5) should return error for value below minimum")
 	}
@@ -1049,7 +1100,7 @@ func TestPromptNumber_AboveMax(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.PromptNumber(ctx, "Enter amount", "amount", 0, 100)
+	_, err := c.PromptNumber(ctx, i18n.Verbatim("Enter amount"), Field{Name: "amount"}, 0, 100)
 	if err == nil {
 		t.Error("PromptNumber(999) should return error for value above maximum")
 	}
@@ -1069,7 +1120,7 @@ func TestElicitURL_Cancel(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", i18n.Verbatim("Open page"))
 	if !errors.Is(err, ErrCancelled) {
 		t.Errorf("ElicitURL(cancel) error = %v, want %v", err, ErrCancelled)
 	}
@@ -1085,7 +1136,7 @@ func TestElicitURL_UnknownAction(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", i18n.Verbatim("Open page"))
 	if err == nil {
 		t.Error("ElicitURL(unknown action) should return error")
 	}
@@ -1105,7 +1156,7 @@ func TestElicitURL_ContextCancelled(t *testing.T) {
 	cancel()
 
 	c := clientFromSession(ss)
-	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", i18n.Verbatim("Open page"))
 	if err == nil {
 		t.Error("ElicitURL(cancelled) should return error")
 	}
@@ -1130,7 +1181,7 @@ func TestSelectOneInt_NonNumericResponse(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOneInt(ctx, "Select", []int{1, 2})
+	_, err := c.SelectOneInt(ctx, i18n.Verbatim("Select"), []int{1, 2})
 	if err == nil {
 		t.Error("SelectOneInt(string) should return error")
 	}
@@ -1154,7 +1205,7 @@ func TestPromptNumber_NonNumericResponse(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.PromptNumber(ctx, "Enter number", "", 0, 100)
+	_, err := c.PromptNumber(ctx, i18n.Verbatim("Enter number"), Field{}, 0, 100)
 	if err == nil {
 		t.Error("PromptNumber(string) should return error")
 	}
@@ -1177,7 +1228,7 @@ func TestSelectMulti_NonArrayResponse(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectMulti(ctx, "Select", []string{"a", "b"}, 0, 0)
+	_, err := c.SelectMulti(ctx, i18n.Verbatim("Select"), []string{"a", "b"}, 0, 0)
 	if err == nil {
 		t.Error("SelectMulti(string) should return error")
 	}
@@ -1196,7 +1247,7 @@ func TestSelectMulti_NonStringElement(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectMulti(ctx, "Select", []string{"a", "b"}, 0, 0)
+	_, err := c.SelectMulti(ctx, i18n.Verbatim("Select"), []string{"a", "b"}, 0, 0)
 	if err == nil {
 		t.Error("SelectMulti(int element) should return error")
 	}
@@ -1207,7 +1258,7 @@ func TestSelectMulti_NonStringElement(t *testing.T) {
 // TestConfirmAction_NilRequest verifies that [ConfirmAction] returns nil
 // when the request is nil (elicitation not supported — backward compatible).
 func TestConfirmAction_NilRequest(t *testing.T) {
-	result := ConfirmAction(context.Background(), nil, "Delete?")
+	result := ConfirmAction(context.Background(), nil, i18n.Verbatim("Delete?"))
 	if result != nil {
 		t.Error("expected nil result for nil request (not supported)")
 	}
@@ -1228,7 +1279,7 @@ func TestConfirmAction_Confirmed(t *testing.T) {
 
 	req := &mcp.CallToolRequest{}
 	req.Session = ss
-	result := ConfirmAction(ctx, req, "Delete project?")
+	result := ConfirmAction(ctx, req, i18n.Verbatim("Delete project?"))
 	if result != nil {
 		t.Error("expected nil result when user confirms")
 	}
@@ -1245,7 +1296,7 @@ func TestConfirmAction_Confirmed(t *testing.T) {
 func TestConfirmAction_MalformedRequestState_FailsClosed(t *testing.T) {
 	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
 		req.Params.RequestState = "{not json"
-		if res := ConfirmAction(ctx, req, "Delete project?"); res != nil {
+		if res := ConfirmAction(ctx, req, i18n.Verbatim("Delete project?")); res != nil {
 			return res, nil
 		}
 		return textResult("confirmation was skipped"), nil
@@ -1278,7 +1329,7 @@ func TestConfirmAction_MultiRoundTrip_QueuesThenConfirms(t *testing.T) {
 	var rounds atomic.Int32
 	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
 		rounds.Add(1)
-		if res := ConfirmAction(ctx, req, "Delete project?"); res != nil {
+		if res := ConfirmAction(ctx, req, i18n.Verbatim("Delete project?")); res != nil {
 			return res, nil
 		}
 		return textResult("confirmed"), nil
@@ -1314,7 +1365,7 @@ func TestConfirmAction_Declined(t *testing.T) {
 
 	req := &mcp.CallToolRequest{}
 	req.Session = ss
-	result := ConfirmAction(ctx, req, "Delete?")
+	result := ConfirmAction(ctx, req, i18n.Verbatim("Delete?"))
 	if result == nil {
 		t.Fatal("expected non-nil result when user declines")
 	}
@@ -1335,7 +1386,7 @@ func TestConfirmAction_NotConfirmed(t *testing.T) {
 
 	req := &mcp.CallToolRequest{}
 	req.Session = ss
-	result := ConfirmAction(ctx, req, "Delete?")
+	result := ConfirmAction(ctx, req, i18n.Verbatim("Delete?"))
 	if result == nil {
 		t.Fatal("expected non-nil result when user does not confirm")
 	}
@@ -1355,7 +1406,7 @@ func TestConfirmAction_OtherError(t *testing.T) {
 
 	req := &mcp.CallToolRequest{}
 	req.Session = ss
-	result := ConfirmAction(ctx, req, "Delete?")
+	result := ConfirmAction(ctx, req, i18n.Verbatim("Delete?"))
 	if result == nil {
 		t.Fatal("expected fail-closed error result on confirmation failure, got nil (action would proceed)")
 	}
@@ -1399,7 +1450,7 @@ func TestSelectOneInt_NaN(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOneInt(ctx, "Pick", []int{1, 2, 3})
+	_, err := c.SelectOneInt(ctx, i18n.Verbatim("Pick"), []int{1, 2, 3})
 	if err == nil {
 		t.Error("expected error for non-numeric selection")
 	}
@@ -1417,7 +1468,7 @@ func TestSelectOneInt_Inf(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOneInt(ctx, "Pick", []int{1, 2, 3})
+	_, err := c.SelectOneInt(ctx, i18n.Verbatim("Pick"), []int{1, 2, 3})
 	if err == nil {
 		t.Error("expected error for Inf selection")
 	}
@@ -1436,7 +1487,7 @@ func TestSelectOne_FloatInsteadOfString(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectOne(ctx, "Pick", []string{"a", "b"})
+	_, err := c.SelectOne(ctx, i18n.Verbatim("Pick"), []string{"a", "b"})
 	if err == nil {
 		t.Error("expected error for non-string selection")
 	}
@@ -1455,7 +1506,7 @@ func TestSelectMulti_StringInsteadOfArray(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.SelectMulti(ctx, "Pick", []string{"a", "b"}, 0, 0)
+	_, err := c.SelectMulti(ctx, i18n.Verbatim("Pick"), []string{"a", "b"}, 0, 0)
 	if err == nil {
 		t.Error("expected error for non-array selections")
 	}
@@ -1481,7 +1532,7 @@ func TestPromptText_NonStringField(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.PromptText(ctx, "Enter text", "")
+	_, err := c.PromptText(ctx, i18n.Verbatim("Enter text"), Field{})
 	if err == nil {
 		t.Error("expected error for non-string response")
 	}
@@ -1500,7 +1551,7 @@ func TestPromptNumber_NaN(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	_, err := c.PromptNumber(ctx, "Enter number", "", 0, 100)
+	_, err := c.PromptNumber(ctx, i18n.Verbatim("Enter number"), Field{}, 0, 100)
 	if err == nil {
 		t.Error("expected error for non-numeric value")
 	}
@@ -1526,7 +1577,7 @@ func TestElicitURL_HandlerError(t *testing.T) {
 	defer cleanup()
 
 	c := clientFromSession(ss)
-	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open")
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", i18n.Verbatim("Open"))
 	if err == nil {
 		t.Fatal("expected error when handler returns error")
 	}
@@ -1744,7 +1795,7 @@ func TestConfirm_AcceptWithoutTheAnswer_IsNotADecision(t *testing.T) {
 			})
 			defer cleanup()
 
-			confirmed, err := clientFromSession(ss).Confirm(ctx, testConfirmMsg)
+			confirmed, err := clientFromSession(ss).Confirm(ctx, i18n.Verbatim(testConfirmMsg))
 
 			if !errors.Is(err, ErrMalformedAnswer) {
 				t.Errorf("Confirm() error = %v, want ErrMalformedAnswer", err)
@@ -1793,19 +1844,14 @@ func uuidV4Problem(id string) string {
 //
 // Nothing read the value it returns. Every URL-mode test drove the request and
 // asserted the outcome, so the generator could have returned the empty string
-// for every call (which is exactly what it does if the error branch guarding
-// crypto/rand is inverted) and the whole suite still passed. The error branch
-// itself is unreachable, since crypto/rand does not fail on a supported
-// platform, so what is asserted is the value that branch is there to protect:
-// a version 4 UUID, different on every call.
+// for every call and the whole suite still passed. crypto/rand cannot fail, so
+// what is asserted is the value itself: a version 4 UUID, different on every
+// call.
 func TestNewElicitationID_IsAUniqueVersion4UUID(t *testing.T) {
 	const runs = 8
 	seen := make(map[string]bool, runs)
-	for i := range runs {
-		id, err := newElicitationID()
-		if err != nil {
-			t.Fatalf("newElicitationID() call %d error = %v", i, err)
-		}
+	for range runs {
+		id := newElicitationID()
 		if reason := uuidV4Problem(id); reason != "" {
 			t.Errorf("newElicitationID() = %q, which is %s", id, reason)
 		}
@@ -1836,7 +1882,7 @@ func TestElicitURL_LegacySession_SendsTheGeneratedElicitationID(t *testing.T) {
 
 	c := clientFromSession(ss)
 	for i := range 2 {
-		if err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/group/project/-/issues/1", "View issue"); err != nil {
+		if err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/group/project/-/issues/1", i18n.Verbatim("View issue")); err != nil {
 			t.Fatalf("ElicitURL() call %d error = %v", i, err)
 		}
 	}
@@ -1854,6 +1900,47 @@ func TestElicitURL_LegacySession_SendsTheGeneratedElicitationID(t *testing.T) {
 	}
 }
 
+// TestElicitURL_SessionOnTheMultiRoundTripRevision_IsRefusedAtTheSend pins the
+// other side of the protocol test: a session whose client declared 2026-07-28
+// generates no elicitationId, since that revision's schema removed it, and the
+// request is refused where it is sent, because that revision forbids a
+// server-initiated elicitation/create and asks for an input request instead,
+// which is what [Flow] sends on such a session. The refusal is the SDK's, and
+// the error names the revision it was refused for.
+func TestElicitURL_SessionOnTheMultiRoundTripRevision_IsRefusedAtTheSend(t *testing.T) {
+	ctx := context.Background()
+	server := mcp.NewServer(testImpl, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
+		Capabilities: urlCapabilities(),
+		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			t.Error("the client was sent an elicitation/create on a 2026-07-28 session")
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+	})
+	cs, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = cs.Close()
+		_ = ss.Wait()
+	})
+	if params := ss.InitializeParams(); params == nil || params.ProtocolVersion < minMRTRProtocolVersion {
+		t.Fatalf("the SDK client declared %+v, want a session on 2026-07-28 or later", params)
+	}
+
+	err = Client{session: ss, caps: urlCapabilities()}.ElicitURL(ctx, "https://gitlab.example.com",
+		"https://gitlab.example.com/group/project", i18n.Verbatim("Open page"))
+	if err == nil || !strings.Contains(err.Error(), "URL request failed") || !strings.Contains(err.Error(), minMRTRProtocolVersion) {
+		t.Errorf("ElicitURL() error = %v, want the send refused for the 2026-07-28 revision", err)
+	}
+}
+
 // TestElicitURL_SessionThatNeverHandshook_ReachesTheSend pins the nil branch of
 // the protocol test.
 //
@@ -1868,7 +1955,7 @@ func TestElicitURL_LegacySession_SendsTheGeneratedElicitationID(t *testing.T) {
 func TestElicitURL_SessionThatNeverHandshook_ReachesTheSend(t *testing.T) {
 	c := Client{session: &mcp.ServerSession{}, caps: urlCapabilities()}
 
-	err := c.ElicitURL(context.Background(), "https://gitlab.example.com", "https://gitlab.example.com/group/project", "Open page")
+	err := c.ElicitURL(context.Background(), "https://gitlab.example.com", "https://gitlab.example.com/group/project", i18n.Verbatim("Open page"))
 
 	if err == nil {
 		t.Fatal("ElicitURL() on a session with no peer returned nil, want the send to fail")
@@ -1911,7 +1998,7 @@ func TestConfirmAction_Cancelled(t *testing.T) {
 
 	req := &mcp.CallToolRequest{}
 	req.Session = ss
-	result := ConfirmAction(ctx, req, "Delete?")
+	result := ConfirmAction(ctx, req, i18n.Verbatim("Delete?"))
 
 	if result == nil {
 		t.Fatal("ConfirmAction(cancelled) = nil, which would let the destructive action run")

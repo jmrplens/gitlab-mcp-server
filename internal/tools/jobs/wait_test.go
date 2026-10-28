@@ -14,10 +14,39 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 const pathWaitJob = "/api/v4/projects/42/jobs/100"
+
+// TestJobWait_ProgressMessage_NamesTheJobAndTheAttempt pins the text a person
+// waiting on the job reads before each poll, in English, as it read before the
+// text moved into the message catalog: the job by its ID and the attempt
+// counted from one, each in its own place, so a call site that bound one value
+// to the other's placeholder would read differently. Every other test of Wait
+// passes a nil request, so its tracker is inactive and nothing it would tell a
+// person is ever sent; the job here has already succeeded, so one poll, and
+// one message, ends the wait.
+func TestJobWait_ProgressMessage_NamesTheJobAndTheAttempt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathWaitJob {
+			testutil.RespondJSON(w, http.StatusOK, jobWithStatus("success"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	got := testutil.ProgressMessages(t, nil, func(ctx context.Context, req *mcp.CallToolRequest) {
+		if _, err := Wait(ctx, req, client, WaitInput{ProjectID: "42", JobID: 100, IntervalSeconds: 5, TimeoutSeconds: 30}); err != nil {
+			t.Errorf("Wait() error = %v", err)
+		}
+	})
+	if want := []string{"Polling job #100 (attempt 1, status check)..."}; !slices.Equal(got, want) {
+		t.Errorf("the progress messages = %q, want %q", got, want)
+	}
+}
 
 // useFastJobPollDuration scales every polling duration from seconds to
 // milliseconds, the timeout included, so a twenty-second wait takes twenty

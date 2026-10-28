@@ -9,11 +9,14 @@
 package elicitation
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
 	"slices"
 	"strconv"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // contentForAction maps an elicitation action to its content or the
@@ -31,8 +34,9 @@ func contentForAction(action string, content map[string]any) (map[string]any, er
 	}
 }
 
-// confirmSchema builds the schema for a yes/no confirmation prompt.
-func confirmSchema(message string) map[string]any {
+// confirmSchema builds the schema for a yes/no confirmation prompt, its field
+// titled in the language ctx carries.
+func confirmSchema(ctx context.Context, message string) map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -46,7 +50,7 @@ func confirmSchema(message string) map[string]any {
 				// the others deliberately have none, since suggesting an
 				// answer to an open question is not a convenience.
 				"default":     false,
-				"title":       "Confirm",
+				"title":       i18n.T(ctx, i18n.ElicitationSchemaConfirmTitle).String(),
 				"description": message,
 			},
 		},
@@ -67,14 +71,15 @@ func parseConfirmContent(content map[string]any) (confirmed, wellFormed bool) {
 	return confirmed, wellFormed
 }
 
-// textSchema builds the schema for a free-form text prompt.
-func textSchema(message, fieldName string) map[string]any {
+// textSchema builds the schema for a free-form text prompt whose property is
+// fieldName, shown titled as title.
+func textSchema(message, fieldName, title string) map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			fieldName: map[string]any{
 				"type":        "string",
-				"title":       fieldName,
+				"title":       title,
 				"description": message,
 			},
 		},
@@ -91,8 +96,13 @@ func parseTextContent(content map[string]any, fieldName string) (string, error) 
 	return text, nil
 }
 
-// selectOneSchema builds the schema for a single-choice string selection.
-func selectOneSchema(message string, options []string) map[string]any {
+// selectOneSchema builds the schema for a single-choice string selection, its
+// field titled in the language ctx carries.
+//
+// The options are never translated: they are what the answer carries back and
+// what the parser compares it with, so a translated option would be an answer
+// no handler recognizes.
+func selectOneSchema(ctx context.Context, message string, options []string) map[string]any {
 	enumValues := make([]any, len(options))
 	for i, o := range options {
 		enumValues[i] = o
@@ -102,7 +112,7 @@ func selectOneSchema(message string, options []string) map[string]any {
 		"properties": map[string]any{
 			"selection": map[string]any{
 				"type":        "string",
-				"title":       "Selection",
+				"title":       i18n.T(ctx, i18n.ElicitationSchemaSelectionTitle).String(),
 				"description": message,
 				"enum":        enumValues,
 			},
@@ -124,15 +134,17 @@ func parseSelectOneContent(content map[string]any, options []string) (string, er
 	return "", fmt.Errorf("elicitation: selected value %q is not in the allowed options", selection)
 }
 
-// selectMultiSchema builds the schema for a multi-choice string selection.
-func selectMultiSchema(message string, options []string, minItems, maxItems int) map[string]any {
+// selectMultiSchema builds the schema for a multi-choice string selection, its
+// field titled in the language ctx carries and its options untranslated, as
+// [selectOneSchema]'s are.
+func selectMultiSchema(ctx context.Context, message string, options []string, minItems, maxItems int) map[string]any {
 	enumValues := make([]any, len(options))
 	for i, o := range options {
 		enumValues[i] = o
 	}
 	arraySchema := map[string]any{
 		"type":        "array",
-		"title":       "Selections",
+		"title":       i18n.T(ctx, i18n.ElicitationSchemaSelectionsTitle).String(),
 		"description": message,
 		"items": map[string]any{
 			"type": "string",
@@ -161,7 +173,11 @@ func parseSelectMultiContent(content map[string]any, options []string, minItems,
 	if !ok {
 		return nil, errors.New("elicitation: response field 'selections' is not an array")
 	}
-	if minItems > 0 && len(raw) < minItems {
+	// No guard on minItems: a list is never shorter than zero, so a minimum of
+	// zero or below bounds nothing on its own, which is what "0 = no bound"
+	// asks. The maximum below needs its guard, since every list is longer
+	// than a maximum of zero.
+	if len(raw) < minItems {
 		return nil, fmt.Errorf("elicitation: %d selections returned, want at least %d", len(raw), minItems)
 	}
 	if maxItems > 0 && len(raw) > maxItems {
@@ -181,8 +197,9 @@ func parseSelectMultiContent(content map[string]any, options []string, minItems,
 	return selections, nil
 }
 
-// selectOneIntSchema builds the schema for a single-choice integer selection.
-func selectOneIntSchema(message string, options []int) map[string]any {
+// selectOneIntSchema builds the schema for a single-choice integer selection,
+// its field titled in the language ctx carries.
+func selectOneIntSchema(ctx context.Context, message string, options []int) map[string]any {
 	// The 2026-07-28 elicitation schema subset admits no integer enum:
 	// PrimitiveSchemaDefinition is String | Number | Boolean | Enum, the
 	// number variant carries no enum member, and every enum variant is
@@ -197,7 +214,7 @@ func selectOneIntSchema(message string, options []int) map[string]any {
 		"properties": map[string]any{
 			"selection": map[string]any{
 				"type":        "string",
-				"title":       "Selection",
+				"title":       i18n.T(ctx, i18n.ElicitationSchemaSelectionTitle).String(),
 				"description": message,
 				"enum":        enumValues,
 			},
@@ -239,12 +256,13 @@ func parseSelectOneIntContent(content map[string]any, options []int) (int, error
 	return selected, nil
 }
 
-// numberSchema builds the schema for a bounded numeric prompt. Use
-// math.Inf(-1) and math.Inf(1) to omit a bound.
-func numberSchema(message, fieldName string, minVal, maxVal float64) map[string]any {
+// numberSchema builds the schema for a bounded numeric prompt whose property
+// is fieldName, shown titled as title. Use math.Inf(-1) and math.Inf(1) to
+// omit a bound.
+func numberSchema(message, fieldName, title string, minVal, maxVal float64) map[string]any {
 	prop := map[string]any{
 		"type":        "number",
-		"title":       fieldName,
+		"title":       title,
 		"description": message,
 	}
 	if !isInf(minVal) {

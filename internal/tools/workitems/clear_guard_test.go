@@ -189,6 +189,79 @@ func TestConfirmListClearing_UnreadableWorkItem_StillAsks(t *testing.T) {
 	if !strings.Contains(prompt.Message, "could not be read") {
 		t.Errorf("prompt = %q, want it to say the current list could not be read", prompt.Message)
 	}
+	// The whole question, as a person was asked it before it became a
+	// catalog message.
+	const question = "Remove every assignee (the current list could not be read) from work item acme/widgets#7?" +
+		" This replaces the list and cannot be undone from the response."
+	if prompt.Message != question {
+		t.Errorf("prompt =\n%q\nwant\n%q", prompt.Message, question)
+	}
+}
+
+// TestConfirmListClearing_YOLOMode_ProceedsWithoutReading pins the first
+// bypass: with destructive confirmation switched off, an update that empties
+// both lists proceeds without asking, and without reading the work item, since
+// a call nobody is going to be asked about does not need to know what it is
+// about to remove. The mock fails the test on any request, the read included.
+func TestConfirmListClearing_YOLOMode_ProceedsWithoutReading(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	if err := confirmListClearing(t.Context(), client, UpdateInput{
+		FullPath:      "acme/widgets",
+		IID:           7,
+		AssigneeIDs:   []int64{},
+		CRMContactIDs: []int64{},
+	}); err != nil {
+		t.Errorf("error = %v, want the update to proceed", err)
+	}
+}
+
+// TestConfirmListClearing_UnreadableConfirmationState_IsRefused pins that a
+// confirmation exchange this server cannot read is refused, with the question
+// and the way to proceed, rather than bypassed: the state travels through the
+// client, and a mangled one must not be the way past the guard.
+func TestConfirmListClearing_UnreadableConfirmationState_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	req := &mcp.CallToolRequest{Session: elicitingSession(t), Params: &mcp.CallToolParamsRaw{
+		RequestState: "not a state this server issued",
+	}}
+
+	err := confirmListClearing(toolutil.ContextWithRequest(t.Context(), req), client, UpdateInput{
+		FullPath:      "acme/widgets",
+		IID:           7,
+		CRMContactIDs: []int64{},
+	})
+	const want = "update_work_item: Remove every CRM contact from work item acme/widgets#7?" +
+		" This replaces the list and cannot be undone from the response." +
+		" Re-send the same call with confirm=true once the user has approved it"
+	if err == nil || err.Error() != want {
+		t.Errorf("refusal =\n%v\nwant\n%q", err, want)
+	}
+}
+
+// TestConfirmListClearing_WithoutAWayToAsk_RefusesWithTheQuestionInEnglish
+// pins the refusal a client that cannot ask receives when an update would
+// empty both lists. It opens with the question a person would have been
+// asked, both losses joined in the order the guard found them, exactly as it
+// read before the question became a catalog message, and the model reads it
+// in English whatever language a person would be asked in.
+func TestConfirmListClearing_WithoutAWayToAsk_RefusesWithTheQuestionInEnglish(t *testing.T) {
+	reads := 0
+	client := testutil.NewTestClient(t, clearGuardHandler(t, `{"username":"dev"},{"username":"ops"}`, &reads))
+
+	err := confirmListClearing(t.Context(), client, UpdateInput{
+		FullPath:      "acme/widgets",
+		IID:           7,
+		AssigneeIDs:   []int64{},
+		CRMContactIDs: []int64{},
+	})
+	const want = "update_work_item: Remove all 2 assignees and every CRM contact from work item acme/widgets#7?" +
+		" This replaces the list and cannot be undone from the response." +
+		" Re-send the same call with confirm=true once the user has approved it"
+	if err == nil || err.Error() != want {
+		t.Errorf("refusal =\n%v\nwant\n%q", err, want)
+	}
 }
 
 // TestPendingClearLosses_NothingCleared_ReportsNothing verifies the guard's

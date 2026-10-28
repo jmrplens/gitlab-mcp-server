@@ -14,6 +14,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/waitpoll"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -65,8 +66,8 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		TimeoutSeconds:  input.TimeoutSeconds,
 		FailOnError:     input.FailOnError,
 		PollDuration:    pollDuration,
-		ProgressMessage: func(attempt int) string {
-			return fmt.Sprintf("Polling job #%d (attempt %d, status check)...", input.JobID, attempt)
+		ProgressMessage: func(attempt int) i18n.Text {
+			return i18n.T(ctx, i18n.ProgressJobWaitPoll, i18n.N("job", input.JobID), i18n.N("attempt", int64(attempt)))
 		},
 		Poll: func(pollCtx context.Context) (Output, error) {
 			pollCtx, captured := gitlabclient.WithResponseCapture(pollCtx)

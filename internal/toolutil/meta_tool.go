@@ -25,6 +25,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 )
 
@@ -2549,8 +2550,8 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 
 		// Confirm destructive actions before execution using route metadata.
 		if route.Destructive {
-			msg := fmt.Sprintf("Confirm %s/%s? This action may be irreversible.", toolName, input.Action)
-			guard, guardErr := ConfirmDestructiveAction(ctx, req, input.Params, msg)
+			prompt := i18n.New(i18n.ConfirmDestructiveMeta, i18n.S("tool", toolName), i18n.S("action", input.Action))
+			guard, guardErr := ConfirmDestructiveAction(ctx, req, input.Params, prompt)
 			if guardErr != nil {
 				// A protocol fault, not a tool outcome: it goes out as a
 				// JSON-RPC error rather than as tool output the model is

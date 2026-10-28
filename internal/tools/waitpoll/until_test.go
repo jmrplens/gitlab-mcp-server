@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // untilState is what a test's Read hands [Until]: which read produced it,
@@ -206,7 +208,7 @@ func TestUntil_ProgressNotifications_NumberEachRead(t *testing.T) {
 			seq := &readSequence{answers: []readAnswer{{}, {}, {landed: true}}}
 			opts := untilOptions(seq, 10*time.Second)
 			opts.Request = req
-			opts.Message = message
+			opts.Message = i18n.Verbatim(message)
 			if _, _, err := Until(callCtx, opts); err != nil {
 				return nil, progressToolOutput{}, err
 			}

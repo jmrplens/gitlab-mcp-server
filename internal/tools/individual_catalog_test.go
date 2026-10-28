@@ -27,6 +27,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -588,7 +589,7 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 			if err != nil {
 				return struct{}{}, err
 			}
-			confirmed, confirmErr := fl.Confirm(ctx, "confirm", "Proceed?")
+			confirmed, confirmErr := fl.Confirm(ctx, "confirm", i18n.Verbatim("Proceed?"))
 			if confirmErr != nil {
 				if errors.Is(confirmErr, elicitation.ErrInputPending) {
 					// Mirrors elicitationtools.flowError: a pending MRTR answer

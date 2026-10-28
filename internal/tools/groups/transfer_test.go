@@ -11,11 +11,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/waitpoll"
@@ -243,6 +246,30 @@ func TestTransferSubGroup_MoveLandsLater_AnswersTheMovedGroup(t *testing.T) {
 	}
 	if _, queries := gitlab.sent(); len(queries) == 0 || queries[0] != "with_projects=false" {
 		t.Errorf("read queries = %q, want with_projects=false", queries)
+	}
+}
+
+// TestTransferSubGroup_ProgressMessage_IsTheOneSentBeforeTheCatalog pins the
+// text a person waiting on a move that lands later reads before each read
+// back, in English, as it read before the text moved into the message
+// catalog. Every other test of the transfer passes a nil request, so its
+// tracker is inactive and nothing the wait would tell a person is sent; here
+// the first read back still finds the group at the top level and the second
+// finds the move, so the message is sent twice.
+func TestTransferSubGroup_ProgressMessage_IsTheOneSentBeforeTheCatalog(t *testing.T) {
+	fastTransferWait(t, landingBound)
+	gitlab := &groupTransferGitLab{t: t, answer: groupAtTopLevel, reads: []string{groupAtTopLevel, groupUnderParent}}
+	client := testutil.NewTestClient(t, gitlab.handler())
+	parent := int64(42)
+
+	got := testutil.ProgressMessages(t, nil, func(ctx context.Context, req *mcp.CallToolRequest) {
+		if _, err := TransferSubGroup(ctx, req, client, TransferSubGroupInput{GroupID: "99", ParentID: &parent}); err != nil {
+			t.Errorf("TransferSubGroup() error = %v", err)
+		}
+	})
+	const want = "Waiting for GitLab to move the group"
+	if !slices.Equal(got, []string{want, want}) {
+		t.Errorf("the progress messages = %q, want %q once for each of the two reads back", got, want)
 	}
 }
 

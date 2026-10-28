@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -266,7 +267,8 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 
 		if tracker.IsActive() {
 			tracker.Update(ctx, float64(doneBytes), float64(progressTotal),
-				fmt.Sprintf("Publishing file %d of %d: %s", i+1, len(files), name))
+				i18n.T(ctx, i18n.ProgressPackagePublishFile,
+					i18n.N("index", int64(i+1)), i18n.N("count", int64(len(files))), i18n.S("name", name)))
 		}
 
 		pubInput := PublishInput{
@@ -301,7 +303,8 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 
 	if tracker.IsActive() {
 		tracker.Update(ctx, float64(progressTotal), float64(progressTotal),
-			fmt.Sprintf("Published %d of %d files", out.TotalFiles, len(files)))
+			i18n.T(ctx, i18n.ProgressPackagePublishDone,
+				i18n.N("published", int64(out.TotalFiles)), i18n.N("count", int64(len(files)))))
 	}
 
 	return out, nil

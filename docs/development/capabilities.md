@@ -98,13 +98,13 @@ initialized.
 
 ### Methods
 
-| Method                                  | Signature                                     | Purpose                                                                                  |
-| --------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `IsActive()`                            | `() bool`                                     | Whether the tracker can send notifications                                               |
-| `Update(ctx, progress, total, message)` | `(context.Context, float64, float64, string)` | Send progress with explicit values; drops a non-monotonic update (logged at debug)       |
-| `Step(ctx, step, total, message)`       | `(context.Context, int, int, string)`         | Report the 1-based step of N; `Step(ctx, 1, 3, msg)` sends `progress=0, total=3`         |
-| `Done(ctx, total, message)`             | `(context.Context, float64, string)`          | Send a final notification with `progress == total`; a no-op when `total` is not positive |
-| `OnScale(base, outerTotal)`             | `(float64, float64) Tracker`                  | A tracker sharing this one's state that places a sub-step's numbers in the outer measure |
+| Method                                  | Signature                                        | Purpose                                                                                  |
+| --------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `IsActive()`                            | `() bool`                                        | Whether the tracker can send notifications                                               |
+| `Update(ctx, progress, total, message)` | `(context.Context, float64, float64, i18n.Text)` | Send progress with explicit values; drops a non-monotonic update (logged at debug)       |
+| `Step(ctx, step, total, message)`       | `(context.Context, int, int, i18n.Text)`         | Report the 1-based step of N; `Step(ctx, 1, 3, msg)` sends `progress=0, total=3`         |
+| `Done(ctx, total, message)`             | `(context.Context, float64, i18n.Text)`          | Send a final notification with `progress == total`; a no-op when `total` is not positive |
+| `OnScale(base, outerTotal)`             | `(float64, float64) Tracker`                     | A tracker sharing this one's state that places a sub-step's numbers in the outer measure |
 
 `Update` returns early when the context is done. Starting `Step` at zero is
 this project's convention, not a protocol rule: the specification only
@@ -133,14 +133,21 @@ The pattern the guided flows use, and the only place `Step` is called:
 
 ```go
 tracker := progress.FromRequest(req)
-tracker.Step(ctx, 1, 4, "Collecting issue details...")
+tracker.Step(ctx, 1, 4, i18n.T(ctx, i18n.InteractiveIssueCreateProgressDetails))
 // ... prompt the user ...
-tracker.Step(ctx, 2, 4, "Gathering optional fields...")
+tracker.Step(ctx, 2, 4, i18n.T(ctx, i18n.InteractiveProgressOptionalFields))
 // ... prompt the user ...
-tracker.Step(ctx, 3, 4, "Confirming creation...")
+tracker.Step(ctx, 3, 4, i18n.T(ctx, i18n.InteractiveIssueCreateProgressConfirming))
 // ... prompt the user ...
-tracker.Step(ctx, 4, 4, "Creating the issue...")
+tracker.Step(ctx, 4, 4, i18n.T(ctx, i18n.InteractiveIssueCreateProgressCreating))
 ```
+
+A progress message is read by the person waiting rather than by the model, so
+`Update`, `Step` and `Done` take an `i18n.Text`, which only the message
+catalog in `internal/i18n` makes (issue 1547): a new message is a key in
+`internal/i18n/keys.go` and an English template in `catalog_en.go`, rendered
+with `i18n.T` in the language the request carries, and a literal at the call
+does not compile.
 
 Each flow ends with `Done`, so the bar reaches 100% once the object exists.
 Outside the flows, progress is reported by the project upload (`uploads`,
@@ -171,11 +178,23 @@ once:
 ```go
 flow, err := elicitation.FlowFromRequest(req)
 if err != nil { /* malformed client-echoed state */ }
-title, err := flow.PromptText(ctx, "title", "Enter the issue title", "title")
+title, err := flow.PromptText(ctx, "title", i18n.T(ctx, i18n.InteractiveIssueCreatePromptTitle),
+    elicitation.Field{Name: "title", Title: i18n.T(ctx, i18n.InteractiveFieldTitle)})
 if errors.Is(err, elicitation.ErrInputPending) {
     return flow.InputRequiredResult(), nil, nil // the client answers and retries
 }
 ```
+
+Every message a prompt shows is an `i18n.Text` from the message catalog, as a
+progress message is, and so is the title of the field a text or number prompt
+asks for. The field's `Name` is the property the answer comes back under,
+which a client hook or a parser reads and which is never translated; a field
+with no `Title` is titled with its name, which is what every field was titled
+before the catalog. The options of a choice are never translated either,
+since the answer carries them back. A destructive confirmation
+(`toolutil.ConfirmDestructiveAction`) takes its prompt as an unrendered
+`i18n.Message` instead, because the model reads the same question in English
+when the client cannot ask it.
 
 On the multi-round-trip path the handler is re-invoked from the start on
 every round. The answers gathered so far travel in the opaque `requestState`

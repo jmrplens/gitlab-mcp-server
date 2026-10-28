@@ -50,14 +50,12 @@ const stateTTL = tenancy.RequestStateTTL // register row IDN-011
 // stopped the cross-tool reuse that was actually reproducible.
 var stateKey = newStateKey()
 
+// newStateKey draws the key. crypto/rand.Read never returns an error since Go
+// 1.24: a broken entropy source crashes the program, which is the one safe
+// answer for a key that signs, so there is no failure left to handle here.
 func newStateKey() []byte {
 	key := make([]byte, 32)
-	if _, err := cryptorand.Read(key); err != nil {
-		// crypto/rand.Read does not fail on any supported platform; if the
-		// system entropy source is broken there is no safe way to continue
-		// signing.
-		panic(fmt.Sprintf("elicitation: cannot generate a request-state key: %v", err))
-	}
+	_, _ = cryptorand.Read(key)
 	return key
 }
 
@@ -100,13 +98,21 @@ func requestDigest(toolName string, args json.RawMessage) string {
 	decoder.UseNumber()
 	var decoded any
 	if decoder.Decode(&decoded) == nil {
-		if reencoded, marshalErr := json.Marshal(canonicalizeNumbers(decoded)); marshalErr == nil {
+		if reencoded, marshalErr := canonicalJSON(canonicalizeNumbers(decoded)); marshalErr == nil {
 			canonical = reencoded
 		}
 	}
 	sum := sha256.Sum256(append([]byte(toolName+"\x00"), canonical...))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
+
+// canonicalJSON encodes the canonical form [requestDigest] hashes. That form
+// always encodes, since [canonicalizeNumbers] turns every number into a marked
+// string and leaves strings, booleans, nil, maps and slices alone, each of
+// which encodes, so the branch reading its error guards against a change no
+// input can bring about. It is a package variable so a test can take that
+// branch.
+var canonicalJSON = json.Marshal
 
 // encodeState returns the signed, bound wire form of a flow's answers.
 //

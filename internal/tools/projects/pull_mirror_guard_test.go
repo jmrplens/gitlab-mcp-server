@@ -117,9 +117,23 @@ func TestConfigurePullMirror_ArmingTheOverwrite_IsRefusedWithoutConfirmation(t *
 		t.Fatal("arming the diverged-branch overwrite was accepted without confirmation")
 	}
 	assertRefusalMentions(t, err, "confirm=true", "github.com/example/repo.git", "overwrite diverged branches")
+	if want := mirrorRefusal(mirrorSourceURL); err.Error() != want {
+		t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
+	}
 	if got := calls.writes.Load(); got != 0 {
 		t.Errorf("the configuration was applied %d time(s) despite being refused", got)
 	}
+}
+
+// mirrorRefusal is the refusal a client that cannot ask receives for project
+// 42 pulling from source: the guard's question in English, exactly as it was
+// asked before the question became a catalog message, then how to proceed.
+// The model reads it in English whatever language the person is asked in.
+func mirrorRefusal(source string) string {
+	return "projectConfigurePullMirror: Configure project 42 to pull from " + source + " and overwrite diverged branches?" +
+		" Every branch of this project that has diverged from that repository is replaced by its version on the next sync," +
+		" and the replaced commits cannot be recovered through the API." +
+		" Re-send the same call with confirm=true once the user has approved it"
 }
 
 // TestConfigurePullMirror_ArmingTheOverwrite_ProceedsWithExplicitConfirm
@@ -216,6 +230,9 @@ func TestConfigurePullMirror_ArmingTheFlagOnARunningMirror_IsRefused(t *testing.
 		t.Fatal("arming the flag on a running mirror was accepted without confirmation")
 	}
 	assertRefusalMentions(t, err, "confirm=true", "its configured mirror source")
+	if want := mirrorRefusal("its configured mirror source"); err.Error() != want {
+		t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
+	}
 	if got := calls.writes.Load(); got != 0 {
 		t.Errorf("the configuration was applied %d time(s) despite being refused", got)
 	}
@@ -616,16 +633,17 @@ func TestConfigurePullMirror_ThroughTheRoute_HonorsTheReservedConfirmKey(t *test
 }
 
 // TestPullMirrorSourceForPrompt_Values verifies what the confirmation says the
-// project would pull from. The URL is the caller's own parameter, so a
-// credential written into its userinfo must not be echoed into a prompt, and a
-// value that is not an absolute URL is withheld rather than shown.
+// project would pull from when the call names a URL. The URL is the caller's
+// own parameter, so a credential written into its userinfo must not be echoed
+// into a prompt, and a value that is not an absolute URL is withheld rather
+// than shown. A call that names none is asked about the configured source,
+// which the two refusal tests above pin.
 func TestPullMirrorSourceForPrompt_Values(t *testing.T) {
 	tests := []struct {
 		name string
 		raw  string
 		want string
 	}{
-		{name: "empty names the configured source", raw: "", want: "its configured mirror source"},
 		{name: "host and path survive", raw: mirrorSourceURL, want: mirrorSourceURL},
 		{name: "userinfo is dropped", raw: "https://user:token@github.com/example/repo.git", want: mirrorSourceURL},
 		{name: "query and fragment are dropped", raw: "https://github.com/example/repo.git?token=secret#frag", want: mirrorSourceURL},

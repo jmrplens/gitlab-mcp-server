@@ -6,22 +6,21 @@
 //
 // # Why this needs a rule of its own
 //
-// Once issue 1547 converts them, a person-facing sink, a question of an
-// elicitation, the title of a field of its form and a progress message, takes
-// an i18n.Text, which only the catalog package makes, so a literal written at
-// its call site will not compile. The compiler stops there. It does not see a
-// placeholder a call leaves unfilled, which a person reads as written, braces
-// and all; a key the catalog holds no template for, which renders as the key
-// itself; an untyped literal passed where a key goes, which compiles by
-// conversion and names a key no constant declares; the test-only
-// i18n.Verbatim called from production code, which serves one text in every
-// language; or an i18n.Text or i18n.Message written as a literal, or a join
-// of nothing, each of which is the empty text a person is shown as a form
-// with no question. And it never says that an entry of the catalog is one
-// nothing renders any more.
-// Each of those is a text that reaches a person without the catalog, or a
-// catalog that holds what no text reaches, and every one of them passes every
-// test that does not render the text in a language other than English.
+// A person-facing sink, a question of an elicitation, the title of a field of
+// its form and a progress message, takes an i18n.Text, which only the catalog
+// package makes, so a literal written at its call site does not compile. The
+// compiler stops there. It does not see a placeholder a call leaves unfilled,
+// which a person reads as written, braces and all; a key the catalog holds no
+// template for, which renders as the key itself; an untyped literal passed
+// where a key goes, which compiles by conversion and names a key no constant
+// declares; the test-only i18n.Verbatim called from production code, which
+// serves one text in every language; or an i18n.Text or i18n.Message written
+// as a literal, or a join of nothing, each of which is the empty text a person
+// is shown as a form with no question. And it never says that an entry of the
+// catalog is one nothing renders any more. Each of those is a text that
+// reaches a person without the catalog, or a catalog that holds what no text
+// reaches, and every one of them passes every test that does not render the
+// text in a language other than English.
 //
 // # The rules
 //

@@ -23,8 +23,8 @@ var PublishedActionIDs = []string{
 
 // SpecNames is the bare name every spec in this package registers under, which
 // the catalog publishes under the issue domain. The external test holds each
-// against the catalog, because that concatenation is the premise the IDs above
-// are derived from.
+// against the catalog, because the IDs above are those names under that
+// domain, which TestActionIDs_AreTheirSpecNamesInTheIssueGroup holds them to.
 var SpecNames = []string{
 	specWorkItemGet,
 	specWorkItemList,

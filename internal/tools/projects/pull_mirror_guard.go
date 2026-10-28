@@ -18,6 +18,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -71,22 +72,32 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 		return nil
 	}
 
-	message := fmt.Sprintf(
-		"Configure project %s to pull from %s and overwrite diverged branches?"+
-			" Every branch of this project that has diverged from that repository is replaced by its version on the next sync,"+
-			" and the replaced commits cannot be recovered through the API.",
-		string(input.ProjectID), pullMirrorSourceForPrompt(input.URL),
-	)
+	// The question has two readers: the person it is asked of, in the
+	// request's language, and the model, which reads it in English as the
+	// refusal's opening sentence when the client cannot ask. A call that names
+	// no URL keeps the source the project has, which the question names in the
+	// person's language rather than reveals; one that names a URL is asked
+	// about that URL as the caller wrote it, redacted.
+	var question i18n.Message
+	if input.URL == "" {
+		question = i18n.New(i18n.ConfirmPullMirrorOverwrite,
+			i18n.S("project", string(input.ProjectID)),
+			i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
+	} else {
+		question = i18n.New(i18n.ConfirmPullMirrorOverwrite,
+			i18n.S("project", string(input.ProjectID)),
+			i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
+	}
 
 	flow, flowErr := elicitation.FlowFromRequest(req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
 			"projectConfigurePullMirror: %s Re-send the same call with confirm=true once the user has approved it",
-			message,
+			question.English(),
 		)
 	}
 
-	confirmed, err := flow.Confirm(ctx, pullMirrorOverwriteConfirmID, message)
+	confirmed, err := flow.Confirm(ctx, pullMirrorOverwriteConfirmID, question.Text(ctx))
 	// A chain of ifs rather than a switch: a switch case carries no statement
 	// counter, so a mutation run reported the error check as not covered
 	// whatever the tests did.
@@ -173,19 +184,17 @@ func isNotMirrored(err error) bool {
 	return toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, notMirroredHint)
 }
 
-// pullMirrorSourceForPrompt names the source the confirmation is about.
+// pullMirrorSourceForPrompt names the URL a call points the mirror at, for the
+// confirmation.
 //
 // The URL is the caller's own parameter and may carry credentials in its
 // userinfo despite the schema saying not to, so it is rendered through
 // [toolutil.RedactURL], and anything that does not parse as an absolute URL is
 // withheld rather than echoed. A call that sends no URL keeps the source the
-// project already has, which the prompt names rather than reveals: reading it
-// would cost a round trip to tell the user something the project's own settings
-// page already shows them.
+// project already has, which [confirmDivergedOverwrite] names from the catalog
+// rather than reveals: reading it would cost a round trip to tell the user
+// something the project's own settings page already shows them.
 func pullMirrorSourceForPrompt(raw string) string {
-	if raw == "" {
-		return "its configured mirror source"
-	}
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return toolutil.RedactedPlaceholder

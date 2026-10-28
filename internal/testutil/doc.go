@@ -23,6 +23,9 @@
 //     [AssertQueryParam] validate inbound HTTP calls in mock handlers.
 //   - Context and logging: [CancelledCtx] returns a pre-cancelled context;
 //     [CaptureSlog] captures [log/slog] output to a buffer for assertions.
+//   - Progress: [ProgressMessages] runs a handler with a request that asks
+//     for progress and returns every message it sent a person, in order,
+//     through the sending middleware [RecordProgress] adds to a server.
 //   - Embedded resources: [AssertEmbeddedResource] toggles the embedded
 //     resource global flag and checks MCP call results.
 //   - GraphQL helpers: [GraphQLHandler] and [ParseGraphQLVariables] simplify

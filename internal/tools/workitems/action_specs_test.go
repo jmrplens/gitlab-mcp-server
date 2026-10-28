@@ -29,6 +29,40 @@ const (
 	actionSpecWorkItemDeleteGraphQLResponse = `{"data":{"workItemDelete":{"errors":[]}}}`
 )
 
+// TestActionIDs_AreTheirSpecNamesInTheIssueGroup holds each canonical ID to
+// the spec it names, under the issue group the catalog publishes work items
+// in. The IDs are literals, so nothing joins the two by construction any
+// more, and an ID edited apart from its spec name would still pass the
+// catalog test while naming another action's route.
+func TestActionIDs_AreTheirSpecNamesInTheIssueGroup(t *testing.T) {
+	for _, tc := range []struct{ id, spec string }{
+		{actionWorkItemGet, specWorkItemGet},
+		{actionWorkItemList, specWorkItemList},
+		{actionWorkItemCreate, specWorkItemCreate},
+		{actionWorkItemUpdate, specWorkItemUpdate},
+		{actionWorkItemDelete, specWorkItemDelete},
+		{actionWorkItemTypeList, specWorkItemTypeList},
+	} {
+		t.Run(tc.spec, func(t *testing.T) {
+			if want := "issue." + tc.spec; tc.id != want {
+				t.Errorf("the ID of %s is %q, want %q", tc.spec, tc.id, want)
+			}
+		})
+	}
+}
+
+// TestWorkItemReadSpec_AToolNoCaseNames_KeepsTheSharedOptions pins the fall
+// through of the read spec's switch: a read tool none of its three cases names
+// keeps what every work item tool shares, its own name as its one alias and
+// the generic usage line, rather than the text of the last case, which every
+// caller reaching that case is meant to get and no other.
+func TestWorkItemReadSpec_AToolNoCaseNames_KeepsTheSharedOptions(t *testing.T) {
+	spec := workItemReadSpec("work_item_probe", toolutil.RouteAction(nil, Get), "gitlab_probe_work_item")
+	if want := workItemOptions("gitlab_probe_work_item"); spec.Usage != want.Usage || !slices.Equal(spec.Aliases, want.Aliases) {
+		t.Errorf("spec = usage %q, aliases %v; want the shared %q and %v", spec.Usage, spec.Aliases, want.Usage, want.Aliases)
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every work item tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := workItemSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, workItemActionHandler())))

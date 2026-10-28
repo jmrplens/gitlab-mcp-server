@@ -4,6 +4,7 @@
 package elicitation
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -185,6 +186,30 @@ func TestRequestDigest_IgnoresReserialization(t *testing.T) {
 	}
 	if first == requestDigest("gitlab_interactive_mr_create", []byte(`{"project_id":"7","title":"a"}`)) {
 		t.Error("a different tool produced the same digest")
+	}
+}
+
+// TestRequestDigest_CanonicalFormThatWillNotEncode_HashesTheArgumentsAsSent
+// pins the fallback of a canonicalization that could not be encoded: the
+// arguments are hashed as the client sent them, exactly as malformed ones are,
+// so the digest still binds the state to this call and its arguments. No
+// decoded document fails to encode today, since every number comes back as a
+// string, so the encoder is replaced here to take the branch.
+func TestRequestDigest_CanonicalFormThatWillNotEncode_HashesTheArgumentsAsSent(t *testing.T) {
+	const name = "gitlab_interactive_issue_create"
+	args := []byte(`{ "project_id" : 7 }`)
+	canonical := requestDigest(name, args)
+
+	original := canonicalJSON
+	t.Cleanup(func() { canonicalJSON = original })
+	canonicalJSON = func(any) ([]byte, error) { return nil, errors.New("encoder broke") }
+
+	sum := sha256.Sum256(append([]byte(name+"\x00"), args...))
+	if got, want := requestDigest(name, args), base64.RawURLEncoding.EncodeToString(sum[:]); got != want {
+		t.Errorf("digest = %q, want %q, the hash of the arguments as sent", got, want)
+	}
+	if requestDigest(name, args) == canonical {
+		t.Error("the fallback digest equals the canonical one, so this test cannot tell the two paths apart")
 	}
 }
 

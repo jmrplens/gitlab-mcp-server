@@ -16,6 +16,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -151,7 +152,7 @@ func TestIsActive_SessionWithoutToken_IsInactive(t *testing.T) {
 func TestUpdate_Inactive(t *testing.T) {
 	var tracker Tracker
 	// Should not panic on inactive tracker
-	tracker.Update(context.Background(), 1, 3, "test")
+	tracker.Update(context.Background(), 1, 3, i18n.Verbatim("test"))
 }
 
 // TestStep_Inactive verifies that [Tracker.Step] does not panic when called
@@ -159,7 +160,7 @@ func TestUpdate_Inactive(t *testing.T) {
 func TestStep_Inactive(t *testing.T) {
 	var tracker Tracker
 	// Should not panic on inactive tracker
-	tracker.Step(context.Background(), 1, 3, "test")
+	tracker.Step(context.Background(), 1, 3, i18n.Verbatim("test"))
 }
 
 // TestUpdate_CancelledContext verifies that [Tracker.Update] returns silently
@@ -171,7 +172,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 	ctx := testutil.CancelledCtx(t)
 	// Should silently return without sending
-	tracker.Update(ctx, 1, 3, "test")
+	tracker.Update(ctx, 1, 3, i18n.Verbatim("test"))
 }
 
 // TestStep_CalculatesProgress verifies that [Tracker.Step] calculates
@@ -182,9 +183,9 @@ func TestStep_CalculatesProgress(t *testing.T) {
 	// Step(3, 3) -> progress=2, total=3
 	// Verify the formula by checking tracker doesn't panic with zero-value session
 	var tracker Tracker
-	tracker.Step(context.Background(), 1, 3, "step one")
-	tracker.Step(context.Background(), 2, 3, "step two")
-	tracker.Step(context.Background(), 3, 3, "step three")
+	tracker.Step(context.Background(), 1, 3, i18n.Verbatim("step one"))
+	tracker.Step(context.Background(), 2, 3, i18n.Verbatim("step two"))
+	tracker.Step(context.Background(), 3, 3, i18n.Verbatim("step three"))
 }
 
 // TestProgress_Integration creates a real in-memory MCP client/server pair
@@ -212,8 +213,8 @@ func TestProgress_Integration(t *testing.T) {
 		if !tracker.IsActive() {
 			t.Error("expected tracker to be active when client sends progress token")
 		}
-		tracker.Step(ctx, 1, 2, testProgressMessage)
-		tracker.Step(ctx, 2, 2, "Done!")
+		tracker.Step(ctx, 1, 2, i18n.Verbatim(testProgressMessage))
+		tracker.Step(ctx, 2, 2, i18n.Verbatim("Done!"))
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 		}, nil, nil
@@ -359,7 +360,7 @@ func TestUpdate_NotifyProgressError(t *testing.T) {
 
 	// Update should call NotifyProgress, which fails because the session is
 	// closed. The error should be logged but not panic.
-	tracker.Update(context.Background(), 1, 3, "should fail silently")
+	tracker.Update(context.Background(), 1, 3, i18n.Verbatim("should fail silently"))
 
 	if !logs.has(sendFailureMessage) {
 		t.Errorf("a refused notification logged no %q line; the error was swallowed without a trace", sendFailureMessage)
@@ -376,7 +377,7 @@ func TestUpdate_DeliveredNotification_LogsNoFailure(t *testing.T) {
 	logs := captureLogs(t)
 
 	received := collectProgress(t, 1, func(ctx context.Context, tracker Tracker) {
-		tracker.Update(ctx, 1, 3, testProgressMessage)
+		tracker.Update(ctx, 1, 3, i18n.Verbatim(testProgressMessage))
 	})
 
 	if received[0].Progress != 1 || received[0].Total != 3 {
@@ -401,7 +402,7 @@ func TestFromRequest_WithTokenNoSession(t *testing.T) {
 		t.Error("expected inactive tracker when session is nil")
 	}
 	// Update should be a safe no-op
-	tracker.Update(context.Background(), 1, 3, "should not send")
+	tracker.Update(context.Background(), 1, 3, i18n.Verbatim("should not send"))
 }
 
 // TestFromRequest_InitializedSessionNoToken verifies that FromRequest returns
@@ -471,12 +472,12 @@ func TestUpdate_MonotonicEnforcement(t *testing.T) {
 		Description: "Sends progress with regressions",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 		tracker := FromRequest(req)
-		tracker.Update(ctx, 1, 10, "first")
-		tracker.Update(ctx, 0.5, 10, "regression-must-drop")
-		tracker.Update(ctx, 1, 10, "equal-must-drop")
-		tracker.Update(ctx, 2, 10, "second")
-		tracker.Update(ctx, 1.5, 10, "regression-must-drop")
-		tracker.Update(ctx, 3, 10, "third")
+		tracker.Update(ctx, 1, 10, i18n.Verbatim("first"))
+		tracker.Update(ctx, 0.5, 10, i18n.Verbatim("regression-must-drop"))
+		tracker.Update(ctx, 1, 10, i18n.Verbatim("equal-must-drop"))
+		tracker.Update(ctx, 2, 10, i18n.Verbatim("second"))
+		tracker.Update(ctx, 1.5, 10, i18n.Verbatim("regression-must-drop"))
+		tracker.Update(ctx, 3, 10, i18n.Verbatim("third"))
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 	})
 
@@ -558,7 +559,7 @@ func TestDone_SendsCompletion(t *testing.T) {
 	mcp.AddTool(server, &mcp.Tool{Name: "t", Description: "d"},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 			tracker := FromRequest(req)
-			tracker.Done(ctx, 5, "complete")
+			tracker.Done(ctx, 5, i18n.Verbatim("complete"))
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 		})
 	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
@@ -608,8 +609,8 @@ func TestDone_SendsCompletion(t *testing.T) {
 // does not send a notification.
 func TestDone_ZeroTotalIsNoop(t *testing.T) {
 	var tracker Tracker
-	tracker.Done(context.Background(), 0, "should-noop")
-	tracker.Done(context.Background(), -1, "should-noop")
+	tracker.Done(context.Background(), 0, i18n.Verbatim("should-noop"))
+	tracker.Done(context.Background(), -1, i18n.Verbatim("should-noop"))
 }
 
 // TestDone_ZeroTotalOnAnActiveTracker_SendsNothing puts the guard's boundary to
@@ -625,8 +626,8 @@ func TestDone_ZeroTotalIsNoop(t *testing.T) {
 // Done(0) to send, its 0/0 would arrive ahead of the 4/4 and take this slot.
 func TestDone_ZeroTotalOnAnActiveTracker_SendsNothing(t *testing.T) {
 	received := collectProgress(t, 1, func(ctx context.Context, tracker Tracker) {
-		tracker.Done(ctx, 0, "zero total")
-		tracker.Done(ctx, 4, "four of four")
+		tracker.Done(ctx, 0, i18n.Verbatim("zero total"))
+		tracker.Done(ctx, 4, i18n.Verbatim("four of four"))
 	})
 
 	first := received[0]
@@ -733,14 +734,14 @@ func TestOnScale_InterleavedSubStep_ClientSeesOneIncreasingSeries(t *testing.T) 
 	const outerTotal = 3
 
 	got := collectProgress(t, 4, func(ctx context.Context, tracker Tracker) {
-		tracker.Step(ctx, 1, outerTotal, "file 1 of 3")
+		tracker.Step(ctx, 1, outerTotal, i18n.Verbatim("file 1 of 3"))
 
 		// File 2 measures itself in its own units, 0..1, placed after file 1.
 		bytes := tracker.OnScale(1, outerTotal)
-		bytes.Update(ctx, 0.25, 1, "file 2: 25%")
-		bytes.Update(ctx, 0.75, 1, "file 2: 75%")
+		bytes.Update(ctx, 0.25, 1, i18n.Verbatim("file 2: 25%"))
+		bytes.Update(ctx, 0.75, 1, i18n.Verbatim("file 2: 75%"))
 
-		tracker.Step(ctx, 3, outerTotal, "file 3 of 3")
+		tracker.Step(ctx, 3, outerTotal, i18n.Verbatim("file 3 of 3"))
 	})
 
 	want := []struct {
@@ -791,9 +792,9 @@ func TestOnScale_OuterUpdateBehindTheSubStep_IsDropped(t *testing.T) {
 
 	got := collectProgress(t, 2, func(ctx context.Context, tracker Tracker) {
 		sub := tracker.OnScale(2, outerTotal)
-		sub.Update(ctx, 0.5, 1, "sub-step halfway")   // translated to 2.5 of 4
-		tracker.Update(ctx, 2, outerTotal, "dropped") // behind 2.5, must not be sent
-		tracker.Update(ctx, 3, outerTotal, "resumed") // ahead of 2.5, must be sent
+		sub.Update(ctx, 0.5, 1, i18n.Verbatim("sub-step halfway"))   // translated to 2.5 of 4
+		tracker.Update(ctx, 2, outerTotal, i18n.Verbatim("dropped")) // behind 2.5, must not be sent
+		tracker.Update(ctx, 3, outerTotal, i18n.Verbatim("resumed")) // ahead of 2.5, must be sent
 	})
 
 	want := []struct {
@@ -829,5 +830,5 @@ func TestOnScale_InactiveTracker_StaysInactive(t *testing.T) {
 		t.Error("OnScale on a zero-value Tracker returned an active tracker")
 	}
 	// Contract of an inactive Tracker: every method is a no-op, never a panic.
-	scaled.Update(context.Background(), 1, 2, "should not send")
+	scaled.Update(context.Background(), 1, 2, i18n.Verbatim("should not send"))
 }

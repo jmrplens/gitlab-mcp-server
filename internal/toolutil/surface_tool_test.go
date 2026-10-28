@@ -19,6 +19,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 type surfaceToolTestInput struct {
@@ -124,6 +125,10 @@ func TestRegisterSurfaceToolFromSpec_UndeclaredKind_IsResolvedFromTheSpec(t *tes
 }
 
 // TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute verifies catalog-backed individual tools centralize destructive confirmation.
+//
+// The person is asked about the tool by its quoted name, which is the
+// question asked before it became a catalog message: the call site quotes the
+// name the way the %q verb it replaced did.
 func TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute(t *testing.T) {
 	var called atomic.Bool
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
@@ -137,7 +142,12 @@ func TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute(t *testing.T) 
 	})
 	RegisterSurfaceToolFromSpec(server, spec, SurfaceToolRegisterOptions{Description: "Test destructive tool."})
 
-	session := newSurfaceToolSession(t, server, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	asked := make(chan string, 4)
+	session := newSurfaceToolSession(t, server, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		select {
+		case asked <- req.Params.Message:
+		default:
+		}
 		return &mcp.ElicitResult{Action: "decline"}, nil
 	})
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "gitlab_test_delete", Arguments: map[string]any{"id": 1}})
@@ -149,6 +159,14 @@ func TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute(t *testing.T) 
 	}
 	if result == nil || strings.TrimSpace(surfaceToolResultText(result)) == "" {
 		t.Fatal("expected non-empty cancellation result")
+	}
+	select {
+	case message := <-asked:
+		if want := `Confirm destructive action "gitlab_test_delete"?`; message != want {
+			t.Errorf("the person was asked %q, want %q", message, want)
+		}
+	default:
+		t.Error("the client was never asked to confirm")
 	}
 }
 
@@ -206,7 +224,7 @@ func TestRegisterSurfaceToolFromSpec_RouteOwnPendingInput_IsReturnedAsResult(t *
 		if err != nil {
 			return DeleteOutput{}, err
 		}
-		confirmed, confirmErr := flow.Confirm(ctx, "own-exchange", "Proceed with side effect?")
+		confirmed, confirmErr := flow.Confirm(ctx, "own-exchange", i18n.Verbatim("Proceed with side effect?"))
 		if errors.Is(confirmErr, elicitation.ErrInputPending) {
 			pending.Add(1)
 			return DeleteOutput{}, flow.PendingError()

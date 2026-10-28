@@ -15,6 +15,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/waitpoll"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -127,7 +128,7 @@ func Transfer(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 		Request:  req,
 		Interval: transferInterval,
 		Bound:    transferBound,
-		Message:  "Waiting for GitLab to move the project to " + input.Namespace,
+		Message:  i18n.T(ctx, i18n.ProgressProjectTransferWait, i18n.S("namespace", input.Namespace)),
 		Read: func(readCtx context.Context) (transferRead, error) {
 			current, readErr := Get(readCtx, client, GetInput{ProjectID: toolutil.StringOrInt(strconv.FormatInt(answered.ID, 10))})
 			if readErr != nil || inNamespace(current, input.Namespace) {

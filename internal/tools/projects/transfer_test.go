@@ -11,11 +11,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/waitpoll"
@@ -225,6 +228,30 @@ func TestTransfer_MoveLandsLater_AnswersTheMovedProject(t *testing.T) {
 	}
 	if got := gitlab.todoHits.Load(); got != 2 {
 		t.Errorf("to-do listings = %d, want 2: one after each read that did not find the move", got)
+	}
+}
+
+// TestTransfer_ProgressMessage_NamesTheDestination pins the text a person
+// waiting on a move that lands later reads before each read back, in English,
+// as it read before the text moved into the message catalog: the namespace
+// the caller named, as the caller wrote it. Every other test of the transfer
+// passes a nil request, so its tracker is inactive and nothing the wait would
+// tell a person is sent; here the first read back still finds the project in
+// the user's namespace and the second finds the move, so the message is sent
+// twice.
+func TestTransfer_ProgressMessage_NamesTheDestination(t *testing.T) {
+	fastTransferWait(t, landingBound)
+	gitlab := &transferGitLab{t: t, answer: projectInUserNamespace, reads: []string{projectInUserNamespace, projectInGroupNamespace}}
+	client := testutil.NewTestClient(t, gitlab.handler())
+
+	got := testutil.ProgressMessages(t, nil, func(ctx context.Context, req *mcp.CallToolRequest) {
+		if _, err := Transfer(ctx, req, client, TransferInput{ProjectID: "42", Namespace: "newns"}); err != nil {
+			t.Errorf("Transfer() error = %v", err)
+		}
+	})
+	const want = "Waiting for GitLab to move the project to newns"
+	if !slices.Equal(got, []string{want, want}) {
+		t.Errorf("the progress messages = %q, want %q once for each of the two reads back", got, want)
 	}
 }
 

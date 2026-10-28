@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 )
 
@@ -656,12 +657,12 @@ func NewProgressReader(ctx context.Context, r io.Reader, total int64, tracker pr
 			if !tracker.IsActive() {
 				return
 			}
-			message := fmt.Sprintf("Read %d / %d bytes, preparing the upload", read, total)
+			message := i18n.T(ctx, i18n.ProgressUploadReading, i18n.N("read", read), i18n.N("total", total))
 			if read >= total && total > 0 {
 				// The handover, which is the only moment this reader can name
 				// the silent phase that follows: from here the bytes are in a
 				// buffer and the transfer reports nothing until it returns.
-				message = fmt.Sprintf("Read %d bytes, uploading to GitLab", read)
+				message = i18n.T(ctx, i18n.ProgressUploadHandover, i18n.N("read", read))
 			}
 			tracker.Update(ctx, float64(read), float64(total), message)
 		},
@@ -712,9 +713,9 @@ func NewProgressWriter(ctx context.Context, w io.Writer, total int64, tracker pr
 			if !tracker.IsActive() {
 				return
 			}
-			message := fmt.Sprintf("Downloaded %d bytes", written)
+			message := i18n.T(ctx, i18n.ProgressDownloadBytes, i18n.N("written", written))
 			if total > 0 {
-				message = fmt.Sprintf("Downloaded %d / %d bytes", written, total)
+				message = i18n.T(ctx, i18n.ProgressDownloadOfTotal, i18n.N("written", written), i18n.N("total", total))
 			}
 			tracker.Update(ctx, float64(written), float64(total), message)
 		},

@@ -7,6 +7,7 @@
 package elicitation
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -14,6 +15,40 @@ import (
 	"strings"
 	"testing"
 )
+
+// TestSchemas_TitleTheirOneProperty pins the title each builder gives the one
+// property of its form, which a client shows above the field: the three
+// builders that ask a question of their own take it from the catalog, in the
+// request's language, and the two that ask for a caller's field take the
+// title the caller resolved for it. The English titles are the ones a client
+// was shown before the catalog existed.
+func TestSchemas_TitleTheirOneProperty(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name     string
+		schema   map[string]any
+		property string
+		want     string
+	}{
+		{name: "confirm", schema: confirmSchema(ctx, "Sure?"), property: "confirmed", want: "Confirm"},
+		{name: "select one", schema: selectOneSchema(ctx, "Pick", []string{"a"}), property: "selection", want: "Selection"},
+		{name: "select one integer", schema: selectOneIntSchema(ctx, "Pick", []int{1}), property: "selection", want: "Selection"},
+		{name: "select multiple", schema: selectMultiSchema(ctx, "Pick", []string{"a"}, 0, 0), property: "selections", want: "Selections"},
+		{name: "text", schema: textSchema("Name?", "name", "Project name"), property: "name", want: "Project name"},
+		{name: "number", schema: numberSchema("How many?", "count", "Count", 0, 9), property: "count", want: "Count"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			props, _ := tc.schema["properties"].(map[string]any)
+			field, ok := props[tc.property].(map[string]any)
+			if !ok {
+				t.Fatalf("the schema has no %q property: %v", tc.property, props)
+			}
+			if field["title"] != tc.want {
+				t.Errorf("title = %v, want %q", field["title"], tc.want)
+			}
+		})
+	}
+}
 
 // TestContentForAction_MapsActions verifies the action-to-outcome mapping
 // shared by both elicitation mechanisms.
@@ -45,7 +80,7 @@ func TestContentForAction_MapsActions(t *testing.T) {
 // change; what differs is what the model is told, and a model told the user
 // cancelled will not retry and will say so to the user.
 func TestConfirmSchema_ShapeAndParse(t *testing.T) {
-	schema := confirmSchema("Sure?")
+	schema := confirmSchema(context.Background(), "Sure?")
 	props, ok := schema["properties"].(map[string]any)
 	if !ok {
 		t.Fatal("confirmSchema missing properties")
@@ -103,7 +138,7 @@ func TestConfirmSchema_ShapeAndParse(t *testing.T) {
 // TestTextSchema_ParseTextContent verifies text schema construction and
 // string extraction errors for non-string values.
 func TestTextSchema_ParseTextContent(t *testing.T) {
-	schema := textSchema("Enter name", "name")
+	schema := textSchema("Enter name", "name", "name")
 	props := schema["properties"].(map[string]any)
 	if _, ok := props["name"]; !ok {
 		t.Fatal("textSchema missing field property")
@@ -226,14 +261,14 @@ func TestSelectSchemas_ValidateOptions(t *testing.T) {
 // TestNumberSchema_BoundsAndParse verifies numeric bounds inclusion and NaN
 // rejection.
 func TestNumberSchema_BoundsAndParse(t *testing.T) {
-	schema := numberSchema("Rate", "rating", 0, 5)
+	schema := numberSchema("Rate", "rating", "rating", 0, 5)
 	props := schema["properties"].(map[string]any)
 	prop := props["rating"].(map[string]any)
 	if prop["minimum"] != 0.0 || prop["maximum"] != 5.0 {
 		t.Errorf("numberSchema bounds = (%v, %v), want (0, 5)", prop["minimum"], prop["maximum"])
 	}
 
-	unbounded := numberSchema("Any", "v", math.Inf(-1), math.Inf(1))
+	unbounded := numberSchema("Any", "v", "v", math.Inf(-1), math.Inf(1))
 	uprop := unbounded["properties"].(map[string]any)["v"].(map[string]any)
 	if _, hasMin := uprop["minimum"]; hasMin {
 		t.Error("numberSchema(-Inf) still has minimum")
@@ -285,7 +320,7 @@ func TestSelectMultiSchema_AdvertisesOnlyTheBoundsItWasGiven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := selectMultiSchema("Pick some", []string{"a", "b"}, tt.minItems, tt.maxItems)
+			schema := selectMultiSchema(context.Background(), "Pick some", []string{"a", "b"}, tt.minItems, tt.maxItems)
 			props, ok := schema["properties"].(map[string]any)
 			if !ok {
 				t.Fatal("selectMultiSchema has no properties object")

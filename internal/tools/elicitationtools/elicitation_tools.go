@@ -13,6 +13,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergerequests"
@@ -21,18 +22,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const (
-	// labelCollectingDesc identifies the description-collection step in wrapped errors.
-	labelCollectingDesc = "collecting description"
-	// fmtDescSummary identifies the fmt desc summary constant used by this package.
-	//
-	// The value is truncated by [summaryExcerpt] before it is escaped, not by a
-	// width verb here. Escaping wraps the text in a fence, so cutting the
-	// escaped form at a byte count would drop the closing delimiter and let the
-	// fence swallow every field printed after it — turning a length limit into
-	// a rendering bug in the dialog a person reads to decide.
-	fmtDescSummary = "\n**Description**: %s"
-)
+// labelCollectingDesc identifies the description-collection step in wrapped
+// errors, which the model reads, so it stays English and outside the catalog.
+const labelCollectingDesc = "collecting description"
 
 // Input types.
 
@@ -57,7 +49,7 @@ type ReleaseInput struct {
 // Confirmation helpers for destructive / create tools.
 
 // ConfirmAction delegates to [elicitation.ConfirmAction].
-func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) *mcp.CallToolResult {
+func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message i18n.Text) *mcp.CallToolResult {
 	return elicitation.ConfirmAction(ctx, req, message)
 }
 
@@ -115,6 +107,9 @@ const summaryExcerptRunes = 100
 //
 // Counting runes rather than bytes keeps a multi-byte character from being
 // split in half, which would put an invalid sequence in front of the user.
+//
+// Every summary's description row is the excerpt, escaped, then put into the
+// row's catalog text, in that order.
 func summaryExcerpt(s string) string {
 	// Walked rather than converted: []rune(s) copies the whole string, and
 	// the input is client-supplied, so the copy scales with whatever a client
@@ -180,7 +175,9 @@ func newWizardFlow(req *mcp.CallToolRequest) (*elicitation.Flow, error) {
 // the reason is [toolutil.EscapeConsentValue]: it defangs a URL scheme on top
 // of the code span a card writes, which is what a line asking for approval
 // needs and what a result card does not. See [cardDirective] in
-// cmd/audit_md_escaping.
+// cmd/audit_md_escaping. Each row is a catalog text of its own, built here so
+// the directive below answers for it, and the rows are joined with
+// [i18n.Concat], since a row the answers do not call for is left out.
 //
 //gitlab:allow-card IssueCreate: a consent prompt, escaped by EscapeConsentValue, which defangs a URL scheme as Card does not
 func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input IssueInput) (issues.Output, error) {
@@ -194,51 +191,58 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 		return issues.Output{}, err
 	}
 
-	tracker.Step(ctx, 1, 4, "Collecting issue details...")
+	tracker.Step(ctx, 1, 4, i18n.T(ctx, i18n.InteractiveIssueCreateProgressDetails))
 
-	title, err := fl.PromptText(ctx, "title", "Enter the issue title", "title")
+	title, err := fl.PromptText(ctx, "title", i18n.T(ctx, i18n.InteractiveIssueCreatePromptTitle),
+		elicitation.Field{Name: "title", Title: i18n.T(ctx, i18n.InteractiveFieldTitle)})
 	if err != nil {
 		return issues.Output{}, flowError(fl, err, "collecting title")
 	}
 
-	description, err := fl.PromptText(ctx, "description", "Enter the issue description (Markdown supported, or leave empty)", "description")
+	description, err := fl.PromptText(ctx, "description", i18n.T(ctx, i18n.InteractiveIssueCreatePromptDescription),
+		elicitation.Field{Name: "description", Title: i18n.T(ctx, i18n.InteractiveFieldDescription)})
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
 		return issues.Output{}, flowError(fl, err, labelCollectingDesc)
 	}
 
-	tracker.Step(ctx, 2, 4, "Collecting optional fields...")
+	tracker.Step(ctx, 2, 4, i18n.T(ctx, i18n.InteractiveProgressOptionalFields))
 
-	labelsStr, err := fl.PromptText(ctx, "labels", "Enter comma-separated labels (or leave empty)", "labels")
+	labelsStr, err := fl.PromptText(ctx, "labels", i18n.T(ctx, i18n.InteractivePromptLabels),
+		elicitation.Field{Name: "labels", Title: i18n.T(ctx, i18n.InteractiveFieldLabels)})
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
 		return issues.Output{}, flowError(fl, err, "collecting labels")
 	}
 	labels := parseCSVLabels(labelsStr)
 
-	confidentialChoice, err := confirmOptionalBool(ctx, fl, "confidential", "Should this issue be confidential?", "confidentiality")
+	confidentialChoice, err := confirmOptionalBool(ctx, fl, "confidential",
+		i18n.T(ctx, i18n.InteractiveIssueCreatePromptConfidential), "confidentiality")
 	if err != nil {
 		return issues.Output{}, err
 	}
 	confidential := confidentialChoice.Value
 
-	tracker.Step(ctx, 3, 4, "Confirming issue creation...")
+	tracker.Step(ctx, 3, 4, i18n.T(ctx, i18n.InteractiveIssueCreateProgressConfirming))
 
-	summary := fmt.Sprintf("Create issue in project %s?\n\n**Title**: %s",
-		toolutil.EscapeConsentValue(string(input.ProjectID)), toolutil.EscapeConsentValue(title))
+	rows := []i18n.Message{i18n.New(i18n.InteractiveIssueCreateSummary,
+		i18n.S("project", toolutil.EscapeConsentValue(string(input.ProjectID))),
+		i18n.S("title", toolutil.EscapeConsentValue(title)))}
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
+		rows = append(rows, i18n.New(i18n.InteractiveSummaryDescription,
+			i18n.S("description", toolutil.EscapeConsentValue(summaryExcerpt(description)))))
 	}
 	if len(labels) > 0 {
-		summary += "\n**Labels**: " + toolutil.EscapeConsentValue(strings.Join(labels, ", "))
+		rows = append(rows, i18n.New(i18n.InteractiveSummaryLabels,
+			i18n.S("labels", toolutil.EscapeConsentValue(strings.Join(labels, ", ")))))
 	}
 	if confidential != nil && *confidential {
-		summary += "\n**Confidential**: Yes"
+		rows = append(rows, i18n.New(i18n.InteractiveIssueCreateSummaryConfidential))
 	}
 
-	if confirmErr := confirmCreation(ctx, fl, summary, "issue creation"); confirmErr != nil {
+	if confirmErr := confirmCreation(ctx, fl, i18n.Concat(rows...), "issue creation"); confirmErr != nil {
 		return issues.Output{}, confirmErr
 	}
 
-	tracker.Step(ctx, 4, 4, "Creating issue...")
+	tracker.Step(ctx, 4, 4, i18n.T(ctx, i18n.InteractiveIssueCreateProgressCreating))
 
 	created, err := issues.Create(ctx, client, issues.CreateInput{
 		ProjectID:    input.ProjectID,
@@ -253,7 +257,7 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 	// Step is 1-based and Update is 0-based, so the last Step above reports 3
 	// of 4. Without this the bar stops one short and stays there, which reads
 	// as a wizard that hung on its final call.
-	tracker.Done(ctx, 4, "Issue created")
+	tracker.Done(ctx, 4, i18n.T(ctx, i18n.InteractiveIssueCreateProgressDone))
 	return created, nil
 }
 
@@ -275,38 +279,42 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 		return mergerequests.Output{}, err
 	}
 
-	tracker.Step(ctx, 1, 5, "Collecting branch information...")
+	tracker.Step(ctx, 1, 5, i18n.T(ctx, i18n.InteractiveMrCreateProgressBranches))
 
-	sourceBranch, err := fl.PromptText(ctx, "source_branch", "Enter the source branch name", "source_branch")
+	sourceBranch, err := fl.PromptText(ctx, "source_branch", i18n.T(ctx, i18n.InteractiveMrCreatePromptSourceBranch),
+		elicitation.Field{Name: "source_branch", Title: i18n.T(ctx, i18n.InteractiveFieldSourceBranch)})
 	if err != nil {
 		return mergerequests.Output{}, flowError(fl, err, "collecting source branch")
 	}
 
-	targetBranch, err := fl.PromptText(ctx, "target_branch", "Enter the target branch name (e.g. main, develop)", "target_branch")
+	targetBranch, err := fl.PromptText(ctx, "target_branch", i18n.T(ctx, i18n.InteractiveMrCreatePromptTargetBranch),
+		elicitation.Field{Name: "target_branch", Title: i18n.T(ctx, i18n.InteractiveFieldTargetBranch)})
 	if err != nil {
 		return mergerequests.Output{}, flowError(fl, err, "collecting target branch")
 	}
 
-	tracker.Step(ctx, 2, 5, "Collecting MR details...")
+	tracker.Step(ctx, 2, 5, i18n.T(ctx, i18n.InteractiveMrCreateProgressDetails))
 
-	title, err := fl.PromptText(ctx, "title", "Enter the merge request title", "title")
+	title, err := fl.PromptText(ctx, "title", i18n.T(ctx, i18n.InteractiveMrCreatePromptTitle),
+		elicitation.Field{Name: "title", Title: i18n.T(ctx, i18n.InteractiveFieldTitle)})
 	if err != nil {
 		return mergerequests.Output{}, flowError(fl, err, "collecting title")
 	}
 
-	description, err := fl.PromptText(ctx, "description", "Enter the MR description (Markdown supported, or leave empty)", "description")
+	description, err := fl.PromptText(ctx, "description", i18n.T(ctx, i18n.InteractiveMrCreatePromptDescription),
+		elicitation.Field{Name: "description", Title: i18n.T(ctx, i18n.InteractiveFieldDescription)})
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
 		return mergerequests.Output{}, flowError(fl, err, labelCollectingDesc)
 	}
 
-	tracker.Step(ctx, 3, 5, "Collecting optional fields...")
+	tracker.Step(ctx, 3, 5, i18n.T(ctx, i18n.InteractiveProgressOptionalFields))
 
 	labels, removeSource, squash, err := collectMROptions(ctx, fl)
 	if err != nil {
 		return mergerequests.Output{}, err
 	}
 
-	tracker.Step(ctx, 4, 5, "Confirming MR creation...")
+	tracker.Step(ctx, 4, 5, i18n.T(ctx, i18n.InteractiveMrCreateProgressConfirming))
 
 	summary := buildMRSummary(mrSummaryParams{
 		ProjectID:    input.ProjectID,
@@ -323,7 +331,7 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 		return mergerequests.Output{}, confirmErr
 	}
 
-	tracker.Step(ctx, 5, 5, "Creating merge request...")
+	tracker.Step(ctx, 5, 5, i18n.T(ctx, i18n.InteractiveMrCreateProgressCreating))
 
 	created, err := mergerequests.Create(ctx, client, mergerequests.CreateInput{
 		ProjectID:          input.ProjectID,
@@ -338,25 +346,27 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 	if err != nil {
 		return created, err
 	}
-	tracker.Done(ctx, 5, "Merge request created")
+	tracker.Done(ctx, 5, i18n.T(ctx, i18n.InteractiveMrCreateProgressDone))
 	return created, nil
 }
 
 // collectMROptions asks for optional merge request labels and merge behavior.
 func collectMROptions(ctx context.Context, fl *elicitation.Flow) (_ []string, _, _ *bool, _ error) {
-	labelsStr, err := fl.PromptText(ctx, "labels", "Enter comma-separated labels (or leave empty)", "labels")
+	labelsStr, err := fl.PromptText(ctx, "labels", i18n.T(ctx, i18n.InteractivePromptLabels),
+		elicitation.Field{Name: "labels", Title: i18n.T(ctx, i18n.InteractiveFieldLabels)})
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
 		return nil, nil, nil, flowError(fl, err, "collecting labels")
 	}
 	labels := parseCSVLabels(labelsStr)
 
-	removeSourceChoice, err := confirmOptionalBool(ctx, fl, "remove_source_branch", "Remove source branch after merge?", "source branch removal")
+	removeSourceChoice, err := confirmOptionalBool(ctx, fl, "remove_source_branch",
+		i18n.T(ctx, i18n.InteractiveMrCreatePromptRemoveSourceBranch), "source branch removal")
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	removeSource := removeSourceChoice.Value
 
-	squashChoice, err := confirmOptionalBool(ctx, fl, "squash", "Squash commits on merge?", "squash option")
+	squashChoice, err := confirmOptionalBool(ctx, fl, "squash", i18n.T(ctx, i18n.InteractiveMrCreatePromptSquash), "squash option")
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -371,8 +381,10 @@ type optionalBoolChoice struct {
 }
 
 // confirmOptionalBool returns an optional boolean prompt result and reports an
-// error when the user cancels the flow or the answer is still pending.
-func confirmOptionalBool(ctx context.Context, fl *elicitation.Flow, id, prompt, field string) (optionalBoolChoice, error) {
+// error when the user cancels the flow or the answer is still pending. The
+// prompt is what the person is asked; field names the step in an error, which
+// the model reads.
+func confirmOptionalBool(ctx context.Context, fl *elicitation.Flow, id string, prompt i18n.Text, field string) (optionalBoolChoice, error) {
 	confirmed, err := fl.Confirm(ctx, id, prompt)
 	if err == nil {
 		return optionalBoolChoice{Value: &confirmed}, nil
@@ -385,9 +397,10 @@ func confirmOptionalBool(ctx context.Context, fl *elicitation.Flow, id, prompt, 
 
 // confirmCreation runs the final confirmation prompt of a creation wizard
 // and converts declines, cancellations, and pending input into the
-// appropriate wizard error.
-func confirmCreation(ctx context.Context, fl *elicitation.Flow, summary, operation string) error {
-	confirmed, err := fl.Confirm(ctx, elicitation.ConfirmExchangeID, summary)
+// appropriate wizard error. The summary is asked in the request's language;
+// the operation names the wizard in an error, which the model reads.
+func confirmCreation(ctx context.Context, fl *elicitation.Flow, summary i18n.Message, operation string) error {
+	confirmed, err := fl.Confirm(ctx, elicitation.ConfirmExchangeID, summary.Text(ctx))
 	if err != nil {
 		if errors.Is(err, elicitation.ErrInputPending) {
 			return fl.PendingError()
@@ -415,29 +428,35 @@ type mrSummaryParams struct {
 	Squash       *bool
 }
 
-// buildMRSummary returns a Markdown confirmation summary for an interactive
-// merge request creation flow. It includes the project, title, source and target
+// buildMRSummary returns the Markdown confirmation summary of an interactive
+// merge request creation flow, unrendered, so the caller asks it in the
+// request's language. It includes the project, title, source and target
 // branches, and omits optional sections for empty description, labels, remove
-// source branch, and squash values.
+// source branch, and squash values. Each row is a catalog text of its own,
+// built here so the directive below answers for it.
 //
 //gitlab:allow-card buildMRSummary: a consent prompt, escaped by EscapeConsentValue, which defangs a URL scheme as Card does not
-func buildMRSummary(p mrSummaryParams) string {
-	summary := fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s -> **Target**: %s",
-		toolutil.EscapeConsentValue(string(p.ProjectID)), toolutil.EscapeConsentValue(p.Title),
-		toolutil.EscapeConsentValue(p.SourceBranch), toolutil.EscapeConsentValue(p.TargetBranch))
+func buildMRSummary(p mrSummaryParams) i18n.Message {
+	rows := []i18n.Message{i18n.New(i18n.InteractiveMrCreateSummary,
+		i18n.S("project", toolutil.EscapeConsentValue(string(p.ProjectID))),
+		i18n.S("title", toolutil.EscapeConsentValue(p.Title)),
+		i18n.S("source", toolutil.EscapeConsentValue(p.SourceBranch)),
+		i18n.S("target", toolutil.EscapeConsentValue(p.TargetBranch)))}
 	if p.Description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(p.Description)))
+		rows = append(rows, i18n.New(i18n.InteractiveSummaryDescription,
+			i18n.S("description", toolutil.EscapeConsentValue(summaryExcerpt(p.Description)))))
 	}
 	if len(p.Labels) > 0 {
-		summary += "\n**Labels**: " + toolutil.EscapeConsentValue(strings.Join(p.Labels, ", "))
+		rows = append(rows, i18n.New(i18n.InteractiveSummaryLabels,
+			i18n.S("labels", toolutil.EscapeConsentValue(strings.Join(p.Labels, ", ")))))
 	}
 	if p.RemoveSource != nil && *p.RemoveSource {
-		summary += "\n**Remove source branch**: Yes"
+		rows = append(rows, i18n.New(i18n.InteractiveMrCreateSummaryRemoveSourceBranch))
 	}
 	if p.Squash != nil && *p.Squash {
-		summary += "\n**Squash commits**: Yes"
+		rows = append(rows, i18n.New(i18n.InteractiveMrCreateSummarySquash))
 	}
-	return summary
+	return i18n.Concat(rows...)
 }
 
 // Interactive release creation.
@@ -460,38 +479,44 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 		return releases.Output{}, err
 	}
 
-	tracker.Step(ctx, 1, 4, "Collecting release details...")
+	tracker.Step(ctx, 1, 4, i18n.T(ctx, i18n.InteractiveReleaseCreateProgressDetails))
 
-	tagName, err := fl.PromptText(ctx, "tag_name", "Enter the tag name for the release (must already exist)", "tag_name")
+	tagName, err := fl.PromptText(ctx, "tag_name", i18n.T(ctx, i18n.InteractiveReleaseCreatePromptTagName),
+		elicitation.Field{Name: "tag_name", Title: i18n.T(ctx, i18n.InteractiveFieldTagName)})
 	if err != nil {
 		return releases.Output{}, flowError(fl, err, "collecting tag name")
 	}
 
-	name, err := fl.PromptText(ctx, "name", "Enter the release name/title", "name")
+	name, err := fl.PromptText(ctx, "name", i18n.T(ctx, i18n.InteractiveReleaseCreatePromptName),
+		elicitation.Field{Name: "name", Title: i18n.T(ctx, i18n.InteractiveFieldName)})
 	if err != nil {
 		return releases.Output{}, flowError(fl, err, "collecting release name")
 	}
 
-	tracker.Step(ctx, 2, 4, "Collecting release description...")
+	tracker.Step(ctx, 2, 4, i18n.T(ctx, i18n.InteractiveReleaseCreateProgressDescription))
 
-	description, err := fl.PromptText(ctx, "description", "Enter the release description/notes (Markdown supported, or leave empty)", "description")
+	description, err := fl.PromptText(ctx, "description", i18n.T(ctx, i18n.InteractiveReleaseCreatePromptDescription),
+		elicitation.Field{Name: "description", Title: i18n.T(ctx, i18n.InteractiveFieldDescription)})
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
 		return releases.Output{}, flowError(fl, err, labelCollectingDesc)
 	}
 
-	tracker.Step(ctx, 3, 4, "Confirming release creation...")
+	tracker.Step(ctx, 3, 4, i18n.T(ctx, i18n.InteractiveReleaseCreateProgressConfirming))
 
-	summary := fmt.Sprintf("Create release in project %s?\n\n**Tag**: %s\n**Name**: %s",
-		toolutil.EscapeConsentValue(string(input.ProjectID)), toolutil.EscapeConsentValue(tagName), toolutil.EscapeConsentValue(name))
+	rows := []i18n.Message{i18n.New(i18n.InteractiveReleaseCreateSummary,
+		i18n.S("project", toolutil.EscapeConsentValue(string(input.ProjectID))),
+		i18n.S("tag", toolutil.EscapeConsentValue(tagName)),
+		i18n.S("name", toolutil.EscapeConsentValue(name)))}
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
+		rows = append(rows, i18n.New(i18n.InteractiveSummaryDescription,
+			i18n.S("description", toolutil.EscapeConsentValue(summaryExcerpt(description)))))
 	}
 
-	if confirmErr := confirmCreation(ctx, fl, summary, "release creation"); confirmErr != nil {
+	if confirmErr := confirmCreation(ctx, fl, i18n.Concat(rows...), "release creation"); confirmErr != nil {
 		return releases.Output{}, confirmErr
 	}
 
-	tracker.Step(ctx, 4, 4, "Creating release...")
+	tracker.Step(ctx, 4, 4, i18n.T(ctx, i18n.InteractiveReleaseCreateProgressCreating))
 
 	created, err := releases.Create(ctx, client, releases.CreateInput{
 		ProjectID:   input.ProjectID,
@@ -502,7 +527,7 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	if err != nil {
 		return created, err
 	}
-	tracker.Done(ctx, 4, "Release created")
+	tracker.Done(ctx, 4, i18n.T(ctx, i18n.InteractiveReleaseCreateProgressDone))
 	return created, nil
 }
 
@@ -524,26 +549,32 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 		return projects.Output{}, err
 	}
 
-	tracker.Step(ctx, 1, 4, "Collecting project details...")
+	tracker.Step(ctx, 1, 4, i18n.T(ctx, i18n.InteractiveProjectCreateProgressDetails))
 
-	name, err := fl.PromptText(ctx, "name", "Enter the project name", "name")
+	name, err := fl.PromptText(ctx, "name", i18n.T(ctx, i18n.InteractiveProjectCreatePromptName),
+		elicitation.Field{Name: "name", Title: i18n.T(ctx, i18n.InteractiveFieldName)})
 	if err != nil {
 		return projects.Output{}, flowError(fl, err, "collecting project name")
 	}
 
-	description, err := fl.PromptText(ctx, "description", "Enter the project description (or leave empty)", "description")
+	description, err := fl.PromptText(ctx, "description", i18n.T(ctx, i18n.InteractiveProjectCreatePromptDescription),
+		elicitation.Field{Name: "description", Title: i18n.T(ctx, i18n.InteractiveFieldDescription)})
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
 		return projects.Output{}, flowError(fl, err, labelCollectingDesc)
 	}
 
-	tracker.Step(ctx, 2, 4, "Collecting project settings...")
+	tracker.Step(ctx, 2, 4, i18n.T(ctx, i18n.InteractiveProjectCreateProgressSettings))
 
-	visibility, err := fl.SelectOne(ctx, "visibility", "Select the project visibility", []string{"private", "internal", "public"})
+	// The options are the values GitLab takes and the answer carries back, so
+	// they are never translated.
+	visibility, err := fl.SelectOne(ctx, "visibility", i18n.T(ctx, i18n.InteractiveProjectCreatePromptVisibility),
+		[]string{"private", "internal", "public"})
 	if err != nil {
 		return projects.Output{}, flowError(fl, err, "collecting visibility")
 	}
 
-	initReadmeChoice, err := confirmOptionalBool(ctx, fl, "initialize_with_readme", "Initialize the repository with a README file?", "README initialization")
+	initReadmeChoice, err := confirmOptionalBool(ctx, fl, "initialize_with_readme",
+		i18n.T(ctx, i18n.InteractiveProjectCreatePromptInitializeWithReadme), "README initialization")
 	if err != nil {
 		return projects.Output{}, err
 	}
@@ -555,31 +586,35 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	// neither asked for, shown for consent nor sent unless a README is.
 	var defaultBranch string
 	if initReadme {
-		defaultBranch, err = fl.PromptText(ctx, "default_branch", "Enter the default branch name (or leave empty for the instance's default branch)", "default_branch")
+		defaultBranch, err = fl.PromptText(ctx, "default_branch", i18n.T(ctx, i18n.InteractiveProjectCreatePromptDefaultBranch),
+			elicitation.Field{Name: "default_branch", Title: i18n.T(ctx, i18n.InteractiveFieldDefaultBranch)})
 		if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
 			return projects.Output{}, flowError(fl, err, "collecting default branch")
 		}
 	}
 
-	tracker.Step(ctx, 3, 4, "Confirming project creation...")
+	tracker.Step(ctx, 3, 4, i18n.T(ctx, i18n.InteractiveProjectCreateProgressConfirming))
 
-	summary := fmt.Sprintf("Create new GitLab project?\n\n**Name**: %s\n**Visibility**: %s",
-		toolutil.EscapeConsentValue(name), toolutil.EscapeConsentValue(visibility))
+	rows := []i18n.Message{i18n.New(i18n.InteractiveProjectCreateSummary,
+		i18n.S("name", toolutil.EscapeConsentValue(name)),
+		i18n.S("visibility", toolutil.EscapeConsentValue(visibility)))}
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
+		rows = append(rows, i18n.New(i18n.InteractiveSummaryDescription,
+			i18n.S("description", toolutil.EscapeConsentValue(summaryExcerpt(description)))))
 	}
 	if initReadme {
-		summary += "\n**README**: Yes"
+		rows = append(rows, i18n.New(i18n.InteractiveProjectCreateSummaryReadme))
 	}
 	if defaultBranch != "" {
-		summary += "\n**Default Branch**: " + toolutil.EscapeConsentValue(defaultBranch)
+		rows = append(rows, i18n.New(i18n.InteractiveProjectCreateSummaryDefaultBranch,
+			i18n.S("branch", toolutil.EscapeConsentValue(defaultBranch))))
 	}
 
-	if confirmErr := confirmCreation(ctx, fl, summary, "project creation"); confirmErr != nil {
+	if confirmErr := confirmCreation(ctx, fl, i18n.Concat(rows...), "project creation"); confirmErr != nil {
 		return projects.Output{}, confirmErr
 	}
 
-	tracker.Step(ctx, 4, 4, "Creating project...")
+	tracker.Step(ctx, 4, 4, i18n.T(ctx, i18n.InteractiveProjectCreateProgressCreating))
 
 	created, err := projects.Create(ctx, client, projects.CreateInput{
 		Name:                 name,
@@ -591,6 +626,6 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	if err != nil {
 		return created, err
 	}
-	tracker.Done(ctx, 4, "Project created")
+	tracker.Done(ctx, 4, i18n.T(ctx, i18n.InteractiveProjectCreateProgressDone))
 	return created, nil
 }

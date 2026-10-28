@@ -14,10 +14,25 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
-const testConfirmPrompt = "Delete project?"
+// testConfirmPrompt is the question the guard tests ask. A destructive prompt
+// is a catalog message, rendered for the person in the request's language and
+// for the model in English, so the tests pass a real one, and
+// testConfirmPromptEnglish is what it reads in English.
+var testConfirmPrompt = i18n.New(i18n.ConfirmDestructiveIndividual, i18n.S("tool", "delete_project"))
+
+// testConfirmPromptEnglish is [testConfirmPrompt] rendered in English.
+const testConfirmPromptEnglish = "Confirm delete_project? This action may be irreversible."
+
+// testProceedPrompt and testDeletePrompt are the shorter questions the
+// ConfirmAction tests ask, catalog messages for the same reason.
+var (
+	testProceedPrompt = i18n.New(i18n.ConfirmDestructiveIndividual, i18n.S("tool", "proceed"))
+	testDeletePrompt  = i18n.New(i18n.ConfirmDestructiveIndividual, i18n.S("tool", "delete"))
+)
 
 // TestIsTruthy verifies that isTruthy correctly parses boolean-like string
 // values ("true", "1", "yes" and variants) as true, and everything else
@@ -195,8 +210,9 @@ func TestConfirmDestructiveAction_RequestWithoutElicitation(t *testing.T) {
 // confirmGuardServer builds an in-memory server with two destructive-guarded
 // tools: "guarded" runs the normal ConfirmDestructiveAction flow, and
 // "corrupt" corrupts the multi round-trip request state first so the guard's
-// invalid-state branch is exercised through a real tools/call.
-func confirmGuardServer(t *testing.T) *mcp.ClientSession {
+// invalid-state branch is exercised through a real tools/call. The message of
+// each question the client is asked is sent on asked when it is not nil.
+func confirmGuardServer(t *testing.T, asked chan<- string) *mcp.ClientSession {
 	t.Helper()
 	server := mcp.NewServer(confirmTestImpl, nil)
 	schema := map[string]any{"type": "object", "properties": map[string]any{}}
@@ -244,7 +260,13 @@ func confirmGuardServer(t *testing.T) *mcp.ClientSession {
 		t.Fatalf("server connect: %v", err)
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "confirm-mrtr-client", Version: "1.0.0"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		ElicitationHandler: func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			if asked != nil {
+				select {
+				case asked <- req.Params.Message:
+				default:
+				}
+			}
 			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
 		},
 	})
@@ -259,9 +281,12 @@ func confirmGuardServer(t *testing.T) *mcp.ClientSession {
 // TestConfirmDestructiveAction_MRTRRoundTrip verifies the multi round-trip
 // confirmation on a modern session: the first pass returns input-required,
 // the SDK client answers through its elicitation handler, and the retried
-// call executes the destructive handler.
+// call executes the destructive handler. The person is asked the prompt as
+// the catalog renders it, which in English is the text asked before the
+// prompt became a catalog message.
 func TestConfirmDestructiveAction_MRTRRoundTrip(t *testing.T) {
-	session := confirmGuardServer(t)
+	asked := make(chan string, 4)
+	session := confirmGuardServer(t, asked)
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "guarded", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatalf("CallTool: %v", err)
@@ -269,6 +294,14 @@ func TestConfirmDestructiveAction_MRTRRoundTrip(t *testing.T) {
 	tc, ok := result.Content[0].(*mcp.TextContent)
 	if !ok || tc.Text != "executed" {
 		t.Fatalf("result = %+v, want confirmed execution", result.Content[0])
+	}
+	select {
+	case message := <-asked:
+		if message != testConfirmPromptEnglish {
+			t.Errorf("the person was asked %q, want %q", message, testConfirmPromptEnglish)
+		}
+	default:
+		t.Error("the client was never asked to confirm")
 	}
 }
 
@@ -299,7 +332,7 @@ func TestInvalidRequestState_FailsClosedAsAProtocolError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			session := confirmGuardServer(t)
+			session := confirmGuardServer(t, nil)
 			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
 				Name:      tt.tool,
 				Arguments: map[string]any{},
@@ -333,7 +366,7 @@ func assertConfirmGuardText(t *testing.T, result *mcp.CallToolResult) {
 	if !ok {
 		t.Fatalf("guard content is %T, want *mcp.TextContent", result.Content[0])
 	}
-	if !strings.Contains(tc.Text, testConfirmPrompt) || !strings.Contains(tc.Text, "confirm=true") {
+	if !strings.Contains(tc.Text, testConfirmPromptEnglish) || !strings.Contains(tc.Text, "confirm=true") {
 		t.Errorf("guard text = %q, want prompt and confirm=true instruction", tc.Text)
 	}
 }
@@ -383,7 +416,7 @@ func newConfirmSession(t *testing.T, handler func(context.Context, *mcp.ElicitRe
 // nil (proceed) when the client does not support elicitation.
 func TestConfirmAction_UnsupportedProceeds(t *testing.T) {
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "noop"}}
-	if got, guardErr := ConfirmAction(context.Background(), req, "Proceed?"); guardErr != nil || got != nil {
+	if got, guardErr := ConfirmAction(context.Background(), req, testProceedPrompt); guardErr != nil || got != nil {
 		t.Errorf("ConfirmAction(unsupported) = %+v, want nil", got)
 	}
 }
@@ -396,7 +429,7 @@ func TestConfirmAction_ConfirmedProceeds(t *testing.T) {
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	if got, guardErr := ConfirmAction(context.Background(), req, "Delete?"); guardErr != nil || got != nil {
+	if got, guardErr := ConfirmAction(context.Background(), req, testDeletePrompt); guardErr != nil || got != nil {
 		t.Errorf("ConfirmAction(confirmed) = %+v, want nil", got)
 	}
 }
@@ -409,7 +442,7 @@ func TestConfirmAction_ConfirmedFalseCancels(t *testing.T) {
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	got, guardErr := ConfirmAction(context.Background(), req, "Delete?")
+	got, guardErr := ConfirmAction(context.Background(), req, testDeletePrompt)
 	if guardErr != nil {
 		t.Fatalf("unexpected protocol error: %v", guardErr)
 	}
@@ -429,7 +462,7 @@ func TestConfirmAction_DeclinedCancels(t *testing.T) {
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	got, guardErr := ConfirmAction(context.Background(), req, "Delete?")
+	got, guardErr := ConfirmAction(context.Background(), req, testDeletePrompt)
 	if guardErr != nil {
 		t.Fatalf("unexpected protocol error: %v", guardErr)
 	}
@@ -441,7 +474,7 @@ func TestConfirmAction_DeclinedCancels(t *testing.T) {
 // TestConfirmAction_NilReqProceeds verifies that a nil request causes
 // [ConfirmAction] to skip elicitation and return nil.
 func TestConfirmAction_NilReqProceeds(t *testing.T) {
-	if got, guardErr := ConfirmAction(context.Background(), nil, "Proceed?"); guardErr != nil || got != nil {
+	if got, guardErr := ConfirmAction(context.Background(), nil, testProceedPrompt); guardErr != nil || got != nil {
 		t.Errorf("ConfirmAction(nil req) = %+v, want nil", got)
 	}
 }
@@ -455,7 +488,7 @@ func TestConfirmAction_UnknownActionFailsClosed(t *testing.T) {
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	got, guardErr := ConfirmAction(context.Background(), req, "Delete?")
+	got, guardErr := ConfirmAction(context.Background(), req, testDeletePrompt)
 	if guardErr != nil {
 		t.Fatalf("unexpected protocol error: %v", guardErr)
 	}
@@ -886,7 +919,7 @@ func TestConfirmAction_ADismissedDialogIsNotARefusal(t *testing.T) {
 			})
 			req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
 
-			got, guardErr := ConfirmAction(context.Background(), req, "Delete?")
+			got, guardErr := ConfirmAction(context.Background(), req, testDeletePrompt)
 
 			if guardErr != nil {
 				t.Fatalf("unexpected protocol error: %v", guardErr)

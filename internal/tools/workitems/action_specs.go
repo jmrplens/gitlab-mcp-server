@@ -14,35 +14,47 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The names these specs register under, and the canonical catalog IDs they are
-// published as.
+// The names these specs register under. The canonical catalog IDs they are
+// published as are the block after this one.
 //
 // Work items are routes on the issue catalog group, so a spec registered under
 // the bare name work_item_get is published as issue.work_item_get, and that is
 // the ID a model passes to gitlab_execute_action. This file used to name them
 // under a work_item domain the catalog does not have: "work_item.get" resolves
 // to no action, and a model that followed one was answered "unknown action".
-// markdown.go held the right spelling in a second block of its own, which is
-// the drift this single block ends. Each ID is concatenated from the same
-// constant the spec is built from, so renaming an action moves both at once.
+// markdown.go held the right spelling in a block of its own, which is the
+// drift that declaring every ID here, beside the name it publishes, ends. Each
+// ID is written out as a literal, and
+// TestActionIDs_AreTheirSpecNamesInTheIssueGroup holds it to the spec name it
+// publishes, so renaming an action fails that test until both move; the block
+// after this one says why they are literals and what holds them to the
+// catalog.
 const (
-	// domainIssue is the catalog group these specs are aggregated into, by
-	// buildIssueActionSpecs in internal/tools/action_specs.go.
-	domainIssue = "issue."
-
 	specWorkItemGet      = "work_item_get"
 	specWorkItemList     = "work_item_list"
 	specWorkItemCreate   = "work_item_create"
 	specWorkItemUpdate   = "work_item_update"
 	specWorkItemDelete   = "work_item_delete"
 	specWorkItemTypeList = "work_item_type_list"
+)
 
-	actionWorkItemGet      = domainIssue + specWorkItemGet
-	actionWorkItemList     = domainIssue + specWorkItemList
-	actionWorkItemCreate   = domainIssue + specWorkItemCreate
-	actionWorkItemUpdate   = domainIssue + specWorkItemUpdate
-	actionWorkItemDelete   = domainIssue + specWorkItemDelete
-	actionWorkItemTypeList = domainIssue + specWorkItemTypeList
+// The canonical IDs of the actions above, each its spec name in the issue
+// catalog group, which buildIssueActionSpecs in internal/tools/action_specs.go
+// aggregates these specs into.
+//
+// Each is one literal rather than the group and the spec name joined with a
+// plus: a package-level declaration carries no coverage counter, so a
+// mutation run files the arithmetic mutant on that plus as not covered, and
+// no test can kill it, since subtracting one string from another does not
+// compile. TestPublishedActionIDs_EveryID_NamesACatalogAction holds every one
+// to an action the catalog builds.
+const (
+	actionWorkItemGet      = "issue.work_item_get"
+	actionWorkItemList     = "issue.work_item_list"
+	actionWorkItemCreate   = "issue.work_item_create"
+	actionWorkItemUpdate   = "issue.work_item_update"
+	actionWorkItemDelete   = "issue.work_item_delete"
+	actionWorkItemTypeList = "issue.work_item_type_list"
 )
 
 // ActionSpecs returns canonical specs for work item actions exposed through gitlab_issue.

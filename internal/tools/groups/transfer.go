@@ -14,6 +14,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/waitpoll"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -118,7 +119,7 @@ func TransferSubGroup(ctx context.Context, req *mcp.CallToolRequest, client *git
 		Request:  req,
 		Interval: transferInterval,
 		Bound:    transferBound,
-		Message:  "Waiting for GitLab to move the group",
+		Message:  i18n.T(ctx, i18n.ProgressGroupTransferWait),
 		Read: func(readCtx context.Context) (groupTransferRead, error) {
 			// The transfer's own answer carries no projects, and a read that
 			// asked for them would page through a group's projects on every

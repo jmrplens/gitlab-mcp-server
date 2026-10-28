@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // progressState carries per-Tracker mutable state. Stored behind a pointer so
@@ -97,7 +99,10 @@ func (t Tracker) IsActive() bool {
 // SPEC: MCP 2025-11-25 mandates that progress values strictly increase. Calls
 // where progress is less than or equal to a previously sent value are dropped
 // (logged at Debug level) to preserve the protocol invariant.
-func (t Tracker) Update(ctx context.Context, progress, total float64, message string) {
+//
+// The message is a catalog text, since a client shows it to the person
+// waiting rather than to the model; the zero Text sends none.
+func (t Tracker) Update(ctx context.Context, progress, total float64, message i18n.Text) {
 	if !t.IsActive() {
 		return
 	}
@@ -130,7 +135,7 @@ func (t Tracker) Update(ctx context.Context, progress, total float64, message st
 		ProgressToken: t.token,
 		Progress:      progress,
 		Total:         total,
-		Message:       message,
+		Message:       message.String(),
 	}
 	if err := t.session.NotifyProgress(ctx, params); err != nil {
 		slog.DebugContext(ctx, "failed to send progress notification", "error", err)
@@ -138,8 +143,8 @@ func (t Tracker) Update(ctx context.Context, progress, total float64, message st
 }
 
 // Step is a convenience that reports progress as step/total (1-based step index).
-// Example: Step(ctx, 1, 3, "Fetching MR details...") sends progress=0, total=3.
-func (t Tracker) Step(ctx context.Context, step, total int, message string) {
+// Example: Step(ctx, 1, 3, i18n.T(ctx, key)) sends progress=0, total=3.
+func (t Tracker) Step(ctx context.Context, step, total int, message i18n.Text) {
 	t.Update(ctx, float64(step-1), float64(total), message)
 }
 
@@ -147,7 +152,7 @@ func (t Tracker) Step(ctx context.Context, step, total int, message string) {
 // It is a convenience for callers that report intermediate steps via [Tracker.Step]
 // (which uses zero-based progress) and want a clean 100% completion notification.
 // If the Tracker is inactive or total is non-positive, Done is a no-op.
-func (t Tracker) Done(ctx context.Context, total float64, message string) {
+func (t Tracker) Done(ctx context.Context, total float64, message i18n.Text) {
 	if total <= 0 {
 		return
 	}

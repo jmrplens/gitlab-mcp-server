@@ -27,6 +27,8 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // minMRTRProtocolVersion is the first MCP protocol version that forbids
@@ -34,6 +36,17 @@ import (
 // request flow instead (SEP-2322). Protocol versions are ISO dates, so
 // lexicographic comparison is chronological.
 const minMRTRProtocolVersion = "2026-07-28"
+
+// multiRoundTrip reports whether a protocol revision forbids server-initiated
+// elicitation requests and asks for the multi round-trip flow instead.
+//
+// It is the one comparison both readers of a revision make: [FlowFromRequest],
+// choosing the flow for a call, and [Client.ElicitURL], deciding whether the
+// request carries the elicitationId 2025-11-25 required and 2026-07-28
+// removed. Kept in one place, the boundary is the same for both.
+func multiRoundTrip(version string) bool {
+	return version >= minMRTRProtocolVersion
+}
 
 // flowStateVersion versions the RequestState encoding so future changes
 // can reject or migrate stale client-echoed state.
@@ -104,7 +117,7 @@ func FlowFromRequest(req *mcp.CallToolRequest) (*Flow, error) {
 	// multi round-trip flow. The SDK's own check reads the same value, and
 	// agreeing with it is deliberate (row 11 of docs/development/upstream-bugs.md,
 	// go-sdk#1258); test/e2e/stdio/elicitation_declared_version_test.go pins it.
-	if req.ProtocolVersion() < minMRTRProtocolVersion {
+	if !multiRoundTrip(req.ProtocolVersion()) {
 		return f, nil
 	}
 	f.mrtr = true
@@ -173,11 +186,11 @@ func (f *Flow) exchange(ctx context.Context, id, message string, schema map[stri
 }
 
 // Confirm asks the user a yes/no question. See [Client.Confirm].
-func (f *Flow) Confirm(ctx context.Context, id, message string) (bool, error) {
+func (f *Flow) Confirm(ctx context.Context, id string, message i18n.Text) (bool, error) {
 	if !f.IsSupported() {
 		return false, ErrElicitationNotSupported
 	}
-	content, err := f.exchange(ctx, id, message, confirmSchema(message))
+	content, err := f.exchange(ctx, id, message.String(), confirmSchema(ctx, message.String()))
 	if err != nil {
 		return false, err
 	}
@@ -189,29 +202,27 @@ func (f *Flow) Confirm(ctx context.Context, id, message string) (bool, error) {
 }
 
 // PromptText asks the user for free-form text input. See [Client.PromptText].
-func (f *Flow) PromptText(ctx context.Context, id, message, fieldName string) (string, error) {
+func (f *Flow) PromptText(ctx context.Context, id string, message i18n.Text, field Field) (string, error) {
 	if !f.IsSupported() {
 		return "", ErrElicitationNotSupported
 	}
-	if fieldName == "" {
-		fieldName = "value"
-	}
-	content, err := f.exchange(ctx, id, message, textSchema(message, fieldName))
+	name, title := field.keys()
+	content, err := f.exchange(ctx, id, message.String(), textSchema(message.String(), name, title))
 	if err != nil {
 		return "", err
 	}
-	return parseTextContent(content, fieldName)
+	return parseTextContent(content, name)
 }
 
 // SelectOne asks the user to pick one option from a list. See [Client.SelectOne].
-func (f *Flow) SelectOne(ctx context.Context, id, message string, options []string) (string, error) {
+func (f *Flow) SelectOne(ctx context.Context, id string, message i18n.Text, options []string) (string, error) {
 	if !f.IsSupported() {
 		return "", ErrElicitationNotSupported
 	}
 	if len(options) == 0 {
 		return "", errors.New(errOptionsEmpty)
 	}
-	content, err := f.exchange(ctx, id, message, selectOneSchema(message, options))
+	content, err := f.exchange(ctx, id, message.String(), selectOneSchema(ctx, message.String(), options))
 	if err != nil {
 		return "", err
 	}
@@ -220,14 +231,14 @@ func (f *Flow) SelectOne(ctx context.Context, id, message string, options []stri
 
 // SelectMulti asks the user to pick one or more options from a list.
 // See [Client.SelectMulti].
-func (f *Flow) SelectMulti(ctx context.Context, id, message string, options []string, minItems, maxItems int) ([]string, error) {
+func (f *Flow) SelectMulti(ctx context.Context, id string, message i18n.Text, options []string, minItems, maxItems int) ([]string, error) {
 	if !f.IsSupported() {
 		return nil, ErrElicitationNotSupported
 	}
 	if len(options) == 0 {
 		return nil, errors.New(errOptionsEmpty)
 	}
-	content, err := f.exchange(ctx, id, message, selectMultiSchema(message, options, minItems, maxItems))
+	content, err := f.exchange(ctx, id, message.String(), selectMultiSchema(ctx, message.String(), options, minItems, maxItems))
 	if err != nil {
 		return nil, err
 	}
@@ -236,14 +247,14 @@ func (f *Flow) SelectMulti(ctx context.Context, id, message string, options []st
 
 // SelectOneInt asks the user to pick one integer from a list of allowed
 // values. See [Client.SelectOneInt].
-func (f *Flow) SelectOneInt(ctx context.Context, id, message string, options []int) (int, error) {
+func (f *Flow) SelectOneInt(ctx context.Context, id string, message i18n.Text, options []int) (int, error) {
 	if !f.IsSupported() {
 		return 0, ErrElicitationNotSupported
 	}
 	if len(options) == 0 {
 		return 0, errors.New(errOptionsEmpty)
 	}
-	content, err := f.exchange(ctx, id, message, selectOneIntSchema(message, options))
+	content, err := f.exchange(ctx, id, message.String(), selectOneIntSchema(ctx, message.String(), options))
 	if err != nil {
 		return 0, err
 	}
@@ -252,27 +263,25 @@ func (f *Flow) SelectOneInt(ctx context.Context, id, message string, options []i
 
 // PromptNumber asks the user for a numeric input within a range.
 // See [Client.PromptNumber].
-func (f *Flow) PromptNumber(ctx context.Context, id, message, fieldName string, minVal, maxVal float64) (float64, error) {
+func (f *Flow) PromptNumber(ctx context.Context, id string, message i18n.Text, field Field, minVal, maxVal float64) (float64, error) {
 	if !f.IsSupported() {
 		return 0, ErrElicitationNotSupported
 	}
-	if fieldName == "" {
-		fieldName = "value"
-	}
-	content, err := f.exchange(ctx, id, message, numberSchema(message, fieldName, minVal, maxVal))
+	name, title := field.keys()
+	content, err := f.exchange(ctx, id, message.String(), numberSchema(message.String(), name, title, minVal, maxVal))
 	if err != nil {
 		return 0, err
 	}
-	return parseNumberContent(content, fieldName, minVal, maxVal)
+	return parseNumberContent(content, name, minVal, maxVal)
 }
 
 // GatherData sends an arbitrary JSON Schema to the client and returns the
 // user's response as a map. See [Client.GatherData].
-func (f *Flow) GatherData(ctx context.Context, id, message string, schema map[string]any) (map[string]any, error) {
+func (f *Flow) GatherData(ctx context.Context, id string, message i18n.Text, schema map[string]any) (map[string]any, error) {
 	if !f.IsSupported() {
 		return nil, ErrElicitationNotSupported
 	}
-	content, err := f.exchange(ctx, id, message, schema)
+	content, err := f.exchange(ctx, id, message.String(), schema)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +295,7 @@ func (f *Flow) GatherData(ctx context.Context, id, message string, schema map[st
 
 // ElicitURL sends a URL-mode elicitation request, directing the user to a
 // GitLab page. See [Client.ElicitURL].
-func (f *Flow) ElicitURL(ctx context.Context, id, gitlabBaseURL, targetURL, message string) error {
+func (f *Flow) ElicitURL(ctx context.Context, id, gitlabBaseURL, targetURL string, message i18n.Text) error {
 	if !f.mrtr {
 		return f.legacy.ElicitURL(ctx, gitlabBaseURL, targetURL, message)
 	}
@@ -314,7 +323,7 @@ func (f *Flow) ElicitURL(ctx context.Context, id, gitlabBaseURL, targetURL, mess
 	// mode/message/url only).
 	f.pending[id] = &mcp.ElicitParams{
 		Mode:    "url",
-		Message: message,
+		Message: message.String(),
 		URL:     targetURL,
 	}
 	return ErrInputPending

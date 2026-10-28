@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // newMRTRFlow builds a Flow in multi round-trip mode with the given
@@ -35,7 +37,7 @@ func newMRTRFlow(answers map[string]answerRecord) *Flow {
 // the queued elicitation request plus versioned request state.
 func TestFlow_Pending_QueuesInputRequest(t *testing.T) {
 	f := newMRTRFlow(nil)
-	_, err := f.PromptText(context.Background(), "title", "Enter title", "title")
+	_, err := f.PromptText(context.Background(), "title", i18n.Verbatim("Enter title"), Field{Name: "title"})
 	if !errors.Is(err, ErrInputPending) {
 		t.Fatalf("PromptText(no answer) error = %v, want ErrInputPending", err)
 	}
@@ -67,7 +69,7 @@ func TestFlow_AcceptedAnswer_ReturnsValue(t *testing.T) {
 	f := newMRTRFlow(map[string]answerRecord{
 		"title": {Action: "accept", Content: map[string]any{"title": "my title"}},
 	})
-	got, err := f.PromptText(context.Background(), "title", "Enter title", "title")
+	got, err := f.PromptText(context.Background(), "title", i18n.Verbatim("Enter title"), Field{Name: "title"})
 	if err != nil {
 		t.Fatalf("PromptText(answered) error = %v", err)
 	}
@@ -80,7 +82,7 @@ func TestFlow_AcceptedAnswer_ReturnsValue(t *testing.T) {
 // MRTR path.
 func TestFlow_DeclinedAnswer_ReturnsErrDeclined(t *testing.T) {
 	f := newMRTRFlow(map[string]answerRecord{"q": {Action: "decline"}})
-	_, err := f.Confirm(context.Background(), "q", "Sure?")
+	_, err := f.Confirm(context.Background(), "q", i18n.Verbatim("Sure?"))
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("Confirm(declined) error = %v, want ErrDeclined", err)
 	}
@@ -90,7 +92,7 @@ func TestFlow_DeclinedAnswer_ReturnsErrDeclined(t *testing.T) {
 // the MRTR path.
 func TestFlow_CancelledAnswer_ReturnsErrCancelled(t *testing.T) {
 	f := newMRTRFlow(map[string]answerRecord{"q": {Action: "cancel"}})
-	_, err := f.Confirm(context.Background(), "q", "Sure?")
+	_, err := f.Confirm(context.Background(), "q", i18n.Verbatim("Sure?"))
 	if !errors.Is(err, ErrCancelled) {
 		t.Errorf("Confirm(cancelled) error = %v, want ErrCancelled", err)
 	}
@@ -100,7 +102,7 @@ func TestFlow_CancelledAnswer_ReturnsErrCancelled(t *testing.T) {
 // action surfaces as an error rather than a value.
 func TestFlow_UnknownAction_ReturnsError(t *testing.T) {
 	f := newMRTRFlow(map[string]answerRecord{"q": {Action: "weird"}})
-	_, err := f.Confirm(context.Background(), "q", "Sure?")
+	_, err := f.Confirm(context.Background(), "q", i18n.Verbatim("Sure?"))
 	if err == nil || !strings.Contains(err.Error(), "unknown action") {
 		t.Errorf("Confirm(unknown action) error = %v, want 'unknown action'", err)
 	}
@@ -112,7 +114,7 @@ func TestFlow_SelectOne_RejectsUnknownOption(t *testing.T) {
 	f := newMRTRFlow(map[string]answerRecord{
 		"vis": {Action: "accept", Content: map[string]any{"selection": "hacked"}},
 	})
-	_, err := f.SelectOne(context.Background(), "vis", "Pick", []string{"private", "public"})
+	_, err := f.SelectOne(context.Background(), "vis", i18n.Verbatim("Pick"), []string{"private", "public"})
 	if err == nil || !strings.Contains(err.Error(), "not in the allowed options") {
 		t.Errorf("SelectOne(invalid option) error = %v, want allowed-options validation error", err)
 	}
@@ -136,28 +138,28 @@ func TestFlow_TypedPrompts_ReplayAnswers(t *testing.T) {
 	}{
 		{"SelectMulti replays selections", func(t *testing.T, f *Flow) {
 			t.Helper()
-			langs, err := f.SelectMulti(t.Context(), "langs", "Pick languages", []string{"go", "rust", "zig"}, 1, 0)
+			langs, err := f.SelectMulti(t.Context(), "langs", i18n.Verbatim("Pick languages"), []string{"go", "rust", "zig"}, 1, 0)
 			if err != nil || len(langs) != 2 {
 				t.Errorf("SelectMulti = (%v, %v), want 2 selections", langs, err)
 			}
 		}},
 		{"SelectOneInt replays selection", func(t *testing.T, f *Flow) {
 			t.Helper()
-			count, err := f.SelectOneInt(t.Context(), "count", "Pick count", []int{1, 2, 3})
+			count, err := f.SelectOneInt(t.Context(), "count", i18n.Verbatim("Pick count"), []int{1, 2, 3})
 			if err != nil || count != 3 {
 				t.Errorf("SelectOneInt = (%d, %v), want 3", count, err)
 			}
 		}},
 		{"PromptNumber replays value", func(t *testing.T, f *Flow) {
 			t.Helper()
-			rating, err := f.PromptNumber(t.Context(), "rating", "Rate", "rating", 0, 5)
+			rating, err := f.PromptNumber(t.Context(), "rating", i18n.Verbatim("Rate"), Field{Name: "rating"}, 0, 5)
 			if err != nil || rating != 4.5 {
 				t.Errorf("PromptNumber = (%g, %v), want 4.5", rating, err)
 			}
 		}},
 		{"GatherData replays content", func(t *testing.T, f *Flow) {
 			t.Helper()
-			form, err := f.GatherData(t.Context(), "form", "Fill", map[string]any{"type": "object"})
+			form, err := f.GatherData(t.Context(), "form", i18n.Verbatim("Fill"), map[string]any{"type": "object"})
 			if err != nil || form["a"] != "b" {
 				t.Errorf("GatherData = (%v, %v), want map with a=b", form, err)
 			}
@@ -185,18 +187,27 @@ func TestFlow_NotSupported_ReturnsSentinel(t *testing.T) {
 		name string
 		call func(*Flow) error
 	}{
-		{"Confirm", func(f *Flow) error { _, err := f.Confirm(ctx, "q", "Sure?"); return err }},
-		{"PromptText", func(f *Flow) error { _, err := f.PromptText(ctx, "q", "Title?", "title"); return err }},
-		{"SelectOne", func(f *Flow) error { _, err := f.SelectOne(ctx, "q", "Pick", []string{"a"}); return err }},
-		{"SelectMulti", func(f *Flow) error { _, err := f.SelectMulti(ctx, "q", "Pick", []string{"a"}, 1, 1); return err }},
-		{"SelectOneInt", func(f *Flow) error { _, err := f.SelectOneInt(ctx, "q", "Pick", []int{1}); return err }},
-		{"PromptNumber", func(f *Flow) error { _, err := f.PromptNumber(ctx, "q", "How many?", "n", 0, 10); return err }},
+		{"Confirm", func(f *Flow) error { _, err := f.Confirm(ctx, "q", i18n.Verbatim("Sure?")); return err }},
+		{"PromptText", func(f *Flow) error {
+			_, err := f.PromptText(ctx, "q", i18n.Verbatim("Title?"), Field{Name: "title"})
+			return err
+		}},
+		{"SelectOne", func(f *Flow) error { _, err := f.SelectOne(ctx, "q", i18n.Verbatim("Pick"), []string{"a"}); return err }},
+		{"SelectMulti", func(f *Flow) error {
+			_, err := f.SelectMulti(ctx, "q", i18n.Verbatim("Pick"), []string{"a"}, 1, 1)
+			return err
+		}},
+		{"SelectOneInt", func(f *Flow) error { _, err := f.SelectOneInt(ctx, "q", i18n.Verbatim("Pick"), []int{1}); return err }},
+		{"PromptNumber", func(f *Flow) error {
+			_, err := f.PromptNumber(ctx, "q", i18n.Verbatim("How many?"), Field{Name: "n"}, 0, 10)
+			return err
+		}},
 		{"GatherData", func(f *Flow) error {
-			_, err := f.GatherData(ctx, "q", "Data", map[string]any{"type": "object"})
+			_, err := f.GatherData(ctx, "q", i18n.Verbatim("Data"), map[string]any{"type": "object"})
 			return err
 		}},
 		{"ElicitURL", func(f *Flow) error {
-			return f.ElicitURL(ctx, "q", "https://gitlab.example.com", "https://gitlab.example.com/x", "Open")
+			return f.ElicitURL(ctx, "q", "https://gitlab.example.com", "https://gitlab.example.com/x", i18n.Verbatim("Open"))
 		}},
 	}
 
@@ -227,9 +238,9 @@ func TestFlow_EmptyOptions_Rejected(t *testing.T) {
 		name string
 		call func(*Flow) error
 	}{
-		{"SelectOne", func(f *Flow) error { _, err := f.SelectOne(ctx, "q", "Pick", nil); return err }},
-		{"SelectMulti", func(f *Flow) error { _, err := f.SelectMulti(ctx, "q", "Pick", nil, 1, 1); return err }},
-		{"SelectOneInt", func(f *Flow) error { _, err := f.SelectOneInt(ctx, "q", "Pick", nil); return err }},
+		{"SelectOne", func(f *Flow) error { _, err := f.SelectOne(ctx, "q", i18n.Verbatim("Pick"), nil); return err }},
+		{"SelectMulti", func(f *Flow) error { _, err := f.SelectMulti(ctx, "q", i18n.Verbatim("Pick"), nil, 1, 1); return err }},
+		{"SelectOneInt", func(f *Flow) error { _, err := f.SelectOneInt(ctx, "q", i18n.Verbatim("Pick"), nil); return err }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -247,13 +258,14 @@ func TestFlow_EmptyOptions_Rejected(t *testing.T) {
 
 // TestFlow_TypedPrompts_QueueWhenUnanswered verifies that every typed prompt
 // queues an input request and reports ErrInputPending on the first round, and
-// that the two prompts taking a field name fall back to "value" when the
-// caller passes none.
+// that the two prompts taking a field fall back to "value" for both the
+// property and its title when the caller names neither.
 //
 // The fallback is not cosmetic. The queued schema and the parser that reads
 // the answer back derive the property name separately, so a prompt that
 // queued "value" while its parser looked for "" would send the user a form,
-// receive a valid answer, and then fail to find it.
+// receive a valid answer, and then fail to find it. The title is the one a
+// client showed before a field had a title of its own, the property's key.
 func TestFlow_TypedPrompts_QueueWhenUnanswered(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
@@ -263,16 +275,25 @@ func TestFlow_TypedPrompts_QueueWhenUnanswered(t *testing.T) {
 		// or "" for prompts whose property name is not caller-supplied.
 		wantField string
 	}{
-		{"PromptText", func(f *Flow) error { _, err := f.PromptText(ctx, "q", "Title?", ""); return err }, "value"},
-		{"PromptNumber", func(f *Flow) error { _, err := f.PromptNumber(ctx, "q", "How many?", "", 0, 10); return err }, "value"},
-		{"SelectOne", func(f *Flow) error { _, err := f.SelectOne(ctx, "q", "Pick", []string{"a", "b"}); return err }, ""},
-		{"SelectMulti", func(f *Flow) error {
-			_, err := f.SelectMulti(ctx, "q", "Pick", []string{"a", "b"}, 1, 2)
+		{"PromptText", func(f *Flow) error { _, err := f.PromptText(ctx, "q", i18n.Verbatim("Title?"), Field{}); return err }, "value"},
+		{"PromptNumber", func(f *Flow) error {
+			_, err := f.PromptNumber(ctx, "q", i18n.Verbatim("How many?"), Field{}, 0, 10)
+			return err
+		}, "value"},
+		{"SelectOne", func(f *Flow) error {
+			_, err := f.SelectOne(ctx, "q", i18n.Verbatim("Pick"), []string{"a", "b"})
 			return err
 		}, ""},
-		{"SelectOneInt", func(f *Flow) error { _, err := f.SelectOneInt(ctx, "q", "Pick", []int{1, 2}); return err }, ""},
+		{"SelectMulti", func(f *Flow) error {
+			_, err := f.SelectMulti(ctx, "q", i18n.Verbatim("Pick"), []string{"a", "b"}, 1, 2)
+			return err
+		}, ""},
+		{"SelectOneInt", func(f *Flow) error {
+			_, err := f.SelectOneInt(ctx, "q", i18n.Verbatim("Pick"), []int{1, 2})
+			return err
+		}, ""},
 		{"GatherData", func(f *Flow) error {
-			_, err := f.GatherData(ctx, "q", "Data", map[string]any{"type": "object"})
+			_, err := f.GatherData(ctx, "q", i18n.Verbatim("Data"), map[string]any{"type": "object"})
 			return err
 		}, ""},
 	}
@@ -291,8 +312,12 @@ func TestFlow_TypedPrompts_QueueWhenUnanswered(t *testing.T) {
 			}
 			schema, _ := queued.RequestedSchema.(map[string]any)
 			props, _ := schema["properties"].(map[string]any)
-			if _, declared := props[tt.wantField]; !declared {
-				t.Errorf("%s queued schema properties = %v, want a %q property", tt.name, props, tt.wantField)
+			field, declared := props[tt.wantField].(map[string]any)
+			if !declared {
+				t.Fatalf("%s queued schema properties = %v, want a %q property", tt.name, props, tt.wantField)
+			}
+			if field["title"] != tt.wantField {
+				t.Errorf("%s queued the title %v, want %q, the property's own key", tt.name, field["title"], tt.wantField)
 			}
 		})
 	}
@@ -337,7 +362,7 @@ func TestFlow_ElicitURL_RefusesWhatItCannotSend(t *testing.T) {
 	t.Run("client without URL capability", func(t *testing.T) {
 		// newMRTRFlow's bare session advertises form elicitation but not URL.
 		f := newMRTRFlow(nil)
-		err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, "Open")
+		err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, i18n.Verbatim("Open"))
 		if !errors.Is(err, ErrURLElicitationNotSupported) {
 			t.Errorf("ElicitURL(form-only client) error = %v, want ErrURLElicitationNotSupported", err)
 		}
@@ -348,7 +373,7 @@ func TestFlow_ElicitURL_RefusesWhatItCannotSend(t *testing.T) {
 
 	t.Run("target outside the instance", func(t *testing.T) {
 		f := urlFlow(t, nil)
-		err := f.ElicitURL(context.Background(), "u", elicitURLBase, "https://elsewhere.example.net/x", "Open")
+		err := f.ElicitURL(context.Background(), "u", elicitURLBase, "https://elsewhere.example.net/x", i18n.Verbatim("Open"))
 		if err == nil || !strings.Contains(err.Error(), "does not match GitLab instance") {
 			t.Errorf("ElicitURL(foreign host) error = %v, want a host-mismatch error", err)
 		}
@@ -369,7 +394,7 @@ func TestFlow_ElicitURL_RefusesWhatItCannotSend(t *testing.T) {
 func TestFlow_ElicitURL_QueuesThenReplays(t *testing.T) {
 	t.Run("unanswered queues a url-mode request", func(t *testing.T) {
 		f := urlFlow(t, nil)
-		err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, "Open the issue")
+		err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, i18n.Verbatim("Open the issue"))
 		if !errors.Is(err, ErrInputPending) {
 			t.Fatalf("ElicitURL(unanswered) error = %v, want ErrInputPending", err)
 		}
@@ -392,7 +417,7 @@ func TestFlow_ElicitURL_QueuesThenReplays(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		f := urlFlow(t, nil)
-		if err := f.ElicitURL(ctx, "u", elicitURLBase, elicitURLTarget, "Open"); !errors.Is(err, context.Canceled) {
+		if err := f.ElicitURL(ctx, "u", elicitURLBase, elicitURLTarget, i18n.Verbatim("Open")); !errors.Is(err, context.Canceled) {
 			t.Errorf("ElicitURL(canceled ctx) error = %v, want context.Canceled", err)
 		}
 		if len(f.pending) != 0 {
@@ -412,7 +437,7 @@ func TestFlow_ElicitURL_QueuesThenReplays(t *testing.T) {
 	for _, tt := range replays {
 		t.Run(tt.name, func(t *testing.T) {
 			f := urlFlow(t, map[string]answerRecord{"u": {Action: tt.action}})
-			err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, "Open")
+			err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, i18n.Verbatim("Open"))
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("ElicitURL(%s) error = %v, want %v", tt.action, err, tt.wantErr)
 			}
@@ -429,7 +454,7 @@ func TestFlow_ContextCancelled_StopsBeforeQueueing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	f := newMRTRFlow(nil)
-	if _, err := f.Confirm(ctx, "q", "Sure?"); !errors.Is(err, context.Canceled) {
+	if _, err := f.Confirm(ctx, "q", i18n.Verbatim("Sure?")); !errors.Is(err, context.Canceled) {
 		t.Errorf("Confirm(canceled ctx) error = %v, want context.Canceled", err)
 	}
 }
@@ -439,7 +464,7 @@ func TestFlow_ContextCancelled_StopsBeforeQueueing(t *testing.T) {
 // can recover it with errors.AsType.
 func TestFlow_PendingError_CarriesResult(t *testing.T) {
 	f := newMRTRFlow(nil)
-	_, _ = f.PromptText(context.Background(), "title", "Enter title", "title")
+	_, _ = f.PromptText(context.Background(), "title", i18n.Verbatim("Enter title"), Field{Name: "title"})
 	err := f.PendingError()
 	inputErr, ok := errors.AsType[*InputRequiredError](err)
 	if !ok {
@@ -533,7 +558,7 @@ func resultText(result *mcp.CallToolResult) string {
 
 // confirmFlowHandler is a tool handler that requires one confirmation.
 func confirmFlowHandler(ctx context.Context, _ *mcp.CallToolRequest, fl *Flow) (*mcp.CallToolResult, error) {
-	confirmed, err := fl.Confirm(ctx, "confirm", "Proceed?")
+	confirmed, err := fl.Confirm(ctx, "confirm", i18n.Verbatim("Proceed?"))
 	switch {
 	case errors.Is(err, ErrInputPending):
 		return fl.InputRequiredResult(), nil
@@ -605,19 +630,19 @@ func TestFlow_MRTR_MultiStepAccumulatesState(t *testing.T) {
 		if !fl.UsesMultiRoundTrip() {
 			return textResult("expected multi round-trip session"), nil
 		}
-		first, err := fl.PromptText(ctx, "first", "Enter first", "first")
+		first, err := fl.PromptText(ctx, "first", i18n.Verbatim("Enter first"), Field{Name: "first"})
 		if errors.Is(err, ErrInputPending) {
 			return fl.InputRequiredResult(), nil
 		} else if err != nil {
 			return nil, err
 		}
-		second, err := fl.PromptText(ctx, "second", "Enter second", "second")
+		second, err := fl.PromptText(ctx, "second", i18n.Verbatim("Enter second"), Field{Name: "second"})
 		if errors.Is(err, ErrInputPending) {
 			return fl.InputRequiredResult(), nil
 		} else if err != nil {
 			return nil, err
 		}
-		confirmed, err := fl.Confirm(ctx, "confirm", "Proceed?")
+		confirmed, err := fl.Confirm(ctx, "confirm", i18n.Verbatim("Proceed?"))
 		if errors.Is(err, ErrInputPending) {
 			return fl.InputRequiredResult(), nil
 		} else if err != nil {
@@ -797,7 +822,7 @@ func TestFlowFromRequest_LegacySession_UsesSynchronousPath(t *testing.T) {
 	if fl.UsesMultiRoundTrip() {
 		t.Fatal("UsesMultiRoundTrip() = true on a legacy session, want false")
 	}
-	confirmed, err := fl.Confirm(ctx, "confirm", "Proceed?")
+	confirmed, err := fl.Confirm(ctx, "confirm", i18n.Verbatim("Proceed?"))
 	if err != nil {
 		t.Fatalf("Confirm(legacy) error = %v", err)
 	}
@@ -845,7 +870,7 @@ func TestFlow_MRTR_TwoRounds_CarriesTheAnswerForward(t *testing.T) {
 	var rounds int
 	handler := func(ctx context.Context, _ *mcp.CallToolRequest, f *Flow) (*mcp.CallToolResult, error) {
 		rounds++
-		title, err := f.PromptText(ctx, "title", "Enter title", "title")
+		title, err := f.PromptText(ctx, "title", i18n.Verbatim("Enter title"), Field{Name: "title"})
 		if err != nil {
 			if errors.Is(err, ErrInputPending) {
 				return f.InputRequiredResult(), nil
@@ -927,7 +952,7 @@ func TestGatherData_ValidatesTheAnswerAgainstItsSchema(t *testing.T) {
 				"data": {Action: "accept", Content: tt.content},
 			})
 
-			got, err := f.GatherData(context.Background(), "data", "Fill this in", schema)
+			got, err := f.GatherData(context.Background(), "data", i18n.Verbatim("Fill this in"), schema)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("an answer that does not satisfy the schema was accepted: %v", got)
@@ -962,7 +987,7 @@ func TestTypedPrompts_KeepTheirOwnValidation(t *testing.T) {
 		f := newMRTRFlow(map[string]answerRecord{
 			"days": {Action: "accept", Content: map[string]any{"selection": 30.0}},
 		})
-		got, err := f.SelectOneInt(context.Background(), "days", "How many days?", []int{7, 30, 90})
+		got, err := f.SelectOneInt(context.Background(), "days", i18n.Verbatim("How many days?"), []int{7, 30, 90})
 		if err != nil {
 			t.Fatalf("a number answer to a string-typed enum was refused: %v", err)
 		}
@@ -975,7 +1000,7 @@ func TestTypedPrompts_KeepTheirOwnValidation(t *testing.T) {
 		f := newMRTRFlow(map[string]answerRecord{
 			"vis": {Action: "accept", Content: map[string]any{"selection": "hacked"}},
 		})
-		_, err := f.SelectOne(context.Background(), "vis", "Visibility?", []string{"private", "public"})
+		_, err := f.SelectOne(context.Background(), "vis", i18n.Verbatim("Visibility?"), []string{"private", "public"})
 		if err == nil {
 			t.Fatal("an option outside the list was accepted")
 		}
@@ -995,7 +1020,7 @@ func TestTypedPrompts_KeepTheirOwnValidation(t *testing.T) {
 // default on purpose: suggesting an answer to an open question is not a
 // convenience.
 func TestConfirmSchema_DefaultsToDeclining(t *testing.T) {
-	props, ok := confirmSchema("Delete it?")["properties"].(map[string]any)
+	props, ok := confirmSchema(context.Background(), "Delete it?")["properties"].(map[string]any)
 	if !ok {
 		t.Fatal("confirmSchema has no properties")
 	}
@@ -1015,9 +1040,9 @@ func TestConfirmSchema_DefaultsToDeclining(t *testing.T) {
 		name   string
 		schema map[string]any
 	}{
-		{name: "text", schema: textSchema("m", "f")},
-		{name: "select_one", schema: selectOneSchema("m", []string{"a"})},
-		{name: "number", schema: numberSchema("m", "f", 0, 10)},
+		{name: "text", schema: textSchema("m", "f", "f")},
+		{name: "select_one", schema: selectOneSchema(context.Background(), "m", []string{"a"})},
+		{name: "number", schema: numberSchema("m", "f", "f", 0, 10)},
 	}
 	for _, tc := range others {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1133,7 +1158,7 @@ func TestFlow_MRTR_ClientWithoutFormMode_IsNotAsked(t *testing.T) {
 			if !fl.UsesMultiRoundTrip() {
 				return textResult("not the multi round-trip path"), nil, nil
 			}
-			_, confirmErr := fl.Confirm(ctx, "confirm", "Proceed?")
+			_, confirmErr := fl.Confirm(ctx, "confirm", i18n.Verbatim("Proceed?"))
 			if !errors.Is(confirmErr, ErrFormElicitationNotSupported) {
 				answered := "no error at all"
 				if confirmErr != nil {
@@ -1201,7 +1226,7 @@ func TestFlowFromRequest_RequestWithoutASession_IsInactive(t *testing.T) {
 	if f.UsesMultiRoundTrip() {
 		t.Error("UsesMultiRoundTrip() = true for a request with no session")
 	}
-	if _, confirmErr := f.Confirm(context.Background(), "q", "Sure?"); !errors.Is(confirmErr, ErrElicitationNotSupported) {
+	if _, confirmErr := f.Confirm(context.Background(), "q", i18n.Verbatim("Sure?")); !errors.Is(confirmErr, ErrElicitationNotSupported) {
 		t.Errorf("Confirm() error = %v, want ErrElicitationNotSupported", confirmErr)
 	}
 }
@@ -1218,10 +1243,10 @@ func TestFlow_QueuesEveryUnansweredExchangeOfOneRound(t *testing.T) {
 	ctx := context.Background()
 	f := newMRTRFlow(nil)
 
-	if _, err := f.PromptText(ctx, "title", "Enter a title", "title"); !errors.Is(err, ErrInputPending) {
+	if _, err := f.PromptText(ctx, "title", i18n.Verbatim("Enter a title"), Field{Name: "title"}); !errors.Is(err, ErrInputPending) {
 		t.Fatalf("PromptText() error = %v, want ErrInputPending", err)
 	}
-	if _, err := f.Confirm(ctx, "confirm", "Proceed?"); !errors.Is(err, ErrInputPending) {
+	if _, err := f.Confirm(ctx, "confirm", i18n.Verbatim("Proceed?")); !errors.Is(err, ErrInputPending) {
 		t.Fatalf("Confirm() error = %v, want ErrInputPending", err)
 	}
 
@@ -1257,10 +1282,10 @@ func TestFlow_ElicitURL_JoinsAFormExchangeAlreadyQueued(t *testing.T) {
 	ctx := context.Background()
 	f := urlFlow(t, nil)
 
-	if _, err := f.PromptText(ctx, "title", "Enter a title", "title"); !errors.Is(err, ErrInputPending) {
+	if _, err := f.PromptText(ctx, "title", i18n.Verbatim("Enter a title"), Field{Name: "title"}); !errors.Is(err, ErrInputPending) {
 		t.Fatalf("PromptText() error = %v, want ErrInputPending", err)
 	}
-	if err := f.ElicitURL(ctx, "page", elicitURLBase, elicitURLTarget, "Open the issue"); !errors.Is(err, ErrInputPending) {
+	if err := f.ElicitURL(ctx, "page", elicitURLBase, elicitURLTarget, i18n.Verbatim("Open the issue")); !errors.Is(err, ErrInputPending) {
 		t.Fatalf("ElicitURL() error = %v, want ErrInputPending", err)
 	}
 
@@ -1302,7 +1327,7 @@ func TestFlow_Confirm_AnswerWithoutTheBoolean_IsNotADecision(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newMRTRFlow(map[string]answerRecord{"q": {Action: "accept", Content: tt.content}})
 
-			confirmed, err := f.Confirm(context.Background(), "q", "Sure?")
+			confirmed, err := f.Confirm(context.Background(), "q", i18n.Verbatim("Sure?"))
 
 			if !errors.Is(err, ErrMalformedAnswer) {
 				t.Errorf("Confirm() error = %v, want ErrMalformedAnswer", err)
@@ -1327,7 +1352,7 @@ func TestFlow_InputRequiredResult_AnswerItCannotEncode_IsAnErrorResult(t *testin
 	f := newMRTRFlow(map[string]answerRecord{
 		"answered": {Action: "accept", Content: map[string]any{"handle": make(chan int)}},
 	})
-	if _, err := f.PromptText(context.Background(), "title", "Enter a title", "title"); !errors.Is(err, ErrInputPending) {
+	if _, err := f.PromptText(context.Background(), "title", i18n.Verbatim("Enter a title"), Field{Name: "title"}); !errors.Is(err, ErrInputPending) {
 		t.Fatalf("PromptText() error = %v, want ErrInputPending", err)
 	}
 

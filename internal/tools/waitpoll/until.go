@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 )
 
@@ -48,8 +49,9 @@ type UntilOptions[T any] struct {
 	Interval time.Duration
 	// Bound is how long the whole wait may take.
 	Bound time.Duration
-	// Message is the progress text sent before each read.
-	Message string
+	// Message is the progress text sent before each read, rendered from the
+	// catalog in the request's language, since a person reads it.
+	Message i18n.Text
 	// Read fetches the object's current state.
 	Read func(context.Context) (T, error)
 	// Landed reports whether a state Read returned is the one waited for.

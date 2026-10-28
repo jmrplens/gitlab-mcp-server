@@ -5,8 +5,7 @@ package i18n
 
 import "context"
 
-// Text is a rendered catalog text, the type a person-facing sink takes once
-// issue 1547 converts it.
+// Text is a rendered catalog text, the type every person-facing sink takes.
 //
 // Only this package makes one that is not empty, so a text a person reads
 // cannot be written inline where a converted sink sends it: the call site has

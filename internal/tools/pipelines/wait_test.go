@@ -8,16 +8,46 @@ package pipelines
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 const pathWaitPipeline = "/api/v4/projects/42/pipelines/10"
+
+// TestWait_ProgressMessage_NamesThePipelineAndTheAttempt pins the text a
+// person waiting on the pipeline reads before each poll, in English, as it
+// read before the text moved into the message catalog: the pipeline by its ID
+// and the attempt counted from one, each in its own place, so a call site that
+// bound one value to the other's placeholder would read differently. Every
+// other test of Wait passes a nil request, so its tracker is inactive and
+// nothing it would tell a person is ever sent; the pipeline here has already
+// succeeded, so one poll, and one message, ends the wait.
+func TestWait_ProgressMessage_NamesThePipelineAndTheAttempt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathWaitPipeline {
+			testutil.RespondJSON(w, http.StatusOK, pipelineJSON("success"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	got := testutil.ProgressMessages(t, nil, func(ctx context.Context, req *mcp.CallToolRequest) {
+		if _, err := Wait(ctx, req, client, WaitInput{ProjectID: "42", PipelineID: 10, IntervalSeconds: 5, TimeoutSeconds: 30}); err != nil {
+			t.Errorf("Wait() error = %v", err)
+		}
+	})
+	if want := []string{"Polling pipeline #10 (attempt 1, status check)..."}; !slices.Equal(got, want) {
+		t.Errorf("the progress messages = %q, want %q", got, want)
+	}
+}
 
 func useFastPipelinePollDuration(t *testing.T) {
 	t.Helper()

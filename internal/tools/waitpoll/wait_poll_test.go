@@ -13,6 +13,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -49,7 +50,7 @@ func pollOptions(statuses ...string) (Options[pollItem], *int) {
 		IntervalSeconds: baseIntervalSeconds,
 		TimeoutSeconds:  baseTimeoutSeconds,
 		PollDuration:    fastDuration,
-		ProgressMessage: func(attempt int) string { return "attempt" },
+		ProgressMessage: func(attempt int) i18n.Text { return i18n.Verbatim("attempt") },
 		Poll: func(context.Context) (pollItem, error) {
 			status := statuses[min(attempts, len(statuses)-1)]
 			attempts++
@@ -150,6 +151,21 @@ func TestPoll_TerminalFailureWithoutCallbackReturnsDefaultError(t *testing.T) {
 	}
 	if result.FinalStatus != "failed" {
 		t.Fatalf("FinalStatus = %q, want failed", result.FinalStatus)
+	}
+}
+
+// TestPollProgressMessage_WithoutOne_SendsNoText pins the default a wait that
+// names no progress message gets: the empty text, which a notification sends
+// as no message at all, rather than a text of its own a person would read
+// without a catalog entry behind it. A message the caller does give is the one
+// used.
+func TestPollProgressMessage_WithoutOne_SendsNoText(t *testing.T) {
+	if got := pollProgressMessage(nil)(3).String(); got != "" {
+		t.Errorf("the default progress message = %q, want none", got)
+	}
+	given := func(int) i18n.Text { return i18n.Verbatim("polling") }
+	if got := pollProgressMessage(given)(3).String(); got != "polling" {
+		t.Errorf("the progress message = %q, want the caller's %q", got, "polling")
 	}
 }
 
@@ -599,7 +615,7 @@ func TestPoll_ProgressNotificationsNumberAndNameEachAttempt(t *testing.T) {
 				}
 				return time.Millisecond
 			}
-			opts.ProgressMessage = func(attempt int) string { return fmt.Sprintf("attempt %d", attempt) }
+			opts.ProgressMessage = func(attempt int) i18n.Text { return i18n.Verbatim(fmt.Sprintf("attempt %d", attempt)) }
 
 			result, err := Poll(callCtx, opts)
 			if err != nil {

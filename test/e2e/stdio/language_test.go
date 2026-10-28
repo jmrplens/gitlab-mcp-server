@@ -5,13 +5,15 @@
 
 // language_test.go drives a stdio server through the language setting
 // (issue 1547): what a deployment that sets nothing, or sets English, is
-// served, what a machine's own locale does to it, and the refusal of a
-// language the server has no catalog for, through the variable and through
-// the flag that writes it.
+// served, the listing and the questions a guided flow asks a person alike,
+// what a machine's own locale does to it, and the refusal of a language the
+// server has no catalog for, through the variable and through the flag that
+// writes it.
 package stdioe2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -171,6 +173,115 @@ func TestLanguage_ALanguageWithoutACatalog_RefusesToStart(t *testing.T) {
 			if b, err := s.stdout.ReadByte(); err == nil {
 				t.Errorf("the refused run wrote %q on stdout, which only JSON-RPC may use", b)
 			}
+		})
+	}
+}
+
+// issueQuestionCall is a 2026-07-28 call of the guided issue creation from a
+// client that declares form elicitation in the request's own _meta, where
+// that revision carries capabilities, and asks for progress.
+func issueQuestionCall(id int) string {
+	return fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"gitlab_execute_action",`+
+		`"arguments":{"action":"interactive.issue_create","params":{"project_id":"42"}},`+
+		`"_meta":{"progressToken":"language-progress","io.modelcontextprotocol/protocolVersion":%q,`+
+		`"io.modelcontextprotocol/clientCapabilities":{"elicitation":{"form":{}}},`+
+		`"io.modelcontextprotocol/clientInfo":{"name":"stdio-e2e","version":"1"}}}}`, id, protocolVersion)
+}
+
+// askedQuestion is the first question of a guided flow as it crossed the
+// pipe: the message a person reads, and the key, title and description of the
+// one field its form asks for.
+type askedQuestion struct {
+	message     string
+	property    string
+	title       string
+	description string
+}
+
+// readFirstQuestion reads the first form of the input_required result answer
+// carries under id, failing on any other shape of answer.
+func readFirstQuestion(t *testing.T, answer map[string]any, id string) askedQuestion {
+	t.Helper()
+	result, _ := answer["result"].(map[string]any)
+	if result["resultType"] != "input_required" {
+		t.Fatalf("the guided flow answered %v, want resultType input_required with its first question", answer)
+	}
+	inputs, _ := result["inputRequests"].(map[string]any)
+	request, _ := inputs[id].(map[string]any)
+	if request["method"] != "elicitation/create" {
+		t.Fatalf("inputRequests[%q] = %v, want an elicitation/create request", id, inputs[id])
+	}
+	params, _ := request["params"].(map[string]any)
+	schema, _ := params["requestedSchema"].(map[string]any)
+	properties, _ := schema["properties"].(map[string]any)
+	if len(properties) != 1 {
+		t.Fatalf("the form asks for %v, want one field", properties)
+	}
+	asked := askedQuestion{}
+	asked.message, _ = params["message"].(string)
+	for key, raw := range properties {
+		field, _ := raw.(map[string]any)
+		asked.property = key
+		asked.title, _ = field["title"].(string)
+		asked.description, _ = field["description"].(string)
+	}
+	return asked
+}
+
+// progressMessages returns the messages of the progress notifications a
+// session read past while waiting for answers, in order.
+func progressMessages(s *session) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var messages []string
+	for _, note := range s.notifications {
+		if note["method"] != "notifications/progress" {
+			continue
+		}
+		params, _ := note["params"].(map[string]any)
+		if message, ok := params["message"].(string); ok {
+			messages = append(messages, message)
+		}
+	}
+	return messages
+}
+
+// TestLanguage_UnsetOrEnglish_AsksTheQuestionsAskedBefore pins what moving the
+// person-facing texts into the message catalog leaves a deployment that sets
+// no language, or sets English: the guided issue creation's first question
+// reaches the client through the real binary as it did before the catalog
+// existed, its message, its field's key and the field's title, which is that
+// key, and the progress message sent ahead of it is the one sent before.
+func TestLanguage_UnsetOrEnglish_AsksTheQuestionsAskedBefore(t *testing.T) {
+	gitlabURL := startFakeGitLab(t).URL
+	want := askedQuestion{
+		message:     "Enter the issue title",
+		property:    "title",
+		title:       "title",
+		description: "Enter the issue title",
+	}
+	for _, tc := range []struct {
+		name  string
+		value string
+		args  []string
+	}{
+		{name: "unset"},
+		{name: "en", value: "en"},
+		{name: "the flag", args: []string{"--language=en"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := baseEnv(gitlabURL)
+			if tc.value != "" {
+				env["GITLAB_MCP_LANGUAGE"] = tc.value
+			}
+			s := startSessionWithArgs(t, env, tc.args...)
+			if got := readFirstQuestion(t, s.call(t, issueQuestionCall(1)), "title"); got != want {
+				t.Errorf("the first question =\n%+v\nwant\n%+v", got, want)
+			}
+			if got := progressMessages(s); len(got) == 0 || got[0] != "Collecting issue details..." {
+				t.Errorf("the progress messages sent ahead of it = %q, want them to open with %q", got, "Collecting issue details...")
+			}
+			s.terminate(t, 10*time.Second)
 		})
 	}
 }

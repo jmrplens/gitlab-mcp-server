@@ -12,7 +12,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,6 +25,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -124,7 +127,7 @@ func TestUnsupportedResult(t *testing.T) {
 // elicitation, maintaining backward compatibility.
 func TestConfirmAction_NoElicitationSupport(t *testing.T) {
 	req := &mcp.CallToolRequest{}
-	r := ConfirmAction(context.Background(), req, "Delete?")
+	r := ConfirmAction(context.Background(), req, i18n.Verbatim("Delete?"))
 	if r != nil {
 		t.Error("ConfirmAction should return nil when elicitation not supported")
 	}
@@ -144,7 +147,7 @@ func TestConfirmAction_UserConfirms(t *testing.T) {
 	defer cleanup()
 
 	toolReq := &mcp.CallToolRequest{Session: ss}
-	r := ConfirmAction(ctx, toolReq, msgDeleteProject)
+	r := ConfirmAction(ctx, toolReq, i18n.Verbatim(msgDeleteProject))
 	if r != nil {
 		t.Error("ConfirmAction should return nil when user confirms")
 	}
@@ -161,7 +164,7 @@ func TestConfirmAction_UserDeclines(t *testing.T) {
 	defer cleanup()
 
 	toolReq := &mcp.CallToolRequest{Session: ss}
-	r := ConfirmAction(ctx, toolReq, msgDeleteProject)
+	r := ConfirmAction(ctx, toolReq, i18n.Verbatim(msgDeleteProject))
 	if r == nil {
 		t.Fatal("ConfirmAction should return cancellation result when user declines")
 	}
@@ -185,7 +188,7 @@ func TestConfirmAction_UserCancels(t *testing.T) {
 	defer cleanup()
 
 	toolReq := &mcp.CallToolRequest{Session: ss}
-	r := ConfirmAction(ctx, toolReq, msgDeleteProject)
+	r := ConfirmAction(ctx, toolReq, i18n.Verbatim(msgDeleteProject))
 	if r == nil {
 		t.Fatal("ConfirmAction should return cancellation result when user cancels")
 	}
@@ -205,7 +208,7 @@ func TestConfirmAction_UserNotConfirmed(t *testing.T) {
 	defer cleanup()
 
 	toolReq := &mcp.CallToolRequest{Session: ss}
-	r := ConfirmAction(ctx, toolReq, msgDeleteProject)
+	r := ConfirmAction(ctx, toolReq, i18n.Verbatim(msgDeleteProject))
 	if r == nil {
 		t.Fatal("ConfirmAction should return cancellation when confirmed=false")
 	}
@@ -614,7 +617,7 @@ func TestBuildMRSummary_Full(t *testing.T) {
 		Labels:       []string{"bug", "feature"},
 		RemoveSource: &removeSource,
 		Squash:       &squash,
-	})
+	}).English()
 	// The caller-controlled values are backtick-quoted in the dialog, so each
 	// is looked for as it is rendered: a consent prompt has to show what the
 	// action will do, and the quoting is what stops those values from passing
@@ -649,7 +652,7 @@ func TestBuildMRSummary_Minimal(t *testing.T) {
 		Title:        "fix: bug",
 		SourceBranch: "fix/bug",
 		TargetBranch: "main",
-	})
+	}).English()
 	if strings.Contains(s, "Labels") {
 		t.Error("minimal summary should not contain Labels")
 	}
@@ -677,7 +680,7 @@ func TestBuildMRSummary_RemoveSourceFalse(t *testing.T) {
 		TargetBranch: "b",
 		RemoveSource: &removeSource,
 		Squash:       &squash,
-	})
+	}).English()
 	if strings.Contains(s, "Remove source branch") {
 		t.Error("remove source = false should not appear")
 	}
@@ -1160,7 +1163,7 @@ func TestConfirmAction_OtherError(t *testing.T) {
 	})
 	defer cleanup()
 
-	r := ConfirmAction(ctx, &mcp.CallToolRequest{Session: ss}, "Proceed?")
+	r := ConfirmAction(ctx, &mcp.CallToolRequest{Session: ss}, i18n.Verbatim("Proceed?"))
 	if r == nil {
 		t.Fatal("ConfirmAction should fail closed on generic confirmation errors")
 	}
@@ -2006,7 +2009,7 @@ func TestBuildMRSummary_DefangsInjectedMarkupAndLinks(t *testing.T) {
 		Title:        "Audit <b>title</b> https://evil2.example/x",
 		SourceBranch: "feature/x",
 		TargetBranch: "main",
-	})
+	}).English()
 
 	if strings.Contains(s, "https://evil.example") || strings.Contains(s, "https://evil2.example") {
 		t.Errorf("a live URL survived into the consent dialog:\n%s", s)
@@ -2061,7 +2064,7 @@ func TestBuildMRSummary_LongDescriptionKeepsItsFenceClosed(t *testing.T) {
 				// Printed after the description, so an unclosed fence shows up
 				// here rather than staying invisible.
 				Labels: []string{"bug", "urgent"},
-			})
+			}).English()
 
 			if strings.Count(s, "`")%2 != 0 {
 				t.Errorf("odd number of backticks, so a fence is left open:\n%s", s)
@@ -2145,6 +2148,360 @@ func assertSummarySections(t *testing.T, summary string, want, notWant []string)
 		if strings.Contains(summary, section) {
 			t.Errorf("the summary shows %q for a value the user never gave:\n%s", section, summary)
 		}
+	}
+}
+
+// askedForm is one question a wizard asked: the message a person read, and
+// the property, title and description of the one field its form held.
+type askedForm struct {
+	message     string
+	property    string
+	title       string
+	description string
+}
+
+// formCapture records every form a wizard sends, in order, guarded because
+// the elicitation handler runs on the client session's goroutine.
+type formCapture struct {
+	mu    sync.Mutex
+	forms []askedForm
+}
+
+// handler wraps stepHandler, replaying the scripted answers unchanged while
+// recording each form.
+func (c *formCapture) handler(steps []elicitationStep) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	replay := stepHandler(steps)
+	return func(ctx context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		form := askedForm{message: req.Params.Message}
+		schema, _ := req.Params.RequestedSchema.(map[string]any)
+		properties, _ := schema["properties"].(map[string]any)
+		for name, raw := range properties {
+			field, _ := raw.(map[string]any)
+			form.property = name
+			form.title, _ = field["title"].(string)
+			form.description, _ = field["description"].(string)
+		}
+		c.mu.Lock()
+		c.forms = append(c.forms, form)
+		c.mu.Unlock()
+		return replay(ctx, req)
+	}
+}
+
+// asked returns the forms recorded so far.
+func (c *formCapture) asked() []askedForm {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.forms)
+}
+
+// textForm and confirmForm are the forms a wizard asked a question with
+// before its texts moved into the catalog: a text field titled with its own
+// key, and the boolean every yes or no question and every summary carries,
+// titled Confirm. Each repeats the message as the field's description.
+func textForm(message, property string) askedForm {
+	return askedForm{message: message, property: property, title: property, description: message}
+}
+
+// confirmForm is the yes or no form [textForm] describes.
+func confirmForm(message string) askedForm {
+	return askedForm{message: message, property: keyConfirmed, title: "Confirm", description: message}
+}
+
+// TestWizards_AskWhatTheyAskedBeforeTheCatalog is the proof that moving the
+// wizards' texts into the catalog left every question a person reads in
+// English byte for byte as it was: each wizard, every optional field
+// answered so every row of its summary is shown, asks the same forms in the
+// same order as at commit 8f339f4e8. The summaries are rebuilt here the way
+// that commit built them, with fmt and the same escaper, rather than written
+// out, so the comparison is with the construction that served them; the
+// description row, whose template was one %s at the end, is the concatenation
+// that template rendered to.
+//
+// Each flow ends by declining the summary, which is answered without a call
+// to GitLab.
+func TestWizards_AskWhatTheyAskedBeforeTheCatalog(t *testing.T) {
+	esc := toolutil.EscapeConsentValue
+	tests := []struct {
+		name  string
+		run   func(context.Context, *mcp.CallToolRequest) error
+		steps []elicitationStep
+		want  []askedForm
+	}{
+		{
+			name: "issue",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := IssueCreate(ctx, req, nil, IssueInput{ProjectID: "42"})
+				return err
+			},
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"title": "Fix login"}},
+				{action: actionAccept, content: map[string]any{"description": "Steps"}},
+				{action: actionAccept, content: map[string]any{"labels": "bug, ui"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			want: []askedForm{
+				textForm("Enter the issue title", "title"),
+				textForm("Enter the issue description (Markdown supported, or leave empty)", "description"),
+				textForm("Enter comma-separated labels (or leave empty)", "labels"),
+				confirmForm("Should this issue be confidential?"),
+				confirmForm(fmt.Sprintf("Create issue in project %s?\n\n**Title**: %s", esc("42"), esc("Fix login")) +
+					"\n**Description**: " + esc("Steps") +
+					"\n**Labels**: " + esc("bug, ui") +
+					"\n**Confidential**: Yes"),
+			},
+		},
+		{
+			name: "merge request",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := MRCreate(ctx, req, nil, MRInput{ProjectID: "42"})
+				return err
+			},
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"source_branch": "feature/x"}},
+				{action: actionAccept, content: map[string]any{"target_branch": "main"}},
+				{action: actionAccept, content: map[string]any{"title": "Add it"}},
+				{action: actionAccept, content: map[string]any{"description": "Body"}},
+				{action: actionAccept, content: map[string]any{"labels": "bug"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			want: []askedForm{
+				textForm("Enter the source branch name", "source_branch"),
+				textForm("Enter the target branch name (e.g. main, develop)", "target_branch"),
+				textForm("Enter the merge request title", "title"),
+				textForm("Enter the MR description (Markdown supported, or leave empty)", "description"),
+				textForm("Enter comma-separated labels (or leave empty)", "labels"),
+				confirmForm("Remove source branch after merge?"),
+				confirmForm("Squash commits on merge?"),
+				confirmForm(fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s -> **Target**: %s",
+					esc("42"), esc("Add it"), esc("feature/x"), esc("main")) +
+					"\n**Description**: " + esc("Body") +
+					"\n**Labels**: " + esc("bug") +
+					"\n**Remove source branch**: Yes" +
+					"\n**Squash commits**: Yes"),
+			},
+		},
+		{
+			name: "release",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := ReleaseCreate(ctx, req, nil, ReleaseInput{ProjectID: "42"})
+				return err
+			},
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"tag_name": "v1.0.0"}},
+				{action: actionAccept, content: map[string]any{"name": "One"}},
+				{action: actionAccept, content: map[string]any{"description": "Notes"}},
+			},
+			want: []askedForm{
+				textForm("Enter the tag name for the release (must already exist)", "tag_name"),
+				textForm("Enter the release name/title", "name"),
+				textForm("Enter the release description/notes (Markdown supported, or leave empty)", "description"),
+				confirmForm(fmt.Sprintf("Create release in project %s?\n\n**Tag**: %s\n**Name**: %s", esc("42"), esc("v1.0.0"), esc("One")) +
+					"\n**Description**: " + esc("Notes")),
+			},
+		},
+		{
+			name: "project",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := ProjectCreate(ctx, req, nil, ProjectInput{})
+				return err
+			},
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": "app"}},
+				{action: actionAccept, content: map[string]any{"description": "Desc"}},
+				{action: actionAccept, content: map[string]any{"selection": "internal"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+				{action: actionAccept, content: map[string]any{"default_branch": "trunk"}},
+			},
+			want: []askedForm{
+				textForm("Enter the project name", "name"),
+				textForm("Enter the project description (or leave empty)", "description"),
+				{message: "Select the project visibility", property: "selection", title: "Selection", description: "Select the project visibility"},
+				confirmForm("Initialize the repository with a README file?"),
+				textForm("Enter the default branch name (or leave empty for the instance's default branch)", "default_branch"),
+				confirmForm(fmt.Sprintf("Create new GitLab project?\n\n**Name**: %s\n**Visibility**: %s", esc("app"), esc("internal")) +
+					"\n**Description**: " + esc("Desc") +
+					"\n**README**: Yes" +
+					"\n**Default Branch**: " + esc("trunk")),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			capture := &formCapture{}
+			ctx := context.Background()
+			_, ss, cleanup := setupElicitationSession(t, ctx, capture.handler(tt.steps))
+			defer cleanup()
+
+			if err := tt.run(ctx, &mcp.CallToolRequest{Session: ss}); !errors.Is(err, elicitation.ErrDeclined) {
+				t.Errorf("the wizard returned %v, want the declined summary", err)
+			}
+			got := capture.asked()
+			if len(got) != len(tt.want) {
+				t.Fatalf("the wizard asked %d forms, want %d:\n%+v", len(got), len(tt.want), got)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("form %d =\n%+v\nwant\n%+v", i+1, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestWizards_ReportTheProgressTheyReportedBeforeTheCatalog is the
+// counterpart of [TestWizards_AskWhatTheyAskedBeforeTheCatalog] for the
+// progress messages a person reads while a wizard runs: each wizard, run to
+// the end against a GitLab that creates what it is asked for, sends every
+// step and its closing message in the same order and in English byte for
+// byte as at commit 8f339f4e8, which wrote each one as a literal at its call.
+// The catalog test holds each key to its text, and this holds each call to
+// its key, so two wizards that traded keys would fail here.
+//
+// The declined issue shows the other end of a flow: a summary declined
+// reports no creation, since nothing was created.
+func TestWizards_ReportTheProgressTheyReportedBeforeTheCatalog(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/issues", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":100,"iid":1,"title":"Test Issue","state":"opened","web_url":"https://gitlab.example.com/issues/1"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":200,"iid":5,"title":"feat: new feature","state":"opened","source_branch":"feature/x","target_branch":"main"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/42/releases", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"tag_name":"v1.0.0","name":"Release 1.0"}`)
+	})
+	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"new-project","visibility":"private","path_with_namespace":"alice/new-project"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	issueAnswers := []elicitationStep{
+		{action: actionAccept, content: map[string]any{"title": testIssueTitle}},
+		{action: actionAccept, content: map[string]any{"description": "A test issue"}},
+		{action: actionAccept, content: map[string]any{"labels": "bug"}},
+		{action: actionAccept, content: map[string]any{keyConfirmed: false}},
+	}
+	tests := []struct {
+		name    string
+		run     func(context.Context, *mcp.CallToolRequest) error
+		steps   []elicitationStep
+		wantErr error
+		want    []string
+	}{
+		{
+			name: "issue",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := IssueCreate(ctx, req, client, IssueInput{ProjectID: "42"})
+				return err
+			},
+			steps: append(slices.Clone(issueAnswers), elicitationStep{action: actionAccept, content: map[string]any{keyConfirmed: true}}),
+			want: []string{
+				"Collecting issue details...",
+				"Collecting optional fields...",
+				"Confirming issue creation...",
+				"Creating issue...",
+				"Issue created",
+			},
+		},
+		{
+			name: "declined issue",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := IssueCreate(ctx, req, client, IssueInput{ProjectID: "42"})
+				return err
+			},
+			steps:   issueAnswers,
+			wantErr: elicitation.ErrDeclined,
+			want: []string{
+				"Collecting issue details...",
+				"Collecting optional fields...",
+				"Confirming issue creation...",
+			},
+		},
+		{
+			name: "merge request",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := MRCreate(ctx, req, client, MRInput{ProjectID: "42"})
+				return err
+			},
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"source_branch": "feature/x"}},
+				{action: actionAccept, content: map[string]any{"target_branch": "main"}},
+				{action: actionAccept, content: map[string]any{"title": testMRFeatureTitle}},
+				{action: actionAccept, content: map[string]any{"description": "A new feature"}},
+				{action: actionAccept, content: map[string]any{"labels": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			want: []string{
+				"Collecting branch information...",
+				"Collecting MR details...",
+				"Collecting optional fields...",
+				"Confirming MR creation...",
+				"Creating merge request...",
+				"Merge request created",
+			},
+		},
+		{
+			name: "release",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := ReleaseCreate(ctx, req, client, ReleaseInput{ProjectID: "42"})
+				return err
+			},
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"tag_name": testTagV100}},
+				{action: actionAccept, content: map[string]any{"name": testRelease10Name}},
+				{action: actionAccept, content: map[string]any{"description": "First release"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			want: []string{
+				"Collecting release details...",
+				"Collecting release description...",
+				"Confirming release creation...",
+				"Creating release...",
+				"Release created",
+			},
+		},
+		{
+			name: "project",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) error {
+				_, err := ProjectCreate(ctx, req, client, ProjectInput{})
+				return err
+			},
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
+				{action: actionAccept, content: map[string]any{"description": "A new project"}},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+				{action: actionAccept, content: map[string]any{"default_branch": "main"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			want: []string{
+				"Collecting project details...",
+				"Collecting project settings...",
+				"Confirming project creation...",
+				"Creating project...",
+				"Project created",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			replay := stepHandler(tt.steps)
+			answer := func(ctx context.Context, params *mcp.ElicitParams) (*mcp.ElicitResult, error) {
+				return replay(ctx, &mcp.ElicitRequest{Params: params})
+			}
+			got := testutil.ProgressMessages(t, answer, func(ctx context.Context, req *mcp.CallToolRequest) {
+				if err := tt.run(ctx, req); !errors.Is(err, tt.wantErr) {
+					t.Errorf("the wizard returned %v, want %v", err, tt.wantErr)
+				}
+			})
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("the progress messages =\n%q\nwant\n%q", got, tt.want)
+			}
+		})
 	}
 }
 

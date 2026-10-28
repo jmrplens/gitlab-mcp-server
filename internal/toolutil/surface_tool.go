@@ -5,10 +5,12 @@ package toolutil
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // SurfaceToolRegisterOptions controls how an ActionSpec is exposed as a
@@ -61,8 +63,10 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 			return withheld, nil, nil
 		}
 		if route.Destructive {
-			message := fmt.Sprintf("Confirm destructive action %q?", toolName)
-			guard, guardErr := ConfirmDestructiveAction(ctx, req, input, message)
+			// Quoted as the %q verb this replaced quoted it, so the English
+			// question is the one asked before it became a catalog message.
+			prompt := i18n.New(i18n.ConfirmDestructiveStandalone, i18n.S("tool", strconv.Quote(toolName)))
+			guard, guardErr := ConfirmDestructiveAction(ctx, req, input, prompt)
 			if guardErr != nil {
 				LogToolCallAll(ctx, req, toolName, start, nil, guardErr)
 				return nil, nil, guardErr

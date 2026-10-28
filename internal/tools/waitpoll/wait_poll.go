@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -19,13 +20,17 @@ import (
 type DurationFunc func(seconds int) time.Duration
 
 // Options configures a polling loop for one wait-style tool.
+//
+// ProgressMessage builds the text of the progress notification sent before
+// each attempt, from the catalog, since a person reads it; without one the
+// notifications carry no text.
 type Options[T any] struct {
 	Request         *mcp.CallToolRequest
 	IntervalSeconds int
 	TimeoutSeconds  int
 	FailOnError     *bool
 	PollDuration    DurationFunc
-	ProgressMessage func(attempt int) string
+	ProgressMessage func(attempt int) i18n.Text
 	Poll            func(context.Context) (T, error)
 	Status          func(T) string
 	FailureError    func(T) error
@@ -165,9 +170,12 @@ func pollDurationFunc(duration DurationFunc) DurationFunc {
 	return func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
 }
 
-func pollProgressMessage(message func(attempt int) string) func(attempt int) string {
+// pollProgressMessage returns the caller's progress message, or one that
+// answers the zero Text, which is no text at all: a person is shown nothing
+// rather than a text no catalog entry stands behind.
+func pollProgressMessage(message func(attempt int) i18n.Text) func(attempt int) i18n.Text {
 	if message != nil {
 		return message
 	}
-	return func(int) string { return "" }
+	return func(int) (none i18n.Text) { return none }
 }

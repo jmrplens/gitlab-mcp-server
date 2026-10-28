@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
 
 // ErrElicitationNotSupported is returned when the MCP client does not
@@ -115,15 +117,41 @@ func (c Client) IsFormSupported() bool {
 	return e.Form != nil || e.URL == nil
 }
 
+// Field is the one property a text or number prompt asks for.
+type Field struct {
+	// Name is the property the answer comes back under, which is contract: a
+	// client hook or script that recognizes the request reads it, and the
+	// parser reads the answer by it, so it is never translated. Empty is
+	// value.
+	Name string
+	// Title is what a client shows a person above the field, from the
+	// catalog. The zero Text is the field's name, which is what every field
+	// was titled before it had a title of its own.
+	Title i18n.Text
+}
+
+// keys returns the property a prompt asks for and the title it shows: value
+// for a field with no name, and the name for a field with no title.
+func (f Field) keys() (name, title string) {
+	name, title = f.Name, f.Title.String()
+	if name == "" {
+		name = "value"
+	}
+	if title == "" {
+		title = name
+	}
+	return name, title
+}
+
 // Confirm asks the user a yes/no question and returns true if
 // the user accepted with confirmed=true, false otherwise. Returns
 // ErrDeclined or ErrCancelled if the user did not accept.
-func (c Client) Confirm(ctx context.Context, message string) (bool, error) {
+func (c Client) Confirm(ctx context.Context, message i18n.Text) (bool, error) {
 	if !c.IsSupported() {
 		return false, ErrElicitationNotSupported
 	}
 
-	result, err := c.elicit(ctx, message, confirmSchema(message))
+	result, err := c.elicit(ctx, message.String(), confirmSchema(ctx, message.String()))
 	if err != nil {
 		return false, err
 	}
@@ -135,23 +163,21 @@ func (c Client) Confirm(ctx context.Context, message string) (bool, error) {
 }
 
 // PromptText asks the user for free-form text input and returns the value.
-func (c Client) PromptText(ctx context.Context, message, fieldName string) (string, error) {
+func (c Client) PromptText(ctx context.Context, message i18n.Text, field Field) (string, error) {
 	if !c.IsSupported() {
 		return "", ErrElicitationNotSupported
 	}
-	if fieldName == "" {
-		fieldName = "value"
-	}
+	name, title := field.keys()
 
-	result, err := c.elicit(ctx, message, textSchema(message, fieldName))
+	result, err := c.elicit(ctx, message.String(), textSchema(message.String(), name, title))
 	if err != nil {
 		return "", err
 	}
-	return parseTextContent(result, fieldName)
+	return parseTextContent(result, name)
 }
 
 // SelectOne asks the user to pick one option from a list.
-func (c Client) SelectOne(ctx context.Context, message string, options []string) (string, error) {
+func (c Client) SelectOne(ctx context.Context, message i18n.Text, options []string) (string, error) {
 	if !c.IsSupported() {
 		return "", ErrElicitationNotSupported
 	}
@@ -159,7 +185,7 @@ func (c Client) SelectOne(ctx context.Context, message string, options []string)
 		return "", errors.New(errOptionsEmpty)
 	}
 
-	result, err := c.elicit(ctx, message, selectOneSchema(message, options))
+	result, err := c.elicit(ctx, message.String(), selectOneSchema(ctx, message.String(), options))
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +194,7 @@ func (c Client) SelectOne(ctx context.Context, message string, options []string)
 
 // SelectMulti asks the user to pick one or more options from a list.
 // minItems and maxItems constrain the number of selections (0 means no limit).
-func (c Client) SelectMulti(ctx context.Context, message string, options []string, minItems, maxItems int) ([]string, error) {
+func (c Client) SelectMulti(ctx context.Context, message i18n.Text, options []string, minItems, maxItems int) ([]string, error) {
 	if !c.IsSupported() {
 		return nil, ErrElicitationNotSupported
 	}
@@ -176,7 +202,7 @@ func (c Client) SelectMulti(ctx context.Context, message string, options []strin
 		return nil, errors.New(errOptionsEmpty)
 	}
 
-	result, err := c.elicit(ctx, message, selectMultiSchema(message, options, minItems, maxItems))
+	result, err := c.elicit(ctx, message.String(), selectMultiSchema(ctx, message.String(), options, minItems, maxItems))
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +210,7 @@ func (c Client) SelectMulti(ctx context.Context, message string, options []strin
 }
 
 // SelectOneInt asks the user to pick one integer from a list of allowed values.
-func (c Client) SelectOneInt(ctx context.Context, message string, options []int) (int, error) {
+func (c Client) SelectOneInt(ctx context.Context, message i18n.Text, options []int) (int, error) {
 	if !c.IsSupported() {
 		return 0, ErrElicitationNotSupported
 	}
@@ -192,7 +218,7 @@ func (c Client) SelectOneInt(ctx context.Context, message string, options []int)
 		return 0, errors.New(errOptionsEmpty)
 	}
 
-	result, err := c.elicit(ctx, message, selectOneIntSchema(message, options))
+	result, err := c.elicit(ctx, message.String(), selectOneIntSchema(ctx, message.String(), options))
 	if err != nil {
 		return 0, err
 	}
@@ -201,19 +227,17 @@ func (c Client) SelectOneInt(ctx context.Context, message string, options []int)
 
 // PromptNumber asks the user for a numeric input within a range.
 // minVal and maxVal define inclusive bounds; use math.Inf(-1) and math.Inf(1) for no bounds.
-func (c Client) PromptNumber(ctx context.Context, message, fieldName string, minVal, maxVal float64) (float64, error) {
+func (c Client) PromptNumber(ctx context.Context, message i18n.Text, field Field, minVal, maxVal float64) (float64, error) {
 	if !c.IsSupported() {
 		return 0, ErrElicitationNotSupported
 	}
-	if fieldName == "" {
-		fieldName = "value"
-	}
+	name, title := field.keys()
 
-	result, err := c.elicit(ctx, message, numberSchema(message, fieldName, minVal, maxVal))
+	result, err := c.elicit(ctx, message.String(), numberSchema(message.String(), name, title, minVal, maxVal))
 	if err != nil {
 		return 0, err
 	}
-	return parseNumberContent(result, fieldName, minVal, maxVal)
+	return parseNumberContent(result, name, minVal, maxVal)
 }
 
 // isInf reports whether f is +Inf or -Inf.
@@ -227,11 +251,11 @@ func isInf(f float64) bool {
 //
 // SECURITY: The caller is responsible for validating and sanitizing the
 // returned data before using it in API calls.
-func (c Client) GatherData(ctx context.Context, message string, schema map[string]any) (map[string]any, error) {
+func (c Client) GatherData(ctx context.Context, message i18n.Text, schema map[string]any) (map[string]any, error) {
 	if !c.IsSupported() {
 		return nil, ErrElicitationNotSupported
 	}
-	return c.elicit(ctx, message, schema)
+	return c.elicit(ctx, message.String(), schema)
 }
 
 // elicit is the internal method that sends an elicitation request and
@@ -258,7 +282,7 @@ func (c Client) elicit(ctx context.Context, message string, schema map[string]an
 // (SSRF prevention). Per the MCP 2025-11-25 spec, URL mode requests MUST
 // include a unique elicitationId; one is generated automatically.
 // Returns nil on accept, ErrDeclined, ErrCancelled, or another error.
-func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL, message string) error {
+func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL string, message i18n.Text) error {
 	if !c.IsSupported() {
 		return ErrElicitationNotSupported
 	}
@@ -276,19 +300,15 @@ func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL, message
 	// from the 2026-07-28 schema (ElicitRequestURLParams is mode/message/url
 	// only), so it is generated only for sessions negotiated below that.
 	var elicitationID string
-	if params := c.session.InitializeParams(); params == nil || params.ProtocolVersion < "2026-07-28" {
-		id, err := newElicitationID()
-		if err != nil {
-			return fmt.Errorf("elicitation: failed to generate elicitationId: %w", err)
-		}
-		elicitationID = id
+	if params := c.session.InitializeParams(); params == nil || !multiRoundTrip(params.ProtocolVersion) {
+		elicitationID = newElicitationID()
 	}
 
 	slog.DebugContext(ctx, "sending URL elicitation", "url", targetURL, "elicitationId", elicitationID)
 
 	result, err := c.session.Elicit(ctx, &mcp.ElicitParams{
 		Mode:          "url",
-		Message:       message,
+		Message:       message.String(),
 		URL:           targetURL,
 		ElicitationID: elicitationID,
 	})
@@ -311,11 +331,13 @@ func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL, message
 // newElicitationID returns a random UUID v4 string for use as the
 // elicitationId in URL-mode elicitation requests, as required by the
 // MCP 2025-11-25 specification.
-func newElicitationID() (string, error) {
+//
+// It has no failure to report: crypto/rand.Read never returns an error since
+// Go 1.24, and a broken entropy source crashes the program instead. The
+// branch that used to guard it was code no input could reach.
+func newElicitationID() string {
 	var b [16]byte
-	if _, err := cryptorand.Read(b[:]); err != nil {
-		return "", err
-	}
+	_, _ = cryptorand.Read(b[:])
 	b[6] = (b[6] & 0x0f) | 0x40 // version 4
 	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
 	return fmt.Sprintf(
@@ -325,7 +347,7 @@ func newElicitationID() (string, error) {
 		hex.EncodeToString(b[6:8]),
 		hex.EncodeToString(b[8:10]),
 		hex.EncodeToString(b[10:16]),
-	), nil
+	)
 }
 
 // validateGitLabURL ensures targetURL belongs to the configured GitLab
@@ -364,7 +386,7 @@ const ConfirmExchangeID = "confirm"
 // and the client has not answered yet. Any other confirmation failure fails
 // closed with an error result: a destructive action must never proceed on a
 // malformed or failed confirmation exchange.
-func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) *mcp.CallToolResult {
+func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message i18n.Text) *mcp.CallToolResult {
 	flow, err := FlowFromRequest(req)
 	if err != nil {
 		return ConfirmFailedResult(err)
@@ -373,12 +395,16 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 		return nil
 	}
 	confirmed, err := flow.Confirm(ctx, ConfirmExchangeID, message)
-	switch {
-	case errors.Is(err, ErrInputPending):
+	// A chain of ifs rather than a tagless switch: a case expression carries
+	// no statement counter, so the mutation gate reads its condition as code
+	// no test covers whatever the tests do.
+	if errors.Is(err, ErrInputPending) {
 		return flow.InputRequiredResult()
-	case errors.Is(err, ErrDeclined), errors.Is(err, ErrCancelled):
+	}
+	if errors.Is(err, ErrDeclined) || errors.Is(err, ErrCancelled) {
 		return CancelledResult("Operation canceled by user.")
-	case err != nil:
+	}
+	if err != nil {
 		return ConfirmFailedResult(err)
 	}
 	if !confirmed {

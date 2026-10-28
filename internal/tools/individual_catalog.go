@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -351,8 +352,8 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 				toolutil.LogToolRefusal(ctx, req, toolName, toolutil.RefusalInvalidParams)
 				return refused, nil, nil
 			}
-			message := fmt.Sprintf("Confirm %s? This action may be irreversible.", toolName)
-			guard, guardErr := toolutil.ConfirmDestructiveAction(ctx, req, input, message)
+			prompt := i18n.New(i18n.ConfirmDestructiveIndividual, i18n.S("tool", toolName))
+			guard, guardErr := toolutil.ConfirmDestructiveAction(ctx, req, input, prompt)
 			if guardErr != nil {
 				return nil, nil, guardErr
 			}
