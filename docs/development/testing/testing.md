@@ -20,15 +20,15 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,560 |
-| Unit test functions                                   | 20,908 |
-| E2E test functions                                    |  1,652 |
-| cmd test functions                                    |  5,252 |
-| Test files (internal/)                                |    731 |
-| Test files (cmd/)                                     |    394 |
-| Test files (test/e2e/)                                |    433 |
+| Total test functions                                  | 22,694 |
+| Unit test functions                                   | 21,027 |
+| E2E test functions                                    |  1,667 |
+| cmd test functions                                    |  5,299 |
+| Test files (internal/)                                |    741 |
+| Test files (cmd/)                                     |    401 |
+| Test files (test/e2e/)                                |    435 |
 | Tool sub-packages tested                              |    181 |
-| Core packages tested                                  |     34 |
+| Core packages tested                                  |     35 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
 | Overall coverage (`go test ./internal/...`)           | 100.0% |
 | Average package coverage                              | 100.0% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,572 | 60.2% |
+| `TestFunc_Scenario` (2-part)           | 13,623 | 60.0% |
 | `TestFunc` (no underscore)             |    909 |  4.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,079 | 35.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,162 | 36.0% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,100 |        243 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,160 |        253 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            428 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,128 |        472 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,652 |        433 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,252 |        394 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,560** |  **1,558** |                                                                                                 |
+| Tool sub-packages (181) |         11,140 |        472 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,667 |        435 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          5,299 |        401 | server entry point and developer command utilities                                              |
+| **Total**               |     **22,694** |  **1,577** |                                                                                                 |
 
 ### Core Packages
 
@@ -63,14 +63,15 @@
 | clientcompat             |        25 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                                                                                             |
 | cmdutil                  |        11 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                                                                                           |
 | completions              |       129 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                                                                                            |
-| config                   |       112 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
+| config                   |       118 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
 | edition                  |         9 |   100.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                                                                                       |
-| elicitation              |       149 |    99.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                                                                                        |
+| elicitation              |       154 |    99.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                                                                                        |
 | finegrained              |        62 |   100.0% | Package finegrained holds what a fine-grained personal access token needs for each catalog action, and the decision this server takes on it.                                                                                                                                                                                        |
 | freshness                |         7 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                                                                             |
-| gatewaycompat            |        20 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.                                                                  |
+| gatewaycompat            |        21 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.                                                                  |
 | gitlab                   |       246 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
 | graphqlschema            |        21 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                                                                                    |
+| i18n                     |        45 |      n/a | Package i18n holds the texts this server shows a person directly, in every language it serves them in, and renders them in the language a request carries (issue 1547).                                                                                                                                                             |
 | mcpotel                  |       116 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                                                                                |
 | oauth                    |       111 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
 | progress                 |        23 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                                                                                       |
@@ -81,7 +82,7 @@
 | subscriptions            |       114 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
 | telemetry                |       148 |   100.0% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                                                                                  |
 | tenancy                  |       119 |   100.0% | Package tenancy is the register of every decision this server makes about who a caller is and what it may hold, spend or be told.                                                                                                                                                                                                   |
-| testutil                 |       176 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
+| testutil                 |       179 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
 | testutil/e2ecalls        |        24 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                                                                                          |
 | testutil/e2erelease      |         8 |   100.0% | Package e2erelease decides what an end-to-end run does on the GitLab release it found, measured against the release the fine-grained action table was recorded from (issue 1155).                                                                                                                                                   |
 | testutil/hints           |         7 |   100.0% | Package hints collects the canonical action IDs a package's Markdown invites a model to call, by rendering the package's own formatters rather than by reading its constants: a hint spelled as a literal at the call site is published exactly like one behind a constant, and a test that reads only the constants cannot see it. |
@@ -92,25 +93,25 @@
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
 | toolutil                 |     1,349 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,100** |          |                                                                                                                                                                                                                                                                                                                                     |
+| **Subtotal**             | **4,160** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   498 |   100.0% |    57 |
+| projects          |   499 |   100.0% |    57 |
 | mergerequests     |   345 |   100.0% |    30 |
 | dynamic           |   324 |   100.0% |     2 |
-| groups            |   317 |   100.0% |    37 |
+| groups            |   318 |   100.0% |    37 |
 | issues            |   296 |   100.0% |    21 |
 | users             |   272 |   100.0% |    38 |
-| jobs              |   178 |   100.0% |    17 |
+| jobs              |   179 |   100.0% |    17 |
 | packages          |   178 |   100.0% |    10 |
 | search            |   171 |   100.0% |    10 |
 | commits           |   155 |   100.0% |    13 |
-| pipelines         |   149 |   100.0% |    12 |
+| pipelines         |   150 |   100.0% |    12 |
 | runners           |   143 |   100.0% |    21 |
-| workitems         |   136 |   100.0% |     6 |
+| workitems         |   141 |   100.0% |     6 |
 | resourceevents    |   131 |   100.0% |    17 |
 | awardemoji        |   130 |   100.0% |    24 |
 | containerregistry |   125 |   100.0% |    16 |
@@ -175,7 +176,7 @@
 | dorametrics             |         17 |          2 |   100.0% |         2 |
 | dynamic                 |        324 |          9 |   100.0% |         2 |
 | dynamiccatalog          |         13 |          1 |   100.0% |         0 |
-| elicitationtools        |         73 |          2 |   100.0% |         4 |
+| elicitationtools        |         75 |          2 |   100.0% |         4 |
 | enterpriseusers         |         41 |          3 |   100.0% |         4 |
 | environments            |         75 |          2 |   100.0% |         6 |
 | epicdiscussions         |         35 |          2 |   100.0% |         6 |
@@ -208,7 +209,7 @@
 | groupprotectedenvs      |         36 |          3 |   100.0% |         5 |
 | grouprelationsexport    |         30 |          3 |   100.0% |         2 |
 | groupreleases           |         24 |          3 |   100.0% |         1 |
-| groups                  |        317 |         10 |   100.0% |        37 |
+| groups                  |        318 |         10 |   100.0% |        37 |
 | groupsaml               |         40 |          3 |   100.0% |         5 |
 | groupscim               |         31 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |         37 |          2 |   100.0% |         9 |
@@ -228,7 +229,7 @@
 | issues                  |        296 |          4 |   100.0% |        21 |
 | issuestatistics         |         54 |          2 |   100.0% |         3 |
 | iterationdata           |         12 |          1 |   100.0% |         0 |
-| jobs                    |        178 |          8 |   100.0% |        17 |
+| jobs                    |        179 |          8 |   100.0% |        17 |
 | jobtokenscope           |         46 |          2 |   100.0% |         8 |
 | keys                    |         32 |          3 |   100.0% |         2 |
 | labeldata               |         17 |          1 |   100.0% |         0 |
@@ -255,7 +256,7 @@
 | orbit                   |         92 |          3 |   100.0% |         6 |
 | packages                |        178 |          6 |   100.0% |        10 |
 | pages                   |         66 |          2 |   100.0% |         9 |
-| pipelines               |        149 |          5 |   100.0% |        12 |
+| pipelines               |        150 |          5 |   100.0% |        12 |
 | pipelineschedules       |        109 |          4 |   100.0% |        11 |
 | pipelinetriggers        |         71 |          2 |   100.0% |         6 |
 | planlimits              |         16 |          1 |   100.0% |         2 |
@@ -264,7 +265,7 @@
 | projectimportexport     |         53 |          2 |   100.0% |         5 |
 | projectiterations       |         24 |          3 |   100.0% |         1 |
 | projectmirrors          |         76 |          2 |   100.0% |         7 |
-| projects                |        498 |          9 |   100.0% |        57 |
+| projects                |        499 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         28 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
 | projectstoragemoves     |         21 |          2 |   100.0% |         6 |
@@ -308,11 +309,11 @@
 | usergpgkeys             |         56 |          2 |   100.0% |         8 |
 | users                   |        272 |          7 |   100.0% |        38 |
 | vulnerabilities         |         96 |          3 |   100.0% |         8 |
-| waitpoll                |         44 |          3 |   100.0% |         0 |
+| waitpoll                |         45 |          3 |   100.0% |         0 |
 | wikis                   |         74 |          2 |   100.0% |         6 |
-| workitems               |        136 |          6 |   100.0% |         6 |
+| workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,128** |    **472** |          | **1,195** |
+| **Total**               | **11,140** |    **472** |          | **1,195** |
 
 </details>
 
@@ -347,6 +348,7 @@
 | cmd/audit_gateway_chars                   |   100.0% |
 | cmd/audit_graphql_documents               |   100.0% |
 | cmd/audit_graphql_shapes                  |   100.0% |
+| cmd/audit_i18n                            |      n/a |
 | cmd/audit_image_vulns                     |   100.0% |
 | cmd/audit_install_buttons                 |    99.1% |
 | cmd/audit_md_escaping                     |   100.0% |
@@ -425,6 +427,7 @@
 | gatewaycompat            |    99.4% |
 | gitlab                   |   100.0% |
 | graphqlschema            |   100.0% |
+| i18n                     |      n/a |
 | mcpotel                  |   100.0% |
 | oauth                    |   100.0% |
 | progress                 |   100.0% |
