@@ -72,6 +72,9 @@ const (
 	glAccessor            = "GL"
 	httpMethodPrefix      = "Method"
 	verbParam             = "method"
+	// uploadTypeParam is the name UploadRequest gives the form field its
+	// file is sent under.
+	uploadTypeParam = "uploadType"
 )
 
 // fixtureDir is the e2e fixture package and scenarioDir the tree of e2e
@@ -115,6 +118,10 @@ type workaround struct {
 	Constructor string `json:"constructor,omitempty"`
 	Verb        string `json:"verb,omitempty"`
 	Options     string `json:"options,omitempty"`
+	// UploadField is, for an UploadRequest, the form field its file is sent
+	// under when the call names it with a constant, which R-PARAM counts as
+	// a param the request carries beside its options.
+	UploadField string `json:"upload_field,omitempty"`
 	// Callers are, for a raw request whose function forwards it its own
 	// verb or options parameter, each call of that function with what the
 	// request then carries, which R-PARAM reads in place of the forwarder's
@@ -313,13 +320,15 @@ func (s bodyScan) workarounds(fn funcBody, site string) []workaround {
 // made on a Client or through a package variable that holds the method
 // expression (commits.newRequest), and reports false for any other call.
 func (s bodyScan) rawRequest(call *ast.CallExpr) (workaround, bool) {
-	constructor, verb, opt := s.rawRequestArgs(call)
+	constructor, offset := s.rawConstructor(call)
 	if constructor == nil {
 		return workaround{}, false
 	}
 	return workaround{
 		Form: formRawRequest, Constructor: constructor.Name(),
-		Verb: constantString(s.info, verb), Options: spellOptions(s.info, opt),
+		Verb:        constantString(s.info, argNamed(constructor, call, offset, verbParam)),
+		Options:     spellOptions(s.info, argNamed(constructor, call, offset, rawRequestParam)),
+		UploadField: constantString(s.info, argNamed(constructor, call, offset, uploadTypeParam)),
 	}, true
 }
 
@@ -327,31 +336,41 @@ func (s bodyScan) rawRequest(call *ast.CallExpr) (workaround, bool) {
 // with and the call's verb and options arguments, each nil when the call
 // does not pass it, and a nil constructor for any other call.
 func (s bodyScan) rawRequestArgs(call *ast.CallExpr) (constructor *types.Func, verb, opt ast.Expr) {
-	offset := 0
-	if sel, isSel := ast.Unparen(call.Fun).(*ast.SelectorExpr); isSel {
-		constructor = clientConstructor(s.info.Selections[sel], types.MethodVal)
-	}
-	if constructor == nil {
-		constructor = s.constructors[calledObject(s.info, call)]
-		offset = 1
-	}
+	constructor, offset := s.rawConstructor(call)
 	if constructor == nil {
 		return nil, nil, nil
 	}
+	return constructor, argNamed(constructor, call, offset, verbParam), argNamed(constructor, call, offset, rawRequestParam)
+}
+
+// rawConstructor returns the request constructor a call builds a raw
+// request with, and the offset of the constructor's first parameter among
+// the call's arguments: 0 for a call of the method on a Client, 1 for a call
+// through a package variable holding its method expression, whose first
+// argument is the Client. It returns a nil constructor for any other call.
+func (s bodyScan) rawConstructor(call *ast.CallExpr) (constructor *types.Func, offset int) {
+	if sel, isSel := ast.Unparen(call.Fun).(*ast.SelectorExpr); isSel {
+		if method := clientConstructor(s.info.Selections[sel], types.MethodVal); method != nil {
+			return method, 0
+		}
+	}
+	return s.constructors[calledObject(s.info, call)], 1
+}
+
+// argNamed returns the argument a call hands the constructor's parameter of
+// that name, and nil when the call stops before it or the constructor takes
+// none.
+func argNamed(constructor *types.Func, call *ast.CallExpr, offset int, name string) ast.Expr {
 	params := constructor.Signature().Params()
 	for i := range params.Len() {
 		if i+offset >= len(call.Args) {
-			break
+			return nil
 		}
-		arg := call.Args[i+offset]
-		if params.At(i).Name() == verbParam {
-			verb = arg
-		}
-		if params.At(i).Name() == rawRequestParam {
-			opt = arg
+		if params.At(i).Name() == name {
+			return call.Args[i+offset]
 		}
 	}
-	return constructor, verb, opt
+	return nil
 }
 
 // clientConstructor returns the client-go request constructor a selection of

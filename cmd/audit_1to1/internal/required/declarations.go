@@ -154,6 +154,14 @@ func declaredRequiredness() map[declarationKey]declaration {
 	}
 }
 
+// FieldAliases returns, by action and then by GitLab parameter, the input
+// field each declared alias fills the parameter from, so another rule that
+// looks a route's params up among an input's fields (R-PARAM) finds them
+// where this scope does rather than keeping a second table.
+func FieldAliases() map[string]map[string]string {
+	return aliasesByAction(declaredAliases())
+}
+
 // aliasKey names the GitLab parameter of an action an alias places.
 type aliasKey struct {
 	action string

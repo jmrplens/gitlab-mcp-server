@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/grants"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/params"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/required"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
@@ -294,6 +295,40 @@ func TestMain_RequiredScope_CarriesGapsOnly(t *testing.T) {
 	}
 }
 
+// TestMain_ParamsScope_CarriesGapsOnly runs main with -scope=params and
+// holds -gaps-only to the one option it sets, both ways.
+func TestMain_ParamsScope_CarriesGapsOnly(t *testing.T) {
+	original := paramsRun
+	t.Cleanup(func() { paramsRun = original })
+	var got params.Options
+	paramsRun = func(_ string, opts params.Options) ([]byte, bool, error) {
+		got = opts
+		return []byte("{}\n"), true, nil
+	}
+	for name, testCase := range map[string]struct {
+		args     []string
+		wantGaps bool
+	}{
+		"gaps_only": {args: []string{"-gaps-only"}, wantGaps: true},
+		"full":      {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got = params.Options{GapsOnly: !testCase.wantGaps}
+			messages := captureFatal(t)
+			resetFlags(t, append([]string{"-scope=params", "-output", filepath.Join(t.TempDir(), "params.json")}, testCase.args...)...)
+
+			main()
+
+			if len(*messages) != 0 {
+				t.Fatalf("main reported %v, want a clean run", *messages)
+			}
+			if got.GapsOnly != testCase.wantGaps {
+				t.Errorf("Options.GapsOnly = %t, want %t", got.GapsOnly, testCase.wantGaps)
+			}
+		})
+	}
+}
+
 // TestRun_AnalyzerFailures_AreNamedByStream verifies each seam-reachable
 // failure of the merged run and the single-scope run surfaces with the name
 // of the stream that failed, and that a gate reporting findings fails the run
@@ -423,6 +458,26 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 				original := requiredRun
 				t.Cleanup(func() { requiredRun = original })
 				requiredRun = func(string, required.Options) ([]byte, bool, error) { return nil, false, boom }
+			},
+			wantErr: "boom",
+		},
+		{
+			name: "params_gate_reports_stale_declarations", scope: scopeParams,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := paramsRun
+				t.Cleanup(func() { paramsRun = original })
+				paramsRun = func(string, params.Options) ([]byte, bool, error) { return []byte("{}\n"), false, nil }
+			},
+			wantErr: "param declarations that answer nothing", wantReport: true,
+		},
+		{
+			name: "params_scope_fails", scope: scopeParams,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := paramsRun
+				t.Cleanup(func() { paramsRun = original })
+				paramsRun = func(string, params.Options) ([]byte, bool, error) { return nil, false, boom }
 			},
 			wantErr: "boom",
 		},

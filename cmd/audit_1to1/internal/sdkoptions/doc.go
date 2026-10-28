@@ -6,11 +6,13 @@
 // written whatever the field holds, walked through the option structs a
 // field nests and named the way GitLab's record declares a nested param.
 //
-// R-PATH's always-sent check (cmd/audit_1to1/internal/paths) asks it which
-// keys a request carries on every call. It is a package of its own so that a
-// second check asking what an option struct can carry reads the same answer
-// rather than the struct tags on its own: two readers of one fact are how one
-// of them ends up answering a narrower question than the other.
+// Two checks ask it. R-PATH's always-sent check
+// (cmd/audit_1to1/internal/paths) asks which keys a request carries on every
+// call, and R-PARAM (cmd/audit_1to1/internal/params) asks which params a
+// route declares that no option struct of the requests reaching it can
+// carry. Each would otherwise read the struct tags on its own, and two
+// readers of one fact are how one of them ends up answering a narrower
+// question than the other.
 //
 // What a field writes depends on the encoder, and the encoder on the
 // constructor of the request: encoding/json reads the json tag for the body

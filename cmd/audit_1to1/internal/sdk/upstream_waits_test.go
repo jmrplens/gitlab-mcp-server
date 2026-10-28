@@ -682,8 +682,8 @@ func TestBuildUpstreamWaits_AStandInTree_AnswersEveryWorkaroundAndHoldsEveryPred
 		},
 		{Form: formRequestOption, Site: "widgets.entityFilter", PassedTo: listWidgets, AnsweredBy: row6},
 		{Form: formRequestOption, Site: "widgets.headers", PassedTo: listWidgets, AnsweredBy: row6},
-		{Form: formRawRequest, Site: "widgets.importThroughSeam", Constructor: "UploadRequest", Verb: "POST", Options: "*gitlab.ListWidgetsOptions", AnsweredBy: row6},
-		{Form: formRawRequest, Site: "widgets.importWidgets", Constructor: "UploadRequest", Verb: "POST", Options: "*gitlab.ListWidgetsOptions", AnsweredBy: row6},
+		{Form: formRawRequest, Site: "widgets.importThroughSeam", Constructor: "UploadRequest", Verb: "POST", Options: "*gitlab.ListWidgetsOptions", UploadField: "file", AnsweredBy: row6},
+		{Form: formRawRequest, Site: "widgets.importWidgets", Constructor: "UploadRequest", Verb: "POST", Options: "*gitlab.ListWidgetsOptions", UploadField: "file", AnsweredBy: row6},
 		{Form: formRawRequest, Site: "widgets.lister.Fetch", Constructor: "NewRequest", Verb: "GET", Options: "*gitlab.ListWidgetsOptions", Decodes: widgetDecode, AnsweredBy: row6},
 		{
 			Form: formRawRequest, Site: "widgets.optsFirst", Constructor: "NewRequest", Verb: "PUT", Options: "any",
@@ -1058,6 +1058,37 @@ func checkGitlab(t *testing.T, source string) *types.Package {
 		t.Fatalf("check: %v", err)
 	}
 	return pkg
+}
+
+// TestArgNamed_ACallThatStopsShort_HandsNothing verifies the argument a call
+// hands a constructor's parameter: the one in its place, nothing when the
+// call stops before it (a variadic tail left out), on a Client and through a
+// package variable holding the method expression, whose first argument is
+// the Client and shifts every other by one, and nothing for a parameter the
+// constructor does not take, read past every argument.
+func TestArgNamed_ACallThatStopsShort_HandsNothing(t *testing.T) {
+	pkg := checkGitlab(t, "package gitlab\n\ntype Client struct{}\n\nfunc (c *Client) UploadRequest(method string, opt any, uploadType string, options ...any) {}\n")
+	client := pkg.Scope().Lookup("Client").Type().(*types.Named)
+	upload := client.Method(0)
+	verb, options := ast.NewIdent("verb"), ast.NewIdent("opts")
+	short := &ast.CallExpr{Args: []ast.Expr{verb, options}}
+	if got := argNamed(upload, short, 0, rawRequestParam); got != options {
+		t.Errorf("argNamed(opt) = %v, want the second argument", got)
+	}
+	if got := argNamed(upload, short, 0, uploadTypeParam); got != nil {
+		t.Errorf("argNamed(uploadType) of a call that stops before it = %v, want nothing", got)
+	}
+	throughVariable := &ast.CallExpr{Args: []ast.Expr{ast.NewIdent("client"), verb, options}}
+	if got := argNamed(upload, throughVariable, 1, rawRequestParam); got != options {
+		t.Errorf("argNamed(opt) through a package variable = %v, want the third argument", got)
+	}
+	if got := argNamed(upload, throughVariable, 1, uploadTypeParam); got != nil {
+		t.Errorf("argNamed(uploadType) of a call through a package variable that stops before it = %v, want nothing", got)
+	}
+	full := &ast.CallExpr{Args: []ast.Expr{verb, options, ast.NewIdent("kind"), ast.NewIdent("extra")}}
+	if got := argNamed(upload, full, 0, "absent"); got != nil {
+		t.Errorf("argNamed(absent) = %v, want nothing", got)
+	}
 }
 
 // TestWalkGuards_WhatTheTreeCannotProduce_FindNothing covers the guards the

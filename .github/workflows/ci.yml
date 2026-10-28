@@ -245,6 +245,13 @@ jobs:
       - name: Check every required parameter against the live record (R-INPUT)
         if: env.FRESHNESS == 'checked'
         run: make audit-1to1-required
+      # Every param a route this server reaches declares, held to whether a
+      # recorded request carries it. The findings are a report; it fails on
+      # a declaration that answers nothing. It reads the request record the
+      # derivation commits, so it is deferred with R-GRANT.
+      - name: Check the declarations of the params the reached routes take (R-PARAM)
+        if: env.FRESHNESS == 'checked'
+        run: make audit-1to1-params
       # The Orbit twin of the record above: what GitLab.com's Orbit routes
       # answered the requests the handlers build, as a key tree. No
       # self-managed GitLab serves Orbit, so no boot could answer it, and the

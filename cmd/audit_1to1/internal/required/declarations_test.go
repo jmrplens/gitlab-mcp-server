@@ -32,6 +32,29 @@ func TestDeclaredRequiredness_EveryEntryNamesADirectionACategoryAndAReason(t *te
 	}
 }
 
+// TestFieldAliases_EveryDeclaredAlias_IsHandedOutByActionAndParam verifies
+// the accessor another rule reads the aliases through: every declaration,
+// filed under its action and its GitLab parameter, naming the field it
+// fills the parameter from.
+func TestFieldAliases_EveryDeclaredAlias_IsHandedOutByActionAndParam(t *testing.T) {
+	declared := declaredAliases()
+	byAction := FieldAliases()
+	count := 0
+	for _, params := range byAction {
+		count += len(params)
+	}
+	if count != len(declared) {
+		t.Errorf("FieldAliases holds %d aliases, want the %d declared", count, len(declared))
+	}
+	for key, alias := range declared {
+		t.Run(key.action+"/"+key.param, func(t *testing.T) {
+			if got := byAction[key.action][key.param]; got != alias.Field {
+				t.Errorf("FieldAliases()[%q][%q] = %q, want %q", key.action, key.param, got, alias.Field)
+			}
+		})
+	}
+}
+
 // TestDeclaredAliases_EveryEntryNamesAFieldAndAReason verifies every alias
 // names the field it moves a parameter to and why the placement rules cannot
 // find it.

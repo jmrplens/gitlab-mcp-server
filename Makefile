@@ -13,7 +13,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
 	audit-catalog-first \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-validate-docs audit-edition-tier \
+	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
@@ -1160,39 +1160,40 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/33] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/33] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/33] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/33] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/33] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/33] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
-	run_check "[7/33] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/33] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/33] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/33] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/33] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/33] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/33] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/33] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/33] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/33] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/33] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
-	run_check "[18/33] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/33] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/33] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/33] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/33] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/33] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/33] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/33] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
-	run_check "[26/33] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
-	run_check "[27/33] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
-	run_check "[28/33] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/33] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
-	run_check "[30/33] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
-	run_check "[31/33] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
-	run_check "[32/33] copyright and license headers" go run ./cmd/audit_file_headers/; \
-	run_check "[33/33] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
+	run_check "[1/34] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/34] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/34] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/34] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/34] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/34] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
+	run_check "[7/34] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/34] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/34] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/34] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/34] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/34] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/34] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/34] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/34] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/34] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/34] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
+	run_check "[18/34] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/34] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/34] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/34] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/34] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/34] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/34] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/34] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/34] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/34] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
+	run_check "[28/34] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
+	run_check "[29/34] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[30/34] params of the routes reached (R-PARAM)" go run ./cmd/audit_1to1/ -scope=params -gaps-only; \
+	run_check "[31/34] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
+	run_check "[32/34] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
+	run_check "[33/34] copyright and license headers" go run ./cmd/audit_file_headers/; \
+	run_check "[34/34] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1875,8 +1876,9 @@ audit-action-spec-coverage:
 
 ## audit-1to1: run all four 1:1-audit gap streams (struct/action/metadata/enums), merge
 ## into plan/1to1-backlog.json, then gate on SDK parity (audit-1to1-sdk), the request
-## paths (audit-1to1-paths), the fine-grained grants (audit-1to1-grants) and the
-## parameters each schema requires (audit-1to1-required).
+## paths (audit-1to1-paths), the fine-grained grants (audit-1to1-grants), the
+## parameters each schema requires (audit-1to1-required) and the params each reached
+## route declares (audit-1to1-params).
 ## Single binary cmd/audit_1to1 consolidates the former audit_struct_completeness,
 ## audit_action_coverage, audit_metadata_completeness, and gen_1to1_backlog.
 ## The backlog is written first so a gate failure still leaves the artifact behind.
@@ -1887,6 +1889,7 @@ audit-1to1:
 	$(MAKE) audit-1to1-paths
 	$(MAKE) audit-1to1-grants
 	$(MAKE) audit-1to1-required
+	$(MAKE) audit-1to1-params
 
 ## audit-1to1-sdk: gate every client-go service, every raw-GraphQL operation and every
 ## enum value on a decision (R-SERVICE/R-GRAPHQL/R-ENUM). Unlike the three candidate
@@ -1980,6 +1983,26 @@ audit-1to1-required-report:
 	@mkdir -p plan
 	go run ./cmd/audit_1to1/ -scope=required -output plan/1to1-required.json
 	@echo "R-INPUT requiredness report written to plan/1to1-required.json"
+
+## audit-1to1-params: hold every param a route this server reaches declares to whether
+## anything here can send it (R-PARAM). A param no recorded request carries is a finding:
+## unmodeled (no option struct the route's requests carry models it and no input offers
+## it, client-go's to fix), not_offered (an option struct models it and no input offers
+## it), offered_unrecorded (an input offers it and no test sends it) or unjudged. The
+## findings are a report; it FAILS only on a declaration in
+## cmd/audit_1to1/internal/params/declarations.go that answers nothing. It reads the
+## committed request record, the inventory and the live record and loads the tool packages
+## for their raw requests; CI runs it under the FRESHNESS deferral with R-GRANT.
+audit-1to1-params:
+	go run ./cmd/audit_1to1/ -scope=params -gaps-only
+
+## audit-1to1-params-report: the same, with the declared findings and the requests whose
+## options could not be read, written to plan/1to1-params.json. It gates on nothing
+## audit-1to1-params does not.
+audit-1to1-params-report:
+	@mkdir -p plan
+	go run ./cmd/audit_1to1/ -scope=params -output plan/1to1-params.json
+	@echo "R-PARAM report written to plan/1to1-params.json"
 
 ## audit-1to1-enums: the enum value rule on its own (R-ENUM), in its native shape.
 ## Fails on a value the SDK declares that no schema enum or description offers, on a
@@ -2645,7 +2668,7 @@ check-dco:
 ## git holds and the untracked ones it would add) does not open with the
 ## copyright and license header cmd/internal/fileheader spells, or carries
 ## another copyright or license notice. It reads git's file list, so it runs in
-## a checkout. Step 32 of make analyze and a CI gate.
+## a checkout. Step 33 of make analyze and a CI gate.
 check-file-headers:
 	go run ./cmd/audit_file_headers/
 
@@ -2693,7 +2716,7 @@ audit-godocs-check:
 ## it is a gate of its own because golangci-lint cannot ask the question: the
 ## `comments` exclusion preset silences revive's exported and package-comments
 ## rules and staticcheck's ST1000 and ST1020 to ST1022. It parses and never
-## compiles, so it costs seconds. CI gate, and step 31 of make analyze.
+## compiles, so it costs seconds. CI gate, and step 32 of make analyze.
 check-godocs:
 	go run ./cmd/godoc_tool/ audit --fail-on-findings
 

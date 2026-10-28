@@ -21,6 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/grants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/merge"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/metadata"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/params"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/required"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdk"
@@ -44,13 +45,14 @@ var (
 	pathsRun       = paths.Run
 	grantsRun      = grants.Run
 	requiredRun    = required.Run
+	paramsRun      = params.Run
 	marshalIndent  = json.MarshalIndent
 )
 
 func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
-	scope := flag.String("scope", "structs,actions,metadata,enums", "one of {structs,actions,metadata,enums,sdk,paths,grants} for a single-scope report, or the first four (default) for the merged backlog; other combinations are not supported")
+	scope := flag.String("scope", "structs,actions,metadata,enums", "one of {structs,actions,metadata,enums,sdk,paths,grants,required,params} for a single-scope report, or the first four (default) for the merged backlog; other combinations are not supported")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
 	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint against GitLab's API documentation (needs the network and reads ~250 pages; fails on an endpoint no declaration in cmd/audit_1to1/internal/paths accounts for)")
 	e2eCalls := flag.String("e2e-calls", "", "with -scope=paths or -scope=grants, the shard directory an end-to-end run recorded its calls into (dist/e2e-calls after `make test-e2e-ce`), which lets the observation question (paths) and the request count and routes of each action (grants) be asked per action rather than per owning package; reports and never gates")
@@ -146,6 +148,8 @@ func gateFailure(scopes []string) string {
 		return "audit_1to1: fine-grained grant inconsistencies (see report)"
 	case slices.Equal(scopes, []string{scopeRequired}):
 		return "audit_1to1: requiredness disagreements with GitLab (see report)"
+	case slices.Equal(scopes, []string{scopeParams}):
+		return "audit_1to1: param declarations that answer nothing (see report)"
 	default:
 		return "audit_1to1: SDK parity findings (see report)"
 	}
@@ -226,7 +230,7 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 // backlog entry rather than a defect.
 func runSingle(ctx context.Context, scope string, opts options) (content []byte, clean bool, err error) {
 	switch scope {
-	case "structs", "actions", "enums", "sdk", scopePaths, scopeGrants, scopeRequired:
+	case "structs", "actions", "enums", "sdk", scopePaths, scopeGrants, scopeRequired, scopeParams:
 		root, rootErr := repositoryRoot(".")
 		if rootErr != nil {
 			return nil, false, fmt.Errorf("find repository root: %w", rootErr)
@@ -250,6 +254,8 @@ func runSingle(ctx context.Context, scope string, opts options) (content []byte,
 			return grantsRun(root, grants.Options{GapsOnly: opts.gapsOnly, E2ECallsDir: opts.e2eCalls})
 		case scopeRequired:
 			return requiredRun(root, required.Options{GapsOnly: opts.gapsOnly})
+		case scopeParams:
+			return paramsRun(root, params.Options{GapsOnly: opts.gapsOnly})
 		default:
 			return sdkRun(root, opts.gapsOnly)
 		}
@@ -286,6 +292,10 @@ const scopeGrants = "grants"
 // schema requires, held to what GitLab requires of it.
 const scopeRequired = "required"
 
+// scopeParams is R-PARAM: each param a route this server reaches declares,
+// held to whether anything here can send it.
+const scopeParams = "params"
+
 // mergedScopes is the set the merged backlog is built from, sorted. The sdk,
 // paths and grants scopes are deliberately not among them: they gate rather
 // than accumulating candidates, and adding any would change the shape of
@@ -293,7 +303,7 @@ const scopeRequired = "required"
 var mergedScopes = []string{"actions", "enums", "metadata", "structs"}
 
 // validScopes is every value -scope accepts, in the order a message lists them.
-var validScopes = []string{"structs", "actions", "metadata", "enums", "sdk", scopePaths, scopeGrants, scopeRequired}
+var validScopes = []string{"structs", "actions", "metadata", "enums", "sdk", scopePaths, scopeGrants, scopeRequired, scopeParams}
 
 // isMergedScope reports whether scopes is exactly the merged set, so a
 // selection that merely happens to have as many entries (say
