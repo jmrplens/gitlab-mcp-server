@@ -193,13 +193,15 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 // models. Only set fields are forwarded, so a boolean or a number is a
 // pointer: overriding a setting the export carries as true with false is the
 // point of the field.
+//
+// The project's name, path and namespace are not among them: GitLab declares
+// them as the import's own params and not under override_params, whose
+// declared params (optional_project_params) Grape keeps alone, so an
+// override_params name, path, namespace_id or default_branch was dropped.
+// The name, path and namespace of [ImportFromFileInput] place the project.
 type ImportOverrideParamsInput struct {
-	Name                         string `json:"name,omitempty" jsonschema:"Override the imported project's name"`
-	Path                         string `json:"path,omitempty" jsonschema:"Override the imported project's URL path (slug)"`
-	NamespaceID                  *int64 `json:"namespace_id,omitempty" jsonschema:"Override the namespace ID the imported project is created in"`
 	Description                  string `json:"description,omitempty" jsonschema:"Override the imported project's description"`
 	Visibility                   string `json:"visibility,omitempty" jsonschema:"Override visibility level (private, internal, public)"`
-	DefaultBranch                string `json:"default_branch,omitempty" jsonschema:"Override the default branch name"`
 	MergeMethod                  string `json:"merge_method,omitempty" jsonschema:"Override merge method (merge, rebase_merge, ff)"`
 	RequestAccessEnabled         *bool  `json:"request_access_enabled,omitempty" jsonschema:"Override whether users can request access"`
 	LFSEnabled                   *bool  `json:"lfs_enabled,omitempty" jsonschema:"Override Git LFS enablement"`
@@ -547,11 +549,7 @@ func buildOverrideParams(in *ImportOverrideParamsInput) *gl.CreateProjectOptions
 		return nil
 	}
 	opts := &gl.CreateProjectOptions{
-		Name:                 optionalString(in.Name),
-		Path:                 optionalString(in.Path),
-		NamespaceID:          in.NamespaceID,
 		Description:          optionalString(in.Description),
-		DefaultBranch:        optionalString(in.DefaultBranch),
 		RequestAccessEnabled: in.RequestAccessEnabled,
 		LFSEnabled:           in.LFSEnabled,
 		SharedRunnersEnabled: in.SharedRunnersEnabled,

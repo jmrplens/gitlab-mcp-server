@@ -233,6 +233,9 @@ const (
 	// overrideParamUndeclared is the reason the import's override_params input
 	// offers a field client-go's CreateProjectOptions carries.
 	overrideParamUndeclared = "not declared under override_params by POST /projects/import, which takes optional_project_params there (lib/api/project_import.rb, lib/api/helpers/projects_helpers.rb; gitlab-api-live.json, 19.5.0-ee), and import_params is declared_params, so Grape drops the key; client-go's CreateProjectOptions, the type of ImportFileOptions.OverrideParams, carries it for the project create"
+	// overrideParamPlacement is the reason the import's override_params input
+	// offers none of the project's name, path and namespace.
+	overrideParamPlacement = "not declared under override_params by POST /projects/import, which declares name, path and namespace as params of its own (lib/api/project_import.rb; gitlab-api-live.json, 19.5.0-ee), so Grape drops the override_params key; ImportFromFileInput offers the import's own name, path and namespace"
 	// achievementAvatarUpload is the reason the avatar upload is absent under
 	// its SDK key.
 	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or avatar_content_base64), which the handler assembles into the *gl.GraphQLUpload opts.Avatar takes"
@@ -1245,6 +1248,10 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 
 	// The CreateProjectOptions fields GitLab does not declare under the
 	// override_params of an import.
+	"projectimportexport.ImportOverrideParamsInput.name":                            overrideParamPlacement,
+	"projectimportexport.ImportOverrideParamsInput.path":                            overrideParamPlacement,
+	"projectimportexport.ImportOverrideParamsInput.namespace_id":                    overrideParamPlacement,
+	"projectimportexport.ImportOverrideParamsInput.default_branch":                  overrideParamUndeclared,
 	"projectimportexport.ImportOverrideParamsInput.build_coverage_regex":            overrideParamUndeclared,
 	"projectimportexport.ImportOverrideParamsInput.ci_forward_deployment_enabled":   overrideParamUndeclared,
 	"projectimportexport.ImportOverrideParamsInput.group_with_project_templates_id": overrideParamUndeclared,

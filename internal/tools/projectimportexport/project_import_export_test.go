@@ -1172,8 +1172,7 @@ func TestScheduleExport_NestedUploadOverridesFlatFields(t *testing.T) {
 func everyOverride() *ImportOverrideParamsInput {
 	yes, no := true, false
 	return &ImportOverrideParamsInput{
-		Name: "renamed", Path: "renamed-path", NamespaceID: new(int64(42)), Description: "overridden",
-		Visibility: "private", DefaultBranch: "main", MergeMethod: "ff",
+		Description: "overridden", Visibility: "private", MergeMethod: "ff",
 		RequestAccessEnabled: &yes, LFSEnabled: &no, SharedRunnersEnabled: &yes,
 		IssuesAccessLevel: "enabled", MergeRequestsAccessLevel: "private", WikiAccessLevel: "disabled",
 		BuildsAccessLevel: "enabled", SnippetsAccessLevel: "private", ContainerRegistryAccessLevel: "disabled",
@@ -1207,9 +1206,8 @@ func everyOverride() *ImportOverrideParamsInput {
 // everyOverrideKey is the form field each override of everyOverride is sent
 // under, with its value.
 var everyOverrideKey = map[string]string{
-	"override_params[name]": "renamed", "override_params[path]": "renamed-path", "override_params[namespace_id]": "42",
 	"override_params[description]": "overridden", "override_params[visibility]": "private",
-	"override_params[default_branch]": "main", "override_params[merge_method]": "ff",
+	"override_params[merge_method]":           "ff",
 	"override_params[request_access_enabled]": "true", "override_params[lfs_enabled]": "false",
 	"override_params[shared_runners_enabled]": "true",
 	"override_params[issues_access_level]":    "enabled", "override_params[merge_requests_access_level]": "private",
@@ -1310,6 +1308,26 @@ func TestImportFromFile_OverrideParams_SendsEveryKeyItModels(t *testing.T) {
 		t.Run(key, func(t *testing.T) {
 			if got, want := sent[key], everyOverrideKey[key]; got != want {
 				t.Errorf("%s = %q, want %q", key, got, want)
+			}
+		})
+	}
+}
+
+// TestImportOverrideParamsInput_OffersNoKeyGitLabDrops verifies that the
+// override offers none of the four keys POST /projects/import does not
+// declare under override_params: Grape keeps the declared params alone, so
+// an override_params name, path, namespace_id or default_branch changed
+// nothing, while the import's own name, path and namespace place the project.
+func TestImportOverrideParamsInput_OffersNoKeyGitLabDrops(t *testing.T) {
+	offered := map[string]bool{}
+	for field := range reflect.TypeFor[ImportOverrideParamsInput]().Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		offered[name] = true
+	}
+	for _, dropped := range []string{"name", "path", "namespace_id", "default_branch"} {
+		t.Run(dropped, func(t *testing.T) {
+			if offered[dropped] {
+				t.Errorf("override_params offers %s, which GitLab drops", dropped)
 			}
 		})
 	}
