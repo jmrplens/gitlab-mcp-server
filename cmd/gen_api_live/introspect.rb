@@ -791,6 +791,10 @@ class KeysetWalk
       when Integer then state.line = instruction
       when Symbol then state.guards.reject! { |guard| guard[1] == instruction }
       when Array then scan_instruction(state, instruction, index)
+      else
+        # An instruction list holds line numbers, labels and events, and
+        # instructions; nothing else reaches it, and it would carry no site.
+        nil
       end
     end
   end
