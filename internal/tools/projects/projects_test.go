@@ -10569,6 +10569,33 @@ func TestCreate_WithAvatar_UploadsItBesideTheOptions(t *testing.T) {
 	}
 }
 
+// TestSDK_CreateProjectWithAvatar_WritesTheFirstTopicAlone pins what
+// client-go does with a list beside an avatar, which commaJoined,
+// groups.attachAvatar and the alert list refusal of groups.Create work
+// around: UploadRequest writes each multipart field with fields.Get, the
+// first of its values, so the second topic never leaves the process. A
+// client-go that writes more fails it, and that is when each of those sites
+// is looked at again (row 151 of docs/development/upstream-bugs.md): Rack
+// keeps the last value of a field sent twice under one name, so a join may
+// still be what GitLab needs.
+func TestSDK_CreateProjectWithAvatar_WritesTheFirstTopicAlone(t *testing.T) {
+	forms := make(chan avatarForm, 1)
+	client := testutil.NewTestClient(t, avatarFormHandler(t, "/api/v4/projects", forms))
+	_, _, err := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{
+		Name:   new(testRepoName),
+		Topics: &[]string{"go", "mcp"},
+		Avatar: &gl.ProjectAvatar{Filename: "logo.png", Image: strings.NewReader("image")},
+	}, gl.WithContext(t.Context()))
+	if err != nil {
+		t.Fatalf("CreateProject() error: %v", err)
+	}
+	if got := (<-forms).values["topics"]; !slices.Equal(got, []string{"go"}) {
+		t.Errorf("topics = %q, want only the first, go: client-go's upload now writes more than the first value of a field "+
+			"(row 151 of docs/development/upstream-bugs.md), so look again at commaJoined, groups.attachAvatar and the alert "+
+			"list refusal of groups.Create", got)
+	}
+}
+
 // TestCreate_WithoutAvatar_SendsJSONWithTheListsWhole verifies that a create
 // without an avatar is left as it was: a JSON body, the lists sent whole.
 func TestCreate_WithoutAvatar_SendsJSONWithTheListsWhole(t *testing.T) {

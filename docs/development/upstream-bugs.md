@@ -109,6 +109,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The protected environment approval rule options model an access_level_description no route declares](#the-protected-environment-approval-rule-options-model-an-access_level_description-no-route-declares)
   - [Five response structs miss keys this server reads through a raw request instead](#five-response-structs-miss-keys-this-server-reads-through-a-raw-request-instead)
   - [Routes this server or its e2e suite sends have no client-go method, or one that takes no options](#routes-this-server-or-its-e2e-suite-sends-have-no-client-go-method-or-one-that-takes-no-options)
+  - [`UploadRequest` writes only the first value of each field](#uploadrequest-writes-only-the-first-value-of-each-field)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -410,6 +411,7 @@ readable without opening the tracker:
 | 148 | client-go | [`Orbit.GetGraphStatus` sends a route GitLab.com removed](#orbitgetgraphstatus-sends-get-orbitgraph_status-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.GraphStatus` reads GraphQL `Group.orbit` and `Project.orbit` |
 | 149 | client-go | [Five response structs miss keys this server reads through a raw request instead](#five-response-structs-miss-keys-this-server-reads-through-a-raw-request-instead) | No | No | No | No | Yes, the deployment, job, approval rule, commit signature and epic board reads decode into structs of their own |
 | 150 | client-go | [Routes this server or its e2e suite sends have no client-go method, or one that takes no options](#routes-this-server-or-its-e2e-suite-sends-have-no-client-go-method-or-one-that-takes-no-options) | No | No | No | No | Yes, the Orbit reads of the MCP endpoint, the e2e fixture and the model registry scenario send their own request, and eighteen paginated lists write their query through a request option |
+| 151 | client-go | [`UploadRequest` writes only the first value of each field](#uploadrequest-writes-only-the-first-value-of-each-field) | No | No | No | No | Yes, the project and group creates send a list beside an avatar as one comma-separated value, and the group create refuses its alert list beside one; a unit test pins the behaviour |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -8405,6 +8407,58 @@ nothing upstream, when the upload and certificate lists, the same gap, did.
 
 **Effort**: small to medium: two methods, and an options struct, or a
 `ListOptions` parameter, for each of the eighteen lists.
+
+### `UploadRequest` writes only the first value of each field
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no, at v3.30.0, the version `go.mod` pins, or at v3.38.0.
+- **Blocking**: no.
+- **Workaround**: yes, in the two creates that send a list beside an
+  avatar. The upstream wait table cannot hold it, since its predicates read
+  types and routes and this is the body of a function, so
+  `TestSDK_CreateProjectWithAvatar_WritesTheFirstTopicAlone`
+  (`internal/tools/projects`) pins what client-go sends instead and fails
+  the day it sends more.
+
+**Where**: `gitlab.go`, `(*Client).UploadRequest` (line 1106 at v3.30.0,
+1108 at v3.38.0). It writes the options of an upload as multipart fields
+from go-querystring's `query.Values`, one `w.WriteField(name,
+fields.Get(name))` per name, and `url.Values.Get` is the first value. A
+list option therefore reaches GitLab as its first element alone, and only
+on the request that carries a file: the same options in a JSON body go out
+whole. Every method that switches to an upload when its options carry an
+avatar does it (`CreateProject`, `CreateProjectForUser`, `EditProject`,
+`CreateGroup`, `UpdateGroup`, `CreateTopic`, `UpdateTopic`, `CreateUser`
+and `ModifyUser`), and so does the project import. client-go knows the
+shape of it in one place: `CreateGroup` refuses an avatar beside more than
+one access level of the default branch protection, "as it will result in
+unexpected behavior".
+
+**What** this server does about it, in the handlers that send a list
+beside an avatar:
+
+- `projects.attachAvatar` sends the topics and the tags as one
+  comma-separated value (`commaJoined`), which GitLab splits back
+  (`API::Validations::Types::CommaSeparatedToArray`).
+- `groups.attachAvatar` sends `unique_project_download_limit_allowlist`
+  the same way, which `ee/lib/ee/api/helpers/groups_helpers.rb` splits
+  back.
+- `groups.Create` refuses `unique_project_download_limit_alertlist` beside
+  an avatar before any request, since it is an `Array[Integer]` GitLab does
+  not split, and points at `group.update`.
+
+Writing every value would not be the whole fix: Rack keeps the last value
+of a field sent twice under one name, and builds a list only from a name
+that ends in `[]`. So when the pin fails, each of the three sites is looked
+at again rather than removed.
+
+**How we found it**: offering the avatar R-PARAM listed as not offered on
+the project and group creates. The group create's test sent two usernames
+in the allowlist beside an avatar, and the mock read one.
+
+**Effort**: small: one part per value in `UploadRequest`, under a name a
+list can be read back from, and a test.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
