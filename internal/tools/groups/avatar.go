@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -51,6 +52,22 @@ func openAvatar(op string, in *AvatarInput) (*gl.GroupAvatar, func(), error) {
 		return nil, nil, err
 	}
 	return &gl.GroupAvatar{Filename: in.Filename, Image: reader}, release, nil
+}
+
+// attachAvatar puts an avatar on the create options. With one, client-go
+// sends the create as a multipart upload (UploadRequest), which writes only
+// the first value of each field, so the usernames excluded from the unique
+// project download limit go as one comma-separated value, which GitLab
+// splits back into the list (CommaSeparatedToArray in
+// ee/lib/ee/api/helpers/groups_helpers.rb) a JSON body would have carried.
+func attachAvatar(opts *gl.CreateGroupOptions, avatar *gl.GroupAvatar) {
+	if avatar == nil {
+		return
+	}
+	opts.Avatar = avatar
+	if opts.UniqueProjectDownloadLimitAllowlist != nil {
+		opts.UniqueProjectDownloadLimitAllowlist = new([]string{strings.Join(*opts.UniqueProjectDownloadLimitAllowlist, ",")})
+	}
 }
 
 // UploadAvatar uploads or replaces the avatar for a group.

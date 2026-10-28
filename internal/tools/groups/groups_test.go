@@ -4813,11 +4813,41 @@ func TestCreate_WithAvatar_UploadsItBesideTheOptions(t *testing.T) {
 	}
 }
 
+// TestCreate_WithAvatar_SendsTheAllowlistAsOneCommaSeparatedValue verifies
+// that a group create given an avatar and more than one username to exclude
+// from the unique project download limit sends them as one comma-separated
+// field. The upload writes only the first value of each field, and GitLab
+// splits this one back into the list (CommaSeparatedToArray in
+// ee/lib/ee/api/helpers/groups_helpers.rb).
+func TestCreate_WithAvatar_SendsTheAllowlistAsOneCommaSeparatedValue(t *testing.T) {
+	forms := make(chan groupAvatarForm, 1)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("the create was not a multipart form: %v", err)
+			http.Error(w, "not multipart", http.StatusBadRequest)
+			return
+		}
+		forms <- groupAvatarForm{values: form.Value}
+		testutil.RespondJSON(w, http.StatusCreated, groupAvatarRespJSON)
+	}))
+	avatar := &AvatarInput{Filename: "team.png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("img"))}
+	if _, err := Create(t.Context(), client, CreateInput{Name: "infra", Avatar: avatar, UniqueProjectDownloadLimitAllowlist: []string{"alice", "bob"}}); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	form := <-forms
+	if got := form.values["unique_project_download_limit_allowlist"]; len(got) != 1 || got[0] != "alice,bob" {
+		t.Errorf("unique_project_download_limit_allowlist = %q, want [alice,bob]", got)
+	}
+}
+
 // TestCreate_AvatarItCannotSend_IsRefused verifies that an avatar the create
 // cannot send is refused naming the action and the avatar: one with no file
-// name or no readable content before any request, and one beside two access
+// name or no readable content before any request, one beside two access
 // levels for a branch protection rule, which client-go refuses because the
-// upload carries one value per field.
+// upload carries one value per field, and one beside an alert list, which
+// the upload sends as a single string GitLab cannot read as its
+// Array[Integer].
 func TestCreate_AvatarItCannotSend_IsRefused(t *testing.T) {
 	image := base64.StdEncoding.EncodeToString([]byte("img"))
 	cases := []struct {
@@ -4830,6 +4860,10 @@ func TestCreate_AvatarItCannotSend_IsRefused(t *testing.T) {
 		{name: "two access levels", input: CreateInput{Name: "g", Avatar: &AvatarInput{Filename: "a.png", ContentBase64: image}, DefaultBranchProtectionDefaults: &BranchProtectionDefaultsInput{
 			AllowedToPush: []int{30, 40},
 		}}, want: "multiple access levels"},
+		{
+			name: "an alert list", input: CreateInput{Name: "g", Avatar: &AvatarInput{Filename: "a.png", ContentBase64: image}, UniqueProjectDownloadLimitAlertlist: []int64{31}},
+			want: "groupCreate: unique_project_download_limit_alertlist cannot be sent beside an avatar",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

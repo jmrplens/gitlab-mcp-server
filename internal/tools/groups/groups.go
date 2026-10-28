@@ -1110,7 +1110,7 @@ type CreateInput struct {
 
 	// Avatar is uploaded with the create, which GitLab takes only as a
 	// multipart form.
-	Avatar *AvatarInput `json:"avatar,omitempty" jsonschema:"Avatar image to upload with the group, from a local file or base64 content. With it, default_branch_protection_defaults may name one access level each for allowed_to_push and allowed_to_merge, since the upload carries a single value per field"`
+	Avatar *AvatarInput `json:"avatar,omitempty" jsonschema:"Avatar image to upload with the group, from a local file or base64 content. The upload carries a single value per field, so with it default_branch_protection_defaults may name one access level each for allowed_to_push and allowed_to_merge, and the unique project download alert list is refused (set it with group.update)"`
 }
 
 // UpdateInput defines parameters for updating a group.
@@ -1305,12 +1305,15 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	applyCreateDownloadLimits(input, opts)
 	applyCreateGroupExtras(input, opts)
+	if input.Avatar != nil && len(input.UniqueProjectDownloadLimitAlertlist) > 0 {
+		return DetailOutput{}, errors.New("groupCreate: unique_project_download_limit_alertlist cannot be sent beside an avatar, since the upload carries it as one string and GitLab reads it as a list of user IDs. Create the group with the avatar, then set the alert list with group.update")
+	}
 	avatar, release, err := openAvatar("groupCreate", input.Avatar)
 	if err != nil {
 		return DetailOutput{}, err
 	}
 	defer release()
-	opts.Avatar = avatar
+	attachAvatar(opts, avatar)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.CreateGroup(opts, gl.WithContext(ctx))
