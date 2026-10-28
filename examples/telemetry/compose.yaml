@@ -44,7 +44,7 @@ services:
       start_period: 10s
 
   collector:
-    image: otel/opentelemetry-collector-contrib:0.163.1
+    image: otel/opentelemetry-collector-contrib:0.164.0
     # Mounted where the image reads its configuration when it is given no
     # --config flag.
     volumes:
@@ -56,6 +56,6 @@ services:
       - lgtm
 
   lgtm:
-    image: grafana/otel-lgtm:0.37.0
+    image: grafana/otel-lgtm:0.38.1
     ports:
       - "127.0.0.1:3000:3000" # Grafana

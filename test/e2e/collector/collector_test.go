@@ -41,7 +41,7 @@ import (
 // through unannounced. Bumping this is a deliberate act with a diff, and it
 // moves the collector in examples/telemetry/compose.yaml with it, which
 // TestExample_ComposeFile_RunsTheCommittedPipeline holds to this tag.
-const collectorImage = "otel/opentelemetry-collector-contrib:0.163.1"
+const collectorImage = "otel/opentelemetry-collector-contrib:0.164.0"
 
 // The container-side paths. The receiver binds 0.0.0.0 rather than the image
 // default of localhost, because a published port reaches the container from
