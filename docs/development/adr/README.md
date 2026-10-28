@@ -38,6 +38,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | [ADR-0024](adr-0024-fine-grained-token-authority-per-action.md)                  | Fine-grained token authority is evaluated per action from GitLab         | Accepted                                                | Current                                         | 2026-09-30 |
 | [ADR-0025](adr-0025-the-site-is-the-only-home-of-user-documentation.md)          | The site is the only home of user documentation (supersedes ADR-0013)    | Accepted                                                | Current                                         | 2026-10-05 |
 | [ADR-0026](adr-0026-read-api-token-served-what-gitlab-accepts.md)                | A read_api token is served what GitLab accepts, per action               | Accepted                                                | Current                                         | 2026-10-06 |
+| [ADR-0027](adr-0027-person-facing-text-is-localized-from-a-compiled-catalog.md)  | Text a person reads is localized; model text and listings stay English   | Accepted                                                | Current                                         | 2026-10-28 |
 
 ## About Missing ADRs
 

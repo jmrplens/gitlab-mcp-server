@@ -126,6 +126,7 @@ Add these to the `env` block (and, for Docker, a matching `-e NAME` in
 | `GITLAB_MCP_SAFE_MODE`       | `false`   | Mutating actions answer with a preview card (the action and the arguments it would send) instead of executing |
 | `GITLAB_MCP_SKIP_TLS_VERIFY` | `false`   | Allow self-signed certificates on self-managed instances                                          |
 | `GITLAB_MCP_LOG_LEVEL`              | `info`    | `debug`, `info`, `warn`, `error`                                                                  |
+| `GITLAB_MCP_LANGUAGE`               | `en`      | `es` asks the guided questions in Spanish in clients that render elicitation forms, and sends progress messages in Spanish to any client; what the model reads stays English |
 
 Full reference: <https://docs.jmrp.io/gitlab-mcp-server/configuration/>
 

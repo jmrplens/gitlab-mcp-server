@@ -421,6 +421,16 @@
             "warn",
             "error"
           ]
+        },
+        {
+          "name": "GITLAB_MCP_LANGUAGE",
+          "description": "Language of the elicitation questions, form field titles and progress messages a client shows the user: en or es (default: en). What the model reads stays English",
+          "isRequired": false,
+          "default": "en",
+          "choices": [
+            "en",
+            "es"
+          ]
         }
       ]
     },
@@ -577,6 +587,16 @@
             "info",
             "warn",
             "error"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_LANGUAGE",
+          "description": "Language of the elicitation questions, form field titles and progress messages a client shows the user: en or es (default: en). What the model reads stays English",
+          "isRequired": false,
+          "default": "en",
+          "choices": [
+            "en",
+            "es"
           ]
         }
       ]
@@ -736,6 +756,16 @@
             "info",
             "warn",
             "error"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_LANGUAGE",
+          "description": "Language of the elicitation questions, form field titles and progress messages a client shows the user: en or es (default: en). What the model reads stays English",
+          "isRequired": false,
+          "default": "en",
+          "choices": [
+            "en",
+            "es"
           ]
         }
       ]
@@ -897,6 +927,16 @@
             "warn",
             "error"
           ]
+        },
+        {
+          "name": "GITLAB_MCP_LANGUAGE",
+          "description": "Language of the elicitation questions, form field titles and progress messages a client shows the user: en or es (default: en). What the model reads stays English",
+          "isRequired": false,
+          "default": "en",
+          "choices": [
+            "en",
+            "es"
+          ]
         }
       ]
     },
@@ -1056,6 +1096,16 @@
             "info",
             "warn",
             "error"
+          ]
+        },
+        {
+          "name": "GITLAB_MCP_LANGUAGE",
+          "description": "Language of the elicitation questions, form field titles and progress messages a client shows the user: en or es (default: en). What the model reads stays English",
+          "isRequired": false,
+          "default": "en",
+          "choices": [
+            "en",
+            "es"
           ]
         }
       ]

@@ -73,6 +73,8 @@ A phase reports `progress` one below its number (the first phase of four sends `
 
 There is no setting that turns progress on. It is active for any tool call that carries a progress token (`_meta.progressToken` in the `tools/call` request), and inactive for one that does not, where every progress update is skipped at no cost. Within one call the `progress` value only ever increases: an update that would not increase it is dropped. A call that is cancelled stops reporting at once.
 
+The messages are in English, the ones this page quotes, unless the deployment sets `GITLAB_MCP_LANGUAGE=es` (or `--language es`), which sends them in Spanish: the third poll of `pipeline.wait` shown [below](#example-frames) then reads `Sondeando el pipeline #41557 (intento 3, comprobación de estado)...`, with the same `progress` and `total`. See [Language](/gitlab-mcp-server/configuration/#language) and [In which language are the questions asked?](/gitlab-mcp-server/capabilities/elicitation/#in-which-language-are-the-questions-asked).
+
 Where the frames travel depends on the transport:
 
 | Transport                                            | Where progress travels                                                                                          |

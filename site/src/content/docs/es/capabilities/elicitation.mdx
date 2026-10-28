@@ -13,6 +13,8 @@ faq:
     a: "Un cliente la admite cuando declara la capacidad `elicitation` al conectarse, y el servidor lee esa declaración en cada llamada, así que aquí no hay nada que configurar. La documentación de **VS Code** (desde la versión 1.102), **Cursor** y **Claude Code** indica que la admiten. El soporte cambia de una versión a otra, así que para cualquier otro cliente consulta su propia documentación."
   - q: "¿Puede un asistente modificar GitLab sin mi confirmación?"
     a: "No. Todo asistente termina con una revisión de sí o no del resumen que ha reunido, y nada llega a GitLab antes de que la aceptes. Toda pregunta de sí o no empieza en no, así que un Enter accidental la rechaza. Cancelar en cualquier paso, o responder no en la revisión, termina el flujo sin ninguna llamada a GitLab."
+  - q: "¿Se pueden hacer las preguntas en español?"
+    a: "Sí. Con `GITLAB_MCP_LANGUAGE=es`, o `--language es`, las preguntas, los títulos de los campos del formulario, los resúmenes de confirmación y los mensajes de progreso que te muestra un cliente están en español. Todo lo que lee el modelo sigue en inglés, porque el modelo te responde en tu idioma lea lo que lea, y también los listados de herramientas, prompts y recursos, que validan las pasarelas MCP estrictas. Las claves de las propiedades y los valores de las opciones no cambian nunca, así que un hook o un script debe fijarse en ellos y no en el texto de la pregunta. El ajuste es de quien opera el servidor, uno por proceso, porque ningún cliente MCP envía todavía el idioma de su usuario; la propuesta de idioma por petición SEP-2792 es la vía prevista para que lo elija el cliente. Sin el ajuste el servidor pregunta en inglés, exactamente como antes."
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
@@ -230,6 +232,78 @@ La superficie dinámica por defecto nunca pregunta: `gitlab_execute_action` rech
 - **Las preguntas de sí o no empiezan en no**, así que un cliente que rellena los valores por defecto las abre en no.
 - **Las respuestas van atadas a la llamada.** En la vía multi-ronda las respuestas viajan en `requestState`, que el servidor firma, ata a la herramienta y a los argumentos exactos de la llamada, y acepta durante 10 minutos. Un estado caducado, o emitido para otra llamada, se ignora y las preguntas se repiten; un estado que el servidor no firmó se rechaza. La clave de firma se crea nueva en cada proceso, así que un estado emitido antes de un reinicio, o por otra réplica tras un balanceador, se rechaza en lugar de continuar.
 - **El usuario tiene siempre la última palabra.** Todo asistente confirma antes de escribir nada en GitLab, y el usuario puede cancelar en cualquier momento sin efectos secundarios.
+
+## ¿En qué idioma se hacen las preguntas?
+
+En inglés, salvo que quien ejecuta el servidor fije `GITLAB_MCP_LANGUAGE=es` (o pase `--language es`), que las hace en español. Los dos transportes leen el ajuste y vale para todo el proceso, así que a todas las credenciales de un despliegue HTTP se les pregunta en el mismo idioma; [Configuración](/gitlab-mcp-server/es/configuration/#idioma) recoge los valores que acepta. Un despliegue que no lo fija recibe exactamente el inglés que recibía antes de que existiera el ajuste.
+
+### ¿Qué cambia y qué sigue en inglés?
+
+| Texto                                                                                                                                                          | Con `es`                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| La pregunta de cada paso (`message`) y la `description` de su campo, que la repite                                                                             | Español                                                               |
+| El `title` de cada campo del formulario (`Título`, `Rama origen`, el `Confirmar` de una pregunta de sí o no)                                                   | Español                                                               |
+| Las etiquetas del resumen de confirmación (`**Título**`, `**Visibilidad**`, `Sí`)                                                                              | Español; los valores que contiene se muestran tal como se escribieron |
+| La confirmación de una acción destructiva en las superficies meta e individual, y las preguntas de las dos protecciones que dependen de los argumentos         | Español                                                               |
+| Los mensajes de progreso: los pasos de los asistentes, y las esperas, subidas, descargas, transferencias y publicaciones de paquetes que informan de su avance | Español                                                               |
+| Las claves de las propiedades (`title`, `source_branch`, `confirmed`, `selection`) y las opciones de una elección (`private`, `internal`, `public`)            | No cambian nunca                                                      |
+| Todo lo que lee el modelo: descripciones, resultados, pistas, el mensaje de cancelación, el rechazo que recibe un cliente sin elicitación                      | Inglés                                                                |
+| Los cuatro listados (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`), títulos incluidos                                            | Inglés, byte a byte igual que con `en`                                |
+| Los logs, los errores de arranque, `--help` y los mensajes de los errores JSON-RPC                                                                             | Inglés                                                                |
+
+Solo se traduce lo que una persona lee sin que el modelo lo lea antes. El modelo responde en el idioma de la persona lea en el idioma que lea, así que traducir lo que recibe cambiaría cómo se comporta sin ganar nada. Los listados se quedan como están porque son lo que comprueban los [validadores estrictos de pasarelas MCP](/gitlab-mcp-server/es/compatibility/#validadores-de-pasarelas-mcp), ASCII puro y sin punto y coma, y de donde el modelo elige las herramientas; las pruebas del servidor los comparan con `en` y con `es` y los encuentran idénticos. Lo que lee quien opera el servidor sigue en inglés porque es lo que se busca en esta documentación y en los issues.
+
+La primera ronda del asistente de issues que se muestra [arriba](#qué-forma-recibe-un-cliente-en-el-protocolo), con `es`:
+
+```json
+{
+  "resultType": "input_required",
+  "inputRequests": {
+    "title": {
+      "method": "elicitation/create",
+      "params": {
+        "message": "Escribe el título del issue",
+        "requestedSchema": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string", "title": "Título", "description": "Escribe el título del issue" }
+          },
+          "required": ["title"]
+        }
+      }
+    }
+  },
+  "requestState": "<opaque, signed by the server>"
+}
+```
+
+La clave de la pregunta y la de la propiedad son `title` en los dos idiomas, y la respuesta vuelve con esa clave.
+
+### ¿En qué debe fijarse un hook o un script?
+
+Un hook `Elicitation` de Claude Code, una regla de respuesta automática o un script que reconozca una pregunta por su `message` deja de coincidir en cuanto cambia el idioma. Fíjate en lo que no cambia nunca: las claves de las propiedades de `requestedSchema`, que son el nombre del propio campo en una pregunta de texto (`title`, `description`, `labels`, `source_branch`, `target_branch`, `tag_name`, `name`, `default_branch`), `selection` en una elección y `confirmed` en una pregunta de sí o no; las claves de `inputRequests` en una sesión de `2026-07-28`, que nombran cada pregunta: el nombre del propio campo en una de texto, `visibility` en la elección, `confidential`, `remove_source_branch`, `squash` e `initialize_with_readme` en las preguntas de sí o no de los asistentes, `confirm` en la confirmación final de un asistente y en la de una acción destructiva, `project_pull_mirror_overwrite` en la protección de `project.pull_mirror_configure` y `work_item_clear_lists` en la de `issue.work_item_update`; y los valores de las opciones de una elección.
+
+En una sesión de `2025-11-25` o anterior, cada pregunta es una petición `elicitation/create` síncrona que solo lleva su `message` y su `requestedSchema`, así que todas las preguntas de sí o no tienen la misma propiedad `confirmed`, y solo su `message`, o su lugar en el asistente, las distingue. Un hook que las responda de forma distinta en esa vía tiene que reconocer el mensaje de cada una en todos los idiomas que pueda tener fijados el despliegue.
+
+### ¿Qué clientes muestran las preguntas traducidas?
+
+Lo que ve una persona es lo que renderiza el cliente. Cada cliente de la tabla cuyo comportamiento está documentado muestra el texto del servidor tal como llega, ninguno lo traduce y ninguno envía al servidor el idioma de su usuario, según su documentación y su código el 2026-10-27:
+
+| Cliente                                        | Renderiza los formularios                                                 | Lo que ve la persona                                                                                                                                                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code + GitHub Copilot (1.102 y posteriores) | Sí                                                                        | La pregunta como Markdown en el chat; cada campo encabezado por su `title`, con su `description` debajo o como placeholder. Los botones de VS Code siguen el idioma de VS Code                                            |
+| Claude Code                                    | Sí, en una sesión interactiva de terminal; una ejecución con `-p` cancela | Un diálogo con los campos del servidor. Los hooks `Elicitation` reciben `message` y `requested_schema` tal como se enviaron. Su ajuste `language` es el idioma de las respuestas de Claude y no se envía a los servidores |
+| Cursor                                         | Figura como admitida                                                      | No está documentado                                                                                                                                                                                                       |
+| OpenAI Codex                                   | Sí                                                                        | Un formulario en su interfaz de terminal, con el `title` y la `description` de cada campo. Puede pasar la petición por una revisión automática con un modelo, que lee el español igual que el inglés                      |
+| Goose                                          | Sí                                                                        | Un formulario en el chat de escritorio; en la CLI, la pregunta y el nombre y la descripción de cada campo                                                                                                                 |
+| Claude Desktop                                 | No                                                                        | Ninguna pregunta: los asistentes responden con su acción alternativa, y una acción destructiva pide `confirm: true` al modelo. Los mensajes de progreso están en español allí donde los muestre                           |
+| Zed, Cline, Continue, LibreChat, Gemini CLI    | No                                                                        | Ninguna pregunta, por el mismo motivo. Los mensajes de progreso están en español en cualquiera de ellos que los muestre                                                                                                   |
+
+Windsurf, los IDE de JetBrains y Kiro no se han verificado. Un cliente que no renderiza formularios no muestra ninguna de las preguntas traducidas, diga lo que diga el ajuste. Los mensajes de progreso no dependen de los formularios: viajan en `notifications/progress` en cualquier llamada a una herramienta que lleve un token de progreso, así que están en español en todos los clientes que [muestran el progreso](/gitlab-mcp-server/es/capabilities/progress/#cómo-muestran-el-progreso-los-clientes).
+
+### ¿Se usará el idioma del propio cliente?
+
+Todavía no, porque ningún cliente lo envía y MCP no tiene un campo para ello. La propuesta [SEP-2792](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2792) añade uno: una petición nombra en `_meta` los idiomas de su usuario, y el servidor responde en la mejor coincidencia que tiene e indica cuál usó. Los mantenedores del núcleo la aceptaron el 2026-10-17, pero todavía no forma parte de ninguna revisión publicada de la especificación, y el SDK de Go sobre el que está construido este servidor no la incluye. Cuando llegue ([el issue 1013](https://github.com/jmrplens/gitlab-mcp-server/issues/1013) la sigue), el plan es que el idioma de cada petición decida para esa petición, que `GITLAB_MCP_LANGUAGE` sea lo que recibe una petición que no nombra ninguno, o ninguno que el servidor tenga, y que nada se guarde en la sesión.
 
 ## ¿Qué requiere la elicitación?
 

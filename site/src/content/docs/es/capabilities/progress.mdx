@@ -73,6 +73,8 @@ Una fase envía como `progress` su número menos uno (la primera fase de cuatro 
 
 No hay ningún ajuste que active el progreso. Está activo en cualquier llamada a herramienta que lleve un token de progreso (`_meta.progressToken` en la petición `tools/call`), e inactivo en la que no lo lleva, donde cada actualización de progreso se omite sin coste. Dentro de una llamada el valor de `progress` solo aumenta: una actualización que no lo aumentaría se descarta. Una llamada cancelada deja de informar en el acto.
 
+Los mensajes están en inglés, los que cita esta página, salvo que el despliegue fije `GITLAB_MCP_LANGUAGE=es` (o `--language es`), que los envía en español: el tercer sondeo de `pipeline.wait` que se muestra [más abajo](#avisos-de-ejemplo) dice entonces `Sondeando el pipeline #41557 (intento 3, comprobación de estado)...`, con los mismos `progress` y `total`. Consulta [Idioma](/gitlab-mcp-server/es/configuration/#idioma) y [¿En qué idioma se hacen las preguntas?](/gitlab-mcp-server/es/capabilities/elicitation/#en-qué-idioma-se-hacen-las-preguntas).
+
 Por dónde viajan los avisos depende del transporte:
 
 | Transporte                                           | Por dónde viaja el progreso                                                                                                                        |

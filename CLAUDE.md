@@ -1,12 +1,13 @@
 # gitlab-mcp-server — AI Development Context
 
 > This file provides comprehensive context for AI assistants working on this project.
-> All project artifacts must be written in **English**, with one exception: the Spanish half of
-> the user documentation, which is the twin pages under `site/src/content/docs/es/` and the
-> Spanish text kept beside its English source (the `es` fields of
-> `cmd/gen_tool_reference/domains.json`, the Spanish strings of the generators that write both
-> languages, `labelEs` in `site/scripts/gen-llms.mjs`, `site/src/content/i18n/es.json`).
-> Conversations may be in any language.
+> All project artifacts must be written in **English**, with two exceptions. The first is the
+> Spanish half of the user documentation, which is the twin pages under
+> `site/src/content/docs/es/` and the Spanish text kept beside its English source (the `es`
+> fields of `cmd/gen_tool_reference/domains.json`, the Spanish strings of the generators that
+> write both languages, `labelEs` in `site/scripts/gen-llms.mjs`, `site/src/content/i18n/es.json`).
+> The second is the server's Spanish message catalog, `internal/i18n/catalog_es.go`, and the
+> Spanish its tests compare a render against. Conversations may be in any language.
 >
 > **No AI attribution in anything published under the maintainer's name.** Commit
 > messages, PR titles and bodies, issue and review comments, and release notes carry
@@ -141,7 +142,7 @@ gitlab-mcp-server/
 │   ├── gatewaycompat/                # Description and title rewriting for strict MCP gateways
 │   ├── gitlab/                       # GitLab API client wrapper (client.GL() accessor)
 │   ├── graphqlschema/                # The pinned GitLab GraphQL schema and Validate()
-│   ├── i18n/                         # Person-facing message catalog (English source) and the request language (GITLAB_MCP_LANGUAGE)
+│   ├── i18n/                         # Person-facing message catalog (English source, Spanish translation) and the request language (GITLAB_MCP_LANGUAGE)
 │   ├── mcpotel/                      # OpenTelemetry instrumentation of MCP request handling (API only)
 │   ├── oauth/                        # OAuth HTTP mode: token cache, verifier, RFC 9728 metadata
 │   ├── serverpool/                   # HTTP mode: bounded LRU pool of per-token+URL entries
@@ -250,6 +251,10 @@ Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-spec
 ### Every client-go call carries the handler's context
 
 client-go takes the caller's context only as a request option and builds the request from `context.Background()` without one, so **every SDK call passes `gl.WithContext(ctx)`**, and a request built with `NewRequest`, `NewRequestToURL` or `UploadRequest` carries it among its options or is rebound with `req = req.WithContext(ctx)` before it is sent. A call without it compiles, answers correctly and passes its tests, while the action deadline, an abandoned HTTP POST and the outbound trace all lose it; that shipped in five packages before anything checked. `make check-sdk-context` (`cmd/audit_sdk_context`, step 22 of `make analyze` and a CI step) is the gate, and `testutil.CancelOnArrival` is the fixture that proves a handler passes it: its context ends when the first request reaches the mock, so a handler returns `context.Canceled` promptly only if that first request carried the context, and any request that sits out the mock's hold, having been sent without it, fails the test at cleanup (a later request carrying the context would be refused by the transport and read as the cancellation, so the return value alone proves only the first).
+
+### Texts a person reads directly
+
+**A text a client shows a person without the model reading it (an elicitation's question, summary and field titles, a progress message) comes from `internal/i18n` as an `i18n.Text`**, the type every person-facing sink takes, so a literal there does not compile. English is the source and the default, byte for byte what was served before the catalog; every language (`catalog_es.go` today) carries every key with the same placeholders, in the same change; what the model reads and the four listings stay English. `make check-i18n` gates the call sites. See [Localization](docs/development/i18n.md) and ADR-0027.
 
 ### Adding or changing a limit
 
@@ -480,7 +485,7 @@ Settings this project defines are read as `GITLAB_MCP_<NAME>` and under no other
 | `GITLAB_MCP_DISCOVERY_RATE_LIMIT_RPS`, `GITLAB_MCP_DISCOVERY_RATE_LIMIT_BURST` | HTTP: one bucket per address for the two server cards and the RFC 9728 metadata (20 req/s, burst 200; `0` turns it off) |
 | `GITLAB_MCP_CLIENT_COMPAT` | Per-client response compatibility (`auto`) |
 | `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | Rewrite listed text for strict gateway validators |
-| `GITLAB_MCP_LANGUAGE` | Language of the texts a client shows a person directly (`en`, the only one so far) |
+| `GITLAB_MCP_LANGUAGE` | Language of the texts a client shows a person directly (`en`, the default, or `es`); both transports, `--language` |
 | `GITLAB_MCP_TELEMETRY`, `GITLAB_MCP_TELEMETRY_*` | OTLP export (off), identity policy, its key and rotation, tool-name metric dimensions |
 | `GITLAB_MCP_LOG_LEVEL` | Logging verbosity |
 | `GITLAB_MCP_PPROF_ADDR` | Loopback-only `net/http/pprof` listener |
@@ -608,6 +613,7 @@ ADRs document key decisions in `docs/development/adr`:
 | ADR-0024 | Fine-grained token authority is evaluated per action from GitLab | Accepted (a token whose scope list is `granular` is unknown authority and never narrowed to read-only by it; phase A withholds what no fine-grained token can reach at the GitLab release the permission table was recorded from, phase B lists what a readable grant reaches; the grant is never a key, and R-GRANT holds the generated table to the live record) |
 | ADR-0025 | The site is the only home of user documentation (supersedes ADR-0013) | Accepted (user pages live in `site/src/content/docs` in English and Spanish, changed together; `docs/` keeps `docs/development` for contributors; the tool reference, fine-grained permissions reference, charts and figures are generated and gated) |
 | ADR-0026 | A read_api token is served what GitLab accepts from it, derived per action (refines ADR-0018) | Accepted (each action's classic scope is derived from the requests it sends, declared where GitLab departs from its method rule, and held by gates 4 and 5; a `read_api` token is served what that scope reaches, not the read-only surface, and the tool reference prints the classic and fine-grained token lines) |
+| ADR-0027 | Text a person reads directly is localized from a compiled catalog; what the model reads and the listed catalog stay English | Accepted (`internal/i18n`, English source and Spanish; `GITLAB_MCP_LANGUAGE` per process, `en` by default; SEP-2792 is the future per-request source) |
 
 ### Modular tools sub-packages (ADR-0004)
 

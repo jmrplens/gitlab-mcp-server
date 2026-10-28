@@ -150,7 +150,7 @@ Spanish translation in `catalog_es.go`, rendered with `i18n.T` in the language
 the request carries, and a literal at the call does not compile. The catalog's
 tests refuse a translation that is missing a key, fills other placeholders,
 breaks the Markdown into other constructions or carries a character outside
-its language's policy.
+its language's policy. See [Localization](i18n.md).
 
 Each flow ends with `Done`, so the bar reaches 100% once the object exists.
 Outside the flows, progress is reported by the project upload (`uploads`,
@@ -197,7 +197,7 @@ before the catalog. The options of a choice are never translated either,
 since the answer carries them back. A destructive confirmation
 (`toolutil.ConfirmDestructiveAction`) takes its prompt as an unrendered
 `i18n.Message` instead, because the model reads the same question in English
-when the client cannot ask it.
+when the client cannot ask it. See [Localization](i18n.md).
 
 On the multi-round-trip path the handler is re-invoked from the start on
 every round. The answers gathered so far travel in the opaque `requestState`

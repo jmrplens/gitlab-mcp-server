@@ -30,6 +30,7 @@ testing reference live in subfolders here.
 | [Error Handling](error-handling.md)                                       | Classification, the wrapping functions, not-found results, and testing errors                                                      |
 | [GraphQL Integration](graphql.md)                                         | When a domain uses GraphQL, the shared helpers, and the pinned schema it is held to                                                |
 | [Capabilities and Icons](capabilities.md)                                 | The progress, elicitation and completion APIs, and how the icons are built                                                         |
+| [Localization](i18n.md)                                                   | Person-facing texts, the message catalog, its tests and gates, and what stays English                                              |
 | [Catalog-First Individual Tools](catalog-first-individual-tools.md)       | Evaluation of generating individual tools from the canonical catalog                                                               |
 | [Dynamic Search Ranker](dynamic-search-ranker.md)                         | How `gitlab_find_action` ranks and matches queries                                                                                 |
 | [Command-Line Utilities](cmd-utilities.md)                                | The `cmd/` developer tools (generators and auditors)                                                                               |

@@ -476,12 +476,13 @@ The four authentication budget flags (`--auth-failure-limit`, `--auth-failure-wi
 | `--allow-private-instances`   | _(empty)_ | `true` permits a destination the operator did not choose (a `GITLAB-URL` header under `--allow-any-gitlab-url`, or a redirect hop that left the instance) to be a private, loopback or CGNAT address; cloud metadata addresses stay refused. Sets `GITLAB_MCP_ALLOW_PRIVATE_INSTANCES` |
 | `--pprof-addr`                | _(empty)_ | Serve Go's profiling handlers on this loopback address (`127.0.0.1:6060`), on a listener of their own; any other host is refused at startup. Sets `GITLAB_MCP_PPROF_ADDR`                                                                                                              |
 | `--max-listen-streams`        | _(empty)_ | `subscriptions/listen` streams one credential may hold open (`64` when unset; `0` removes that ceiling, and the 512 per process stays). Sets `GITLAB_MCP_MAX_LISTEN_STREAMS`; a value that is not a whole number warns and keeps `64`                                                  |
+| `--language`                  | _(empty)_ | Language of the questions, form field titles and progress messages a client shows you: `en` (the effective default) or `es`. Sets `GITLAB_MCP_LANGUAGE`; any other value refuses startup. See [Language](#language)                                                                    |
 | `--tool-search`               | _(empty)_ | Search the action catalog by name, alias, tag or description, then exit; prints each canonical action ID beside the tool the configured surface names it. Reads `--tool-surface` and `--tier`, and otherwise `GITLAB_MCP_TOOL_SURFACE` and `GITLAB_MCP_TIER`                           |
 | `--version`                   | `false`   | Print the version and commit, then exit                                                                                                                                                                                                                                                |
 | `--shutdown`                  | `false`   | Terminate all running instances and exit                                                                                                                                                                                                                                               |
 | `--probe`                     | `false`   | Ask the running instance's `/health` and exit 0 when it answers; the image's `HEALTHCHECK`. Reads the listener off the instance's own flags, or probes the URL, `unix:<path>` or `host:port` given after the flag                                                                      |
 
-The eight flags that set a variable (`--log-level` through `--max-listen-streams`) exist so one command line can configure the whole server; an explicitly passed flag beats an exported variable. `GITLAB_TOKEN` deliberately has no flag, since a token on a command line is visible to every user on the machine through `ps` and lands in shell history. The four telemetry flags (`--telemetry`, `--telemetry-identity`, `--telemetry-identity-rotation`, `--telemetry-tool-name`) are read by both transports too, and [Telemetry](/gitlab-mcp-server/operations/telemetry/) explains them; while telemetry is on, an identity policy or rotation it cannot use refuses the start. `-h` or `--help` prints the server's own help, and the [CLI reference](/gitlab-mcp-server/reference/cli/) lists every flag with its type.
+The nine flags that set a variable (`--log-level` through `--language`) exist so one command line can configure the whole server; an explicitly passed flag beats an exported variable. `GITLAB_TOKEN` deliberately has no flag, since a token on a command line is visible to every user on the machine through `ps` and lands in shell history. The four telemetry flags (`--telemetry`, `--telemetry-identity`, `--telemetry-identity-rotation`, `--telemetry-tool-name`) are read by both transports too, and [Telemetry](/gitlab-mcp-server/operations/telemetry/) explains them; while telemetry is on, an identity policy or rotation it cannot use refuses the start. `-h` or `--help` prints the server's own help, and the [CLI reference](/gitlab-mcp-server/reference/cli/) lists every flag with its type.
 
 Example:
 
@@ -586,6 +587,16 @@ Both safe mode and read-only act **per action**, not per tool. On the dynamic an
 :::note
 If `GITLAB_MCP_READ_ONLY=true` is also set, it takes precedence — mutating operations are removed entirely rather than previewed.
 :::
+
+## Language
+
+`GITLAB_MCP_LANGUAGE` chooses the language of the texts a client shows you without the model reading them first: the questions and summaries of the guided wizards and of a destructive action's confirmation, the titles of their form fields, and progress messages. It takes `en`, the default, or `es`, in any case and with an optional region (`es-ES`, `es-419`). The `--language` flag sets the same variable, in both transports, and any other value refuses the start.
+
+```bash
+GITLAB_MCP_LANGUAGE=es
+```
+
+Everything the model reads stays English, and so do the tool, prompt and resource listings, the logs, the startup errors and `--help`: the model answers you in your own language whatever it reads. The server never reads the machine's locale (`LANG`, `LC_ALL`, `LC_MESSAGES` or gettext's `LANGUAGE`), so a deployment that does not set the variable is served English, exactly as before it existed. The language is the operator's, one per process, because no MCP client sends its user's language yet. [In which language are the questions asked?](/gitlab-mcp-server/capabilities/elicitation/#in-which-language-are-the-questions-asked) says what changes, which clients show it, and what a hook or a script should match on.
 
 ## Automatic behaviors
 

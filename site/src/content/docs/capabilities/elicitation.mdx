@@ -13,6 +13,8 @@ faq:
     a: "A client supports it when it declares the `elicitation` capability as it connects, and the server reads that declaration on every call, so there is nothing to configure here. The documentation of **VS Code** (from release 1.102), **Cursor** and **Claude Code** lists elicitation as supported. Support changes from release to release, so for any other client check its own documentation."
   - q: "Can a wizard change GitLab without my confirmation?"
     a: "No. Every wizard ends with a yes/no review of the summary it assembled, and nothing reaches GitLab before you accept it. Every yes/no question starts on no, so an accidental Enter declines. Cancelling at any step, or answering no at the review, ends the flow without a GitLab call."
+  - q: "Can the questions be asked in Spanish?"
+    a: "Yes. With `GITLAB_MCP_LANGUAGE=es`, or `--language es`, the questions, the titles of the form fields, the confirmation summaries and the progress messages a client shows you are in Spanish. Everything the model reads stays English, because the model answers you in your own language whatever it reads, and so do the tool, prompt and resource listings, which strict MCP gateways validate. The property keys and the option values never change, so a hook or a script should match on them rather than on the question's text. The setting is the operator's, one per process, since no MCP client sends its user's language yet; the per-request language proposal SEP-2792 is the planned way for a client to choose. Without the setting the server asks in English, exactly as before."
 ---
 
 import FAQ from "../../../components/FAQ.astro";
@@ -230,6 +232,78 @@ The default dynamic surface never asks: `gitlab_execute_action` refuses an actio
 - **Yes/no questions default to no**, so a client that pre-fills defaults opens them on no.
 - **The answers are bound to the call.** On the multi-round-trip path the answers travel in `requestState`, which the server signs, ties to the tool and the exact arguments of the call, and accepts for 10 minutes. State that has expired, or was issued for another call, is ignored and the questions are asked again; state the server did not sign is refused. The signing key is created fresh in each process, so state issued before a restart, or by another replica behind a balancer, is refused rather than continued.
 - **The user always has the last word.** Every wizard confirms before it writes anything to GitLab, and the user can cancel at any point without side effects.
+
+## In which language are the questions asked?
+
+In English, unless whoever runs the server sets `GITLAB_MCP_LANGUAGE=es` (or passes `--language es`), which asks them in Spanish. The setting is read by both transports and holds for the whole process, so every credential of an HTTP deployment is asked in the same language; [Configuration](/gitlab-mcp-server/configuration/#language) lists the values it takes. A deployment that does not set it is served exactly the English it was served before the setting existed.
+
+### What changes, and what stays English?
+
+| Text                                                                                                                                       | With `es`                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| The question of each step (`message`), and the `description` of its field, which repeats it                                                | Spanish                                                  |
+| The `title` of each form field (`Título`, `Rama origen`, the `Confirmar` of a yes/no question)                                             | Spanish                                                  |
+| The labels of the confirmation summary (`**Título**`, `**Visibilidad**`, `Sí`)                                                             | Spanish; the values in it are shown as they were written |
+| The confirmation of a destructive action on the meta and individual surfaces, and the questions of the two guards that depend on arguments | Spanish                                                  |
+| Progress messages: the wizards' steps, and the waits, uploads, downloads, transfers and package publishing that report progress            | Spanish                                                  |
+| The property keys (`title`, `source_branch`, `confirmed`, `selection`) and the options of a choice (`private`, `internal`, `public`)       | Never change                                             |
+| Everything the model reads: descriptions, results, hints, the cancellation message, the refusal a client that cannot elicit receives       | English                                                  |
+| The four listings (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`), titles included                            | English, byte for byte the same as under `en`            |
+| Logs, startup errors, `--help` and the messages of JSON-RPC errors                                                                         | English                                                  |
+
+Only what a person reads without the model reading it first is translated. The model answers in the person's own language whatever language it read, so translating its input would change how it behaves and gain nothing. The listings stay as they are because they are what strict [MCP gateway validators](/gitlab-mcp-server/compatibility/#mcp-gateway-validators) check, pure ASCII with no semicolon, and what the model chooses tools from; the server's tests compare them under `en` and `es` and find them identical. What an operator reads stays English because it is what gets searched for in this documentation and in issues.
+
+The first round of the issue wizard shown [above](#which-wire-form-does-a-client-get), under `es`:
+
+```json
+{
+  "resultType": "input_required",
+  "inputRequests": {
+    "title": {
+      "method": "elicitation/create",
+      "params": {
+        "message": "Escribe el título del issue",
+        "requestedSchema": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string", "title": "Título", "description": "Escribe el título del issue" }
+          },
+          "required": ["title"]
+        }
+      }
+    }
+  },
+  "requestState": "<opaque, signed by the server>"
+}
+```
+
+The question key and the property key are `title` in both languages, and the answer comes back under that key.
+
+### What should a hook or a script match on?
+
+A Claude Code `Elicitation` hook, an auto-answer rule or a script that recognizes a question by its `message` stops matching once the language changes. Match on what never changes instead: the property keys of `requestedSchema`, which are the field's own name for a text question (`title`, `description`, `labels`, `source_branch`, `target_branch`, `tag_name`, `name`, `default_branch`), `selection` for a choice and `confirmed` for a yes/no question; the keys of `inputRequests` on a `2026-07-28` session, which name every question: a text field's own name, `visibility` for the choice, `confidential`, `remove_source_branch`, `squash` and `initialize_with_readme` for the wizards' yes/no questions, `confirm` for a wizard's final confirmation and a destructive action's, `project_pull_mirror_overwrite` for the guard of `project.pull_mirror_configure` and `work_item_clear_lists` for the guard of `issue.work_item_update`; and the option values of a choice.
+
+On a `2025-11-25` session or an earlier one, each question is a synchronous `elicitation/create` request that carries only its `message` and its `requestedSchema`, so every yes/no question has the same `confirmed` property, and only its `message`, or its place in the wizard, tells one from another. A hook that answers them differently there has to recognize each one's message in every language the deployment may be set to.
+
+### Which clients show the translated questions?
+
+What a person sees is what the client renders. Every client below whose behavior is documented shows the server's text as it arrives, none translates it, and none sends its user's language to the server, as their documentation and sources read on 2026-10-27:
+
+| Client                                      | Renders the forms                                           | What the person sees                                                                                                                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code + GitHub Copilot (1.102 and later)  | Yes                                                         | The question as Markdown in the chat; each field headed by its `title`, with its `description` beneath it or as its placeholder. VS Code's own buttons follow VS Code's language               |
+| Claude Code                                 | Yes, in an interactive terminal session; a `-p` run cancels | A dialog with the server's fields. `Elicitation` hooks receive `message` and `requested_schema` as sent. Its `language` setting is the language of Claude's replies and is not sent to servers |
+| Cursor                                      | Listed as supported                                         | Not documented                                                                                                                                                                                 |
+| OpenAI Codex                                | Yes                                                         | A form in its terminal interface, with each field's `title` and `description`. It can route the request to an automatic review by a model, which reads Spanish as well as English              |
+| Goose                                       | Yes                                                         | A form in the desktop chat; in the CLI, the question and each field's name and description                                                                                                     |
+| Claude Desktop                              | No                                                          | No question: the wizards answer with their alternative action, and a destructive action asks the model for `confirm: true`. Progress messages are in Spanish wherever it shows them            |
+| Zed, Cline, Continue, LibreChat, Gemini CLI | No                                                          | No question, for the same reason. Progress messages are in Spanish in any of them that shows them                                                                                              |
+
+Windsurf, JetBrains IDEs and Kiro were not verified. A client that renders no form shows none of the translated questions, whatever the setting says. Progress messages do not depend on forms: they travel in `notifications/progress` on any tool call that carries a progress token, so they are in Spanish in every client that [shows progress](/gitlab-mcp-server/capabilities/progress/#how-do-clients-display-progress).
+
+### Will the client's own language be used?
+
+Not yet, because no client sends one and MCP has no field for it. The proposal [SEP-2792](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2792) adds one: a request names its user's languages in `_meta`, the server answers in the best match it has and says which one it used. The core maintainers accepted it on 2026-10-17, but it is not part of a published revision of the specification yet, and the Go SDK this server is built on does not carry it. When it lands ([issue 1013](https://github.com/jmrplens/gitlab-mcp-server/issues/1013) tracks it), the plan is that a request's own language decides for that request, `GITLAB_MCP_LANGUAGE` is what a request that names none, or none the server has, is served, and nothing is kept on the session.
 
 ## What does elicitation require?
 
