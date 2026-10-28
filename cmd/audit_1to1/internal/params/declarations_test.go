@@ -36,8 +36,10 @@ func TestRouteMatches_ADeclaredRoute_NamesTheRoutesItSpells(t *testing.T) {
 // declaration answers: on its route and its param, or every param of the
 // route; an upstream one an unmodeled param alone, so it goes stale when
 // client-go models the param; a map input one a param an option struct
-// models or a free map carries, and never one nothing can send; the others
-// any class.
+// models or a free map carries, and never one nothing can send; a
+// declared-not-applied or webhook-payload one a param no input offers, so an
+// input that offers one is a finding again; a branch-not-taken one any
+// class.
 func TestAnswers_ACategory_AnswersOnlyTheClassesItMay(t *testing.T) {
 	finding := func(param, class string) Finding {
 		return Finding{Route: "GET /things", Param: param, Class: class}
@@ -53,7 +55,13 @@ func TestAnswers_ACategory_AnswersOnlyTheClassesItMay(t *testing.T) {
 		{name: "map input on a modeled param", declaration: paramDeclaration{Route: "GET /things", Param: anyParam, Category: categoryMapInput}, finding: finding("p", ClassNotOffered), want: true},
 		{name: "map input on a free map", declaration: paramDeclaration{Route: "GET /things", Param: anyParam, Category: categoryMapInput}, finding: finding("p", ClassUnjudged), want: true},
 		{name: "map input on an unmodeled param", declaration: paramDeclaration{Route: "GET /things", Param: anyParam, Category: categoryMapInput}, finding: finding("p", ClassUnmodeled)},
-		{name: "any class otherwise", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassOfferedUnrecorded), want: true},
+		{name: "not applied on an unmodeled param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassUnmodeled), want: true},
+		{name: "not applied on a modeled param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassNotOffered), want: true},
+		{name: "not applied on an unjudged param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassUnjudged), want: true},
+		{name: "not applied on an offered param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassOfferedUnrecorded)},
+		{name: "webhook payload on an unmodeled param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryWebhookPayload}, finding: finding("p", ClassUnmodeled), want: true},
+		{name: "webhook payload on an offered param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryWebhookPayload}, finding: finding("p", ClassOfferedUnrecorded)},
+		{name: "branch not taken on an offered param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryBranchNotTaken}, finding: finding("p", ClassOfferedUnrecorded), want: true},
 		{name: "another param", declaration: paramDeclaration{Route: "GET /things", Param: "q", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassUnmodeled)},
 		{name: "another route", declaration: paramDeclaration{Route: "GET /other", Param: "p", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassUnmodeled)},
 	}

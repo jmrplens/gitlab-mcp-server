@@ -18,14 +18,16 @@ const (
 	// client-go models the param.
 	categoryUpstream = "upstream"
 	// categoryDeclaredNotApplied is a param GitLab declares on the route and
-	// drops before it acts, so offering it would offer nothing.
+	// drops before it acts, or cannot apply, so offering it would offer
+	// nothing. It answers a param no input offers alone.
 	categoryDeclaredNotApplied = "declared-not-applied"
 	// categoryMapInput is a route whose action takes its params as a free
 	// map the caller fills, so every param GitLab declares is offered by
 	// the map and none by name.
 	categoryMapInput = "map-input"
 	// categoryWebhookPayload is a param of a payload another service posts
-	// to the route, which no caller of an action chooses.
+	// to the route, which no caller of an action chooses. It answers a param
+	// no input offers alone.
 	categoryWebhookPayload = "webhook-payload"
 	// categoryBranchNotTaken is a param of a route the client-go method
 	// sends only for an argument the handler never passes, so the action
@@ -63,9 +65,17 @@ type paramDeclaration struct {
 // offers what the struct it is decoded into carries, or, sent as it is,
 // whatever the caller writes, so it answers a param an option struct models
 // and a param whose options are a free map, and never one neither can send.
+// A param GitLab drops, or a payload another service posts, is one no input
+// should offer, so those two answer a param no input offers and never an
+// offered one: an input that starts offering a key GitLab drops is a finding
+// again rather than an offer the declaration hides. A branch not taken
+// answers any class, since what its route's input offers goes to the route
+// the method takes instead.
 var answeredClasses = map[string][]string{
-	categoryUpstream: {ClassUnmodeled},
-	categoryMapInput: {ClassNotOffered, ClassUnjudged},
+	categoryUpstream:           {ClassUnmodeled},
+	categoryMapInput:           {ClassNotOffered, ClassUnjudged},
+	categoryDeclaredNotApplied: {ClassUnmodeled, ClassNotOffered, ClassUnjudged},
+	categoryWebhookPayload:     {ClassUnmodeled, ClassNotOffered, ClassUnjudged},
 }
 
 // answers reports whether the declaration answers a finding: on its route,
