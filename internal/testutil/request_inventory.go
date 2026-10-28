@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"io"
 	"maps"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -72,11 +74,21 @@ const (
 	// parameter is allowed after it.
 	jsonContentType = "application/json"
 
+	// multipartFormType is what an upload declares, matched as the prefix of
+	// a lowercased header, which a boundary parameter follows.
+	multipartFormType = "multipart/form-data"
+
 	// shardDirPerm is the mode the shard directory is created with. It holds
 	// nothing secret, but nothing needs to read it either except the merge
 	// that runs as the same user.
 	shardDirPerm = 0o750
 )
+
+// maxRecordedFormBytes is the most of a multipart body the recorder reads to
+// name its fields. A test's upload is a few kilobytes, so the bound is about
+// a test that streams a large file through the mock, whose bytes this would
+// otherwise hold. It is a variable so a test can put a form either side of it.
+var maxRecordedFormBytes = 8 << 20
 
 // requestRecord is one request a test issued, as one line of the shard file.
 //
@@ -95,10 +107,11 @@ type requestRecord struct {
 	// The values are left out because a value is a fixture and a name is part
 	// of the request we make.
 	Query []string `json:"query,omitempty"`
-	// Body holds the top-level field names of a JSON request body, on the same
-	// terms. Without it a mutating row carries a method and a path and nothing
-	// else, which is most of what this server sends and the half where a wrong
-	// field name lives.
+	// Body holds the top-level field names of a JSON request body, or the
+	// part names of a multipart form, on the same terms. Without it a
+	// mutating row carries a method and a path and nothing else, which is
+	// most of what this server sends and the half where a wrong field name
+	// lives.
 	Body []string `json:"body,omitempty"`
 	// Operation and Variables describe a GraphQL call the way Path and Query
 	// describe a REST one. See [graphQLShape].
@@ -380,18 +393,29 @@ func queryKeys(r *http.Request) []string {
 	return slices.Sorted(maps.Keys(values))
 }
 
-// bodyKeys lists the top-level field names of a JSON request body, sorted, and
-// puts the body back for the mock to read.
-//
-// It reads nothing at all unless the request declares JSON, which is what
-// keeps a multipart upload's megabytes out of this path, and it reports no
-// names rather than a failure for a body that is not a JSON object: an array
-// or a bare value carries no field names to record, and a body this cannot
-// parse is the mock's business rather than the inventory's.
+// bodyKeys lists the field names of a request body, sorted, and puts the body
+// back for the mock to read: the top-level keys of a JSON object, or the names
+// of a multipart form's parts. Any other body records no names.
 func bodyKeys(r *http.Request) []string {
-	if r.Body == nil || !strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), jsonContentType) {
+	if r.Body == nil {
 		return nil
 	}
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(strings.ToLower(contentType), multipartFormType) {
+		return formFieldNames(r, contentType)
+	}
+	if !strings.Contains(strings.ToLower(contentType), jsonContentType) {
+		return nil
+	}
+	return jsonBodyKeys(r)
+}
+
+// jsonBodyKeys lists the top-level field names of a JSON request body.
+//
+// It reports no names rather than a failure for a body that is not a JSON
+// object: an array or a bare value carries no field names to record, and a
+// body this cannot parse is the mock's business rather than the inventory's.
+func jsonBodyKeys(r *http.Request) []string {
 	body, err := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(body))
 	if err != nil {
@@ -404,6 +428,42 @@ func bodyKeys(r *http.Request) []string {
 		return nil
 	}
 	return slices.Sorted(maps.Keys(fields))
+}
+
+// formFieldNames lists the names of a multipart form's parts, the file's
+// among them, each once however many values it carries.
+//
+// client-go's UploadRequest writes the file first and every option after it
+// as a field, so the names are what an upload sent, the way a JSON body's
+// keys are. The form is read only up to [maxRecordedFormBytes]: a larger one
+// records no names, since the fields come after the file, and the bytes read
+// are put back in front of the rest unread, so a test streaming a large file
+// through the mock does not hold it in memory here. A body that fails to read
+// records nothing, and a form that stops part way records the parts before
+// the break, both being the mock's business rather than the inventory's.
+func formFieldNames(r *http.Request, contentType string) []string {
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil || params["boundary"] == "" {
+		return nil
+	}
+	head, err := io.ReadAll(io.LimitReader(r.Body, int64(maxRecordedFormBytes)+1))
+	r.Body = restoredBody{Reader: io.MultiReader(bytes.NewReader(head), r.Body), Closer: r.Body}
+	if err != nil || len(head) > maxRecordedFormBytes {
+		return nil
+	}
+	names := map[string]bool{}
+	parts := multipart.NewReader(bytes.NewReader(head), params["boundary"])
+	for part, partErr := parts.NextPart(); partErr == nil; part, partErr = parts.NextPart() {
+		names[part.FormName()] = true
+	}
+	return slices.Sorted(maps.Keys(names))
+}
+
+// restoredBody is a request body put back after a read: what was read in
+// front of what was not, closed through the body it came from.
+type restoredBody struct {
+	io.Reader
+	io.Closer
 }
 
 // recordedGraphQLDocument reads the document out of a request body and puts the
@@ -501,20 +561,23 @@ func callerPackage() string {
 // The walk takes its own package from the first frame rather than writing it
 // down, so moving this file needs no edit here. Reaching the test harness
 // without having left this package means this package called itself, which is
-// what its own tests do, and the answer is this package.
+// what its own tests do, and the answer is this package. Ifs rather than a
+// tagless switch, so the mutation tool, which cannot see a case expression,
+// measures each condition.
 func packageOutside(next func() (string, bool)) string {
 	self := ""
 	for {
 		function, more := next()
 		pkg := packageOf(function)
-		switch {
-		case pkg == "":
-		case self == "":
+		if self == "" {
 			self = pkg
-		case stackBoundaries[pkg]:
-			return shortPackage(self)
-		case pkg != self:
-			return shortPackage(pkg)
+		} else if pkg != "" {
+			if stackBoundaries[pkg] {
+				return shortPackage(self)
+			}
+			if pkg != self {
+				return shortPackage(pkg)
+			}
 		}
 		if !more {
 			return unknownPackage

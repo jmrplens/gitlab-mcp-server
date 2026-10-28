@@ -4,8 +4,12 @@
 package testutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -125,7 +129,7 @@ func TestDescribeRequest_JSONBody_RecordsItsFieldNames(t *testing.T) {
 		{"a content type with a charset after it", func() *http.Request {
 			return jsonRequest(t, http.MethodPut, "application/json; charset=utf-8", `{"title":"t"}`)
 		}, []string{"title"}},
-		{"a multipart upload, which is never read", func() *http.Request {
+		{"a multipart content type around a body that is no form", func() *http.Request {
 			return jsonRequest(t, http.MethodPost, "multipart/form-data; boundary=x", `{"title":"t"}`)
 		}, nil},
 		{"a request declaring no content type", func() *http.Request {
@@ -184,6 +188,176 @@ func TestDescribeRequest_JSONBody_StaysReadable(t *testing.T) {
 	}
 	if round["title"] != "t" {
 		t.Errorf("body round-tripped as %v, want the title it was sent", round)
+	}
+}
+
+// uploadPart is one part of a multipart form a test sends: a value, or a
+// file when filename is set.
+type uploadPart struct {
+	name, filename, content string
+}
+
+// formRequest builds a multipart POST of the parts given, in that order, the
+// file first being the order client-go's UploadRequest writes an upload in.
+func formRequest(t *testing.T, parts ...uploadPart) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for _, part := range parts {
+		var (
+			field io.Writer
+			err   error
+		)
+		if part.filename != "" {
+			field, err = writer.CreateFormFile(part.name, part.filename)
+		} else {
+			field, err = writer.CreateFormField(part.name)
+		}
+		if err != nil {
+			t.Fatalf("create the %s part: %v", part.name, err)
+		}
+		if _, err = io.WriteString(field, part.content); err != nil {
+			t.Fatalf("write the %s part: %v", part.name, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close the form: %v", err)
+	}
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://gitlab.example.com/api/v4/projects", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	return request
+}
+
+// withFormLimit lowers the bytes the recorder reads of a form for one test.
+func withFormLimit(t *testing.T, limit int) {
+	t.Helper()
+	original := maxRecordedFormBytes
+	t.Cleanup(func() { maxRecordedFormBytes = original })
+	maxRecordedFormBytes = limit
+}
+
+// uploadParts is an upload the way client-go writes one: the file, then each
+// option as a field, a list field once per element.
+var uploadParts = []uploadPart{
+	{name: "avatar", filename: "avatar.png", content: "PNG"},
+	{name: "name", content: "widget"},
+	{name: "override_params[topics]", content: "a"},
+	{name: "override_params[topics]", content: "b"},
+}
+
+// TestDescribeRequest_MultipartForm_RecordsItsFieldNames verifies that an
+// upload records the names of its form, the file part's among them, the way
+// a JSON body records its keys. client-go sends every option of an upload as
+// a multipart field (UploadRequest), so recording none left a create with an
+// avatar, and every option of a file import, looking unsent although the
+// test sent each of them.
+//
+// A form is read only as far as the recorder's limit: a larger one records
+// no names rather than half of them, since a field written after a large
+// file would be the one missing. A form the content type names no boundary
+// for, a content type that does not parse, a body that fails to read and a
+// form cut off part way record what they hold, which for all but the last is
+// nothing. The first two are refused before the body is read, so their body
+// is still the one the test built.
+func TestDescribeRequest_MultipartForm_RecordsItsFieldNames(t *testing.T) {
+	tests := []struct {
+		name    string
+		limit   int
+		request func() *http.Request
+		want    []string
+		// unread says the recorder must refuse the form before it reads
+		// the body, leaving the body the request was built with.
+		unread bool
+	}{
+		{name: "an upload with its options", request: func() *http.Request {
+			return formRequest(t, uploadParts...)
+		}, want: []string{"avatar", "name", "override_params[topics]"}},
+		{name: "a form exactly at the limit", limit: -1, request: func() *http.Request {
+			return formRequest(t, uploadParts...)
+		}, want: []string{"avatar", "name", "override_params[topics]"}},
+		{name: "a form one byte over the limit", limit: 1, request: func() *http.Request {
+			return formRequest(t, uploadParts...)
+		}},
+		{name: "a form whose content type names no boundary", unread: true, request: func() *http.Request {
+			request := formRequest(t, uploadParts...)
+			request.Header.Set("Content-Type", "multipart/form-data")
+			return request
+		}},
+		{name: "a content type that does not parse", unread: true, request: func() *http.Request {
+			request := formRequest(t, uploadParts...)
+			request.Header.Set("Content-Type", "multipart/form-data; boundary")
+			return request
+		}},
+		{name: "a form body that cannot be read", request: func() *http.Request {
+			request := formRequest(t, uploadParts...)
+			request.Body = failingBody{}
+			return request
+		}},
+		{name: "a form cut off after its first part", request: func() *http.Request {
+			request := formRequest(t, uploadParts...)
+			content, _ := io.ReadAll(request.Body)
+			head, _, _ := bytes.Cut(content, []byte(`name="name"`))
+			request.Body = io.NopCloser(bytes.NewReader(head))
+			return request
+		}, want: []string{"avatar"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := tt.request()
+			switch {
+			case tt.limit > 0:
+				withFormLimit(t, int(request.ContentLength)-tt.limit)
+			case tt.limit < 0:
+				withFormLimit(t, int(request.ContentLength))
+			}
+			built := request.Body
+
+			record, _, ok := describeRequest(requestOrigin{}, request)
+
+			if !ok {
+				t.Fatal("describeRequest reported no record for a REST call")
+			}
+			if !slices.Equal(record.Body, tt.want) {
+				t.Errorf("body = %v, want %v", record.Body, tt.want)
+			}
+			if tt.unread && request.Body != built {
+				t.Errorf("the recorder read a form it should have refused first: the body is now %T", request.Body)
+			}
+		})
+	}
+}
+
+// TestDescribeRequest_MultipartForm_StaysReadable verifies that reading a
+// form's names leaves the whole form for the handler under test, the file's
+// bytes included, both for a form the recorder read and for one over its
+// limit it left part way.
+func TestDescribeRequest_MultipartForm_StaysReadable(t *testing.T) {
+	for _, limit := range []int{maxRecordedFormBytes, 8} {
+		t.Run(fmt.Sprintf("limit %d", limit), func(t *testing.T) {
+			withFormLimit(t, limit)
+			request := formRequest(t, uploadParts...)
+
+			if _, _, ok := describeRequest(requestOrigin{}, request); !ok {
+				t.Fatal("describeRequest reported no record")
+			}
+
+			form, err := ReadMultipartForm(request, 1<<20)
+			if err != nil {
+				t.Fatalf("the form was consumed: %v", err)
+			}
+			file, _, err := FormFile(form, "avatar")
+			if err != nil {
+				t.Fatalf("the avatar part was lost: %v", err)
+			}
+			defer file.Close()
+			content, _ := io.ReadAll(file)
+			if string(content) != "PNG" || FormValue(form, "name") != "widget" || !slices.Equal(form.Value["override_params[topics]"], []string{"a", "b"}) {
+				t.Errorf("form round-tripped as file %q and values %v, want the parts it was sent", content, form.Value)
+			}
+			if closeErr := request.Body.Close(); closeErr != nil {
+				t.Errorf("closing the restored body: %v", closeErr)
+			}
+		})
 	}
 }
 
