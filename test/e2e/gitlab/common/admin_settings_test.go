@@ -58,9 +58,10 @@ func adminDeferDelete(e *harness.Env, s *harness.Session, label string, action h
 	})
 }
 
-// TestAdmin_Topics_Lifecycle lists the instance topics, creates one, reads it
-// back, renames it and deletes it, asserting the id round-trips through each
-// call.
+// TestAdmin_Topics_Lifecycle lists the instance topics, creates one with a
+// generated PNG as its avatar, reads it back, changes its description and
+// removes its avatar, and deletes it, asserting the id round-trips through
+// each call.
 //
 // Replaces: TestMeta_AdminTopics, TestMeta_Admin
 func TestAdmin_Topics_Lifecycle(t *testing.T) {
@@ -71,11 +72,17 @@ func TestAdmin_Topics_Lifecycle(t *testing.T) {
 	e.T.Logf("%d topic(s) before the create", len(before.Topics))
 
 	name := e.Name("topic")
-	created := harness.Do[topics.CreateOutput](s, actionAdminTopicCreate, map[string]any{"name": name, "title": "E2E " + name})
+	created := harness.Do[topics.CreateOutput](s, actionAdminTopicCreate, map[string]any{
+		"name": name, "title": "E2E " + name,
+		"avatar": map[string]any{"filename": "avatar.png", "content_base64": fixture.PNGBase64(e)},
+	})
 	if created.Topic.ID == 0 {
 		e.T.Fatalf("topic_create answered %+v, want a topic with an ID", created.Topic)
 	}
 	adminDeferDelete(e, s, "topic "+name, actionAdminTopicDelete, map[string]any{"topic_id": created.Topic.ID})
+	if !strings.Contains(created.Topic.AvatarURL, "avatar.png") {
+		e.T.Errorf("topic_create answered the avatar URL %q, want the uploaded avatar.png", created.Topic.AvatarURL)
+	}
 
 	got := harness.Do[topics.GetOutput](s, actionAdminTopicGet, map[string]any{"topic_id": created.Topic.ID})
 	if got.Topic.ID != created.Topic.ID {
@@ -83,10 +90,10 @@ func TestAdmin_Topics_Lifecycle(t *testing.T) {
 	}
 
 	updated := harness.Do[topics.UpdateOutput](s, actionAdminTopicUpdate, map[string]any{
-		"topic_id": created.Topic.ID, "description": "updated by the e2e suite",
+		"topic_id": created.Topic.ID, "description": "updated by the e2e suite", "remove_avatar": true,
 	})
-	if updated.Topic.ID != created.Topic.ID {
-		e.T.Errorf("topic_update answered %d, want %d", updated.Topic.ID, created.Topic.ID)
+	if updated.Topic.ID != created.Topic.ID || updated.Topic.AvatarURL != "" {
+		e.T.Errorf("topic_update answered %+v, want topic %d with no avatar URL", updated.Topic, created.Topic.ID)
 	}
 
 	harness.DoVoid(s, actionAdminTopicDelete, map[string]any{"topic_id": created.Topic.ID})

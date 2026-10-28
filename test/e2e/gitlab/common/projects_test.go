@@ -13,6 +13,8 @@ package common
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
@@ -70,6 +72,46 @@ func TestProject_Lifecycle_CreateGetUpdateDelete(t *testing.T) {
 			e.T.Errorf("the project still reads as %+v after its delete, and is not marked for deletion", remaining)
 		case err == nil:
 			e.T.Logf("the delete marked the project for deletion on %s", remaining.MarkedForDeletionOn)
+		}
+	})
+}
+
+// TestProject_CreateWithAvatarAndTopics_UpdateRemovesTheAvatar creates a
+// private project on every surface with a generated PNG as its avatar and
+// two topics, and removes the avatar again with the update's remove_avatar.
+//
+// With an avatar the create is a multipart upload, which carries one value
+// per field, so the topics go as one comma-separated value; that GitLab
+// splits it back into both topics is what the create's answer shows.
+func TestProject_CreateWithAvatarAndTopics_UpdateRemovesTheAvatar(t *testing.T) {
+	e := harness.New(t)
+	topics := []string{"e2e-avatar-a", "e2e-avatar-b"}
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		name := e.Name("projavatar")
+
+		created := harness.Do[projects.Output](s, actionProjectCreate, map[string]any{
+			"name": name, "visibility": "private", "topics": topics,
+			"avatar": map[string]any{"filename": "avatar.png", "content_base64": fixture.PNGBase64(e)},
+		})
+		if created.ID == 0 || created.Name != name {
+			e.T.Fatalf("project create answered %+v, want a project named %q with an ID", created, name)
+		}
+		e.Defer("project "+created.PathWithNamespace, func(ctx context.Context) error {
+			return fixture.DeleteProject(ctx, e.Client(), created.ID, created.PathWithNamespace)
+		})
+		if !strings.Contains(created.AvatarURL, "avatar.png") {
+			e.T.Errorf("project create answered the avatar URL %q, want the uploaded avatar.png", created.AvatarURL)
+		}
+		if got := slices.Sorted(slices.Values(created.Topics)); !slices.Equal(got, topics) {
+			e.T.Errorf("project create answered the topics %q, want %q", got, topics)
+		}
+
+		project := fixture.Project{ID: created.ID}
+		updated := harness.Do[projects.Output](s, actionProjectUpdate, map[string]any{"project_id": project.IDParam(), "remove_avatar": true})
+		if updated.ID != created.ID || updated.AvatarURL != "" {
+			e.T.Errorf("project update with remove_avatar answered %+v, want project %d with no avatar URL", updated, created.ID)
 		}
 	})
 }

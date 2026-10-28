@@ -96,11 +96,22 @@ func TestUserAdmin_Lifecycle_CreatesChangesStateAndDeletes(t *testing.T) {
 		if state := userState(e, created.ID); state != userStateActive {
 			e.T.Errorf("a user created with skip_confirmation is %q, want %q", state, userStateActive)
 		}
+		// An account with no avatar of its own answers a Gravatar URL, so the
+		// file name is what tells the uploaded image apart.
+		if !strings.Contains(created.AvatarURL, userCreateAvatar) {
+			e.T.Errorf("user create answered the avatar URL %q, want the uploaded %s", created.AvatarURL, userCreateAvatar)
+		}
 
 		bio := "modified by the e2e suite on the " + string(surface) + " surface"
-		modified := harness.Do[users.Output](s, actionUserModify, withParams(id, map[string]any{"bio": bio}))
+		modified := harness.Do[users.Output](s, actionUserModify, withParams(id, map[string]any{
+			"bio":    bio,
+			"avatar": map[string]any{"filename": userModifyAvatar, "content_base64": fixture.PNGBase64(e)},
+		}))
 		if modified.ID != created.ID || modified.Bio != bio {
 			e.T.Errorf("user modify answered id %d bio %q, want %d %q", modified.ID, modified.Bio, created.ID, bio)
+		}
+		if !strings.Contains(modified.AvatarURL, userModifyAvatar) {
+			e.T.Errorf("user modify answered the avatar URL %q, want the uploaded %s", modified.AvatarURL, userModifyAvatar)
 		}
 
 		assertAdminTransition(e, s, actionUserBlock, created.ID, "blocked", userStateBlocked)
@@ -178,8 +189,16 @@ func weakPasswordRefusal(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "commonly used")
 }
 
-// createUserThroughTheServer creates one account through the server, minting a
-// fresh password on every attempt.
+// userCreateAvatar and userModifyAvatar name the PNG the user lifecycle
+// uploads with the create and with the modify, so each answer's avatar URL
+// says which upload it carries.
+const (
+	userCreateAvatar = "created-avatar.png"
+	userModifyAvatar = "modified-avatar.png"
+)
+
+// createUserThroughTheServer creates one account through the server, with a
+// generated PNG as its avatar, minting a fresh password on every attempt.
 //
 // GitLab judges a password against its own weak-password rules, and a random
 // one occasionally lands on something it refuses; the fixture builder mints a
@@ -197,6 +216,7 @@ func createUserThroughTheServer(e *harness.Env, s *harness.Session, username str
 				"username":          username,
 				"password":          "Pw-" + rand.Text(),
 				"skip_confirmation": true,
+				"avatar":            map[string]any{"filename": userCreateAvatar, "content_base64": fixture.PNGBase64(e)},
 			})
 			return out, weakPasswordRefusal(tryErr), "the random password was refused as commonly used", tryErr
 		})

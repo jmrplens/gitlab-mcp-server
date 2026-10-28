@@ -14,6 +14,7 @@ package common
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -66,6 +67,40 @@ func TestGroup_Lifecycle_CreateGetUpdateDelete(t *testing.T) {
 				e.T.Errorf("the group still reads as %+v after its delete, and is not marked for deletion", remaining)
 			}
 			e.T.Logf("the delete marked the group for deletion on %s", remaining.MarkedForDeletion)
+		}
+	})
+}
+
+// TestGroup_CreateWithAvatar_UpdateRemovesIt creates a private group on every
+// surface with a generated PNG as its avatar, which the create sends as a
+// multipart upload, and removes the avatar again with the update's
+// remove_avatar, which sends it blank.
+func TestGroup_CreateWithAvatar_UpdateRemovesIt(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		name := e.Name("grpavatar")
+
+		created := harness.Do[groups.DetailOutput](s, actionGroupCreate, map[string]any{
+			"name": name, "path": name, "visibility": "private",
+			"avatar": map[string]any{"filename": "avatar.png", "content_base64": fixture.PNGBase64(e)},
+		})
+		if created.ID == 0 || created.Path != name {
+			e.T.Fatalf("group create answered %+v, want a group at %q with an ID", created, name)
+		}
+		e.Defer("group "+created.FullPath, func(ctx context.Context) error {
+			return fixture.DeleteGroup(ctx, e.Client(), created.ID, created.FullPath)
+		})
+		if !strings.Contains(created.AvatarURL, "avatar.png") {
+			e.T.Errorf("group create answered the avatar URL %q, want the uploaded avatar.png", created.AvatarURL)
+		}
+
+		updated := harness.Do[groups.DetailOutput](s, actionGroupUpdate, map[string]any{
+			"group_id": fixture.Group{ID: created.ID}.IDParam(), "remove_avatar": true,
+		})
+		if updated.ID != created.ID || updated.AvatarURL != "" {
+			e.T.Errorf("group update with remove_avatar answered %+v, want group %d with no avatar URL", updated, created.ID)
 		}
 	})
 }
