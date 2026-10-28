@@ -579,10 +579,15 @@ class CursorProbe
   end
 end
 
+# MissingNextLinkError is what a probe raises when the paginator it asked
+# wrote no next link, so the run fails where somebody sees it rather than
+# recording a paginator without the parameter its next page is asked by.
+class MissingNextLinkError < StandardError; end
+
 # next_link_of is the query of the next link a probe was given.
 def next_link_of(probe)
   link = probe.headers["Link"].to_s[/<([^>]+)>;\s*rel="next"/, 1]
-  raise "the paginator wrote no next link: #{probe.headers.inspect}" unless link
+  raise MissingNextLinkError, "the paginator wrote no next link: #{probe.headers.inspect}" unless link
 
   Rack::Utils.parse_query(URI.parse(link).query)
 end
@@ -756,6 +761,17 @@ class KeysetWalk
     @sites << entry
   end
 
+  # ScanState is what scan carries from one instruction of a sequence to the
+  # next: the method the sequence belongs to and the route's path to it, the
+  # flags the enclosing sequences are behind, the method's text, the line the
+  # instructions are on, the guards still open, and how far a flag test has
+  # been read (a Feature constant, then its flag, then the enabled? or
+  # disabled? call the next branch tests).
+  ScanState = Struct.new(
+    :owner, :via, :inherited, :text, :path, :line, :body, :guards, :feature, :flag, :flag_call,
+    keyword_init: true,
+  )
+
   # scan reads one instruction sequence, and every block nested in it, for
   # keyset sites and for the helpers it calls.
   #
@@ -766,83 +782,114 @@ class KeysetWalk
   # the flag. A flag tested any other way, an early return among them, is not
   # recorded.
   def scan(form, method, via, inherited, text)
-    path = form[7]
-    line = form[8]
-    body = form[13]
-    guards = []
-    feature = false
-    flag = nil
-    flag_call = nil
-    body.each_with_index do |instruction, index|
-      if instruction.is_a?(Integer)
-        line = instruction
-        next
-      end
-      if instruction.is_a?(Symbol)
-        guards.reject! { |guard| guard[1] == instruction }
-        next
-      end
-      next unless instruction.is_a?(Array)
-
-      active = inherited + guards.map(&:first)
-      instruction.each { |operand| scan(operand, method, via, active, text) if iseq_array?(operand) }
-      operation = instruction[0]
-      tested, flag_call = flag_call, nil
-      if (operation == :branchunless && tested&.first == :enabled?) ||
-          (operation == :branchif && tested&.first == :disabled?)
-        guards << [tested.last, instruction[1]]
-      end
-      if operation == :opt_getconstant_path
-        name = instruction[1].reject { |segment| segment.to_s.empty? }.join("::")
-        feature = name == "Feature"
-        flag = nil
-        if name.end_with?("Gitlab::Pagination::GitalyKeysetPager")
-          site("gitaly_keyset_pager", path, line, via, active, @paginators["gitaly_keyset_pager"])
-        end
-      elsif operation == :putobject && feature && flag.nil? && instruction[1].is_a?(Symbol)
-        flag = instruction[1].to_s
-      end
-
-      calldata = instruction[1]
-      next unless calldata.is_a?(Hash) && calldata[:mid]
-
-      called = calldata[:mid]
-      on_self = (calldata[:flag].to_i & VM_CALL_FCALL) != 0
-      if %i[enabled? disabled?].include?(called) && feature && flag
-        flag_call = [called, flag]
-        feature = false
-        flag = nil
-      end
-      record_site(called, calldata, on_self, body, index, path, line, via, active, text)
-      if operation == :invokesuper
-        parent = method.super_method
-        walk(parent, via, active) if parent && gitlab_method?(parent)
-      elsif on_self
-        callee = helper(called)
-        walk(callee, via + [called.to_s], active) if callee && gitlab_method?(callee)
+    state = ScanState.new(
+      owner: method, via: via, inherited: inherited, text: text,
+      path: form[7], line: form[8], body: form[13], guards: [], feature: false,
+    )
+    state.body.each_with_index do |instruction, index|
+      case instruction
+      when Integer then state.line = instruction
+      when Symbol then state.guards.reject! { |guard| guard[1] == instruction }
+      when Array then scan_instruction(state, instruction, index)
       end
     end
   end
 
-  def record_site(called, calldata, on_self, body, index, path, line, via, flags, text)
+  # scan_instruction reads one instruction: the blocks nested in its operands,
+  # the flag test it reads a step of or closes into a guard, and the call it
+  # makes, which can be a keyset site or a method to walk into.
+  def scan_instruction(state, instruction, index)
+    active = state.inherited + state.guards.map(&:first)
+    instruction.each { |operand| scan(operand, state.owner, state.via, active, state.text) if iseq_array?(operand) }
+    operation = instruction[0]
+    open_guard(state, operation, instruction)
+    read_operand(state, operation, instruction, active)
+
+    calldata = instruction[1]
+    return unless calldata.is_a?(Hash) && calldata[:mid]
+
+    read_flag_call(state, calldata[:mid])
+    record_site(state, calldata, index, active)
+    follow_call(state, operation, calldata, active)
+  end
+
+  # open_guard opens a guard when the instruction is the branch that tests the
+  # flag call the instruction before it made. A flag call is tested by the
+  # next instruction or by none.
+  def open_guard(state, operation, instruction)
+    tested = state.flag_call
+    state.flag_call = nil
+    return unless (operation == :branchunless && tested&.first == :enabled?) ||
+                  (operation == :branchif && tested&.first == :disabled?)
+
+    state.guards << [tested.last, instruction[1]]
+  end
+
+  # read_operand reads a constant, which starts a flag test when it is
+  # Feature and is a site when it is the Gitaly keyset pager, and the symbol a
+  # flag test passes after its Feature constant.
+  def read_operand(state, operation, instruction, active)
+    if operation == :opt_getconstant_path
+      name = instruction[1].reject { |segment| segment.to_s.empty? }.join("::")
+      state.feature = name == "Feature"
+      state.flag = nil
+      if name.end_with?("Gitlab::Pagination::GitalyKeysetPager")
+        site("gitaly_keyset_pager", state.path, state.line, state.via, active, @paginators["gitaly_keyset_pager"])
+      end
+    elsif operation == :putobject && state.feature && state.flag.nil? && instruction[1].is_a?(Symbol)
+      state.flag = instruction[1].to_s
+    end
+  end
+
+  # read_flag_call ends a flag test at its enabled? or disabled? call, for
+  # the next instruction to branch on.
+  def read_flag_call(state, called)
+    return unless %i[enabled? disabled?].include?(called) && state.feature && state.flag
+
+    state.flag_call = [called, state.flag]
+    state.feature = false
+    state.flag = nil
+  end
+
+  # follow_call walks into the method a call reaches: the parent's for a call
+  # to super, and the helper's for a call on self.
+  def follow_call(state, operation, calldata, active)
+    if operation == :invokesuper
+      parent = state.owner.super_method
+      walk(parent, state.via, active) if parent && gitlab_method?(parent)
+    elsif on_self?(calldata)
+      called = calldata[:mid]
+      callee = helper(called)
+      walk(callee, state.via + [called.to_s], active) if callee && gitlab_method?(callee)
+    end
+  end
+
+  def on_self?(calldata)
+    (calldata[:flag].to_i & VM_CALL_FCALL) != 0
+  end
+
+  def record_site(state, calldata, index, flags)
+    called = calldata[:mid]
     last_keyword = Array(calldata[:kw_arg]).last
+    path = state.path
+    line = state.line
     # paginate_with_strategies is given CursorPager's cursor whenever the call
     # does not pass `use_cursor: false`, which assumes a relation whose model
     # declares keyset orderings: the model is not in the instructions, and on
     # one declaring none GitLab answers 405 instead (see the section above).
-    if called == :paginate_with_strategies && on_self
-      without_cursor = last_keyword == :use_cursor && literal_before(body, index) == [true, false]
-      site("paginate_with_strategies", path, line, via, flags,
+    if called == :paginate_with_strategies && on_self?(calldata)
+      without_cursor = last_keyword == :use_cursor && literal_before(state.body, index) == [true, false]
+      site("paginate_with_strategies", path, line, state.via, flags,
         without_cursor ? @paginators["pager"] : @paginators["cursor_pager"])
-    elsif called == :execute && last_keyword == :gitaly_pagination && literal_before(body, index) == [true, true]
-      site("gitaly_pagination", path, line, via, flags, @paginators["gitaly_keyset_pager"])
+    elsif called == :execute && last_keyword == :gitaly_pagination && literal_before(state.body, index) == [true, true]
+      site("gitaly_pagination", path, line, state.via, flags, @paginators["gitaly_keyset_pager"])
     elsif called == :add_next_page_header
-      site("keyset_header_builder", path, line, via, flags, next_link_keys(text, line_text(path, line)))
+      site("keyset_header_builder", path, line, state.via, flags, next_link_keys(state.text, line_text(path, line)))
     elsif called == :add_prev_and_next_cursor_headers
-      site("keyset_header_builder", path, line, via, flags, @paginators["cursor_headers"])
+      site("keyset_header_builder", path, line, state.via, flags, @paginators["cursor_headers"])
     elsif called == :keyset_paginate
       cursor = line_text(path, line)[/keyset_paginate\(\s*cursor:\s*params\[:(\w+)\]/, 1]
-      site("keyset_paginate", path, line, via, flags, cursor ? [cursor] : [])
+      site("keyset_paginate", path, line, state.via, flags, cursor ? [cursor] : [])
     end
   end
 end
