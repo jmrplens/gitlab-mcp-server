@@ -132,7 +132,7 @@ services:
   # .env.docker; GitLab reaches it as http://e2e-bitbucket:7990 over the
   # compose network.
   e2e-bitbucket:
-    image: atlassian/bitbucket:9.6
+    image: atlassian/bitbucket:10.5
     hostname: bitbucket-e2e
     container_name: e2e-bitbucket
     profiles: ["bitbucket"]
@@ -148,6 +148,15 @@ services:
     environment:
       SEARCH_ENABLED: "false"
       JVM_MAXIMUM_MEMORY: "1024m"
+      # Bitbucket 10 refuses basic authentication on REST and git by default
+      # (its "secure by default" change of 10.0), and both clients of this
+      # fixture send it:
+      # setup-bitbucket.sh as admin with the password, and GitLab's Bitbucket
+      # Server importer with the access token as the password. Without this
+      # flag 10.5 answers both with 403 "Basic Authentication has been disabled
+      # on this instance", and the import coverage skips. Atlassian documents
+      # no bitbucket.properties key for it.
+      JVM_SUPPORT_RECOMMENDED_ARGS: "-Dcom.atlassian.plugins.authentication.basic.auth.filter.force.allow=true"
       BITBUCKET_ADMIN_PASSWORD: ${E2E_BITBUCKET_ADMIN_PASSWORD:-}
     entrypoint: ["/bin/bash", "-c"]
     command:
