@@ -236,6 +236,13 @@ const (
 	// overrideParamPlacement is the reason the import's override_params input
 	// offers none of the project's name, path and namespace.
 	overrideParamPlacement = "not declared under override_params by POST /projects/import, which declares name, path and namespace as params of its own (lib/api/project_import.rb; gitlab-api-live.json, 19.5.0-ee), so Grape drops the override_params key; ImportFromFileInput offers the import's own name, path and namespace"
+	// overrideParamNotRestored is the reason the import's override_params
+	// input offers a field GitLab declares there and the import never applies.
+	overrideParamNotRestored = "declared under override_params by POST /projects/import (gitlab-api-live.json, 19.5.0-ee), but the import's tree restorer merges the overrides into the archive's project attributes and keeps only those lib/gitlab/import_export/project/import_export.yml permits for a project (Gitlab::ImportExport::AttributesPermitter, through Group::RelationTreeRestorer#filter_attributes), and this one is not among them, so the import drops it; client-go's CreateProjectOptions carries it for the project create"
+	// overrideParamNotAssignable is the reason the import's override_params
+	// input offers neither of the two keys the import permits and cannot
+	// assign.
+	overrideParamNotAssignable = "declared under override_params by POST /projects/import (gitlab-api-live.json, 19.5.0-ee) and permitted for a project by lib/gitlab/import_export/project/import_export.yml, but Group::RelationTreeRestorer#update_params! hands it to Project#assign_attributes, which cannot take it: topics is the has_many :topics association with Projects::Topic (app/models/project.rb), which a list of names does not fill, and the project has no jobs_enabled writer at all (lib/api/projects.rb renames it to builds_enabled for the create and the edit alone), so either one raises, the restore fails and the import with it; builds_access_level sets what jobs_enabled would, and client-go's CreateProjectOptions carries both for the project create"
 	// achievementAvatarUpload is the reason the avatar upload is absent under
 	// its SDK key.
 	achievementAvatarUpload = "offered as AvatarInput (avatar_filename, avatar_content_type, and avatar_file_path or avatar_content_base64), which the handler assembles into the *gl.GraphQLUpload opts.Avatar takes"
@@ -1269,7 +1276,35 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"projectimportexport.ImportOverrideParamsInput.template_name":                   overrideParamUndeclared,
 	"projectimportexport.ImportOverrideParamsInput.template_project_id":             overrideParamUndeclared,
 	"projectimportexport.ImportOverrideParamsInput.use_custom_template":             overrideParamUndeclared,
-	"projectimportexport.ImportContainerExpirationPolicyInput.name_regex_delete":    "GitLab declares no override_params[container_expiration_policy_attributes][name_regex_delete] (gitlab-api-live.json, 19.5.0-ee) and never read the key, which client-go v3.16.2 deprecated for name_regex; the new input has no caller written against the old name, which projects.ContainerExpirationPolicyInput keeps for its own",
+
+	// The CreateProjectOptions fields GitLab declares under the
+	// override_params of an import and the import never applies.
+	"projectimportexport.ImportOverrideParamsInput.ci_config_path":                               overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.cicd_catalog_enabled":                         overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.container_expiration_policy_attributes":       overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.emails_disabled":                              overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.emails_enabled":                               overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.enforce_auth_checks_on_uploads":               overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.group_runners_enabled":                        overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.issue_branch_template":                        overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.lfs_enabled":                                  overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.merge_request_title_regex":                    overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.merge_request_title_regex_description":        overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.mirror":                                       overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.mirror_trigger_builds":                        overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.mr_default_title_template":                    overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.only_allow_merge_if_all_status_checks_passed": overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.packages_enabled":                             overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.public_jobs":                                  overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.repository_storage":                           overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.resource_group_default_process_mode":          overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.show_default_award_emojis":                    overrideParamNotRestored,
+	"projectimportexport.ImportOverrideParamsInput.tag_list":                                     overrideParamNotRestored,
+
+	// The CreateProjectOptions fields the import permits under
+	// override_params and fails on.
+	"projectimportexport.ImportOverrideParamsInput.topics":       overrideParamNotAssignable,
+	"projectimportexport.ImportOverrideParamsInput.jobs_enabled": overrideParamNotAssignable,
 }}
 
 // isAcceptedMissingInput reports whether an input pair's missing field is an

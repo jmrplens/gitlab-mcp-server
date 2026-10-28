@@ -7873,8 +7873,11 @@ client-go option struct:
   `lock_require_sha_for_merge`, `duo_code_review_decisions_enabled` and
   `duo_auto_mode_availability` (`PUT /groups/:id`), and `CreateGroupOptions`
   the last (`POST /groups`).
-- `CreateProjectOptions`, `CreateProjectForUserOptions`, `EditProjectOptions`
-  and the import overrides lack `duo_code_review_decisions_enabled`.
+- `CreateProjectOptions`, `CreateProjectForUserOptions` and
+  `EditProjectOptions` lack `duo_code_review_decisions_enabled`. An import
+  declares it under `override_params` as well and would not apply it even once
+  client-go models it, since the import's tree restorer keeps only the project
+  attributes `import_export.yml` permits and this is not one of them.
 - `CreateServiceAccountUserOptions` and `UpdateServiceAccountOptions` lack
   `external` (`POST /service_accounts`, `PATCH /service_accounts/:user_id`).
 - `SearchOptions` lacks the merge request filters the group and project search

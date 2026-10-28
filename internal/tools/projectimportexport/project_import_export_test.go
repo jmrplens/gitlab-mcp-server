@@ -1173,7 +1173,7 @@ func everyOverride() *ImportOverrideParamsInput {
 	yes, no := true, false
 	return &ImportOverrideParamsInput{
 		Description: "overridden", Visibility: "private", MergeMethod: "ff",
-		RequestAccessEnabled: &yes, LFSEnabled: &no, SharedRunnersEnabled: &yes,
+		RequestAccessEnabled: &yes, SharedRunnersEnabled: &no,
 		IssuesAccessLevel: "enabled", MergeRequestsAccessLevel: "private", WikiAccessLevel: "disabled",
 		BuildsAccessLevel: "enabled", SnippetsAccessLevel: "private", ContainerRegistryAccessLevel: "disabled",
 		RepositoryAccessLevel: "enabled", ForkingAccessLevel: "private", AnalyticsAccessLevel: "disabled",
@@ -1182,24 +1182,15 @@ func everyOverride() *ImportOverrideParamsInput {
 		MonitorAccessLevel: "private", RequirementsAccessLevel: "disabled", SecurityAndComplianceAccessLevel: "enabled",
 		ModelExperimentsAccessLevel: "private", ModelRegistryAccessLevel: "disabled",
 		SquashOption: "default_on", OnlyAllowMergeIfPipelineSucceeds: &yes, OnlyAllowMergeIfAllDiscussionsAreResolved: &no,
-		OnlyAllowMergeIfAllStatusChecksPassed: &yes, AllowMergeOnSkippedPipeline: &no, RemoveSourceBranchAfterMerge: &yes,
+		AllowMergeOnSkippedPipeline: &no, RemoveSourceBranchAfterMerge: &yes,
 		AutocloseReferencedIssues: &no, ResolveOutdatedDiffDiscussions: &yes, PrintingMergeRequestLinkEnabled: &no,
-		MergeCommitTemplate: "merge %{title}", SquashCommitTemplate: "squash %{title}", MRDefaultTitleTemplate: "mr %{title}",
-		SuggestionCommitMessage: "apply %{file_path}", IssueBranchTemplate: "issue-%{id}", MergeRequestTitleRegex: "^feat",
-		MergeRequestTitleRegexDescription: "starts with feat", ApprovalsBeforeMerge: new(int64(2)),
-		ServiceDeskEnabled: &yes, EmailsEnabled: &no, ShowDefaultAwardEmojis: &yes, EnforceAuthChecksOnUploads: &no,
-		CICDCatalogEnabled: &yes, GroupRunnersEnabled: &no, PublicJobs: &yes, AutoDevopsEnabled: &no,
-		Mirror: &yes, MirrorTriggerBuilds: &no,
+		MergeCommitTemplate: "merge %{title}", SquashCommitTemplate: "squash %{title}",
+		SuggestionCommitMessage: "apply %{file_path}", ApprovalsBeforeMerge: new(int64(2)),
+		ServiceDeskEnabled: &yes, AutoDevopsEnabled: &no,
 		AutoDevopsDeployStrategy: "manual", AutoCancelPendingPipelines: "disabled", BuildGitStrategy: "clone",
-		BuildTimeout: new(int64(3600)), CIConfigPath: "ci/.gitlab-ci.yml", ResourceGroupDefaultProcessMode: "oldest_first",
-		RepositoryStorage: "default", ExternalAuthorizationClassificationLabel: "secret",
-		ContainerExpirationPolicyAttributes: &ImportContainerExpirationPolicyInput{
-			Cadence: "7d", KeepN: new(int64(5)), OlderThan: "14d", NameRegex: new(".*"), NameRegexKeep: new("^v"), Enabled: &yes,
-		},
-		Topics:        []string{"go", "mcp"},
-		IssuesEnabled: &yes, MergeRequestsEnabled: &no, WikiEnabled: &yes, JobsEnabled: &no, SnippetsEnabled: &yes,
-		ContainerRegistryEnabled: &no, PackagesEnabled: &yes, EmailsDisabled: &no, PublicBuilds: &yes,
-		TagList: []string{"legacy", "tags"},
+		BuildTimeout: new(int64(3600)), ExternalAuthorizationClassificationLabel: "secret",
+		IssuesEnabled: &yes, MergeRequestsEnabled: &no, WikiEnabled: &yes, SnippetsEnabled: &yes,
+		ContainerRegistryEnabled: &no, PublicBuilds: &yes,
 	}
 }
 
@@ -1208,9 +1199,8 @@ func everyOverride() *ImportOverrideParamsInput {
 var everyOverrideKey = map[string]string{
 	"override_params[description]": "overridden", "override_params[visibility]": "private",
 	"override_params[merge_method]":           "ff",
-	"override_params[request_access_enabled]": "true", "override_params[lfs_enabled]": "false",
-	"override_params[shared_runners_enabled]": "true",
-	"override_params[issues_access_level]":    "enabled", "override_params[merge_requests_access_level]": "private",
+	"override_params[request_access_enabled]": "true", "override_params[shared_runners_enabled]": "false",
+	"override_params[issues_access_level]": "enabled", "override_params[merge_requests_access_level]": "private",
 	"override_params[wiki_access_level]": "disabled", "override_params[builds_access_level]": "enabled",
 	"override_params[snippets_access_level]": "private", "override_params[container_registry_access_level]": "disabled",
 	"override_params[repository_access_level]": "enabled", "override_params[forking_access_level]": "private",
@@ -1222,44 +1212,24 @@ var everyOverrideKey = map[string]string{
 	"override_params[model_experiments_access_level]": "private", "override_params[model_registry_access_level]": "disabled",
 	"override_params[squash_option]":                         "default_on",
 	"override_params[only_allow_merge_if_pipeline_succeeds]": "true", "override_params[only_allow_merge_if_all_discussions_are_resolved]": "false",
-	"override_params[only_allow_merge_if_all_status_checks_passed]": "true", "override_params[allow_merge_on_skipped_pipeline]": "false",
+	"override_params[allow_merge_on_skipped_pipeline]":  "false",
 	"override_params[remove_source_branch_after_merge]": "true", "override_params[autoclose_referenced_issues]": "false",
 	"override_params[resolve_outdated_diff_discussions]": "true", "override_params[printing_merge_request_link_enabled]": "false",
 	"override_params[merge_commit_template]": "merge %{title}", "override_params[squash_commit_template]": "squash %{title}",
-	"override_params[mr_default_title_template]": "mr %{title}", "override_params[suggestion_commit_message]": "apply %{file_path}",
-	"override_params[issue_branch_template]": "issue-%{id}", "override_params[merge_request_title_regex]": "^feat",
-	"override_params[merge_request_title_regex_description]": "starts with feat", "override_params[approvals_before_merge]": "2",
-	"override_params[service_desk_enabled]": "true", "override_params[emails_enabled]": "false",
-	"override_params[show_default_award_emojis]": "true", "override_params[enforce_auth_checks_on_uploads]": "false",
-	"override_params[cicd_catalog_enabled]": "true", "override_params[group_runners_enabled]": "false",
-	"override_params[public_jobs]": "true", "override_params[auto_devops_enabled]": "false",
-	"override_params[mirror]": "true", "override_params[mirror_trigger_builds]": "false",
+	"override_params[suggestion_commit_message]": "apply %{file_path}", "override_params[approvals_before_merge]": "2",
+	"override_params[service_desk_enabled]": "true", "override_params[auto_devops_enabled]": "false",
 	"override_params[auto_devops_deploy_strategy]": "manual", "override_params[auto_cancel_pending_pipelines]": "disabled",
 	"override_params[build_git_strategy]": "clone", "override_params[build_timeout]": "3600",
-	"override_params[ci_config_path]": "ci/.gitlab-ci.yml", "override_params[resource_group_default_process_mode]": "oldest_first",
-	"override_params[repository_storage]": "default", "override_params[external_authorization_classification_label]": "secret",
-	"override_params[container_expiration_policy_attributes][cadence]":         "7d",
-	"override_params[container_expiration_policy_attributes][keep_n]":          "5",
-	"override_params[container_expiration_policy_attributes][older_than]":      "14d",
-	"override_params[container_expiration_policy_attributes][name_regex]":      ".*",
-	"override_params[container_expiration_policy_attributes][name_regex_keep]": "^v",
-	"override_params[container_expiration_policy_attributes][enabled]":         "true",
-	"override_params[topics]": "go,mcp", "override_params[issues_enabled]": "true",
-	"override_params[merge_requests_enabled]": "false", "override_params[wiki_enabled]": "true",
-	"override_params[jobs_enabled]": "false", "override_params[snippets_enabled]": "true",
-	"override_params[container_registry_enabled]": "false", "override_params[packages_enabled]": "true",
-	"override_params[emails_disabled]": "false", "override_params[public_builds]": "true",
-	"override_params[tag_list]": "legacy,tags",
+	"override_params[external_authorization_classification_label]": "secret",
+	"override_params[issues_enabled]":                              "true",
+	"override_params[merge_requests_enabled]":                      "false", "override_params[wiki_enabled]": "true",
+	"override_params[snippets_enabled]":           "true",
+	"override_params[container_registry_enabled]": "false", "override_params[public_builds]": "true",
 }
 
 // TestImportFromFile_OverrideParams_SendsEveryKeyItModels verifies that
 // every override reaches GitLab in the multipart body under the key GitLab
 // declares, with the value given, and nothing else under override_params.
-//
-// The two lists arrive as one comma-separated value each. client-go's
-// UploadRequest keeps the first value of a multipart field, so the list sent
-// element by element arrived as its first topic alone; GitLab splits the one
-// value back into the list.
 func TestImportFromFile_OverrideParams_SendsEveryKeyItModels(t *testing.T) {
 	received := make(chan map[string][]string, 1)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1314,20 +1284,40 @@ func TestImportFromFile_OverrideParams_SendsEveryKeyItModels(t *testing.T) {
 }
 
 // TestImportOverrideParamsInput_OffersNoKeyGitLabDrops verifies that the
-// override offers none of the four keys POST /projects/import does not
-// declare under override_params: Grape keeps the declared params alone, so
-// an override_params name, path, namespace_id or default_branch changed
-// nothing, while the import's own name, path and namespace place the project.
+// override offers no key GitLab drops before it reaches the project, nor one
+// the import cannot apply.
+//
+// Four POST /projects/import does not declare under override_params: Grape
+// keeps the declared params alone, so an override_params name, path,
+// namespace_id or default_branch changed nothing, while the import's own
+// name, path and namespace place the project. The rest it declares and the
+// import never applies: the tree restorer merges the overrides into the
+// archive's project attributes and keeps only those import_export.yml
+// permits for a project (Gitlab::ImportExport::AttributesPermitter, through
+// Group::RelationTreeRestorer#filter_attributes), and lfs_enabled, mirror,
+// repository_storage and tag_list it excludes by name. Two it permits and
+// cannot assign: topics is the project's association with Projects::Topic,
+// which a list of names does not fill, and the project has no jobs_enabled
+// at all (only lib/api/projects.rb renames it to builds_enabled, on the create
+// and the edit), so either one fails the restore, and the import with it.
 func TestImportOverrideParamsInput_OffersNoKeyGitLabDrops(t *testing.T) {
 	offered := map[string]bool{}
 	for field := range reflect.TypeFor[ImportOverrideParamsInput]().Fields() {
 		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		offered[name] = true
 	}
-	for _, dropped := range []string{"name", "path", "namespace_id", "default_branch"} {
+	for _, dropped := range []string{
+		"name", "path", "namespace_id", "default_branch",
+		"cicd_catalog_enabled", "ci_config_path", "container_expiration_policy_attributes", "emails_disabled",
+		"emails_enabled", "enforce_auth_checks_on_uploads", "group_runners_enabled", "issue_branch_template",
+		"lfs_enabled", "merge_request_title_regex", "merge_request_title_regex_description", "mirror",
+		"mirror_trigger_builds", "mr_default_title_template", "only_allow_merge_if_all_status_checks_passed",
+		"packages_enabled", "public_jobs", "repository_storage", "resource_group_default_process_mode",
+		"show_default_award_emojis", "tag_list", "topics", "jobs_enabled",
+	} {
 		t.Run(dropped, func(t *testing.T) {
 			if offered[dropped] {
-				t.Errorf("override_params offers %s, which GitLab drops", dropped)
+				t.Errorf("override_params offers %s, which the import never applies", dropped)
 			}
 		})
 	}
@@ -1335,15 +1325,12 @@ func TestImportOverrideParamsInput_OffersNoKeyGitLabDrops(t *testing.T) {
 
 // TestBuildOverrideParams_OneFieldAlone_IsAnOverride verifies that each
 // override is enough on its own to send override_params, one of each kind of
-// field: a value the builder converts, a pointer it passes through and a
-// list it joins, the cleanup policy among them.
+// field: a value the builder converts and a pointer it passes through.
 func TestBuildOverrideParams_OneFieldAlone_IsAnOverride(t *testing.T) {
 	cases := map[string]*ImportOverrideParamsInput{
 		"visibility":         {Visibility: "public"},
 		"squash option":      {SquashOption: "never"},
-		"process mode":       {ResourceGroupDefaultProcessMode: "unordered"},
-		"a deprecated list":  {TagList: []string{"t"}},
-		"the cleanup policy": {ContainerExpirationPolicyAttributes: &ImportContainerExpirationPolicyInput{KeepN: new(int64(1))}},
+		"a deprecated value": {PublicBuilds: new(false)},
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -1449,9 +1436,6 @@ func TestBuildOverrideParams_NilAndEmpty(t *testing.T) {
 	}
 	if got := buildOverrideParams(&ImportOverrideParamsInput{}); got != nil {
 		t.Errorf("buildOverrideParams(empty) = %v, want nil", got)
-	}
-	if got := buildOverrideParams(&ImportOverrideParamsInput{ContainerExpirationPolicyAttributes: &ImportContainerExpirationPolicyInput{}}); got != nil {
-		t.Errorf("buildOverrideParams(an empty cleanup policy) = %v, want nil", got)
 	}
 }
 

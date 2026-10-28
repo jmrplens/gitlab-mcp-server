@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -187,24 +186,38 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 // Import From File
 // ---------------------------------------------------------------------------.
 
-// ImportOverrideParamsInput mirrors the project attributes GitLab accepts
-// under the import-from-file `override_params` field, every one that
+// ImportOverrideParamsInput mirrors the project attributes an import from
+// file applies from its `override_params` field: every one that
 // [gl.CreateProjectOptions] (the type of [gl.ImportFileOptions.OverrideParams])
-// models. Only set fields are forwarded, so a boolean or a number is a
-// pointer: overriding a setting the export carries as true with false is the
-// point of the field.
+// models and the import keeps. Only set fields are forwarded, so a boolean or
+// a number is a pointer: overriding a setting the export carries as true with
+// false is the point of the field.
 //
 // The project's name, path and namespace are not among them: GitLab declares
 // them as the import's own params and not under override_params, whose
 // declared params (optional_project_params) Grape keeps alone, so an
 // override_params name, path, namespace_id or default_branch was dropped.
 // The name, path and namespace of [ImportFromFileInput] place the project.
+//
+// Nor is any key GitLab declares under override_params and the import never
+// applies. The tree restorer merges the overrides into the archive's project
+// attributes and keeps only those import_export.yml permits for a project
+// (Gitlab::ImportExport::AttributesPermitter, through
+// Group::RelationTreeRestorer#filter_attributes), which leaves out the CI/CD
+// configuration path, the cleanup policy, the email, mirroring, runner and
+// template settings among others, and excludes lfs_enabled, mirror,
+// repository_storage and tag_list by name. Two keys it permits are left out
+// too, because the restorer cannot assign them: topics is the project's
+// association with Projects::Topic, which a list of names does not fill, and
+// the project has no jobs_enabled (lib/api/projects.rb renames it to
+// builds_enabled for the create and the edit alone), so either one fails the
+// restore and the import with it. builds_access_level sets what jobs_enabled
+// would.
 type ImportOverrideParamsInput struct {
 	Description                  string `json:"description,omitempty" jsonschema:"Override the imported project's description"`
 	Visibility                   string `json:"visibility,omitempty" jsonschema:"Override visibility level (private, internal, public)"`
 	MergeMethod                  string `json:"merge_method,omitempty" jsonschema:"Override merge method (merge, rebase_merge, ff)"`
 	RequestAccessEnabled         *bool  `json:"request_access_enabled,omitempty" jsonschema:"Override whether users can request access"`
-	LFSEnabled                   *bool  `json:"lfs_enabled,omitempty" jsonschema:"Override Git LFS enablement"`
 	SharedRunnersEnabled         *bool  `json:"shared_runners_enabled,omitempty" jsonschema:"Override whether shared (instance) CI runners are enabled"`
 	IssuesAccessLevel            string `json:"issues_access_level,omitempty" jsonschema:"Override issues access level (disabled, private, enabled)"`
 	MergeRequestsAccessLevel     string `json:"merge_requests_access_level,omitempty" jsonschema:"Override merge requests access level (disabled, private, enabled)"`
@@ -231,7 +244,6 @@ type ImportOverrideParamsInput struct {
 	SquashOption                              string `json:"squash_option,omitempty" jsonschema:"Override the squash option (never, always, default_on, default_off)"`
 	OnlyAllowMergeIfPipelineSucceeds          *bool  `json:"only_allow_merge_if_pipeline_succeeds,omitempty" jsonschema:"Override whether a merge waits for a successful pipeline"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved *bool  `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Override whether a merge waits for every discussion to be resolved"`
-	OnlyAllowMergeIfAllStatusChecksPassed     *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Override whether a merge waits for every external status check to pass"`
 	AllowMergeOnSkippedPipeline               *bool  `json:"allow_merge_on_skipped_pipeline,omitempty" jsonschema:"Override whether a merge is allowed when the pipeline is skipped"`
 	RemoveSourceBranchAfterMerge              *bool  `json:"remove_source_branch_after_merge,omitempty" jsonschema:"Override whether the source branch is removed after a merge by default"`
 	AutocloseReferencedIssues                 *bool  `json:"autoclose_referenced_issues,omitempty" jsonschema:"Override whether a merge closes the issues it references"`
@@ -239,61 +251,26 @@ type ImportOverrideParamsInput struct {
 	PrintingMergeRequestLinkEnabled           *bool  `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Override whether a push prints the create-merge-request link"`
 	MergeCommitTemplate                       string `json:"merge_commit_template,omitempty" jsonschema:"Override the merge commit message template"`
 	SquashCommitTemplate                      string `json:"squash_commit_template,omitempty" jsonschema:"Override the squash commit message template"`
-	MRDefaultTitleTemplate                    string `json:"mr_default_title_template,omitempty" jsonschema:"Override the default merge request title template"`
 	SuggestionCommitMessage                   string `json:"suggestion_commit_message,omitempty" jsonschema:"Override the default commit message for applied suggestions"`
-	IssueBranchTemplate                       string `json:"issue_branch_template,omitempty" jsonschema:"Override the template for branch names created from issues"`
-	MergeRequestTitleRegex                    string `json:"merge_request_title_regex,omitempty" jsonschema:"Override the regex merge request titles must match"`
-	MergeRequestTitleRegexDescription         string `json:"merge_request_title_regex_description,omitempty" jsonschema:"Override the description of the merge request title regex"`
 	ApprovalsBeforeMerge                      *int64 `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Override how many approvals a merge request needs (deprecated: use the merge request approvals API)"`
 
-	ServiceDeskEnabled         *bool `json:"service_desk_enabled,omitempty" jsonschema:"Override whether Service Desk is enabled"`
-	EmailsEnabled              *bool `json:"emails_enabled,omitempty" jsonschema:"Override whether email notifications are enabled"`
-	ShowDefaultAwardEmojis     *bool `json:"show_default_award_emojis,omitempty" jsonschema:"Override whether the default award emojis are shown"`
-	EnforceAuthChecksOnUploads *bool `json:"enforce_auth_checks_on_uploads,omitempty" jsonschema:"Override whether uploads require authorization"`
-	CICDCatalogEnabled         *bool `json:"cicd_catalog_enabled,omitempty" jsonschema:"Override whether the project is a CI/CD catalog resource"`
-	GroupRunnersEnabled        *bool `json:"group_runners_enabled,omitempty" jsonschema:"Override whether group runners are enabled"`
-	PublicJobs                 *bool `json:"public_jobs,omitempty" jsonschema:"Override whether pipelines and job logs are public"`
-	AutoDevopsEnabled          *bool `json:"auto_devops_enabled,omitempty" jsonschema:"Override whether Auto DevOps is enabled"`
-	Mirror                     *bool `json:"mirror,omitempty" jsonschema:"Override whether pull mirroring is enabled"`
-	MirrorTriggerBuilds        *bool `json:"mirror_trigger_builds,omitempty" jsonschema:"Override whether mirror updates trigger pipelines"`
+	ServiceDeskEnabled *bool `json:"service_desk_enabled,omitempty" jsonschema:"Override whether Service Desk is enabled"`
+	AutoDevopsEnabled  *bool `json:"auto_devops_enabled,omitempty" jsonschema:"Override whether Auto DevOps is enabled"`
 
 	AutoDevopsDeployStrategy                 string `json:"auto_devops_deploy_strategy,omitempty" jsonschema:"Override the Auto DevOps deploy strategy (continuous, manual, timed_incremental)"`
 	AutoCancelPendingPipelines               string `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Override whether pending pipelines are auto-canceled (enabled, disabled)"`
 	BuildGitStrategy                         string `json:"build_git_strategy,omitempty" jsonschema:"Override the Git strategy of jobs (fetch, clone)"`
 	BuildTimeout                             *int64 `json:"build_timeout,omitempty" jsonschema:"Override the job timeout in seconds"`
-	CIConfigPath                             string `json:"ci_config_path,omitempty" jsonschema:"Override the path of the CI/CD configuration file"`
-	ResourceGroupDefaultProcessMode          string `json:"resource_group_default_process_mode,omitempty" jsonschema:"Override the default resource group process mode (unordered, oldest_first, newest_first)"`
-	RepositoryStorage                        string `json:"repository_storage,omitempty" jsonschema:"Override the repository storage shard (administrators only)"`
 	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty" jsonschema:"Override the external authorization classification label"`
 
-	ContainerExpirationPolicyAttributes *ImportContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Override the container registry cleanup policy"`
-
-	Topics []string `json:"topics,omitempty" jsonschema:"Override the project's topics"`
-
-	// The deprecated toggles GitLab still declares under override_params,
-	// each sent as the caller gives it.
-	IssuesEnabled            *bool    `json:"issues_enabled,omitempty" jsonschema:"Override whether issues are enabled (deprecated: use issues_access_level)"`
-	MergeRequestsEnabled     *bool    `json:"merge_requests_enabled,omitempty" jsonschema:"Override whether merge requests are enabled (deprecated: use merge_requests_access_level)"`
-	WikiEnabled              *bool    `json:"wiki_enabled,omitempty" jsonschema:"Override whether the wiki is enabled (deprecated: use wiki_access_level)"`
-	JobsEnabled              *bool    `json:"jobs_enabled,omitempty" jsonschema:"Override whether jobs are enabled (deprecated: use builds_access_level)"`
-	SnippetsEnabled          *bool    `json:"snippets_enabled,omitempty" jsonschema:"Override whether snippets are enabled (deprecated: use snippets_access_level)"`
-	ContainerRegistryEnabled *bool    `json:"container_registry_enabled,omitempty" jsonschema:"Override whether the container registry is enabled (deprecated: use container_registry_access_level)"`
-	PackagesEnabled          *bool    `json:"packages_enabled,omitempty" jsonschema:"Override whether packages are enabled (deprecated: use package_registry_access_level)"`
-	EmailsDisabled           *bool    `json:"emails_disabled,omitempty" jsonschema:"Override whether email notifications are disabled (deprecated: use emails_enabled)"`
-	PublicBuilds             *bool    `json:"public_builds,omitempty" jsonschema:"Override whether pipelines are public (deprecated: use public_jobs)"`
-	TagList                  []string `json:"tag_list,omitempty" jsonschema:"Override the project's tags (deprecated: use topics)"`
-}
-
-// ImportContainerExpirationPolicyInput mirrors
-// [gl.ContainerExpirationPolicyAttributes], the cleanup policy an import can
-// override.
-type ImportContainerExpirationPolicyInput struct {
-	Cadence       string  `json:"cadence,omitempty" jsonschema:"Cleanup cadence (1d, 7d, 14d, 1month, 3month)"`
-	KeepN         *int64  `json:"keep_n,omitempty" jsonschema:"Number of most recent tags to always keep per image name"`
-	OlderThan     string  `json:"older_than,omitempty" jsonschema:"Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)"`
-	NameRegex     *string `json:"name_regex,omitempty" jsonschema:"Regex matching tag names to delete"`
-	NameRegexKeep *string `json:"name_regex_keep,omitempty" jsonschema:"Regex matching tag names to always keep"`
-	Enabled       *bool   `json:"enabled,omitempty" jsonschema:"Enable the cleanup policy"`
+	// The deprecated toggles GitLab still declares under override_params
+	// and the import applies, each sent as the caller gives it.
+	IssuesEnabled            *bool `json:"issues_enabled,omitempty" jsonschema:"Override whether issues are enabled (deprecated: use issues_access_level)"`
+	MergeRequestsEnabled     *bool `json:"merge_requests_enabled,omitempty" jsonschema:"Override whether merge requests are enabled (deprecated: use merge_requests_access_level)"`
+	WikiEnabled              *bool `json:"wiki_enabled,omitempty" jsonschema:"Override whether the wiki is enabled (deprecated: use wiki_access_level)"`
+	SnippetsEnabled          *bool `json:"snippets_enabled,omitempty" jsonschema:"Override whether snippets are enabled (deprecated: use snippets_access_level)"`
+	ContainerRegistryEnabled *bool `json:"container_registry_enabled,omitempty" jsonschema:"Override whether the container registry is enabled (deprecated: use container_registry_access_level)"`
+	PublicBuilds             *bool `json:"public_builds,omitempty" jsonschema:"Override whether pipelines and job logs are public (the import applies this name, not public_jobs)"`
 }
 
 // ImportFromFileInput is the input for importing a project from an archive
@@ -551,11 +528,7 @@ func buildOverrideParams(in *ImportOverrideParamsInput) *gl.CreateProjectOptions
 	opts := &gl.CreateProjectOptions{
 		Description:          optionalString(in.Description),
 		RequestAccessEnabled: in.RequestAccessEnabled,
-		LFSEnabled:           in.LFSEnabled,
 		SharedRunnersEnabled: in.SharedRunnersEnabled,
-		Topics:               uploadedList(in.Topics),
-
-		ContainerExpirationPolicyAttributes: in.ContainerExpirationPolicyAttributes.toGL(),
 	}
 	if in.Visibility != "" {
 		opts.Visibility = new(gl.VisibilityValue(in.Visibility))
@@ -605,7 +578,6 @@ func applyOverrideMergeSettings(opts *gl.CreateProjectOptions, in *ImportOverrid
 	}
 	opts.OnlyAllowMergeIfPipelineSucceeds = in.OnlyAllowMergeIfPipelineSucceeds
 	opts.OnlyAllowMergeIfAllDiscussionsAreResolved = in.OnlyAllowMergeIfAllDiscussionsAreResolved
-	opts.OnlyAllowMergeIfAllStatusChecksPassed = in.OnlyAllowMergeIfAllStatusChecksPassed
 	opts.AllowMergeOnSkippedPipeline = in.AllowMergeOnSkippedPipeline
 	opts.RemoveSourceBranchAfterMerge = in.RemoveSourceBranchAfterMerge
 	opts.AutocloseReferencedIssues = in.AutocloseReferencedIssues
@@ -613,72 +585,32 @@ func applyOverrideMergeSettings(opts *gl.CreateProjectOptions, in *ImportOverrid
 	opts.PrintingMergeRequestLinkEnabled = in.PrintingMergeRequestLinkEnabled
 	opts.MergeCommitTemplate = optionalString(in.MergeCommitTemplate)
 	opts.SquashCommitTemplate = optionalString(in.SquashCommitTemplate)
-	opts.MRDefaultTitleTemplate = optionalString(in.MRDefaultTitleTemplate)
 	opts.SuggestionCommitMessage = optionalString(in.SuggestionCommitMessage)
-	opts.IssueBranchTemplate = optionalString(in.IssueBranchTemplate)
-	opts.MergeRequestTitleRegex = optionalString(in.MergeRequestTitleRegex)
-	opts.MergeRequestTitleRegexDescription = optionalString(in.MergeRequestTitleRegexDescription)
 	opts.ApprovalsBeforeMerge = in.ApprovalsBeforeMerge //nolint:staticcheck // 1:1 with the param GitLab declares under override_params; the approvals API is its replacement.
 }
 
-// applyOverrideFeatureSettings sets the feature, CI/CD and mirroring settings
-// an override names.
+// applyOverrideFeatureSettings sets the feature and CI/CD settings an
+// override names.
 func applyOverrideFeatureSettings(opts *gl.CreateProjectOptions, in *ImportOverrideParamsInput) {
 	opts.ServiceDeskEnabled = in.ServiceDeskEnabled
-	opts.EmailsEnabled = in.EmailsEnabled
-	opts.ShowDefaultAwardEmojis = in.ShowDefaultAwardEmojis
-	opts.EnforceAuthChecksOnUploads = in.EnforceAuthChecksOnUploads
-	opts.CICDCatalogEnabled = in.CICDCatalogEnabled
-	opts.GroupRunnersEnabled = in.GroupRunnersEnabled
-	opts.PublicJobs = in.PublicJobs
 	opts.AutoDevopsEnabled = in.AutoDevopsEnabled
-	opts.Mirror = in.Mirror
-	opts.MirrorTriggerBuilds = in.MirrorTriggerBuilds
 	opts.AutoDevopsDeployStrategy = optionalString(in.AutoDevopsDeployStrategy)
 	opts.AutoCancelPendingPipelines = optionalString(in.AutoCancelPendingPipelines)
 	opts.BuildGitStrategy = optionalString(in.BuildGitStrategy)
 	opts.BuildTimeout = in.BuildTimeout
-	opts.CIConfigPath = optionalString(in.CIConfigPath)
-	opts.RepositoryStorage = optionalString(in.RepositoryStorage)
 	opts.ExternalAuthorizationClassificationLabel = optionalString(in.ExternalAuthorizationClassificationLabel)
-	if in.ResourceGroupDefaultProcessMode != "" {
-		opts.ResourceGroupDefaultProcessMode = new(gl.ResourceGroupProcessMode(in.ResourceGroupDefaultProcessMode))
-	}
 }
 
 // applyOverrideDeprecatedToggles sets the deprecated toggles GitLab still
-// declares under override_params, each as the caller gave it.
+// declares under override_params and the import applies, each as the caller
+// gave it.
 func applyOverrideDeprecatedToggles(opts *gl.CreateProjectOptions, in *ImportOverrideParamsInput) {
 	opts.IssuesEnabled = in.IssuesEnabled                       //nolint:staticcheck // 1:1 with the declared param; prefer issues_access_level.
 	opts.MergeRequestsEnabled = in.MergeRequestsEnabled         //nolint:staticcheck // 1:1 with the declared param; prefer merge_requests_access_level.
 	opts.WikiEnabled = in.WikiEnabled                           //nolint:staticcheck // 1:1 with the declared param; prefer wiki_access_level.
-	opts.JobsEnabled = in.JobsEnabled                           //nolint:staticcheck // 1:1 with the declared param; prefer builds_access_level.
 	opts.SnippetsEnabled = in.SnippetsEnabled                   //nolint:staticcheck // 1:1 with the declared param; prefer snippets_access_level.
 	opts.ContainerRegistryEnabled = in.ContainerRegistryEnabled //nolint:staticcheck // 1:1 with the declared param; prefer container_registry_access_level.
-	opts.PackagesEnabled = in.PackagesEnabled                   //nolint:staticcheck // 1:1 with the declared param; prefer package_registry_access_level.
-	opts.EmailsDisabled = in.EmailsDisabled                     //nolint:staticcheck // 1:1 with the declared param; prefer emails_enabled.
-	opts.PublicBuilds = in.PublicBuilds                         //nolint:staticcheck // 1:1 with the declared param; prefer public_jobs.
-	opts.TagList = uploadedList(in.TagList)                     //nolint:staticcheck // 1:1 with the declared param; prefer topics.
-}
-
-// toGL converts the cleanup policy override into the SDK options, returning
-// nil when no field is set.
-func (c *ImportContainerExpirationPolicyInput) toGL() *gl.ContainerExpirationPolicyAttributes {
-	if c == nil {
-		return nil
-	}
-	out := &gl.ContainerExpirationPolicyAttributes{
-		Cadence:       optionalString(c.Cadence),
-		KeepN:         c.KeepN,
-		OlderThan:     optionalString(c.OlderThan),
-		NameRegex:     c.NameRegex,
-		NameRegexKeep: c.NameRegexKeep,
-		Enabled:       c.Enabled,
-	}
-	if *out == (gl.ContainerExpirationPolicyAttributes{}) {
-		return nil
-	}
-	return out
+	opts.PublicBuilds = in.PublicBuilds                         //nolint:staticcheck // 1:1 with the declared param, the name the import applies.
 }
 
 // optionalString returns a pointer to s, or nil for the empty string so an
@@ -696,20 +628,6 @@ func accessLevel(s string) *gl.AccessControlValue {
 		return nil
 	}
 	return new(gl.AccessControlValue(s))
-}
-
-// uploadedList returns a list the way an upload has to send it: as one
-// comma-separated value, or nil for an empty list. client-go's UploadRequest
-// writes only the first value of each multipart field (fields.Get), so a list
-// sent element by element reaches GitLab as its first element alone, and
-// GitLab splits a comma-separated value back into the list for the topic and
-// tag params (API::Validations::Types::CommaSeparatedToArray), which is the
-// list a JSON body would have carried.
-func uploadedList(values []string) *[]string {
-	if len(values) == 0 {
-		return nil
-	}
-	return new([]string{strings.Join(values, ",")})
 }
 
 // ---------------------------------------------------------------------------

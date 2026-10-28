@@ -159,11 +159,20 @@ func paramDeclarations() []paramDeclaration {
 			"and presents Entities::MergeRequestBasic with current_user alone: view, with_labels_details and " +
 			"with_merge_status_recheck become presenter options only through serializer_options_for in lib/api/merge_requests.rb, " +
 			"which this route does not call, and MergeRequestsFinder reads none of them, so the route applies none"
+		reasonImportNotRestored = "the import's tree restorer merges override_params into the archive's project attributes " +
+			"and keeps only those lib/gitlab/import_export/project/import_export.yml permits for a project " +
+			"(Gitlab::ImportExport::AttributesPermitter, through Group::RelationTreeRestorer#filter_attributes), " +
+			"and this key is not among them, so the import drops it"
+		reasonImportNotAssignable = "lib/gitlab/import_export/project/import_export.yml permits this key for a project, " +
+			"and Group::RelationTreeRestorer#update_params! hands it to Project#assign_attributes, which cannot take it: " +
+			"topics is the has_many :topics association with Projects::Topic (app/models/project.rb), which a list of names " +
+			"does not fill, and the project has no jobs_enabled writer (lib/api/projects.rb renames it to builds_enabled for " +
+			"the create and the edit alone), so either one raises, the restore fails and the import with it"
 		reasonMirrorWebhook = "ee/lib/api/project_mirror.rb declares action and the pull_request.* keys for the GitHub " +
 			"pull request event a webhook posts to the route (ProcessGithubEventService), which no caller of an action writes"
 		reasonPlanLimits    = "ChangePlanLimitOptions models eight of the twenty-nine limits PUT /application/plan_limits takes"
 		reasonRow133Groups  = "UpdateGroupOptions and CreateGroupOptions lack the group params GitLab 19.5 added"
-		reasonRow133Duo     = "the project create, create-for-user, edit and import options lack duo_code_review_decisions_enabled"
+		reasonRow133Duo     = "the project create, create-for-user and edit options lack duo_code_review_decisions_enabled"
 		reasonRow133Account = "CreateServiceAccountUserOptions and UpdateServiceAccountOptions lack external"
 		reasonRow133Search  = "SearchOptions lacks the merge request filters the group and project search routes take"
 		reasonLabelRoutes   = "client-go's UpdateLabel, DeleteLabel, UpdateGroupLabel and DeleteGroupLabel send the " +
@@ -194,6 +203,29 @@ func paramDeclarations() []paramDeclaration {
 			Category: categoryDeclaredNotApplied, Reason: reasonDeploymentMRs,
 		})
 	}
+	for _, key := range []string{
+		"auto_duo_code_review_enabled", "avatar", "ci_config_path", "cicd_catalog_enabled",
+		"container_expiration_policy_attributes", "duo_code_review_decisions_enabled",
+		"duo_dependency_bump_breaking_changes_enabled", "duo_remote_flows_enabled", "duo_sast_fp_detection_enabled",
+		"duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled", "emails_disabled", "emails_enabled",
+		"enforce_auth_checks_on_uploads", "group_runners_enabled", "issue_branch_template", "lfs_enabled",
+		"merge_request_title_regex", "merge_request_title_regex_description", "mirror", "mirror_trigger_builds",
+		"mr_default_target_self", "mr_default_title_template", "only_allow_merge_if_all_status_checks_passed",
+		"packages_enabled", "prevent_merge_without_jira_issue", "public_jobs", "repository_storage",
+		"resource_group_default_process_mode", "show_default_award_emojis", "show_diff_preview_in_email",
+		"spp_repository_pipeline_access", "tag_list", "warn_about_potentially_unwanted_characters",
+	} {
+		declared = append(declared, paramDeclaration{
+			Route: "POST /projects/import", Param: "override_params[" + key + "]",
+			Category: categoryDeclaredNotApplied, Reason: reasonImportNotRestored,
+		})
+	}
+	for _, key := range []string{"jobs_enabled", "topics"} {
+		declared = append(declared, paramDeclaration{
+			Route: "POST /projects/import", Param: "override_params[" + key + "]",
+			Category: categoryDeclaredNotApplied, Reason: reasonImportNotAssignable,
+		})
+	}
 	for _, param := range []string{
 		"action", "pull_request.base.ref", "pull_request.base.repo.full_name", "pull_request.base.sha",
 		"pull_request.head.ref", "pull_request.head.repo.full_name", "pull_request.head.sha", "pull_request.number",
@@ -220,7 +252,6 @@ func paramDeclarations() []paramDeclaration {
 	for _, route := range []string{"POST /projects", "POST /projects/user/:user_id", "PUT /projects/:id"} {
 		upstream133(route, reasonRow133Duo, "duo_code_review_decisions_enabled")
 	}
-	upstream133("POST /projects/import", reasonRow133Duo, "override_params[duo_code_review_decisions_enabled]")
 	upstream133("POST /service_accounts", reasonRow133Account, "external")
 	upstream133("PATCH /service_accounts/:user_id", reasonRow133Account, "external")
 	for _, route := range []string{"GET /groups/:id/(-/)search", "GET /projects/:id/(-/)search"} {
