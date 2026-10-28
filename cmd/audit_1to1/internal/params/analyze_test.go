@@ -593,6 +593,91 @@ func TestRun_Repository_ReportsTheParamsClientGoV3300CannotSend(t *testing.T) {
 	checkProjectHookHeaders(t, reported)
 }
 
+// TestRun_Repository_OffersOrDeclaresTheParamsNoInputOfferedOnV3300 holds
+// the 71 findings not_offered on 9 routes the scope reported on v3.30.0
+// before the layer that answered them: params an option struct the action
+// already hands client-go models and no input offered. Each is answered now.
+// The avatar of seven create and edit actions and 39 of the 61
+// override_params keys of the file import are offered, and answered by no
+// declaration. The three list flags of a deployment's merge requests, which
+// the route takes and never reads, and the other 22 import keys, which the
+// import's tree restorer drops or cannot assign, are declared
+// declared-not-applied on a param client-go models and no input offers, and
+// so is lfs_enabled, which the import input offered before them.
+//
+// It pins those cases and no more: a param client-go starts modeling in a
+// bump is reported as not_offered beside the rest, which the scope reports
+// and does not gate, and the bump updates this list as it does every
+// witness's.
+func TestRun_Repository_OffersOrDeclaresTheParamsNoInputOfferedOnV3300(t *testing.T) {
+	report := repositoryReport(t)
+	reported := map[string]Finding{}
+	for _, finding := range slices.Concat(report.Findings, report.Declared) {
+		reported[finding.Route+" "+finding.Param] = finding
+	}
+	offered, declared := notOfferedOnV3300()
+	for _, tc := range offered {
+		t.Run(tc.route+" "+tc.param+" is offered", func(t *testing.T) {
+			if finding, found := reported[tc.route+" "+tc.param]; found && (!finding.Offered || finding.Category != "") {
+				t.Errorf("%s %s = %+v, want it offered and answered by no declaration", tc.route, tc.param, finding)
+			}
+		})
+	}
+	for _, tc := range declared {
+		t.Run(tc.route+" "+tc.param+" is declared", func(t *testing.T) {
+			if finding := reported[tc.route+" "+tc.param]; finding.Category != categoryDeclaredNotApplied || !finding.SDKModels || finding.Offered {
+				t.Errorf("%s %s = %+v, want the modeled param declared %s and offered by no input", tc.route, tc.param, finding, categoryDeclaredNotApplied)
+			}
+		})
+	}
+}
+
+// routeParam is one param of one route.
+type routeParam struct{ route, param string }
+
+// notOfferedOnV3300 are the params the scope reported not_offered on
+// v3.30.0 before they were answered, split into the ones an input offers now
+// and the ones declared declared-not-applied, lfs_enabled among the latter.
+func notOfferedOnV3300() (offered, declared []routeParam) {
+	for _, route := range []string{
+		"POST /groups", "POST /projects", "POST /projects/user/:user_id",
+		"POST /topics", "PUT /topics/:id", "POST /users", "PUT /users/:id",
+	} {
+		offered = append(offered, routeParam{route, "avatar"})
+	}
+	const imports = "POST /projects/import"
+	for _, key := range []string{
+		"allow_merge_on_skipped_pipeline", "analytics_access_level", "approvals_before_merge",
+		"auto_cancel_pending_pipelines", "auto_devops_deploy_strategy", "auto_devops_enabled",
+		"autoclose_referenced_issues", "build_git_strategy", "build_timeout", "container_registry_enabled",
+		"environments_access_level", "external_authorization_classification_label", "feature_flags_access_level",
+		"forking_access_level", "infrastructure_access_level", "issues_enabled", "merge_commit_template",
+		"merge_requests_enabled", "model_experiments_access_level", "model_registry_access_level",
+		"monitor_access_level", "only_allow_merge_if_all_discussions_are_resolved",
+		"only_allow_merge_if_pipeline_succeeds", "package_registry_access_level", "pages_access_level",
+		"printing_merge_request_link_enabled", "public_builds", "releases_access_level",
+		"remove_source_branch_after_merge", "repository_access_level", "requirements_access_level",
+		"resolve_outdated_diff_discussions", "security_and_compliance_access_level", "service_desk_enabled",
+		"snippets_enabled", "squash_commit_template", "squash_option", "suggestion_commit_message", "wiki_enabled",
+	} {
+		offered = append(offered, routeParam{imports, "override_params[" + key + "]"})
+	}
+	for _, key := range []string{
+		"ci_config_path", "cicd_catalog_enabled", "container_expiration_policy_attributes", "emails_disabled",
+		"emails_enabled", "enforce_auth_checks_on_uploads", "group_runners_enabled", "issue_branch_template",
+		"jobs_enabled", "lfs_enabled", "merge_request_title_regex", "merge_request_title_regex_description",
+		"mirror", "mirror_trigger_builds", "mr_default_title_template",
+		"only_allow_merge_if_all_status_checks_passed", "packages_enabled", "public_jobs", "repository_storage",
+		"resource_group_default_process_mode", "show_default_award_emojis", "tag_list", "topics",
+	} {
+		declared = append(declared, routeParam{imports, "override_params[" + key + "]"})
+	}
+	for _, flag := range []string{"view", "with_labels_details", "with_merge_status_recheck"} {
+		declared = append(declared, routeParam{"GET /projects/:id/deployments/:deployment_id/merge_requests", flag})
+	}
+	return offered, declared
+}
+
 // witnessCase is one param the witness test expects reported, with its class
 // and, when a declaration answers it, its category.
 type witnessCase struct{ route, param, class, category string }
