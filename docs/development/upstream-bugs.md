@@ -166,6 +166,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet)
   - [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses)
   - [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does)
+  - [The service account token list examples sort by a value their pages do not list](#the-service-account-token-list-examples-sort-by-a-value-their-pages-do-not-list)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -394,6 +395,7 @@ readable without opening the tracker:
 | 140 | gobco | [gobco bridges a black box test package through an import it may not find](#gobco-bridges-a-black-box-test-package-through-an-import-it-may-not-find) | Yes, by another user, [rillig/gobco#33](https://github.com/rillig/gobco/issues/33) | Yes, by another contributor, [rillig/gobco#39](https://github.com/rillig/gobco/pull/39), open | No | No; the condition gate could not measure a package it reaches | Yes, temporarily: the staged copy of `scripts/coverage-conditions.sh` since 2026-10-27, by the decision of row 97, until a gobco release carries a fix |
 | 141 | gitlab-org/gitlab | [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses) | No | No | No | No; GitLab answers both with `400` | Yes, the two custom role creates offer Guest to Maintainer and the two broadcast message writes every target but Security Manager |
 | 142 | gitlab-org/gitlab | [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does) | No; a documentation merge request is drafted, not sent | No | No | No; the schemas followed the pages | Yes ([issue 1240](https://github.com/jmrplens/gitlab-mcp-server/issues/1240)): each row is declared with the source that settles it, and a parameter no tier honors is no longer offered |
+| 143 | gitlab-org/gitlab | [The service account token list examples sort by a value their pages do not list](#the-service-account-token-list-examples-sort-by-a-value-their-pages-do-not-list) | No | No | No | No | None; `group.service_account_pat_list` and `project.service_account_pat_list` publish the eight documented orders and not the example's `id_desc` |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -15632,6 +15634,60 @@ checksum filters are offered by no list.
 **How we found it**: answering the 65 parameter findings of
 `make audit-edition-tier` for issue 1240, each read against the source at
 v19.5.0-ee.
+
+### The service account token list examples sort by a value their pages do not list
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. Read at `v19.5.0-ee` and on master at `a728284cfb1d`
+  (2026-10-27), which carry the same lines.
+- **Blocking**: no.
+- **Workaround**: none. `group.service_account_pat_list` and
+  `project.service_account_pat_list` publish `sort` as the eight orders the
+  pages list (the `SchemaEnumOverride` in `action_specs.go` of
+  `internal/tools/groupserviceaccounts` and
+  `internal/tools/projectserviceaccounts`), as the three access token lists
+  do, so the example's `id_desc` is not among the values they offer. A fix
+  upstream that says which orders the routes take decides whether that enum
+  grows.
+
+**Where**: `doc/api/service_accounts.md`, the sections that list the personal
+access tokens of a group service account and of a project service account.
+Each attribute table gives `sort` eight possible values, and the example
+request under it sends `?sort=id_desc`. The code behind both routes is
+`access_token_params` in `lib/api/helpers/personal_access_tokens_helpers.rb`,
+which declares `sort` as a `String` with no `values`,
+`PersonalAccessTokensFinder#sort` in `app/finders/personal_access_tokens_finder.rb`
+and `PersonalAccessToken.simple_sorts` in `app/models/personal_access_token.rb`.
+
+**What**: the finder sorts by any key of `PersonalAccessToken.simple_sorts`
+and leaves the tokens unsorted for any other value. That hash merges the eight
+documented orders over `Sortable.simple_sorts`
+(`app/models/concerns/sortable.rb`), so it holds seventeen keys: the eight,
+and `id_asc`, `id_desc`, `created_at_asc`, `created_at_desc`, `created_date`,
+`updated_asc`, `updated_desc`, `updated_at_asc` and `updated_at_desc`. The
+example's `id_desc` is one of the nine the pages do not list: it sorts, but a
+reader cannot tell from the page whether it is supported. Since the route declares no `values`, a value outside all
+seventeen, such as `asc`, is accepted and ignored. The personal, project and
+group access token pages list the same eight values, and their examples send
+no `sort`.
+
+**What it costs this server**: nothing at run time. The enum follows the
+documented list and leaves out the nine undocumented orders, the example's
+`id_desc` among them, so a caller cannot ask these two lists for the tokens by
+id until GitLab says that order is supported.
+
+**Proposal**: a documentation merge request changing both examples to a
+listed order, such as `created_desc`, the example `access_token_params` itself
+documents. Listing the nine as well, or declaring `values` on `sort` so that
+an order the finder does not apply is refused with 400, is GitLab's choice;
+the first would let the enum here grow, and the second would make GitLab
+refuse `asc` and `desc` as the schema here does.
+
+**How we found it**: the review of
+[issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165)'s
+first layer, which replaced the two lists' `asc` and `desc` enum with the
+documented orders and read the finder to see which values GitLab applies.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

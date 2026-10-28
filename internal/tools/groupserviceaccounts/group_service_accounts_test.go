@@ -528,7 +528,7 @@ func TestListPATs(t *testing.T) {
 			input: ListPATInput{
 				GroupID:          "mygroup",
 				ServiceAccountID: 42,
-				Sort:             "desc",
+				Sort:             "created_desc",
 				Revoked:          new(true),
 				UserID:           7,
 				Search:           "deploy",
@@ -541,7 +541,7 @@ func TestListPATs(t *testing.T) {
 				LastUsedBefore:   "2026-10-01T00:00:00Z",
 			},
 			handler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertQueryParam(t, r, "sort", "desc")
+				testutil.AssertQueryParam(t, r, "sort", "created_desc")
 				testutil.AssertQueryParam(t, r, "revoked", "true")
 				testutil.AssertQueryParam(t, r, "user_id", "7")
 				testutil.AssertQueryParam(t, r, "search", "deploy")

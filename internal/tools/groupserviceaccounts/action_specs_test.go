@@ -346,6 +346,39 @@ func TestActionSpecs_TokenStateEnum_IsPublishedOnThePATListingAlone(t *testing.T
 	}
 }
 
+// TestActionSpecs_TokenSortEnum_NamesTheEightDocumentedOrders verifies that
+// the token list publishes sort as the eight named orders the route documents
+// (access_token_params in lib/api/helpers/personal_access_tokens_helpers.rb at
+// v19.5.0-ee), in its enum and in its description, rather than the asc and
+// desc the catalog gives every sort parameter. PersonalAccessTokensFinder
+// sorts only by a key of PersonalAccessToken.simple_sorts, which holds the
+// eight documented orders and nine undocumented ones it inherits from
+// Sortable, and leaves the tokens unsorted otherwise; asc and desc are not
+// keys, so with them the schema admitted only two values GitLab ignores and
+// refused every order it applies.
+func TestActionSpecs_TokenSortEnum_NamesTheEightDocumentedOrders(t *testing.T) {
+	want := []string{"created_asc", "created_desc", "expires_asc", "expires_desc", "last_used_asc", "last_used_desc", "name_asc", "name_desc"}
+	props, _ := groupServiceAccountMetadataSpecs(t)["gitlab_group_service_account_pat_list"].Route.InputSchema["properties"].(map[string]any)
+	sortProp, _ := props["sort"].(map[string]any)
+	raw, _ := sortProp["enum"].([]any)
+	enum := make([]string, 0, len(raw))
+	for _, value := range raw {
+		text, _ := value.(string)
+		enum = append(enum, text)
+	}
+	if !slices.Equal(enum, want) {
+		t.Errorf("pat_list sort enum = %v, want %v", enum, want)
+	}
+	desc, _ := sortProp["description"].(string)
+	for _, value := range want {
+		t.Run(value, func(t *testing.T) {
+			if !strings.Contains(desc, value) {
+				t.Errorf("pat_list sort description = %q, want it to name %s", desc, value)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_TokenIDGuidance_GoesToTheTwoActionsThatTakeATokenID holds
 // both operands of the guidance branch. The guidance exists because the two
 // actions take a service_account_id and a token_id side by side and a model

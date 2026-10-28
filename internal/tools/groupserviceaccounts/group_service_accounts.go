@@ -309,7 +309,7 @@ type ListPATInput struct {
 	GroupID          string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	ServiceAccountID int64  `json:"service_account_id" jsonschema:"Service account user ID,required"`
 	toolutil.PaginationInput
-	Sort           string `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
+	Sort           string `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	Revoked        *bool  `json:"revoked,omitempty" jsonschema:"Filter by revoked state: true returns only revoked tokens, false only active ones"`
 	UserID         int64  `json:"user_id,omitempty" jsonschema:"Filter by the user ID that owns the token"`
 	Search         string `json:"search,omitempty" jsonschema:"Filter tokens whose name contains this text"`

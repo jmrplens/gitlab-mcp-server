@@ -79,6 +79,21 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 		// https://docs.gitlab.com/api/service_accounts/#list-all-personal-access-tokens-for-a-project-service-account
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("state", "active", "inactive"),
+			// The route sorts by a named order rather than a direction, so
+			// the central sort enum, asc and desc, would refuse every order
+			// it takes and admit two it ignores. The enum is the eight
+			// orders the route documents (access_token_params in
+			// lib/api/helpers/personal_access_tokens_helpers.rb), as on the
+			// access token lists. The finder applies any key of
+			// PersonalAccessToken.simple_sorts, which also holds nine orders
+			// it inherits from Sortable and GitLab does not document
+			// (id_asc, id_desc, created_at_asc, created_at_desc,
+			// created_date, updated_asc, updated_desc, updated_at_asc and
+			// updated_at_desc), although the documentation's own example
+			// sends id_desc (docs/development/upstream-bugs.md, row 143).
+			toolutil.SchemaEnumOverride("sort",
+				"created_asc", "created_desc", "expires_asc", "expires_desc",
+				"last_used_asc", "last_used_desc", "name_asc", "name_desc"),
 		}
 	}
 	if actionName == "service_account_pat_create" || actionName == "service_account_pat_rotate" {

@@ -323,7 +323,7 @@ type ListPATInput struct {
 	Revoked        *bool  `json:"revoked,omitempty" jsonschema:"Filter by revoked state"`
 	UserID         int64  `json:"user_id,omitempty" jsonschema:"Filter by user ID"`
 	Search         string `json:"search,omitempty" jsonschema:"Search token names"`
-	Sort           string `json:"sort,omitempty" jsonschema:"Sort expression"`
+	Sort           string `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	State          string `json:"state,omitempty" jsonschema:"Token state filter: active or inactive"`
 }
 
