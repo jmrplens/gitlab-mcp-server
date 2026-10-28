@@ -449,8 +449,8 @@ Actions (8): confirm, dismiss, get, list, pipeline_security_summary, resolve, re
 
 Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation.
 
-- gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership.
-- gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership.
+- gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership at access_level, or Developer when it is left out.
+- gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership at access_level, or Developer when it is left out.
 - gitlab_access_request_deny_group: Deny a pending group access request, removing it without granting membership.
 - gitlab_access_request_deny_project: Deny a pending project access request, removing it without granting membership.
 - gitlab_access_request_list_group: List pending access requests for a group.

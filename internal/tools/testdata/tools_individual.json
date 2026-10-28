@@ -1,12 +1,22 @@
 [
   {
     "name": "gitlab_access_request_approve_group",
-    "description": "Approve a pending group access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list.",
+    "description": "Approve a pending group access request, granting the user membership at access_level, or Developer when it is left out. Minimal access is granted only on a top-level group with a Premium or Ultimate license, and is reported as granted only once the requester is found among the group's members. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30",
+          "description": "Access level to grant (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Omit it to grant Developer, GitLab's default. Minimal access is refused on a subgroup and on the Free tier, and reported as an approval only once the requester is found among the group's members",
+          "enum": [
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "group_id": {
@@ -273,12 +283,21 @@
   },
   {
     "name": "gitlab_access_request_approve_project",
-    "description": "Approve a pending project access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list.",
+    "description": "Approve a pending project access request, granting the user membership at access_level, or Developer when it is left out. A level a project does not grant is refused before the request. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30",
+          "description": "Access level to grant (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Omit it to grant Developer, GitLab's default. A project grants no other level",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "project_id": {
@@ -15011,8 +15030,16 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)",
+          "description": "Access levels to target (10=Guest, 15=Planner, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). A broadcast message cannot target Security Manager",
           "items": {
+            "enum": [
+              10,
+              15,
+              20,
+              30,
+              40,
+              50
+            ],
             "type": "integer"
           },
           "type": [
@@ -16709,7 +16736,15 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid",
+          "description": "Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer). A custom role extends no other level",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40
+          ],
           "type": "integer"
         },
         "description": {
@@ -17441,7 +17476,15 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid",
+          "description": "Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer). A custom role extends no other level",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40
+          ],
           "type": "integer"
         },
         "description": {
@@ -53694,7 +53737,16 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner). 60=Admin is not valid for group access tokens",
+          "description": "Access level of the token (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner), no higher than the caller's own. GitLab grants Maintainer when it is left out",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "description": {
@@ -62644,7 +62696,17 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level",
+          "enum": [
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "email": {
@@ -62899,7 +62961,16 @@
           ]
         },
         "min_access_level": {
-          "description": "Minimum access level the invitation grants (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level the invitation grants (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -64379,9 +64450,8 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Default access level for members of the LDAP group: 0 (No access), 5 (Minimal access), 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner)",
+          "description": "Default access level for members of the LDAP group (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). An LDAP group link takes Minimal access on a subgroup as well, and no other level",
           "enum": [
-            0,
             5,
             10,
             15,
@@ -64398,7 +64468,7 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID",
+          "description": "Custom member role ID the link's members get (Ultimate)",
           "type": [
             "null",
             "integer"
@@ -64754,7 +64824,16 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -64791,7 +64870,7 @@
           "type": "integer"
         },
         "repository_storage": {
-          "description": "Filter by repository storage shard (administrators only)",
+          "description": "Filter by the storage shard of the group's wiki repository (administrators only)",
           "type": "string"
         },
         "search": {
@@ -65842,7 +65921,17 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level",
+          "enum": [
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "expires_at": {
@@ -66137,7 +66226,17 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)",
+          "description": "New access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level",
+          "enum": [
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "expires_at": {
@@ -66153,7 +66252,7 @@
           ]
         },
         "member_role_id": {
-          "description": "Custom member role ID to assign. Ultimate only. The role's base access level must match access_level. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched",
+          "description": "Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. The role's base access level must match access_level. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched",
           "type": [
             "null",
             "integer"
@@ -68783,7 +68882,16 @@
           "type": "boolean"
         },
         "min_access_level": {
-          "description": "Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Limit to projects where the caller has at least this access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -72989,7 +73097,17 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A SAML group link takes no other level",
+          "enum": [
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "group_id": {
@@ -72997,7 +73115,7 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID",
+          "description": "Custom member role ID the link's members get (Ultimate)",
           "type": [
             "null",
             "integer"
@@ -75408,7 +75526,17 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares",
+          "description": "Access level the members of the group shared with gain (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group share takes no other level",
+          "enum": [
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "group_id": {
@@ -75535,7 +75663,17 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares",
+          "description": "Access level the members of the group shared with gain (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group share takes no other level",
+          "enum": [
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "group_id": {
@@ -75619,7 +75757,16 @@
           ]
         },
         "min_access_level": {
-          "description": "Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Limit to projects where the caller has at least this access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -75874,7 +76021,16 @@
           ]
         },
         "min_access_level": {
-          "description": "Minimum access level the share grants (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level the share grants (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -78762,7 +78918,7 @@
           "type": "string"
         },
         "duo_features_enabled": {
-          "description": "Enable GitLab Duo features",
+          "description": "Enable GitLab Duo features. GitLab Duo needs Premium or Ultimate, or GitLab Credits on a Free namespace, and elsewhere the setting has no effect",
           "type": [
             "null",
             "boolean"
@@ -78831,7 +78987,7 @@
           ]
         },
         "lock_duo_features_enabled": {
-          "description": "Prevent subgroups from changing the Duo features setting",
+          "description": "Prevent subgroups from changing the Duo features setting. GitLab Duo needs Premium or Ultimate, or GitLab Credits on a Free namespace, and elsewhere the setting has no effect",
           "type": [
             "null",
             "boolean"
@@ -80814,7 +80970,7 @@
           "type": "string"
         },
         "environment_scope": {
-          "description": "Environment scope (default: *)",
+          "description": "Environment scope (default: *). A scope other than * needs Premium or Ultimate: a Free Enterprise Edition instance drops it and the variable applies to every environment",
           "type": "string"
         },
         "group_id": {
@@ -86118,7 +86274,7 @@
           "type": "integer"
         },
         "assignee_ids": {
-          "description": "User IDs to assign",
+          "description": "User IDs to assign. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first",
           "items": {
             "type": "integer"
           },
@@ -102785,7 +102941,7 @@
           ]
         },
         "assignee_ids": {
-          "description": "User IDs that replace the issue's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched",
+          "description": "User IDs that replace the issue's assignees. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first. Pass [] to remove every assignee. Omit the field to leave them untouched",
           "items": {
             "type": "integer"
           },
@@ -161977,13 +162133,6 @@
             "boolean"
           ]
         },
-        "new_epic": {
-          "description": "Notify on new epic",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "new_issue": {
           "description": "Notify on new issue",
           "type": [
@@ -171990,7 +172139,16 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer). 50=Owner and 60=Admin are not valid for project access tokens",
+          "description": "Access level of the token (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Planner (15) and Security Manager (25) are granted only by an Owner of the project or by a member who holds that role, and any other level no higher than the caller's own. GitLab grants Maintainer when it is left out",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "description": {
@@ -185104,7 +185262,16 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "email": {
@@ -185455,7 +185622,7 @@
           ]
         },
         "include_hidden": {
-          "description": "Include hidden projects in results",
+          "description": "Include hidden projects in results (administrators only)",
           "type": [
             "null",
             "boolean"
@@ -185486,7 +185653,16 @@
           ]
         },
         "min_access_level": {
-          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -185525,13 +185701,6 @@
           "maximum": 100,
           "minimum": 1,
           "type": "integer"
-        },
-        "repository_checksum_failed": {
-          "description": "Limit to projects where the repository checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "repository_storage": {
           "description": "Limit to projects on the given repository storage shard (admin only)",
@@ -185586,13 +185755,6 @@
             "public"
           ],
           "type": "string"
-        },
-        "wiki_checksum_failed": {
-          "description": "Limit to projects where the wiki checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "with_custom_attributes": {
           "description": "Include custom attributes in the response (admin only)",
@@ -186994,7 +187156,16 @@
           ]
         },
         "min_access_level": {
-          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -187039,13 +187210,6 @@
           "type": [
             "string",
             "integer"
-          ]
-        },
-        "repository_checksum_failed": {
-          "description": "Limit to forks where the repository checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
           ]
         },
         "repository_storage": {
@@ -187101,13 +187265,6 @@
             "public"
           ],
           "type": "string"
-        },
-        "wiki_checksum_failed": {
-          "description": "Limit to forks where the wiki checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "with_custom_attributes": {
           "description": "Include custom attributes in the response (admin only)",
@@ -188478,7 +188635,16 @@
           "type": "string"
         },
         "shared_min_access_level": {
-          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "shared_visible_only": {
@@ -188627,7 +188793,16 @@
       "additionalProperties": false,
       "properties": {
         "min_access_level": {
-          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -189118,7 +189293,16 @@
           ]
         },
         "min_access_level": {
-          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -189157,13 +189341,6 @@
           "maximum": 100,
           "minimum": 1,
           "type": "integer"
-        },
-        "repository_checksum_failed": {
-          "description": "Limit to projects where the repository checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "repository_storage": {
           "description": "Limit to projects on the given repository storage shard (admin only)",
@@ -189225,13 +189402,6 @@
             "public"
           ],
           "type": "string"
-        },
-        "wiki_checksum_failed": {
-          "description": "Limit to projects where the wiki checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "with_custom_attributes": {
           "description": "Include custom attributes in the response (admin only)",
@@ -190636,7 +190806,16 @@
           ]
         },
         "min_access_level": {
-          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -190675,13 +190854,6 @@
           "maximum": 100,
           "minimum": 1,
           "type": "integer"
-        },
-        "repository_checksum_failed": {
-          "description": "Limit to projects where the repository checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "repository_storage": {
           "description": "Limit to projects on the given repository storage shard (admin only)",
@@ -190743,13 +190915,6 @@
             "public"
           ],
           "type": "string"
-        },
-        "wiki_checksum_failed": {
-          "description": "Limit to projects where the wiki checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "with_custom_attributes": {
           "description": "Include custom attributes in the response (admin only)",
@@ -192154,7 +192319,16 @@
           ]
         },
         "min_access_level": {
-          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "description": "Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -192193,13 +192367,6 @@
           "maximum": 100,
           "minimum": 1,
           "type": "integer"
-        },
-        "repository_checksum_failed": {
-          "description": "Limit to projects where the repository checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "repository_storage": {
           "description": "Limit to projects on the given repository storage shard (admin only)",
@@ -192261,13 +192428,6 @@
             "public"
           ],
           "type": "string"
-        },
-        "wiki_checksum_failed": {
-          "description": "Limit to projects where the wiki checksum calculation failed (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "with_custom_attributes": {
           "description": "Include custom attributes in the response (admin only)",
@@ -193760,12 +193920,21 @@
   },
   {
     "name": "gitlab_project_member_add",
-    "description": "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users.",
+    "description": "Add a user to a project team by user_id or username with an access level. Optional: expires_at and, on Ultimate, member_role_id. Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "expires_at": {
@@ -193774,7 +193943,7 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID",
+          "description": "Custom member role ID (Ultimate)",
           "type": "integer"
         },
         "project_id": {
@@ -194140,7 +194309,16 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "New access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "expires_at": {
@@ -194149,7 +194327,7 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched",
+          "description": "Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched",
           "type": [
             "null",
             "integer"
@@ -197934,7 +198112,16 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Access level the members of the group gain on the project (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "group_id": {
@@ -203355,7 +203542,7 @@
           ]
         },
         "auto_duo_code_review_enabled": {
-          "description": "Enable automatic GitLab Duo code review",
+          "description": "Enable automatic GitLab Duo code review. GitLab keeps it only where Duo code review is available to the project: on Premium or Ultimate with GitLab Duo, or on GitLab.com for a Free group with GitLab Credits. Elsewhere it is dropped",
           "type": [
             "null",
             "boolean"
@@ -232059,7 +232246,16 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner,60=Admin where supported)",
+          "description": "Minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
+          "enum": [
+            10,
+            15,
+            20,
+            25,
+            30,
+            40,
+            50
+          ],
           "type": "integer"
         },
         "order_by": {
@@ -232096,7 +232292,7 @@
           "type": "integer"
         },
         "repository_storage": {
-          "description": "Filter by repository storage shard (administrators only)",
+          "description": "Filter by the storage shard of the subgroup's wiki repository (administrators only)",
           "type": "string"
         },
         "search": {
@@ -235413,8 +235609,16 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner). Pass [] to show the message to every role. Omit the field to leave them untouched",
+          "description": "Access levels to target (10=Guest, 15=Planner, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). A broadcast message cannot target Security Manager. Pass [] to show the message to every role. Omit the field to leave them untouched",
           "items": {
+            "enum": [
+              10,
+              15,
+              20,
+              30,
+              40,
+              50
+            ],
             "type": "integer"
           },
           "type": [

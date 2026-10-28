@@ -46,8 +46,8 @@ operations under a single tool with an `action` parameter.
 Use {"action":"approve_group","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_access.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so access.approve_group is {"action":"approve_group"} on this one.
 Action guidance:
-- approve_group: Approve a user group access request. Use after listing pending group requests and selecting the user_id to approve.
-- approve_project: Approve a user project access request. Use after listing pending requests and selecting the user_id to approve.
+- approve_group: Approve a user group access request. Use after listing pending group requests and selecting the user_id to approve. Leave access_level out to grant Developer. Minimal access (5) is granted only on a top-level group with a Premium or Ultimate license: it is refused on a subgroup and on the Free tier, and otherwise confirmed by reading the requester back among the group's members, since GitLab answers the approval alike when it leaves the request pending.
+- approve_project: Approve a user project access request. Use after listing pending requests and selecting the user_id to approve. Leave access_level out to grant Developer. A project grants Guest (10) to Owner (50), and any other level is refused before the request, since GitLab would answer it as an approval while the request stays pending.
 - deny_group: Deny a pending group access request. Use only after confirming the user and scope to avoid rejecting the wrong request.
 - deny_project: Deny a pending project access request. Use only after confirming the user and scope to avoid rejecting the wrong request.
 - deploy_key_add: Use for SSH deploy keys that grant repository access to projects.
@@ -128,7 +128,7 @@ Parameter guidance:
 - deploy_token_get_project.project_id: scope_project. Source: Project ID or path owning the deploy token.
 - deploy_token_list_group.group_id: scope_group. Source: Group ID or path owning the deploy token.
 - deploy_token_list_project.project_id: scope_project. Source: Project ID or path owning the deploy token.
-- invite_group.access_level: access_level. Source: Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
+- invite_group.access_level: access_level. Source: Role to grant: 5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
 - invite_group.email: invite_email. Source: Email address of the person to invite when they may not have an account yet, or several addresses separated by commas to invite each of them. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
 - invite_group.expires_at: calendar_date. Source: Date the invitation should expire, when the user requests one. Avoid: Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp.
 - invite_group.group_id: scope_group. Source: Group ID or full group path the user is being invited to. Avoid: Use group_id for the group scope. Use project_id only with access.invite_project.
@@ -138,7 +138,7 @@ Parameter guidance:
 - invite_list_group.query. Source: Substring to filter pending invitations by invite email or name. Avoid: query filters within this group's pending invitations. It does not replace group_id.
 - invite_list_project.project_id: scope_project. Source: Project ID or full namespace path whose pending invitations should be listed. Avoid: Lists pending invitations, not accepted members. Use project.members for current members.
 - invite_list_project.query. Source: Substring to filter pending invitations by invite email or name. Avoid: query filters within this project's pending invitations. It does not replace project_id.
-- invite_project.access_level: access_level. Source: Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
+- invite_project.access_level: access_level. Source: Role to grant: 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Pass the numeric access level, not a role name like 'developer'.
 - invite_project.email: invite_email. Source: Email address of the person to invite when they may not have an account yet, or several addresses separated by commas to invite each of them. Avoid: Provide either email or user_id. Supply email for people who are not yet GitLab users.
 - invite_project.expires_at: calendar_date. Source: Date the invitation should expire, when the user requests one. Avoid: Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp.
 - invite_project.invite_source. Source: Name of the flow that started the invitation, recorded by GitLab for attribution. Avoid: This labels where the invitation came from. It does not change who is invited or what they get.
@@ -2770,12 +2770,12 @@ Action guidance:
 - group_label_subscribe: Subscribe the authenticated user to a group label to receive notifications for issues and merge requests carrying it.
 - group_label_unsubscribe: Unsubscribe the authenticated user from a group label so notifications for it stop.
 - group_label_update: Update an existing group label. Provide at least one of new_name, color, description, or archived to change the label.
-- group_member_add: Add a user as a direct member of a group with a chosen access level. Use this to grant a known user a role in a group. Supply user_id or username plus access_level, and optionally member_role_id for a custom role (Premium/Ultimate) or expires_at.
+- group_member_add: Add a user as a direct member of a group with a chosen access level. Use this to grant a known user a role in a group. Supply user_id or username plus access_level, and optionally expires_at and, on Ultimate, member_role_id for a custom role.
 - group_member_edit: Edit a direct group member's access level, expiry, or custom member role by group_id plus user_id. Use this to promote, demote, change expiry, or reassign the custom role of an existing direct member. Inherited members cannot be edited here.
 - group_member_get: Get one direct member of a group by group_id plus user_id. Use this when the prompt names a known user and group and you need that user's exact access level, expiry, or custom member role. Inherited members are not returned. Use group_member_get_inherited for those.
 - group_member_get_inherited: Get a member of a group including membership inherited from ancestor groups, by group_id plus user_id. Use this when a user may be a member via a parent group rather than a direct membership.
 - group_member_remove: Remove a direct member from a group by group_id plus user_id. Destructive: requires confirmation. Inherited members cannot be removed here. Remove them from the ancestor group where they were added directly.
-- group_member_share: Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration. Supply group_id (the group to share) and share_group_id (the recipient group), and optionally expires_at or member_role_id for a custom role (Ultimate). Group shares accept Guest through Owner, and Minimal access on Premium/Ultimate.
+- group_member_share: Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration. Supply group_id (the group to share) and share_group_id (the recipient group), and optionally expires_at or member_role_id for a custom role (Ultimate). Group shares accept Guest through Owner, and Minimal access only on a top-level group with a Premium or Ultimate license.
 - group_member_unshare: Stop sharing a group with another group by group_id plus share_group_id. Destructive: requires confirmation. Use this to revoke a previously created group share.
 - group_milestone_create: Create a new milestone in a group. Provide title and optional description, start_date, and due_date.
 - group_milestone_delete: Permanently delete a group milestone. Destructive and irreversible. Confirm group_id and milestone_iid before calling. Requires Owner role.
@@ -2815,7 +2815,7 @@ Action guidance:
 - transfer_project: Move an existing project into this group's namespace, as an administrator. GitLab refuses this route to anyone else, the project's owner included, who moves a project with project.transfer instead. The move is applied before GitLab answers, and the answer is the destination group rather than the project: read the project with project.get to see its new path. To discover which groups a group itself can be transferred into, use group.transfer_locations instead.
 - unarchive: Unarchive a previously archived group, restoring write access. Idempotent. Unarchiving a non-archived group is a no-op.
 - unshare_from_group: Revoke a group-to-group share via the Groups API, removing the shared group's access. Destructive. Send group_id and shared_group_id. Requires Owner role. (group.group_member_unshare is the GroupMembers-API equivalent.)
-- update: Update an existing group's settings. Send group_id plus only the fields to change (name, path, visibility, default branch protection, merge policies, Duo, runner limits, etc.).
+- update: Update an existing group's settings. Send group_id plus only the fields to change (name, path, visibility, default branch protection, Duo, runner limits, and on Premium and Ultimate the merge checks, etc.).
 - upload_avatar: Upload or replace a group's avatar image. Send group_id, filename, and exactly one of file_path (a local image the MCP server reads) or content_base64 (inline base64-encoded image). Image must be JPG/PNG/GIF under 200 KB. Requires Owner role.
 Parameter guidance:
 - archive.group_id: scope_group. Source: Group numeric ID or full path to archive.
@@ -2848,13 +2848,12 @@ Parameter guidance:
 - group_label_subscribe.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_label_unsubscribe.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_label_update.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- group_member_add.access_level: access_level. Source: Numeric role level for the membership. Avoid: Use the numeric level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner), not the role name.
+- group_member_add.access_level: access_level. Source: Numeric role level for the membership: 5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Use the numeric level, not the role name.
 - group_member_add.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
-- group_member_add.member_role_id: member_role_id. Source: ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level. Avoid: member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate.
 - group_member_add.user_id: user_id. Source: Numeric user ID to add as a member (alternative to username). Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
-- group_member_edit.access_level: access_level. Source: Numeric role level for the membership. Avoid: Use the numeric level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner), not the role name.
+- group_member_edit.access_level: access_level. Source: Numeric role level for the membership: 5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. Avoid: Use the numeric level, not the role name.
 - group_member_edit.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
-- group_member_edit.member_role_id: member_role_id. Source: ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level. Avoid: member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate.
+- group_member_edit.member_role_id: member_role_id. Source: ID of a custom member role to assign (Ultimate). Its base access level must match access_level. Avoid: member_role_id references a custom role definition, not access_level. Only Ultimate assigns one.
 - group_member_edit.user_id: user_id. Source: Numeric user ID of the direct member to edit. Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
 - group_member_get.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
 - group_member_get.user_id: user_id. Source: Numeric user ID of the direct group member to inspect. Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
@@ -2862,7 +2861,7 @@ Parameter guidance:
 - group_member_get_inherited.user_id: user_id. Source: Numeric user ID of the member to inspect, including inherited memberships. Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
 - group_member_remove.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
 - group_member_remove.user_id: user_id. Source: Numeric user ID of the direct member to remove. Avoid: Use the numeric user ID, not the username. Resolve usernames with user.list first.
-- group_member_share.group_access: access_level. Source: Access level granted to the recipient group's members: 10, 15, 20, 25, 30, 40 or 50, and 5 on Premium/Ultimate. Avoid: 60 (Admin) is not a share level and is rejected. With member_role_id, group_access must equal the custom role's base access level.
+- group_member_share.group_access: access_level. Source: Access level granted to the recipient group's members: 5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. Avoid: 60 (Admin) is not a share level and is rejected. With member_role_id, group_access must equal the custom role's base access level.
 - group_member_share.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
 - group_member_share.share_group_id: share_group_id. Source: Numeric ID of the recipient group that should gain access. Avoid: share_group_id must be a numeric group ID, not a path, and is distinct from group_id (the group being shared).
 - group_member_unshare.group_id: scope_group. Source: Group ID or full namespace path that owns the membership. Avoid: Use the group here, not a project path or project member action. Project members use the project-member tools.
@@ -2900,7 +2899,7 @@ Parameter guidance:
 - service_account_pat_rotate.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - service_account_pat_rotate.token_id: access_token. Source: Group service account personal access token ID returned by service_account_pat_list or service_account_pat_create. Avoid: Do not use service_account_id as token_id. token_id identifies the personal access token itself.
 - service_account_update.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- share_with_group.group_access. Source: Access level 10, 15, 20, 25, 30, 40 or 50 (Guest, Planner, Reporter, Security Manager, Developer, Maintainer, Owner), and 5 (Minimal access) on Premium/Ultimate.
+- share_with_group.group_access. Source: Access level: 5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner.
 - share_with_group.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - share_with_group.shared_group_id. Source: Numeric ID of the group to grant access to. Avoid: group_id is the group being shared. shared_group_id is the group receiving access.
 - shared_projects.group_id: scope_group. Source: Group numeric ID or full path whose shared projects are listed. Avoid: Lists projects shared *into* the group. Use group.projects for the group's own projects.
@@ -7574,7 +7573,7 @@ Action guidance:
 - list_user_projects: List projects owned by a specific user. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by.
 - list_user_starred: List projects a specific user has starred. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by.
 - list_users: List the users who are members of a project. Send project_id and optionally search by name or username.
-- member_add: Add a user to a project team by user_id or username with an access_level. Optionally set expires_at and member_role_id (Premium/Ultimate custom role). Idempotent for already-existing members.
+- member_add: Add a user to a project team by user_id or username with an access_level. Optionally set expires_at and, on Ultimate, member_role_id for a custom role. Idempotent for already-existing members.
 - member_delete: Remove a member from a project by user_id. Destructive and requires confirmation. Requires Maintainer. The last Owner cannot be removed.
 - member_edit: Edit an existing project member's access_level, expires_at, or member_role_id. Requires at least the same access level as the target member.
 - member_get: Get one direct project member by project_id plus user_id. Use after a member list, or when the prompt already names a concrete user. Returns only direct members. Use project.member_inherited to include parent-group inheritance.
@@ -7615,7 +7614,7 @@ Action guidance:
 - service_account_pat_revoke: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate). Requires sufficient project permissions.
 - service_account_pat_rotate: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate). Requires sufficient project permissions. Omit expires_at unless the task gives an explicit expiry date. If provided, use YYYY-MM-DD within the instance maximum token lifetime.
 - service_account_update: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate). Requires sufficient project permissions. Omit email unless the task gives an explicit valid email address.
-- share_with_group: Share a project with a group at a chosen access level. Send project_id, group_id, and group_access (10 Guest, 20 Reporter, 30 Developer, 40 Maintainer). Optionally expires_at (YYYY-MM-DD).
+- share_with_group: Share a project with a group at a chosen access level. Send project_id, group_id, and group_access, Guest (10) to Owner (50). Optionally expires_at (YYYY-MM-DD).
 - star: Star a project for the authenticated user. Send project_id. Idempotent if already starred.
 - start_housekeeping: Trigger Git housekeeping (garbage collection and repository optimization) for a project. Send project_id. Requires Owner role.
 - statistics_get: Get the last 30 days of repository fetch statistics (git clone/pull counts) for a project, broken down by day. Use this when the prompt asks how often a project is being cloned or pulled, or for recent fetch activity. The caller must have at least Reporter access to the project. This returns fetch counts only. It is not the project-size/storage statistics that project.get exposes via with_statistics.
@@ -7716,12 +7715,12 @@ Parameter guidance:
 - list_user_projects.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - list_user_starred.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - list_users.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- member_add.access_level: access_level. Source: Numeric access level: 10 Guest, 20 Reporter, 30 Developer, 40 Maintainer, 50 Owner (plus 5/15/25/60 on supported tiers). Avoid: Use the numeric level, not a role name. Set member_role_id for a custom role.
+- member_add.access_level: access_level. Source: Numeric access level: 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. A project grants no other level. Avoid: Use the numeric level, not a role name. On Ultimate, set member_role_id for a custom role.
 - member_add.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
 - member_add.user_id: user_id. Source: Numeric user ID to add. Provide either user_id or username. Avoid: Provide user_id or username, not both. access_level is also required.
 - member_delete.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
 - member_delete.user_id: user_id. Source: Numeric user ID of the member, from user.list or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
-- member_edit.access_level: access_level. Source: New numeric access level: 10 Guest, 20 Reporter, 30 Developer, 40 Maintainer, 50 Owner (plus 5/15/25/60 on supported tiers). Avoid: Use the numeric level, not a role name. You must hold at least the same level as the target.
+- member_edit.access_level: access_level. Source: New numeric access level: 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. A project grants no other level. Avoid: Use the numeric level, not a role name. You must hold at least the same level as the target.
 - member_edit.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
 - member_edit.user_id: user_id. Source: Numeric user ID of the member, from user.list or prior member list output. Avoid: Use the global user ID, not a username. Pass username only on the add action.
 - member_get.project_id: scope_project. Source: Project ID or full namespace path (e.g. "group/project") that owns the membership. Avoid: Use the project here, not a group ID. For group memberships use the group member actions instead.
@@ -7828,7 +7827,7 @@ Users and groups:
 - list_user_projects: user_id* (ID or username), search, visibility, archived, order_by, sort, simple
 - list_users / list_starrers: project_id*, search
 - list_groups: project_id*, search, with_shared, shared_visible_only, skip_groups, shared_min_access_level
-- share_with_group: project_id*, group_id*, group_access* (10-40), expires_at
+- share_with_group: project_id*, group_id*, group_access* (10-50), expires_at
 - delete_shared_group: project_id*, group_id*
 - list_invited_groups: project_id*, search, min_access_level
 - list_user_contributed / list_user_starred: user_id*, search, visibility, archived, order_by, sort, simple
@@ -12898,10 +12897,10 @@ Action guidance:
 - list_group: Lists custom member roles available for a specific group_id. Deprecated on self-managed GitLab 17+. Use list_instance instead on self-managed. Still valid on GitLab.com Ultimate.
 - list_instance: Lists all custom member roles defined at the instance level (Ultimate on self-managed, all tiers on GitLab.com). Use this when the prompt asks for custom member roles in general, because list_group is deprecated on self-managed 17+ and returns 400 in that environment.
 Parameter guidance:
-- create_group.base_access_level: access_level. Source: Numeric base access level the custom role extends (10/15/20/25/30/40/50). Avoid: Use a valid numeric level (10/15/20/25/30/40/50). 0, 5=Minimal access and 60=Admin are not accepted, and do not pass role names like Developer.
+- create_group.base_access_level: access_level. Source: Numeric base access level the custom role extends: 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer. Avoid: Use a valid numeric level (10/15/20/25/30/40). 0, 5=Minimal access, 50=Owner and 60=Admin are not accepted, and do not pass role names like Developer.
 - create_group.group_id: scope_group. Source: Top-level group ID or full group path that will own the custom role. Avoid: Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed. Use create_instance there.
 - create_group.name: member_role_name. Source: Short, unique name for the custom role within the group.
-- create_instance.base_access_level: access_level. Source: Numeric base access level the custom role extends (10/15/20/25/30/40/50). Avoid: Use a valid numeric level (10/15/20/25/30/40/50). 0, 5=Minimal access and 60=Admin are not accepted, and do not pass role names like Developer.
+- create_instance.base_access_level: access_level. Source: Numeric base access level the custom role extends: 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer. Avoid: Use a valid numeric level (10/15/20/25/30/40). 0, 5=Minimal access, 50=Owner and 60=Admin are not accepted, and do not pass role names like Developer.
 - create_instance.name: member_role_name. Source: Short, unique name for the custom role from the user's request.
 - delete_group.group_id: scope_group. Source: Top-level group ID or full group path that owns the custom role. Avoid: Use the group that owns the role, not a subgroup or project. Group-level roles are deprecated on self-managed.
 - delete_group.member_role_id: member_role_id. Source: Numeric ID of the group member role to delete, usually from member_role.list_group output. Avoid: Use the role's member_role_id, not its name or a user/member ID. Verify it with member_role.list_group first.
@@ -12913,7 +12912,7 @@ Returns: JSON with resource data. Lists include pagination (page, per_page, tota
 
 Instance-level:
 - list_instance: (no params)
-- create_instance: name, base_access_level* (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 0, 5 and 60 are not valid), description, admin_cicd_variables, admin_compliance_framework, admin_group_member, admin_merge_request, admin_push_rules, admin_terraform_state, admin_vulnerability, admin_web_hook, archive_project, manage_deploy_tokens, manage_group_access_tokens, manage_merge_request_settings, manage_project_access_tokens, manage_security_policy_link, read_code, read_runners, read_dependency, read_vulnerability, remove_group, remove_project (one boolean per permission)
+- create_instance: name, base_access_level* (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer. 0, 5, 50 and 60 are not valid), description, admin_cicd_variables, admin_compliance_framework, admin_group_member, admin_merge_request, admin_push_rules, admin_terraform_state, admin_vulnerability, admin_web_hook, archive_project, manage_deploy_tokens, manage_group_access_tokens, manage_merge_request_settings, manage_project_access_tokens, manage_security_policy_link, read_code, read_runners, read_dependency, read_vulnerability, remove_group, remove_project (one boolean per permission)
 - delete_instance: member_role_id*
 
 Group-level:
@@ -13485,11 +13484,11 @@ Grouped by domain:
 
 #### gitlab_access_request_approve_group
 
-Approve a pending group access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list.
+Approve a pending group access request, granting the user membership at access_level, or Developer when it is left out. Minimal access is granted only on a top-level group with a Premium or Ultimate license, and is reported as granted only once the requester is found among the group's members. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list.
 
 **Parameters:**
 
-- `access_level` (integer): Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30
+- `access_level` (integer): Access level to grant (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Omit it to grant Developer, GitLab's default. Minimal access is refused on a subgroup and on the Free tier, and reported as an approval only once the requester is found among the group's members
 - `group_id` (string or integer) (required): Group ID or path
 - `user_id` (integer) (required): User ID of the access requester
 
@@ -13497,11 +13496,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_access_request_approve_project
 
-Approve a pending project access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list.
+Approve a pending project access request, granting the user membership at access_level, or Developer when it is left out. A level a project does not grant is refused before the request. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list.
 
 **Parameters:**
 
-- `access_level` (integer): Access level to grant (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner). Default 30
+- `access_level` (integer): Access level to grant (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Omit it to grant Developer, GitLab's default. A project grants no other level
 - `project_id` (string or integer) (required): Project ID or path
 - `user_id` (integer) (required): User ID of the access requester
 
@@ -14714,7 +14713,7 @@ Create a broadcast message. Returns: the created message with id, theme, target,
 - `font` (string): Font for the message
 - `message` (string) (required): Message text. Supports Markdown.
 - `starts_at` (string): Start time in ISO 8601 format
-- `target_access_levels` (array of integers): Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner)
+- `target_access_levels` (array of integers): Access levels to target (10=Guest, 15=Planner, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). A broadcast message cannot target Security Manager
 - `target_path` (string): Target path to show message on
 - `theme` (string): Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.
 
@@ -14856,7 +14855,7 @@ Create a group-level custom member role. Returns: the created role with id, name
 - `admin_vulnerability` (boolean): Allow admin vulnerability
 - `admin_web_hook` (boolean): Allow admin webhooks
 - `archive_project` (boolean): Allow archive project
-- `base_access_level` (integer) (required): Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid
+- `base_access_level` (integer) (required): Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer). A custom role extends no other level
 - `description` (string): Description of the custom role
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `manage_deploy_tokens` (boolean): Allow manage deploy tokens
@@ -14914,7 +14913,7 @@ Create an instance-level custom member role. Returns: the created role with id, 
 - `admin_vulnerability` (boolean): Allow admin vulnerability
 - `admin_web_hook` (boolean): Allow admin webhooks
 - `archive_project` (boolean): Allow archive project
-- `base_access_level` (integer) (required): Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid
+- `base_access_level` (integer) (required): Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer). A custom role extends no other level
 - `description` (string): Description of the custom role
 - `manage_deploy_tokens` (boolean): Allow manage deploy tokens
 - `manage_group_access_tokens` (boolean): Allow manage group access tokens
@@ -17955,7 +17954,7 @@ Create a new group access token with specified name, scopes, access level, and o
 
 **Parameters:**
 
-- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner). 60=Admin is not valid for group access tokens
+- `access_level` (integer): Access level of the token (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner), no higher than the caller's own. GitLab grants Maintainer when it is left out
 - `description` (string): Token description
 - `expires_at` (string): Expiry date in YYYY-MM-DD format
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
@@ -18552,7 +18551,7 @@ Invite a user to a group by email or user ID with an access level. Returns: an i
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level
 - `email` (string): Email address to invite, or several separated by commas to invite each of them (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
@@ -18587,7 +18586,7 @@ List groups invited to a GitLab group. Returns: the invited groups with path and
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `min_access_level` (integer): Minimum access level the invitation grants (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Minimum access level the invitation grants (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Column to order invited groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
@@ -18704,9 +18703,9 @@ Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate). Sen
 
 - `cn` (string): LDAP Common Name (CN) of the group to link. Send exactly one of cn or filter, not both.
 - `filter` (string): LDAP filter selecting the users to link. Send exactly one of cn or filter, not both.
-- `group_access` (integer) (required): Default access level for members of the LDAP group: 0 (No access), 5 (Minimal access), 10 (Guest), 15 (Planner), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner)
+- `group_access` (integer) (required): Default access level for members of the LDAP group (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). An LDAP group link takes Minimal access on a subgroup as well, and no other level
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `member_role_id` (integer): Custom member role ID
+- `member_role_id` (integer): Custom member role ID the link's members get (Ultimate)
 - `provider` (string) (required): LDAP provider name
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -18769,14 +18768,14 @@ List accessible GitLab groups with filtering and pagination. Returns: matching g
 - `archived` (boolean): Limit to archived groups (true) or non-archived (false)
 - `custom_attributes` (object): Filter groups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response
 - `marked_for_deletion_on` (string): Filter to groups marked for deletion on this date (YYYY-MM-DD)
-- `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order groups by field (name, path, id, similarity)
 - `owned` (boolean): Limit to groups explicitly owned by the authenticated user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `repository_storage` (string): Filter by repository storage shard (administrators only)
+- `repository_storage` (string): Filter by the storage shard of the group's wiki repository (administrators only)
 - `search` (string): Filter groups by name or path
 - `skip_groups` (array of integers): Group IDs to exclude from results
 - `sort` (string): Sort direction (asc, desc)
@@ -18815,7 +18814,7 @@ Add a user as a direct member of a group. Returns: the created membership with a
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID to assign. Ultimate only. The role's base access level must match access_level
@@ -18830,10 +18829,10 @@ Edit a direct group member's access level, expiry, or custom member role. Return
 
 **Parameters:**
 
-- `access_level` (integer) (required): New access level (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner, 60=Admin)
+- `access_level` (integer) (required): New access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level
 - `expires_at` (string): New membership expiration date (YYYY-MM-DD)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `member_role_id` (integer): Custom member role ID to assign. Ultimate only. The role's base access level must match access_level. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched
+- `member_role_id` (integer): Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. The role's base access level must match access_level. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched
 - `user_id` (integer) (required): User ID
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -19030,7 +19029,7 @@ List the projects in a GitLab group. Returns: compact project rows with names an
 - `archived` (boolean): Filter archived projects
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `include_subgroups` (boolean): Include projects in subgroups
-- `min_access_level` (integer): Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Limit to projects where the caller has at least this access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at, similarity)
 - `owned` (boolean): Limit to projects owned by current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -19228,9 +19227,9 @@ Add a SAML group link to a GitLab group.
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A SAML group link takes no other level
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `member_role_id` (integer): Custom member role ID
+- `member_role_id` (integer): Custom member role ID the link's members get (Ultimate)
 - `provider` (string): SAML provider name
 - `saml_group_name` (string) (required): Name of the SAML group
 
@@ -19445,7 +19444,7 @@ Share a group with another group at a chosen access level, optionally granting a
 **Parameters:**
 
 - `expires_at` (string): Share expiration date (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares
+- `group_access` (integer) (required): Access level the members of the group shared with gain (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group share takes no other level
 - `group_id` (string or integer) (required): Group ID or URL-encoded path to share
 - `member_role_id` (integer): Custom member role the share grants (Ultimate only). Its base access level must equal group_access
 - `share_group_id` (integer) (required): Group ID to share with
@@ -19459,7 +19458,7 @@ Share a GitLab group with another group (Groups API). Returns: a confirmation wi
 **Parameters:**
 
 - `expires_at` (string): Expiration date for the share (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level the members of the group shared with gain (5=Minimal access (Premium/Ultimate), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 60=Admin is not valid for group shares
+- `group_access` (integer) (required): Access level the members of the group shared with gain (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group share takes no other level
 - `group_id` (string or integer) (required): Group ID or URL-encoded path of the group being shared
 - `member_role_id` (integer): Custom member role the share grants (Ultimate only). Its base access level must equal group_access
 - `shared_group_id` (integer) (required): ID of the group to share with
@@ -19474,7 +19473,7 @@ List projects shared with a GitLab group. Returns: compact project rows with nam
 
 - `archived` (boolean): Filter archived projects
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `min_access_level` (integer): Limit to projects where the caller has at least this access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Limit to projects where the caller has at least this access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order by field: id, name, path, created_at, updated_at, star_count, or last_activity_at. Default is created_at
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
@@ -19498,7 +19497,7 @@ List groups shared with a GitLab group (group-to-group shares). Returns: the sha
 **Parameters:**
 
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `min_access_level` (integer): Minimum access level the share grants (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Minimum access level the share grants (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order shared groups by field: name, path, id, or similarity (similarity only applies with search). Default is name
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
@@ -19602,7 +19601,7 @@ Update a GitLab group's settings. Returns: the updated group metadata. See also:
 - `default_branch_protection_defaults` (object): Default branch protection settings object
 - `description` (string): Group description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `duo_availability` (string): GitLab Duo availability (always_on, default_on, default_off, never_on). always_on and never_on also lock the setting for every subgroup and project
-- `duo_features_enabled` (boolean): Enable GitLab Duo features
+- `duo_features_enabled` (boolean): Enable GitLab Duo features. GitLab Duo needs Premium or Ultimate, or GitLab Credits on a Free namespace, and elsewhere the setting has no effect
 - `emails_disabled` (boolean): Deprecated: disable email notifications. Prefer emails_enabled
 - `emails_enabled` (boolean): Enable email notifications
 - `enabled_git_access_protocol` (string): Allowed Git access protocol (ssh, http, all)
@@ -19612,7 +19611,7 @@ Update a GitLab group's settings. Returns: the updated group metadata. See also:
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `ip_restriction_ranges` (string): Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only
 - `lfs_enabled` (boolean): Enable Git LFS
-- `lock_duo_features_enabled` (boolean): Prevent subgroups from changing the Duo features setting
+- `lock_duo_features_enabled` (boolean): Prevent subgroups from changing the Duo features setting. GitLab Duo needs Premium or Ultimate, or GitLab Credits on a Free namespace, and elsewhere the setting has no effect
 - `lock_math_rendering_limits_enabled` (boolean): Prevent subgroups from changing the math rendering limits setting
 - `math_rendering_limits_enabled` (boolean): Enable math rendering limits
 - `max_artifacts_size` (integer): Maximum job artifacts size in MB (administrators only)
@@ -19663,7 +19662,7 @@ Create a CI/CD variable in a group with type, environment scope, and protected/m
 **Parameters:**
 
 - `description` (string): Variable description
-- `environment_scope` (string): Environment scope (default: *)
+- `environment_scope` (string): Environment scope (default: *). A scope other than * needs Premium or Ultimate: a Free Enterprise Edition instance drops it and the variable applies to every environment
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `key` (string) (required): Variable key name
 - `masked` (boolean): Mask variable value in job logs
@@ -20005,7 +20004,7 @@ Create a new issue in a project. Returns: the created issue with IID, state, lab
 **Parameters:**
 
 - `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple)
-- `assignee_ids` (array of integers): User IDs to assign
+- `assignee_ids` (array of integers): User IDs to assign. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first
 - `confidential` (boolean): Mark issue as confidential
 - `created_at` (string): Creation date override (ISO 8601, requires admin permissions)
 - `description` (string): Issue description (Markdown supported)
@@ -20713,7 +20712,7 @@ Update a GitLab issue. Supports changing title, description, state (close/reopen
 
 - `add_labels` (array of strings): Label names to add without removing existing
 - `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched
-- `assignee_ids` (array of integers): User IDs that replace the issue's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched
+- `assignee_ids` (array of integers): User IDs that replace the issue's assignees. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first. Pass [] to remove every assignee. Omit the field to leave them untouched
 - `confidential` (boolean): Update confidential flag
 - `description` (string): New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched
 - `discussion_locked` (boolean): Lock discussions on this issue
@@ -23962,7 +23961,6 @@ Update the authenticated user's notification settings for a project. Returns: th
 - `merge_merge_request` (boolean): Notify on MR merge
 - `merge_when_pipeline_succeeds` (boolean): Notify on merge when pipeline succeeds
 - `moved_project` (boolean): Notify on project move
-- `new_epic` (boolean): Notify on new epic
 - `new_issue` (boolean): Notify on new issue
 - `new_merge_request` (boolean): Notify on new MR
 - `new_note` (boolean): Notify on new note
@@ -24838,7 +24836,7 @@ Create a new project access token with specified name, scopes, access level, and
 
 **Parameters:**
 
-- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer). 50=Owner and 60=Admin are not valid for project access tokens
+- `access_level` (integer): Access level of the token (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). Planner (15) and Security Manager (25) are granted only by an Owner of the project or by a member who holds that role, and any other level no higher than the caller's own. GitLab grants Maintainer when it is left out
 - `description` (string): Token description
 - `expires_at` (string): Expiry date in YYYY-MM-DD format
 - `name` (string) (required): Token name
@@ -25607,7 +25605,7 @@ Invite a user to a project by email or user ID with an access level. Returns: an
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (0=No access, 5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level
 - `email` (string): Email address to invite, or several separated by commas to invite each of them (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `id` (string or integer): Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)
@@ -25657,19 +25655,18 @@ List projects accessible to the user with filtering and pagination. Returns: pro
 - `id_after` (integer): Return projects with ID greater than this value (keyset pagination)
 - `id_before` (integer): Return projects with ID less than this value (keyset pagination)
 - `imported` (boolean): Limit to projects imported from an external source by the current user
-- `include_hidden` (boolean): Include hidden projects in results
+- `include_hidden` (boolean): Include hidden projects in results (administrators only)
 - `include_pending_delete` (boolean): Include projects that are marked/scheduled for deletion. Default false.
 - `last_activity_after` (string): Return projects with last activity after date (ISO 8601 format)
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where current user is a member
-- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
+- `min_access_level` (integer): Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `repository_checksum_failed` (boolean): Limit to projects where the repository checksum calculation failed (admin only)
 - `repository_storage` (string): Limit to projects on the given repository storage shard (admin only)
 - `search` (string): Search query for project name
 - `search_namespaces` (boolean): Include namespace in search
@@ -25679,7 +25676,6 @@ List projects accessible to the user with filtering and pagination. Returns: pro
 - `statistics` (boolean): Include project statistics in response
 - `topic` (string): Filter by topic name
 - `visibility` (string): Filter by visibility (private, internal, public)
-- `wiki_checksum_failed` (boolean): Limit to projects where the wiki checksum calculation failed (admin only)
 - `with_custom_attributes` (boolean): Include custom attributes in the response (admin only)
 - `with_issues_enabled` (boolean): Filter by projects with issues feature enabled
 - `with_merge_requests_enabled` (boolean): Filter by projects with merge requests enabled
@@ -25704,7 +25700,7 @@ List a project's forks. Returns: forked projects with namespace, visibility, and
 - `last_activity_after` (string): Return forks with last activity after date (ISO 8601 format)
 - `last_activity_before` (string): Return forks with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to forks where the current user is a member
-- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
+- `min_access_level` (integer): Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to forks owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -25712,7 +25708,6 @@ List a project's forks. Returns: forked projects with namespace, visibility, and
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `repository_checksum_failed` (boolean): Limit to forks where the repository checksum calculation failed (admin only)
 - `repository_storage` (string): Limit to forks on the given repository storage shard (admin only)
 - `search` (string): Search query for fork name
 - `search_namespaces` (boolean): Include namespace in search
@@ -25722,7 +25717,6 @@ List a project's forks. Returns: forked projects with namespace, visibility, and
 - `statistics` (boolean): Include project statistics in response
 - `topic` (string): Filter by topic name
 - `visibility` (string): Filter by visibility (private, internal, public)
-- `wiki_checksum_failed` (boolean): Limit to forks where the wiki checksum calculation failed (admin only)
 - `with_custom_attributes` (boolean): Include custom attributes in the response (admin only)
 - `with_issues_enabled` (boolean): Filter by forks with issues feature enabled
 - `with_merge_requests_enabled` (boolean): Filter by forks with merge requests enabled
@@ -25743,7 +25737,7 @@ List a project's associated groups. Returns: groups with id, full_path, and full
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `search` (string): Search by group name
-- `shared_min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
+- `shared_min_access_level` (integer): Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `shared_visible_only` (boolean): Only show shared groups visible to the current user
 - `skip_groups` (array of integers): Array of group IDs to exclude
 - `sort` (string): Keyset sort direction (asc, desc)
@@ -25757,7 +25751,7 @@ List groups invited to a project. Returns: invited groups with id, full_path, an
 
 **Parameters:**
 
-- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
+- `min_access_level` (integer): Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Keyset ordering column (for keyset pagination)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
@@ -25815,14 +25809,13 @@ List projects a user contributed to, by offset pages only, since GitLab does not
 - `last_activity_after` (string): Return projects with last activity after date (ISO 8601 format)
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where the current user is a member
-- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
+- `min_access_level` (integer): Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `repository_checksum_failed` (boolean): Limit to projects where the repository checksum calculation failed (admin only)
 - `repository_storage` (string): Limit to projects on the given repository storage shard (admin only)
 - `search` (string): Search query for project name
 - `search_namespaces` (boolean): Include namespace in search
@@ -25833,7 +25826,6 @@ List projects a user contributed to, by offset pages only, since GitLab does not
 - `topic` (string): Filter by topic name
 - `user_id` (string or integer) (required): User ID or username
 - `visibility` (string): Filter by visibility (private, internal, public)
-- `wiki_checksum_failed` (boolean): Limit to projects where the wiki checksum calculation failed (admin only)
 - `with_custom_attributes` (boolean): Include custom attributes in the response (admin only)
 - `with_issues_enabled` (boolean): Filter by projects with issues feature enabled
 - `with_merge_requests_enabled` (boolean): Filter by projects with merge requests enabled
@@ -25858,14 +25850,13 @@ List a user's owned projects. Returns: projects with namespace, visibility, and 
 - `last_activity_after` (string): Return projects with last activity after date (ISO 8601 format)
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where the current user is a member
-- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
+- `min_access_level` (integer): Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `repository_checksum_failed` (boolean): Limit to projects where the repository checksum calculation failed (admin only)
 - `repository_storage` (string): Limit to projects on the given repository storage shard (admin only)
 - `search` (string): Search query for project name
 - `search_namespaces` (boolean): Include namespace in search
@@ -25876,7 +25867,6 @@ List a user's owned projects. Returns: projects with namespace, visibility, and 
 - `topic` (string): Filter by topic name
 - `user_id` (string or integer) (required): User ID or username
 - `visibility` (string): Filter by visibility (private, internal, public)
-- `wiki_checksum_failed` (boolean): Limit to projects where the wiki checksum calculation failed (admin only)
 - `with_custom_attributes` (boolean): Include custom attributes in the response (admin only)
 - `with_issues_enabled` (boolean): Filter by projects with issues feature enabled
 - `with_merge_requests_enabled` (boolean): Filter by projects with merge requests enabled
@@ -25901,14 +25891,13 @@ List projects a user starred. Returns: projects with namespace, visibility, and 
 - `last_activity_after` (string): Return projects with last activity after date (ISO 8601 format)
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where the current user is a member
-- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
+- `min_access_level` (integer): Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `repository_checksum_failed` (boolean): Limit to projects where the repository checksum calculation failed (admin only)
 - `repository_storage` (string): Limit to projects on the given repository storage shard (admin only)
 - `search` (string): Search query for project name
 - `search_namespaces` (boolean): Include namespace in search
@@ -25919,7 +25908,6 @@ List projects a user starred. Returns: projects with namespace, visibility, and 
 - `topic` (string): Filter by topic name
 - `user_id` (string or integer) (required): User ID or username
 - `visibility` (string): Filter by visibility (private, internal, public)
-- `wiki_checksum_failed` (boolean): Limit to projects where the wiki checksum calculation failed (admin only)
 - `with_custom_attributes` (boolean): Include custom attributes in the response (admin only)
 - `with_issues_enabled` (boolean): Filter by projects with issues feature enabled
 - `with_merge_requests_enabled` (boolean): Filter by projects with merge requests enabled
@@ -25946,13 +25934,13 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_member_add
 
-Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users.
+Add a user to a project team by user_id or username with an access level. Optional: expires_at and, on Ultimate, member_role_id. Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users.
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
-- `member_role_id` (integer): Custom member role ID
+- `member_role_id` (integer): Custom member role ID (Ultimate)
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `user_id` (integer): User ID to add (provide user_id or username)
 - `username` (string): Username to add (provide user_id or username)
@@ -25977,9 +25965,9 @@ Edit a project member's access level, expiry, or custom member role. Returns: th
 
 **Parameters:**
 
-- `access_level` (integer) (required): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): New access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
-- `member_role_id` (integer): Custom member role ID. Pass 0 to remove the custom role, which GitLab requires before it changes the access level of a member that holds one. Omit the field to leave it untouched
+- `member_role_id` (integer): Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `user_id` (integer) (required): User ID of the member to edit
 
@@ -26217,7 +26205,7 @@ Share a project with a group. Returns: a confirmation with the group ID and gran
 **Parameters:**
 
 - `expires_at` (string): Expiration date for the share (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level for the group (5=Minimal access 10=Guest 15=Planner (Premium/Ultimate) 20=Reporter 25=Security Manager (Premium/Ultimate) 30=Developer 40=Maintainer 50=Owner)
+- `group_access` (integer) (required): Access level the members of the group gain on the project (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level
 - `group_id` (integer) (required): Group ID to share with
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
@@ -26381,7 +26369,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `auto_cancel_pending_pipelines` (string): Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.
 - `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
-- `auto_duo_code_review_enabled` (boolean): Enable automatic GitLab Duo code review
+- `auto_duo_code_review_enabled` (boolean): Enable automatic GitLab Duo code review. GitLab keeps it only where Duo code review is available to the project: on Premium or Ultimate with GitLab Duo, or on GitLab.com for a Free group with GitLab Credits. Elsewhere it is dropped
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
 - `automatic_rebase_enabled` (boolean): Rebase the source branch automatically before merge
 - `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
@@ -28728,14 +28716,14 @@ List the subgroups (descendant groups) of a GitLab group. Returns: descendant gr
 - `custom_attributes` (object): Filter subgroups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `marked_for_deletion_on` (string): Filter to subgroups marked for deletion on this date (YYYY-MM-DD)
-- `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner,20=Reporter,25=Security Manager,30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
+- `min_access_level` (integer): Minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
 - `order_by` (string): Order subgroups by field (name, path, id, similarity)
 - `owned` (boolean): Limit to subgroups explicitly owned by the authenticated user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `repository_storage` (string): Filter by repository storage shard (administrators only)
+- `repository_storage` (string): Filter by the storage shard of the subgroup's wiki repository (administrators only)
 - `search` (string): Filter subgroups by name or path
 - `skip_groups` (array of integers): Group IDs to exclude from results
 - `sort` (string): Sort direction (asc, desc)
@@ -29037,7 +29025,7 @@ Update a broadcast message. Returns: the updated message. See also: gitlab_get_b
 - `id` (integer) (required): Broadcast message ID
 - `message` (string): Message text. Supports Markdown.
 - `starts_at` (string): Start time in ISO 8601 format
-- `target_access_levels` (array of integers): Access levels to target (10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner). Pass [] to show the message to every role. Omit the field to leave them untouched
+- `target_access_levels` (array of integers): Access levels to target (10=Guest, 15=Planner, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). A broadcast message cannot target Security Manager. Pass [] to show the message to every role. Omit the field to leave them untouched
 - `target_path` (string): Target path to show message on. Pass an empty string to remove it, so the message shows on every page. Omit the field to leave it untouched
 - `theme` (string): Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light.
 

@@ -10,6 +10,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /groups/:id",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "accessrequests.refuseMinimalAccessGroup"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroup"
+          ],
+          "directives": [
+            "optional: the group is read only for a Minimal access approval, to refuse it on a subgroup before the approval is sent"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /groups/:id/access_requests/:user_id/approve",
           "class": "mandatory",
           "classic": "api",
@@ -19,11 +34,26 @@
           "sdk_methods": [
             "AccessRequests.ApproveGroupAccessRequest"
           ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/members/:user_id",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "accessrequests.confirmMinimalAccess"
+          ],
+          "sdk_methods": [
+            "GroupMembers.GetGroupMember"
+          ],
+          "directives": [
+            "optional: the requester is read back only after a Minimal access approval, since the approval answers alike whether GitLab saved it or not"
+          ]
         }
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },

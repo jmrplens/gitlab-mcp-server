@@ -1136,11 +1136,14 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// The existence probes: three list actions read the project, and the LDAP
 	// link listing the group, only to tell a missing object from one with
 	// nothing to list. The option declarations above still answer the license
-	// and custom attribute keys, since they come first.
+	// and custom attribute keys, since they come first. The group approval at
+	// Minimal access reads the group for its parent_id alone, which is a
+	// probe of the same kind.
 	{Package: attestationsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonAttestationProjectProbe},
 	{Package: securityFindingsPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonGraphQLProjectProbe},
 	{Package: vulnerabilitiesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonGraphQLProjectProbe},
 	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLDAPGroupProbe},
+	{Package: accessRequestsPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonMinimalAccessGroupProbe},
 
 	// The current user, which one package reads for the caller's id and the
 	// other to prove the credential.
@@ -1281,6 +1284,13 @@ const reasonGraphQLProjectProbe = "the package reads GET /projects/:id only when
 const reasonLDAPGroupProbe = "internal/tools/groupldap reads GET /groups/:id only after GET /groups/:id/ldap_group_links " +
 	"answered 404, to tell a group with no LDAP link (an empty list) from a group that does not exist (the error), and " +
 	"returns nothing of the answer. group.get is the action that answers with a group."
+
+// reasonMinimalAccessGroupProbe answers the group a Minimal access approval
+// reads before it is sent.
+const reasonMinimalAccessGroupProbe = "internal/tools/accessrequests reads GET /groups/:id only when access.approve_group is " +
+	"asked for access_level 5, to refuse the approval on a subgroup, where GitLab answers it with 201 and leaves the request " +
+	"pending, before it is sent; it reads parent_id and returns nothing of the answer. group.get is the action that answers " +
+	"with a group."
 
 // reasonAwardEmojiCurrentUser answers the user the merge request emoji award
 // reads to find the caller's own existing award.

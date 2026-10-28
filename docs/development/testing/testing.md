@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,484 |
-| Unit test functions                                   | 20,840 |
-| E2E test functions                                    |  1,644 |
-| cmd test functions                                    |  5,214 |
+| Total test functions                                  | 22,523 |
+| Unit test functions                                   | 20,873 |
+| E2E test functions                                    |  1,650 |
+| cmd test functions                                    |  5,223 |
 | Test files (internal/)                                |    731 |
-| Test files (cmd/)                                     |    390 |
-| Test files (test/e2e/)                                |    430 |
+| Test files (cmd/)                                     |    391 |
+| Test files (test/e2e/)                                |    433 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     34 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,564 | 60.3% |
+| `TestFunc_Scenario` (2-part)           | 13,568 | 60.2% |
 | `TestFunc` (no underscore)             |    909 |  4.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,011 | 35.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,046 | 35.7% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,094 |        243 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            421 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,111 |        472 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,644 |        430 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,214 |        390 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,484** |  **1,551** |                                                                                                 |
+| Core packages           |          4,100 |        243 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            428 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (181) |         11,122 |        472 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,650 |        433 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          5,223 |        391 | server entry point and developer command utilities                                              |
+| **Total**               |     **22,523** |  **1,555** |                                                                                                 |
 
 ### Core Packages
 
@@ -91,8 +91,8 @@
 | testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,343 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,094** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,349 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,100** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -116,11 +116,11 @@
 | containerregistry |   125 |   100.0% |    16 |
 | branches          |   115 |   100.0% |    10 |
 | snippets          |   115 |   100.0% |    15 |
+| accesstokens      |   110 |   100.0% |    18 |
 | groupmilestones   |   110 |   100.0% |     8 |
-| accesstokens      |   109 |   100.0% |    18 |
 | pipelineschedules |   109 |   100.0% |    11 |
+| groupmembers      |   108 |   100.0% |    10 |
 | mrapprovals       |   108 |   100.0% |     7 |
-| groupmembers      |   107 |   100.0% |    10 |
 | files             |   101 |   100.0% |     8 |
 | milestones        |    97 |   100.0% |     9 |
 
@@ -131,8 +131,8 @@
 
 | Sub-package             |      Tests | Test Files | Coverage |     Tools |
 | ----------------------- | ---------: | ---------: | -------: | --------: |
-| accessrequests          |         58 |          4 |   100.0% |         8 |
-| accesstokens            |        109 |          2 |   100.0% |        18 |
+| accessrequests          |         65 |          4 |   100.0% |         8 |
+| accesstokens            |        110 |          2 |   100.0% |        18 |
 | achievements            |         67 |          3 |   100.0% |        12 |
 | actioncatalog           |         75 |          8 |   100.0% |         0 |
 | actioncompat            |         61 |          3 |   100.0% |         1 |
@@ -202,14 +202,14 @@
 | grouplabels             |         65 |          3 |   100.0% |         7 |
 | groupldap               |         23 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |         35 |          4 |   100.0% |         3 |
-| groupmembers            |        107 |          5 |   100.0% |        10 |
+| groupmembers            |        108 |          5 |   100.0% |        10 |
 | groupmilestones         |        110 |          3 |   100.0% |         8 |
 | groupprotectedbranches  |         24 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |         36 |          3 |   100.0% |         5 |
 | grouprelationsexport    |         30 |          3 |   100.0% |         2 |
 | groupreleases           |         24 |          3 |   100.0% |         1 |
 | groups                  |        317 |         10 |   100.0% |        37 |
-| groupsaml               |         39 |          3 |   100.0% |         5 |
+| groupsaml               |         40 |          3 |   100.0% |         5 |
 | groupscim               |         31 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |         34 |          2 |   100.0% |         9 |
 | groupsshcerts           |         33 |          5 |   100.0% |         3 |
@@ -251,7 +251,7 @@
 | mrdraftnotes            |         80 |          3 |   100.0% |         7 |
 | mrnotes                 |         52 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
-| notifications           |         39 |          2 |   100.0% |         6 |
+| notifications           |         40 |          2 |   100.0% |         6 |
 | orbit                   |         92 |          3 |   100.0% |         6 |
 | packages                |        178 |          6 |   100.0% |        10 |
 | pages                   |         66 |          2 |   100.0% |         9 |
@@ -312,7 +312,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        136 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,111** |    **472** |          | **1,195** |
+| **Total**               | **11,122** |    **472** |          | **1,195** |
 
 </details>
 

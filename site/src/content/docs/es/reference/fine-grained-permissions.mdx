@@ -13,56 +13,56 @@ Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada 
 
 ## `access`
 
-| Acción                                | Necesita                                     | Se sirve vacío |
-| ------------------------------------- | -------------------------------------------- | -------------- |
-| `access.approve_group`                | Access Request: Approve en grupo             |                |
-| `access.approve_project`              | Access Request: Approve en proyecto          |                |
-| `access.deny_group`                   | Access Request: Delete en grupo o usuario    |                |
-| `access.deny_project`                 | Access Request: Delete en proyecto o usuario |                |
-| `access.deploy_key_add`               | Deploy Key: Create en proyecto               |                |
-| `access.deploy_key_add_instance`      | Deploy Key: Create en instancia              |                |
-| `access.deploy_key_delete`            | Deploy Key: Delete en proyecto               |                |
-| `access.deploy_key_enable`            | Deploy Key: Enable en proyecto               |                |
-| `access.deploy_key_get`               | Deploy Key: Read en proyecto                 |                |
-| `access.deploy_key_list_all`          | Deploy Key: Read en instancia                |                |
-| `access.deploy_key_list_project`      | Deploy Key: Read en proyecto                 |                |
-| `access.deploy_key_list_user_project` | Deploy Key: Read en usuario                  |                |
-| `access.deploy_key_update`            | Deploy Key: Update en proyecto               |                |
-| `access.deploy_token_create_group`    | Deploy Token: Create en grupo                |                |
-| `access.deploy_token_create_project`  | Deploy Token: Create en proyecto             |                |
-| `access.deploy_token_delete_group`    | Deploy Token: Delete en grupo                |                |
-| `access.deploy_token_delete_project`  | Deploy Token: Delete en proyecto             |                |
-| `access.deploy_token_get_group`       | Deploy Token: Read en grupo                  |                |
-| `access.deploy_token_get_project`     | Deploy Token: Read en proyecto               |                |
-| `access.deploy_token_list_all`        | Deploy Token: Read en instancia              |                |
-| `access.deploy_token_list_group`      | Deploy Token: Read en grupo                  |                |
-| `access.deploy_token_list_project`    | Deploy Token: Read en proyecto               |                |
-| `access.invite_group`                 | Invitation: Create en grupo                  |                |
-| `access.invite_list_group`            | Invitation: Read en grupo                    |                |
-| `access.invite_list_project`          | Invitation: Read en proyecto                 |                |
-| `access.invite_project`               | Invitation: Create en proyecto               |                |
-| `access.request_group`                | Access Request: Create en usuario            |                |
-| `access.request_list_group`           | Access Request: Read en grupo                |                |
-| `access.request_list_project`         | Access Request: Read en proyecto             |                |
-| `access.request_project`              | Access Request: Create en usuario            |                |
-| `access.token_group_create`           | Resource Access Token: Create en grupo       |                |
-| `access.token_group_get`              | Resource Access Token: Read en grupo         |                |
-| `access.token_group_list`             | Resource Access Token: Read en grupo         |                |
-| `access.token_group_revoke`           | Resource Access Token: Delete en grupo       |                |
-| `access.token_group_rotate`           | Resource Access Token: Rotate en grupo       |                |
-| `access.token_group_rotate_self`      | Resource Access Token: Rotate en grupo       |                |
-| `access.token_personal_get`           | Personal Access Token: Read en usuario       |                |
-| `access.token_personal_list`          | Personal Access Token: Read en usuario       |                |
-| `access.token_personal_revoke`        | Personal Access Token: Revoke en usuario     |                |
-| `access.token_personal_revoke_self`   | Personal Access Token: Revoke en usuario     |                |
-| `access.token_personal_rotate`        | Personal Access Token: Rotate en usuario     |                |
-| `access.token_personal_rotate_self`   | Personal Access Token: Rotate en usuario     |                |
-| `access.token_project_create`         | Resource Access Token: Create en proyecto    |                |
-| `access.token_project_get`            | Resource Access Token: Read en proyecto      |                |
-| `access.token_project_list`           | Resource Access Token: Read en proyecto      |                |
-| `access.token_project_revoke`         | Resource Access Token: Delete en proyecto    |                |
-| `access.token_project_rotate`         | Resource Access Token: Rotate en proyecto    |                |
-| `access.token_project_rotate_self`    | Resource Access Token: Rotate en proyecto    |                |
+| Acción                                | Necesita                                                                                                          | Se sirve vacío |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------- |
+| `access.approve_group`                | Access Request: Approve en grupo. Algunas llamadas también necesitan: Group: Read en grupo; Member: Read en grupo |                |
+| `access.approve_project`              | Access Request: Approve en proyecto                                                                               |                |
+| `access.deny_group`                   | Access Request: Delete en grupo o usuario                                                                         |                |
+| `access.deny_project`                 | Access Request: Delete en proyecto o usuario                                                                      |                |
+| `access.deploy_key_add`               | Deploy Key: Create en proyecto                                                                                    |                |
+| `access.deploy_key_add_instance`      | Deploy Key: Create en instancia                                                                                   |                |
+| `access.deploy_key_delete`            | Deploy Key: Delete en proyecto                                                                                    |                |
+| `access.deploy_key_enable`            | Deploy Key: Enable en proyecto                                                                                    |                |
+| `access.deploy_key_get`               | Deploy Key: Read en proyecto                                                                                      |                |
+| `access.deploy_key_list_all`          | Deploy Key: Read en instancia                                                                                     |                |
+| `access.deploy_key_list_project`      | Deploy Key: Read en proyecto                                                                                      |                |
+| `access.deploy_key_list_user_project` | Deploy Key: Read en usuario                                                                                       |                |
+| `access.deploy_key_update`            | Deploy Key: Update en proyecto                                                                                    |                |
+| `access.deploy_token_create_group`    | Deploy Token: Create en grupo                                                                                     |                |
+| `access.deploy_token_create_project`  | Deploy Token: Create en proyecto                                                                                  |                |
+| `access.deploy_token_delete_group`    | Deploy Token: Delete en grupo                                                                                     |                |
+| `access.deploy_token_delete_project`  | Deploy Token: Delete en proyecto                                                                                  |                |
+| `access.deploy_token_get_group`       | Deploy Token: Read en grupo                                                                                       |                |
+| `access.deploy_token_get_project`     | Deploy Token: Read en proyecto                                                                                    |                |
+| `access.deploy_token_list_all`        | Deploy Token: Read en instancia                                                                                   |                |
+| `access.deploy_token_list_group`      | Deploy Token: Read en grupo                                                                                       |                |
+| `access.deploy_token_list_project`    | Deploy Token: Read en proyecto                                                                                    |                |
+| `access.invite_group`                 | Invitation: Create en grupo                                                                                       |                |
+| `access.invite_list_group`            | Invitation: Read en grupo                                                                                         |                |
+| `access.invite_list_project`          | Invitation: Read en proyecto                                                                                      |                |
+| `access.invite_project`               | Invitation: Create en proyecto                                                                                    |                |
+| `access.request_group`                | Access Request: Create en usuario                                                                                 |                |
+| `access.request_list_group`           | Access Request: Read en grupo                                                                                     |                |
+| `access.request_list_project`         | Access Request: Read en proyecto                                                                                  |                |
+| `access.request_project`              | Access Request: Create en usuario                                                                                 |                |
+| `access.token_group_create`           | Resource Access Token: Create en grupo                                                                            |                |
+| `access.token_group_get`              | Resource Access Token: Read en grupo                                                                              |                |
+| `access.token_group_list`             | Resource Access Token: Read en grupo                                                                              |                |
+| `access.token_group_revoke`           | Resource Access Token: Delete en grupo                                                                            |                |
+| `access.token_group_rotate`           | Resource Access Token: Rotate en grupo                                                                            |                |
+| `access.token_group_rotate_self`      | Resource Access Token: Rotate en grupo                                                                            |                |
+| `access.token_personal_get`           | Personal Access Token: Read en usuario                                                                            |                |
+| `access.token_personal_list`          | Personal Access Token: Read en usuario                                                                            |                |
+| `access.token_personal_revoke`        | Personal Access Token: Revoke en usuario                                                                          |                |
+| `access.token_personal_revoke_self`   | Personal Access Token: Revoke en usuario                                                                          |                |
+| `access.token_personal_rotate`        | Personal Access Token: Rotate en usuario                                                                          |                |
+| `access.token_personal_rotate_self`   | Personal Access Token: Rotate en usuario                                                                          |                |
+| `access.token_project_create`         | Resource Access Token: Create en proyecto                                                                         |                |
+| `access.token_project_get`            | Resource Access Token: Read en proyecto                                                                           |                |
+| `access.token_project_list`           | Resource Access Token: Read en proyecto                                                                           |                |
+| `access.token_project_revoke`         | Resource Access Token: Delete en proyecto                                                                         |                |
+| `access.token_project_rotate`         | Resource Access Token: Rotate en proyecto                                                                         |                |
+| `access.token_project_rotate_self`    | Resource Access Token: Rotate en proyecto                                                                         |                |
 
 ## `achievement`
 

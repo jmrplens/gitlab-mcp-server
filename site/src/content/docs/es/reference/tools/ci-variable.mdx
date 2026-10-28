@@ -122,18 +122,18 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Variable: Create en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro           | Tipo                         | Requerido | Descripción                            |
-| ------------------- | ---------------------------- | --------- | -------------------------------------- |
-| `group_id`          | `string/integer`             | sí        | Group ID or URL-encoded path           |
-| `key`               | `string`                     | sí        | Variable key name                      |
-| `value`             | `string`                     | sí        | Variable value                         |
-| `description`       | `string`                     | no        | Variable description                   |
-| `environment_scope` | `string`                     | no        | Environment scope (default: \*)        |
-| `masked`            | `boolean`                    | no        | Mask variable value in job logs        |
-| `masked_and_hidden` | `boolean`                    | no        | Mask and hide variable value           |
-| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags |
-| `raw`               | `boolean`                    | no        | Treat variable value as raw string     |
-| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file         |
+| Parámetro           | Tipo                         | Requerido | Descripción                                                                                                                                                                 |
+| ------------------- | ---------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`          | `string/integer`             | sí        | Group ID or URL-encoded path                                                                                                                                                |
+| `key`               | `string`                     | sí        | Variable key name                                                                                                                                                           |
+| `value`             | `string`                     | sí        | Variable value                                                                                                                                                              |
+| `description`       | `string`                     | no        | Variable description                                                                                                                                                        |
+| `environment_scope` | `string`                     | no        | Environment scope (default: \*). A scope other than \* needs Premium or Ultimate: a Free Enterprise Edition instance drops it and the variable applies to every environment |
+| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                                                                                                             |
+| `masked_and_hidden` | `boolean`                    | no        | Mask and hide variable value                                                                                                                                                |
+| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                                                                                                      |
+| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                                                                                                          |
+| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                                                                                              |
 
 ### `ci_variable.group_delete`
 

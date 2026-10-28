@@ -1797,6 +1797,18 @@
       "package": "internal/tools/accessrequests",
       "kind": "rest",
       "method": "GET",
+      "path": "/groups/:group_id",
+      "query": [
+        "with_projects"
+      ],
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/accessrequests",
+      "kind": "rest",
+      "method": "GET",
       "path": "/groups/:group_id/access_requests",
       "query": [
         "order_by",
@@ -1840,6 +1852,16 @@
       "identifiers": {
         ":access_request_id": 2,
         ":group_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/accessrequests",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/members/:member_id",
+      "identifiers": {
+        ":group_id": 1,
+        ":member_id": 1
       }
     },
     {
@@ -13890,7 +13912,8 @@
       "method": "PUT",
       "path": "/groups/grp/notification_settings",
       "body": [
-        "level"
+        "level",
+        "new_epic"
       ]
     },
     {
