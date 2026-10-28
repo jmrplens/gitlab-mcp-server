@@ -30,6 +30,15 @@ const (
 	// is never followed as a delegation: its own request names a field rather
 	// than a path, and the path is read where withPath names it.
 	requestMachinery = "do"
+	// uploadOption is the request option that makes [requestMachinery] build
+	// its request with UploadRequest rather than NewRequest. It builds no
+	// request of its own, so it is never followed as a delegation.
+	uploadOption = "withUpload"
+	// uploadTypeArg and legacyUploadTypeArg are where withUpload and a
+	// legacy UploadRequest take the UploadType, the form field the file is
+	// sent under.
+	uploadTypeArg       = 2
+	legacyUploadTypeArg = 4
 	// httpPackage qualifies the net/http verb constants both request forms name,
 	// and verbConstantPrefix opens each of them, so http.MethodPost is POST.
 	httpPackage        = "http"
@@ -55,8 +64,9 @@ const (
 )
 
 // legacyRequests are the client methods the pre-option form builds a request
-// with: the verb is the first argument and the path the second.
-var legacyRequests = map[string]bool{"NewRequest": true, "UploadRequest": true}
+// with, each the constructor it is: the verb is the first argument and the
+// path the second.
+var legacyRequests = map[string]string{"NewRequest": ConstructorNewRequest, "UploadRequest": ConstructorUpload}
 
 // reading is one parse of the package: the facts every function body is read
 // against, and the functions themselves.
@@ -101,8 +111,20 @@ type function struct {
 	templates []templateUse
 	legacy    []legacyUse
 	calls     []delegation
-	graphQL   bool
-	idents    map[string]bool
+	// sends holds, for each call of [requestMachinery] in the body, whether
+	// a [uploadOption] call is one of its arguments, which makes that request
+	// an upload on every call. directUploads are those argument calls, and
+	// otherUpload is set by any other call of [uploadOption] in the body,
+	// one appended to the options under a condition (CreateGroup's avatar),
+	// which makes each request without a direct one either.
+	sends         []bool
+	directUploads map[*ast.CallExpr]bool
+	otherUpload   bool
+	// uploadFields are the form fields an upload of the body sends its file
+	// under, each the UploadType constant a call names.
+	uploadFields []string
+	graphQL      bool
+	idents       map[string]bool
 	// file, start and end place the body, which is how an inline GraphQL
 	// document is attributed to the function that writes it.
 	file  string
@@ -131,10 +153,12 @@ type templateUse struct {
 	args     []ast.Expr
 }
 
-// legacyUse is one request built with NewRequest or UploadRequest.
+// legacyUse is one request built with NewRequest or UploadRequest, and which
+// of the two.
 type legacyUse struct {
-	verb ast.Expr
-	path ast.Expr
+	verb        ast.Expr
+	path        ast.Expr
+	constructor string
 }
 
 // delegation is one call into another function of the package that may send
@@ -276,13 +300,14 @@ func (r *reading) collectFields(spec *ast.TypeSpec) {
 // addFunction reads one function body.
 func (r *reading) addFunction(file parsedFile, decl *ast.FuncDecl) {
 	fn := &function{
-		name:   decl.Name.Name,
-		decl:   decl,
-		idents: map[string]bool{},
-		file:   file.path,
-		start:  file.fileSet.Position(decl.Pos()).Line,
-		end:    file.fileSet.Position(decl.End()).Line,
-		params: paramNames(decl.Type.Params),
+		name:          decl.Name.Name,
+		decl:          decl,
+		idents:        map[string]bool{},
+		directUploads: map[*ast.CallExpr]bool{},
+		file:          file.path,
+		start:         file.fileSet.Position(decl.Pos()).Line,
+		end:           file.fileSet.Position(decl.End()).Line,
+		params:        paramNames(decl.Type.Params),
 		// The types are read off the same list, so they line up with params.
 		paramTypes: paramTypes(decl.Type.Params),
 	}
@@ -349,17 +374,63 @@ func (r *reading) readFunctionCall(fn *function, name string, call *ast.CallExpr
 			fn.templates = append(fn.templates, templateUse{template: template, args: call.Args[1:]})
 		}
 	case requestMachinery:
+		direct := false
+		for _, arg := range call.Args {
+			if inner, isCall := arg.(*ast.CallExpr); isCall && calledName(inner) == uploadOption {
+				direct = true
+				fn.directUploads[inner] = true
+			}
+		}
+		fn.sends = append(fn.sends, direct)
+	case uploadOption:
+		// The call of do is visited before its arguments, so a direct
+		// argument is already known here.
+		if !fn.directUploads[call] {
+			fn.otherUpload = true
+		}
+		fn.uploadFields = append(fn.uploadFields, r.uploadField(call.Args, uploadTypeArg)...)
 	default:
 		fn.calls = append(fn.calls, delegation{callee: name, args: call.Args})
 	}
+}
+
+// uploadField returns the form field an upload sends its file under: the
+// value of the package constant the argument at index names, and nothing
+// for an argument that names none.
+func (r *reading) uploadField(args []ast.Expr, index int) []string {
+	if index >= len(args) {
+		return nil
+	}
+	ident, isIdent := args[index].(*ast.Ident)
+	if !isIdent {
+		return nil
+	}
+	value, isConst := r.consts[ident.Name]
+	if !isConst {
+		return nil
+	}
+	return []string{value}
+}
+
+// calledName names the package function a call calls, type arguments
+// dropped, and is empty for a call of anything else.
+func calledName(call *ast.CallExpr) string {
+	ident, _ := unindex(call.Fun).(*ast.Ident)
+	if ident == nil {
+		return ""
+	}
+	return ident.Name
 }
 
 // readMethodCall records a call of a method: a legacy request, a call of the
 // receiver's own method, or a call of a method of a helper the receiver holds
 // in a field.
 func (r *reading) readMethodCall(fn *function, selector *ast.SelectorExpr, call *ast.CallExpr) {
-	if legacyRequests[selector.Sel.Name] && len(call.Args) >= 2 {
-		fn.legacy = append(fn.legacy, legacyUse{verb: call.Args[0], path: call.Args[1]})
+	if constructor, isLegacy := legacyRequests[selector.Sel.Name]; isLegacy && len(call.Args) >= 2 {
+		fn.legacy = append(fn.legacy, legacyUse{verb: call.Args[0], path: call.Args[1], constructor: constructor})
+		if constructor == ConstructorUpload {
+			fn.uploadFields = append(fn.uploadFields, r.uploadField(call.Args, legacyUploadTypeArg)...)
+		}
 		return
 	}
 	if fn.recvVar == "" {

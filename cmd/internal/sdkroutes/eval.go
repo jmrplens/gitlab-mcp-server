@@ -51,6 +51,8 @@ func (r *reading) resolve(entry *function) Method {
 	}
 	r.walk(entry, nil, map[string]bool{}, func(fn *function, env map[string]string) {
 		method.GraphQL = method.GraphQL || fn.graphQL
+		method.Constructors = append(method.Constructors, fn.constructors()...)
+		method.UploadFields = append(method.UploadFields, fn.uploadFields...)
 		for _, use := range fn.templates {
 			paths, unresolved := r.templatePaths(fn, use, env)
 			for _, path := range paths {
@@ -66,7 +68,29 @@ func (r *reading) resolve(entry *function) Method {
 	})
 	method.Routes = sortedRoutes(method.Routes)
 	method.Unresolved = sortedUnique(method.Unresolved)
+	method.Constructors = sortedUnique(method.Constructors)
+	method.UploadFields = sortedUnique(method.UploadFields)
 	return method
+}
+
+// constructors names the constructors fn's own body builds a request with:
+// one for each call of do, both for a call that may be handed withUpload
+// through a list the body appends it to, and the one each legacy request
+// names.
+func (fn *function) constructors() []string {
+	var out []string
+	for _, direct := range fn.sends {
+		if direct || fn.otherUpload {
+			out = append(out, ConstructorUpload)
+		}
+		if !direct {
+			out = append(out, ConstructorNewRequest)
+		}
+	}
+	for _, use := range fn.legacy {
+		out = append(out, use.constructor)
+	}
+	return out
 }
 
 // walk visits fn and every function it delegates to, each with the string

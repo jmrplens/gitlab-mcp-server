@@ -164,6 +164,10 @@ func TestRead_FixturePackage_ResolvesEveryMethodShape(t *testing.T) {
 			if got.Key() != key {
 				t.Errorf("Key() = %q, want %q", got.Key(), key)
 			}
+			// Which constructor builds each request, and the field an upload
+			// sends its file under, are held on their own, by
+			// TestRead_EachRequest_NamesTheConstructorThatBuildsIt.
+			got.Constructors, got.UploadFields = nil, nil
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("Method(%q) =\n%+v\nwant\n%+v", key, got, want)
 			}
@@ -275,6 +279,119 @@ func TestRead_DirectoryItCannotRead_YieldsNoMethods(t *testing.T) {
 				t.Errorf("Read(%q).Methods() = %v, want none", dir, methods)
 			}
 		})
+	}
+}
+
+// constructorSource is a stand-in for client-go holding one method per way a
+// request's constructor is decided: do handed withUpload directly, do handed
+// options withUpload is appended to under a condition, do with no upload at
+// all, a delegation to a helper that uploads, the two legacy constructors,
+// and a method that builds no REST request.
+const constructorSource = `package gitlab
+
+import "net/http"
+
+var (
+	routeWikis   = route("projects/%s/wikis/attachments")
+	routeGroups  = route("groups")
+	routeIssues  = route("projects/%s/issues")
+	routeImports = route("projects/import")
+)
+
+type UploadType string
+
+const (
+	UploadAvatar UploadType = "avatar"
+	UploadFile   UploadType = "file"
+)
+
+func (s *WikisService) UploadWikiAttachment(pid any) (*Wiki, *Response, error) {
+	return do[*Wiki](s.client, withMethod(http.MethodPost), withPath(routeWikis, ProjectID{pid}), withUpload(nil, "f", UploadFile))
+}
+
+func (s *WikisService) UploadAnyKind(pid any, kind UploadType) (*Wiki, *Response, error) {
+	return do[*Wiki](s.client, withMethod(http.MethodPost), withPath(routeWikis, ProjectID{pid}), withUpload(nil, "f", kind), withUpload(nil, "f", "literal"), withUpload(nil, "f"), withUpload(nil))
+}
+
+func (s *GroupsService) CreateGroup(opt *CreateGroupOptions) (*Group, *Response, error) {
+	reqOpts := []doOption{withMethod(http.MethodPost), withPath(routeGroups)}
+	if opt.Avatar != nil {
+		reqOpts = append(reqOpts, withUpload(nil, "a", UploadAvatar))
+	}
+	return do[*Group](s.client, reqOpts...)
+}
+
+func (s *IssuesService) ListIssues(pid any) ([]*Issue, *Response, error) {
+	return do[[]*Issue](s.client, withPath(routeIssues, ProjectID{pid}), s.options.paging())
+}
+
+func (s *ImportsService) ImportFile() (*Import, *Response, error) {
+	return s.importFile()
+}
+
+func (s *ImportsService) importFile() (*Import, *Response, error) {
+	return do[*Import](s.client, withMethod(http.MethodPost), withPath(routeImports), withUpload(nil, "archive", UploadFile))
+}
+
+func (s *LegacyService) Upload() (*Import, *Response, error) {
+	s.client.UploadRequest(http.MethodPost, "uploads", nil, "", UploadFile, nil, nil)
+	s.client.UploadRequest(http.MethodPost, "uploads")
+	return nil, nil, nil
+}
+
+func (s *LegacyService) Get() (*Import, *Response, error) {
+	s.client.NewRequest(http.MethodGet, "things", nil, nil)
+	return nil, nil, nil
+}
+
+func (s *LegacyService) Nothing() (*Import, *Response, error) {
+	return nil, nil, nil
+}
+`
+
+// TestRead_EachRequest_NamesTheConstructorThatBuildsIt verifies which
+// constructor each method is read as building its request with, which is
+// what decides how its options are encoded: an upload sends every option as
+// a multipart field through the url tag, even on a POST. A method that
+// appends withUpload only under a condition can build either and names both,
+// a helper's upload is its caller's, and a method that builds no REST
+// request names none. Each upload also names the form field its file goes
+// under, the UploadType constant it is handed, and none for an upload type
+// that is no constant or is not handed at all.
+func TestRead_EachRequest_NamesTheConstructorThatBuildsIt(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "methods.go"), []byte(constructorSource), 0o600); err != nil {
+		t.Fatalf("write the stand-in: %v", err)
+	}
+	sdk := Read(dir)
+	upload, newRequest := []string{ConstructorUpload}, []string{ConstructorNewRequest}
+	file := []string{"file"}
+	cases := map[string]struct{ constructors, fields []string }{
+		"Wikis.UploadWikiAttachment": {upload, file},
+		"Wikis.UploadAnyKind":        {constructors: upload},
+		"Groups.CreateGroup":         {[]string{ConstructorNewRequest, ConstructorUpload}, []string{"avatar"}},
+		"Issues.ListIssues":          {constructors: newRequest},
+		"Imports.ImportFile":         {upload, file},
+		"Legacy.Upload":              {upload, file},
+		"Legacy.Get":                 {constructors: newRequest},
+		"Legacy.Nothing":             {},
+	}
+	for key, want := range cases {
+		t.Run(key, func(t *testing.T) {
+			method, ok := sdk.Method(key)
+			if !ok {
+				t.Fatalf("Method(%q) not found", key)
+			}
+			if !reflect.DeepEqual(method.Constructors, want.constructors) {
+				t.Errorf("Constructors = %v, want %v", method.Constructors, want.constructors)
+			}
+			if !reflect.DeepEqual(method.UploadFields, want.fields) {
+				t.Errorf("UploadFields = %v, want %v", method.UploadFields, want.fields)
+			}
+		})
+	}
+	if create, _ := sdk.Method("Groups.CreateGroup"); len(create.Routes) != 1 || create.Routes[0].String() != "POST /groups" {
+		t.Errorf("CreateGroup routes = %v, want the one POST: withUpload is no delegation", create.Routes)
 	}
 }
 

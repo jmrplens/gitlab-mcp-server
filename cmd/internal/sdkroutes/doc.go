@@ -52,6 +52,17 @@
 // ":", which is client-go's own normalization of a route template, so the
 // shapes produced here meet the ones its route registry reports.
 //
+// # Which constructor builds it
+//
+// A method also says which of client-go's two constructors builds its
+// request ([Method.Constructors]), because the constructor decides how the
+// options are encoded: NewRequest writes the body of a PATCH, POST or PUT
+// with encoding/json and the query of every other verb with go-querystring,
+// and UploadRequest writes every option as a multipart field with
+// go-querystring under any verb. A call of do handed withUpload is an upload,
+// any other is NewRequest, and a body that appends withUpload to the options
+// only under a condition builds either.
+//
 // # Where a parameter lands
 //
 // [SDK.Placements] answers which of those placeholders each parameter of a

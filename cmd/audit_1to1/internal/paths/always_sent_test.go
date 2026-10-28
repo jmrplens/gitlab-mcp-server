@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdkoptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
@@ -28,7 +29,7 @@ func withSDKOptions(t *testing.T, dir string) {
 	collectPairings = func(string) (structs.Pairings, error) {
 		return structs.Pairings{ClientGoDir: dir}, nil
 	}
-	readOptions = readSDKOptions
+	readOptions = sdkoptions.Read
 	t.Cleanup(func() { collectPairings, readOptions = originalPairings, originalOptions })
 }
 
@@ -255,8 +256,8 @@ func TestAlwaysSentCheck_TwoMethodsOnOneRoute_JudgeOnlyTheOptionsThePackageSends
 			check.Fields, check.Required, check.Unmatched)
 	}
 	want := []AlwaysSentField{
-		{Package: "internal/tools/groupmembers", Method: http.MethodPost, Path: "/groups/:group_id/share", OptionType: "ShareWithGroupOptions", Field: "ExpiresAt", Param: "expires_at", ParamType: "String"},
-		{Package: "internal/tools/handbuilt", Method: http.MethodPost, Path: "/groups/:group_id/share", OptionType: "ShareWithGroupOptions", Field: "ExpiresAt", Param: "expires_at", ParamType: "String"},
+		{Package: "internal/tools/groupmembers", Method: http.MethodPost, Path: "/groups/:group_id/share", OptionType: "ShareWithGroupOptions", Field: "ExpiresAt", Param: "expires_at", ParamType: "String", Encoder: "json"},
+		{Package: "internal/tools/handbuilt", Method: http.MethodPost, Path: "/groups/:group_id/share", OptionType: "ShareWithGroupOptions", Field: "ExpiresAt", Param: "expires_at", ParamType: "String", Encoder: "json"},
 	}
 	if !reflect.DeepEqual(check.Optional, want) {
 		t.Errorf("findings = %+v, want %+v: none for the package that sends ShareGroupWithGroupOptions", check.Optional, want)
@@ -288,6 +289,80 @@ func TestAlwaysSentCheck_NoActionRequestRecord_JudgesEveryEndpointUnnarrowed(t *
 	}
 	if len(check.Optional) != 3 || len(check.NotNarrowed) != 3 {
 		t.Errorf("findings = %+v, not narrowed = %+v, want three of each: every package held to both structs", check.Optional, check.NotNarrowed)
+	}
+}
+
+// TestOptionTypesByRoute_AMethodGivenAStruct_TakesItToEachRouteItSends
+// verifies the index the join is cut from: an endpoint is keyed by its verb
+// and shape, holds each option struct a method reaching it takes with the
+// methods that take it there, and a route no method takes a struct to has
+// no entry.
+func TestOptionTypesByRoute_AMethodGivenAStruct_TakesItToEachRouteItSends(t *testing.T) {
+	byRoute := optionTypesByRoute(sdkoptions.Read(alwaysSentSource(t)))
+
+	want := map[string]routeTakers{
+		"PATCH /projects/:/packages/protection/rules/:": {"UpdateRulesOptions": {"ProtectedPackages.UpdateRules": true}},
+	}
+	if !reflect.DeepEqual(byRoute, want) {
+		t.Errorf("byRoute = %+v, want %+v", byRoute, want)
+	}
+}
+
+// TestRouteTakers_TheStructsAPackageCanSend_AreTheOnesItsMethodsTake verifies
+// the narrowing issue 1104 asked for at its smallest: of the option structs a
+// route accepts, a package is held to those a method it calls takes there,
+// one method taking two structs and two methods taking one struct included,
+// and to none when it calls no method that reaches the route.
+func TestRouteTakers_TheStructsAPackageCanSend_AreTheOnesItsMethodsTake(t *testing.T) {
+	takers := routeTakers{
+		"AOptions": {"Svc.TakesAAndB": true},
+		"BOptions": {"Svc.TakesAAndB": true, "Svc.TakesB": true},
+		"COptions": {"Svc.TakesC": true},
+	}
+	if got := takers.optionTypes(); !reflect.DeepEqual(got, []string{"AOptions", "BOptions", "COptions"}) {
+		t.Errorf("optionTypes() = %v, want every struct the route accepts, sorted", got)
+	}
+
+	tests := []struct {
+		name   string
+		called map[string]bool
+		want   []string
+	}{
+		{name: "a method taking two structs", called: map[string]bool{"Svc.TakesAAndB": true}, want: []string{"AOptions", "BOptions"}},
+		{name: "one of two methods taking a struct", called: map[string]bool{"Svc.TakesB": true}, want: []string{"BOptions"}},
+		{name: "methods taking different structs", called: map[string]bool{"Svc.TakesB": true, "Svc.TakesC": true}, want: []string{"BOptions", "COptions"}},
+		{name: "a method recorded as not called", called: map[string]bool{"Svc.TakesC": false}},
+		{name: "a method that does not reach the route", called: map[string]bool{"Svc.Elsewhere": true}},
+		{name: "no method at all"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := takers.takenBy(tt.called); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("takenBy(%v) = %v, want %v", tt.called, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRouteTakers_AStructTwoMethodsTake_IsJudgedByEveryEncoderEitherUses
+// verifies the encoders a struct is judged by on one endpoint: those of
+// every method that takes it there, each once, so a struct one method sends
+// as a body and another uploads is held to both tags.
+func TestRouteTakers_AStructTwoMethodsTake_IsJudgedByEveryEncoderEitherUses(t *testing.T) {
+	takers := routeTakers{"AOptions": {"Svc.Body": true, "Svc.Upload": true, "Svc.Both": true}}
+	methods := map[string]sdkoptions.Method{
+		"Svc.Body":   {Constructors: []string{"NewRequest"}},
+		"Svc.Upload": {Constructors: []string{"UploadRequest"}},
+		"Svc.Both":   {Constructors: []string{"NewRequest", "UploadRequest"}},
+	}
+	if got := takers.encoders("AOptions", http.MethodPost, methods); !reflect.DeepEqual(got, []string{"json", "url"}) {
+		t.Errorf("encoders(POST) = %v, want [json url]", got)
+	}
+	if got := takers.encoders("AOptions", http.MethodGet, methods); !reflect.DeepEqual(got, []string{"url"}) {
+		t.Errorf("encoders(GET) = %v, want [url]", got)
+	}
+	if got := takers.encoders("BOptions", http.MethodPost, methods); got != nil {
+		t.Errorf("encoders(a struct no method takes) = %v, want none", got)
 	}
 }
 
@@ -328,25 +403,102 @@ func TestPackageMethods_ARequest_IsCreditedToItsSitesAndItsHandlers(t *testing.T
 	}
 }
 
-// TestAlwaysSentCheck_AGetEndpoint_IsNeverJudged verifies the one restriction
-// that keeps the rule truthful about what it reads. A GET carries its options
-// in the query string, where client-go's encoder leaves a nil pointer out
-// whatever the json tag says, so judging one would report a field nobody sends.
-func TestAlwaysSentCheck_AGetEndpoint_IsNeverJudged(t *testing.T) {
-	withSDKOptions(t, alwaysSentSource(t))
+// verbSource is pretend client-go source with one request per encoding
+// NewRequest and UploadRequest choose between: a GET and a DELETE, whose
+// options NewRequest writes as a query, and a POST built as an upload, whose
+// options UploadRequest writes as multipart fields. Each struct tags a field
+// to be written always under the url tag and omitted under the json one, and
+// the GET's struct another the other way round.
+func verbSource(t *testing.T) string {
+	t.Helper()
+	return sdkSourceIn(t, map[string]string{
+		"routes.go": `package gitlab
+
+var (
+	routeRules       = route("projects/%s/rules")
+	routeRulesID     = route("projects/%s/rules/%d")
+	routeRulesUpload = route("projects/%s/rules/upload")
+)
+`,
+		"options.go": `package gitlab
+
+type ListRulesOptions struct {
+	PackageNamePattern *string ` + "`" + `url:"package_name_pattern" json:"package_name_pattern,omitempty"` + "`" + `
+	Name               *string ` + "`" + `url:"name,omitempty" json:"name"` + "`" + `
+}
+
+type DeleteRuleOptions struct {
+	FullPath *string ` + "`" + `url:"full_path" json:"full_path,omitempty"` + "`" + `
+}
+
+type UploadRuleOptions struct {
+	Title *string ` + "`" + `url:"title" json:"title,omitempty"` + "`" + `
+}
+`,
+		"service.go": `package gitlab
+
+import "net/http"
+
+func (s *RulesService) ListRules(pid any, opt *ListRulesOptions, options ...RequestOptionFunc) ([]*Rule, *Response, error) {
+	return do[[]*Rule](s.client, withPath(routeRules, ProjectID{pid}), withAPIOpts(opt))
+}
+
+func (s *RulesService) DeleteRule(pid any, id int64, opt *DeleteRuleOptions, options ...RequestOptionFunc) (*Response, error) {
+	_, resp, err := do[none](s.client, withMethod(http.MethodDelete), withPath(routeRulesID, ProjectID{pid}, id), withAPIOpts(opt))
+	return resp, err
+}
+
+func (s *RulesService) UploadRule(pid any, opt *UploadRuleOptions, options ...RequestOptionFunc) (*Rule, *Response, error) {
+	return do[*Rule](s.client, withMethod(http.MethodPost), withPath(routeRulesUpload, ProjectID{pid}), withUpload(nil, "rule", UploadFile), withAPIOpts(opt))
+}
+`,
+	})
+}
+
+// TestAlwaysSentCheck_EachRequest_IsJudgedByTheTagItsEncoderReads verifies
+// that the rule reads what the request carries, not the json tag alone.
+//
+// NewRequest writes a GET's and a DELETE's options as a query through
+// go-querystring, which reads the url tag and writes `name=` for a nil
+// pointer that carries no omitempty, and UploadRequest writes a POST's as
+// multipart fields through the same encoder. The rule used to read the json
+// tag for every body verb, DELETE included, and to pass over a GET on the
+// premise that a query leaves a nil pointer out whatever the tag says: it
+// reported the GET's name, which the query omits, and missed the three keys
+// each of these requests writes on every call.
+func TestAlwaysSentCheck_EachRequest_IsJudgedByTheTagItsEncoderReads(t *testing.T) {
+	withSDKOptions(t, verbSource(t))
 	root := recordIn(t, map[string]response{
-		"GET /projects/:id/packages/protection/rules/:package_protection_rule_id": {
-			Params: []string{"package_name_pattern"},
-		},
+		"GET /projects/:id/rules":         {Params: []string{"package_name_pattern", "name"}},
+		"DELETE /projects/:id/rules/:id2": {Params: []string{"full_path"}},
+		"POST /projects/:id/rules/upload": {Params: []string{"title"}},
+	})
+	row := func(method, path string) requestinventory.Row {
+		return requestinventory.Row{Package: "internal/tools/rules", Kind: "rest", Method: method, Path: path}
+	}
+
+	check := alwaysSentCheck(root, []requestinventory.Row{
+		row(http.MethodGet, "/projects/:project_id/rules"),
+		row(http.MethodDelete, "/projects/:project_id/rules/:rule_id"),
+		row(http.MethodPost, "/projects/:project_id/rules/upload"),
 	})
 
-	check := alwaysSentCheck(root, []requestinventory.Row{{
-		Package: "internal/tools/protectedpackages", Kind: "rest", Method: "GET",
-		Path: "/projects/:project_id/packages/protection/rules/:rule_id",
-	}})
-
-	if check.Endpoints != 0 || len(check.Optional) != 0 {
-		t.Errorf("check = %+v, want a GET to be passed over", check)
+	if !check.Ran || check.Endpoints != 3 || check.Fields != 3 {
+		t.Fatalf("check = %+v, want three endpoints writing one key each on every call", check)
+	}
+	finding := func(method, path, optionType, field, param string) AlwaysSentField {
+		return AlwaysSentField{
+			Package: "internal/tools/rules", Method: method, Path: path, OptionType: optionType,
+			Field: field, Param: param, ParamType: "String", Encoder: "url",
+		}
+	}
+	want := []AlwaysSentField{
+		finding(http.MethodGet, "/projects/:project_id/rules", "ListRulesOptions", "PackageNamePattern", "package_name_pattern"),
+		finding(http.MethodDelete, "/projects/:project_id/rules/:rule_id", "DeleteRuleOptions", "FullPath", "full_path"),
+		finding(http.MethodPost, "/projects/:project_id/rules/upload", "UploadRuleOptions", "Title", "title"),
+	}
+	if !reflect.DeepEqual(check.Optional, want) {
+		t.Errorf("findings =\n%+v\nwant\n%+v", check.Optional, want)
 	}
 }
 
@@ -416,7 +568,7 @@ func TestAlwaysSentCheck_MissingInputs_SayTheCheckDidNotRun(t *testing.T) {
 		collectPairings = func(string) (structs.Pairings, error) { return structs.Pairings{}, nil }
 		// A reader that would find option structs wherever it was pointed, so
 		// only the empty directory can be what stops the check.
-		readOptions = func(string) sdkOptions { return readSDKOptions(dir) }
+		readOptions = func(string) sdkoptions.SDK { return sdkoptions.Read(dir) }
 		t.Cleanup(func() { collectPairings, readOptions = original, originalOptions })
 
 		root := recordIn(t, map[string]response{"PATCH /projects/:id": {Params: []string{"name"}}})
@@ -437,9 +589,9 @@ func TestAlwaysSentCheck_MissingInputs_SayTheCheckDidNotRun(t *testing.T) {
 		withSDKOptions(t, alwaysSentSource(t))
 		original := collectPairings
 		collectPairings = func(string) (structs.Pairings, error) { return structs.Pairings{}, nil }
-		readOptions = func(dir string) sdkOptions {
+		readOptions = func(dir string) sdkoptions.SDK {
 			t.Errorf("readOptions(%q) was called, want no read of a module the load did not find", dir)
-			return sdkOptions{}
+			return sdkoptions.SDK{}
 		}
 		t.Cleanup(func() { collectPairings = original })
 
@@ -471,12 +623,13 @@ func TestAlwaysSentCheck_ARouteDeclaringNoParam_IsNotAskedAbout(t *testing.T) {
 	}
 }
 
-// TestBodyEndpoints_RecordedRows_AreDeduplicatedPerPackage verifies the join's
+// TestRESTEndpoints_RecordedRows_AreDeduplicatedPerPackage verifies the join's
 // own input: one endpoint a package reached twenty times is asked about once,
-// and two packages reaching it are two questions, since a finding names the
-// package whose handler built the request.
-func TestBodyEndpoints_RecordedRows_AreDeduplicatedPerPackage(t *testing.T) {
-	endpoints := bodyEndpoints([]requestinventory.Row{
+// two packages reaching it are two questions, since a finding names the
+// package whose handler built the request, and a GET is asked about beside
+// the POST, since its query writes the url tag's always-sent keys as well.
+func TestRESTEndpoints_RecordedRows_AreDeduplicatedPerPackage(t *testing.T) {
+	endpoints := restEndpoints([]requestinventory.Row{
 		{Package: "internal/tools/issues", Kind: "rest", Method: "post", Path: "/projects/:project_id/issues"},
 		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/projects/:project_id/issues"},
 		{Package: "internal/tools/groups", Kind: "rest", Method: "POST", Path: "/projects/:project_id/issues"},
@@ -484,8 +637,9 @@ func TestBodyEndpoints_RecordedRows_AreDeduplicatedPerPackage(t *testing.T) {
 		{Package: "internal/tools/epics", Kind: "graphql", Method: "POST", Path: "/graphql", Operation: "mutation createEpic"},
 	})
 
-	want := []bodyEndpoint{
+	want := []restEndpoint{
 		{pkg: "internal/tools/groups", method: "POST", path: "/projects/:project_id/issues"},
+		{pkg: "internal/tools/issues", method: "GET", path: "/projects/:project_id/issues"},
 		{pkg: "internal/tools/issues", method: "POST", path: "/projects/:project_id/issues"},
 	}
 	if len(endpoints) != len(want) {
@@ -498,19 +652,19 @@ func TestBodyEndpoints_RecordedRows_AreDeduplicatedPerPackage(t *testing.T) {
 	}
 }
 
-// TestBodyEndpoints_AreOrderedByPackagePathAndMethod verifies the order the
+// TestRESTEndpoints_AreOrderedByPackagePathAndMethod verifies the order the
 // join asks its questions in, which is the order a report lists them in:
 // by package, then path, then method, whatever order the inventory recorded
 // them in.
-func TestBodyEndpoints_AreOrderedByPackagePathAndMethod(t *testing.T) {
-	endpoints := bodyEndpoints([]requestinventory.Row{
+func TestRESTEndpoints_AreOrderedByPackagePathAndMethod(t *testing.T) {
+	endpoints := restEndpoints([]requestinventory.Row{
 		{Package: "internal/tools/issues", Kind: "rest", Method: "PUT", Path: "/projects/:project_id/issues/:issue_id"},
 		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/projects/:project_id/issues/:issue_id"},
 		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/projects/:project_id/issues"},
 		{Package: "internal/tools/groups", Kind: "rest", Method: "POST", Path: "/groups"},
 	})
 
-	want := []bodyEndpoint{
+	want := []restEndpoint{
 		{pkg: "internal/tools/groups", method: "POST", path: "/groups"},
 		{pkg: "internal/tools/issues", method: "POST", path: "/projects/:project_id/issues"},
 		{pkg: "internal/tools/issues", method: "POST", path: "/projects/:project_id/issues/:issue_id"},
@@ -521,17 +675,17 @@ func TestBodyEndpoints_AreOrderedByPackagePathAndMethod(t *testing.T) {
 	}
 }
 
-// TestBodyEndpoints_OnePackage_IsOrderedByPathThenMethod verifies the order
+// TestRESTEndpoints_OnePackage_IsOrderedByPathThenMethod verifies the order
 // within a package, from rows recorded the other way round so that every
 // comparison of the sort is asked in both directions.
-func TestBodyEndpoints_OnePackage_IsOrderedByPathThenMethod(t *testing.T) {
-	endpoints := bodyEndpoints([]requestinventory.Row{
+func TestRESTEndpoints_OnePackage_IsOrderedByPathThenMethod(t *testing.T) {
+	endpoints := restEndpoints([]requestinventory.Row{
 		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/b"},
 		{Package: "internal/tools/issues", Kind: "rest", Method: "PUT", Path: "/a"},
 		{Package: "internal/tools/issues", Kind: "rest", Method: "POST", Path: "/a"},
 	})
 
-	want := []bodyEndpoint{
+	want := []restEndpoint{
 		{pkg: "internal/tools/issues", method: "POST", path: "/a"},
 		{pkg: "internal/tools/issues", method: "PUT", path: "/a"},
 		{pkg: "internal/tools/issues", method: "POST", path: "/b"},
@@ -550,7 +704,7 @@ func TestBodyEndpoints_OnePackage_IsOrderedByPathThenMethod(t *testing.T) {
 // is equal, so a comparison that stopped early, skipped a field or read one
 // backwards answers zero or the wrong sign for exactly that case.
 func TestCompareAlwaysSent_IsATotalOrder(t *testing.T) {
-	base := AlwaysSentField{Package: "internal/tools/x", Path: "/a", Method: "PUT", OptionType: "XOptions", Param: "b"}
+	base := AlwaysSentField{Package: "internal/tools/x", Path: "/a", Method: "PUT", OptionType: "XOptions", Param: "b", Encoder: "json"}
 	if got := compareAlwaysSent(base, base); got != 0 {
 		t.Errorf("compareAlwaysSent(f, f) = %d, want 0", got)
 	}
@@ -563,6 +717,7 @@ func TestCompareAlwaysSent_IsATotalOrder(t *testing.T) {
 		{name: "method", later: func(f *AlwaysSentField) { f.Method = "PUTX" }},
 		{name: "option type", later: func(f *AlwaysSentField) { f.OptionType = "YOptions" }},
 		{name: "param", later: func(f *AlwaysSentField) { f.Param = "c" }},
+		{name: "encoder", later: func(f *AlwaysSentField) { f.Encoder = "url" }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -601,7 +756,7 @@ func TestLookupParam_AListOfObjects_IsTriedUnderBothSpellings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			param, declared := lookupParam(params, optionParam{Param: tt.param})
+			param, declared := lookupParam(params, sdkoptions.Param{Param: tt.param})
 			if declared != tt.declared || param.Required != tt.required {
 				t.Errorf("lookupParam(%q) = %+v, %t, want required=%t declared=%t", tt.param, param, declared, tt.required, tt.declared)
 			}

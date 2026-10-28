@@ -5,11 +5,12 @@ package paths
 
 import (
 	"cmp"
-	"net/http"
+	"maps"
 	"path"
 	"slices"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdkoptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
@@ -35,11 +36,22 @@ import (
 // # The oracle, and why it separates the defect from the innocent cases
 //
 // Two records already here answer it between them. client-go's own source says
-// which option struct a service method takes and which json keys it writes
+// which option struct a service method takes, which constructor builds its
+// request, and which keys the encoder that constructor uses writes
 // unconditionally; the live record says, per mounted route, which params GitLab
 // declares and which of them it requires. A field written on every call whose
 // param GitLab requires anyway is correct, and one whose param GitLab marks
 // optional is a value the caller cannot decline to send.
+//
+// The encoder is the request's, read by [sdkoptions.Encoders]. NewRequest
+// writes the body of a PATCH, POST or PUT with encoding/json, which reads the
+// json tag, and the query of a GET, a DELETE or a HEAD with go-querystring,
+// which reads the url tag and writes `name=` for a nil pointer whose tag
+// carries no omitempty. UploadRequest writes every field as a multipart field
+// through go-querystring under any verb. The rule used to read the json tag
+// for every body verb, DELETE included, and to pass over a GET on the premise
+// that a nil pointer is left out of a query whatever the tag says, which is
+// not what go-querystring does.
 //
 // That is a sharp line rather than a heuristic, and it was measured before it
 // was written: over the option structs the 41 packages of one review reach, it
@@ -51,13 +63,13 @@ import (
 //
 // # What it cannot see
 //
-// The rule reads the json tag, so it sees exactly what encoding/json's
-// omitempty decides. A field whose type is a plain struct carrying omitempty is
-// still written on every call, because under v1 semantics a struct is never
-// empty, and this does not report it. client-go has no such field today: its
-// nullable values are Nullable[T], which is a map and which omitempty does omit.
-// The blind spot is stated rather than absorbed because a future SDK change
-// could open it silently.
+// The rule reads the tag of the request's encoder, so it sees exactly what
+// that encoder's omitempty decides. A field whose type is a plain struct
+// carrying omitempty is still written by encoding/json on every call, because
+// under v1 semantics a struct is never empty, and this does not report it.
+// client-go has no such field today: its nullable values are Nullable[T],
+// which is a map and which omitempty does omit. The blind spot is stated
+// rather than absorbed because a future SDK change could open it silently.
 //
 // The join is the package rather than the action: the inventory says which
 // package reached which route, the action request record
@@ -103,7 +115,8 @@ type AlwaysSentCheck struct {
 	// read, and then every endpoint is judged against every option struct
 	// its route accepts and listed in NotNarrowed.
 	Requests string `json:"requests_record,omitempty"`
-	// Endpoints counts the recorded body-carrying endpoints this was asked of.
+	// Endpoints counts the recorded endpoints this was asked of, of every
+	// verb.
 	Endpoints int `json:"endpoints"`
 	// OptionTypes counts the distinct client-go option structs those endpoints
 	// reach, which is the size of what was walked.
@@ -156,23 +169,77 @@ type AlwaysSentField struct {
 	// ParamType is what the route says the param is, which is what a reader
 	// needs to judge what a null in that position does.
 	ParamType string `json:"param_type,omitempty"`
-}
-
-// bodyMethods are the verbs whose options client-go encodes as a JSON body, and
-// so the verbs whose omitempty decides what GitLab receives. A GET carries its
-// options in the query string, where a nil pointer is left out whatever the
-// json tag says.
-var bodyMethods = map[string]bool{
-	http.MethodPost:   true,
-	http.MethodPut:    true,
-	http.MethodPatch:  true,
-	http.MethodDelete: true,
+	// Encoder is the tag the request writes the field by, json for a body
+	// NewRequest encodes and url for a query or a multipart upload, which
+	// writes an empty value where a body writes a null.
+	Encoder string `json:"encoder"`
 }
 
 // readOptions is the seam for the client-go source, which lives in a module
 // cache a test has none of. It is a variable a test restores, like readRoutes
 // beside it.
-var readOptions = readSDKOptions
+var readOptions = sdkoptions.Read
+
+// routeTakers is, for one endpoint, the option structs whose methods reach it
+// and, under each, the methods that take that struct there.
+type routeTakers map[string]map[string]bool
+
+// optionTypesByRoute indexes the option structs whose methods reach each
+// endpoint, keyed the way an inventory row's method and path key it, with the
+// methods that take each one there, so a package can be held to the structs
+// of the methods its handlers call rather than to every struct the route
+// accepts.
+func optionTypesByRoute(options sdkoptions.SDK) map[string]routeTakers {
+	byRoute := map[string]routeTakers{}
+	for key, method := range options.Methods {
+		for _, route := range method.Routes {
+			endpoint := route.Method + " " + pathShape(route.Path)
+			for _, name := range method.Options {
+				takers := byRoute[endpoint]
+				if takers == nil {
+					takers = routeTakers{}
+					byRoute[endpoint] = takers
+				}
+				if takers[name] == nil {
+					takers[name] = map[string]bool{}
+				}
+				takers[name][key] = true
+			}
+		}
+	}
+	return byRoute
+}
+
+// optionTypes names the option structs that reach the endpoint, sorted.
+func (t routeTakers) optionTypes() []string {
+	return slices.Sorted(maps.Keys(t))
+}
+
+// encoders names the encoders the methods taking the option struct name to
+// the endpoint write it with under verb, sorted: every method's, since a
+// struct two methods take there is sent by either.
+func (t routeTakers) encoders(name, verb string, methods map[string]sdkoptions.Method) []string {
+	var out []string
+	for method := range t[name] {
+		out = append(out, sdkoptions.Encoders(methods[method].Constructors, verb)...)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// takenBy names the option structs that reach the endpoint through one of
+// the methods called, sorted, and none when no called method reaches it.
+func (t routeTakers) takenBy(called map[string]bool) []string {
+	taken := map[string]bool{}
+	for name, methods := range t {
+		for method := range methods {
+			if called[method] {
+				taken[name] = true
+			}
+		}
+	}
+	return slices.Sorted(maps.Keys(taken))
+}
 
 // alwaysSentCheck reports every param an option struct writes on every call
 // that GitLab marks optional on the route receiving it.
@@ -200,7 +267,7 @@ func alwaysSentCheck(root string, requests []requestinventory.Row) AlwaysSentChe
 	}
 
 	walked := map[string]bool{}
-	for _, endpoint := range bodyEndpoints(requests) {
+	for _, endpoint := range restEndpoints(requests) {
 		operation, quality, _ := index.lookup(endpoint.method, endpoint.path)
 		if quality == matchNone || len(operation.Params) == 0 {
 			continue
@@ -219,7 +286,9 @@ func alwaysSentCheck(root string, requests []requestinventory.Row) AlwaysSentChe
 		}
 		for _, name := range types {
 			walked[name] = true
-			check.judge(endpoint, name, options.Types, operation.Params)
+			for _, encoder := range takers.encoders(name, endpoint.method, options.Methods) {
+				check.judge(endpoint, name, encoder, options.Types, operation.Params)
+			}
 		}
 	}
 	check.OptionTypes = len(walked)
@@ -258,10 +327,11 @@ func packageMethods(record actionrequests.Record) map[string]map[string]bool {
 	return calls
 }
 
-// judge walks one option struct against one route's declared params.
-func (c *AlwaysSentCheck) judge(endpoint bodyEndpoint, name string, types map[string]sdkOptionType, params map[string]apilive.Param) {
-	walkOptionParams(types, name, "", nil, 0, func(found optionParam) {
-		if !found.Field.Always || found.Field.Nested != "" {
+// judge walks one option struct, as encoder writes it, against one route's
+// declared params.
+func (c *AlwaysSentCheck) judge(endpoint restEndpoint, name, encoder string, types map[string]sdkoptions.Type, params map[string]apilive.Param) {
+	sdkoptions.Walk(types, name, encoder, func(found sdkoptions.Param) {
+		if !found.Tag.Always || found.Field.Nested != "" {
 			// A nested struct's own key is the object around the fields this
 			// walk goes on to judge. Whether that object is written when it is
 			// nil is a question about the parent's tag rather than about a
@@ -285,6 +355,7 @@ func (c *AlwaysSentCheck) judge(endpoint bodyEndpoint, name string, types map[st
 				Field:      found.Field.GoName,
 				Param:      found.Param,
 				ParamType:  param.Type,
+				Encoder:    encoder,
 			})
 		}
 	})
@@ -295,7 +366,7 @@ func (c *AlwaysSentCheck) judge(endpoint bodyEndpoint, name string, types map[st
 // A list of nested objects is tried under both spellings GitLab uses for one,
 // since Grape declares the members of an array of hashes with an empty
 // subscript and several routes flatten it away.
-func lookupParam(params map[string]apilive.Param, found optionParam) (apilive.Param, bool) {
+func lookupParam(params map[string]apilive.Param, found sdkoptions.Param) (apilive.Param, bool) {
 	if param, declared := params[found.Param]; declared {
 		return param, true
 	}
@@ -307,30 +378,30 @@ func lookupParam(params map[string]apilive.Param, found optionParam) (apilive.Pa
 	return apilive.Param{}, false
 }
 
-// bodyEndpoint is one recorded request reduced to what this check joins on.
-type bodyEndpoint struct {
+// restEndpoint is one recorded request reduced to what this check joins on.
+type restEndpoint struct {
 	pkg    string
 	method string
 	path   string
 }
 
-// bodyEndpoints lists the distinct recorded REST endpoints whose verb carries a
-// body, one per package that reached it.
-func bodyEndpoints(requests []requestinventory.Row) []bodyEndpoint {
-	seen := map[bodyEndpoint]bool{}
-	found := make([]bodyEndpoint, 0, len(requests))
+// restEndpoints lists the distinct recorded REST endpoints of every verb, one
+// per package that reached it.
+func restEndpoints(requests []requestinventory.Row) []restEndpoint {
+	seen := map[restEndpoint]bool{}
+	found := make([]restEndpoint, 0, len(requests))
 	for _, request := range requests {
-		if !strings.EqualFold(request.Kind, requestinventory.KindREST) || !bodyMethods[strings.ToUpper(request.Method)] {
+		if !strings.EqualFold(request.Kind, requestinventory.KindREST) {
 			continue
 		}
-		endpoint := bodyEndpoint{pkg: request.Package, method: strings.ToUpper(request.Method), path: request.Path}
+		endpoint := restEndpoint{pkg: request.Package, method: strings.ToUpper(request.Method), path: request.Path}
 		if seen[endpoint] {
 			continue
 		}
 		seen[endpoint] = true
 		found = append(found, endpoint)
 	}
-	slices.SortFunc(found, func(left, right bodyEndpoint) int {
+	slices.SortFunc(found, func(left, right restEndpoint) int {
 		return cmp.Or(
 			strings.Compare(left.pkg, right.pkg),
 			strings.Compare(left.path, right.path),
@@ -349,5 +420,6 @@ func compareAlwaysSent(a, b AlwaysSentField) int {
 		strings.Compare(a.Method, b.Method),
 		strings.Compare(a.OptionType, b.OptionType),
 		strings.Compare(a.Param, b.Param),
+		strings.Compare(a.Encoder, b.Encoder),
 	)
 }
