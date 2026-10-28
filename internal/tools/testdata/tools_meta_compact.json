@@ -12821,17 +12821,8 @@
             "last_used_before": {
               "type": "string"
             },
-            "order_by": {
-              "type": "string"
-            },
             "page": {
               "type": "integer"
-            },
-            "page_token": {
-              "type": "string"
-            },
-            "pagination": {
-              "type": "string"
             },
             "per_page": {
               "type": "integer"
@@ -12850,8 +12841,14 @@
             },
             "sort": {
               "enum": [
-                "asc",
-                "desc"
+                "created_asc",
+                "created_desc",
+                "expires_asc",
+                "expires_desc",
+                "last_used_asc",
+                "last_used_desc",
+                "name_asc",
+                "name_desc"
               ],
               "type": "string"
             },
@@ -32115,17 +32112,8 @@
             "last_used_before": {
               "type": "string"
             },
-            "order_by": {
-              "type": "string"
-            },
             "page": {
               "type": "integer"
-            },
-            "page_token": {
-              "type": "string"
-            },
-            "pagination": {
-              "type": "string"
             },
             "per_page": {
               "type": "integer"
@@ -32150,8 +32138,14 @@
             },
             "sort": {
               "enum": [
-                "asc",
-                "desc"
+                "created_asc",
+                "created_desc",
+                "expires_asc",
+                "expires_desc",
+                "last_used_asc",
+                "last_used_desc",
+                "name_asc",
+                "name_desc"
               ],
               "type": "string"
             },

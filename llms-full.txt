@@ -19381,15 +19381,12 @@ List personal access tokens for a group service account.
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `last_used_after` (string): Return tokens last used after this RFC3339 timestamp
 - `last_used_before` (string): Return tokens last used before this RFC3339 timestamp
-- `order_by` (string): Order tokens by a supported column (e.g. id, created_at, expires_at, last_used_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
-- `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `revoked` (boolean): Filter by revoked state: true returns only revoked tokens, false only active ones
 - `search` (string): Filter tokens whose name contains this text
 - `service_account_id` (integer) (required): Service account user ID
-- `sort` (string): Sort direction: asc or desc
+- `sort` (string): Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc
 - `state` (string): Filter by token state: active or inactive
 - `user_id` (integer): Filter by the user ID that owns the token
 
@@ -26143,16 +26140,13 @@ List personal access tokens for a GitLab project service account. Returns: pagin
 - `expires_before` (string): Filter tokens expiring before YYYY-MM-DD date
 - `last_used_after` (string): Filter tokens last used after RFC3339 datetime or YYYY-MM-DD date
 - `last_used_before` (string): Filter tokens last used before RFC3339 datetime or YYYY-MM-DD date
-- `order_by` (string): Order tokens by column (keyset pagination)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
-- `page_token` (string): Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page.
-- `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `revoked` (boolean): Filter by revoked state
 - `search` (string): Search token names
 - `service_account_id` (integer) (required): Service account user ID
-- `sort` (string): Sort expression
+- `sort` (string): Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc
 - `state` (string): Token state filter: active or inactive
 - `user_id` (integer): Filter by user ID
 
