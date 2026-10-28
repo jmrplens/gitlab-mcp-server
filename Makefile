@@ -1627,10 +1627,10 @@ gen-nuget:
 ## token, binary magic and executable bit for all six, plus a real
 ## `dotnet tool install`, a `dnx` run and an MCP initialize handshake for the
 ## container's native platform. The image is pinned by digest because dnx's
-## behaviour is an SDK property (10.0.402 is what was verified); bump the
+## behaviour is an SDK property (10.0.403 is what was verified); bump the
 ## digest deliberately.
 ##   make validate-nuget NUGET_BINARIES=dist
-NUGET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.402@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa
+NUGET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.403@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b
 validate-nuget:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-nuget-local)"; exit 1; }
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
