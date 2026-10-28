@@ -21,7 +21,7 @@
 //      never executed by anything. The notices every tarball carries are
 //      compared the same way, against the digest recorded for them.
 //   2. Runtime, for the one platform the validating host can run (linux-x64
-//      inside the node:22 container `make validate-npm` uses). It installs the
+//      inside the node:24 container `make validate-npm` uses). It installs the
 //      launcher plus that platform package from their tarballs into a throwaway
 //      project, confirms npm resolved only the matching package, then drives an
 //      MCP initialize handshake over stdio and asserts stdout carries pure

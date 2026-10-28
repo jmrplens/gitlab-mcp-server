@@ -1535,14 +1535,14 @@ sync-npm-version:
 	node scripts/build-npm.mjs --sync-only --version "$$(tr -d '[:space:]' < VERSION)"
 
 ## validate-npm: build the npm packages and validate them inside a clean
-## node:22 container, so the check never installs anything on the host. Runs
+## node:24 container, so the check never installs anything on the host. Runs
 ## structural checks on all 7 packages plus a real install + MCP handshake for
 ## the container's native platform (linux-x64).
 ##   make validate-npm NPM_BINARIES=dist
 validate-npm:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-npm-local)"; exit 1; }
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
-	@VER=$$(tr -d '[:space:]' < VERSION); 	docker run --rm 		-v "$(CURDIR):/work" -v "$(abspath $(NPM_BINARIES)):/binaries:ro" 		-w /work node:22 sh -euc '			node scripts/build-npm.mjs --binaries /binaries --version '"$$VER"' && 			node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version '"$$VER"
+	@VER=$$(tr -d '[:space:]' < VERSION); 	docker run --rm 		-v "$(CURDIR):/work" -v "$(abspath $(NPM_BINARIES)):/binaries:ro" 		-w /work node:24 sh -euc '			node scripts/build-npm.mjs --binaries /binaries --version '"$$VER"' && 			node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version '"$$VER"
 
 ## validate-npm-local: same validation without Docker, for the ephemeral CI
 ## runner (already disposable). Builds packages from NPM_BINARIES, then validates.

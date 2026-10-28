@@ -1517,8 +1517,9 @@ jobs:
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
-      # npm >= 11.5.1 performs the OIDC exchange that trusted publishing needs;
-      # setup-node's Node 22 ships an older npm, so it is upgraded below.
+      # npm >= 11.5.1 performs the OIDC exchange that trusted publishing needs.
+      # setup-node's Node 24 ships npm 11, which validates the packages; the
+      # publish step upgrades it to the npm release pinned there.
       # Provenance is attached automatically under trusted publishing (no
       # --provenance flag), and publish-npm.sh skips any version already on the
       # registry, so re-running this job is safe.
@@ -1529,7 +1530,7 @@ jobs:
       # publisher names. The job id is not part of the binding.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       # A published npm version is permanent, so a broken tarball must fail the
