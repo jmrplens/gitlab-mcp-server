@@ -207,7 +207,7 @@ func TestBalancer_HAProxyForwardforChargesTheRealClient(t *testing.T) {
 	)
 	port := freePort(t)
 	conf := writeBalancerConfig(t, "haproxy.cfg", fmt.Sprintf(haproxyForwardforConfig, port, upstream))
-	base := startBalancer(t, "haproxy:3.0-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
+	base := startBalancer(t, "haproxy:3.4-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
 	through := &server{baseURL: base}
 
 	for i := range 8 {
@@ -366,7 +366,7 @@ func TestBalancer_HAProxyHashesADigestOfTheCredential(t *testing.T) {
 	port := freePort(t)
 	conf := writeBalancerConfig(t, "haproxy.cfg",
 		fmt.Sprintf(haproxyBalancerConfig, port, balancerSalt, first, second))
-	base := startBalancer(t, "haproxy:3.0-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
+	base := startBalancer(t, "haproxy:3.4-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
 
 	assertEachCredentialPins(t, base, func(token string) [2]string {
 		return [2]string{"PRIVATE-TOKEN", token}
@@ -403,7 +403,7 @@ func TestBalancer_HAProxyEjectsADrainingInstanceBeforeItCloses(t *testing.T) {
 	port := freePort(t)
 	conf := writeBalancerConfig(t, "haproxy.cfg",
 		fmt.Sprintf(haproxyBalancerConfig, port, balancerSalt, first, second))
-	base := startBalancer(t, "haproxy:3.0-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
+	base := startBalancer(t, "haproxy:3.4-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
 
 	// Which credentials the hash sends to the instance about to drain. They
 	// are the ones whose service has to survive, and knowing them is what
