@@ -1167,6 +1167,11 @@ type UpdateInput struct {
 	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
 	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
 	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
+
+	// RemoveAvatar sends avatar as an empty value, which PUT /groups/:id
+	// answers by removing the group's avatar (lib/api/groups.rb). A new
+	// image goes through group.upload_avatar.
+	RemoveAvatar bool `json:"remove_avatar,omitempty" jsonschema:"Remove the group's avatar. To replace it instead, use group.upload_avatar"`
 }
 
 // DeleteInput defines parameters for deleting a group.
@@ -1415,6 +1420,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	applyUpdateGroupPointers(input, opts)
 	applyUpdateGroupEnums(input, opts)
+	if input.RemoveAvatar {
+		// An avatar with neither a file name nor an image is the one
+		// client-go writes as "avatar": "" in the JSON body rather than
+		// uploading.
+		opts.Avatar = &gl.GroupAvatar{}
+	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.UpdateGroup(string(input.GroupID), opts, gl.WithContext(ctx))

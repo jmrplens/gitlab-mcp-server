@@ -71,6 +71,26 @@ func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
 	recorder.AssertMembers(t, want)
 }
 
+// TestUpdate_RemoveAvatar_SendsTheBlankAvatarGitLabRemovesItFor verifies
+// that remove_avatar sends avatar as an empty value in the JSON body, which
+// PUT /projects/:id maps to CarrierWave's remove_avatar (lib/api/projects.rb),
+// and that an update without it sends no avatar at all.
+func TestUpdate_RemoveAvatar_SendsTheBlankAvatarGitLabRemovesItFor(t *testing.T) {
+	client, recorder := testutil.RecordWrites(t, `{}`, projectJSON)
+	if _, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", RemoveAvatar: true}); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	recorder.AssertMembers(t, map[string]string{"avatar": `""`})
+
+	client, recorder = testutil.RecordWrites(t, `{}`, projectJSON)
+	if _, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", Name: "renamed"}); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+	if got, ok := recorder.Member("avatar"); ok {
+		t.Errorf("an update without remove_avatar sent avatar = %s", got)
+	}
+}
+
 // TestUpdate_NameRegexDelete_StillSetsTheDeletionRegex verifies that a
 // deletion regex sent under name_regex_delete, the name this input gave it
 // until name_regex replaced it, still reaches GitLab as name_regex, the key

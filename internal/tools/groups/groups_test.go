@@ -4506,6 +4506,9 @@ func groupWriteSettings() []groupWriteSetting {
 		{"unique_project_download_limit_interval_in_seconds", "unique_project_download_limit_interval_in_seconds", float64(600), CreateInput{UniqueProjectDownloadLimitIntervalInSeconds: new(int64(600))}, UpdateInput{UniqueProjectDownloadLimitIntervalInSeconds: new(int64(600))}},
 		{"unique_project_download_limit_allowlist", "unique_project_download_limit_allowlist", []any{"alice", "bob"}, CreateInput{UniqueProjectDownloadLimitAllowlist: []string{"alice", "bob"}}, UpdateInput{UniqueProjectDownloadLimitAllowlist: []string{"alice", "bob"}}},
 		{"unique_project_download_limit_alertlist", "unique_project_download_limit_alertlist", []any{float64(31), float64(32)}, CreateInput{UniqueProjectDownloadLimitAlertlist: []int64{31, 32}}, UpdateInput{UniqueProjectDownloadLimitAlertlist: []int64{31, 32}}},
+		// A blank avatar is what PUT /groups/:id answers with remove_avatar!
+		// (lib/api/groups.rb); a create has no avatar to remove.
+		{"remove_avatar", "avatar", "", CreateInput{}, UpdateInput{RemoveAvatar: true}},
 		{
 			"default_branch_protection_defaults.allow_force_push", "default_branch_protection_defaults",
 			map[string]any{"allow_force_push": true},

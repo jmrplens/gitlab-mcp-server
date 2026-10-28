@@ -716,6 +716,11 @@ type UpdateInput struct {
 	SecurityAndComplianceAccessLevel string `json:"security_and_compliance_access_level,omitempty" jsonschema:"Security and compliance access level (disabled, private, enabled)"`
 	ModelExperimentsAccessLevel      string `json:"model_experiments_access_level,omitempty" jsonschema:"Model experiments access level (disabled, private, enabled)"`
 	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty" jsonschema:"Model registry access level (disabled, private, enabled)"`
+
+	// RemoveAvatar sends avatar as an empty value, which PUT /projects/:id
+	// maps to CarrierWave's remove_avatar (lib/api/projects.rb). A new
+	// image goes through project.upload_avatar.
+	RemoveAvatar bool `json:"remove_avatar,omitempty" jsonschema:"Remove the project's avatar. To replace it instead, use project.upload_avatar"`
 }
 
 // projectOutput finishes a handler that answers with one project: it reads the
@@ -1537,6 +1542,12 @@ func buildUpdateOpts(input UpdateInput) (*gl.EditProjectOptions, toolutil.BodyEd
 		opts.OnlyAllowMergeIfAllDiscussionsAreResolved = input.OnlyAllowMergeIfAllDiscussionsAreResolved
 	}
 	applyUpdateFeatureOpts(opts, input)
+	if input.RemoveAvatar {
+		// An avatar with neither a file name nor an image is the one
+		// client-go writes as "avatar": "" in the JSON body rather than
+		// uploading.
+		opts.Avatar = &gl.ProjectAvatar{}
+	}
 	// GitLab stores neither limit as 0: the artifact size must be above 0 and
 	// pipelines are kept at least a day. Each goes back to its default, the
 	// instance's limit and no deletion, only on null, which client-go's
