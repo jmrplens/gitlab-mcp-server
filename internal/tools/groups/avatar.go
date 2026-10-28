@@ -6,6 +6,7 @@ package groups
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -25,6 +26,31 @@ type UploadAvatarInput struct {
 	Filename      string               `json:"filename" jsonschema:"Avatar filename (e.g. avatar.png),required"`
 	FilePath      string               `json:"file_path,omitempty" jsonschema:"Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided."`
 	ContentBase64 string               `json:"content_base64,omitempty" jsonschema:"Base64-encoded image content. Only one of file_path or content_base64 should be provided."`
+}
+
+// AvatarInput is an image a group create uploads as the new group's avatar,
+// as [gl.GroupAvatar] carries it: the file name GitLab reads the image type
+// from, and the content, from a local file or as base64.
+type AvatarInput struct {
+	Filename      string `json:"filename" jsonschema:"Avatar file name such as avatar.png, whose extension GitLab reads the image type from,required"`
+	FilePath      string `json:"file_path,omitempty" jsonschema:"Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided."`
+	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"Base64-encoded image content. Only one of file_path or content_base64 should be provided."`
+}
+
+// openAvatar opens the image an avatar input names, nil for no avatar, with
+// the function that releases it.
+func openAvatar(op string, in *AvatarInput) (*gl.GroupAvatar, func(), error) {
+	if in == nil {
+		return nil, func() { /* no avatar: nothing to release */ }, nil
+	}
+	if in.Filename == "" {
+		return nil, nil, fmt.Errorf("%s: avatar.filename is required with an avatar, since GitLab reads the image type from its extension", op)
+	}
+	reader, _, release, err := toolutil.OpenFileOrBase64Source(op+" avatar", in.FilePath, in.ContentBase64)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &gl.GroupAvatar{Filename: in.Filename, Image: reader}, release, nil
 }
 
 // UploadAvatar uploads or replaces the avatar for a group.

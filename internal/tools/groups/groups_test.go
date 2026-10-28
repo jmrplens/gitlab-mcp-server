@@ -9,9 +9,12 @@ package groups
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -4744,5 +4747,99 @@ func TestGroupWrites_EachSettingReachesTheRequestOnItsOwn(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// groupAvatarForm is what a mock reads off a group create sent with an
+// avatar: the file part's name and bytes, and the value fields.
+type groupAvatarForm struct {
+	filename, content string
+	values            map[string][]string
+}
+
+// TestCreate_WithAvatar_UploadsItBesideTheOptions verifies that a group
+// create given an avatar sends the image under avatar with its file name,
+// read from base64 content or from a local file, and the options as the
+// form's fields.
+func TestCreate_WithAvatar_UploadsItBesideTheOptions(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "team.png")
+	if err := os.WriteFile(file, []byte("file-image"), 0o600); err != nil {
+		t.Fatalf("write the avatar file: %v", err)
+	}
+	cases := []struct {
+		name        string
+		avatar      AvatarInput
+		wantContent string
+	}{
+		{name: "from base64", avatar: AvatarInput{Filename: "team.png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("b64-image"))}, wantContent: "b64-image"},
+		{name: "from a local file", avatar: AvatarInput{Filename: "team.png", FilePath: file}, wantContent: "file-image"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			forms := make(chan groupAvatarForm, 1)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				form, err := testutil.ReadMultipartForm(r, 1<<20)
+				if err != nil {
+					t.Errorf("the create was not a multipart form: %v", err)
+					http.Error(w, "not multipart", http.StatusBadRequest)
+					return
+				}
+				part, header, err := testutil.FormFile(form, "avatar")
+				if err != nil {
+					t.Errorf("the create carried no avatar part: %v", err)
+					http.Error(w, "no avatar", http.StatusBadRequest)
+					return
+				}
+				content, _ := io.ReadAll(part)
+				_ = part.Close()
+				forms <- groupAvatarForm{filename: header.Filename, content: string(content), values: form.Value}
+				testutil.RespondJSON(w, http.StatusCreated, groupAvatarRespJSON)
+			}))
+			out, err := Create(t.Context(), client, CreateInput{Name: "infra", Path: "infra", Avatar: &tc.avatar})
+			if err != nil {
+				t.Fatalf("Create() error: %v", err)
+			}
+			if out.ID != 99 {
+				t.Errorf("ID = %d, want 99", out.ID)
+			}
+			form := <-forms
+			if form.filename != "team.png" || form.content != tc.wantContent {
+				t.Errorf("avatar part = %q holding %q, want team.png holding %q", form.filename, form.content, tc.wantContent)
+			}
+			if got := form.values["name"]; len(got) != 1 || got[0] != "infra" {
+				t.Errorf("name = %q, want [infra]", got)
+			}
+		})
+	}
+}
+
+// TestCreate_AvatarItCannotSend_IsRefused verifies that an avatar the create
+// cannot send is refused naming the action and the avatar: one with no file
+// name or no readable content before any request, and one beside two access
+// levels for a branch protection rule, which client-go refuses because the
+// upload carries one value per field.
+func TestCreate_AvatarItCannotSend_IsRefused(t *testing.T) {
+	image := base64.StdEncoding.EncodeToString([]byte("img"))
+	cases := []struct {
+		name  string
+		input CreateInput
+		want  string
+	}{
+		{name: "no file name", input: CreateInput{Name: "g", Avatar: &AvatarInput{ContentBase64: image}}, want: "groupCreate: avatar.filename is required"},
+		{name: "both sources", input: CreateInput{Name: "g", Avatar: &AvatarInput{Filename: "a.png", FilePath: "/tmp/a.png", ContentBase64: image}}, want: "groupCreate avatar: provide either file_path or content_base64"},
+		{name: "two access levels", input: CreateInput{Name: "g", Avatar: &AvatarInput{Filename: "a.png", ContentBase64: image}, DefaultBranchProtectionDefaults: &BranchProtectionDefaultsInput{
+			AllowedToPush: []int{30, 40},
+		}}, want: "multiple access levels"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				t.Errorf("a create with an avatar it cannot send reached GitLab: %s %s", r.Method, r.URL.Path)
+				http.NotFound(w, r)
+			}))
+			if _, err := Create(t.Context(), client, tc.input); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Create() error = %v, want one containing %q", err, tc.want)
+			}
+		})
 	}
 }

@@ -1107,6 +1107,10 @@ type CreateInput struct {
 	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
 	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
 	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
+
+	// Avatar is uploaded with the create, which GitLab takes only as a
+	// multipart form.
+	Avatar *AvatarInput `json:"avatar,omitempty" jsonschema:"Avatar image to upload with the group, from a local file or base64 content. With it, default_branch_protection_defaults may name one access level each for allowed_to_push and allowed_to_merge, since the upload carries a single value per field"`
 }
 
 // UpdateInput defines parameters for updating a group.
@@ -1299,22 +1303,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.AllowPersonalSnippets != nil {
 		opts.AllowPersonalSnippets = input.AllowPersonalSnippets
 	}
-	if input.UniqueProjectDownloadLimit != nil {
-		opts.UniqueProjectDownloadLimit = input.UniqueProjectDownloadLimit
-	}
-	if input.UniqueProjectDownloadLimitIntervalInSeconds != nil {
-		opts.UniqueProjectDownloadLimitIntervalInSeconds = input.UniqueProjectDownloadLimitIntervalInSeconds
-	}
-	if len(input.UniqueProjectDownloadLimitAllowlist) > 0 {
-		opts.UniqueProjectDownloadLimitAllowlist = &input.UniqueProjectDownloadLimitAllowlist
-	}
-	if len(input.UniqueProjectDownloadLimitAlertlist) > 0 {
-		opts.UniqueProjectDownloadLimitAlertlist = &input.UniqueProjectDownloadLimitAlertlist
-	}
-	if input.AutoBanUserOnExcessiveProjectsDownload != nil {
-		opts.AutoBanUserOnExcessiveProjectsDownload = input.AutoBanUserOnExcessiveProjectsDownload
-	}
+	applyCreateDownloadLimits(input, opts)
 	applyCreateGroupExtras(input, opts)
+	avatar, release, err := openAvatar("groupCreate", input.Avatar)
+	if err != nil {
+		return DetailOutput{}, err
+	}
+	defer release()
+	opts.Avatar = avatar
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.CreateGroup(opts, gl.WithContext(ctx))
@@ -1325,6 +1321,21 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return DetailOutput{}, toolutil.WrapErrWithMessage("groupCreate", err)
 	}
 	return groupDetail("Create", g, captured)
+}
+
+// applyCreateDownloadLimits copies the unique project download limits onto
+// the create options, each only when the caller gave it. Split out of Create
+// to keep that handler's cyclomatic complexity flat.
+func applyCreateDownloadLimits(input CreateInput, opts *gl.CreateGroupOptions) {
+	opts.UniqueProjectDownloadLimit = input.UniqueProjectDownloadLimit
+	opts.UniqueProjectDownloadLimitIntervalInSeconds = input.UniqueProjectDownloadLimitIntervalInSeconds
+	if len(input.UniqueProjectDownloadLimitAllowlist) > 0 {
+		opts.UniqueProjectDownloadLimitAllowlist = &input.UniqueProjectDownloadLimitAllowlist
+	}
+	if len(input.UniqueProjectDownloadLimitAlertlist) > 0 {
+		opts.UniqueProjectDownloadLimitAlertlist = &input.UniqueProjectDownloadLimitAlertlist
+	}
+	opts.AutoBanUserOnExcessiveProjectsDownload = input.AutoBanUserOnExcessiveProjectsDownload
 }
 
 // applyCreateGroupExtras copies the remaining optional CreateGroup settings
