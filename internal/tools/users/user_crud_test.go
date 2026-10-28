@@ -7,6 +7,7 @@ package users
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"maps"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -601,5 +603,103 @@ func TestModify_UserACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 	_, err := Modify(context.Background(), client, ModifyInput{UserID: 42, Name: "N"})
 	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
 		t.Errorf("Modify() error = %v, want the capture's decode failure", err)
+	}
+}
+
+// userAvatarForm is what a mock reads off a user create or modify sent
+// with an avatar: the method, the file part's name and bytes, and the value
+// fields.
+type userAvatarForm struct {
+	method, filename, content string
+	values                    map[string][]string
+}
+
+// userAvatarHandler answers a create or a modify with the user, handing the
+// multipart form it was sent to the test goroutine.
+func userAvatarHandler(t *testing.T, status int, forms chan<- userAvatarForm) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("the request was not a multipart form: %v", err)
+			http.Error(w, "not multipart", http.StatusBadRequest)
+			return
+		}
+		part, header, err := testutil.FormFile(form, "avatar")
+		if err != nil {
+			t.Errorf("the request carried no avatar part: %v", err)
+			http.Error(w, "no avatar", http.StatusBadRequest)
+			return
+		}
+		content, _ := io.ReadAll(part)
+		_ = part.Close()
+		forms <- userAvatarForm{method: r.Method, filename: header.Filename, content: string(content), values: form.Value}
+		testutil.RespondJSON(w, status, userJSON)
+	})
+}
+
+// TestCreateAndModify_WithAvatar_UploadIt verifies that a user create and a
+// user modify given an avatar send the image under avatar with its file
+// name, and the options as the form's fields.
+func TestCreateAndModify_WithAvatar_UploadIt(t *testing.T) {
+	avatar := &AvatarInput{Filename: "me.png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("user-image"))}
+	cases := []struct {
+		name       string
+		status     int
+		call       func(*gitlabclient.Client) error
+		wantMethod string
+		wantField  string
+	}{
+		{name: "create", status: http.StatusCreated, wantMethod: http.MethodPost, wantField: "username", call: func(client *gitlabclient.Client) error {
+			_, err := Create(t.Context(), client, CreateInput{Email: "e@example.com", Name: "N", Username: "u", Avatar: avatar})
+			return err
+		}},
+		{name: "modify", status: http.StatusOK, wantMethod: http.MethodPut, wantField: "name", call: func(client *gitlabclient.Client) error {
+			_, err := Modify(t.Context(), client, ModifyInput{UserID: 42, Name: "N", Avatar: avatar})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			forms := make(chan userAvatarForm, 1)
+			client := testutil.NewTestClient(t, userAvatarHandler(t, tc.status, forms))
+			if err := tc.call(client); err != nil {
+				t.Fatalf("%s error: %v", tc.name, err)
+			}
+			form := <-forms
+			if form.method != tc.wantMethod || form.filename != "me.png" || form.content != "user-image" || len(form.values[tc.wantField]) != 1 {
+				t.Errorf("form = %+v, want a %s carrying me.png and %s", form, tc.wantMethod, tc.wantField)
+			}
+		})
+	}
+}
+
+// TestCreateAndModify_AvatarTheyCannotRead_AreRefusedBeforeAnyRequest
+// verifies that an avatar with no file name or no readable content is
+// refused naming the action and the avatar, and that nothing reaches GitLab.
+func TestCreateAndModify_AvatarTheyCannotRead_AreRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name   string
+		avatar AvatarInput
+		want   string
+	}{
+		{name: "no file name", avatar: AvatarInput{ContentBase64: "aW1n"}, want: ": avatar.filename is required"},
+		{name: "no source", avatar: AvatarInput{Filename: "a.png"}, want: " avatar: either file_path or content_base64 is required"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				t.Errorf("a request with an avatar it cannot read reached GitLab: %s %s", r.Method, r.URL.Path)
+				http.NotFound(w, r)
+			}))
+			_, createErr := Create(t.Context(), client, CreateInput{Email: "e@example.com", Name: "N", Username: "u", Avatar: &tc.avatar})
+			if createErr == nil || !strings.Contains(createErr.Error(), "create_user"+tc.want) {
+				t.Errorf("Create() error = %v, want one reading create_user%s", createErr, tc.want)
+			}
+			_, modifyErr := Modify(t.Context(), client, ModifyInput{UserID: 42, Avatar: &tc.avatar})
+			if modifyErr == nil || !strings.Contains(modifyErr.Error(), "modify_user"+tc.want) {
+				t.Errorf("Modify() error = %v, want one reading modify_user%s", modifyErr, tc.want)
+			}
+		})
 	}
 }
