@@ -4,6 +4,7 @@
 package paths
 
 import (
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -94,6 +95,15 @@ type TypedShapeCheck struct {
 	// is the list the field-by-field review reads, since it names the type
 	// and the endpoints rather than a package's union of them.
 	Unsurfaced []UnsurfacedField `json:"unsurfaced,omitempty"`
+	// NestedUnsurfaced are the same reverse findings one level down: a key the
+	// record says the object under a property sends that the nested type there
+	// does not publish, each naming the property (Under), read on the entity
+	// that renders the object, and saying whether the client-go struct under
+	// the same key carries it. It is the direction a key GitLab adds to a
+	// nested entity reaches: archived on a merge request's head_pipeline,
+	// which the pipeline entity sends and toolutil.PipelineOutput does not
+	// publish, was in neither list before.
+	NestedUnsurfaced []UnsurfacedField `json:"nested_unsurfaced,omitempty"`
 	// UnusedDeclarations names the shape declarations that matched no finding
 	// in this run, sorted. Each is a claim about GitLab's record that no longer
 	// describes it.
@@ -248,6 +258,7 @@ type typeJoin struct {
 	sdkTypes     map[[2]string][]string
 	projected    map[[2]string][]structs.ProjectionPairing
 	sdkFields    map[string]map[string]bool
+	sdkNested    map[string]map[string]map[string]bool
 }
 
 // typedShapeCheck compares each output type with the responses of the
@@ -265,6 +276,7 @@ func typedShapeCheck(root string, index *operationIndex, conditions *conditionIn
 		sdkTypes:     pairedSDKTypes(pairings.Outputs),
 		projected:    projectionsByType(pairings.Outputs, pairings.Projections),
 		sdkFields:    sdkFieldsByType(pairings.Outputs, pairings.Projections),
+		sdkNested:    sdkNestedByType(pairings.Outputs, pairings.Projections),
 	}
 	join.projected = withCaptured(join.projected, join.sdkTypes)
 
@@ -286,6 +298,7 @@ func typedShapeCheck(root string, index *operationIndex, conditions *conditionIn
 	sortFindings(check.Unpublished)
 	sortFindings(check.Nested)
 	sortUnsurfaced(check.Unsurfaced)
+	sortUnsurfaced(check.NestedUnsurfaced)
 	for _, names := range [][]string{check.Skipped.NoPairing, check.Skipped.NoRoute, check.Skipped.NoSchema, check.Envelopes, check.Projections, check.Captured} {
 		sort.Strings(names)
 	}
@@ -423,7 +436,37 @@ func (join typeJoin) compare(c *TypedShapeCheck, candidate publishedType, named 
 	c.Nested = append(c.Nested, nested...)
 	c.NestedCompared += compared
 	c.Unsurfaced = append(c.Unsurfaced, unsurfacedAtTypeGrain(candidate, paired, join.sdkFields, described, join.conditions)...)
+	c.NestedUnsurfaced = append(c.NestedUnsurfaced, unsurfacedNested(candidate, paired, join.sdkNested, described, join.conditions)...)
 	return outcomeCompared
+}
+
+// sdkNestedByType indexes what the structs each client-go struct nests
+// deserialize, per json name of the field carrying them, the way
+// [sdkFieldsByType] indexes the struct's own names and for the same reason.
+func sdkNestedByType(pairings []structs.OutputPairing, projections []structs.ProjectionPairing) map[string]map[string]map[string]bool {
+	out := map[string]map[string]map[string]bool{}
+	add := func(sdkType string, nested map[string][]string) {
+		for property, names := range nested {
+			if out[sdkType] == nil {
+				out[sdkType] = map[string]map[string]bool{}
+			}
+			under := out[sdkType][property]
+			if under == nil {
+				under = make(map[string]bool, len(names))
+				out[sdkType][property] = under
+			}
+			for _, name := range names {
+				under[name] = true
+			}
+		}
+	}
+	for _, pairing := range pairings {
+		add(pairing.SDKType, pairing.SDKNested)
+	}
+	for _, projection := range projections {
+		add(projection.SDKType, projection.SDKNested)
+	}
+	return out
 }
 
 // sdkFieldsByType indexes what each client-go struct deserializes, which is
@@ -549,6 +592,13 @@ type describedResponses struct {
 	// object under it carries. A property absent from it is one no searched
 	// response describes an object for.
 	Nested map[string]map[string]bool
+	// NestedEntityOf maps each property Nested holds, and each key under it,
+	// to the entity the first searched response carrying that key there
+	// renders the object with, which is what the key is read on. Per key for
+	// the reason EntityOf is: two routes of one type can render the object
+	// under a property with two entities, and a key only the second sends
+	// would be read on the first, which does not expose it.
+	NestedEntityOf map[string]map[string]string
 }
 
 // describedRoutes collects the endpoints every paired client-go struct is
@@ -589,7 +639,10 @@ func describedProjections(projections []structs.ProjectionPairing, routes, metho
 // search scope selects rather than to the one its own routes name.
 func describe(lists [][]sdkRoute, index *operationIndex) describedResponses {
 	seen := map[string]bool{}
-	described := describedResponses{EntityOf: map[string]string{}, Known: map[string]bool{}, Nested: map[string]map[string]bool{}}
+	described := describedResponses{
+		EntityOf: map[string]string{}, Known: map[string]bool{},
+		Nested: map[string]map[string]bool{}, NestedEntityOf: map[string]map[string]string{},
+	}
 	var declared []operation
 	for _, list := range lists {
 		for _, route := range list {
@@ -650,13 +703,18 @@ func (d *describedResponses) absorb(operation operation) {
 		}
 	}
 	for property, names := range operation.Nested {
-		under := d.Nested[property]
+		under, entities := d.Nested[property], d.NestedEntityOf[property]
 		if under == nil {
-			under = map[string]bool{}
-			d.Nested[property] = under
+			under, entities = map[string]bool{}, map[string]string{}
+			d.Nested[property], d.NestedEntityOf[property] = under, entities
 		}
 		for _, name := range names {
 			under[name] = true
+			// Key by key, as one level up: the first response carrying the key
+			// under this property is the one whose entity renders it there.
+			if entities[name] == "" {
+				entities[name] = operation.NestedEntity[property][name]
+			}
 		}
 	}
 }
@@ -762,6 +820,60 @@ func unpublishedNested(candidate publishedType, paired []string, described descr
 		}
 	}
 	return found, compared
+}
+
+// unsurfacedNested reports the reverse one level down: a key a searched
+// response says the object under a property sends that the nested type there
+// does not publish, read on the entity that renders the object and with what
+// the client-go struct under the same key carries.
+//
+// It holds the nested types [unpublishedNested] compares and no others: a
+// property the record describes no object for says nothing about what is
+// missing from one. A property the type publishes as a scalar, or as a type of
+// another package, carries no nested type here and is not judged either,
+// since there is no published name list to hold the record's against.
+func unsurfacedNested(candidate publishedType, paired []string, sdkNested map[string]map[string]map[string]bool, described describedResponses, conditions *conditionIndex) []UnsurfacedField {
+	var out []UnsurfacedField
+	for _, tag := range sortedKeys(candidate.Nested) {
+		child := candidate.Nested[tag]
+		published := make(map[string]bool, len(child.Fields))
+		for _, field := range child.Fields {
+			published[field] = true
+		}
+		// In order, so the findings reach the sort in the same order on every
+		// run, whatever the sort then does with two of them that tie.
+		for _, name := range slices.Sorted(maps.Keys(described.Nested[tag])) {
+			if published[name] {
+				continue
+			}
+			finding := UnsurfacedField{
+				Grain:      grainType,
+				Package:    candidate.Package,
+				Type:       child.Name,
+				Under:      tag,
+				Field:      name,
+				Operations: described.Operations,
+				Entity:     described.NestedEntityOf[tag][name],
+				SDKType:    strings.Join(paired, "|"),
+				SDKModels:  modeledBySDKUnder(paired, sdkNested, tag, name),
+			}
+			conditions.annotate(&finding)
+			out = append(out, finding)
+		}
+	}
+	return out
+}
+
+// modeledBySDKUnder reports whether the struct any client-go struct the type
+// models carries under the property carries this key, for the reason
+// [modeledBySDK] reads any rather than all.
+func modeledBySDKUnder(paired []string, sdkNested map[string]map[string]map[string]bool, under, name string) bool {
+	for _, sdkType := range paired {
+		if sdkNested[sdkType][under][name] {
+			return true
+		}
+	}
+	return false
 }
 
 // sortedKeys walks a map of nested types in a stable order, so two runs over

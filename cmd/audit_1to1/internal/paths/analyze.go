@@ -150,6 +150,14 @@ type Summary struct {
 	// upstream merge request rather than an edit here. The remainder is a
 	// field the SDK already gives us and only this server does not publish.
 	TypedUnsurfacedNotInSDK int `json:"typed_unsurfaced_not_in_sdk"`
+	// TypedNestedUnsurfaced, TypedNestedSentDeclared and TypedNestedNotInSDK
+	// are the reverse findings one level down: the keys the object under a
+	// property sends that the nested type there does not publish, how many of
+	// them a declaration answers, and how many the client-go struct under the
+	// same key does not carry either. See [TypedShapeCheck.NestedUnsurfaced].
+	TypedNestedUnsurfaced   int `json:"typed_nested_unsurfaced_fields"`
+	TypedNestedSentDeclared int `json:"typed_nested_unsurfaced_declared"`
+	TypedNestedNotInSDK     int `json:"typed_nested_unsurfaced_not_in_sdk"`
 	// TypedJudgedByOrbit counts the types the type grain could not judge and
 	// the Orbit response record did, which are listed there instead of in its
 	// skip lists. See [TypedShapeCheck.OrbitRecord].
@@ -347,6 +355,7 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 	shapes.Typed = shapes.Typed.judgedAgainstOrbit(shapes.Orbit.judged())
 	sentAlways, sentWhen, sentDeclared := unsurfacedCounts(shapes.Sent.Unsurfaced)
 	typedSentAlways, typedSentWhen, typedSentDeclared := unsurfacedCounts(shapes.Typed.Unsurfaced)
+	_, _, nestedSentDeclared := unsurfacedCounts(shapes.Typed.NestedUnsurfaced)
 	pagination := paginationCheck(root, inventory.Requests, actions)
 	sdkGraphQL := sdkGraphQLCheck(root)
 	alwaysSent := alwaysSentCheck(root, inventory.Requests)
@@ -399,6 +408,9 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 			TypedUnsurfacedWhen:       typedSentWhen,
 			TypedUnsurfacedDeclared:   typedSentDeclared,
 			TypedUnsurfacedNotInSDK:   notModelledBySDK(shapes.Typed.Unsurfaced),
+			TypedNestedUnsurfaced:     len(shapes.Typed.NestedUnsurfaced),
+			TypedNestedSentDeclared:   nestedSentDeclared,
+			TypedNestedNotInSDK:       notModelledBySDK(shapes.Typed.NestedUnsurfaced),
 			TypedCompared:             shapes.Typed.Compared,
 			TypedProjections:          len(shapes.Typed.Projections),
 			TypedEnvelopes:            len(shapes.Typed.Envelopes),

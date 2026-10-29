@@ -20,13 +20,22 @@ import (
 // verifies the table's contract: a declaration naming a component covers
 // every field read on it, or one field when it names one, at both grains
 // with one use counted for both; a finding nothing covers is left as it is;
-// a declaration that covers nothing is named stale, once; and an empty list
-// of findings stays nil rather than becoming a list of none.
+// a declaration that covers nothing is named stale, once, and one about a
+// nested object names its property in that name; a declaration about a
+// response's own keys answers no key of an object inside it, and one about
+// the object answers it; and an empty list of findings stays nil rather than
+// becoming a list of none.
 func TestClassifySentFindings_ADeclaration_AnswersItsFindingsAtEitherGrain(t *testing.T) {
 	declarations := []sentDeclaration{
 		{Package: "internal/tools/keys", Entity: "APIEntitiesUserWithAdmin", Field: declaredSegment, Category: categoryDocumentedNotSent, Reason: "the lookup presents a key"},
 		{Package: "internal/tools/keys", Entity: "APIEntitiesSSHKeyWithUser", Field: "usage_type", Category: categoryDocumentedNotSent, Reason: "one field"},
 		{Package: "internal/tools/keys", Entity: "APIEntitiesNobody", Field: declaredSegment, Category: categoryDocumentedNotSent, Reason: "stale"},
+		{Package: "internal/tools/keys", Type: "UserOutput", Under: "user", Entity: "APIEntitiesUserBasic", Field: "locked", Category: categoryCompactRow, Reason: "nested"},
+		{Package: "internal/tools/keys", Type: "UserOutput", Under: "owner", Entity: "APIEntitiesUserBasic", Field: "locked", Category: categoryCompactRow, Reason: "stale too"},
+	}
+	nested := []UnsurfacedField{
+		{Grain: grainType, Package: "internal/tools/keys", Type: "UserOutput", Under: "user", Field: "locked", Entity: "APIEntitiesUserBasic", Sent: sentAlways},
+		{Grain: grainType, Package: "internal/tools/keys", Type: "UserOutput", Under: "user", Field: "bio", Entity: "APIEntitiesUserWithAdmin", Sent: sentAlways},
 	}
 	byPackage := []UnsurfacedField{
 		{Grain: grainPackage, Package: "internal/tools/keys", Field: "bio", Entity: "APIEntitiesUserWithAdmin", Sent: sentAlways},
@@ -38,7 +47,7 @@ func TestClassifySentFindings_ADeclaration_AnswersItsFindingsAtEitherGrain(t *te
 		{Grain: grainType, Package: "internal/tools/other", Type: "Output", Field: "bio", Entity: "APIEntitiesUserWithAdmin", Sent: sentAlways},
 	}
 
-	classifiedPackage, classifiedType, unused := classifySentFindings(declarations, byPackage, byType)
+	classifiedPackage, classifiedType, classifiedNested, unused := classifySentFindings(declarations, byPackage, byType, nested)
 
 	wantPackage := []UnsurfacedField{
 		{Grain: grainPackage, Package: "internal/tools/keys", Field: "bio", Entity: "APIEntitiesUserWithAdmin", Sent: sentAlways, Category: categoryDocumentedNotSent, Reason: "the lookup presents a key"},
@@ -55,16 +64,24 @@ func TestClassifySentFindings_ADeclaration_AnswersItsFindingsAtEitherGrain(t *te
 	if !reflect.DeepEqual(classifiedType, wantType) {
 		t.Errorf("type grain = %+v, want %+v", classifiedType, wantType)
 	}
-	if !reflect.DeepEqual(unused, []string{"internal/tools/keys.APIEntitiesNobody.*"}) {
-		t.Errorf("unused = %v, want the one declaration covering nothing", unused)
+	wantNested := []UnsurfacedField{
+		{Grain: grainType, Package: "internal/tools/keys", Type: "UserOutput", Under: "user", Field: "locked", Entity: "APIEntitiesUserBasic", Sent: sentAlways, Category: categoryCompactRow, Reason: "nested"},
+		{Grain: grainType, Package: "internal/tools/keys", Type: "UserOutput", Under: "user", Field: "bio", Entity: "APIEntitiesUserWithAdmin", Sent: sentAlways},
+	}
+	if !reflect.DeepEqual(classifiedNested, wantNested) {
+		t.Errorf("nested level = %+v, want %+v", classifiedNested, wantNested)
+	}
+	wantUnused := []string{"internal/tools/keys.APIEntitiesNobody.*", "internal/tools/keys.UserOutput.APIEntitiesUserBasic.locked under owner"}
+	if !reflect.DeepEqual(unused, wantUnused) {
+		t.Errorf("unused = %v, want %v", unused, wantUnused)
 	}
 	if always, when, declared := unsurfacedCounts(classifiedType); always != 3 || when != 0 || declared != 2 {
 		t.Errorf("unsurfacedCounts() = %d always, %d when, %d declared; want 3, 0 and 2", always, when, declared)
 	}
 
-	nothingPackage, nothingType, none := classifySentFindings(declarations, nil, nil)
-	if nothingPackage != nil || nothingType != nil || len(none) != 3 {
-		t.Errorf("classifying nothing = %v, %v, %v; want nil, nil and every declaration unused", nothingPackage, nothingType, none)
+	nothingPackage, nothingType, nothingNested, none := classifySentFindings(declarations, nil, nil, nil)
+	if nothingPackage != nil || nothingType != nil || nothingNested != nil || len(none) != len(declarations) {
+		t.Errorf("classifying nothing = %v, %v, %v, %v; want nil three times and every declaration unused", nothingPackage, nothingType, nothingNested, none)
 	}
 }
 
@@ -81,8 +98,12 @@ func TestSentDeclarationCovers_ATypedDeclaration_ReachesThePackageGrainOnlyForOn
 	field := sentDeclaration{Package: pkg, Type: "ProjectItem", Entity: entity, Field: "namespace"}
 	splat := sentDeclaration{Package: pkg, Type: "ProjectItem", Entity: entity, Field: declaredSegment}
 	untyped := sentDeclaration{Package: pkg, Entity: entity, Field: "namespace"}
+	nested := sentDeclaration{Package: pkg, Type: "ProjectItem", Under: "project", Entity: entity, Field: "namespace"}
 	onType := func(typ, name string) UnsurfacedField {
 		return UnsurfacedField{Grain: grainType, Package: pkg, Type: typ, Entity: entity, Field: name}
+	}
+	nestedOn := func(under, name string) UnsurfacedField {
+		return UnsurfacedField{Grain: grainType, Package: pkg, Type: "ProjectItem", Under: under, Entity: entity, Field: name}
 	}
 	onPackage := func(name string) UnsurfacedField {
 		return UnsurfacedField{Grain: grainPackage, Package: pkg, Entity: entity, Field: name}
@@ -103,6 +124,10 @@ func TestSentDeclarationCovers_ATypedDeclaration_ReachesThePackageGrainOnlyForOn
 		{name: "an untyped field on its package", declaration: untyped, finding: onPackage("namespace"), want: true},
 		{name: "another package", declaration: field, finding: UnsurfacedField{Grain: grainPackage, Package: "internal/tools/projects", Entity: entity, Field: "namespace"}},
 		{name: "another entity", declaration: field, finding: UnsurfacedField{Grain: grainPackage, Package: pkg, Entity: "API::Entities::Group", Field: "namespace"}},
+		{name: "a top-level field on the same key of a nested object", declaration: field, finding: nestedOn("project", "namespace")},
+		{name: "a nested field under its property", declaration: nested, finding: nestedOn("project", "namespace"), want: true},
+		{name: "a nested field under another property", declaration: nested, finding: nestedOn("forked_from", "namespace")},
+		{name: "a nested field on the type's own key", declaration: nested, finding: onType("ProjectItem", "namespace")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -491,7 +516,7 @@ func TestDeclaredUnsurfaced_AccessRequestTypes_AnswerOnlyTheOtherEntitysOwnKeys(
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, classified, _ := classifySentFindings(declaredUnsurfaced, nil, []UnsurfacedField{tc.finding})
+			_, classified, _, _ := classifySentFindings(declaredUnsurfaced, nil, []UnsurfacedField{tc.finding}, nil)
 			if len(classified) != 1 || classified[0].Category != tc.wantCategory {
 				t.Errorf("classifySentFindings(%+v) = %+v, want category %q", tc.finding, classified, tc.wantCategory)
 			}

@@ -26,6 +26,12 @@ type shapeDeclaration struct {
 	Package string
 	// Type is the Go type publishing the field.
 	Type string
+	// Under names the response property a nested type sits under, for a
+	// declaration answering a nested finding, and is empty for one about a
+	// top-level type. It must agree with the finding's, so that a declaration
+	// about the user under one property never answers the same user under
+	// another, where GitLab may render a different entity.
+	Under string
 	// Field is the json tag. A "*" covers every field of the type, which is
 	// right when the record describes a different response entirely rather than
 	// an incomplete version of the same one.
@@ -352,12 +358,18 @@ func declaredShapeField(finding UnpublishedField) (shapeDeclaration, bool) {
 func (d shapeDeclaration) covers(finding UnpublishedField) bool {
 	return d.Package == finding.Package &&
 		d.Type == finding.Type &&
+		d.Under == finding.Under &&
 		(d.Field == declaredSegment || d.Field == finding.Field)
 }
 
-// key names one declaration in a report, which is how a stale one is reported.
+// key names one declaration in a report, which is how a stale one is reported,
+// with the property a nested declaration is about written after the field.
 func (d shapeDeclaration) key() string {
-	return d.Package + "." + d.Type + "." + d.Field
+	key := d.Package + "." + d.Type + "." + d.Field
+	if d.Under != "" {
+		key += underSuffix + d.Under
+	}
+	return key
 }
 
 // classifyShapeFindings attaches the declaration that accounts for each finding

@@ -44,6 +44,9 @@ type ProjectionPairing struct {
 	// SDKFields is what that struct deserializes, as [OutputPairing.SDKFields]
 	// has it.
 	SDKFields []string
+	// SDKNested is what the structs it nests deserialize, as
+	// [OutputPairing.SDKNested] has it.
+	SDKNested map[string][]string
 	// Methods are the client-go service methods whose answer the projection is
 	// built from, as "Service.Method" with the service spelled the way
 	// [shared.ServiceName] spells it, sorted. They are found in the function
@@ -114,6 +117,7 @@ func CollectProjections(pkg *packages.Package) []ProjectionPairing {
 				MCPType:   site.mcpName,
 				SDKType:   k.sdk,
 				SDKFields: sdkFieldNames(site.st),
+				SDKNested: sdkNestedNames(site.st),
 			}
 			methods[k] = map[string]bool{}
 		}

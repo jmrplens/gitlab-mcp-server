@@ -227,7 +227,15 @@
 // way, the payload of an envelope included: the walk used to record what a
 // top-level type nests and nothing else, and a payload is named by its
 // envelope, so 184 of the 252 compared types, the merge request a list wraps
-// among them, were never held one level down. typed_undeclared_fields spans both
+// among them, were never held one level down. The reverse is asked at that
+// level too (shapes.typed.nested_unsurfaced): a key the object under a
+// property sends that the nested type there does not publish, read on the
+// entity rendering the object and with whether the client-go struct under the
+// same key carries it (typed_nested_unsurfaced_fields,
+// typed_nested_unsurfaced_declared, typed_nested_unsurfaced_not_in_sdk). A
+// declaration in either table answers a nested finding only when it names
+// the property in Under, and one naming none answers the top level alone.
+// typed_undeclared_fields spans both
 // levels: it counts every finding at this grain no declaration answers, and
 // adjudicating one means reading its page first.
 //

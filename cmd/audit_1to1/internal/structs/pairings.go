@@ -6,6 +6,7 @@ package structs
 import (
 	"go/types"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -42,6 +43,17 @@ type OutputPairing struct {
 	// holds **client-go** against GitLab. That is the comparison whose findings
 	// belong upstream rather than here, and it needs exactly this list.
 	SDKFields []string
+	// SDKNested is the same one level down: per json name of that struct
+	// whose field carries another client-go struct, through a pointer, a
+	// slice, an array or a map value, what that struct deserializes, sorted.
+	// A name whose field carries anything else is absent.
+	//
+	// It is what lets the type grain say of a key GitLab sends inside a
+	// nested object whether client-go could already give it to us: a merge
+	// request's head_pipeline is a gl.Pipeline, and whether gl.Pipeline
+	// carries archived is the difference between an upstream contribution
+	// and a field this server only has to publish.
+	SDKNested map[string][]string
 }
 
 // Pairings is one pass over the tool packages, for a caller outside this
@@ -87,6 +99,7 @@ func CollectOutputPairings(root string) (Pairings, error) {
 				MCPType:   pair.MCPName,
 				SDKType:   pair.SDKName[strings.LastIndexByte(pair.SDKName, '.')+1:],
 				SDKFields: sdkFieldNames(pair.SDKType),
+				SDKNested: sdkNestedNames(pair.SDKType),
 			})
 		}
 		found.Projections = append(found.Projections, CollectProjections(pkg)...)
@@ -185,4 +198,63 @@ func sdkFieldNames(st *types.Struct) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// sdkNestedNames is, per json name of a client-go struct whose field carries
+// another client-go struct, what that struct deserializes (see
+// [OutputPairing.SDKNested]), or nil when no field does.
+//
+// The name is the one [flattenFields] keys, so an embed's fields are reached
+// and a name two fields share resolves to the one encoding/json writes: a
+// field is taken only when its type is the type flattenFields labels the name
+// with, and the shallowest of those is met first.
+func sdkNestedNames(st *types.Struct) map[string][]string {
+	written := flattenFields(st, []string{tagKeyJSON})
+	out := map[string][]string{}
+	collectSDKNested(st, written, out, map[*types.Struct]bool{})
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// collectSDKNested records in out the nested structs of one struct's own
+// fields and then of its untagged embeds, under the names written keys.
+//
+// It walks each struct once rather than to a depth: written already holds no
+// name deeper than [flattenFields] reads, so the only thing a bound would add
+// is an end to a struct that embeds itself through a pointer, which walked
+// gives directly.
+func collectSDKNested(st *types.Struct, written map[string]string, out map[string][]string, walked map[*types.Struct]bool) {
+	if walked[st] {
+		return
+	}
+	walked[st] = true
+	var embeds []*types.Struct
+	for i := range st.NumFields() {
+		field := st.Field(i)
+		name := shared.TagName(reflect.StructTag(st.Tag(i)), []string{tagKeyJSON})
+		if field.Embedded() && name == "" {
+			if embedded, ok := structUnder(field.Type()); ok {
+				embeds = append(embeds, embedded)
+				continue
+			}
+		}
+		if name == "" {
+			name = field.Name()
+		}
+		if _, recorded := out[name]; recorded || written[name] != types.TypeString(field.Type(), shortQualifier) {
+			continue
+		}
+		_, nested, isSDK := clientGoNamedStruct(elementType(field.Type()))
+		if !isSDK {
+			continue
+		}
+		if names := sdkFieldNames(nested); len(names) > 0 {
+			out[name] = names
+		}
+	}
+	for _, embedded := range embeds {
+		collectSDKNested(embedded, written, out, walked)
+	}
 }

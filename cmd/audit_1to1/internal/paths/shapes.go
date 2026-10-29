@@ -211,8 +211,10 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 	conditions := newConditionIndex(record)
 	check.Typed = typedShapeCheck(root, index, conditions, published)
 	check.Sent = sentCheck(conditions, sources, published)
-	check.Sent.Unsurfaced, check.Typed.Unsurfaced, check.Sent.UnusedDeclarations = classifySentFindings(declaredUnsurfaced, check.Sent.Unsurfaced, check.Typed.Unsurfaced)
-	check.Sent.ContradictedDeclarations = newOptionEvidence(conditions, index, requests).contradictions(declaredUnsurfaced, check.Sent.Unsurfaced, check.Typed.Unsurfaced)
+	typed := &check.Typed
+	check.Sent.Unsurfaced, typed.Unsurfaced, typed.NestedUnsurfaced, check.Sent.UnusedDeclarations = classifySentFindings(declaredUnsurfaced, check.Sent.Unsurfaced, typed.Unsurfaced, typed.NestedUnsurfaced)
+	evidence := newOptionEvidence(conditions, index, requests)
+	check.Sent.ContradictedDeclarations = evidence.contradictions(declaredUnsurfaced, check.Sent.Unsurfaced, slices.Concat(typed.Unsurfaced, typed.NestedUnsurfaced))
 	return check
 }
 
@@ -323,6 +325,15 @@ type operation struct {
 	// Nested is, per field rendering an entity of its own, the keys that child
 	// sends.
 	Nested map[string][]string
+	// NestedEntity names, per field Nested holds and per key under it, the
+	// entity that renders the object, which is what a key GitLab sends inside
+	// that object is read on for its conditions: a merge request's
+	// head_pipeline is API::Entities::Ci::Pipeline. It is kept per key for the
+	// reason EntityOf is one level up: where a shape merges two routes that
+	// render one field with two entities, the union under the field is no one
+	// entity's, and a key only the second sends would be read on the first,
+	// which does not expose it. The first entity to render a key keeps it.
+	NestedEntity map[string]map[string]string
 	// Offset is true when the route declares both page and per_page, which is
 	// GitLab's offset pagination: the answer carries X-Page, X-Next-Page,
 	// X-Total and their siblings in the response headers.
@@ -408,14 +419,15 @@ func (index *operationIndex) add(record apilive.Document, route apilive.Route, n
 	response := record.FieldNames(route.Entity)
 	offset, keyset := routePagination(route)
 	built := operation{
-		Entity:   route.Entity,
-		Response: response,
-		EntityOf: entityOf(route.Entity, response),
-		Nested:   record.NestedNames(route.Entity),
-		Offset:   offset,
-		Keyset:   keyset,
-		Params:   route.Params,
-		Routes:   1,
+		Entity:       route.Entity,
+		Response:     response,
+		EntityOf:     entityOf(route.Entity, response),
+		Nested:       record.NestedNames(route.Entity),
+		NestedEntity: nestedEntityOf(record, route.Entity),
+		Offset:       offset,
+		Keyset:       keyset,
+		Params:       route.Params,
+		Routes:       1,
 	}
 	pathKey := route.Method + " " + normalized
 	if taken, ok := index.byPath[pathKey]; !ok {
@@ -437,6 +449,7 @@ func (index *operationIndex) add(record apilive.Document, route apilive.Route, n
 	merged.Response = union(merged.Response, built.Response)
 	merged.EntityOf = unionEntityOf(merged.EntityOf, built.EntityOf)
 	merged.Nested = unionNested(merged.Nested, built.Nested)
+	merged.NestedEntity = unionNestedEntityOf(merged.NestedEntity, built.NestedEntity)
 	merged.Offset = merged.Offset || offset
 	merged.Keyset = merged.Keyset || keyset
 	merged.Params = unionParams(merged.Params, route.Params)
@@ -461,7 +474,42 @@ func (index *operationIndex) as(found operation, entity string) operation {
 	found.Response = response
 	found.EntityOf = entityOf(entity, response)
 	found.Nested = index.record.NestedNames(entity)
+	found.NestedEntity = nestedEntityOf(index.record, entity)
 	return found
+}
+
+// nestedEntityOf attributes, per field of entity that renders an entity of its
+// own sending at least one key, every key of that object to that entity: the
+// fields and keys [apilive.Document.NestedNames] lists, under the same rule,
+// so the two maps always name one set of properties and keys.
+func nestedEntityOf(record apilive.Document, entity string) map[string]map[string]string {
+	resolved, _ := record.Resolve(entity)
+	var out map[string]map[string]string
+	for _, field := range resolved {
+		byKey := entityOf(field.Using, record.FieldNames(field.Using))
+		if byKey == nil {
+			continue
+		}
+		if out == nil {
+			out = map[string]map[string]string{}
+		}
+		out[field.Name] = byKey
+	}
+	return out
+}
+
+// unionNestedEntityOf merges two nested attributions property by property,
+// the first entity to render a key under a property keeping it, as
+// [unionEntityOf] does one level up.
+func unionNestedEntityOf(a, b map[string]map[string]string) map[string]map[string]string {
+	if len(a) == 0 {
+		return b
+	}
+	out := maps.Clone(a)
+	for property, byKey := range b {
+		out[property] = unionEntityOf(out[property], byKey)
+	}
+	return out
 }
 
 // routePagination reads what the record says about a route's pagination.

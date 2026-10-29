@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
@@ -554,6 +555,48 @@ func TestRun_ADeclarationThatMatchesNothing_IsAFinding(t *testing.T) {
 	}
 	if stale := decode(t, content).StaleDeclarations; len(stale) != 1 || !strings.Contains(stale[0], "/orbit/...") {
 		t.Errorf("stale = %v, want the unused declaration named", stale)
+	}
+}
+
+// TestRun_TheNestedKeysAPartLeavesOut_AreCountedApartFromTheTopLevel verifies
+// the three figures the summary gives the reverse comparison one level down,
+// which a reader weighs the nested list by: how many keys the part under
+// head_widget sends that it does not publish, how many of them a declaration
+// answers, and how many the client-go struct under the same key does not carry
+// either. The widget also sends a top-level key it does not publish, so each
+// figure differs from its top-level twin, and the three differ from one
+// another.
+func TestRun_TheNestedKeysAPartLeavesOut_AreCountedApartFromTheTopLevel(t *testing.T) {
+	pairing := structs.Pairings{
+		ClientGoDir: "/client-go",
+		Outputs: []structs.OutputPairing{{
+			Package: "widgets", MCPType: "Output", SDKType: "Widget", SDKNested: map[string][]string{"head_widget": {"archived"}},
+		}},
+	}
+	stubTypeGrainInputs(t, pairing, nil, widgetRoutes)
+	declaredUnsurfaced = []sentDeclaration{{
+		Package: "internal/tools/widgets", Type: "PartOutput", Under: "head_widget", Entity: widgetPartEntity, Field: "archived",
+		Category: categoryCompactRow, Reason: "the part leaves it to the widget action",
+	}}
+	root := recordIn(t, map[string]response{"GET /api/v4/widgets": {
+		Entity:   widgetEntity,
+		Response: []string{"head_widget", "id", "title"},
+		Nested:   map[string][]string{"head_widget": {"archived", "color", "id", "state"}},
+	}})
+	writeToolsPackage(t, root, "widgets", widgetListSource)
+	withDeclarations(t, map[string]silentOwnerDeclaration{})
+	stubInputs(t, nil, nil, graphqldocs.Result{})
+
+	content, _, err := Run(t.Context(), root, Options{})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	summary := decode(t, content).Summary
+	top := [3]int{summary.TypedUnsurfacedFields, summary.TypedUnsurfacedDeclared, summary.TypedUnsurfacedNotInSDK}
+	nested := [3]int{summary.TypedNestedUnsurfaced, summary.TypedNestedSentDeclared, summary.TypedNestedNotInSDK}
+	if top != [3]int{1, 0, 1} || nested != [3]int{3, 1, 2} {
+		t.Errorf("top level = %v, nested = %v (fields, declared, not in client-go); want [1 0 1] and [3 1 2]", top, nested)
 	}
 }
 

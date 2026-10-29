@@ -591,8 +591,10 @@ func TestClassifyShapeFindings_ADeclaration_AnswersItsOwnFinding(t *testing.T) {
 	previous := declaredShapeFields
 	declaredShapeFields = []shapeDeclaration{
 		{Package: "internal/tools/one", Type: "Output", Field: declaredSegment, Category: categoryRecordSilent, Reason: "whole type"},
-		{Package: "internal/tools/two", Type: "NestedOutput", Field: "named", Category: categoryRecordSilent, Reason: "one field"},
+		{Package: "internal/tools/two", Type: "NestedOutput", Under: "parent", Field: "named", Category: categoryRecordSilent, Reason: "one field"},
+		{Package: "internal/tools/two", Type: "NestedOutput", Field: "other", Category: categoryRecordSilent, Reason: "the top level only"},
 		{Package: "internal/tools/gone", Type: "Output", Field: "vanished", Category: categoryRecordSilent, Reason: "matches nothing"},
+		{Package: "internal/tools/two", Type: "NestedOutput", Under: "sibling", Field: "named", Category: categoryRecordSilent, Reason: "another property"},
 	}
 	t.Cleanup(func() { declaredShapeFields = previous })
 
@@ -600,6 +602,7 @@ func TestClassifyShapeFindings_ADeclaration_AnswersItsOwnFinding(t *testing.T) {
 		[]UnpublishedField{
 			{Package: "internal/tools/one", Type: "Output", Field: "anything"},
 			{Package: "internal/tools/one", Type: "OtherOutput", Field: "anything"},
+			{Package: "internal/tools/two", Type: "NestedOutput", Field: "other"},
 		},
 		[]UnpublishedField{
 			{Package: "internal/tools/two", Type: "NestedOutput", Under: "parent", Field: "named"},
@@ -607,14 +610,17 @@ func TestClassifyShapeFindings_ADeclaration_AnswersItsOwnFinding(t *testing.T) {
 		},
 	)
 
-	if topLevel[0].Reason != "whole type" || topLevel[1].declared() {
-		t.Errorf("top-level = %+v, want only the declared type answered", topLevel)
+	if topLevel[0].Reason != "whole type" || topLevel[1].declared() || topLevel[2].Reason != "the top level only" {
+		t.Errorf("top-level = %+v, want the declared type and the declared top-level field answered", topLevel)
 	}
+	// The nested finding on other is left open: a declaration about the type's
+	// own key says nothing about the same key of the object under a property.
 	if nested[0].Reason != "one field" || nested[1].declared() {
-		t.Errorf("nested = %+v, want only the declared field answered", nested)
+		t.Errorf("nested = %+v, want only the field declared under its property answered", nested)
 	}
-	if !reflect.DeepEqual(unused, []string{"internal/tools/gone.Output.vanished"}) {
-		t.Errorf("unused = %v, want the declaration that matched nothing", unused)
+	want := []string{"internal/tools/gone.Output.vanished", "internal/tools/two.NestedOutput.named under sibling"}
+	if !reflect.DeepEqual(unused, want) {
+		t.Errorf("unused = %v, want %v", unused, want)
 	}
 }
 
@@ -943,10 +949,18 @@ var (
 // no name, which the published part carries.
 var widgetOperations = map[string]response{
 	"GET /api/v4/widgets": {
+		Entity:   widgetEntity,
 		Response: []string{"head_widget", "id"},
 		Nested:   map[string][]string{"head_widget": {"archived", "id"}},
 	},
 }
+
+// widgetEntity and widgetPartEntity name the entity the widget list renders
+// and the one fixtureEntity writes for the object under head_widget.
+const (
+	widgetEntity     = "API::Entities::Widget"
+	widgetPartEntity = widgetEntity + "::Head_widgetFixture"
+)
 
 // TestTypedShapeCheck_ThePayloadOfAList_HasItsNestedTypesJudged verifies, from
 // the source to the finding, that the nested comparison reaches the payload
@@ -975,16 +989,291 @@ func TestTypedShapeCheck_ThePayloadOfAList_HasItsNestedTypesJudged(t *testing.T)
 	}
 }
 
+// TestTypedShapeCheck_AKeyTheNestedObjectSends_IsReportedUnderItsProperty
+// verifies the reverse direction one level down. The record says the object
+// under head_widget sends archived and the part published there does not, so
+// the finding names the part, the property, the entity rendering the object,
+// which is what its conditions are read on, and the struct the row models.
+// The part's own name is the other direction's and is not repeated here.
+func TestTypedShapeCheck_AKeyTheNestedObjectSends_IsReportedUnderItsProperty(t *testing.T) {
+	stubTypeGrainInputs(t, widgetPairing, nil, widgetRoutes)
+	root := writePackage(t, "widgets", widgetListSource)
+
+	check := typedCheckOf("", widgetOperations, publishedTypes(root))
+
+	want := []UnsurfacedField{{
+		Grain: grainType, Package: "internal/tools/widgets", Type: "PartOutput", Under: "head_widget", Field: "archived",
+		Operations: []string{"GET /widgets"}, Entity: widgetPartEntity, SDKType: "Widget", Sent: sentAlways,
+	}}
+	if !reflect.DeepEqual(check.NestedUnsurfaced, want) {
+		t.Errorf("nested unsurfaced = %+v, want %+v", check.NestedUnsurfaced, want)
+	}
+	if len(check.Unsurfaced) != 0 {
+		t.Errorf("unsurfaced = %+v, want nothing at the top level, which the row publishes whole", check.Unsurfaced)
+	}
+}
+
+// widgetDetailEntity is a second entity a widget route renders, whose part
+// under head_widget sends more than the list's does.
+const widgetDetailEntity = "API::Entities::WidgetDetail"
+
+// TestTypedShapeCheck_ANestedKeyOneRouteAloneSends_IsReadOnTheEntityThatSendsIt
+// verifies a nested key is read on the entity that renders it, key by key, as
+// a key one level up is. Two routes render the widget's head_widget with two
+// entities, and only the second sends archived, so the finding on archived is
+// about the second: read on the first entity met under the property, it
+// would say nothing about when the key is sent, and a declaration answering
+// it would have to name an entity that does not send it. The second case is
+// the same pair of routes merged into one shape, because they differ only in
+// what they call a placeholder.
+func TestTypedShapeCheck_ANestedKeyOneRouteAloneSends_IsReadOnTheEntityThatSendsIt(t *testing.T) {
+	part := map[string][]string{"head_widget": {"id", "name"}}
+	detailedPart := map[string][]string{"head_widget": {"archived", "id", "name"}}
+	cases := []struct {
+		name       string
+		routes     []sdkRoute
+		operations map[string]response
+		searched   []string
+	}{
+		{
+			name:   "two routes of the struct",
+			routes: []sdkRoute{{Method: "GET", Path: "/widgets"}, {Method: "GET", Path: "/widgets/:"}},
+			operations: map[string]response{
+				"GET /api/v4/widgets":      {Entity: widgetEntity, Response: []string{"head_widget", "id"}, Nested: part},
+				"GET /api/v4/widgets/{id}": {Entity: widgetDetailEntity, Response: []string{"head_widget", "id"}, Nested: detailedPart},
+			},
+			searched: []string{"GET /widgets", "GET /widgets/:"},
+		},
+		{
+			name:   "two routes merged into one shape",
+			routes: []sdkRoute{{Method: "GET", Path: "/projects/:/widgets"}},
+			operations: map[string]response{
+				"GET /api/v4/projects/{id}/widgets":   {Entity: widgetEntity, Response: []string{"head_widget", "id"}, Nested: part},
+				"GET /api/v4/projects/{name}/widgets": {Entity: widgetDetailEntity, Response: []string{"head_widget", "id"}, Nested: detailedPart},
+			},
+			searched: []string{"GET /projects/:/widgets"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubTypeGrainInputs(t, widgetPairing, nil, map[string][]sdkRoute{"Widget": tc.routes})
+			root := writePackage(t, "widgets", widgetListSource)
+
+			check := typedCheckOf("", tc.operations, publishedTypes(root))
+
+			want := []UnsurfacedField{{
+				Grain: grainType, Package: "internal/tools/widgets", Type: "PartOutput", Under: "head_widget", Field: "archived",
+				Operations: tc.searched, Entity: widgetDetailEntity + "::Head_widgetFixture", SDKType: "Widget", Sent: sentAlways,
+			}}
+			if !reflect.DeepEqual(check.NestedUnsurfaced, want) {
+				t.Errorf("nested unsurfaced = %+v, want %+v", check.NestedUnsurfaced, want)
+			}
+		})
+	}
+}
+
+// trayEntity and trayPartEntity are the entity a tray route renders and the
+// one fixtureEntity writes for the part under its head_widget.
+const (
+	trayEntity     = "API::Entities::Tray"
+	trayPartEntity = trayEntity + "::Head_widgetFixture"
+)
+
+// TestTypedShapeCheck_OneNestedTypeUnderTwoTypes_IsReportedInOneOrder verifies
+// that two runs over one tree write one report. The widget row and a tray both
+// carry the part under head_widget, and the record has the part send two keys
+// it does not publish and leave out one it does, so every nested finding comes
+// twice, once for each type, with the package, the part, the property and the
+// field equal. The keys of one object are read out of a map and the sort keeps
+// no input order, so the order is fixed here: field by field, and then by the
+// client-go struct each finding was judged against, which puts the tray, the
+// type judged second, first.
+func TestTypedShapeCheck_OneNestedTypeUnderTwoTypes_IsReportedInOneOrder(t *testing.T) {
+	source := widgetListSource + `
+type TrayOutput struct {
+	ID         int64       ` + "`json:\"id\"`" + `
+	HeadWidget *PartOutput ` + "`json:\"head_widget\"`" + `
+}
+`
+	pairing := structs.Pairings{
+		ClientGoDir: "/client-go",
+		Outputs: []structs.OutputPairing{
+			{Package: "widgets", MCPType: "Output", SDKType: "Widget"},
+			{Package: "widgets", MCPType: "TrayOutput", SDKType: "Tray"},
+		},
+	}
+	routes := map[string][]sdkRoute{"Widget": widgetRoutes["Widget"], "Tray": {{Method: "GET", Path: "/trays"}}}
+	stubTypeGrainInputs(t, pairing, nil, routes)
+	root := writePackage(t, "widgets", source)
+	part := map[string][]string{"head_widget": {"archived", "id", "state"}}
+	operations := map[string]response{
+		"GET /api/v4/widgets": {Entity: widgetEntity, Response: []string{"head_widget", "id"}, Nested: part},
+		"GET /api/v4/trays":   {Entity: trayEntity, Response: []string{"head_widget", "id"}, Nested: part},
+	}
+
+	check := typedCheckOf("", operations, publishedTypes(root))
+
+	unpublished := make([]string, 0, len(check.Nested))
+	for _, finding := range check.Nested {
+		unpublished = append(unpublished, finding.Under+"."+finding.Field+" "+finding.SDKType)
+	}
+	if want := []string{"head_widget.name Tray", "head_widget.name Widget"}; !slices.Equal(unpublished, want) {
+		t.Errorf("nested unpublished = %v, want %v", unpublished, want)
+	}
+	unsurfaced := make([]string, 0, len(check.NestedUnsurfaced))
+	for _, finding := range check.NestedUnsurfaced {
+		unsurfaced = append(unsurfaced, finding.Under+"."+finding.Field+" "+finding.SDKType+" "+finding.Entity)
+	}
+	want := []string{
+		"head_widget.archived Tray " + trayPartEntity,
+		"head_widget.archived Widget " + widgetPartEntity,
+		"head_widget.state Tray " + trayPartEntity,
+		"head_widget.state Widget " + widgetPartEntity,
+	}
+	if !slices.Equal(unsurfaced, want) {
+		t.Errorf("nested unsurfaced = %v, want %v", unsurfaced, want)
+	}
+}
+
+// TestTypedShapeCheck_ANestedKey_SaysWhetherClientGoCarriesItUnderTheSameProperty
+// verifies the half of a nested finding that decides where its fix goes. A key
+// the client-go struct under the same property carries is a field this server
+// only has to publish; one it does not, or carries under another property
+// alone, is an upstream contribution or a captured read first.
+func TestTypedShapeCheck_ANestedKey_SaysWhetherClientGoCarriesItUnderTheSameProperty(t *testing.T) {
+	cases := []struct {
+		name   string
+		nested map[string][]string
+		want   bool
+	}{
+		{name: "carried under the property", nested: map[string][]string{"head_widget": {"archived", "id"}}, want: true},
+		{name: "carried under another property", nested: map[string][]string{"tail_widget": {"archived"}}},
+		{name: "not nested at all"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pairing := structs.Pairings{
+				ClientGoDir: "/client-go",
+				Outputs:     []structs.OutputPairing{{Package: "widgets", MCPType: "Output", SDKType: "Widget", SDKNested: tc.nested}},
+			}
+			stubTypeGrainInputs(t, pairing, nil, widgetRoutes)
+			root := writePackage(t, "widgets", widgetListSource)
+
+			check := typedCheckOf("", widgetOperations, publishedTypes(root))
+
+			if len(check.NestedUnsurfaced) != 1 || check.NestedUnsurfaced[0].SDKModels != tc.want {
+				t.Errorf("nested unsurfaced = %+v, want archived with sdk_models %t", check.NestedUnsurfaced, tc.want)
+			}
+		})
+	}
+}
+
+// TestTypedShapeCheck_ANestedKeyOfAProjection_IsAskedOfItsStruct verifies that
+// a type paired through a projection rather than a converter answers the
+// nested question from the struct it is read off, as it answers the top-level
+// one.
+func TestTypedShapeCheck_ANestedKeyOfAProjection_IsAskedOfItsStruct(t *testing.T) {
+	pairing := structs.Pairings{
+		ClientGoDir: "/client-go",
+		Projections: []structs.ProjectionPairing{{
+			Package: "widgets", MCPType: "Output", SDKType: "Widget",
+			SDKNested: map[string][]string{"head_widget": {"archived"}}, Methods: []string{"Widgets.ListWidgets"},
+		}},
+	}
+	stubTypeGrainInputs(t, pairing, nil, nil)
+	stubMethodRoutes(t, map[string][]sdkRoute{"Widgets.ListWidgets": widgetRoutes["Widget"]})
+	root := writePackage(t, "widgets", widgetListSource)
+
+	check := typedCheckOf("", widgetOperations, publishedTypes(root))
+
+	if len(check.NestedUnsurfaced) != 1 || !check.NestedUnsurfaced[0].SDKModels {
+		t.Errorf("nested unsurfaced = %+v, want archived carried by the projected struct", check.NestedUnsurfaced)
+	}
+}
+
+// TestShapeCheck_ANestedDeclaration_AnswersItsFindingUntilTheKeyIsPublished
+// verifies the declaration table answers the nested level on the terms it
+// answers the top: a declaration naming the property answers the finding, and
+// once the part publishes the key the same declaration answers nothing and is
+// reported stale, which is what fails the gate.
+func TestShapeCheck_ANestedDeclaration_AnswersItsFindingUntilTheKeyIsPublished(t *testing.T) {
+	published := strings.Replace(widgetListSource, "type PartOutput struct {",
+		"type PartOutput struct {\n\tArchived bool `json:\"archived\"`", 1)
+	declaration := sentDeclaration{
+		Package: "internal/tools/widgets", Type: "PartOutput", Under: "head_widget", Entity: widgetPartEntity, Field: "archived",
+		Category: categoryCompactRow, Reason: "the part leaves it to the widget action",
+	}
+	cases := []struct {
+		name       string
+		source     string
+		wantFound  bool
+		wantUnused []string
+	}{
+		{name: "the key unpublished", source: widgetListSource, wantFound: true},
+		{name: "the key published", source: published, wantUnused: []string{declaration.key()}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubTypeGrainInputs(t, widgetPairing, nil, widgetRoutes)
+			declaredUnsurfaced = []sentDeclaration{declaration}
+			root := recordIn(t, widgetOperations)
+			writeToolsPackage(t, root, "widgets", tc.source)
+
+			check := shapeCheck(root, nil, publishedTypes(root))
+
+			found := len(check.Typed.NestedUnsurfaced) == 1 && check.Typed.NestedUnsurfaced[0].Category == categoryCompactRow
+			if found != tc.wantFound {
+				t.Errorf("nested unsurfaced = %+v, want the finding answered: %t", check.Typed.NestedUnsurfaced, tc.wantFound)
+			}
+			if !reflect.DeepEqual(check.Sent.UnusedDeclarations, tc.wantUnused) {
+				t.Errorf("unused declarations = %v, want %v", check.Sent.UnusedDeclarations, tc.wantUnused)
+			}
+		})
+	}
+}
+
+// TestShapeCheck_ANestedOptionDeclaration_IsHeldToItsEvidence verifies a
+// declaration answering a nested finding is judged against what its category
+// rests on, as one answering a type's own key is. Saying the package never
+// requests the option that renders a key is a claim about the request
+// inventory, and a nested finding is a type-grain finding, whose operations
+// are not rows of it: a declaration answering nothing else can be held to
+// nothing, and is refused rather than read as an answer.
+func TestShapeCheck_ANestedOptionDeclaration_IsHeldToItsEvidence(t *testing.T) {
+	stubTypeGrainInputs(t, widgetPairing, nil, widgetRoutes)
+	declaration := sentDeclaration{
+		Package: "internal/tools/widgets", Type: "PartOutput", Under: "head_widget", Entity: widgetPartEntity, Field: "archived",
+		Category: categoryOptionNeverRequested, Reason: "the widget actions never ask for the archived part",
+	}
+	declaredUnsurfaced = []sentDeclaration{declaration}
+	root := recordIn(t, widgetOperations)
+	writeToolsPackage(t, root, "widgets", widgetListSource)
+
+	check := shapeCheck(root, nil, publishedTypes(root))
+
+	want := []string{declaration.key() + " is declared as " + categoryOptionNeverRequested + ", and it answers type-grain findings alone: " +
+		"their operations are not rows of the request inventory, which is the evidence the category rests on, so nothing can hold it to it"}
+	if !slices.Equal(check.Sent.ContradictedDeclarations, want) {
+		t.Errorf("contradicted declarations = %q, want %q", check.Sent.ContradictedDeclarations, want)
+	}
+	if len(check.Typed.NestedUnsurfaced) != 1 || check.Typed.NestedUnsurfaced[0].Category != categoryOptionNeverRequested {
+		t.Errorf("nested unsurfaced = %+v, want archived answered by the declaration being refused", check.Typed.NestedUnsurfaced)
+	}
+}
+
 // TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity is the
 // witness of the nested comparison on this tree, against client-go v3.30.0 and
 // the record of GitLab 19.5.0.
 //
 // A merge request's head_pipeline is rendered with API::Entities::Ci::Pipeline,
-// which sends no name, and toolutil.PipelineOutput publishes name on every
-// merge request and every merge request a deployment lists. Both rows are
-// payloads of a list and were never compared one level down, so neither was
-// reported. It reads the record and the typed packages and not the request
-// inventory, so it does not wait on a regeneration.
+// which sends no name and sends archived, and toolutil.PipelineOutput publishes
+// name and not archived on every merge request and every merge request a
+// deployment lists. Both rows are payloads of a list and were never compared
+// one level down, so neither half was reported. archived is reported as a key
+// client-go does not model, which is true of v3.30.0: gl.Pipeline carries it
+// from v3.36.0, and the bump turns this witness's sdk_models to true. It reads
+// the record and the typed packages and not the request inventory, so it does
+// not wait on a regeneration.
 func TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity(t *testing.T) {
 	root := repoRoot(t)
 
@@ -999,6 +1288,16 @@ func TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity(t *t
 				return finding.Package == pkg && finding.Type == "toolutil.PipelineOutput" && finding.Under == "head_pipeline" && finding.Field == "name"
 			}) {
 				t.Errorf("no nested finding for %s head_pipeline.name, want toolutil.PipelineOutput's name reported unpublished", pkg)
+			}
+			index := slices.IndexFunc(check.NestedUnsurfaced, func(finding UnsurfacedField) bool {
+				return finding.Package == pkg && finding.Type == "toolutil.PipelineOutput" && finding.Under == "head_pipeline" && finding.Field == "archived"
+			})
+			if index < 0 {
+				t.Fatalf("no nested unsurfaced finding for %s head_pipeline.archived, want the key the pipeline entity sends reported", pkg)
+			}
+			archived := check.NestedUnsurfaced[index]
+			if archived.Entity != "API::Entities::Ci::Pipeline" || archived.SDKModels || archived.Sent != sentAlways {
+				t.Errorf("head_pipeline.archived = %+v, want it read on API::Entities::Ci::Pipeline, sent always, and not modeled by client-go v3.30.0", archived)
 			}
 		})
 	}

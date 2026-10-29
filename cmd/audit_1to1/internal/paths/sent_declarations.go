@@ -47,6 +47,12 @@ type sentDeclaration struct {
 	// naming a type never does: it answers what one type does with a whole
 	// entity, which says nothing about the rest of the package.
 	Type string
+	// Under names the response property a nested finding sits under, and is
+	// empty for a declaration about a response's own keys. A declaration
+	// answers a finding only when the two agree, so one about a merge
+	// request's head_pipeline never answers the same key of its pipeline, and
+	// one about the top level never answers a key of an object inside it.
+	Under string
 	// Field is the json name, or "*" for every field read on the component.
 	Field string
 	// Category says what kind of absence this is.
@@ -1572,8 +1578,13 @@ const reasonResolvedProject = "discovering the project behind a git remote reads
 // declaration naming no type answers the package's findings at both grains,
 // and one naming a type answers that type's, and, when it names one field,
 // the package grain's finding on that field (see [sentDeclaration.Type]).
+// Either answers a nested finding only when it names the property the finding
+// sits under, and a package-grain finding only when it names none (see
+// [sentDeclaration.Under]): one naming no property answers the top level
+// alone, and one naming a property and no type answers every nested type
+// found under that property.
 func (d sentDeclaration) covers(finding UnsurfacedField) bool {
-	if d.Package != finding.Package || d.Entity != finding.Entity {
+	if d.Package != finding.Package || d.Entity != finding.Entity || d.Under != finding.Under {
 		return false
 	}
 	if d.Field != declaredSegment && d.Field != finding.Field {
@@ -1593,22 +1604,33 @@ func (d sentDeclaration) covers(finding UnsurfacedField) bool {
 
 // key names one declaration in a report, which is how a stale one is reported.
 // The type is part of the name so that two declarations differing only in it
-// are two names, and a stale one says which type it stopped describing.
+// are two names, and a stale one says which type it stopped describing; the
+// property a nested declaration is about is written after the field, as the
+// object the field is read in.
 func (d sentDeclaration) key() string {
-	if d.Type == "" {
-		return d.Package + "." + d.Entity + "." + d.Field
+	key := d.Package + "." + d.Entity + "." + d.Field
+	if d.Type != "" {
+		key = d.Package + "." + d.Type + "." + d.Entity + "." + d.Field
 	}
-	return d.Package + "." + d.Type + "." + d.Entity + "." + d.Field
+	if d.Under != "" {
+		key += underSuffix + d.Under
+	}
+	return key
 }
 
+// underSuffix joins a nested declaration's key to the property it is about.
+const underSuffix = " under "
+
 // classifySentFindings attaches the declaration that accounts for each
-// finding at either grain, and names the declarations that accounted for
-// none. The two grains are classified together because one declaration can
-// only be stale once, for the reason [classifyShapeFindings] records.
-func classifySentFindings(declarations []sentDeclaration, byPackage, byType []UnsurfacedField) (classifiedPackage, classifiedType []UnsurfacedField, unused []string) {
+// finding at either grain and at either level of the type grain, and names the
+// declarations that accounted for none. They are classified together because
+// one declaration can only be stale once, for the reason
+// [classifyShapeFindings] records.
+func classifySentFindings(declarations []sentDeclaration, byPackage, byType, nested []UnsurfacedField) (classifiedPackage, classifiedType, classifiedNested []UnsurfacedField, unused []string) {
 	used := map[string]bool{}
 	classifiedPackage = classifySent(declarations, byPackage, used)
 	classifiedType = classifySent(declarations, byType, used)
+	classifiedNested = classifySent(declarations, nested, used)
 
 	// Left nil rather than empty when nothing is stale, for the reason
 	// [classifyShapeFindings] records.
@@ -1618,7 +1640,7 @@ func classifySentFindings(declarations []sentDeclaration, byPackage, byType []Un
 		}
 	}
 	sort.Strings(unused)
-	return classifiedPackage, classifiedType, unused
+	return classifiedPackage, classifiedType, classifiedNested, unused
 }
 
 // classifySent annotates one list of findings, recording in used the

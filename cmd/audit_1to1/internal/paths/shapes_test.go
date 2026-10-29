@@ -5,7 +5,9 @@ package paths
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -433,6 +435,37 @@ func TestShapeCheck_TheJoinCountsWhatItRead(t *testing.T) {
 	want := []string{"myproject=2", "apple=1", "zebra=1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("untemplated = %v, want %v: most frequent first, then alphabetical", got, want)
+	}
+}
+
+// TestNestedEntityOf_NamesTheEntityOfEveryPropertyNestedNamesLists verifies the
+// two maps name one set of properties and keys: every key of a field rendered
+// with an entity that sends keys is named with that entity, and a field
+// rendered with no entity, with one sending no key, or with one the record
+// does not hold, is named in neither, since a key under it is read on nothing.
+func TestNestedEntityOf_NamesTheEntityOfEveryPropertyNestedNamesLists(t *testing.T) {
+	doc := apilive.Document{Entities: map[string]apilive.Entity{
+		"API::Entities::Widget": {Fields: []apilive.Field{
+			{Name: "part", Using: "API::Entities::Part"},
+			{Name: "hollow", Using: "API::Entities::Hollow"},
+			{Name: "missing", Using: "API::Entities::Missing"},
+			{Name: "id"},
+		}},
+		"API::Entities::Part":   {Fields: []apilive.Field{{Name: "archived"}, {Name: "id"}}},
+		"API::Entities::Hollow": {},
+	}}
+
+	got := nestedEntityOf(doc, "API::Entities::Widget")
+
+	want := map[string]map[string]string{"part": {"archived": "API::Entities::Part", "id": "API::Entities::Part"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("nestedEntityOf() = %v, want %v", got, want)
+	}
+	if names := doc.NestedNames("API::Entities::Widget"); len(names) != len(got) || !slices.Equal(names["part"], slices.Sorted(maps.Keys(got["part"]))) {
+		t.Errorf("NestedNames() = %v, want the same properties and keys nestedEntityOf names", names)
+	}
+	if absent := nestedEntityOf(doc, "API::Entities::Absent"); absent != nil {
+		t.Errorf("nestedEntityOf(absent) = %v, want nil", absent)
 	}
 }
 

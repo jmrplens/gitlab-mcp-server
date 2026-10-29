@@ -165,6 +165,7 @@ func GetIssues(client *gl.Client) IssuesOutput {
 	want := []ProjectionPairing{{
 		Package: "milestones", MCPType: "IssueItem", SDKType: "Issue",
 		SDKFields: []string{"author", "created_at", "id", "iid", "title"},
+		SDKNested: map[string][]string{"author": {"username"}},
 		Methods:   []string{"Milestones.GetMilestoneIssues"},
 	}}
 	if !reflect.DeepEqual(got, want) {
@@ -394,6 +395,7 @@ func Page(client *gl.Client) PageOutput {
 		{
 			Package: "pages", MCPType: "PageOutput", SDKType: "Issue",
 			SDKFields: []string{"author", "created_at", "id", "iid", "title"},
+			SDKNested: map[string][]string{"author": {"username"}},
 			Methods:   []string{"Milestones.GetMilestoneIssues"},
 		},
 		{
@@ -486,7 +488,10 @@ type NameOutput struct {
 	// of their names.
 	want := []ProjectionPairing{
 		{Package: "mixed", MCPType: "AuthorOutput", SDKType: "BasicUser", SDKFields: []string{"username"}},
-		{Package: "mixed", MCPType: "NameOutput", SDKType: "Issue", SDKFields: []string{"author", "created_at", "id", "iid", "title"}},
+		{
+			Package: "mixed", MCPType: "NameOutput", SDKType: "Issue", SDKFields: []string{"author", "created_at", "id", "iid", "title"},
+			SDKNested: map[string][]string{"author": {"username"}},
+		},
 		{Package: "mixed", MCPType: "NameOutput", SDKType: "Project", SDKFields: []string{"id", "name"}},
 	}
 	if !reflect.DeepEqual(got, want) {
