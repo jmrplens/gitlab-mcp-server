@@ -10513,7 +10513,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_graph_status
 
-Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain.
+Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain, and for a top-level group its Orbit access and trial, which decide whether GitLab.com serves the index at all.
 
 **Parameters:**
 
