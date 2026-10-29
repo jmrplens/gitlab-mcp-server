@@ -41,4 +41,10 @@
 // deliberately not shared: one wants a single listing's stdout under a
 // deadline, the other runs `go test` and `go tool cover` through the same
 // runner and reports a failure with the tail of its combined output.
+//
+// One listing is shared whole, because it has one shape for every caller:
+// [ModuleDir] asks `go list -m` for the directory one module of the build
+// list sits in. R-ROUTE (cmd/audit_1to1 -scope=routes) reads client-go's
+// routes out of it without the typed load of the tool packages the other
+// scopes find that directory through.
 package golist

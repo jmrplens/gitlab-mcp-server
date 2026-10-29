@@ -39,15 +39,38 @@ const (
 const securityWrapperSwallowsErrors = "the wrapper selects the same fields but never reads the response's top-level GraphQL errors array, and GraphQL.Do only errors on a non-2xx status, so a mutation GitLab refuses with HTTP 200 is reported as success (destroy, bulk update), as an empty result (create), or as a bare ErrNotFound that drops GitLab's message (update); the raw handler surfaces it through toolutil.GraphQLTopLevelError. Recorded in docs/development/upstream-bugs.md (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"
 
 // certificateClusters is the shared reason behind the three cluster services.
-// GitLab removed the certificate-based Kubernetes integration outright, so the
-// group, instance and project wrappers over it are all superseded by the same
-// replacement and carry the same evidence.
-const certificateClusters = "certificate-based cluster integration, marked upstream 'Deprecated: in GitLab 14.5, to be removed in 19.0' and removed by GitLab; internal/tools/clusteragents calls ClusterAgents instead"
+// GitLab deprecated the certificate-based Kubernetes integration for the agent
+// for Kubernetes and still mounts its three APIs, so the group, instance and
+// project wrappers over it are superseded by the same replacement and carry
+// the same evidence.
+const certificateClusters = "certificate-based cluster integration, marked in client-go 'Deprecated: in GitLab 14.5, to be removed in 19.0'; GitLab 19.5 still mounts the instance, group and project APIs and answers them with 404 unless the certificate_based_clusters ops flag, off by default, is on, or for a group or a project whose namespace was granted the integration (lib/api/project_clusters.rb, app/models/namespace.rb, app/models/clusters/instance.rb, config/feature_flags/ops/certificate_based_clusters.yml); the agent for Kubernetes replaces it, and internal/tools/clusteragents calls ClusterAgents instead"
 
 // declaration adjudicates one client-go service no handler calls.
 type declaration struct {
 	Category string
 	Reason   string
+}
+
+// ServiceDeclaration is how the service rule adjudicates a client-go service
+// no handler calls: its category (COVERED_GRAPHQL, SUPERSEDED_UPSTREAM,
+// UNWRAPPED_TRACKED) and why.
+type ServiceDeclaration struct {
+	Category string
+	Reason   string
+}
+
+// DeclaredServices returns the service declarations as a copy a caller may
+// keep, keyed by the service's bare name. R-ROUTE reads them to decide
+// whether a route no action reaches inherits the decision about the service
+// that sends it. The COVERED_RAW ones are not among them: they are derived
+// from the waits table, which a reader takes them from with the entry that
+// says why.
+func DeclaredServices() map[string]ServiceDeclaration {
+	out := make(map[string]ServiceDeclaration, len(declaredServices))
+	for service, declared := range declaredServices {
+		out[service] = ServiceDeclaration(declared)
+	}
+	return out
 }
 
 // declaredServices adjudicates the client-go services no handler calls. Every

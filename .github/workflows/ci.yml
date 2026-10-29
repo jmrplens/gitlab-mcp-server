@@ -252,6 +252,14 @@ jobs:
       - name: Check the declarations of the params the reached routes take (R-PARAM)
         if: env.FRESHNESS == 'checked'
         run: make audit-1to1-params
+      # Every route the live record mounts, held to an action that sends it
+      # or a reason none does. The findings are a report until the triage
+      # adjudicates them; it fails on a declaration that no longer describes
+      # the tree. It reads the request record the derivation commits, so it
+      # is deferred with R-GRANT.
+      - name: Check the declarations of the routes no action reaches (R-ROUTE)
+        if: env.FRESHNESS == 'checked'
+        run: make audit-1to1-routes
       # The Orbit twin of the record above: what GitLab.com's Orbit routes
       # answered the requests the handlers build, as a key tree. No
       # self-managed GitLab serves Orbit, so no boot could answer it, and the

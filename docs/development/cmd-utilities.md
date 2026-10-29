@@ -358,9 +358,19 @@ It reads the committed request record, the request inventory and the live record
 
 Report keys: `schema_version`, `requests`, `record`, `inventory`, a `summary` block (`stale_declarations` among its counters, which is what `-gaps-only` exits on, and one counter per class, which counts findings: a container that stands for its members is one), `findings[]` (each with `route`, `param`, `class`, `sdk_models`, `offered`, `type`, `required`, `children`, `actions` and `option_types`), `declared[]` (the same with `category`, `reason` and `row`), `stale_declarations[]` and `unread_requests[]`. With `-gaps-only` `declared[]` and `unread_requests[]` are dropped and every count stays.
 
+#### Live routes (R-ROUTE)
+
+`-scope=routes`, in `cmd/audit_1to1/internal/routes`. It holds every route the live record mounts to an action that sends it or to a reason none does: `reached`, `outside-api`, `skip` (a reason the closed `skipReasons` table excludes, or a `skipExceptions` row), `slug-from-input` (a `slugRules` row), `deprecated-alias` (a `/services/` route whose `/integrations/` twin is answered), `inherited` (every client-go method that sends the route decided in a way that holds without a request, a `COVERED_GRAPHQL` one with the GraphQL actions `graphqlActions` names) or `declared` (a `routeFamilies` row), and reports the rest as findings: `unanswered` (with the reached `/services/` twin of an `/integrations/` route when there is one), `unknown-skip-reason`, `internal-without-skip`, `internal-not-excluded` and `contradicted` (a `COVERED_VARIANT` or `COVERED_RAW` decision on a route no action reaches). The rules, their order and what they found on the pinned record are in [Request Paths and Fine-Grained Grants](request-paths.md#live-routes-r-route).
+
+It reads the committed request record and the live record, the pinned client-go through `cmd/internal/sdkroutes`, its directory asked of `go list -m` (`golist.ModuleDir`) rather than of a typed load, the decisions of `acceptedMissingMethods` (`actions.AcceptedMissingMethods`), of the service declarations (`sdk.DeclaredServices`) and of the waits table, and the catalog (`requestinventory.Actions`), which an action a declaration names must be in.
+
+**What gates.** With `-gaps-only` it exits non-zero only on a declaration that no longer describes the tree: a family row that answers no route, answers another number than it pins, answers a route another row answers, lacks what its category needs or is `client-protocol` over a route client-go sends; a skip row no route carries or with a category the table does not define, and a reason a route carries that no row holds, whatever the route's class; a skip exception that answers no route, gives no reason or excludes nothing; a `graphqlActions` row that answers no route or names no action, one the catalog does not hold or one that sends no GraphQL; a slug rule that answers nothing or names an action the catalog does not hold. The findings are a report until their triage.
+
+Report keys: `schema_version`, `requests`, `record`, a `summary` block (one counter per class, `stale_declarations`, which is what `-gaps-only` exits on, and `skip_reasons_reached`), `findings[]` (each with `route`, `class`, `group`, `summary`, `sdk_methods`, `skip_reason`, `twin` and `adjudications`, each decision with its `method`, `category`, `reason`, `actions` and `carries`), `answered[]` (the same with what answers it: `category`, `reason`, `issue`, `family`, `actions`, `twin`), `reached[]` and `stale_declarations[]`. With `-gaps-only` `answered[]` and `reached[]` are dropped and every count stays.
+
 #### Make targets
 
-- `make audit-1to1`: writes `plan/1to1-backlog.json`, then runs the five gates `audit-1to1-sdk`, `audit-1to1-paths`, `audit-1to1-grants`, `audit-1to1-required` and `audit-1to1-params`.
+- `make audit-1to1`: writes `plan/1to1-backlog.json`, then runs the six gates `audit-1to1-sdk`, `audit-1to1-paths`, `audit-1to1-grants`, `audit-1to1-required`, `audit-1to1-params` and `audit-1to1-routes`.
 - `make audit-1to1-sdk` — the SDK parity gate, enum values included; fails the build on a finding.
 - `make audit-1to1-enums` — the enum value rule alone; fails the build on a finding.
 - `make audit-1to1-paths` — the request-path gate (R-PATH); fails the build on a finding. No network.
@@ -372,6 +382,8 @@ Report keys: `schema_version`, `requests`, `record`, `inventory`, a `summary` bl
 - `make audit-1to1-required-report`: the whole requiredness report, with the unplaced and unjudged fields, written to `plan/1to1-required.json`. Gates on nothing the plain target does not.
 - `make audit-1to1-params`: the route param gate (R-PARAM, `-scope=params -gaps-only`); reports every param of a reached route no recorded request carries and fails the build on a declaration that answers nothing. No network, step 30 of `make analyze`.
 - `make audit-1to1-params-report`: the whole R-PARAM report, with the declared findings and the requests whose options could not be read, written to `plan/1to1-params.json`. Gates on nothing the plain target does not.
+- `make audit-1to1-routes`: the live route gate (R-ROUTE, `-scope=routes -gaps-only`); reports every route no action reaches and nothing answers, and fails the build on a declaration that no longer describes the tree. No network, step 31 of `make analyze`.
+- `make audit-1to1-routes-report`: the whole R-ROUTE report, with the answered routes ordered by family and the reached ones, written to `plan/1to1-routes.json`. Gates on nothing the plain target does not.
 - `make audit-1to1-validate-docs` — validates the doc/api citations (CI gate).
 - `make audit-struct-completeness` — legacy wrapper running `-scope=structs`.
 - `make audit-action-coverage` — legacy wrapper running `-scope=actions`.
@@ -1372,7 +1384,7 @@ go run ./cmd/godoc_tool/ fix --move-package-doc ./internal/
 #### Make targets
 
 - `make audit-godocs`: writes `dist/analysis/godoc.md`, test functions included.
-- `make check-godocs`: CI gate, in the `generated` job; also step 32 of `make analyze`. Package comments and every exported symbol, test functions excluded (`audit --fail-on-findings`).
+- `make check-godocs`: CI gate, in the `generated` job; also step 33 of `make analyze`. Package comments and every exported symbol, test functions excluded (`audit --fail-on-findings`).
 - `make audit-godocs-check`: the same with `--include-tests`. Not a gate while test functions whose comment is missing or does not open with their name remain.
 - `make fix-godocs ARGS="<paths>"`: run the fixer.
 
@@ -1525,7 +1537,7 @@ One line per finding, naming the file and line of the close, the server as writt
 #### Make targets
 
 - `make audit-closed-servers`: the report, with what a declaration excuses.
-- `make check-closed-servers`: CI gate, in the compile job; also step 31 of `make analyze`.
+- `make check-closed-servers`: CI gate, in the compile job; also step 32 of `make analyze`.
 
 ### audit_md_escaping
 
@@ -1636,7 +1648,7 @@ Every finding with its file, its line, its rule, the reason and the declaration 
 #### Make targets
 
 - `make audit-i18n`: the report, verbose.
-- `make check-i18n`: CI gate, in the `generated` job right after `make check-action-ids`; also step 34 of `make analyze`.
+- `make check-i18n`: CI gate, in the `generated` job right after `make check-action-ids`; also step 35 of `make analyze`.
 
 ### audit_sdk_context
 
@@ -2061,7 +2073,7 @@ One line per finding, in path order: `<path>: does not open with the copyright a
 
 #### Make targets
 
-- `make check-file-headers`: the gate. Step 33 of `make analyze`, and a step of the `generated` job of `ci.yml`, which runs on every pull request and every push to `main`.
+- `make check-file-headers`: the gate. Step 34 of `make analyze`, and a step of the `generated` job of `ci.yml`, which runs on every pull request and every push to `main`.
 - `make fix-file-headers`: the fix mode, for a new file or after the header changes.
 
 ## Generators
@@ -3126,3 +3138,4 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `audit-1to1-grants`                      | `audit_1to1 -scope=grants -gaps-only`                            | The committed request record and fine-grained table agree with the live record and with each other: release, vocabulary, public sets, every denial's element, and one row per recorded action                                 | Non-zero on any inconsistency, or if an input cannot be read                                                                                                                      |
 | `audit-1to1-required`                    | `audit_1to1 -scope=required -gaps-only`                          | Every parameter an input schema requires is one GitLab requires on every way the action runs, and the reverse, or a declaration says why not                                                                                  | Non-zero on an undeclared disagreement or a declaration that answers nothing, or if an input cannot be read                                                                       |
 | `audit-1to1-params`                      | `audit_1to1 -scope=params -gaps-only`                            | Every param a reached route declares that no recorded request carries is reported by who can send it first, client-go or an input                                                                                             | Non-zero on a declaration that answers nothing, or if an input cannot be read                                                                                                     |
+| `audit-1to1-routes`                      | `audit_1to1 -scope=routes -gaps-only`                            | Every route the live record mounts is reached by an action or answered by a rule, a decision about its client-go methods or a family row, and the rest is reported with the methods that send it                              | Non-zero on a declaration that no longer describes the tree, or if an input cannot be read                                                                                        |

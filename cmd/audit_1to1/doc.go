@@ -32,4 +32,5 @@
 //	go run ./cmd/audit_1to1/ -scope=enums -gaps-only          # enum value gate
 //	go run ./cmd/audit_1to1/ -scope=sdk -gaps-only            # SDK parity gate
 //	go run ./cmd/audit_1to1/ -scope=params -gaps-only         # route params (R-PARAM)
+//	go run ./cmd/audit_1to1/ -scope=routes -gaps-only         # live routes (R-ROUTE)
 package main

@@ -70,6 +70,31 @@ func withAdjudication(t *testing.T, table map[string]string) {
 	acceptedMissingMethods, coveredRaw = table, map[string]string{}
 }
 
+// TestAcceptedMissingMethods_TheAccessor_ReturnsTheTableAsACopy verifies the
+// accessor R-ROUTE reads hands out every adjudication of the table, none of
+// the COVERED_RAW ones the waits table derives, and that a caller writing into
+// what it was handed changes nothing a later caller reads.
+func TestAcceptedMissingMethods_TheAccessor_ReturnsTheTableAsACopy(t *testing.T) {
+	got := AcceptedMissingMethods()
+	if len(got) != len(acceptedMissingMethods) {
+		t.Fatalf("AcceptedMissingMethods holds %d methods, the table %d", len(got), len(acceptedMissingMethods))
+	}
+	for key, reason := range acceptedMissingMethods {
+		if got[key] != reason {
+			t.Errorf("AcceptedMissingMethods()[%s] = %q, want %q", key, got[key], reason)
+		}
+	}
+	for key := range coveredRaw {
+		if _, derived := got[key]; derived {
+			t.Errorf("AcceptedMissingMethods carries %s, which the waits table derives", key)
+		}
+	}
+	got["Epics.GetEpic"] = "written by a caller"
+	if again := AcceptedMissingMethods(); again["Epics.GetEpic"] != coveredGraphQLEpics {
+		t.Errorf("a caller's write reached the table: Epics.GetEpic = %q", again["Epics.GetEpic"])
+	}
+}
+
 // TestCoveredRaw_WaitsTable_IsTheOnlyPlaceAMethodIsCoveredRaw verifies the
 // derivation: every method the waits table replaces is adjudicated
 // COVERED_RAW with the entry's reason, and acceptedMissingMethods declares

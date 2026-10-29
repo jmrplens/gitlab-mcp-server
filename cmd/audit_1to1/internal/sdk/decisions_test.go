@@ -50,6 +50,26 @@ func TestDeclaredServices_Entries_CarryAKnownCategoryAndEvidence(t *testing.T) {
 	}
 }
 
+// TestDeclaredServices_TheAccessor_ReturnsEveryDeclarationAsACopy verifies
+// the accessor R-ROUTE reads hands out every declaration with its category
+// and reason, and that a caller writing into what it was handed changes
+// nothing a later caller reads.
+func TestDeclaredServices_TheAccessor_ReturnsEveryDeclarationAsACopy(t *testing.T) {
+	got := DeclaredServices()
+	if len(got) != len(declaredServices) {
+		t.Fatalf("DeclaredServices holds %d services, the table %d", len(got), len(declaredServices))
+	}
+	for service, declared := range declaredServices {
+		if got[service] != ServiceDeclaration(declared) {
+			t.Errorf("DeclaredServices()[%s] = %+v, want %+v", service, got[service], declared)
+		}
+	}
+	got["GeoNodes"] = ServiceDeclaration{Category: "written by a caller"}
+	if again := DeclaredServices(); again["GeoNodes"].Category != supersededUpstream {
+		t.Errorf("a caller's write reached the table: GeoNodes = %+v", again["GeoNodes"])
+	}
+}
+
 // TestGraphQLDecisions_Entries_CarryAKnownVerdictAndEvidence verifies every
 // GraphQL decision is well formed and keyed "<package>.<function>".
 func TestGraphQLDecisions_Entries_CarryAKnownVerdictAndEvidence(t *testing.T) {

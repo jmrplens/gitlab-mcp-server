@@ -135,7 +135,7 @@ go run ./cmd/godoc_tool/ audit [flags]
 | `--ignore-internal`  | `false`    | Skip packages whose import path contains `/internal/`        |
 
 `make check-godocs` is the gate: it runs the audit without `--include-tests` and with `--fail-on-findings`, as a step
-of CI's `generated` job and as step 32 of `make analyze`. golangci-lint cannot stand in for it, because the `comments`
+of CI's `generated` job and as step 33 of `make analyze`. golangci-lint cannot stand in for it, because the `comments`
 exclusion preset in `.golangci.yml` silences revive's `exported` and `package-comments` rules and staticcheck's ST1000
 and ST1020 to ST1022.
 `make audit-godocs-check` adds `--include-tests` and stays a report until the test functions it finds have a comment

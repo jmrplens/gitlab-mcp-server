@@ -25,6 +25,7 @@
 //   - cmd/audit_1to1/internal/grants
 //   - cmd/audit_1to1/internal/params
 //   - cmd/audit_1to1/internal/required
+//   - cmd/audit_1to1/internal/routes
 //   - cmd/audit_metrics
 //   - cmd/audit_tokens
 //   - cmd/gen_lhm_manifest

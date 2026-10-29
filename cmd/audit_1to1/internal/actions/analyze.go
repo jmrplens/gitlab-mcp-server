@@ -6,6 +6,7 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -142,17 +143,19 @@ var acceptedMissingMethods = map[string]string{
 	"Discussions.ListGroupEpicDiscussions": coveredGraphQLEpicDsc,
 	"Discussions.UpdateEpicDiscussionNote": coveredGraphQLEpicDsc,
 
-	// COVERED_GRAPHQL and SUPERSEDED_UPSTREAM: the Orbit methods that send the
-	// REST routes GitLab.com removed on 2026-10-15, -27 and -28. Three actions
-	// read GraphQL in their place; orbit.tools and orbit.dsl read the Orbit MCP
-	// endpoint GitLab serves instead, which client-go has no method for and
-	// orbit.callMCP posts to through NewRequest (a waits entry, row 150). Rows
-	// 144 to 148 of docs/development/upstream-bugs.md.
-	"Orbit.GetStatus":      "COVERED_GRAPHQL. orbit.status reads Query.orbit.serviceStatus; GetStatus sends GET /orbit/status, which GitLab.com answers 404 since gitlab-org/gitlab!265633 (upstream-bugs row 144)",
-	"Orbit.GetSchema":      "COVERED_GRAPHQL. orbit.schema reads Query.orbit.schema, and get_graph_schema of POST /orbit/mcp for its llm text; GetSchema sends GET /orbit/schema, removed by gitlab-org/gitlab!265633 (upstream-bugs row 145)",
+	// SUPERSEDED_UPSTREAM: the Orbit methods that send the REST routes
+	// GitLab.com removed on 2026-10-15, -27 and -28, each replaced by what its
+	// action reads now: GraphQL, or the Orbit MCP endpoint, which client-go has
+	// no method for and orbit.callMCP posts to through NewRequest (a waits
+	// entry, row 150). Not COVERED_GRAPHQL: R-ROUTE carries that decision
+	// onto a route only with a GraphQL action of the self-managed catalog,
+	// which holds no Orbit action, while GitLab replacing the route carries
+	// on its own. Rows 144 to 148 of docs/development/upstream-bugs.md.
+	"Orbit.GetStatus":      "SUPERSEDED_UPSTREAM. GetStatus sends GET /orbit/status, which gitlab-org/gitlab!265633 removed in favor of GraphQL Query.orbit.serviceStatus, which orbit.status reads (upstream-bugs row 144)",
+	"Orbit.GetSchema":      "SUPERSEDED_UPSTREAM. GetSchema sends GET /orbit/schema, which gitlab-org/gitlab!265633 removed in favor of GraphQL Query.orbit.schema, which orbit.schema reads with get_graph_schema of POST /orbit/mcp for its llm text (upstream-bugs row 145)",
 	"Orbit.GetTools":       "SUPERSEDED_UPSTREAM. GetTools sends GET /orbit/tools, which gitlab-org/gitlab!265998 removed in favor of the Orbit MCP endpoint; orbit.tools sends tools/list to POST /orbit/mcp through orbit.callMCP (upstream-bugs rows 146 and 150)",
 	"Orbit.GetDsl":         "SUPERSEDED_UPSTREAM. GetDsl sends GET /orbit/schema/dsl, which GitLab.com answers 404 since it read every query as GQL; orbit.dsl sends list_commands to POST /orbit/mcp through orbit.callMCP (upstream-bugs rows 147 and 150)",
-	"Orbit.GetGraphStatus": "COVERED_GRAPHQL. orbit.graph_status reads Group.orbit and Project.orbit; GetGraphStatus sends GET /orbit/graph_status, removed by gitlab-org/gitlab!264745 (upstream-bugs row 148)",
+	"Orbit.GetGraphStatus": "SUPERSEDED_UPSTREAM. GetGraphStatus sends GET /orbit/graph_status, which gitlab-org/gitlab!264745 removed in favor of GraphQL Group.orbit and Project.orbit, which orbit.graph_status reads (upstream-bugs row 148)",
 
 	// COVERED_RAW is not declared here: a method a raw request, a URL the
 	// handler builds or a generic slug dispatch stands in for is replaced by
@@ -197,6 +200,15 @@ var acceptedMissingMethods = map[string]string{
 	// publish. Set approval requirements through the approval rules instead.
 	"MergeRequestApprovals.ChangeApprovalConfiguration": "INTENTIONAL_SKIP_OTHER. Deprecated in GitLab 16.0; approval rules supersede it (gitlab_mr_approval_rule_create/update)",
 }
+
+// AcceptedMissingMethods returns the adjudications acceptedMissingMethods
+// writes, as a copy a caller may keep, keyed "Service.Method" and each
+// opening with its category ("COVERED_GRAPHQL. Epics pkg"). R-ROUTE reads
+// them to decide whether a route no action reaches inherits the decision
+// about the methods that send it. The COVERED_RAW adjudications are not
+// among them: they are derived from the waits table, which a reader takes
+// them from with the entry that says why.
+func AcceptedMissingMethods() map[string]string { return maps.Clone(acceptedMissingMethods) }
 
 // coveredRawCategory is how a COVERED_RAW adjudication opens, the category
 // the rest of acceptedMissingMethods spells its entries with.

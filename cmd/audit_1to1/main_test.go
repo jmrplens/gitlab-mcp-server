@@ -19,6 +19,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/params"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/required"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/routes"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
@@ -329,6 +330,40 @@ func TestMain_ParamsScope_CarriesGapsOnly(t *testing.T) {
 	}
 }
 
+// TestMain_RoutesScope_CarriesGapsOnly runs main with -scope=routes and
+// holds -gaps-only to the one option it sets, both ways.
+func TestMain_RoutesScope_CarriesGapsOnly(t *testing.T) {
+	original := routesRun
+	t.Cleanup(func() { routesRun = original })
+	var got routes.Options
+	routesRun = func(_ string, opts routes.Options) ([]byte, bool, error) {
+		got = opts
+		return []byte("{}\n"), true, nil
+	}
+	for name, testCase := range map[string]struct {
+		args     []string
+		wantGaps bool
+	}{
+		"gaps_only": {args: []string{"-gaps-only"}, wantGaps: true},
+		"full":      {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got = routes.Options{GapsOnly: !testCase.wantGaps}
+			messages := captureFatal(t)
+			resetFlags(t, append([]string{"-scope=routes", "-output", filepath.Join(t.TempDir(), "routes.json")}, testCase.args...)...)
+
+			main()
+
+			if len(*messages) != 0 {
+				t.Fatalf("main reported %v, want a clean run", *messages)
+			}
+			if got.GapsOnly != testCase.wantGaps {
+				t.Errorf("Options.GapsOnly = %t, want %t", got.GapsOnly, testCase.wantGaps)
+			}
+		})
+	}
+}
+
 // TestRun_AnalyzerFailures_AreNamedByStream verifies each seam-reachable
 // failure of the merged run and the single-scope run surfaces with the name
 // of the stream that failed, and that a gate reporting findings fails the run
@@ -478,6 +513,26 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 				original := paramsRun
 				t.Cleanup(func() { paramsRun = original })
 				paramsRun = func(string, params.Options) ([]byte, bool, error) { return nil, false, boom }
+			},
+			wantErr: "boom",
+		},
+		{
+			name: "routes_gate_reports_stale_declarations", scope: scopeRoutes,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := routesRun
+				t.Cleanup(func() { routesRun = original })
+				routesRun = func(string, routes.Options) ([]byte, bool, error) { return []byte("{}\n"), false, nil }
+			},
+			wantErr: "route declarations that no longer describe the tree", wantReport: true,
+		},
+		{
+			name: "routes_scope_fails", scope: scopeRoutes,
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := routesRun
+				t.Cleanup(func() { routesRun = original })
+				routesRun = func(string, routes.Options) ([]byte, bool, error) { return nil, false, boom }
 			},
 			wantErr: "boom",
 		},
