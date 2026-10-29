@@ -143,23 +143,33 @@ type DSLOutput struct {
 //
 // Every node carries a label where it first appears, and at least one is
 // bounded by its id or a literal property, inline or in WHERE; LIMIT is not a
-// filter. A relationship type follows a colon, -[:IN_PROJECT]->, a repeat is
-// bounded (*1..3), and no path is longer than three hops. WHERE combines
-// predicates on one node's properties with AND and NOT. RETURN selects
-// properties or whole nodes, and count, sum, avg, min and max aggregate, every
-// other item becoming a group key; an aggregate is aliased and sorted by its
-// alias, with one sort key. SKIP takes 0 to 10000 and LIMIT 1 to 1000, which
-// replaced PAGE and AFTER (gitlab-org/orbit/knowledge-graph!2924, issue 1527).
-// CALL db.schema() and CALL db.schema('Node') answer the ontology. The query
-// type of the answer is inferred from the statement.
+// filter. A relationship type follows a colon, -[:IN_PROJECT]->, several
+// types are joined by | (-[:IN_PROJECT|CONTAINS*1..3]->, answered 200 on
+// 2026-10-26), a repeat is bounded (*1..3), and no path is longer than three
+// hops. A traversal can leave the type out, -[*1..3]->, to follow any type,
+// but a shortest path, MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN
+// path with both ends bounded, names its relationship types: GitLab.com
+// refuses the wildcard there with "shortest paths require named relationship
+// types" (measured 2026-10-29, issue 1528). WHERE combines predicates on one
+// node's properties with AND and NOT. RETURN selects properties or whole
+// nodes, and count, sum, avg, min and max aggregate, every other item
+// becoming a group key; an aggregate is aliased and sorted by its alias, with
+// one sort key. SKIP takes 0 to 10000 and LIMIT 1 to 1000, which replaced
+// PAGE and AFTER (gitlab-org/orbit/knowledge-graph!2924, issue 1527). CALL
+// db.schema() and CALL db.schema('Node') answer the ontology. The query type
+// of the answer is inferred from the statement.
 //
 // Examples, each answered 200 by GitLab.com on 2026-10-29:
 //
 //	MATCH (p:Project {full_path: 'jmrp-oss/orbit-fixtures/kg-fixtures'}) RETURN p.id, p.full_path, p.name
 //	MATCH (j:Job)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'jmrp-oss/orbit-fixtures/' RETURN p, count(j) AS job_count ORDER BY job_count DESC
 //	MATCH (p:Project {full_path: 'jmrp-oss/orbit-fixtures/kg-fixtures'})--(n) RETURN n
+//
+// A shortest path over a named relationship type, answered 200 on 2026-10-26:
+//
+//	MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: 'feature/restock-helper'})-[:IN_PROJECT*1..2]->(p:Project {full_path: 'jmrp-oss/orbit-fixtures/kg-fixtures'}) RETURN path
 type QueryInput struct {
-	Query string `json:"query" jsonschema:"Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [SKIP n] [LIMIT n]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1; LIMIT is not a filter. A relationship type follows a colon, -[:IN_PROJECT]->, and a repeat is bounded, *1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups; alias an aggregate and sort by the alias: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. SKIP takes 0 to 10000 and LIMIT 1 to 1000. orbit.schema lists the entities, properties and relationship types a query names. The JSON query DSL GitLab.com read before is gone. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
+	Query string `json:"query" jsonschema:"Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [SKIP n] [LIMIT n]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1; LIMIT is not a filter. A relationship type follows a colon, -[:IN_PROJECT]->, several types are joined by |, -[:IN_PROJECT|CONTAINS*1..3]->, and a repeat is bounded, *1..3 at most. A shortest path, MATCH path = ANY SHORTEST (a)-[:IN_PROJECT*1..3]->(b) RETURN path, bounds both ends and names its relationship types: GitLab.com refuses the wildcard -[*1..3]-> there. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups; alias an aggregate and sort by the alias: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. SKIP takes 0 to 10000 and LIMIT 1 to 1000. orbit.schema lists the entities, properties and relationship types a query names. The JSON query DSL GitLab.com read before is gone. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
 	// ResponseFormat selects the answer's shape. POST /orbit/query declares
 	// a third value beside raw and llm, which is why this input carries its
 	// own field rather than [ResponseFormatInput] (`values: %w[raw llm gql]`

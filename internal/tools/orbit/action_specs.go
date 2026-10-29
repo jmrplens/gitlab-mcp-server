@@ -102,10 +102,10 @@ func queryGuidance() map[string]toolutil.ParameterGuidance {
 			ValueSource:  "GQL text, one MATCH ... RETURN statement, naming the entities, properties and relationship types orbit.schema lists. orbit.dsl describes the language as GitLab.com publishes it.",
 			CommonConfusions: []string{
 				"Every query bounds at least one node by its id or a literal property, inline as {id: 278964} or {full_path: 'gitlab-org/gitlab'}, or in a WHERE comparison. LIMIT bounds nothing, so MATCH (p:Project) RETURN p LIMIT 5 is refused.",
-				"A relationship type follows a colon, -[:IN_PROJECT]->. Written without it, -[IN_PROJECT]-> declares a variable and is refused.",
+				"A relationship type follows a colon, -[:IN_PROJECT]->, and several types are joined by |, -[:IN_PROJECT|CONTAINS*1..3]->. Written without the colon, -[IN_PROJECT]-> declares a variable and is refused.",
 				"WHERE combines predicates on one node's properties with AND and NOT. OR, XOR, RETURN DISTINCT, count(*), OPTIONAL MATCH, WITH and UNION are refused, and a list is negated as NOT p.visibility_level IN [...], never with NOT IN. count(DISTINCT x) counts distinct values.",
 				"Between labeled nodes the arrow is -> or <-. The undirected -- is for the neighbors of one node, whose far end has a variable and nothing else: MATCH (p:Project {id: 278964})--(n) RETURN n.",
-				"A shortest path is MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path with both ends bounded and its relationship types named, since a wildcard -[*1..3]-> is refused. An aggregate is aliased to be sorted by, with one sort key: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC.",
+				"A shortest path is MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path with both ends bounded and its relationship types named, one type or several joined by |, since a wildcard -[*1..3]-> is refused there. An aggregate is aliased to be sorted by, with one sort key: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC.",
 				"A page is SKIP and LIMIT: SKIP 0 to 10000, LIMIT 1 to 1000, as in ORDER BY p.id SKIP 20 LIMIT 20. PAGE and AFTER are refused.",
 				"A query written as a JSON object is the JSON DSL GitLab.com removed, and is answered compile_error at line 1, column 1. Send a GQL statement.",
 			},
