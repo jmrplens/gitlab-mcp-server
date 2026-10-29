@@ -12,7 +12,7 @@ behind the `orbitlive` build tag and require `GITLAB_COM_TOKEN` in the
 environment. This document explains the data they expect and how to
 re-provision it.
 
-The file holds 11 tests and 68 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written in the JSON DSL GitLab.com removed on 2026-10-27, as text, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network.
+The file holds 12 tests and 76 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written in the JSON DSL GitLab.com removed on 2026-10-27, as text, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network. The last holds against a stand-in, with no network, which answers make a subtest skip because GitLab.com does not serve Orbit to the token (see [Access since Orbit's general availability](#access-since-orbits-general-availability)).
 
 ## The fixture namespace
 
@@ -108,7 +108,7 @@ GQL pattern at least once against the namespace: comparison, list and
 string predicates joined by `AND`, multi-node patterns with a
 relationship type, aggregations grouped by a property and by a node
 with `count`, `sum`, `max` and `avg`, `ORDER BY`, the virtual `diff` and
-`content` properties, `PAGE`, an id range, incoming neighbors of one
+`content` properties, `SKIP` and `LIMIT`, an id range, incoming neighbors of one
 relationship type, `properties(n)` and the procedure GQL calls for the
 ontology of one entity. Each of its subtests is informational: it passes as long as
 the API accepts the statement and returns a valid envelope, even with
@@ -213,10 +213,22 @@ token until about 09:32 UTC, and by 09:51 UTC `serviceStatus` answered
 maintainer's decision and has not been taken; the Orbit team was asked in
 gitlab-org/orbit/knowledge-graph#1425.
 
-The live suite skips every subtest that needs the fixture namespace when
-GitLab.com does not serve it (`requireOrbitServed` in
-`test/e2e/orbit/live_test.go`), naming GitLab's answer, and a recording
-made then needs `ORBIT_RECORD_FLAGS=-allow-unanswered` (below).
+The live suite skips a subtest when GitLab.com does not serve it Orbit,
+naming GitLab's answer, and fails it on any other error, since that says
+something about the handler. A subtest that needs the fixture namespace
+runs under `requireOrbitServed` in `test/e2e/orbit/live_test.go`, which
+asks the namespace's index first. One that needs only the account (the
+service status, the schema in every format, the tool list and the query
+language, in `TestOrbitLiveGitLabCom`, `TestOrbitLiveGitLabCom_DSL` and
+`TestOrbitLiveGitLabCom_SchemaFormats`) runs under `skipUnlessServed`,
+which skips on the two answers GitLab.com gave the account that morning:
+`null` where the handler reads (`orbit.ErrOrbitUnavailable`) and the
+Orbit MCP endpoint's permission refusal, a `403` that carries no RFC 6750
+code and does not refuse the account itself. A `401`, a scope refusal or
+a blocked account still fails, and
+`TestNotServed_ThroughTheAccountLevelHandlers_ReadsGitLabsAnswer` holds
+that reading against a stand-in. A recording made while GitLab.com does
+not serve Orbit needs `ORBIT_RECORD_FLAGS=-allow-unanswered` (below).
 
 What says which is the top-level group's own Orbit `access` and `trial`,
 which `graph_status` publishes. GitLab answers them for a top-level group
