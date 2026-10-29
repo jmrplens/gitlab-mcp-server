@@ -1895,11 +1895,16 @@ audit-1to1:
 	$(MAKE) audit-1to1-routes
 
 ## audit-1to1-sdk: gate every client-go service, every raw-GraphQL operation and every
-## enum value on a decision (R-SERVICE/R-GRAPHQL/R-ENUM). Unlike the three candidate
+## enum value on a decision (R-SERVICE/R-GRAPHQL/R-ENUM), with the option structs a
+## call sends, the workarounds waiting on client-go, the captured keys and the
+## identifiers that accept a path. Unlike the three candidate
 ## streams this one FAILS on a finding: a new SDK service that is neither called nor
 ## declared, a raw-GraphQL operation whose wrapper now exists and is not adjudicated,
 ## an SDK enum constant the surface does not offer (or a value it offers that the SDK
-## does not declare), or a declaration or exemption that has gone stale.
+## does not declare), an option struct no input fills, a workaround whose predicate
+## the pinned SDK no longer meets, a captured key the SDK struct beside it models, an
+## integer input passed where GitLab accepts a path, or a declaration or exemption
+## that has gone stale.
 audit-1to1-sdk:
 	go run ./cmd/audit_1to1/ -scope=sdk -gaps-only
 

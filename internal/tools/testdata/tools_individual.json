@@ -20060,6 +20060,31 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "avatar": {
+          "additionalProperties": false,
+          "description": "Avatar image to upload with the topic, from a local file or base64 content",
+          "properties": {
+            "content_base64": {
+              "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "file_path": {
+              "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "filename": {
+              "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "filename"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "description": {
           "description": "Topic description",
           "type": "string"
@@ -20157,6 +20182,31 @@
           "type": [
             "null",
             "boolean"
+          ]
+        },
+        "avatar": {
+          "additionalProperties": false,
+          "description": "Avatar image to upload for the user, from a local file or base64 content",
+          "properties": {
+            "content_base64": {
+              "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "file_path": {
+              "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "filename": {
+              "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "filename"
+          ],
+          "type": [
+            "null",
+            "object"
           ]
         },
         "bio": {
@@ -57830,6 +57880,31 @@
             "boolean"
           ]
         },
+        "avatar": {
+          "additionalProperties": false,
+          "description": "Avatar image to upload with the group, from a local file or base64 content. The upload carries a single value per field, so with it default_branch_protection_defaults may name one access level each for allowed_to_push and allowed_to_merge, and the unique project download alert list is refused (set it with group.update)",
+          "properties": {
+            "content_base64": {
+              "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "file_path": {
+              "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "filename": {
+              "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "filename"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "crm_enabled": {
           "description": "Enable Customer Relations Management (CRM) for the group",
           "type": [
@@ -79077,6 +79152,10 @@
           ],
           "type": "string"
         },
+        "remove_avatar": {
+          "description": "Remove the group's avatar. To replace it instead, use group.upload_avatar",
+          "type": "boolean"
+        },
         "request_access_enabled": {
           "description": "Allow users to request access",
           "type": [
@@ -82439,6 +82518,57 @@
           "additionalProperties": false,
           "description": "Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])",
           "properties": {
+            "allow_merge_on_skipped_pipeline": {
+              "description": "Override whether a merge is allowed when the pipeline is skipped",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "analytics_access_level": {
+              "description": "Override analytics access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "approvals_before_merge": {
+              "description": "Override how many approvals a merge request needs (deprecated: use the merge request approvals API)",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "auto_cancel_pending_pipelines": {
+              "description": "Override whether pending pipelines are auto-canceled (enabled, disabled)",
+              "type": "string"
+            },
+            "auto_devops_deploy_strategy": {
+              "description": "Override the Auto DevOps deploy strategy (continuous, manual, timed_incremental)",
+              "type": "string"
+            },
+            "auto_devops_enabled": {
+              "description": "Override whether Auto DevOps is enabled",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "autoclose_referenced_issues": {
+              "description": "Override whether a merge closes the issues it references",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "build_git_strategy": {
+              "description": "Override the Git strategy of jobs (fetch, clone)",
+              "type": "string"
+            },
+            "build_timeout": {
+              "description": "Override the job timeout in seconds",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
             "builds_access_level": {
               "description": "Override CI/CD builds access level (disabled, private, enabled)",
               "type": "string"
@@ -82447,24 +82577,51 @@
               "description": "Override container registry access level (disabled, private, enabled)",
               "type": "string"
             },
-            "default_branch": {
-              "description": "Override the default branch name",
-              "type": "string"
+            "container_registry_enabled": {
+              "description": "Override whether the container registry is enabled (deprecated: use container_registry_access_level)",
+              "type": [
+                "null",
+                "boolean"
+              ]
             },
             "description": {
               "description": "Override the imported project's description",
+              "type": "string"
+            },
+            "environments_access_level": {
+              "description": "Override environments access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "external_authorization_classification_label": {
+              "description": "Override the external authorization classification label",
+              "type": "string"
+            },
+            "feature_flags_access_level": {
+              "description": "Override feature flags access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "forking_access_level": {
+              "description": "Override forking access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "infrastructure_access_level": {
+              "description": "Override infrastructure access level (disabled, private, enabled)",
               "type": "string"
             },
             "issues_access_level": {
               "description": "Override issues access level (disabled, private, enabled)",
               "type": "string"
             },
-            "lfs_enabled": {
-              "description": "Override Git LFS enablement",
+            "issues_enabled": {
+              "description": "Override whether issues are enabled (deprecated: use issues_access_level)",
               "type": [
                 "null",
                 "boolean"
               ]
+            },
+            "merge_commit_template": {
+              "description": "Override the merge commit message template",
+              "type": "string"
             },
             "merge_method": {
               "description": "Override merge method (merge, rebase_merge, ff)",
@@ -82479,23 +82636,100 @@
               "description": "Override merge requests access level (disabled, private, enabled)",
               "type": "string"
             },
-            "name": {
-              "description": "Override the imported project's name",
-              "type": "string"
-            },
-            "namespace_id": {
-              "description": "Override the namespace ID the imported project is created in",
+            "merge_requests_enabled": {
+              "description": "Override whether merge requests are enabled (deprecated: use merge_requests_access_level)",
               "type": [
                 "null",
-                "integer"
+                "boolean"
               ]
             },
-            "path": {
-              "description": "Override the imported project's URL path (slug)",
+            "model_experiments_access_level": {
+              "description": "Override model experiments access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "model_registry_access_level": {
+              "description": "Override model registry access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "monitor_access_level": {
+              "description": "Override monitor access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "only_allow_merge_if_all_discussions_are_resolved": {
+              "description": "Override whether a merge waits for every discussion to be resolved",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "only_allow_merge_if_pipeline_succeeds": {
+              "description": "Override whether a merge waits for a successful pipeline",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "package_registry_access_level": {
+              "description": "Override package registry access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "pages_access_level": {
+              "description": "Override Pages access level (disabled, private, enabled, public)",
+              "type": "string"
+            },
+            "printing_merge_request_link_enabled": {
+              "description": "Override whether a push prints the create-merge-request link",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "public_builds": {
+              "description": "Override whether pipelines and job logs are public (the import applies this name, not public_jobs)",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "releases_access_level": {
+              "description": "Override releases access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "remove_source_branch_after_merge": {
+              "description": "Override whether the source branch is removed after a merge by default",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "repository_access_level": {
+              "description": "Override repository access level (disabled, private, enabled)",
               "type": "string"
             },
             "request_access_enabled": {
               "description": "Override whether users can request access",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "requirements_access_level": {
+              "description": "Override requirements access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "resolve_outdated_diff_discussions": {
+              "description": "Override whether outdated diff discussions are resolved on push",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "security_and_compliance_access_level": {
+              "description": "Override security and compliance access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "service_desk_enabled": {
+              "description": "Override whether Service Desk is enabled",
               "type": [
                 "null",
                 "boolean"
@@ -82512,6 +82746,25 @@
               "description": "Override snippets access level (disabled, private, enabled)",
               "type": "string"
             },
+            "snippets_enabled": {
+              "description": "Override whether snippets are enabled (deprecated: use snippets_access_level)",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "squash_commit_template": {
+              "description": "Override the squash commit message template",
+              "type": "string"
+            },
+            "squash_option": {
+              "description": "Override the squash option (never, always, default_on, default_off)",
+              "type": "string"
+            },
+            "suggestion_commit_message": {
+              "description": "Override the default commit message for applied suggestions",
+              "type": "string"
+            },
             "visibility": {
               "description": "Override visibility level (private, internal, public)",
               "enum": [
@@ -82524,6 +82777,13 @@
             "wiki_access_level": {
               "description": "Override wiki access level (disabled, private, enabled)",
               "type": "string"
+            },
+            "wiki_enabled": {
+              "description": "Override whether the wiki is enabled (deprecated: use wiki_access_level)",
+              "type": [
+                "null",
+                "boolean"
+              ]
             }
           },
           "type": [
@@ -109194,6 +109454,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "description": "Filter by archived state: true returns only archived labels, false only active labels. Omit for both",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "include_ancestor_groups": {
           "description": "Include labels from ancestor groups",
           "type": "boolean"
@@ -132602,6 +132869,31 @@
           "type": [
             "null",
             "boolean"
+          ]
+        },
+        "avatar": {
+          "additionalProperties": false,
+          "description": "New avatar image to upload for the user, from a local file or base64 content",
+          "properties": {
+            "content_base64": {
+              "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "file_path": {
+              "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "filename": {
+              "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "filename"
+          ],
+          "type": [
+            "null",
+            "object"
           ]
         },
         "bio": {
@@ -176097,6 +176389,31 @@
             "boolean"
           ]
         },
+        "avatar": {
+          "additionalProperties": false,
+          "description": "Avatar image to upload with the project, from a local file or base64 content",
+          "properties": {
+            "content_base64": {
+              "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "file_path": {
+              "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "filename": {
+              "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "filename"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "build_git_strategy": {
           "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
           "enum": [
@@ -177649,6 +177966,31 @@
           "type": [
             "null",
             "boolean"
+          ]
+        },
+        "avatar": {
+          "additionalProperties": false,
+          "description": "Avatar image to upload with the project, from a local file or base64 content",
+          "properties": {
+            "content_base64": {
+              "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "file_path": {
+              "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "filename": {
+              "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "filename"
+          ],
+          "type": [
+            "null",
+            "object"
           ]
         },
         "build_git_strategy": {
@@ -204126,6 +204468,10 @@
           "description": "Releases access level (disabled, private, enabled)",
           "type": "string"
         },
+        "remove_avatar": {
+          "description": "Remove the project's avatar. To replace it instead, use project.upload_avatar",
+          "type": "boolean"
+        },
         "remove_source_branch_after_merge": {
           "description": "Remove source branch after merge by default",
           "type": [
@@ -223692,6 +224038,10 @@
           "description": "Search query string",
           "type": "string"
         },
+        "ref": {
+          "description": "Branch or tag whose commits a project search reads (default: the default branch). Group and instance searches do not take it",
+          "type": "string"
+        },
         "search_type": {
           "description": "Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance.",
           "enum": [
@@ -226457,6 +226807,10 @@
         },
         "query": {
           "description": "Search query string",
+          "type": "string"
+        },
+        "ref": {
+          "description": "Branch or tag of the wiki repository a project search reads (default: the default branch). Group and instance searches do not take it",
           "type": "string"
         },
         "search_type": {
@@ -238559,6 +238913,31 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "avatar": {
+          "additionalProperties": false,
+          "description": "New avatar image to upload for the topic, from a local file or base64 content. Cannot be combined with remove_avatar",
+          "properties": {
+            "content_base64": {
+              "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "file_path": {
+              "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+              "type": "string"
+            },
+            "filename": {
+              "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+              "type": "string"
+            }
+          },
+          "required": [
+            "filename"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "description": {
           "description": "New topic description. Pass an empty string to remove it. Omit the field to leave it untouched",
           "type": [
@@ -238569,6 +238948,10 @@
         "name": {
           "description": "New topic name",
           "type": "string"
+        },
+        "remove_avatar": {
+          "description": "Remove the topic's avatar. Cannot be combined with avatar",
+          "type": "boolean"
         },
         "title": {
           "description": "New topic title",

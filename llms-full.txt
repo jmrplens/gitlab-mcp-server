@@ -868,7 +868,7 @@ Action guidance:
 - topic_delete: Delete a project topic by id (admin only). Projects keep their other topics. This only removes the topic definition.
 - topic_get: Get one instance project topic by its numeric topic id.
 - topic_list: List instance project topics, optionally filtered by a search term. Topics group related projects across the instance.
-- topic_update: Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, or avatar.
+- topic_update: Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, avatar, or remove_avatar to remove the image.
 - usage_data_metric_definitions: Get the Service Ping metric definitions (the dictionary describing each usage metric, its category, and data type).
 - usage_data_non_sql_metrics: Get the non-SQL Service Ping metrics for the instance (metrics not derived from database queries).
 - usage_data_queries: Get the SQL queries that GitLab uses to build Service Ping metrics, useful for auditing what usage data is collected.
@@ -10252,6 +10252,7 @@ Parameter guidance:
 - code.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
 - commits.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - commits.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- commits.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
 - issues.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - issues.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - merge_requests.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
@@ -10264,6 +10265,7 @@ Parameter guidance:
 - users.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - wiki.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - wiki.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- wiki.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
 
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id. If both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
@@ -15079,6 +15081,7 @@ Create an instance project topic. Returns: the created topic with id, name, titl
 
 **Parameters:**
 
+- `avatar` (object): Avatar image to upload with the topic, from a local file or base64 content
 - `description` (string): Topic description
 - `name` (string) (required): Topic name (slug-like unique identifier)
 - `title` (string) (required): Topic display title
@@ -15093,6 +15096,7 @@ Create a user account. Returns: created user identity and profile summary fields
 
 - `admin` (boolean): Grant admin privileges
 - `auditor` (boolean): Grant auditor privileges (Premium/Ultimate)
+- `avatar` (object): Avatar image to upload for the user, from a local file or base64 content
 - `bio` (string): User bio text
 - `can_create_group` (boolean): Allow the user to create groups
 - `color_scheme_id` (integer): Syntax-highlighting color scheme ID
@@ -18213,6 +18217,7 @@ Create a GitLab group or subgroup. Returns: created group metadata including ID,
 - `allow_personal_snippets` (boolean): Allow members to create personal snippets
 - `auto_ban_user_on_excessive_projects_download` (boolean): Automatically ban users who exceed the unique project download limit (Ultimate)
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for projects in this group
+- `avatar` (object): Avatar image to upload with the group, from a local file or base64 content. The upload carries a single value per field, so with it default_branch_protection_defaults may name one access level each for allowed_to_push and allowed_to_merge, and the unique project download alert list is refused (set it with group.update)
 - `crm_enabled` (boolean): Enable Customer Relations Management (CRM) for the group
 - `default_branch` (string): Default branch name
 - `default_branch_protection` (integer): Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults
@@ -19623,6 +19628,7 @@ Update a GitLab group's settings. Returns: the updated group metadata. See also:
 - `prevent_forking_outside_group` (boolean): Prevent forking projects outside the group (Premium/Ultimate)
 - `prevent_sharing_groups_outside_hierarchy` (boolean): Prevent inviting groups outside this group's hierarchy
 - `project_creation_level` (string): Who can create projects (noone, maintainer, developer)
+- `remove_avatar` (boolean): Remove the group's avatar. To replace it instead, use group.upload_avatar
 - `request_access_enabled` (boolean): Allow users to request access
 - `require_two_factor_authentication` (boolean): Require two-factor authentication for members
 - `share_with_group_lock` (boolean): Prevent sharing projects in this group with other groups
@@ -21019,6 +21025,7 @@ List labels in a project with optional search, counts, ancestor-group inclusion,
 
 **Parameters:**
 
+- `archived` (boolean): Filter by archived state: true returns only archived labels, false only active labels. Omit for both
 - `include_ancestor_groups` (boolean): Include labels from ancestor groups
 - `order_by` (string): Column to order results by (e.g. name, created_at, updated_at)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -22626,6 +22633,7 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 
 - `admin` (boolean): Grant or revoke admin privileges
 - `auditor` (boolean): Grant or revoke auditor privileges (Premium/Ultimate)
+- `avatar` (object): New avatar image to upload for the user, from a local file or base64 content
 - `bio` (string): New bio text. Pass an empty string to remove it. Omit the field to leave it untouched
 - `can_create_group` (boolean): Allow user to create groups
 - `commit_email` (string): Email used for commits
@@ -25057,6 +25065,7 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
+- `avatar` (object): Avatar image to upload with the project, from a local file or base64 content
 - `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
@@ -25149,6 +25158,7 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
+- `avatar` (object): Avatar image to upload with the project, from a local file or base64 content
 - `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
@@ -26443,6 +26453,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `public_builds` (boolean): Enable public access to pipelines
 - `public_jobs` (boolean): Enable public access to pipelines
 - `releases_access_level` (string): Releases access level (disabled, private, enabled)
+- `remove_avatar` (boolean): Remove the project's avatar. To replace it instead, use project.upload_avatar
 - `remove_source_branch_after_merge` (boolean): Remove source branch after merge by default
 - `repository_access_level` (string): Repository access level (disabled, private, enabled)
 - `repository_storage` (string): Repository storage shard name (admin only)
@@ -28089,6 +28100,7 @@ Search commit messages across global, group, or project scope. Returns: matching
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query string
+- `ref` (string): Branch or tag whose commits a project search reads (default: the default branch). Group and instance searches do not take it
 - `search_type` (string): Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -28205,6 +28217,7 @@ Search wiki blobs across global, group, or project scope. Returns: the file of e
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string): Project ID or URL-encoded path (optional)
 - `query` (string) (required): Search query string
+- `ref` (string): Branch or tag of the wiki repository a project search reads (default: the default branch). Group and instance searches do not take it
 - `search_type` (string): Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -29287,8 +29300,10 @@ Update a project topic. Returns: the updated topic. See also: gitlab_get_topic, 
 
 **Parameters:**
 
+- `avatar` (object): New avatar image to upload for the topic, from a local file or base64 content. Cannot be combined with remove_avatar
 - `description` (string): New topic description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `name` (string): New topic name
+- `remove_avatar` (boolean): Remove the topic's avatar. Cannot be combined with avatar
 - `title` (string): New topic title
 - `topic_id` (integer) (required): Topic ID
 

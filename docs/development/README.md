@@ -42,7 +42,7 @@ testing reference live in subfolders here.
 | [Tenant Policy](tenant-policy-spec.md)                                    | Who a caller is, what each key costs to mint, and the invariants every limit meets                                                 |
 | [Adding or Changing a Limit](adding-a-limit.md)                           | The procedure a new limit, or a change to one, follows under the tenant policy register                                            |
 | [Request Inventory](cmd-utilities.md#gen_request_inventory)               | What a row of the generated `request-inventory.json` means, and what it does not                                                   |
-| [Request Paths and Fine-Grained Grants](request-paths.md)                 | R-PATH, R-PAGE and R-GRANT: the audit dimensions that read the requests a handler sends                                            |
+| [Request Paths and Fine-Grained Grants](request-paths.md)                 | R-PATH, R-PAGE, R-GRANT, R-PARAM and R-ROUTE: the audit dimensions that read the requests a handler sends                          |
 | [Orbit Live Test Fixtures](orbit-fixtures.md)                             | Fixtures, setup, and the indexer caveat for GitLab.com live tests                                                                  |
 | [Enterprise Schema Checks](enterprise-schema-checks.md)                   | The unlicensed weekly re-probe, and the licensed pre-release run                                                                   |
 | [Testing](testing/README.md)                                              | Unit, E2E, and AI model-evaluation documentation                                                                                   |

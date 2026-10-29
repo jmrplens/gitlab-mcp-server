@@ -1545,11 +1545,12 @@ Sin parámetros.
 - **Token de grano fino**: Topic: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro     | Tipo     | Requerido | Descripción                              |
-| ------------- | -------- | --------- | ---------------------------------------- |
-| `name`        | `string` | sí        | Topic name (slug-like unique identifier) |
-| `title`       | `string` | sí        | Topic display title                      |
-| `description` | `string` | no        | Topic description                        |
+| Parámetro     | Tipo     | Requerido | Descripción                                                                |
+| ------------- | -------- | --------- | -------------------------------------------------------------------------- |
+| `name`        | `string` | sí        | Topic name (slug-like unique identifier)                                   |
+| `title`       | `string` | sí        | Topic display title                                                        |
+| `avatar`      | `object` | no        | Avatar image to upload with the topic, from a local file or base64 content |
+| `description` | `string` | no        | Topic description                                                          |
 
 ### `admin.topic_delete`
 
@@ -1614,12 +1615,14 @@ Sin parámetros.
 - **Token de grano fino**: Topic: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro     | Tipo      | Requerido | Descripción                                                                                    |
-| ------------- | --------- | --------- | ---------------------------------------------------------------------------------------------- |
-| `topic_id`    | `integer` | sí        | Topic ID                                                                                       |
-| `description` | `string`  | no        | New topic description. Pass an empty string to remove it. Omit the field to leave it untouched |
-| `name`        | `string`  | no        | New topic name                                                                                 |
-| `title`       | `string`  | no        | New topic title                                                                                |
+| Parámetro       | Tipo      | Requerido | Descripción                                                                                                          |
+| --------------- | --------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
+| `topic_id`      | `integer` | sí        | Topic ID                                                                                                             |
+| `avatar`        | `object`  | no        | New avatar image to upload for the topic, from a local file or base64 content. Cannot be combined with remove_avatar |
+| `description`   | `string`  | no        | New topic description. Pass an empty string to remove it. Omit the field to leave it untouched                       |
+| `name`          | `string`  | no        | New topic name                                                                                                       |
+| `remove_avatar` | `boolean` | no        | Remove the topic's avatar. Cannot be combined with avatar                                                            |
+| `title`         | `string`  | no        | New topic title                                                                                                      |
 
 ### `admin.usage_data_metric_definitions`
 

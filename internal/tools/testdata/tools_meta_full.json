@@ -3164,7 +3164,7 @@
   },
   {
     "name": "gitlab_admin",
-    "description": "Use {\"action\":\"alert_metric_image_delete\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_admin.\u003caction\u003e. A domain.action ID below is the action after the dot on the gitlab_\u003cdomain\u003e tool, or that tool itself where it takes no action, so admin.alert_metric_image_delete is {\"action\":\"alert_metric_image_delete\"} on this one.\nAction guidance:\n- alert_metric_image_delete: Delete a metric image from an alert. Provide project_id, alert_iid, and image id.\n- alert_metric_image_list: List the metric images attached to an alert in a project's incident/alert management. Provide project_id and alert_iid.\n- alert_metric_image_update: Update the url or url_text of an existing alert metric image. Provide project_id, alert_iid, and image id.\n- alert_metric_image_upload: Upload a metric image to an alert in a project. Provide project_id, alert_iid, and the image file. Optionally a url and url_text.\n- app_statistics_get: Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access.\n- appearance_get: Read the current GitLab application appearance and branding settings. Use this for logos, banners, PWA labels, and instance message colors rather than general application settings or version metadata.\n- appearance_update: Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately.\n- application_create: Create an instance-level OAuth application (admin only). Provide name, redirect_uri, and scopes. Optionally mark it confidential or trusted.\n- application_delete: Delete an instance-level OAuth application by id (admin only), revoking its credentials.\n- application_list: List instance-level OAuth applications registered for the GitLab instance (admin only).\n- application_renew_secret: Renew (rotate) the secret of an instance-level OAuth application by id (admin only). The previous secret is invalidated immediately, so update every client that uses it with the new value returned.\n- broadcast_message_create: Create a broadcast message banner or notification (admin only). Provide message text and optionally theme, target_path, broadcast_type, dismissable, starts_at, and ends_at.\n- broadcast_message_delete: Delete a broadcast message by id (admin only), removing the banner or notification from the instance.\n- broadcast_message_get: Get one broadcast message by id.\n- broadcast_message_list: List all broadcast messages shown to users across the instance, including active and scheduled banners and notifications.\n- broadcast_message_update: Update a broadcast message by id (admin only). Send only the fields to change such as message, theme, schedule, or target.\n- bulk_import_cancel: Cancel an in-progress bulk import (direct-transfer migration) by id.\n- bulk_import_entity_failures: List the failures recorded for one bulk import entity, useful for diagnosing partial migrations. Provide import id and entity id.\n- bulk_import_entity_get: Get one entity (group or project) within a bulk import by import id and entity id to inspect its migration status.\n- bulk_import_entity_list: List the entities (groups and projects) being migrated within a bulk import, with per-entity status. Provide the bulk import id.\n- bulk_import_get: Get one bulk import (direct-transfer migration) by id to inspect its overall status.\n- bulk_import_list: List bulk imports (direct-transfer migrations) started by the authenticated user, with their status.\n- bulk_import_start: Start a group/project migration by direct transfer from another GitLab instance (admin/maintainer). Provide the source instance URL, access token, and entities to import.\n- cluster_agent_delete: Delete a GitLab Agent for Kubernetes from a project by project_id and agent id.\n- cluster_agent_get: Get one GitLab Agent for Kubernetes by project_id and agent id.\n- cluster_agent_list: List the GitLab Agents for Kubernetes registered in a project. Provide project_id.\n- cluster_agent_register: Register a new GitLab Agent for Kubernetes in a project. Provide project_id and the agent name.\n- cluster_agent_token_create: Create a token for a GitLab Agent for Kubernetes. Provide project_id, agent id, and a token name.\n- cluster_agent_token_get: Get one cluster agent token by project_id, agent id, and token id.\n- cluster_agent_token_list: List the tokens for a GitLab Agent for Kubernetes. Provide project_id and agent id.\n- cluster_agent_token_revoke: Revoke a cluster agent token by project_id, agent id, and token id, immediately invalidating it.\n- custom_attr_delete: Delete a custom attribute by key from a user, group, or project (admin only).\n- custom_attr_get: Get one custom attribute by key for a user, group, or project (admin only).\n- custom_attr_list: List custom attributes set on a user, group, or project (admin only). Custom attributes are admin-only key/value metadata.\n- custom_attr_set: Set (create or update) a custom attribute by key on a user, group, or project (admin only). Provide key and value.\n- db_migration_mark: Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.\n- dependency_proxy_delete: Purge the dependency proxy cache for a group, freeing storage used by cached upstream images. Provide the group id.\n- error_tracking_create: Create an error-tracking client key for a project's integrated error tracking. Provide project_id.\n- error_tracking_delete: Delete an error-tracking client key from a project by project_id and key id.\n- error_tracking_get_settings: Get the integrated error-tracking settings for a project, including whether it is enabled. Provide project_id.\n- error_tracking_list: List the error-tracking client keys configured for a project (used by the integrated error tracking feature). Provide project_id.\n- error_tracking_update_settings: Enable or disable integrated error tracking for a project. Provide project_id and the active flag (and integrated mode where applicable).\n- feature_delete: Delete a feature flag by name (admin only), removing all of its gates and resetting it to its default state.\n- feature_list: List all defined feature flags and their current gate state on the instance. Use list_feature_definitions for the flag catalog with metadata.\n- feature_list_definitions: List feature flag definitions (the catalog) with metadata such as type, group, default state, and introduction milestone.\n- feature_set: Set or update a feature flag's gate (admin only). Provide name and a value such as true/false, a percentage, or scope it to feature_group, user, group, project, or namespace.\n- import_bitbucket: Import a repository from Bitbucket Cloud into GitLab. Provide Bitbucket credentials, the source repo, and the target namespace.\n- import_bitbucket_server: Import a repository from a self-hosted Bitbucket Server into GitLab. Provide the Bitbucket Server URL, credentials, the source project/repo, and the target namespace.\n- import_cancel_github: Cancel an in-progress GitHub import for a project. Provide the project_id of the importing project.\n- import_gists: Import the authenticated user's GitHub gists into GitLab snippets. Provide a GitHub personal access token.\n- import_github: Import a repository from GitHub into GitLab. Provide a GitHub personal access token, the repo_id, and the target namespace.\n- license_add: Install a new GitLab Enterprise license (admin only). Provide the license key string. Replaces the active license entitlements.\n- license_delete: Delete an installed license by id (admin only). Removing the active license downgrades the instance to Community/Free features.\n- license_get: Get the currently installed GitLab Enterprise license, including plan, expiration, user limits, and add-on entitlements. Requires administrator access.\n- metadata_get: Read GitLab instance metadata such as version and revision. Do not use this for application settings.\n- plan_limits_change: Change plan limits for a plan (admin only). Provide plan_name and only the package file size limits to change, such as npm_max_file_size. The other limits the read returns are not accepted here.\n- plan_limits_get: Get the configured plan limits for a plan (admin only). Provide plan_name (e.g. default, free, premium) to read its resource caps.\n- secure_file_create: Upload a CI/CD secure file to a project. Provide project_id, the name, and the file content.\n- secure_file_delete: Remove a CI/CD secure file from a project by project_id and secure file id.\n- secure_file_get: Get metadata for one CI/CD secure file by project_id and secure file id.\n- secure_file_list: List the CI/CD secure files stored for a project (certificates, provisioning profiles, and similar). Provide project_id.\n- settings_get: Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information.\n- settings_update: Update GitLab application (instance) settings such as sign-up restrictions, default visibility, CI/CD defaults, rate limits, and feature toggles. Send only the keys to change. Requires administrator access.\n- sidekiq_compound_metrics: Get all Sidekiq metrics in one call: queue, process, and job statistics combined.\n- sidekiq_job_stats: Get aggregate Sidekiq job statistics for the instance such as processed, failed, and enqueued counts.\n- sidekiq_process_metrics: Get Sidekiq process metrics for the instance, listing running Sidekiq processes and their state.\n- sidekiq_queue_metrics: Get Sidekiq background-job queue metrics for the instance, including per-queue backlog and latency.\n- system_hook_add: Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable.\n- system_hook_delete: Delete an instance system hook by id (admin only), stopping it from receiving global event notifications.\n- system_hook_delete_url_variable: Delete one URL variable from an instance system hook (admin only). Provide the hook id and variable key.\n- system_hook_edit: Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification.\n- system_hook_get: Get one instance system hook by its numeric hook id.\n- system_hook_list: List instance-wide system hooks that fire on global events such as project, group, user, and key changes, one page at a time with page and per_page. Distinct from per-project webhooks.\n- system_hook_set_url_variable: Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value.\n- system_hook_test: Fire a test event against an instance system hook by id to verify it is reachable and configured correctly.\n- terraform_state_delete: Delete a Terraform state by project_id and state name (admin/maintainer). Removes all versions of the state.\n- terraform_state_get: Get one Terraform state by project_id and state name, including its lock status.\n- terraform_state_list: List the Terraform states stored in a project's Terraform state backend. Provide project_id.\n- terraform_state_lock: Lock a Terraform state to prevent concurrent applies. Provide project_id and the state name.\n- terraform_state_unlock: Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name. Do not send the state name as id.\n- terraform_version_delete: Delete a single version of a Terraform state by project_id, state name, and serial/version number.\n- topic_create: Create a new instance project topic (admin only). Provide name and title, and optionally description and avatar.\n- topic_delete: Delete a project topic by id (admin only). Projects keep their other topics. This only removes the topic definition.\n- topic_get: Get one instance project topic by its numeric topic id.\n- topic_list: List instance project topics, optionally filtered by a search term. Topics group related projects across the instance.\n- topic_update: Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, or avatar.\n- usage_data_metric_definitions: Get the Service Ping metric definitions (the dictionary describing each usage metric, its category, and data type).\n- usage_data_non_sql_metrics: Get the non-SQL Service Ping metrics for the instance (metrics not derived from database queries).\n- usage_data_queries: Get the SQL queries that GitLab uses to build Service Ping metrics, useful for auditing what usage data is collected.\n- usage_data_service_ping: Get the latest Service Ping (usage data) payload that GitLab reports for the instance.\n- usage_data_track_event: Track a single internal usage event (admin only). Provide the event name and optional context for usage analytics.\n- usage_data_track_events: Track multiple internal usage events in one call (admin only). Provide an array of events with names and context.\nParameter guidance:\n- alert_metric_image_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_upload.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- appearance_update.message_background_color: hex_color. Source: Hex color string such as #e75e40 for the appearance banner background. Avoid: Provide a CSS-style hex color such as #ffffff. Do not send color names or RGB tuples.\n- appearance_update.message_font_color: hex_color. Source: Hex color string such as #ffffff for the appearance banner text. Avoid: Provide a CSS-style hex color such as #000000. Do not send color names or RGB tuples.\n- appearance_update.title: instance_brand_title. Source: Instance branding title shown in the GitLab UI header.\n- application_create.name: oauth_application_name. Source: Human-readable name for the OAuth application.\n- application_create.redirect_uri: oauth_redirect_uri. Source: Authorized callback URL the OAuth flow returns to.\n- application_create.scopes: oauth_scopes. Source: Space-delimited list of scopes GitLab OAuth supports.\n- application_delete.id: oauth_application_id. Source: Numeric application ID from admin.application_list output.\n- application_renew_secret.id: oauth_application_id. Source: Numeric application ID from admin.application_list output.\n- broadcast_message_delete.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.\n- broadcast_message_get.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.\n- broadcast_message_update.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.\n- cluster_agent_delete.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_get.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_register.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_create.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_token_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_get.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_token_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_list.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_token_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_revoke.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_token_revoke.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- db_migration_mark.version: migration_version. Source: The migration's timestamp version, as GitLab names it in the migration file.\n- dependency_proxy_delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- error_tracking_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_delete.key_id: error_tracking_key_id. Source: Client key numeric ID from admin.error_tracking_list output.\n- error_tracking_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_get_settings.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_update_settings.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- feature_delete.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.\n- feature_set.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.\n- feature_set.value: feature_flag_value. Source: Desired gate value: a boolean, a percentage, or a string GitLab accepts for the gate.\n- import_cancel_github.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- license_add.license: license_payload. Source: The encoded license text the administrator was issued, sent whole.\n- license_delete.id: license_id. Source: License numeric ID from admin.license_get or admin.license_add output.\n- plan_limits_change.plan_name: plan_name. Source: Plan name whose limits are read or changed, for example default, free or premium.\n- plan_limits_get.plan_name: plan_name. Source: Plan name whose limits are read or changed, for example default, free or premium.\n- secure_file_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- settings_update.settings: settings_patch. Source: Map of setting keys to desired values, in the snake_case spelling the GitLab API expects.\n- terraform_state_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_state_lock.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_state_unlock.name: terraform_state_name. Source: Terraform state name from the prompt or admin.terraform_state_list output. Avoid: Do not send the state name as id. Use params.name.\n- terraform_state_unlock.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_version_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- topic_delete.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.\n- topic_get.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.\n- topic_update.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.\n- usage_data_track_event.event: usage_event_name. Source: The single internal event name to record.\n- usage_data_track_event.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.\n- usage_data_track_event.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- usage_data_track_events.events: usage_event_batch. Source: Array of event objects to record in one request.\n\nGitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab-to-GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.\nWhen to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).\nNOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).\n\nBehavior:\n- Idempotent reads: settings_get / appearance_get / *_list / *_get / sidekiq_* / app_statistics_get / metadata_get / usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions / plan_limits_get / feature_list / feature_list_definitions.\n- settings_update / appearance_update / feature_set / plan_limits_change / custom_attr_set / error_tracking_update_settings are idempotent (same input -\u003e same state). license_add / system_hook_add / system_hook_test / broadcast_message_create / application_create / bulk_import_start / import_github / import_bitbucket / import_bitbucket_server / import_gists are NON-idempotent (re-invocation creates duplicates or new background jobs).\n- Side effects: license_add / system_hook_add / broadcast_message_create / settings_update / feature_set apply instance-wide IMMEDIATELY (all sessions affected). bulk_import_* and import_* queue long-running async migrations. Poll bulk_import_get / bulk_import_entity_* until status='finished'. usage_data_track_event posts to Snowplow when send_to_snowplow=true. application_create returns the OAuth secret only ONCE.\n- Destructive: *_delete, license_delete, system_hook_delete, feature_delete, application_delete, broadcast_message_delete, custom_attr_delete, cluster_agent_delete, dependency_proxy_delete, secure_file_delete, terraform_state_delete / terraform_state_unlock, db_migration_mark, bulk_import_cancel and import_cancel_github are irreversible. db_migration_mark may corrupt the schema if used incorrectly.\n\nReturns: resource object for *_get/*_create/*_update/*_set/*_add. Metrics object for Sidekiq/usage_data/app_statistics/metadata. Paginated array for *_list / feature_list_definitions. {success, message} for *_delete/*_revoke/*_purge/*_unlock.\nErrors: 401/403 forbidden (hint: most actions require admin token), 404 not found, 400 invalid params (hint: license must be base64-encoded. System hook url must be https).\n\nParam conventions: * = required. List actions accept page, per_page.\n\nTopics:\n- topic_list: search\n- topic_get / topic_delete: topic_id*\n- topic_create: name*, title*, description\n- topic_update: topic_id*, name, title, description\n\nSettings \u0026 appearance:\n- settings_get / appearance_get: (no params). If the task says \"read current instance settings\" or \"get instance settings\", call settings_get, not broadcast_message_list.\n- settings_update: settings (map of setting_name to value)\n- appearance_update: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines\n\nBroadcast messages:\n- broadcast_message_list: (no params). Lists existing broadcast messages only. It does not read instance settings.\n- broadcast_message_get / broadcast_message_delete: id*\n- broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable (bool), target_path, target_access_levels\n- broadcast_message_update: id*, message, starts_at, ends_at, broadcast_type, theme, dismissable\n\nInstance feature flags:\n- feature_list / feature_list_definitions: (no params)\n- feature_set: name*, value*, key, feature_group, user, group, namespace, project, repository, force (bool)\n- feature_delete: name*\n\nLicense:\n- license_get: (no params)\n- license_add: license* (Base64-encoded)\n- license_delete: id*\n\nSystem hooks:\n- system_hook_list: (no params)\n- system_hook_get / system_hook_test / system_hook_delete: id*\n- system_hook_add: url*, token, signing_token, push_events, push_events_branch_filter, branch_filter_strategy, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification\n- system_hook_edit: id*, url, name, description, token, signing_token, push_events, push_events_branch_filter, branch_filter_strategy, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification\n- system_hook_set_url_variable: id*, key*, value*\n- system_hook_delete_url_variable: id*, key*\n\nSidekiq metrics: sidekiq_queue_metrics / sidekiq_process_metrics / sidekiq_job_stats / sidekiq_compound_metrics (no params).\n\nPlan limits:\n- plan_limits_get: plan_name\n- plan_limits_change: plan_name*, conan_max_file_size, generic_packages_max_file_size, helm_max_file_size, maven_max_file_size, npm_max_file_size, nuget_max_file_size, pypi_max_file_size, terraform_module_max_file_size\n\nUsage data:\n- usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions: (no params)\n- usage_data_track_event: event*, send_to_snowplow (bool), namespace_id, project_id\n- usage_data_track_events: events* (array)\n\nOAuth applications:\n- application_list: (no params)\n- application_create: name*, redirect_uri*, scopes*, confidential (bool)\n- application_delete: id*\n\nMisc:\n- db_migration_mark: version*, database\n- app_statistics_get / metadata_get: (no params)\n\nCustom attributes:\n- custom_attr_list: resource_type* (user/group/project), resource_id*\n- custom_attr_get / custom_attr_delete: resource_type*, resource_id*, key*\n- custom_attr_set: resource_type*, resource_id*, key*, value*\n\nBulk import:\n- bulk_import_start: configuration*, entities*. configuration is {url, access_token} and is nested, not two top-level params. Each entity is {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)}.\n- bulk_import_list: status, page, per_page\n- bulk_import_get: id*\n- bulk_import_cancel: id*\n- bulk_import_entity_list: bulk_import_id, status, page, per_page\n- bulk_import_entity_get: bulk_import_id*, entity_id*\n- bulk_import_entity_failures: bulk_import_id*, entity_id*\n\nError tracking:\n- error_tracking_list: project_id*\n- error_tracking_create: project_id*\n- error_tracking_delete: project_id*, key_id*\n- error_tracking_get_settings: project_id*\n- error_tracking_update_settings: project_id*, active* (bool), integrated (bool)\n\nAlert metric images:\n- alert_metric_image_list: project_id*, alert_iid*\n- alert_metric_image_upload: project_id*, alert_iid*, url*, url_text\n- alert_metric_image_update: project_id*, alert_iid*, image_id*, url, url_text\n- alert_metric_image_delete: project_id*, alert_iid*, image_id*\n\nSecure files:\n- secure_file_list: project_id*\n- secure_file_get / secure_file_delete: project_id*, file_id*\n- secure_file_create: project_id*, name*, file_path or content_base64 (exactly one)\n\nTerraform states:\n- terraform_state_list: project_path*\n- terraform_state_get: project_path*, name*\n- terraform_state_delete / terraform_state_lock / terraform_state_unlock: project_id*, name*\n- terraform_version_delete: project_id*, name*, serial*\n\nCluster agents:\n- cluster_agent_list: project_id*\n- cluster_agent_get / cluster_agent_delete: project_id*, agent_id*\n- cluster_agent_register: project_id*, name*\n- cluster_agent_token_list: project_id*, agent_id*\n- cluster_agent_token_get / cluster_agent_token_revoke: project_id*, agent_id*, token_id*\n- cluster_agent_token_create: project_id*, agent_id*, name*\n\nImports:\n- import_github: personal_access_token*, repo_id*, target_namespace*, new_name\n- import_bitbucket: bitbucket_api_token*, bitbucket_email*, repo_path*, target_namespace*, new_name\n- import_bitbucket_server: bitbucket_server_url*, bitbucket_server_username*, personal_access_token*, bitbucket_server_project*, bitbucket_server_repo*, new_namespace, new_name\n- import_cancel_github: project_id*\n- import_gists: personal_access_token*\n- dependency_proxy_delete: group_id*. Purges the group's dependency proxy cache\n\nParameter constraints (beyond schema):\n- broadcast_message_create.broadcast_type is one of banner, notification. Theme is a CSS hex color (e.g. '#E75E40'). target_access_levels uses GitLab numeric levels [10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner]. starts_at/ends_at are ISO 8601 timestamps and ends_at MUST be \u003e starts_at.\n- feature_set.value accepts 'true' / 'false' / a 0-100 integer (percentage of time/actors) / 'actor:\u003cid\u003e'. The optional key disambiguates 'percentage_of_time' vs 'percentage_of_actors'. User/group/namespace/project/repository scope the gate and are mutually-exclusive with each other.\n- plan_limits_change.*_max_file_size are sizes in BYTES. 0 disables the limit. Omitted fields keep their current value (partial update).\n- license_add.license is the Base64 of the raw .gitlab-license file (not the file path).\n- system_hook_add.url MUST be https when enable_ssl_verification=true. Token is sent as X-Gitlab-Token on every delivery.\n- application_create.scopes is a SPACE-separated string of OAuth scopes (e.g. 'api read_user'). Confidential=false enables PKCE for public clients. The client_secret is returned ONCE on creation and cannot be retrieved later.\n- cluster_agent_token_create returns the token ONCE. Revoke + re-create to rotate.\n- secure_file_create.content_base64 is Base64-encoded, and file_path reads a local file instead. Max size 5 MiB.\n- custom_attr_set.resource_type is one of user, group, project and (resource_type, resource_id, key) is a unique upsert key.\n- bulk_import_start.entities[].source_type is one of group_entity, project_entity. migrate_projects and migrate_memberships apply only to group_entity. destination_namespace must already exist on the target instance.\n- import_bitbucket_server.bitbucket_server_project is the project KEY (usually uppercase, from the Bitbucket URL), not the display name.\n- usage_data_track_event.namespace_id and .project_id are mutually-exclusive context refs (provide at most one). send_to_snowplow=false keeps the event internal to GitLab.\n- db_migration_mark.database is one of main, ci. Defaults to 'main'. Marking a non-applied migration corrupts schema_migrations. Verify first via metadata_get.\n- terraform_state_lock fails if the state is already locked. Unlock breaks any active client session holding the lock.\n- topic_create.name must be globally unique (slug). Title is the display name shown in the UI.\n- List actions: page defaults to 1, per_page defaults to 20 (GitLab cap is 100).\n\nSee also: gitlab_user (user CRUD), gitlab_server (MCP server health and updates), gitlab_group / gitlab_project (group/project admin), gitlab_access (tokens, deploy keys, access requests).",
+    "description": "Use {\"action\":\"alert_metric_image_delete\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_admin.\u003caction\u003e. A domain.action ID below is the action after the dot on the gitlab_\u003cdomain\u003e tool, or that tool itself where it takes no action, so admin.alert_metric_image_delete is {\"action\":\"alert_metric_image_delete\"} on this one.\nAction guidance:\n- alert_metric_image_delete: Delete a metric image from an alert. Provide project_id, alert_iid, and image id.\n- alert_metric_image_list: List the metric images attached to an alert in a project's incident/alert management. Provide project_id and alert_iid.\n- alert_metric_image_update: Update the url or url_text of an existing alert metric image. Provide project_id, alert_iid, and image id.\n- alert_metric_image_upload: Upload a metric image to an alert in a project. Provide project_id, alert_iid, and the image file. Optionally a url and url_text.\n- app_statistics_get: Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access.\n- appearance_get: Read the current GitLab application appearance and branding settings. Use this for logos, banners, PWA labels, and instance message colors rather than general application settings or version metadata.\n- appearance_update: Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately.\n- application_create: Create an instance-level OAuth application (admin only). Provide name, redirect_uri, and scopes. Optionally mark it confidential or trusted.\n- application_delete: Delete an instance-level OAuth application by id (admin only), revoking its credentials.\n- application_list: List instance-level OAuth applications registered for the GitLab instance (admin only).\n- application_renew_secret: Renew (rotate) the secret of an instance-level OAuth application by id (admin only). The previous secret is invalidated immediately, so update every client that uses it with the new value returned.\n- broadcast_message_create: Create a broadcast message banner or notification (admin only). Provide message text and optionally theme, target_path, broadcast_type, dismissable, starts_at, and ends_at.\n- broadcast_message_delete: Delete a broadcast message by id (admin only), removing the banner or notification from the instance.\n- broadcast_message_get: Get one broadcast message by id.\n- broadcast_message_list: List all broadcast messages shown to users across the instance, including active and scheduled banners and notifications.\n- broadcast_message_update: Update a broadcast message by id (admin only). Send only the fields to change such as message, theme, schedule, or target.\n- bulk_import_cancel: Cancel an in-progress bulk import (direct-transfer migration) by id.\n- bulk_import_entity_failures: List the failures recorded for one bulk import entity, useful for diagnosing partial migrations. Provide import id and entity id.\n- bulk_import_entity_get: Get one entity (group or project) within a bulk import by import id and entity id to inspect its migration status.\n- bulk_import_entity_list: List the entities (groups and projects) being migrated within a bulk import, with per-entity status. Provide the bulk import id.\n- bulk_import_get: Get one bulk import (direct-transfer migration) by id to inspect its overall status.\n- bulk_import_list: List bulk imports (direct-transfer migrations) started by the authenticated user, with their status.\n- bulk_import_start: Start a group/project migration by direct transfer from another GitLab instance (admin/maintainer). Provide the source instance URL, access token, and entities to import.\n- cluster_agent_delete: Delete a GitLab Agent for Kubernetes from a project by project_id and agent id.\n- cluster_agent_get: Get one GitLab Agent for Kubernetes by project_id and agent id.\n- cluster_agent_list: List the GitLab Agents for Kubernetes registered in a project. Provide project_id.\n- cluster_agent_register: Register a new GitLab Agent for Kubernetes in a project. Provide project_id and the agent name.\n- cluster_agent_token_create: Create a token for a GitLab Agent for Kubernetes. Provide project_id, agent id, and a token name.\n- cluster_agent_token_get: Get one cluster agent token by project_id, agent id, and token id.\n- cluster_agent_token_list: List the tokens for a GitLab Agent for Kubernetes. Provide project_id and agent id.\n- cluster_agent_token_revoke: Revoke a cluster agent token by project_id, agent id, and token id, immediately invalidating it.\n- custom_attr_delete: Delete a custom attribute by key from a user, group, or project (admin only).\n- custom_attr_get: Get one custom attribute by key for a user, group, or project (admin only).\n- custom_attr_list: List custom attributes set on a user, group, or project (admin only). Custom attributes are admin-only key/value metadata.\n- custom_attr_set: Set (create or update) a custom attribute by key on a user, group, or project (admin only). Provide key and value.\n- db_migration_mark: Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.\n- dependency_proxy_delete: Purge the dependency proxy cache for a group, freeing storage used by cached upstream images. Provide the group id.\n- error_tracking_create: Create an error-tracking client key for a project's integrated error tracking. Provide project_id.\n- error_tracking_delete: Delete an error-tracking client key from a project by project_id and key id.\n- error_tracking_get_settings: Get the integrated error-tracking settings for a project, including whether it is enabled. Provide project_id.\n- error_tracking_list: List the error-tracking client keys configured for a project (used by the integrated error tracking feature). Provide project_id.\n- error_tracking_update_settings: Enable or disable integrated error tracking for a project. Provide project_id and the active flag (and integrated mode where applicable).\n- feature_delete: Delete a feature flag by name (admin only), removing all of its gates and resetting it to its default state.\n- feature_list: List all defined feature flags and their current gate state on the instance. Use list_feature_definitions for the flag catalog with metadata.\n- feature_list_definitions: List feature flag definitions (the catalog) with metadata such as type, group, default state, and introduction milestone.\n- feature_set: Set or update a feature flag's gate (admin only). Provide name and a value such as true/false, a percentage, or scope it to feature_group, user, group, project, or namespace.\n- import_bitbucket: Import a repository from Bitbucket Cloud into GitLab. Provide Bitbucket credentials, the source repo, and the target namespace.\n- import_bitbucket_server: Import a repository from a self-hosted Bitbucket Server into GitLab. Provide the Bitbucket Server URL, credentials, the source project/repo, and the target namespace.\n- import_cancel_github: Cancel an in-progress GitHub import for a project. Provide the project_id of the importing project.\n- import_gists: Import the authenticated user's GitHub gists into GitLab snippets. Provide a GitHub personal access token.\n- import_github: Import a repository from GitHub into GitLab. Provide a GitHub personal access token, the repo_id, and the target namespace.\n- license_add: Install a new GitLab Enterprise license (admin only). Provide the license key string. Replaces the active license entitlements.\n- license_delete: Delete an installed license by id (admin only). Removing the active license downgrades the instance to Community/Free features.\n- license_get: Get the currently installed GitLab Enterprise license, including plan, expiration, user limits, and add-on entitlements. Requires administrator access.\n- metadata_get: Read GitLab instance metadata such as version and revision. Do not use this for application settings.\n- plan_limits_change: Change plan limits for a plan (admin only). Provide plan_name and only the package file size limits to change, such as npm_max_file_size. The other limits the read returns are not accepted here.\n- plan_limits_get: Get the configured plan limits for a plan (admin only). Provide plan_name (e.g. default, free, premium) to read its resource caps.\n- secure_file_create: Upload a CI/CD secure file to a project. Provide project_id, the name, and the file content.\n- secure_file_delete: Remove a CI/CD secure file from a project by project_id and secure file id.\n- secure_file_get: Get metadata for one CI/CD secure file by project_id and secure file id.\n- secure_file_list: List the CI/CD secure files stored for a project (certificates, provisioning profiles, and similar). Provide project_id.\n- settings_get: Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information.\n- settings_update: Update GitLab application (instance) settings such as sign-up restrictions, default visibility, CI/CD defaults, rate limits, and feature toggles. Send only the keys to change. Requires administrator access.\n- sidekiq_compound_metrics: Get all Sidekiq metrics in one call: queue, process, and job statistics combined.\n- sidekiq_job_stats: Get aggregate Sidekiq job statistics for the instance such as processed, failed, and enqueued counts.\n- sidekiq_process_metrics: Get Sidekiq process metrics for the instance, listing running Sidekiq processes and their state.\n- sidekiq_queue_metrics: Get Sidekiq background-job queue metrics for the instance, including per-queue backlog and latency.\n- system_hook_add: Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable.\n- system_hook_delete: Delete an instance system hook by id (admin only), stopping it from receiving global event notifications.\n- system_hook_delete_url_variable: Delete one URL variable from an instance system hook (admin only). Provide the hook id and variable key.\n- system_hook_edit: Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification.\n- system_hook_get: Get one instance system hook by its numeric hook id.\n- system_hook_list: List instance-wide system hooks that fire on global events such as project, group, user, and key changes, one page at a time with page and per_page. Distinct from per-project webhooks.\n- system_hook_set_url_variable: Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value.\n- system_hook_test: Fire a test event against an instance system hook by id to verify it is reachable and configured correctly.\n- terraform_state_delete: Delete a Terraform state by project_id and state name (admin/maintainer). Removes all versions of the state.\n- terraform_state_get: Get one Terraform state by project_id and state name, including its lock status.\n- terraform_state_list: List the Terraform states stored in a project's Terraform state backend. Provide project_id.\n- terraform_state_lock: Lock a Terraform state to prevent concurrent applies. Provide project_id and the state name.\n- terraform_state_unlock: Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name. Do not send the state name as id.\n- terraform_version_delete: Delete a single version of a Terraform state by project_id, state name, and serial/version number.\n- topic_create: Create a new instance project topic (admin only). Provide name and title, and optionally description and avatar.\n- topic_delete: Delete a project topic by id (admin only). Projects keep their other topics. This only removes the topic definition.\n- topic_get: Get one instance project topic by its numeric topic id.\n- topic_list: List instance project topics, optionally filtered by a search term. Topics group related projects across the instance.\n- topic_update: Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, avatar, or remove_avatar to remove the image.\n- usage_data_metric_definitions: Get the Service Ping metric definitions (the dictionary describing each usage metric, its category, and data type).\n- usage_data_non_sql_metrics: Get the non-SQL Service Ping metrics for the instance (metrics not derived from database queries).\n- usage_data_queries: Get the SQL queries that GitLab uses to build Service Ping metrics, useful for auditing what usage data is collected.\n- usage_data_service_ping: Get the latest Service Ping (usage data) payload that GitLab reports for the instance.\n- usage_data_track_event: Track a single internal usage event (admin only). Provide the event name and optional context for usage analytics.\n- usage_data_track_events: Track multiple internal usage events in one call (admin only). Provide an array of events with names and context.\nParameter guidance:\n- alert_metric_image_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- alert_metric_image_upload.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- appearance_update.message_background_color: hex_color. Source: Hex color string such as #e75e40 for the appearance banner background. Avoid: Provide a CSS-style hex color such as #ffffff. Do not send color names or RGB tuples.\n- appearance_update.message_font_color: hex_color. Source: Hex color string such as #ffffff for the appearance banner text. Avoid: Provide a CSS-style hex color such as #000000. Do not send color names or RGB tuples.\n- appearance_update.title: instance_brand_title. Source: Instance branding title shown in the GitLab UI header.\n- application_create.name: oauth_application_name. Source: Human-readable name for the OAuth application.\n- application_create.redirect_uri: oauth_redirect_uri. Source: Authorized callback URL the OAuth flow returns to.\n- application_create.scopes: oauth_scopes. Source: Space-delimited list of scopes GitLab OAuth supports.\n- application_delete.id: oauth_application_id. Source: Numeric application ID from admin.application_list output.\n- application_renew_secret.id: oauth_application_id. Source: Numeric application ID from admin.application_list output.\n- broadcast_message_delete.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.\n- broadcast_message_get.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.\n- broadcast_message_update.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.\n- cluster_agent_delete.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_get.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_register.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_create.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_token_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_get.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_token_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_list.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_token_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- cluster_agent_token_revoke.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.\n- cluster_agent_token_revoke.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- db_migration_mark.version: migration_version. Source: The migration's timestamp version, as GitLab names it in the migration file.\n- dependency_proxy_delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- error_tracking_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_delete.key_id: error_tracking_key_id. Source: Client key numeric ID from admin.error_tracking_list output.\n- error_tracking_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_get_settings.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- error_tracking_update_settings.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- feature_delete.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.\n- feature_set.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.\n- feature_set.value: feature_flag_value. Source: Desired gate value: a boolean, a percentage, or a string GitLab accepts for the gate.\n- import_cancel_github.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- license_add.license: license_payload. Source: The encoded license text the administrator was issued, sent whole.\n- license_delete.id: license_id. Source: License numeric ID from admin.license_get or admin.license_add output.\n- plan_limits_change.plan_name: plan_name. Source: Plan name whose limits are read or changed, for example default, free or premium.\n- plan_limits_get.plan_name: plan_name. Source: Plan name whose limits are read or changed, for example default, free or premium.\n- secure_file_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- secure_file_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- settings_update.settings: settings_patch. Source: Map of setting keys to desired values, in the snake_case spelling the GitLab API expects.\n- terraform_state_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_state_lock.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_state_unlock.name: terraform_state_name. Source: Terraform state name from the prompt or admin.terraform_state_list output. Avoid: Do not send the state name as id. Use params.name.\n- terraform_state_unlock.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- terraform_version_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- topic_delete.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.\n- topic_get.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.\n- topic_update.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.\n- usage_data_track_event.event: usage_event_name. Source: The single internal event name to record.\n- usage_data_track_event.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.\n- usage_data_track_event.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- usage_data_track_events.events: usage_event_batch. Source: Array of event objects to record in one request.\n\nGitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab-to-GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.\nWhen to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).\nNOT for: user CRUD (use gitlab_user), group/project administration (use gitlab_group / gitlab_project), MCP server itself (use gitlab_server), runtime feature flags per project (use gitlab_feature_flags), CI variables (use gitlab_ci_variable).\n\nBehavior:\n- Idempotent reads: settings_get / appearance_get / *_list / *_get / sidekiq_* / app_statistics_get / metadata_get / usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions / plan_limits_get / feature_list / feature_list_definitions.\n- settings_update / appearance_update / feature_set / plan_limits_change / custom_attr_set / error_tracking_update_settings are idempotent (same input -\u003e same state). license_add / system_hook_add / system_hook_test / broadcast_message_create / application_create / bulk_import_start / import_github / import_bitbucket / import_bitbucket_server / import_gists are NON-idempotent (re-invocation creates duplicates or new background jobs).\n- Side effects: license_add / system_hook_add / broadcast_message_create / settings_update / feature_set apply instance-wide IMMEDIATELY (all sessions affected). bulk_import_* and import_* queue long-running async migrations. Poll bulk_import_get / bulk_import_entity_* until status='finished'. usage_data_track_event posts to Snowplow when send_to_snowplow=true. application_create returns the OAuth secret only ONCE.\n- Destructive: *_delete, license_delete, system_hook_delete, feature_delete, application_delete, broadcast_message_delete, custom_attr_delete, cluster_agent_delete, dependency_proxy_delete, secure_file_delete, terraform_state_delete / terraform_state_unlock, db_migration_mark, bulk_import_cancel and import_cancel_github are irreversible. db_migration_mark may corrupt the schema if used incorrectly.\n\nReturns: resource object for *_get/*_create/*_update/*_set/*_add. Metrics object for Sidekiq/usage_data/app_statistics/metadata. Paginated array for *_list / feature_list_definitions. {success, message} for *_delete/*_revoke/*_purge/*_unlock.\nErrors: 401/403 forbidden (hint: most actions require admin token), 404 not found, 400 invalid params (hint: license must be base64-encoded. System hook url must be https).\n\nParam conventions: * = required. List actions accept page, per_page.\n\nTopics:\n- topic_list: search\n- topic_get / topic_delete: topic_id*\n- topic_create: name*, title*, description\n- topic_update: topic_id*, name, title, description\n\nSettings \u0026 appearance:\n- settings_get / appearance_get: (no params). If the task says \"read current instance settings\" or \"get instance settings\", call settings_get, not broadcast_message_list.\n- settings_update: settings (map of setting_name to value)\n- appearance_update: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines\n\nBroadcast messages:\n- broadcast_message_list: (no params). Lists existing broadcast messages only. It does not read instance settings.\n- broadcast_message_get / broadcast_message_delete: id*\n- broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable (bool), target_path, target_access_levels\n- broadcast_message_update: id*, message, starts_at, ends_at, broadcast_type, theme, dismissable\n\nInstance feature flags:\n- feature_list / feature_list_definitions: (no params)\n- feature_set: name*, value*, key, feature_group, user, group, namespace, project, repository, force (bool)\n- feature_delete: name*\n\nLicense:\n- license_get: (no params)\n- license_add: license* (Base64-encoded)\n- license_delete: id*\n\nSystem hooks:\n- system_hook_list: (no params)\n- system_hook_get / system_hook_test / system_hook_delete: id*\n- system_hook_add: url*, token, signing_token, push_events, push_events_branch_filter, branch_filter_strategy, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification\n- system_hook_edit: id*, url, name, description, token, signing_token, push_events, push_events_branch_filter, branch_filter_strategy, tag_push_events, merge_requests_events, repository_update_events, enable_ssl_verification\n- system_hook_set_url_variable: id*, key*, value*\n- system_hook_delete_url_variable: id*, key*\n\nSidekiq metrics: sidekiq_queue_metrics / sidekiq_process_metrics / sidekiq_job_stats / sidekiq_compound_metrics (no params).\n\nPlan limits:\n- plan_limits_get: plan_name\n- plan_limits_change: plan_name*, conan_max_file_size, generic_packages_max_file_size, helm_max_file_size, maven_max_file_size, npm_max_file_size, nuget_max_file_size, pypi_max_file_size, terraform_module_max_file_size\n\nUsage data:\n- usage_data_service_ping / usage_data_non_sql_metrics / usage_data_queries / usage_data_metric_definitions: (no params)\n- usage_data_track_event: event*, send_to_snowplow (bool), namespace_id, project_id\n- usage_data_track_events: events* (array)\n\nOAuth applications:\n- application_list: (no params)\n- application_create: name*, redirect_uri*, scopes*, confidential (bool)\n- application_delete: id*\n\nMisc:\n- db_migration_mark: version*, database\n- app_statistics_get / metadata_get: (no params)\n\nCustom attributes:\n- custom_attr_list: resource_type* (user/group/project), resource_id*\n- custom_attr_get / custom_attr_delete: resource_type*, resource_id*, key*\n- custom_attr_set: resource_type*, resource_id*, key*, value*\n\nBulk import:\n- bulk_import_start: configuration*, entities*. configuration is {url, access_token} and is nested, not two top-level params. Each entity is {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)}.\n- bulk_import_list: status, page, per_page\n- bulk_import_get: id*\n- bulk_import_cancel: id*\n- bulk_import_entity_list: bulk_import_id, status, page, per_page\n- bulk_import_entity_get: bulk_import_id*, entity_id*\n- bulk_import_entity_failures: bulk_import_id*, entity_id*\n\nError tracking:\n- error_tracking_list: project_id*\n- error_tracking_create: project_id*\n- error_tracking_delete: project_id*, key_id*\n- error_tracking_get_settings: project_id*\n- error_tracking_update_settings: project_id*, active* (bool), integrated (bool)\n\nAlert metric images:\n- alert_metric_image_list: project_id*, alert_iid*\n- alert_metric_image_upload: project_id*, alert_iid*, url*, url_text\n- alert_metric_image_update: project_id*, alert_iid*, image_id*, url, url_text\n- alert_metric_image_delete: project_id*, alert_iid*, image_id*\n\nSecure files:\n- secure_file_list: project_id*\n- secure_file_get / secure_file_delete: project_id*, file_id*\n- secure_file_create: project_id*, name*, file_path or content_base64 (exactly one)\n\nTerraform states:\n- terraform_state_list: project_path*\n- terraform_state_get: project_path*, name*\n- terraform_state_delete / terraform_state_lock / terraform_state_unlock: project_id*, name*\n- terraform_version_delete: project_id*, name*, serial*\n\nCluster agents:\n- cluster_agent_list: project_id*\n- cluster_agent_get / cluster_agent_delete: project_id*, agent_id*\n- cluster_agent_register: project_id*, name*\n- cluster_agent_token_list: project_id*, agent_id*\n- cluster_agent_token_get / cluster_agent_token_revoke: project_id*, agent_id*, token_id*\n- cluster_agent_token_create: project_id*, agent_id*, name*\n\nImports:\n- import_github: personal_access_token*, repo_id*, target_namespace*, new_name\n- import_bitbucket: bitbucket_api_token*, bitbucket_email*, repo_path*, target_namespace*, new_name\n- import_bitbucket_server: bitbucket_server_url*, bitbucket_server_username*, personal_access_token*, bitbucket_server_project*, bitbucket_server_repo*, new_namespace, new_name\n- import_cancel_github: project_id*\n- import_gists: personal_access_token*\n- dependency_proxy_delete: group_id*. Purges the group's dependency proxy cache\n\nParameter constraints (beyond schema):\n- broadcast_message_create.broadcast_type is one of banner, notification. Theme is a CSS hex color (e.g. '#E75E40'). target_access_levels uses GitLab numeric levels [10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner]. starts_at/ends_at are ISO 8601 timestamps and ends_at MUST be \u003e starts_at.\n- feature_set.value accepts 'true' / 'false' / a 0-100 integer (percentage of time/actors) / 'actor:\u003cid\u003e'. The optional key disambiguates 'percentage_of_time' vs 'percentage_of_actors'. User/group/namespace/project/repository scope the gate and are mutually-exclusive with each other.\n- plan_limits_change.*_max_file_size are sizes in BYTES. 0 disables the limit. Omitted fields keep their current value (partial update).\n- license_add.license is the Base64 of the raw .gitlab-license file (not the file path).\n- system_hook_add.url MUST be https when enable_ssl_verification=true. Token is sent as X-Gitlab-Token on every delivery.\n- application_create.scopes is a SPACE-separated string of OAuth scopes (e.g. 'api read_user'). Confidential=false enables PKCE for public clients. The client_secret is returned ONCE on creation and cannot be retrieved later.\n- cluster_agent_token_create returns the token ONCE. Revoke + re-create to rotate.\n- secure_file_create.content_base64 is Base64-encoded, and file_path reads a local file instead. Max size 5 MiB.\n- custom_attr_set.resource_type is one of user, group, project and (resource_type, resource_id, key) is a unique upsert key.\n- bulk_import_start.entities[].source_type is one of group_entity, project_entity. migrate_projects and migrate_memberships apply only to group_entity. destination_namespace must already exist on the target instance.\n- import_bitbucket_server.bitbucket_server_project is the project KEY (usually uppercase, from the Bitbucket URL), not the display name.\n- usage_data_track_event.namespace_id and .project_id are mutually-exclusive context refs (provide at most one). send_to_snowplow=false keeps the event internal to GitLab.\n- db_migration_mark.database is one of main, ci. Defaults to 'main'. Marking a non-applied migration corrupts schema_migrations. Verify first via metadata_get.\n- terraform_state_lock fails if the state is already locked. Unlock breaks any active client session holding the lock.\n- topic_create.name must be globally unique (slug). Title is the display name shown in the UI.\n- List actions: page defaults to 1, per_page defaults to 20 (GitLab cap is 100).\n\nSee also: gitlab_user (user CRUD), gitlab_server (MCP server health and updates), gitlab_group / gitlab_project (group/project admin), gitlab_access (tokens, deploy keys, access requests).",
     "inputSchema": {
       "$defs": {
         "alert_metric_image_delete": {
@@ -5915,6 +5915,31 @@
         "topic_create": {
           "additionalProperties": false,
           "properties": {
+            "avatar": {
+              "additionalProperties": false,
+              "description": "Avatar image to upload with the topic, from a local file or base64 content",
+              "properties": {
+                "content_base64": {
+                  "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "file_path": {
+                  "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "filename": {
+                  "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filename"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "description": {
               "description": "Topic description",
               "type": "string"
@@ -6027,6 +6052,31 @@
         "topic_update": {
           "additionalProperties": false,
           "properties": {
+            "avatar": {
+              "additionalProperties": false,
+              "description": "New avatar image to upload for the topic, from a local file or base64 content. Cannot be combined with remove_avatar",
+              "properties": {
+                "content_base64": {
+                  "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "file_path": {
+                  "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "filename": {
+                  "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filename"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "description": {
               "description": "New topic description. Pass an empty string to remove it. Omit the field to leave it untouched",
               "type": [
@@ -6037,6 +6087,10 @@
             "name": {
               "description": "New topic name",
               "type": "string"
+            },
+            "remove_avatar": {
+              "description": "Remove the topic's avatar. Cannot be combined with avatar",
+              "type": "boolean"
             },
             "title": {
               "description": "New topic title",
@@ -13984,6 +14038,31 @@
               "type": [
                 "null",
                 "boolean"
+              ]
+            },
+            "avatar": {
+              "additionalProperties": false,
+              "description": "Avatar image to upload with the group, from a local file or base64 content. The upload carries a single value per field, so with it default_branch_protection_defaults may name one access level each for allowed_to_push and allowed_to_merge, and the unique project download alert list is refused (set it with group.update)",
+              "properties": {
+                "content_base64": {
+                  "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "file_path": {
+                  "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "filename": {
+                  "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filename"
+              ],
+              "type": [
+                "null",
+                "object"
               ]
             },
             "crm_enabled": {
@@ -23699,6 +23778,10 @@
                 "administrator"
               ],
               "type": "string"
+            },
+            "remove_avatar": {
+              "description": "Remove the group's avatar. To replace it instead, use group.upload_avatar",
+              "type": "boolean"
             },
             "request_access_enabled": {
               "description": "Allow users to request access",
@@ -46736,6 +46819,31 @@
                 "boolean"
               ]
             },
+            "avatar": {
+              "additionalProperties": false,
+              "description": "Avatar image to upload with the project, from a local file or base64 content",
+              "properties": {
+                "content_base64": {
+                  "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "file_path": {
+                  "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "filename": {
+                  "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filename"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "build_git_strategy": {
               "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
               "enum": [
@@ -47266,6 +47374,31 @@
               "type": [
                 "null",
                 "boolean"
+              ]
+            },
+            "avatar": {
+              "additionalProperties": false,
+              "description": "Avatar image to upload with the project, from a local file or base64 content",
+              "properties": {
+                "content_base64": {
+                  "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "file_path": {
+                  "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "filename": {
+                  "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filename"
+              ],
+              "type": [
+                "null",
+                "object"
               ]
             },
             "build_git_strategy": {
@@ -49021,6 +49154,57 @@
               "additionalProperties": false,
               "description": "Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])",
               "properties": {
+                "allow_merge_on_skipped_pipeline": {
+                  "description": "Override whether a merge is allowed when the pipeline is skipped",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "analytics_access_level": {
+                  "description": "Override analytics access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "approvals_before_merge": {
+                  "description": "Override how many approvals a merge request needs (deprecated: use the merge request approvals API)",
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "auto_cancel_pending_pipelines": {
+                  "description": "Override whether pending pipelines are auto-canceled (enabled, disabled)",
+                  "type": "string"
+                },
+                "auto_devops_deploy_strategy": {
+                  "description": "Override the Auto DevOps deploy strategy (continuous, manual, timed_incremental)",
+                  "type": "string"
+                },
+                "auto_devops_enabled": {
+                  "description": "Override whether Auto DevOps is enabled",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "autoclose_referenced_issues": {
+                  "description": "Override whether a merge closes the issues it references",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "build_git_strategy": {
+                  "description": "Override the Git strategy of jobs (fetch, clone)",
+                  "type": "string"
+                },
+                "build_timeout": {
+                  "description": "Override the job timeout in seconds",
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
                 "builds_access_level": {
                   "description": "Override CI/CD builds access level (disabled, private, enabled)",
                   "type": "string"
@@ -49029,24 +49213,51 @@
                   "description": "Override container registry access level (disabled, private, enabled)",
                   "type": "string"
                 },
-                "default_branch": {
-                  "description": "Override the default branch name",
-                  "type": "string"
+                "container_registry_enabled": {
+                  "description": "Override whether the container registry is enabled (deprecated: use container_registry_access_level)",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
                 },
                 "description": {
                   "description": "Override the imported project's description",
+                  "type": "string"
+                },
+                "environments_access_level": {
+                  "description": "Override environments access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "external_authorization_classification_label": {
+                  "description": "Override the external authorization classification label",
+                  "type": "string"
+                },
+                "feature_flags_access_level": {
+                  "description": "Override feature flags access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "forking_access_level": {
+                  "description": "Override forking access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "infrastructure_access_level": {
+                  "description": "Override infrastructure access level (disabled, private, enabled)",
                   "type": "string"
                 },
                 "issues_access_level": {
                   "description": "Override issues access level (disabled, private, enabled)",
                   "type": "string"
                 },
-                "lfs_enabled": {
-                  "description": "Override Git LFS enablement",
+                "issues_enabled": {
+                  "description": "Override whether issues are enabled (deprecated: use issues_access_level)",
                   "type": [
                     "null",
                     "boolean"
                   ]
+                },
+                "merge_commit_template": {
+                  "description": "Override the merge commit message template",
+                  "type": "string"
                 },
                 "merge_method": {
                   "description": "Override merge method (merge, rebase_merge, ff)",
@@ -49061,23 +49272,100 @@
                   "description": "Override merge requests access level (disabled, private, enabled)",
                   "type": "string"
                 },
-                "name": {
-                  "description": "Override the imported project's name",
-                  "type": "string"
-                },
-                "namespace_id": {
-                  "description": "Override the namespace ID the imported project is created in",
+                "merge_requests_enabled": {
+                  "description": "Override whether merge requests are enabled (deprecated: use merge_requests_access_level)",
                   "type": [
                     "null",
-                    "integer"
+                    "boolean"
                   ]
                 },
-                "path": {
-                  "description": "Override the imported project's URL path (slug)",
+                "model_experiments_access_level": {
+                  "description": "Override model experiments access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "model_registry_access_level": {
+                  "description": "Override model registry access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "monitor_access_level": {
+                  "description": "Override monitor access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "only_allow_merge_if_all_discussions_are_resolved": {
+                  "description": "Override whether a merge waits for every discussion to be resolved",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "only_allow_merge_if_pipeline_succeeds": {
+                  "description": "Override whether a merge waits for a successful pipeline",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "package_registry_access_level": {
+                  "description": "Override package registry access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "pages_access_level": {
+                  "description": "Override Pages access level (disabled, private, enabled, public)",
+                  "type": "string"
+                },
+                "printing_merge_request_link_enabled": {
+                  "description": "Override whether a push prints the create-merge-request link",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "public_builds": {
+                  "description": "Override whether pipelines and job logs are public (the import applies this name, not public_jobs)",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "releases_access_level": {
+                  "description": "Override releases access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "remove_source_branch_after_merge": {
+                  "description": "Override whether the source branch is removed after a merge by default",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "repository_access_level": {
+                  "description": "Override repository access level (disabled, private, enabled)",
                   "type": "string"
                 },
                 "request_access_enabled": {
                   "description": "Override whether users can request access",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "requirements_access_level": {
+                  "description": "Override requirements access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "resolve_outdated_diff_discussions": {
+                  "description": "Override whether outdated diff discussions are resolved on push",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "security_and_compliance_access_level": {
+                  "description": "Override security and compliance access level (disabled, private, enabled)",
+                  "type": "string"
+                },
+                "service_desk_enabled": {
+                  "description": "Override whether Service Desk is enabled",
                   "type": [
                     "null",
                     "boolean"
@@ -49094,6 +49382,25 @@
                   "description": "Override snippets access level (disabled, private, enabled)",
                   "type": "string"
                 },
+                "snippets_enabled": {
+                  "description": "Override whether snippets are enabled (deprecated: use snippets_access_level)",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
+                },
+                "squash_commit_template": {
+                  "description": "Override the squash commit message template",
+                  "type": "string"
+                },
+                "squash_option": {
+                  "description": "Override the squash option (never, always, default_on, default_off)",
+                  "type": "string"
+                },
+                "suggestion_commit_message": {
+                  "description": "Override the default commit message for applied suggestions",
+                  "type": "string"
+                },
                 "visibility": {
                   "description": "Override visibility level (private, internal, public)",
                   "enum": [
@@ -49106,6 +49413,13 @@
                 "wiki_access_level": {
                   "description": "Override wiki access level (disabled, private, enabled)",
                   "type": "string"
+                },
+                "wiki_enabled": {
+                  "description": "Override whether the wiki is enabled (deprecated: use wiki_access_level)",
+                  "type": [
+                    "null",
+                    "boolean"
+                  ]
                 }
               },
               "type": [
@@ -49866,6 +50180,13 @@
         "label_list": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "description": "Filter by archived state: true returns only archived labels, false only active labels. Omit for both",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
             "include_ancestor_groups": {
               "description": "Include labels from ancestor groups",
               "type": "boolean"
@@ -54897,6 +55218,10 @@
             "releases_access_level": {
               "description": "Releases access level (disabled, private, enabled)",
               "type": "string"
+            },
+            "remove_avatar": {
+              "description": "Remove the project's avatar. To replace it instead, use project.upload_avatar",
+              "type": "boolean"
             },
             "remove_source_branch_after_merge": {
               "description": "Remove source branch after merge by default",
@@ -60462,7 +60787,7 @@
   },
   {
     "name": "gitlab_search",
-    "description": "Use {\"action\":\"code\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_search.\u003caction\u003e. A domain.action ID below is the action after the dot on the gitlab_\u003cdomain\u003e tool, or that tool itself where it takes no action, so search.code is {\"action\":\"code\"} on this one.\nAction guidance:\n- code: Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories. Do not use for project or repository name discovery. num_context_lines asks advanced or exact search for more or fewer lines around each match, and regex chooses a regular expression or literal text on exact search.\n- commits: Search commit messages across global, group (group_id), or project (project_id) scope. Use to find commits by message keywords. Use repository.commit_get when the SHA is already known.\n- issues: Search issues by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt gives keywords. If it already names a project plus an issue number, use issue.get instead.\n- merge_requests: Search merge requests by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt names keywords from an MR rather than a specific MR IID in a known project.\n- milestones: Search milestones by title and description across global, group (group_id), or project (project_id) scope. Use to locate a milestone by name when its ID is unknown.\n- notes: Search note bodies within a single project (project_id is required). Use to find comments on issues, merge requests, or commits that mention given keywords.\n- projects: Search project records by fuzzy project name, path fragment, namespace, or description. Use for broad discovery across many projects. If the prompt gives one exact namespace path like group/project and asks for metadata, use project.get instead. Do not use for code contents.\n- snippets: Search snippet titles globally (no group or project scope). Use to locate a snippet by its title keywords across the instance.\n- users: Search users by name or username across global, group (group_id), or project (project_id) scope. Use to resolve a person to their user record before assigning or mentioning them.\n- wiki: Search wiki page contents across global, group (group_id), or project (project_id) scope. Use to find wiki pages by their body or title keywords.\nParameter guidance:\n- code.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- code.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- code.ref: branch_or_tag. Source: Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix). Avoid: Use \"sha\" for an exact commit hash, not \"ref\".\n- commits.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- commits.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- issues.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- issues.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- merge_requests.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- merge_requests.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- milestones.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- milestones.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- notes.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- projects.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- users.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- users.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- wiki.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- wiki.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n\nSearch GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.\nWhen to use: full-text search across the supplied scope. Use action code for prompts like \"search code for ...\" or \"find occurrences of ...\". Most actions accept project_id and / or group_id. If both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).\nNOT for: discovering a project from a git remote (use gitlab_discover_project), listing labels / milestones / issues with structured filters (use gitlab_project, gitlab_issue, gitlab_merge_request. Those support filters like state/labels/milestone), reading a known file path's contents (use gitlab_repository file_get).\n\nScope precedence: project_id \u003e group_id \u003e global. Pagination: page, per_page (max 100). All actions need query*. Optional search_type selects the GitLab search backend: basic, advanced, or zoekt. The value must match the per-action schema enum and the requested backend must be enabled on the target GitLab instance.\n\nReturns:\n- code: array of {basename, data, path, ref, startline, project_id} blobs.\n- merge_requests / issues: arrays of MR / issue objects.\n- commits: array of {id, short_id, title, author_name, committed_date, project_id}.\n- milestones / projects / snippets / users / wiki: arrays of resource summaries.\n- notes: array of {id, body, notable_type, notable_id, notable_iid} entries.\nAll lists paginate with {page, per_page, total, next_page}.\nErrors: 403 (hint: project_id / group_id must be visible to the caller), 404 (hint: project_id / group_id wrong or no permission), 400 (hint: query must not be empty. Some scopes only support global, e.g. snippets. If search_type was supplied, retry without it or choose a backend enabled on this GitLab instance).\n\n- code: query*, project_id, group_id, ref, search_type\n- merge_requests / issues / commits / milestones / users / wiki: query*, project_id, group_id, search_type\n- notes: query*, project_id* (project-scoped only), search_type\n- projects: query*, group_id, search_type\n- snippets: query*, search_type (global only)\n\nSee also: gitlab_discover_project (resolve git remote URL -\u003e project_id), gitlab_project / gitlab_merge_request / gitlab_issue (structured filtering).",
+    "description": "Use {\"action\":\"code\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_search.\u003caction\u003e. A domain.action ID below is the action after the dot on the gitlab_\u003cdomain\u003e tool, or that tool itself where it takes no action, so search.code is {\"action\":\"code\"} on this one.\nAction guidance:\n- code: Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories. Do not use for project or repository name discovery. num_context_lines asks advanced or exact search for more or fewer lines around each match, and regex chooses a regular expression or literal text on exact search.\n- commits: Search commit messages across global, group (group_id), or project (project_id) scope. Use to find commits by message keywords. Use repository.commit_get when the SHA is already known.\n- issues: Search issues by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt gives keywords. If it already names a project plus an issue number, use issue.get instead.\n- merge_requests: Search merge requests by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt names keywords from an MR rather than a specific MR IID in a known project.\n- milestones: Search milestones by title and description across global, group (group_id), or project (project_id) scope. Use to locate a milestone by name when its ID is unknown.\n- notes: Search note bodies within a single project (project_id is required). Use to find comments on issues, merge requests, or commits that mention given keywords.\n- projects: Search project records by fuzzy project name, path fragment, namespace, or description. Use for broad discovery across many projects. If the prompt gives one exact namespace path like group/project and asks for metadata, use project.get instead. Do not use for code contents.\n- snippets: Search snippet titles globally (no group or project scope). Use to locate a snippet by its title keywords across the instance.\n- users: Search users by name or username across global, group (group_id), or project (project_id) scope. Use to resolve a person to their user record before assigning or mentioning them.\n- wiki: Search wiki page contents across global, group (group_id), or project (project_id) scope. Use to find wiki pages by their body or title keywords.\nParameter guidance:\n- code.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- code.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- code.ref: branch_or_tag. Source: Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix). Avoid: Use \"sha\" for an exact commit hash, not \"ref\".\n- commits.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- commits.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- commits.ref: branch_or_tag. Source: Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix). Avoid: Use \"sha\" for an exact commit hash, not \"ref\".\n- issues.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- issues.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- merge_requests.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- merge_requests.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- milestones.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- milestones.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- notes.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- projects.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- users.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- users.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- wiki.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").\n- wiki.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. \"group/project\").\n- wiki.ref: branch_or_tag. Source: Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix). Avoid: Use \"sha\" for an exact commit hash, not \"ref\".\n\nSearch GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.\nWhen to use: full-text search across the supplied scope. Use action code for prompts like \"search code for ...\" or \"find occurrences of ...\". Most actions accept project_id and / or group_id. If both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).\nNOT for: discovering a project from a git remote (use gitlab_discover_project), listing labels / milestones / issues with structured filters (use gitlab_project, gitlab_issue, gitlab_merge_request. Those support filters like state/labels/milestone), reading a known file path's contents (use gitlab_repository file_get).\n\nScope precedence: project_id \u003e group_id \u003e global. Pagination: page, per_page (max 100). All actions need query*. Optional search_type selects the GitLab search backend: basic, advanced, or zoekt. The value must match the per-action schema enum and the requested backend must be enabled on the target GitLab instance.\n\nReturns:\n- code: array of {basename, data, path, ref, startline, project_id} blobs.\n- merge_requests / issues: arrays of MR / issue objects.\n- commits: array of {id, short_id, title, author_name, committed_date, project_id}.\n- milestones / projects / snippets / users / wiki: arrays of resource summaries.\n- notes: array of {id, body, notable_type, notable_id, notable_iid} entries.\nAll lists paginate with {page, per_page, total, next_page}.\nErrors: 403 (hint: project_id / group_id must be visible to the caller), 404 (hint: project_id / group_id wrong or no permission), 400 (hint: query must not be empty. Some scopes only support global, e.g. snippets. If search_type was supplied, retry without it or choose a backend enabled on this GitLab instance).\n\n- code: query*, project_id, group_id, ref, search_type\n- merge_requests / issues / commits / milestones / users / wiki: query*, project_id, group_id, search_type\n- notes: query*, project_id* (project-scoped only), search_type\n- projects: query*, group_id, search_type\n- snippets: query*, search_type (global only)\n\nSee also: gitlab_discover_project (resolve git remote URL -\u003e project_id), gitlab_project / gitlab_merge_request / gitlab_issue (structured filtering).",
     "inputSchema": {
       "$defs": {
         "code": {
@@ -60571,6 +60896,10 @@
               "description": "Search query string",
               "type": "string"
             },
+            "ref": {
+              "description": "Branch or tag whose commits a project search reads (default: the default branch). Group and instance searches do not take it",
+              "type": "string"
+            },
             "search_type": {
               "description": "Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance.",
               "enum": [
@@ -60595,6 +60924,13 @@
               "example_binding": "params.project_id:\"group/project\"",
               "semantic_role": "scope_project",
               "value_source": "Project ID or URL-encoded path (e.g. \"group/project\")."
+            },
+            "ref": {
+              "common_confusions": [
+                "Use \"sha\" for an exact commit hash, not \"ref\"."
+              ],
+              "semantic_role": "branch_or_tag",
+              "value_source": "Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix)."
             }
           }
         },
@@ -60958,6 +61294,10 @@
               "description": "Search query string",
               "type": "string"
             },
+            "ref": {
+              "description": "Branch or tag of the wiki repository a project search reads (default: the default branch). Group and instance searches do not take it",
+              "type": "string"
+            },
             "search_type": {
               "description": "Search backend to request. Use 'basic' for GitLab's default search, 'advanced' for Elasticsearch/OpenSearch-backed search, or 'zoekt' for Zoekt-based search. The requested backend must be enabled on the GitLab instance.",
               "enum": [
@@ -60982,6 +61322,13 @@
               "example_binding": "params.project_id:\"group/project\"",
               "semantic_role": "scope_project",
               "value_source": "Project ID or URL-encoded path (e.g. \"group/project\")."
+            },
+            "ref": {
+              "common_confusions": [
+                "Use \"sha\" for an exact commit hash, not \"ref\"."
+              ],
+              "semantic_role": "branch_or_tag",
+              "value_source": "Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix)."
             }
           }
         }
@@ -66173,6 +66520,31 @@
                 "boolean"
               ]
             },
+            "avatar": {
+              "additionalProperties": false,
+              "description": "Avatar image to upload for the user, from a local file or base64 content",
+              "properties": {
+                "content_base64": {
+                  "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "file_path": {
+                  "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "filename": {
+                  "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filename"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "bio": {
               "description": "User bio text",
               "type": "string"
@@ -67689,6 +68061,31 @@
               "type": [
                 "null",
                 "boolean"
+              ]
+            },
+            "avatar": {
+              "additionalProperties": false,
+              "description": "New avatar image to upload for the user, from a local file or base64 content",
+              "properties": {
+                "content_base64": {
+                  "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "file_path": {
+                  "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+                  "type": "string"
+                },
+                "filename": {
+                  "description": "Avatar file name such as avatar.png, whose extension GitLab reads the image type from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filename"
+              ],
+              "type": [
+                "null",
+                "object"
               ]
             },
             "bio": {

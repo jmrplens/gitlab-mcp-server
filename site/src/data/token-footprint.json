@@ -20,18 +20,18 @@
   "individual": {
     "free": {
       "visible_tools": 872,
-      "tool_schema_tokens": 567225,
-      "reduction_factor_vs_dynamic": 311
+      "tool_schema_tokens": 569320,
+      "reduction_factor_vs_dynamic": 312
     },
     "premium": {
       "visible_tools": 1027,
-      "tool_schema_tokens": 686975,
-      "reduction_factor_vs_dynamic": 377
+      "tool_schema_tokens": 689070,
+      "reduction_factor_vs_dynamic": 378
     },
     "ultimate": {
       "visible_tools": 1093,
-      "tool_schema_tokens": 728387,
-      "reduction_factor_vs_dynamic": 399
+      "tool_schema_tokens": 730482,
+      "reduction_factor_vs_dynamic": 400
     }
   }
 }

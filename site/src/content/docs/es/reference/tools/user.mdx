@@ -372,6 +372,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `username`                                     | `string`  | sí        | The username                                                                       |
 | `admin`                                        | `boolean` | no        | Grant admin privileges                                                             |
 | `auditor` (Premium)                            | `boolean` | no        | Grant auditor privileges (Premium/Ultimate)                                        |
+| `avatar`                                       | `object`  | no        | Avatar image to upload for the user, from a local file or base64 content           |
 | `bio`                                          | `string`  | no        | User bio text                                                                      |
 | `can_create_group`                             | `boolean` | no        | Allow the user to create groups                                                    |
 | `color_scheme_id`                              | `integer` | no        | Syntax-highlighting color scheme ID                                                |
@@ -1086,6 +1087,7 @@ Sin parámetros.
 | `user_id`                 | `integer` | sí        | The ID of the user to modify                                                              |
 | `admin`                   | `boolean` | no        | Grant or revoke admin privileges                                                          |
 | `auditor` (Premium)       | `boolean` | no        | Grant or revoke auditor privileges (Premium/Ultimate)                                     |
+| `avatar`                  | `object`  | no        | New avatar image to upload for the user, from a local file or base64 content              |
 | `bio`                     | `string`  | no        | New bio text. Pass an empty string to remove it. Omit the field to leave it untouched     |
 | `can_create_group`        | `boolean` | no        | Allow user to create groups                                                               |
 | `commit_email`            | `string`  | no        | Email used for commits                                                                    |

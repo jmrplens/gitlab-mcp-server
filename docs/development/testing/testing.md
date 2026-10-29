@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,730 |
-| Unit test functions                                   | 21,059 |
-| E2E test functions                                    |  1,671 |
-| cmd test functions                                    |  5,312 |
+| Total test functions                                  | 22,953 |
+| Unit test functions                                   | 21,280 |
+| E2E test functions                                    |  1,673 |
+| cmd test functions                                    |  5,511 |
 | Test files (internal/)                                |    744 |
-| Test files (cmd/)                                     |    402 |
+| Test files (cmd/)                                     |    428 |
 | Test files (test/e2e/)                                |    435 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     35 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,628 | 60.0% |
+| `TestFunc_Scenario` (2-part)           | 13,631 | 59.4% |
 | `TestFunc` (no underscore)             |    909 |  4.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,193 | 36.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,413 | 36.7% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,171 |        253 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,173 |        253 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            433 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,143 |        475 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,671 |        435 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,312 |        402 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,730** |  **1,581** |                                                                                                 |
+| Tool sub-packages (181) |         11,163 |        475 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,673 |        435 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          5,511 |        428 | server entry point and developer command utilities                                              |
+| **Total**               |     **22,953** |  **1,607** |                                                                                                 |
 
 ### Core Packages
 
@@ -82,7 +82,7 @@
 | subscriptions            |       114 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
 | telemetry                |       148 |   100.0% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                                                                                  |
 | tenancy                  |       119 |   100.0% | Package tenancy is the register of every decision this server makes about who a caller is and what it may hold, spend or be told.                                                                                                                                                                                                   |
-| testutil                 |       179 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
+| testutil                 |       181 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
 | testutil/e2ecalls        |        24 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                                                                                          |
 | testutil/e2erelease      |         8 |   100.0% | Package e2erelease decides what an end-to-end run does on the GitLab release it found, measured against the release the fine-grained action table was recorded from (issue 1155).                                                                                                                                                   |
 | testutil/hints           |         7 |   100.0% | Package hints collects the canonical action IDs a package's Markdown invites a model to call, by rendering the package's own formatters rather than by reading its constants: a hint spelled as a literal at the call site is published exactly like one behind a constant, and a test that reads only the constants cannot see it. |
@@ -93,21 +93,21 @@
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
 | toolutil                 |     1,359 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,171** |          |                                                                                                                                                                                                                                                                                                                                     |
+| **Subtotal**             | **4,173** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   499 |   100.0% |    57 |
+| projects          |   505 |   100.0% |    57 |
 | mergerequests     |   345 |   100.0% |    30 |
 | dynamic           |   324 |   100.0% |     2 |
-| groups            |   318 |   100.0% |    37 |
+| groups            |   321 |   100.0% |    37 |
 | issues            |   296 |   100.0% |    21 |
-| users             |   272 |   100.0% |    38 |
+| users             |   274 |   100.0% |    38 |
 | jobs              |   179 |   100.0% |    17 |
 | packages          |   178 |   100.0% |    10 |
-| search            |   171 |   100.0% |    10 |
+| search            |   172 |   100.0% |    10 |
 | commits           |   155 |   100.0% |    13 |
 | pipelines         |   150 |   100.0% |    12 |
 | runners           |   143 |   100.0% |    21 |
@@ -119,9 +119,9 @@
 | snippets          |   115 |   100.0% |    15 |
 | accesstokens      |   110 |   100.0% |    18 |
 | groupmilestones   |   110 |   100.0% |     8 |
+| mrapprovals       |   110 |   100.0% |     7 |
 | pipelineschedules |   109 |   100.0% |    11 |
 | groupmembers      |   108 |   100.0% |    10 |
-| mrapprovals       |   108 |   100.0% |     7 |
 | files             |   101 |   100.0% |     8 |
 | milestones        |    97 |   100.0% |     9 |
 
@@ -209,7 +209,7 @@
 | groupprotectedenvs      |         36 |          3 |   100.0% |         5 |
 | grouprelationsexport    |         30 |          3 |   100.0% |         2 |
 | groupreleases           |         24 |          3 |   100.0% |         1 |
-| groups                  |        318 |         10 |   100.0% |        37 |
+| groups                  |        321 |         10 |   100.0% |        37 |
 | groupsaml               |         40 |          3 |   100.0% |         5 |
 | groupscim               |         31 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |         37 |          2 |   100.0% |         9 |
@@ -233,7 +233,7 @@
 | jobtokenscope           |         46 |          2 |   100.0% |         8 |
 | keys                    |         32 |          3 |   100.0% |         2 |
 | labeldata               |         17 |          1 |   100.0% |         0 |
-| labels                  |         78 |          3 |   100.0% |         8 |
+| labels                  |         79 |          3 |   100.0% |         8 |
 | license                 |         24 |          1 |   100.0% |         3 |
 | licensetemplates        |         31 |          2 |   100.0% |         2 |
 | markdown                |         10 |          1 |   100.0% |         1 |
@@ -244,7 +244,7 @@
 | metadata                |          9 |          1 |   100.0% |         1 |
 | milestones              |         97 |          2 |   100.0% |         9 |
 | modelregistry           |         13 |          3 |   100.0% |         1 |
-| mrapprovals             |        108 |          3 |   100.0% |         7 |
+| mrapprovals             |        110 |          3 |   100.0% |         7 |
 | mrapprovalsettings      |         14 |          4 |   100.0% |         4 |
 | mrchanges               |         47 |          2 |   100.0% |         4 |
 | mrcontextcommits        |         40 |          3 |   100.0% |         3 |
@@ -262,10 +262,10 @@
 | planlimits              |         16 |          1 |   100.0% |         2 |
 | projectaliases          |         34 |          2 |   100.0% |         4 |
 | projectdiscovery        |         23 |          1 |   100.0% |         1 |
-| projectimportexport     |         53 |          2 |   100.0% |         5 |
+| projectimportexport     |         55 |          2 |   100.0% |         5 |
 | projectiterations       |         24 |          3 |   100.0% |         1 |
 | projectmirrors          |         76 |          2 |   100.0% |         7 |
-| projects                |        499 |          9 |   100.0% |        57 |
+| projects                |        505 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         28 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
 | projectstoragemoves     |         21 |          2 |   100.0% |         6 |
@@ -283,7 +283,7 @@
 | runnercontrollerscopes  |         40 |          2 |   100.0% |         5 |
 | runnercontrollertokens  |         48 |          2 |   100.0% |         5 |
 | runners                 |        143 |          2 |   100.0% |        21 |
-| search                  |        171 |          5 |   100.0% |        10 |
+| search                  |        172 |          5 |   100.0% |        10 |
 | securefiles             |         33 |          1 |   100.0% |         4 |
 | securityattributes      |         39 |          1 |   100.0% |         5 |
 | securitycategories      |         29 |          1 |   100.0% |         3 |
@@ -302,18 +302,18 @@
 | terraformstates         |         43 |          1 |   100.0% |         6 |
 | todos                   |         48 |          4 |   100.0% |         3 |
 | toolvisibility          |         24 |          2 |   100.0% |         0 |
-| topics                  |         25 |          2 |   100.0% |         5 |
+| topics                  |         28 |          2 |   100.0% |         5 |
 | uploads                 |         57 |          3 |   100.0% |         4 |
 | usagedata               |         37 |          1 |   100.0% |         6 |
 | useremails              |         32 |          2 |   100.0% |         6 |
 | usergpgkeys             |         56 |          2 |   100.0% |         8 |
-| users                   |        272 |          7 |   100.0% |        38 |
+| users                   |        274 |          7 |   100.0% |        38 |
 | vulnerabilities         |         96 |          3 |   100.0% |         8 |
 | waitpoll                |         45 |          3 |   100.0% |         0 |
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,143** |    **475** |          | **1,195** |
+| **Total**               | **11,163** |    **475** |          | **1,195** |
 
 </details>
 
@@ -329,11 +329,15 @@
 | cmd/audit_1to1/internal/grants            |   100.0% |
 | cmd/audit_1to1/internal/merge             |   100.0% |
 | cmd/audit_1to1/internal/metadata          |   100.0% |
+| cmd/audit_1to1/internal/params            |      n/a |
 | cmd/audit_1to1/internal/paths             |   100.0% |
 | cmd/audit_1to1/internal/required          |   100.0% |
+| cmd/audit_1to1/internal/routes            |      n/a |
 | cmd/audit_1to1/internal/sdk               |   100.0% |
+| cmd/audit_1to1/internal/sdkoptions        |      n/a |
 | cmd/audit_1to1/internal/shared            |   100.0% |
 | cmd/audit_1to1/internal/structs           |   100.0% |
+| cmd/audit_1to1/internal/waits             |      n/a |
 | cmd/audit_action_ids                      |   100.0% |
 | cmd/audit_binary_vulns                    |   100.0% |
 | cmd/audit_catalog_first                   |   100.0% |

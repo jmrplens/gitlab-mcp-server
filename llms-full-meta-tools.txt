@@ -868,7 +868,7 @@ Action guidance:
 - topic_delete: Delete a project topic by id (admin only). Projects keep their other topics. This only removes the topic definition.
 - topic_get: Get one instance project topic by its numeric topic id.
 - topic_list: List instance project topics, optionally filtered by a search term. Topics group related projects across the instance.
-- topic_update: Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, or avatar.
+- topic_update: Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, avatar, or remove_avatar to remove the image.
 - usage_data_metric_definitions: Get the Service Ping metric definitions (the dictionary describing each usage metric, its category, and data type).
 - usage_data_non_sql_metrics: Get the non-SQL Service Ping metrics for the instance (metrics not derived from database queries).
 - usage_data_queries: Get the SQL queries that GitLab uses to build Service Ping metrics, useful for auditing what usage data is collected.
@@ -10252,6 +10252,7 @@ Parameter guidance:
 - code.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
 - commits.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - commits.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- commits.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
 - issues.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - issues.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - merge_requests.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
@@ -10264,6 +10265,7 @@ Parameter guidance:
 - users.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - wiki.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - wiki.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- wiki.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
 
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id. If both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).

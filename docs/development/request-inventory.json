@@ -2335,6 +2335,11 @@
       "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/alert_management_alerts/:alert_management_alert_id/metric_images",
+      "body": [
+        "file",
+        "url",
+        "url_text"
+      ],
       "identifiers": {
         ":alert_management_alert_id": 1,
         ":project_id": 1
@@ -7786,7 +7791,13 @@
       "package": "internal/tools/groupimportexport",
       "kind": "rest",
       "method": "POST",
-      "path": "/groups/import"
+      "path": "/groups/import",
+      "body": [
+        "file",
+        "name",
+        "parent_id",
+        "path"
+      ]
     },
     {
       "package": "internal/tools/groupiterations",
@@ -8629,6 +8640,7 @@
         "allow_personal_snippets",
         "auto_ban_user_on_excessive_projects_download",
         "auto_devops_enabled",
+        "avatar",
         "crm_enabled",
         "default_branch",
         "default_branch_protection",
@@ -8705,6 +8717,7 @@
         "allowed_email_domains_list",
         "auto_ban_user_on_excessive_projects_download",
         "auto_devops_enabled",
+        "avatar",
         "crm_enabled",
         "default_branch",
         "default_branch_protection",
@@ -11978,6 +11991,7 @@
       "method": "GET",
       "path": "/projects/:project_id/labels",
       "query": [
+        "archived",
         "include_ancestor_groups",
         "order_by",
         "page",
@@ -15067,7 +15081,64 @@
       "package": "internal/tools/projectimportexport",
       "kind": "rest",
       "method": "POST",
-      "path": "/projects/import"
+      "path": "/projects/import",
+      "body": [
+        "file",
+        "name",
+        "namespace",
+        "override_params[allow_merge_on_skipped_pipeline]",
+        "override_params[analytics_access_level]",
+        "override_params[approvals_before_merge]",
+        "override_params[auto_cancel_pending_pipelines]",
+        "override_params[auto_devops_deploy_strategy]",
+        "override_params[auto_devops_enabled]",
+        "override_params[autoclose_referenced_issues]",
+        "override_params[build_git_strategy]",
+        "override_params[build_timeout]",
+        "override_params[builds_access_level]",
+        "override_params[container_registry_access_level]",
+        "override_params[container_registry_enabled]",
+        "override_params[description]",
+        "override_params[environments_access_level]",
+        "override_params[external_authorization_classification_label]",
+        "override_params[feature_flags_access_level]",
+        "override_params[forking_access_level]",
+        "override_params[infrastructure_access_level]",
+        "override_params[issues_access_level]",
+        "override_params[issues_enabled]",
+        "override_params[merge_commit_template]",
+        "override_params[merge_method]",
+        "override_params[merge_requests_access_level]",
+        "override_params[merge_requests_enabled]",
+        "override_params[model_experiments_access_level]",
+        "override_params[model_registry_access_level]",
+        "override_params[monitor_access_level]",
+        "override_params[only_allow_merge_if_all_discussions_are_resolved]",
+        "override_params[only_allow_merge_if_pipeline_succeeds]",
+        "override_params[package_registry_access_level]",
+        "override_params[pages_access_level]",
+        "override_params[printing_merge_request_link_enabled]",
+        "override_params[public_builds]",
+        "override_params[releases_access_level]",
+        "override_params[remove_source_branch_after_merge]",
+        "override_params[repository_access_level]",
+        "override_params[request_access_enabled]",
+        "override_params[requirements_access_level]",
+        "override_params[resolve_outdated_diff_discussions]",
+        "override_params[security_and_compliance_access_level]",
+        "override_params[service_desk_enabled]",
+        "override_params[shared_runners_enabled]",
+        "override_params[snippets_access_level]",
+        "override_params[snippets_enabled]",
+        "override_params[squash_commit_template]",
+        "override_params[squash_option]",
+        "override_params[suggestion_commit_message]",
+        "override_params[visibility]",
+        "override_params[wiki_access_level]",
+        "override_params[wiki_enabled]",
+        "overwrite",
+        "path"
+      ]
     },
     {
       "package": "internal/tools/projectiterations",
@@ -15295,6 +15366,7 @@
       "method": "POST",
       "path": "/projects",
       "body": [
+        "avatar",
         "build_timeout",
         "builds_access_level",
         "container_registry_access_level",
@@ -15316,6 +15388,8 @@
         "snippets_access_level",
         "squash_option",
         "suggestion_commit_message",
+        "tag_list",
+        "topics",
         "visibility",
         "wiki_access_level"
       ]
@@ -15354,6 +15428,7 @@
       "path": "/projects/:project_id",
       "body": [
         "approvals_before_merge",
+        "avatar",
         "build_timeout",
         "ci_config_path",
         "ci_default_git_depth",
@@ -16016,6 +16091,7 @@
       "path": "/projects/user/:user_id",
       "body": [
         "auto_devops_enabled",
+        "avatar",
         "builds_access_level",
         "default_branch",
         "description",
@@ -17797,6 +17873,10 @@
       "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/secure_files",
+      "body": [
+        "file",
+        "name"
+      ],
       "identifiers": {
         ":project_id": 2
       }
@@ -18955,6 +19035,7 @@
       "method": "POST",
       "path": "/topics",
       "body": [
+        "avatar",
         "description",
         "name",
         "title"
@@ -18984,6 +19065,7 @@
       "method": "PUT",
       "path": "/topics/:topic_id",
       "body": [
+        "avatar",
         "description",
         "name",
         "title"
@@ -19015,6 +19097,9 @@
       "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/uploads",
+      "body": [
+        "file"
+      ],
       "identifiers": {
         ":project_id": 1
       }
@@ -19048,7 +19133,10 @@
       "package": "internal/tools/uploads",
       "kind": "rest",
       "method": "POST",
-      "path": "/projects/p/uploads"
+      "path": "/projects/p/uploads",
+      "body": [
+        "file"
+      ]
     },
     {
       "package": "internal/tools/uploads",
@@ -19330,7 +19418,10 @@
       "package": "internal/tools/users",
       "kind": "rest",
       "method": "PUT",
-      "path": "/user/avatar"
+      "path": "/user/avatar",
+      "body": [
+        "avatar"
+      ]
     },
     {
       "package": "internal/tools/users",
@@ -19478,6 +19569,7 @@
       "body": [
         "admin",
         "auditor",
+        "avatar",
         "bio",
         "can_create_group",
         "color_scheme_id",
@@ -19540,6 +19632,7 @@
       "body": [
         "admin",
         "auditor",
+        "avatar",
         "bio",
         "can_create_group",
         "commit_email",
@@ -19950,6 +20043,10 @@
       "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/wikis/attachments",
+      "body": [
+        "branch",
+        "file"
+      ],
       "identifiers": {
         ":project_id": 1
       }
