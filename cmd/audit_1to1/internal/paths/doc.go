@@ -223,7 +223,11 @@
 // property it sits under, and only when the document describes an object there
 // at all (typed_nested_types_compared, typed_nested_unpublished_fields). The
 // reticence is what makes that level usable, since it is the level whose first,
-// unguarded attempt produced 1418 findings. typed_undeclared_fields spans both
+// unguarded attempt produced 1418 findings. Every compared type is read that
+// way, the payload of an envelope included: the walk used to record what a
+// top-level type nests and nothing else, and a payload is named by its
+// envelope, so 184 of the 252 compared types, the merge request a list wraps
+// among them, were never held one level down. typed_undeclared_fields spans both
 // levels: it counts every finding at this grain no declaration answers, and
 // adjudicating one means reading its page first.
 //

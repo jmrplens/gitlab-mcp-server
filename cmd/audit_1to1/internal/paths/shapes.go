@@ -265,10 +265,24 @@ func unpublishedFields(published []publishedType, byPackage map[string]map[strin
 }
 
 // sortFindings orders the findings of either grain the way a reader reads them:
-// down the tree, then by type, then by field.
+// down the tree, then by type, then by the property a nested type sits under,
+// then by field.
+//
+// The property is part of the order because one nested type sits under several
+// of them: a merge request's author, assignees and reviewers are all
+// toolutil.BasicUserOutput, and the three findings on created_at would
+// otherwise tie and come out in whatever order the sort left them.
+//
+// The client-go struct and the endpoints a finding was judged against close
+// the order, for the same reason one step further: one nested type under one
+// property of two types of a package is reported once for each, with the four
+// keys above equal, and the sort keeps no input order, so two runs over one
+// tree would put the pair either way round. Two findings equal on these as
+// well were judged against the same responses, and nothing tells them apart.
 func sortFindings(found []UnpublishedField) {
 	slices.SortFunc(found, func(a, b UnpublishedField) int {
-		return cmp.Or(strings.Compare(a.Package, b.Package), strings.Compare(a.Type, b.Type), strings.Compare(a.Field, b.Field))
+		return cmp.Or(strings.Compare(a.Package, b.Package), strings.Compare(a.Type, b.Type), strings.Compare(a.Under, b.Under), strings.Compare(a.Field, b.Field),
+			strings.Compare(a.SDKType, b.SDKType), slices.Compare(a.Operations, b.Operations))
 	})
 }
 

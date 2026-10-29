@@ -906,6 +906,104 @@ func TestProjectedSDKTypes_EachStruct_IsNamedOnceInOrder(t *testing.T) {
 	}
 }
 
+// widgetListSource is a package whose response is a list of widgets, each
+// carrying the part it was built from: the shape of a merge request list,
+// whose rows carry their head pipeline. The row type is the payload of the
+// list, so some struct names it and it is inner, and it is what a converter
+// pairs.
+const widgetListSource = `package widgets
+
+type ListOutput struct {
+	Widgets []Output ` + "`json:\"widgets\"`" + `
+}
+
+type Output struct {
+	ID         int64       ` + "`json:\"id\"`" + `
+	HeadWidget *PartOutput ` + "`json:\"head_widget\"`" + `
+}
+
+type PartOutput struct {
+	ID   int64  ` + "`json:\"id\"`" + `
+	Name string ` + "`json:\"name\"`" + `
+}
+`
+
+// widgetPairing and widgetRoutes are the converter pairing and the route the
+// widget row is judged against.
+var (
+	widgetPairing = structs.Pairings{
+		ClientGoDir: "/client-go",
+		Outputs:     []structs.OutputPairing{{Package: "widgets", MCPType: "Output", SDKType: "Widget"}},
+	}
+	widgetRoutes = map[string][]sdkRoute{"Widget": {{Method: "GET", Path: "/widgets"}}}
+)
+
+// widgetOperations is what the record says the widget list sends: the part
+// under head_widget carries an archived flag the published part lacks, and
+// no name, which the published part carries.
+var widgetOperations = map[string]response{
+	"GET /api/v4/widgets": {
+		Response: []string{"head_widget", "id"},
+		Nested:   map[string][]string{"head_widget": {"archived", "id"}},
+	},
+}
+
+// TestTypedShapeCheck_ThePayloadOfAList_HasItsNestedTypesJudged verifies, from
+// the source to the finding, that the nested comparison reaches the payload
+// of an envelope. The payload is inner, and the walk used to leave the nested
+// types of an inner type out, so the type grain compared the row and never the
+// part under it: the merge request's head_pipeline is that part, and its name,
+// which no merge request route sends, was never reported.
+func TestTypedShapeCheck_ThePayloadOfAList_HasItsNestedTypesJudged(t *testing.T) {
+	stubTypeGrainInputs(t, widgetPairing, nil, widgetRoutes)
+	root := writePackage(t, "widgets", widgetListSource)
+
+	check := typedCheckOf("", widgetOperations, publishedTypes(root))
+
+	if check.Compared != 1 || check.ComparedInner != 1 {
+		t.Fatalf("Compared = %d (%d inner), want the row judged as the list's payload", check.Compared, check.ComparedInner)
+	}
+	if check.NestedCompared != 1 {
+		t.Errorf("NestedCompared = %d, want the part under head_widget compared", check.NestedCompared)
+	}
+	want := []UnpublishedField{{
+		Grain: grainType, Package: "internal/tools/widgets", Type: "PartOutput", Under: "head_widget", Field: "name",
+		SDKType: "Widget", Endpoints: 1, Operations: []string{"GET /widgets"},
+	}}
+	if !reflect.DeepEqual(check.Nested, want) {
+		t.Errorf("nested findings = %+v, want %+v", check.Nested, want)
+	}
+}
+
+// TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity is the
+// witness of the nested comparison on this tree, against client-go v3.30.0 and
+// the record of GitLab 19.5.0.
+//
+// A merge request's head_pipeline is rendered with API::Entities::Ci::Pipeline,
+// which sends no name, and toolutil.PipelineOutput publishes name on every
+// merge request and every merge request a deployment lists. Both rows are
+// payloads of a list and were never compared one level down, so neither was
+// reported. It reads the record and the typed packages and not the request
+// inventory, so it does not wait on a regeneration.
+func TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity(t *testing.T) {
+	root := repoRoot(t)
+
+	check := shapeCheck(root, nil, publishedTypes(root)).Typed
+
+	if !check.Ran {
+		t.Fatal("the type grain did not run on the repository")
+	}
+	for _, pkg := range []string{mergeRequestsPkg, toolsDir + "/deploymentmergerequests"} {
+		t.Run(shortPackage(pkg), func(t *testing.T) {
+			if !slices.ContainsFunc(check.Nested, func(finding UnpublishedField) bool {
+				return finding.Package == pkg && finding.Type == "toolutil.PipelineOutput" && finding.Under == "head_pipeline" && finding.Field == "name"
+			}) {
+				t.Errorf("no nested finding for %s head_pipeline.name, want toolutil.PipelineOutput's name reported unpublished", pkg)
+			}
+		})
+	}
+}
+
 // TestTypedShapeCheck_UndeclaredFindings_AreCountedAtBothLevels verifies the
 // number the report leads with, which is what a reader is being asked to act
 // on: an answered finding is context, and one at either level that nothing

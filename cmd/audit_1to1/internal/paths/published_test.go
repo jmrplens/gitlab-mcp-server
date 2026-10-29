@@ -107,6 +107,43 @@ type rawOutput struct {
 	}
 }
 
+// TestPublishedTypes_AnInnerType_KeepsWhatItNests verifies the walk records
+// the nested types of a type some struct names as a field, which is every
+// payload of a list. The type grain judges such a payload against the routes
+// its converter pairs, and the merge request a list wraps nests its
+// head_pipeline exactly as a top-level type would: leaving Nested empty there
+// kept every nested type of 184 compared payloads out of the nested
+// comparison, and head_pipeline.name published although no merge request
+// route sends it.
+func TestPublishedTypes_AnInnerType_KeepsWhatItNests(t *testing.T) {
+	root := writePackage(t, "widgets", `package widgets
+
+type ListOutput struct {
+	Widgets []Output `+"`json:\"widgets\"`"+`
+}
+
+type Output struct {
+	ID         int64        `+"`json:\"id\"`"+`
+	HeadWidget *PartOutput  `+"`json:\"head_widget\"`"+`
+}
+
+type PartOutput struct {
+	Name string `+"`json:\"name\"`"+`
+}
+`)
+
+	types := publishedTypes(root)
+
+	want := []publishedType{
+		{Package: "internal/tools/widgets", Name: "ListOutput", Fields: []string{"widgets"}, Wraps: []string{"Output"}, Nested: map[string]nestedType{"widgets": {Name: "Output", Fields: []string{"head_widget", "id"}}}},
+		{Package: "internal/tools/widgets", Name: "Output", Fields: []string{"head_widget", "id"}, Inner: true, Payload: true, Nested: map[string]nestedType{"head_widget": {Name: "PartOutput", Fields: []string{"name"}}}},
+		{Package: "internal/tools/widgets", Name: "PartOutput", Fields: []string{"name"}, Inner: true},
+	}
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
+	}
+}
+
 // writeShared puts one Go source file under the shared shapes package of a
 // tree writePackage began.
 func writeShared(t *testing.T, root, source string) {
@@ -225,7 +262,10 @@ type MergeRequestOutput struct {
 		{Package: "internal/tools/sample", Name: "DiscussionOutput", Fields: []string{"notes"}, Nested: map[string]nestedType{
 			"notes": {Name: "toolutil.NoteOutput", Fields: []string{"body"}},
 		}, Wraps: []string{"toolutil.NoteOutput"}},
-		{Package: "internal/tools/sample", Name: "MemberRoleOutput", Fields: []string{"id", "owner"}, Inner: true},
+		{
+			Package: "internal/tools/sample", Name: "MemberRoleOutput", Fields: []string{"id", "owner"}, Inner: true,
+			Nested: map[string]nestedType{"owner": {Name: "toolutil.BasicUserOutput", Fields: []string{"id", "name", "username"}}},
+		},
 		{Package: "internal/tools/sample", Name: "NoteOutput", Fields: []string{"body"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"author", "id", "other", "role"}, Nested: map[string]nestedType{
 			"author": {Name: "toolutil.BasicUserOutput", Fields: []string{"id", "name", "username"}},
@@ -469,7 +509,10 @@ type Row struct {
 		{Package: "internal/tools/labels", Name: "ListOutput", Fields: []string{"labels"}, Nested: map[string]nestedType{
 			"labels": {Name: "Output", Fields: []string{"id", "name", "row"}},
 		}, Wraps: []string{"Output"}},
-		{Package: "internal/tools/labels", Name: "Output", Fields: []string{"id", "name", "row"}, Inner: true, Payload: true},
+		{
+			Package: "internal/tools/labels", Name: "Output", Fields: []string{"id", "name", "row"}, Inner: true, Payload: true,
+			Nested: map[string]nestedType{"row": {Name: "labeldata.Row", Fields: []string{"color"}}},
+		},
 		{Package: "internal/tools/labels", Name: "RowOutput", Fields: []string{"other"}},
 		{Package: "internal/tools/labels", Name: "labeldata.Row", Fields: []string{"color"}, Inner: true, Borrowed: true},
 	}
@@ -876,7 +919,10 @@ type RightOutput struct {
 		{Package: "internal/tools/sample", Name: "DetailsOutput", Fields: []string{"connected", "group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}}},
 		{Package: "internal/tools/sample", Name: "GroupOutput", Fields: []string{"path"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "LeftOutput", Fields: []string{"a", "b"}},
-		{Package: "internal/tools/sample", Name: "ListItem", Fields: []string{"id", "uploaded_by"}, Inner: true},
+		{
+			Package: "internal/tools/sample", Name: "ListItem", Fields: []string{"id", "uploaded_by"}, Inner: true,
+			Nested: map[string]nestedType{"uploaded_by": {Name: "UploadedByOutput", Fields: []string{"name"}}},
+		},
 		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}, "owner": {Name: "UserOutput", Fields: []string{"name"}}}},
 		{Package: "internal/tools/sample", Name: "RightOutput", Fields: []string{"a", "b"}},
 		{Package: "internal/tools/sample", Name: "StatusOutput", Fields: []string{"Status", "note"}},

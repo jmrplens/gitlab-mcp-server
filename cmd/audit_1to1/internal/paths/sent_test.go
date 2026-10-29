@@ -374,6 +374,30 @@ func TestSentCheck_ARowNamedOneLevelDown_CountsAsPublished(t *testing.T) {
 	}
 }
 
+// TestSentCheck_WhatAnInnerTypeNests_IsNotCreditedToThePackage verifies that
+// the package grain stops one level down. An inner type is already one level
+// below a response, and this grain joins on names alone, so a name its nested
+// type publishes, two levels down, would answer a key of the response it
+// shares only a name with: here the row's user publishes `name`, and the
+// project's own `name` is still unsurfaced. The type grain is where a nested
+// type of an inner one is judged, under the property it sits under.
+func TestSentCheck_WhatAnInnerTypeNests_IsNotCreditedToThePackage(t *testing.T) {
+	root := projectRecord(t)
+	published := []publishedType{
+		{Package: "internal/tools/projects", Name: "Output", Fields: []string{"archived", "id", "mirror", "star_count"}},
+		{
+			Package: "internal/tools/projects", Name: "RowOutput", Fields: []string{"owner"}, Inner: true,
+			Nested: map[string]nestedType{"owner": {Name: "UserOutput", Fields: []string{"name"}}},
+		},
+	}
+
+	check := shapeCheck(root, projectRows(), published)
+
+	if len(check.Sent.Unsurfaced) != 1 || check.Sent.Unsurfaced[0].Field != "name" {
+		t.Errorf("Unsurfaced = %+v, want the project's name still reported", check.Sent.Unsurfaced)
+	}
+}
+
 // TestSentCheck_ARowAnotherToolsPackageDeclares_CountsAsPublished verifies that
 // the package grain credits a borrowed type's fields to the package naming it,
 // the way a merge request's commit list publishes a commit's fields through

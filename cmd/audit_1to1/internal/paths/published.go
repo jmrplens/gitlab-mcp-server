@@ -32,9 +32,17 @@ type publishedType struct {
 	Fields []string
 	// Nested holds, per json tag whose Go type is another output type of the
 	// same package, that type's own name and fields. It is one level deep,
-	// which is as far as the comparison goes (see [operation.Nested]), and it
-	// is empty on an inner type: a type reached through a field of a field is
-	// compared against nothing, so collecting it would only grow the walk.
+	// which is as far as the comparison goes (see [operation.Nested]).
+	//
+	// It is filled on an inner type too. It used to be left empty there, on
+	// the reading that a type reached through a field is compared against
+	// nothing, and the type grain stopped reading it that way once it judged
+	// the payload of an envelope ([TypedShapeCheck.ComparedInner]): the merge
+	// request a list wraps is inner and compared, and its head_pipeline was
+	// never held against what GitLab's pipeline entity sends, which is how
+	// head_pipeline.name stayed published although no merge request route sends
+	// it. Whether a type is judged at all is the type grain's decision, so the
+	// walk records what every type nests and leaves it to that.
 	Nested map[string]nestedType
 	// Inner is true for a type some struct of the package names as a field
 	// type, or one not named as an output type at all.
@@ -276,9 +284,7 @@ func publishedTypesIn(dir, pkg string, shared map[string]declaredStruct, sharedN
 			Payload: parsed.enveloped[candidate.Name],
 			Wraps:   structsOnly(parsed.wraps[candidate.Name], byName),
 		}
-		if !published.Inner {
-			published.Nested = nestedTypes(whole, byName, scalars)
-		}
+		published.Nested = nestedTypes(whole, byName, scalars)
 		out = append(out, published)
 	}
 	for _, name := range slices.Sorted(maps.Keys(parsed.borrowed)) {

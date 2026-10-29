@@ -436,18 +436,23 @@ func TestShapeCheck_TheJoinCountsWhatItRead(t *testing.T) {
 	}
 }
 
-// TestSortFindings_OrderedByPackageThenTypeThenField verifies the order a
-// reader meets the findings of either grain in.
+// TestSortFindings_OrderedByPackageThenTypeThenPropertyThenField verifies the
+// order a reader meets the findings of either grain in.
 //
 // The list is read as work: everything about one package arrives together,
-// everything about one type of it arrives together inside that, and the field
-// decides the rest. Each key is what makes the next one's order meaningful, so
-// the fixture names them to disagree with one another on purpose; a list sorted
-// by any one of the three alone would otherwise read as correct.
-func TestSortFindings_OrderedByPackageThenTypeThenField(t *testing.T) {
+// everything about one type of it arrives together inside that, the property a
+// nested type sits under groups its findings next, and the field decides the
+// rest. Each key is what makes the next one's order meaningful, so the fixture
+// names them to disagree with one another on purpose; a list sorted by any one
+// of the four alone would otherwise read as correct. The property matters
+// because one nested type sits under several, and without it two findings on
+// one field tie and come out in whatever order the sort leaves them.
+func TestSortFindings_OrderedByPackageThenTypeThenPropertyThenField(t *testing.T) {
 	found := []UnpublishedField{
 		{Package: "b", Type: "A", Field: "a"},
 		{Package: "a", Type: "Z", Field: "z"},
+		{Package: "a", Type: "Z", Under: "y", Field: "a"},
+		{Package: "a", Type: "Z", Under: "x", Field: "z"},
 		{Package: "a", Type: "Z", Field: "a"},
 		{Package: "a", Type: "A", Field: "z"},
 	}
@@ -456,11 +461,53 @@ func TestSortFindings_OrderedByPackageThenTypeThenField(t *testing.T) {
 
 	got := make([]string, 0, len(found))
 	for _, finding := range found {
-		got = append(got, finding.Package+"."+finding.Type+"."+finding.Field)
+		got = append(got, finding.Package+"."+finding.Type+"."+finding.Under+"."+finding.Field)
 	}
-	want := []string{"a.A.z", "a.Z.a", "a.Z.z", "b.A.a"}
+	want := []string{"a.A..z", "a.Z..a", "a.Z..z", "a.Z.x.z", "a.Z.y.a", "b.A..a"}
 	if !slices.Equal(got, want) {
 		t.Errorf("sortFindings() = %v, want %v", got, want)
+	}
+}
+
+// TestSortFindings_OneNestedFieldUnderTwoTypes_IsOrderedByWhatEachWasJudgedAgainst
+// verifies the order is total. One nested type under one property of two
+// types of a package is reported once for each, with the package, the type,
+// the property and the field all equal: commits publishes the author of a
+// commit status and of a commit comment as one user type. The sort keeps no
+// input order, so two runs over one tree would put the pair either way round;
+// the client-go struct each was judged against decides, and the endpoints
+// after it. Each case hands the pair over in the wrong order.
+func TestSortFindings_OneNestedFieldUnderTwoTypes_IsOrderedByWhatEachWasJudgedAgainst(t *testing.T) {
+	statuses := []string{"GET /projects/:/repository/commits/:/statuses"}
+	comments := []string{"GET /projects/:/repository/commits/:/comments"}
+	author := func(sdkType string, operations []string) UnpublishedField {
+		return UnpublishedField{
+			Grain: grainType, Package: "internal/tools/commits", Type: "toolutil.BasicUserOutput", Under: "author", Field: "locked",
+			SDKType: sdkType, Endpoints: len(operations), Operations: operations,
+		}
+	}
+	cases := []struct {
+		name          string
+		first, second UnpublishedField
+	}{
+		{name: "the struct first", first: author("CommitComment", statuses), second: author("CommitStatus", comments)},
+		{name: "then the endpoints", first: author("CommitStatus", comments), second: author("CommitStatus", statuses)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			found := []UnpublishedField{tc.second, tc.first}
+
+			sortFindings(found)
+
+			got := make([]string, 0, len(found))
+			for _, finding := range found {
+				got = append(got, finding.SDKType+" "+strings.Join(finding.Operations, ","))
+			}
+			want := []string{tc.first.SDKType + " " + strings.Join(tc.first.Operations, ","), tc.second.SDKType + " " + strings.Join(tc.second.Operations, ",")}
+			if !slices.Equal(got, want) {
+				t.Errorf("sortFindings() = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
