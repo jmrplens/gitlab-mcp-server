@@ -718,24 +718,28 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 }
 
 // TestOrbit_ActionSpecs_ForbiddenStaysAnError verifies that the not-found
-// wrapper every Orbit route carries converts a 404 and nothing else: a 403,
-// which GitLab.com answers an account Orbit is not served to since its general
-// availability, keeps the hint naming what Orbit needs and reaches the caller
-// as the error it is, rather than as the not-found card.
+// wrapper every Orbit route carries converts a 404 and nothing else: a 403
+// reaches the caller as the error it is, rather than as the not-found card.
+// On the query route and the MCP endpoint, which GitLab.com answers 403 for an
+// account Orbit is not served to since its general availability, it keeps the
+// hint naming what Orbit needs; on the GraphQL endpoint, which answers an Orbit
+// field it does not serve with null instead, a 403 is about the token or the
+// account and carries no Orbit hint.
 func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
 	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 
 	tests := []struct {
-		name string
-		args map[string]any
+		name     string
+		args     map[string]any
+		wantHint bool
 	}{
 		{name: "gitlab_orbit_status", args: map[string]any{}},
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
-		{name: "gitlab_orbit_tools", args: map[string]any{}},
-		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDGQL}},
+		{name: "gitlab_orbit_tools", args: map[string]any{}, wantHint: true},
+		{name: "gitlab_orbit_dsl", args: map[string]any{}, wantHint: true},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDGQL}, wantHint: true},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 
@@ -749,8 +753,8 @@ func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Route.Handler() = %#v with nil error, want the forbidden error", result)
 			}
-			if !strings.Contains(err.Error(), orbitUnavailableHint) {
-				t.Fatalf("Route.Handler() error = %q, want the Orbit availability hint", err)
+			if got := strings.Contains(err.Error(), orbitUnavailableHint); got != tt.wantHint {
+				t.Fatalf("Route.Handler() error = %q, carries the Orbit availability hint = %t, want %t", err, got, tt.wantHint)
 			}
 			if _, notFound := result.(orbitNotFoundOutput); notFound {
 				t.Fatalf("Route.Handler() = %#v, want no not-found card for a 403", result)

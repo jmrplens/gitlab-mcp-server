@@ -655,6 +655,36 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 	}
 }
 
+// TestOrbit_AccountRefused_GetsNoOrbitHint verifies that the availability
+// hint follows GitLab's refusal of Orbit, the 403 it answered every query with
+// once the fixture namespace lost Orbit on 2026-10-29, and not a 403 that
+// refuses the account itself, which no Orbit access would change.
+func TestOrbit_AccountRefused_GetsNoOrbitHint(t *testing.T) {
+	cases := []struct {
+		name     string
+		body     string
+		wantHint bool
+	}{
+		{name: "Orbit not served", body: `{"message":"403 Forbidden - No Orbit enabled namespaces available"}`, wantHint: true},
+		{name: "a blocked account", body: `{"message":"403 Forbidden - Your account has been blocked."}`, wantHint: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+				testutil.RespondJSON(w, http.StatusForbidden, tc.body)
+			}))
+			_, err := Query(context.Background(), client, QueryInput{Query: projectByIDGQL})
+			if err == nil {
+				t.Fatal("Query() error = nil, want GitLab's refusal")
+			}
+			if got := strings.Contains(err.Error(), orbitUnavailableHint); got != tc.wantHint {
+				t.Fatalf("Query() error = %v, carries the Orbit hint = %t, want %t", err, got, tc.wantHint)
+			}
+		})
+	}
+}
+
 // TestWrapOrbitErr_GenericError_UsesWrappedMessage verifies that non-HTTP
 // Orbit errors retain both operation context and the original error message.
 func TestWrapOrbitErr_GenericError_UsesWrappedMessage(t *testing.T) {

@@ -160,9 +160,13 @@ func TestGraphQLHandlers_TopLevelErrors_AreReturned(t *testing.T) {
 
 // TestGraphQLHandlers_HTTPFailure_CarriesTheOrbitHint verifies that an HTTP
 // refusal of the GraphQL request is classified the way every Orbit failure
-// is, with the availability hint on 403.
+// is: a 404 with the availability hint, and a 403 without it, since GitLab
+// answers an Orbit field it does not serve the user with null rather than a
+// refusal of the request, so a 403 of the GraphQL endpoint is about the token
+// or the account and says nothing about Orbit ([toolutil.IsPermissionRefusal]
+// reads no GraphQL answer as a permission refusal).
 func TestGraphQLHandlers_HTTPFailure_CarriesTheOrbitHint(t *testing.T) {
-	cases := []struct {
+	handlers := []struct {
 		name string
 		call func(context.Context, *testClient) error
 	}{
@@ -172,17 +176,29 @@ func TestGraphQLHandlers_HTTPFailure_CarriesTheOrbitHint(t *testing.T) {
 		{name: "graph status by group id", call: callGraphStatusByGroupID},
 		{name: "graph status by project id", call: callGraphStatusByProjectID},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				readGraphQL(t, r)
-				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-			}))
-			err := tc.call(context.Background(), client)
-			if err == nil || !strings.Contains(err.Error(), orbitUnavailableHint) {
-				t.Fatalf("error = %v, want the availability hint", err)
-			}
-		})
+	statuses := []struct {
+		status   int
+		wantHint bool
+	}{
+		{status: http.StatusNotFound, wantHint: true},
+		{status: http.StatusForbidden, wantHint: false},
+	}
+	for _, handler := range handlers {
+		for _, answer := range statuses {
+			t.Run(handler.name+", "+http.StatusText(answer.status), func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					readGraphQL(t, r)
+					testutil.RespondJSON(w, answer.status, `{"message":"`+http.StatusText(answer.status)+`"}`)
+				}))
+				err := handler.call(context.Background(), client)
+				if err == nil {
+					t.Fatal("error = nil, want GitLab's refusal")
+				}
+				if got := strings.Contains(err.Error(), orbitUnavailableHint); got != answer.wantHint {
+					t.Fatalf("error = %v, carries the availability hint = %t, want %t", err, got, answer.wantHint)
+				}
+			})
+		}
 	}
 }
 

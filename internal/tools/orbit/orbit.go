@@ -639,12 +639,16 @@ func responseFormatName(format *gl.OrbitResponseFormatValue) string {
 const orbitUnavailableHint = "Orbit is served on GitLab.com only, to a token that can read a top-level group with Orbit access and Orbit turned on; check the group's Orbit settings and access"
 
 // wrapOrbitErr classifies an HTTP error from the Orbit API and
-// attaches a domain-specific actionable hint. 404 and 403 get the
-// availability hint, since GitLab answers both to a user or namespace Orbit
-// does not serve; 400 hints at the query/format/scope parameters; 429 and
-// 503 hint at backoff; everything else uses the generic wrap.
+// attaches a domain-specific actionable hint. A 404 and a permission refusal
+// get the availability hint, since GitLab answers both to a user or namespace
+// Orbit does not serve (403 "No Orbit enabled namespaces available" since
+// Orbit's general availability). The hint names an access gate, so the
+// refusal is read with [toolutil.IsPermissionRefusal] rather than by its
+// status: a 403 refusing the account itself, as a blocked user's is, says
+// nothing about Orbit. 400 hints at the query/format/scope parameters; 429
+// and 503 hint at backoff; everything else uses the generic wrap.
 func wrapOrbitErr(op string, err error) error {
-	if toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+	if toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsPermissionRefusal(err) {
 		return toolutil.WrapErrWithHint(op, err, orbitUnavailableHint)
 	}
 	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
