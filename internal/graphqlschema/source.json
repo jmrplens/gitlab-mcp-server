@@ -1,7 +1,7 @@
 {
   "instance": "https://gitlab.com/api/graphql",
   "gitlab_version": "19.6.0-pre",
-  "gitlab_revision": "6d76e28bfe7",
-  "retrieved_at": "2026-10-17",
-  "types": 4568
+  "gitlab_revision": "2effc9e2a3f",
+  "retrieved_at": "2026-10-29",
+  "types": 4626
 }

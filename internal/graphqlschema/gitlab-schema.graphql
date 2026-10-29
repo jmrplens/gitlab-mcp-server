@@ -293,6 +293,7 @@ type AddOnPurchase {
 }
 
 type AddOnUser implements Todoable & User {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   addOnAssignments(addOnPurchaseIds: [GitlabSubscriptionsAddOnPurchaseID!]!, after: String, before: String, first: Int, last: Int): UserAddOnAssignmentConnection
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -315,7 +316,7 @@ type AddOnUser implements Todoable & User {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -335,7 +336,7 @@ type AddOnUser implements Todoable & User {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -1355,6 +1356,7 @@ type AiCatalogMcpServerUpdatePayload {
 }
 
 type AiCatalogMcpTool {
+  beta: Boolean!
   description: String
   icons: [AiCatalogMcpToolIcon!]!
   name: ID!
@@ -1679,6 +1681,7 @@ input AiDuoWorkflowCreateInput {
   namespaceId: NamespaceID
   preApprovedAgentPrivileges: [Int!]
   projectId: ProjectID
+  source: DuoWorkflowSourceType
   webSearchEnabled: Boolean
   workflowDefinition: String
 }
@@ -1779,6 +1782,7 @@ enum AiFeatures {
   RESOLVE_VULNERABILITY
   REVIEW_MERGE_REQUEST
   REVIEW_MERGE_REQUEST_DAP
+  REVIEW_MERGE_REQUEST_DAP_DEEP
   RISK_CLASSIFICATION
   SAST_VULNERABILITY_FP_DETECTION
   SAST_VULNERABILITY_RESOLUTION
@@ -1889,6 +1893,11 @@ type AiFlowTriggerCreatePayload {
   errors: [String!]!
 }
 
+type AiFlowTriggerDailyRunCount {
+  date: Date!
+  runs: Int!
+}
+
 input AiFlowTriggerDeleteInput {
   clientMutationId: String
   id: AiFlowTriggerID!
@@ -1926,6 +1935,25 @@ type AiFlowTriggerLastRun {
   status: AiFlowTriggerRunStatus!
 }
 
+enum AiFlowTriggerLastRunStatus {
+  AWAITING_INPUT
+  CANCELED
+  FAILED
+  NEVER
+  PENDING
+  RUNNING
+  SUCCEEDED
+}
+
+type AiFlowTriggerRunStats {
+  dailyVolume: [AiFlowTriggerDailyRunCount!]!
+  failedRuns: Int!
+  finishedRuns: Int!
+  medianDurationSeconds: Float
+  stoppedRuns: Int!
+  totalRuns: Int!
+}
+
 enum AiFlowTriggerRunStatus {
   AWAITING_INPUT
   CANCELED
@@ -1938,8 +1966,12 @@ enum AiFlowTriggerRunStatus {
 enum AiFlowTriggerSort {
   CREATED_ASC
   CREATED_DESC
+  LAST_RUN_ASC
+  LAST_RUN_DESC
   NAME_ASC
   NAME_DESC
+  TOTAL_RUNS_ASC
+  TOTAL_RUNS_DESC
   UPDATED_ASC
   UPDATED_DESC
 }
@@ -1961,8 +1993,9 @@ type AiFlowTriggerType {
   precondition: JSON
   project: Project
   readyMergeRequestsOnFinish: Boolean!
+  runStats: AiFlowTriggerRunStats
   runningCount: Int!
-  sessions(after: String, before: String, first: Int, last: Int): DuoWorkflowConnection
+  sessions(after: String, before: String, createdAfter: Time, createdBefore: Time, first: Int, last: Int, search: String, sort: DuoWorkflowsWorkflowSort, statuses: [DuoWorkflowStatus!]): DuoWorkflowConnection
   statusOnFinish: String
   updatedAt: Time!
   user: UserCore
@@ -1973,6 +2006,7 @@ type AiFlowTriggerTypeConnection {
   edges: [AiFlowTriggerTypeEdge]
   nodes: [AiFlowTriggerType]
   pageInfo: PageInfo!
+  runStats: AiFlowTriggerRunStats
 }
 
 type AiFlowTriggerTypeEdge {
@@ -2111,12 +2145,15 @@ type AiGovernanceSession {
   downloadPath: String
   flowType: String
   id: AiGovernanceSessionID!
+  mergeRequestLinks(after: String, before: String, first: Int, last: Int): AiGovernanceSessionMergeRequestLinkConnection
+  noteLinks(after: String, before: String, first: Int, last: Int): AiGovernanceSessionNoteLinkConnection
   project: Project
   sessionId: String
   sessionStartedAt: Time!
   source: AiGovernanceSessionSource!
   triggeredBy: UserCore
   webPath: String
+  workItemLinks(after: String, before: String, first: Int, last: Int): AiGovernanceSessionWorkItemLinkConnection
 }
 
 type AiGovernanceSessionConnection {
@@ -2145,10 +2182,46 @@ type AiGovernanceSessionEdge {
 
 scalar AiGovernanceSessionID
 
+type AiGovernanceSessionMergeRequestLink {
+  createdAt: Time!
+  id: GlobalID!
+  linkType: DuoWorkflowMergeRequestLinkType!
+  mergeRequest: MergeRequest
+}
+
+type AiGovernanceSessionMergeRequestLinkConnection {
+  edges: [AiGovernanceSessionMergeRequestLinkEdge]
+  nodes: [AiGovernanceSessionMergeRequestLink]
+  pageInfo: PageInfo!
+}
+
+type AiGovernanceSessionMergeRequestLinkEdge {
+  cursor: String!
+  node: AiGovernanceSessionMergeRequestLink
+}
+
 input AiGovernanceSessionNegatedFilterInput {
   flowType: String
   projectPath: String
   triggeredByUserId: UserID
+}
+
+type AiGovernanceSessionNoteLink {
+  createdAt: Time!
+  id: GlobalID!
+  linkType: DuoWorkflowNoteLinkType!
+  note: Note
+}
+
+type AiGovernanceSessionNoteLinkConnection {
+  edges: [AiGovernanceSessionNoteLinkEdge]
+  nodes: [AiGovernanceSessionNoteLink]
+  pageInfo: PageInfo!
+}
+
+type AiGovernanceSessionNoteLinkEdge {
+  cursor: String!
+  node: AiGovernanceSessionNoteLink
 }
 
 enum AiGovernanceSessionSource {
@@ -2156,6 +2229,24 @@ enum AiGovernanceSessionSource {
   CLAUDE_CODE_GLAB
   GITLAB_DUO
   MCP
+}
+
+type AiGovernanceSessionWorkItemLink {
+  createdAt: Time!
+  id: GlobalID!
+  linkType: DuoWorkflowWorkItemLinkType!
+  workItem: WorkItem
+}
+
+type AiGovernanceSessionWorkItemLinkConnection {
+  edges: [AiGovernanceSessionWorkItemLinkEdge]
+  nodes: [AiGovernanceSessionWorkItemLink]
+  pageInfo: PageInfo!
+}
+
+type AiGovernanceSessionWorkItemLinkEdge {
+  cursor: String!
+  node: AiGovernanceSessionWorkItemLink
 }
 
 type AiGovernanceToolCall {
@@ -2324,6 +2415,7 @@ enum AiModelSelectionFeatures {
   RESOLVE_VULNERABILITY
   REVIEW_MERGE_REQUEST
   REVIEW_MERGE_REQUEST_DAP
+  REVIEW_MERGE_REQUEST_DAP_DEEP
   RISK_CLASSIFICATION
   SAST_VULNERABILITY_FP_DETECTION
   SAST_VULNERABILITY_RESOLUTION
@@ -2631,6 +2723,7 @@ enum AiUsageEventType {
   AGENT_PLATFORM_SESSION_STARTED
   AGENT_PLATFORM_SESSION_STOPPED
   AI_DUO_MESSAGING_FEEDBACK_SUBMITTED
+  APPROVE_MERGE_REQUEST_DUO_CODE_REVIEW
   ASSIGN_DUO_SUGGESTED_REVIEWER
   CLICK_DUO_AGENTIC_SUBSCRIPTION_EXPIRED_LEARN_MORE
   CLICK_DUO_AGENTIC_SUBSCRIPTION_EXPIRED_UPGRADE
@@ -2658,6 +2751,7 @@ enum AiUsageEventType {
   REACT_THUMBS_DOWN_ON_DUO_CODE_REVIEW_COMMENT
   REACT_THUMBS_UP_ON_DUO_CODE_REVIEW_COMMENT
   REFACTOR_CODE
+  REPORT_AGENT_PLATFORM_TOKEN_USAGE
   REPORT_DUO_CHAT_TOKEN_USAGE
   REQUEST_DUO_CHAT_RESPONSE
   REQUEST_DUO_VULNERABILITY_RESOLUTION
@@ -2734,6 +2828,8 @@ enum AiUserMetricsSort {
   AI_CATALOG_TOTAL_COUNT_DESC
   AI_DUO_MESSAGING_FEEDBACK_SUBMITTED_ASC
   AI_DUO_MESSAGING_FEEDBACK_SUBMITTED_DESC
+  APPROVE_MERGE_REQUEST_DUO_CODE_REVIEW_ASC
+  APPROVE_MERGE_REQUEST_DUO_CODE_REVIEW_DESC
   ASSIGN_DUO_SUGGESTED_REVIEWER_ASC
   ASSIGN_DUO_SUGGESTED_REVIEWER_DESC
   CHAT_TOTAL_COUNT_ASC
@@ -3294,6 +3390,7 @@ enum AnalyzerTypeEnum {
   SECRET_DETECTION
   SECRET_DETECTION_PIPELINE_BASED
   SECRET_DETECTION_SECRET_PUSH_PROTECTION
+  SKILLGUARD
 }
 
 enum AnalyzerTypeForStatus {
@@ -3313,11 +3410,46 @@ enum AnalyzerTypeForStatus {
   SECRET_DETECTION
   SECRET_DETECTION_PIPELINE_BASED
   SECRET_DETECTION_SECRET_PUSH_PROTECTION
+  SKILLGUARD
 }
 
 type AncestorType {
   name: String
   version: String
+}
+
+type AnthropicComplianceIntegration {
+  disabledReason: AnthropicComplianceIntegrationDisabledReason
+  enabled: Boolean!
+  lastSuccessfulSyncAt: Time
+  updatedAt: Time!
+}
+
+input AnthropicComplianceIntegrationCreateInput {
+  apiKey: String!
+  clientMutationId: String
+  groupPath: ID!
+}
+
+type AnthropicComplianceIntegrationCreatePayload {
+  anthropicComplianceIntegration: AnthropicComplianceIntegration
+  clientMutationId: String
+  errorReason: AnthropicComplianceIntegrationErrorReason
+  errors: [String!]!
+}
+
+enum AnthropicComplianceIntegrationDisabledReason {
+  INVALID_KEY
+  LOCAL_SESSIONS_UNAVAILABLE
+  REPEATED_FAILURES
+}
+
+enum AnthropicComplianceIntegrationErrorReason {
+  BLANK_KEY
+  INVALID_INTEGRATION
+  INVALID_KEY
+  RATE_LIMITED
+  VERIFICATION_FAILED
 }
 
 type ApiFuzzingCiConfiguration {
@@ -3451,6 +3583,7 @@ type ApprovalRule {
   approvalsRequired: Int
   approved: Boolean
   approvedBy(after: String, before: String, first: Int, last: Int): UserCoreConnection
+  blockageReason: ApprovalRuleBlockageReason
   commentedBy(after: String, before: String, first: Int, last: Int): UserCoreConnection
   containsHiddenGroups: Boolean
   eligibleApprovers: [UserCore!]
@@ -3465,6 +3598,19 @@ type ApprovalRule {
   sourceRule: ApprovalRule
   type: ApprovalRuleType
   users(after: String, before: String, first: Int, last: Int): UserCoreConnection
+}
+
+type ApprovalRuleBlockageReason {
+  baseCoverage: Float
+  coverage: Float
+  reason: ApprovalRuleBlockageReasonKind!
+  threshold: Float
+}
+
+enum ApprovalRuleBlockageReasonKind {
+  BELOW_THRESHOLD
+  DECREASED
+  MISSING_BASE_COVERAGE
 }
 
 enum ApprovalRuleType {
@@ -3997,6 +4143,7 @@ enum ArtifactRegistryRole {
 type ArtifactRegistryRoleAssignment {
   assignee: UserCore
   createdAt: Time
+  grantedBy: UserCore
   resourceId: String!
   role: ArtifactRegistryRole
 }
@@ -4852,6 +4999,7 @@ enum AutoStopSetting {
 }
 
 type AutocompletedUser implements Todoable & User {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   authoredMergeRequests(after: String, approvedBy: [String!], approver: [String!], assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeAssigned: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -4873,7 +5021,7 @@ type AutocompletedUser implements Todoable & User {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -4892,7 +5040,7 @@ type AutocompletedUser implements Todoable & User {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -7201,6 +7349,7 @@ type CiJob implements CiJobInterface {
   tags: [String!]
   trace: CiJobTrace
   triggered: Boolean
+  userId: UserID
   userPermissions: JobPermissions!
   webPath: String
 }
@@ -7324,11 +7473,13 @@ enum CiJobFailureReason {
   REACHED_DOWNSTREAM_PIPELINE_TRIGGER_RATE_LIMIT
   REACHED_MAX_DESCENDANT_PIPELINES_DEPTH
   REACHED_MAX_PIPELINE_HIERARCHY_SIZE
+  RULES_PARSE_FAILURE
   RUNNER_CONFIGURATION_ERROR
   RUNNER_EXTERNAL_DEPENDENCY_FAILURE
   RUNNER_INTERRUPTED
   RUNNER_SYSTEM_FAILURE
   RUNNER_UNSUPPORTED
+  RUNTIME_ENVIRONMENT_UNAVAILABLE
   SCHEDULER_FAILURE
   SCRIPT_FAILURE
   SECRETS_MANAGER_ACCESS_DENIED
@@ -10384,6 +10535,7 @@ type CurrentLicense {
 }
 
 type CurrentUser implements Todoable & User {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   admin: Boolean!
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -10413,7 +10565,7 @@ type CurrentUser implements Todoable & User {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -10433,7 +10585,7 @@ type CurrentUser implements Todoable & User {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -10459,7 +10611,7 @@ type CurrentUser implements Todoable & User {
   webPath: String!
   webUrl: String!
   workItemPreferences(namespacePath: ID!, workItemTypeId: WorkItemsTypeID): WorkItemTypesUserPreference
-  workItems(after: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, dueAfter: Time, dueBefore: Time, first: Int, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iids: [String!], in: [IssuableSearchableField!], includeDescendantWorkItems: Boolean, labelName: [String!], last: Int, milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, subscribed: SubscriptionStatus, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, workItemTypeIds: [WorkItemsTypeID!]): WorkItemConnection
+  workItems(after: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, dueAfter: Time, dueBefore: Time, first: Int, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iids: [String!], in: [IssuableSearchableField!], includeDescendantWorkItems: Boolean, labelName: [String!], last: Int, milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, relativeDateFilters: WorkItemRelativeDateFiltersInput, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, subscribed: SubscriptionStatus, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, workItemTypeIds: [WorkItemsTypeID!]): WorkItemConnection
   workspaces(actualStates: [String!], after: String, agentIds: [ClustersAgentID!], before: String, first: Int, ids: [RemoteDevelopmentWorkspaceID!], includeActualStates: [String!], last: Int, projectIds: [ProjectID!]): WorkspaceConnection
 }
 
@@ -10597,8 +10749,7 @@ input CustomDashboardPanelInput {
   queryOverrides: CustomDashboardQueryOverridesInput
   title: String!
   tooltip: CustomDashboardTooltipInput
-  visualization: String
-  visualizationConfig: JSON
+  visualizationConfig: JSON!
 }
 
 input CustomDashboardPanelOptionsInput {
@@ -10767,6 +10918,7 @@ type CustomSystemDashboard implements CustomDashboardInterface {
   config: JSON!
   createdAt: Time
   description: String
+  errors: [String!]
   id: ID!
   name: String!
   slug: String
@@ -11781,7 +11933,6 @@ enum DependencyFirewallRuleType {
   MALICIOUS
   PACKAGE_VERSION
   RISK_SEVERITY
-  VULNERABILITY
 }
 
 type DependencyFirewallSeverityCount {
@@ -13026,6 +13177,11 @@ enum DuoAvailability {
   NEVER_ON
 }
 
+enum DuoCodeReviewDepth {
+  DEEP
+  STANDARD
+}
+
 type DuoCodeSuggestionsAggregationResponse {
   acceptanceRate: Float
   acceptedCount: Int
@@ -13092,6 +13248,17 @@ type DuoMessage {
   toolInfo: String
 }
 
+type DuoMessageConnection {
+  edges: [DuoMessageEdge]
+  nodes: [DuoMessage]
+  pageInfo: PageInfo!
+}
+
+type DuoMessageEdge {
+  cursor: String!
+  node: DuoMessage
+}
+
 type DuoSettings {
   aiGatewayTimeoutSeconds: Int
   aiGatewayUrl: String
@@ -13105,6 +13272,7 @@ type DuoSettings {
   minimumAccessLevelExecute: AccessLevelEnum
   minimumAccessLevelExecuteAsync: AccessLevelEnum
   minimumAccessLevelManage: AccessLevelEnum
+  requireSandbox: Boolean
   selfHostedDuoAgentPlatformServiceSecure: Boolean
   updatedAt: Time!
 }
@@ -13123,6 +13291,7 @@ input DuoSettingsUpdateInput {
   minimumAccessLevelExecute: AccessLevelEnum
   minimumAccessLevelExecuteAsync: AccessLevelEnum
   minimumAccessLevelManage: AccessLevelEnum
+  requireSandbox: Boolean
   selfHostedDuoAgentPlatformServiceSecure: Boolean
 }
 
@@ -13193,6 +13362,7 @@ type DuoWorkflow implements Todoable {
   flowMetadataId: String
   flowMetadataSchemaVersion: String
   flowMetadataVersion: String
+  flowTrigger: AiFlowTriggerType
   goal: String
   humanStatus: String!
   id: ID!
@@ -13226,10 +13396,12 @@ type DuoWorkflow implements Todoable {
   toolCallApprovalMatch(toolCallArgs: String!, toolName: String!): DuoWorkflowToolCallApprovalMatch!
   toolCallApprovals: JSON
   toolCallApproved(toolCallArgs: String!, toolName: String!): Boolean!
+  triggerSource: DuoWorkflowTriggerSource
   updatedAt: Time!
   user: UserCore
   userId: UserID!
   userPermissions: DuoWorkflowPermissions
+  webPath: String
   webSearchEnabled: Boolean
   webUrl: String
   workItem: WorkItem
@@ -13241,6 +13413,7 @@ type DuoWorkflow implements Todoable {
 type DuoWorkflowAgentPresence {
   agentCatalogWebPath: String
   agentName: String
+  flowTrigger: AiFlowTriggerType
   sessionId: AiDuoWorkflowsWorkflowID!
   sourceLink: String
   sourceType: DuoWorkflowSourceType
@@ -13304,6 +13477,7 @@ type DuoWorkflowEvent {
   errors: [String!]
   executionStatus: String!
   lastDuoMessage: DuoMessage
+  messages(after: String, before: String, first: Int, last: Int): DuoMessageConnection
   metadata: JsonString
   parentTs: String
   threadTs: String
@@ -13445,14 +13619,17 @@ enum DuoWorkflowSourceType {
   MERGE_REQUEST_FIX_PIPELINE
   MERGE_REQUEST_RESOLVE_DISCUSSION
   SLACK
+  WEB_CHAT
   WORK_ITEM_PLAN_TO_MERGE_REQUEST
   WORK_ITEM_TO_MERGE_REQUEST
+  WORK_ITEM_WORKPLAN
 }
 
 enum DuoWorkflowStatus {
   CREATED
   FAILED
   FINISHED
+  IDLE
   INPUT_REQUIRED
   PAUSED
   PLAN_APPROVAL_REQUIRED
@@ -13635,6 +13812,7 @@ enum DuoWorkflowsModelHosting {
 
 type DuoWorkflowsModelMetadata {
   hosting: DuoWorkflowsModelHosting
+  id: String!
   isDefault: Boolean!
   name: String
   provider: String
@@ -13721,6 +13899,15 @@ type EmailParticipantTypeConnection {
 type EmailParticipantTypeEdge {
   cursor: String!
   node: EmailParticipantType
+}
+
+enum EmojiSkinTone {
+  DARK
+  DEFAULT
+  LIGHT
+  MEDIUM
+  MEDIUM_DARK
+  MEDIUM_LIGHT
 }
 
 input EnableDevopsAdoptionNamespaceInput {
@@ -15149,6 +15336,7 @@ type GitlabSubscriptionUsageUserUsage {
   creditsUsed: Float
   monthlyCommitmentCreditsUsed: Float
   monthlyWaiverCreditsUsed: Float
+  nonBillableCreditsUsed: Float
   overageCreditsUsed: Float
   paidTierTrialCreditsUsed: Float
   totalCredits: Float
@@ -15172,6 +15360,7 @@ type GitlabSubscriptionUserCreditsUsage {
   enabled: Boolean!
   endDate: ISO8601Date
   isOutdatedClient: Boolean
+  nonBillableUsage: [GitlabSubscriptionUserCreditsUsageNonBillableUsage!]
   products: [GitlabSubscriptionUserCreditsUsageProduct!]
   startDate: ISO8601Date
   usedFlowTypes: [GitlabSubscriptionUsageFlowTypeInfo!]
@@ -15180,6 +15369,13 @@ type GitlabSubscriptionUserCreditsUsage {
 type GitlabSubscriptionUserCreditsUsageDailyUsage {
   creditsUsed: Float!
   date: ISO8601Date!
+}
+
+type GitlabSubscriptionUserCreditsUsageNonBillableUsage {
+  dailyUsage: [GitlabSubscriptionUserCreditsUsageDailyUsage!]!
+  productId: String!
+  skipReason: String
+  totalCreditsUsed: Float!
 }
 
 type GitlabSubscriptionUserCreditsUsageProduct {
@@ -15411,7 +15607,9 @@ type GovernPolicy {
   actions: [JSON!]
   createdAt: Time
   description: String
+  group: Group
   id: Int!
+  inherited: Boolean!
   lifecycleState: String
   mode: String
   name: String!
@@ -15509,6 +15707,10 @@ enum GovernPolicyEvaluationTriggerType {
   DEPLOYMENT_PROMOTED
   DEPLOYMENT_REQUESTED
   ENVIRONMENT_ADVANCED
+  PROJECT_AFTER_CREATE
+  PROJECT_AFTER_TRANSFER
+  PROJECT_BEFORE_SETTINGS_UPDATE
+  PROJECT_SCHEDULED_SETTINGS_DRIFT_CHECK
 }
 
 enum GovernPolicyEvaluationVerdict {
@@ -15594,6 +15796,7 @@ type Group implements GroupInterface & Todoable {
   amazonS3Configurations(after: String, before: String, first: Int, last: Int): AmazonS3ConfigurationTypeConnection
   analytics: Analytics
   analyzerStatuses: [AnalyzerGroupStatusType!]
+  anthropicComplianceIntegration: AnthropicComplianceIntegration
   approvalPolicies(after: String, before: String, deduplicatePolicies: Boolean = false, first: Int, includeUnscoped: Boolean = true, last: Int, relationship: SecurityPolicyRelationType = DIRECT): ApprovalPolicyConnection
   archived: Boolean
   autoDevopsEnabled: Boolean
@@ -15658,8 +15861,11 @@ type Group implements GroupInterface & Todoable {
   doraPerformanceScoreCounts(after: String, before: String, first: Int, last: Int, projectFilters: DoraProjectFilterInput): DoraPerformanceScoreCountConnection
   duoAutoModeEnabled: Boolean
   duoFeaturesEnabled: Boolean
+  duoMcpServerNames: [String!]
   duoSettingsPath: String
+  duoWorkflowRunnerAvailable: Boolean
   duoWorkflowSessionArtifacts(after: String, agentClass: AiGovernanceAgentClass, before: String, first: Int, last: Int, not: DuoWorkflowSessionArtifactNegatedFilterInput, projectPath: String, triggeredByUserId: UserID, workflowCreatedAfter: Time, workflowCreatedBefore: Time, workflowDefinition: String, workflowId: AiDuoWorkflowsWorkflowID): DuoWorkflowSessionArtifactConnection
+  duoWorkflowUsableRunnerType: String
   editPath: String!
   emailsDisabled: Boolean
   emailsEnabled: Boolean
@@ -15688,8 +15894,6 @@ type Group implements GroupInterface & Todoable {
   issues(after: String, assigneeId: String, assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, epicId: String, epicWildcardId: EpicWildcardId, first: Int, healthStatus: HealthStatus, healthStatusFilter: HealthStatusFilter, iid: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeSubepics: Boolean, includeSubgroups: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationTitle: String, iterationWildcardId: IterationWildcardId, labelName: [String], last: Int, milestoneTitle: [String], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedIssueFilterInput, or: UnionedIssueFilterInput, search: String, sort: IssueSort = created_desc, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): IssueConnection
   iterationCadences(active: Boolean, after: String, automatic: Boolean, before: String, durationInWeeks: Int, first: Int, id: IterationsCadenceID, includeAncestorGroups: Boolean, last: Int, title: String): IterationCadenceConnection
   iterations(after: String, before: String, first: Int, id: ID, iid: ID, in: [IterationSearchableField!], includeAncestors: Boolean, includeDescendants: Boolean, iterationCadenceIds: [IterationsCadenceID!], last: Int, search: String, sort: IterationSort, state: IterationState, timeframe: Timeframe, title: String): IterationConnection
-  knowledgeGraphAvailable: Boolean!
-  knowledgeGraphEnabled: Boolean!
   label(title: String!): Label
   labels(after: String, archived: Boolean = false, before: String, first: Int, fuzzySearch: Boolean = false, includeAncestorGroups: Boolean = false, includeDescendantGroups: Boolean = false, last: Int, onlyGroupLabels: Boolean = false, searchIn: [LabelSearchFieldList!]! = [TITLE, DESCRIPTION], searchTerm: String, title: String): LabelConnection
   lfsEnabled: Boolean
@@ -15719,8 +15923,6 @@ type Group implements GroupInterface & Todoable {
   name: String
   namespaceSettings: NamespaceSettings
   orbit: OrbitNamespace
-  orbitAccess: OrbitAccess
-  orbitTrial: OrbitTrial
   organizationEditPath: String
   organizationStateCounts(search: String, state: CustomerRelationsOrganizationState): OrganizationStateCounts
   organizations(after: String, before: String, first: Int, ids: [CustomerRelationsOrganizationID!], last: Int, search: String, sort: OrganizationSort = NAME_ASC, state: CustomerRelationsOrganizationState): CustomerRelationsOrganizationConnection
@@ -15732,7 +15934,7 @@ type Group implements GroupInterface & Todoable {
   pendingMemberApprovals(after: String, before: String, first: Int, last: Int): MemberApprovalConnection
   pendingMembers(after: String, before: String, first: Int, last: Int): PendingMemberInterfaceConnection
   permanentDeletionDate: String
-  pipelineAnalytics(fromTime: Time, ref: String, source: CiPipelineSources, subgroupFullPaths: [String!], toTime: Time): PipelineAnalytics
+  pipelineAnalytics(fromTime: Time, nameSearch: String, ref: String, source: CiPipelineSources, subgroupFullPaths: [String!], toTime: Time): PipelineAnalytics
   pipelineExecutionPolicies(after: String, before: String, deduplicatePolicies: Boolean = false, first: Int, includeUnscoped: Boolean = true, last: Int, relationship: SecurityPolicyRelationType = DIRECT): PipelineExecutionPolicyConnection
   pipelineExecutionSchedulePolicies(after: String, before: String, deduplicatePolicies: Boolean = false, first: Int, includeUnscoped: Boolean = true, last: Int, relationship: SecurityPolicyRelationType = DIRECT): PipelineExecutionSchedulePolicyConnection
   plan: NamespacePlan
@@ -15817,9 +16019,9 @@ type Group implements GroupInterface & Todoable {
   workItemDescriptionTemplates(after: String, before: String, first: Int, last: Int, name: String, search: String): WorkItemDescriptionTemplateConnection
   workItemMoveTargets(sourceFullPath: String!, sourceTypeIds: [WorkItemsTypeID!]!): [WorkItemMoveTarget!]
   workItemSettings: WorkItemSettings
-  workItemStateCounts(assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, excludeGroupWorkItems: Boolean = false, excludeProjects: Boolean = false, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeAncestors: Boolean = false, includeArchived: Boolean = false, includeDescendantWorkItems: Boolean, includeDescendants: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, timeframe: Timeframe, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemStateCountsType
+  workItemStateCounts(assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, excludeGroupWorkItems: Boolean = false, excludeProjects: Boolean = false, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeAncestors: Boolean = false, includeArchived: Boolean = false, includeDescendantWorkItems: Boolean, includeDescendants: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, relativeDateFilters: WorkItemRelativeDateFiltersInput, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, timeframe: Timeframe, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemStateCountsType
   workItemTypes(after: String, before: String, first: Int, last: Int, name: IssueType, onlyAvailable: Boolean): WorkItemTypeConnection
-  workItems(after: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, excludeGroupWorkItems: Boolean = false, excludeProjects: Boolean = false, first: Int, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeAncestors: Boolean = false, includeArchived: Boolean = false, includeDescendantWorkItems: Boolean, includeDescendants: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], last: Int, milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, timeframe: Timeframe, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemConnection
+  workItems(after: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, excludeGroupWorkItems: Boolean = false, excludeProjects: Boolean = false, first: Int, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeAncestors: Boolean = false, includeArchived: Boolean = false, includeDescendantWorkItems: Boolean, includeDescendants: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], last: Int, milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, relativeDateFilters: WorkItemRelativeDateFiltersInput, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, timeframe: Timeframe, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemConnection
   workItemsWidgets(ids: [WorkItemsTypeID!]!, union: Boolean! = false): [String!]
   workspacesClusterAgents(after: String, before: String, filter: NamespaceClusterAgentFilter!, first: Int, last: Int): ClusterAgentConnection
 }
@@ -16125,6 +16327,7 @@ type GroupPermissions {
   readCrmOrganization: Boolean!
   readCycleAnalytics: Boolean!
   readDora4Analytics: Boolean!
+  readEnterpriseAiAnalytics: Boolean!
   readGroup: Boolean!
   readOrbitSetting: Boolean!
   readOrbitTrial: Boolean!
@@ -17759,7 +17962,7 @@ type IterationCadence {
   id: IterationsCadenceID!
   iterationsInAdvance: Int
   rollOver: Boolean!
-  startDate: Time
+  startDate: Date
   title: String!
 }
 
@@ -18131,28 +18334,6 @@ type Key implements Todoable {
   name: String
   title: String!
   webUrl: String
-}
-
-input KnowledgeGraphExcludedNamespaceCreateInput {
-  clientMutationId: String
-  groupPath: ID!
-}
-
-type KnowledgeGraphExcludedNamespaceCreatePayload {
-  clientMutationId: String
-  errors: [String!]!
-  group: Group
-}
-
-input KnowledgeGraphExcludedNamespaceDestroyInput {
-  clientMutationId: String
-  groupPath: ID!
-}
-
-type KnowledgeGraphExcludedNamespaceDestroyPayload {
-  clientMutationId: String
-  errors: [String!]!
-  group: Group
 }
 
 type KubernetesAnnotation {
@@ -18599,6 +18780,7 @@ enum LicensedFeature {
   SELF_HOSTED_MODELS
   SEMANTIC_CODE_SEARCH
   SEND_EMAILS_FROM_ADMIN_AREA
+  SKILLGUARD
   SMARTCARD_AUTH
   SSH_CERTIFICATES
   SSH_KEY_EXPIRATION_POLICY
@@ -19271,6 +19453,7 @@ enum MemberRolePermission {
   ADMIN_WEB_HOOK
   APPLY_SECURITY_SCAN_PROFILES
   ARCHIVE_PROJECT
+  ARCHIVE_SUBGROUP
   CREATE_SECURITY_SCAN_PROFILES
   DELETE_SECURITY_SCAN_PROFILES
   DESTROY_PACKAGE
@@ -19319,6 +19502,7 @@ enum MemberRoleStandardPermission {
   ADMIN_WEB_HOOK
   APPLY_SECURITY_SCAN_PROFILES
   ARCHIVE_PROJECT
+  ARCHIVE_SUBGROUP
   CREATE_SECURITY_SCAN_PROFILES
   DELETE_SECURITY_SCAN_PROFILES
   DESTROY_PACKAGE
@@ -19427,6 +19611,7 @@ input MergeAccessLevelInput {
 }
 
 type MergeRequest implements CurrentUserTodos & NoteableInterface & Todoable {
+  agentPresence: DuoWorkflowAgentPresence
   aiSuggestedReviewers(after: String, before: String, first: Int, last: Int): AiSuggestedReviewerConnection
   allowCollaboration: Boolean
   allowsMultipleAssignees: Boolean!
@@ -19492,10 +19677,12 @@ type MergeRequest implements CurrentUserTodos & NoteableInterface & Todoable {
   labels(after: String, before: String, first: Int, last: Int): LabelConnection
   linkedWorkItems(types: [MergeRequestWorkItemLinkType!]): [MergeRequestLinkedWorkItem!]
   mergeAfter: Time
+  mergeBefore: Time
   mergeCommitSha: String
   mergeError: String
   mergeOngoing: Boolean!
   mergeRequestDiffs(after: String, before: String, first: Int, last: Int): MergeRequestDiffConnection
+  mergeSource: MergeRequestMergeSource
   mergeStatus: String
   mergeStatusEnum: MergeStatus
   mergeTrainCar: MergeTrainCar
@@ -19592,6 +19779,7 @@ type MergeRequestApprovalState {
 }
 
 type MergeRequestAssignee implements Todoable & User {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   authoredMergeRequests(after: String, approvedBy: [String!], approver: [String!], assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeAssigned: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -19613,7 +19801,7 @@ type MergeRequestAssignee implements Todoable & User {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -19632,7 +19820,7 @@ type MergeRequestAssignee implements Todoable & User {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -19669,6 +19857,7 @@ type MergeRequestAssigneeEdge {
 }
 
 type MergeRequestAuthor implements Todoable & User {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   authoredMergeRequests(after: String, approvedBy: [String!], approver: [String!], assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeAssigned: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -19690,7 +19879,7 @@ type MergeRequestAuthor implements Todoable & User {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -19709,7 +19898,7 @@ type MergeRequestAuthor implements Todoable & User {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -19750,7 +19939,14 @@ type MergeRequestBypassSecurityPolicyPayload {
 type MergeRequestConflict {
   content: String
   ourPath: String
+  sections: [MergeRequestConflictSection!]
   theirPath: String
+}
+
+type MergeRequestConflictSection {
+  ourLines: [String!]!
+  sectionId: String!
+  theirLines: [String!]!
 }
 
 enum MergeRequestConflictStatus {
@@ -19766,6 +19962,7 @@ type MergeRequestConnection {
   edges: [MergeRequestEdge]
   nodes: [MergeRequest]
   pageInfo: PageInfo!
+  timeLimitedCount: Int
   totalTimeToMerge: Float
 }
 
@@ -19774,6 +19971,7 @@ input MergeRequestCreateInput {
   description: String
   labels: [String!]
   mergeAfter: Time
+  mergeBefore: Time
   projectPath: ID!
   removeSourceBranch: Boolean
   sourceBranch: String!
@@ -19901,6 +20099,11 @@ type MergeRequestLinkedWorkItem {
   workItem: WorkItem
 }
 
+type MergeRequestMergeSource {
+  commitSha: String
+  mergeRequest: MergeRequest
+}
+
 type MergeRequestMergeabilityCheck {
   identifier: MergeabilityCheckIdentifier!
   status: MergeabilityCheckStatus!
@@ -19912,6 +20115,7 @@ enum MergeRequestNewState {
 }
 
 type MergeRequestParticipant implements Todoable & User {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   authoredMergeRequests(after: String, approvedBy: [String!], approver: [String!], assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeAssigned: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -19933,7 +20137,7 @@ type MergeRequestParticipant implements Todoable & User {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -19952,7 +20156,7 @@ type MergeRequestParticipant implements Todoable & User {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -20054,6 +20258,7 @@ enum MergeRequestReviewState {
 }
 
 type MergeRequestReviewer implements Todoable & User {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   authoredMergeRequests(after: String, approvedBy: [String!], approver: [String!], assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeAssigned: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -20075,7 +20280,7 @@ type MergeRequestReviewer implements Todoable & User {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -20094,7 +20299,7 @@ type MergeRequestReviewer implements Todoable & User {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -20132,6 +20337,7 @@ type MergeRequestReviewerEdge {
 
 input MergeRequestReviewerRereviewInput {
   clientMutationId: String
+  duoCodeReviewDepth: DuoCodeReviewDepth
   iid: String!
   projectPath: ID!
   userId: UserID!
@@ -20456,6 +20662,7 @@ input MergeRequestUpdateInput {
   description: String
   iid: String!
   mergeAfter: Time
+  mergeBefore: Time
   overrideRequestedChanges: Boolean
   projectPath: ID!
   removeSourceBranch: Boolean
@@ -20497,11 +20704,21 @@ type MergeRequestWorkItemRelationEdge {
 
 type MergeRequestsAggregationResponse {
   acceptanceRate: Float
+  codeReviewTime: MergeRequestsAggregationResponseCodeReviewTimeMetrics
   dimensions: MergeRequestsAggregationResponseDimensions
   throughputCount: Int
+  timeToFirstReview: MergeRequestsAggregationResponseTimeToFirstReviewMetrics
   timeToMerge: MergeRequestsAggregationResponseTimeToMergeMetrics
   timeToMergeQuantile(quantile: Float): Float
   totalCount: Int
+}
+
+type MergeRequestsAggregationResponseCodeReviewTimeMetrics {
+  max: Int
+  mean: Float
+  min: Int
+  quantile(quantile: Float): Float
+  sum: Float
 }
 
 type MergeRequestsAggregationResponseConnection {
@@ -20515,7 +20732,9 @@ type MergeRequestsAggregationResponseDimensions {
   author: UserCore
   createdAt(granularity: String, origin: Time): Date
   createdByDuo: Boolean
+  group(depth: Int): Group
   metricMergedAt(granularity: String, origin: Time): Date
+  project: Project
   stateId: String
   targetBranch: String
 }
@@ -20523,6 +20742,14 @@ type MergeRequestsAggregationResponseDimensions {
 type MergeRequestsAggregationResponseEdge {
   cursor: String!
   node: MergeRequestsAggregationResponse
+}
+
+type MergeRequestsAggregationResponseTimeToFirstReviewMetrics {
+  max: Int
+  mean: Float
+  min: Int
+  quantile(quantile: Float): Float
+  sum: Float
 }
 
 type MergeRequestsAggregationResponseTimeToMergeMetrics {
@@ -20535,6 +20762,58 @@ type MergeRequestsAggregationResponseTimeToMergeMetrics {
 
 type MergeRequestsAggregationScope {
   aggregated(after: String, before: String, first: Int, last: Int, orderBy: [AggregationOrder!]): MergeRequestsAggregationResponseConnection
+}
+
+input MergeRequestsCsvExportInput {
+  approvedBy: [String!]
+  approver: [String!]
+  assigneeUsername: String
+  assigneeUsernames: [String!]
+  assigneeWildcardId: AssigneeWildcardId
+  authorUsername: String
+  blobPath: String
+  clientMutationId: String
+  closedAfter: Time
+  closedBefore: Time
+  createdAfter: Time
+  createdBefore: Time
+  deployedAfter: Time
+  deployedBefore: Time
+  deploymentId: String
+  draft: Boolean
+  environmentName: String
+  ignoredReviewerUsername: String
+  iids: [String!]
+  in: [IssuableSearchableField!]
+  labelName: [String]
+  labels: [String!]
+  mergedAfter: Time
+  mergedBefore: Time
+  mergedBy: String
+  milestoneTitle: String
+  milestoneWildcardId: MilestoneWildcardId
+  myReactionEmoji: String
+  not: MergeRequestsResolverNegatedParams
+  or: UnionedMergeRequestFilterInput
+  projectPath: ID!
+  releaseTag: String
+  reviewState: MergeRequestReviewState
+  reviewStates: [MergeRequestReviewState!]
+  reviewerUsername: String
+  reviewerWildcardId: ReviewerWildcardId
+  search: String
+  sourceBranches: [String!]
+  state: MergeRequestState
+  subscribed: SubscriptionStatus
+  targetBranches: [String!]
+  updatedAfter: Time
+  updatedBefore: Time
+}
+
+type MergeRequestsCsvExportPayload {
+  clientMutationId: String
+  errors: [String!]!
+  message: String
 }
 
 enum MergeRequestsDashboardListType {
@@ -20677,6 +20956,7 @@ type Metadata {
   enterprise: Boolean!
   featureFlags(names: [String!]!): [GitlabInstanceFeatureFlag!]!
   kas: Kas!
+  plan: String
   revision: String!
   version: String!
 }
@@ -21123,6 +21403,7 @@ type Mutation {
   aiSelfHostedModelUpdate(input: AiSelfHostedModelUpdateInput!): AiSelfHostedModelUpdatePayload
   alertSetAssignees(input: AlertSetAssigneesInput!): AlertSetAssigneesPayload
   alertTodoCreate(input: AlertTodoCreateInput!): AlertTodoCreatePayload
+  anthropicComplianceIntegrationCreate(input: AnthropicComplianceIntegrationCreateInput!): AnthropicComplianceIntegrationCreatePayload
   approvalProjectRuleDelete(input: approvalProjectRuleDeleteInput!): approvalProjectRuleDeletePayload
   approvalProjectRuleUpdate(input: approvalProjectRuleUpdateInput!): approvalProjectRuleUpdatePayload
   approveDeployment(input: ApproveDeploymentInput!): ApproveDeploymentPayload
@@ -21439,8 +21720,6 @@ type Mutation {
   jobPlay(input: JobPlayInput!): JobPlayPayload
   jobRetry(input: JobRetryInput!): JobRetryPayload
   jobUnschedule(input: JobUnscheduleInput!): JobUnschedulePayload
-  knowledgeGraphExcludedNamespaceCreate(input: KnowledgeGraphExcludedNamespaceCreateInput!): KnowledgeGraphExcludedNamespaceCreatePayload
-  knowledgeGraphExcludedNamespaceDestroy(input: KnowledgeGraphExcludedNamespaceDestroyInput!): KnowledgeGraphExcludedNamespaceDestroyPayload
   labelCreate(input: LabelCreateInput!): LabelCreatePayload
   labelUpdate(input: LabelUpdateInput!): LabelUpdatePayload
   ldapAdminRoleLinkCreate(input: LdapAdminRoleLinkCreateInput!): LdapAdminRoleLinkCreatePayload
@@ -21491,6 +21770,7 @@ type Mutation {
   mergeRequestSetSubscription(input: MergeRequestSetSubscriptionInput!): MergeRequestSetSubscriptionPayload
   mergeRequestUpdate(input: MergeRequestUpdateInput!): MergeRequestUpdatePayload
   mergeRequestUpdateApprovalRule(input: MergeRequestUpdateApprovalRuleInput!): MergeRequestUpdateApprovalRulePayload
+  mergeRequestsCsvExport(input: MergeRequestsCsvExportInput!): MergeRequestsCsvExportPayload
   mergeTrainsDeleteCar(input: MergeTrainsDeleteCarInput!): MergeTrainsDeleteCarPayload
   mlModelCreate(input: MlModelCreateInput!): MlModelCreatePayload
   mlModelDelete(input: MlModelDeleteInput!): MlModelDeletePayload
@@ -21659,6 +21939,7 @@ type Mutation {
   tagCreate(input: TagCreateInput!): TagCreatePayload
   tagDelete(input: TagDeleteInput!): TagDeletePayload
   terraformStateDelete(input: TerraformStateDeleteInput!): TerraformStateDeletePayload
+  terraformStateDeletePermanently(input: TerraformStateDeletePermanentlyInput!): TerraformStateDeletePermanentlyPayload
   terraformStateLock(input: TerraformStateLockInput!): TerraformStateLockPayload
   terraformStateRestore(input: TerraformStateRestoreInput!): TerraformStateRestorePayload
   terraformStateUnlock(input: TerraformStateUnlockInput!): TerraformStateUnlockPayload
@@ -21872,9 +22153,9 @@ type Namespace implements Todoable {
   workItemDescriptionTemplates(after: String, before: String, first: Int, last: Int, name: String, search: String): WorkItemDescriptionTemplateConnection
   workItemMoveTargets(sourceFullPath: String!, sourceTypeIds: [WorkItemsTypeID!]!): [WorkItemMoveTarget!]
   workItemSettings: WorkItemSettings
-  workItemStateCounts(assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, excludeGroupWorkItems: Boolean = false, excludeProjects: Boolean = false, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeAncestors: Boolean = false, includeArchived: Boolean = false, includeDescendantWorkItems: Boolean, includeDescendants: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, timeframe: Timeframe, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemStateCountsType
+  workItemStateCounts(assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, excludeGroupWorkItems: Boolean = false, excludeProjects: Boolean = false, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeAncestors: Boolean = false, includeArchived: Boolean = false, includeDescendantWorkItems: Boolean, includeDescendants: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, relativeDateFilters: WorkItemRelativeDateFiltersInput, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, timeframe: Timeframe, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemStateCountsType
   workItemTypes(after: String, before: String, first: Int, last: Int, name: IssueType, onlyAvailable: Boolean): WorkItemTypeConnection
-  workItems(after: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, excludeGroupWorkItems: Boolean = false, excludeProjects: Boolean = false, first: Int, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeAncestors: Boolean = false, includeArchived: Boolean = false, includeDescendantWorkItems: Boolean, includeDescendants: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], last: Int, milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, timeframe: Timeframe, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemConnection
+  workItems(after: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, excludeGroupWorkItems: Boolean = false, excludeProjects: Boolean = false, first: Int, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeAncestors: Boolean = false, includeArchived: Boolean = false, includeDescendantWorkItems: Boolean, includeDescendants: Boolean = false, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], last: Int, milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, relativeDateFilters: WorkItemRelativeDateFiltersInput, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, timeframe: Timeframe, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemConnection
   workItemsWidgets(ids: [WorkItemsTypeID!]!, union: Boolean! = false): [String!]
   workspacesClusterAgents(after: String, before: String, filter: NamespaceClusterAgentFilter!, first: Int, last: Int): ClusterAgentConnection
 }
@@ -22597,6 +22878,9 @@ type Orbit {
   excludedGroups(after: String, before: String, first: Int, last: Int): GroupConnection
   groups(active: Boolean = null, after: String, aimedForDeletion: Boolean, allAvailable: Boolean = true, before: String, enabled: Boolean = false, first: Int, ids: [ID!], includeSubgroups: Boolean = false, last: Int, markedForDeletionOn: Date, not: BaseGroupsResolverNegatedParams, ownedOnly: Boolean = false, parentPath: ID, search: String, sort: String = "name_asc", topLevelOnly: Boolean = false, visibilityLevel: VisibilityLevelsEnum): GroupConnection
   memberGroups(after: String, before: String, enabled: Boolean = false, first: Int, last: Int, search: String): GroupConnection
+  queryTemplates: [OrbitQueryTemplate!]
+  schema: OrbitSchema
+  serviceStatus: OrbitServiceStatus
 }
 
 type OrbitAccess {
@@ -22652,6 +22936,7 @@ type OrbitExcludedGroupDestroyPayload {
 
 type OrbitIndexing {
   areas: [OrbitIndexingArea!]
+  lastCompletedAt: Time
   projects: OrbitIndexingProjects
   state: OrbitIndexingState
 }
@@ -22741,6 +23026,117 @@ type OrbitNamespace {
   trial: OrbitTrial
 }
 
+type OrbitQueryTemplate {
+  description: String
+  name: String!
+  query: String!
+}
+
+type OrbitSchema {
+  edges(after: String, before: String, first: Int, last: Int): OrbitSchemaEdgeConnection!
+  nodes(after: String, before: String, first: Int, last: Int): OrbitSchemaNodeConnection!
+}
+
+type OrbitSchemaDisplay {
+  color: String
+  size: Int
+}
+
+type OrbitSchemaDomain {
+  name: String!
+}
+
+type OrbitSchemaEdge {
+  description: String
+  endpoints(after: String, before: String, first: Int, last: Int): OrbitSchemaEdgeEndpointConnection!
+  name: String!
+}
+
+type OrbitSchemaEdgeConnection {
+  edges: [OrbitSchemaEdgeEdge]
+  nodes: [OrbitSchemaEdge]
+  pageInfo: PageInfo!
+}
+
+type OrbitSchemaEdgeEdge {
+  cursor: String!
+  node: OrbitSchemaEdge
+}
+
+type OrbitSchemaEdgeEndpoint {
+  source: OrbitSchemaNode!
+  target: OrbitSchemaNode!
+}
+
+type OrbitSchemaEdgeEndpointConnection {
+  edges: [OrbitSchemaEdgeEndpointEdge]
+  nodes: [OrbitSchemaEdgeEndpoint]
+  pageInfo: PageInfo!
+}
+
+type OrbitSchemaEdgeEndpointEdge {
+  cursor: String!
+  node: OrbitSchemaEdgeEndpoint
+}
+
+type OrbitSchemaNode {
+  description: String
+  display: OrbitSchemaDisplay
+  domain: OrbitSchemaDomain!
+  labelProperty: String
+  name: String!
+  primaryKey: String
+  properties(after: String, before: String, first: Int, last: Int): OrbitSchemaPropertyConnection!
+}
+
+type OrbitSchemaNodeConnection {
+  edges: [OrbitSchemaNodeEdge]
+  nodes: [OrbitSchemaNode]
+  pageInfo: PageInfo!
+}
+
+type OrbitSchemaNodeEdge {
+  cursor: String!
+  node: OrbitSchemaNode
+}
+
+type OrbitSchemaProperty {
+  dataType: String!
+  enumValues: [String!]!
+  name: String!
+  nullable: Boolean!
+}
+
+type OrbitSchemaPropertyConnection {
+  edges: [OrbitSchemaPropertyEdge]
+  nodes: [OrbitSchemaProperty]
+  pageInfo: PageInfo!
+}
+
+type OrbitSchemaPropertyEdge {
+  cursor: String!
+  node: OrbitSchemaProperty
+}
+
+type OrbitServiceComponent {
+  name: String!
+  state: OrbitServiceState!
+}
+
+enum OrbitServiceState {
+  DEGRADED
+  HEALTHY
+  MIGRATING
+  UNHEALTHY
+  UNKNOWN
+}
+
+type OrbitServiceStatus {
+  components: [OrbitServiceComponent!]!
+  state: OrbitServiceState!
+  version: String
+}
+
 input OrbitStartTrialInput {
   clientMutationId: String
   groupPath: ID!
@@ -22827,7 +23223,7 @@ type Organization {
   cdVersionSet(id: CdVersionSetID!): CdVersionSet
   description: String
   descriptionHtml: String
-  groups(active: Boolean = null, after: String, aimedForDeletion: Boolean, allAvailable: Boolean = true, before: String, first: Int, ids: [ID!], includeSubgroups: Boolean = false, last: Int, markedForDeletionOn: Date, not: BaseGroupsResolverNegatedParams, ownedOnly: Boolean = false, parentPath: ID, search: String, sort: String = "name_asc", topLevelOnly: Boolean = false, visibilityLevel: VisibilityLevelsEnum, withKnowledgeGraphEnabled: Boolean = false): GroupConnection!
+  groups(active: Boolean = null, after: String, aimedForDeletion: Boolean, allAvailable: Boolean = true, before: String, first: Int, ids: [ID!], includeSubgroups: Boolean = false, last: Int, markedForDeletionOn: Date, not: BaseGroupsResolverNegatedParams, ownedOnly: Boolean = false, parentPath: ID, search: String, sort: String = "name_asc", topLevelOnly: Boolean = false, visibilityLevel: VisibilityLevelsEnum, withDuoAgentPlatformEnabled: Boolean = false, withKnowledgeGraphEnabled: Boolean = false): GroupConnection!
   id: ID!
   name: String!
   organizationUsers(after: String, before: String, first: Int, last: Int, search: String): OrganizationUserConnection!
@@ -22836,6 +23232,7 @@ type Organization {
   projects(active: Boolean, after: String, aimedForDeletion: Boolean, archived: ProjectArchived, before: String, duoLicensedFeature: DuoLicensedFeature, first: Int, fullPaths: [String!], ids: [ID!], includeHidden: Boolean, last: Int, lastRepositoryCheckFailed: Boolean, markedForDeletionOn: Date, membership: Boolean, minAccessLevel: AccessLevelEnum, namespacePath: ID, notAimedForDeletion: Boolean, personal: Boolean, programmingLanguageName: String, search: String, searchNamespaces: Boolean, sort: String = null, topics: [String!], trending: Boolean, visibilityLevel: VisibilityLevelsEnum, withIssuesEnabled: Boolean, withMergeRequestsEnabled: Boolean): ProjectConnection!
   rootPath: String!
   securityMetrics(projectId: [ID!], reportType: [VulnerabilityReportType!], securityAttributesFilters: [AttributeFilterInput!], trackedRefIds: [SecurityProjectTrackedContextID!]): SecurityMetrics
+  securityTrackedContextQuota: SecurityTrackedContextQuota
   softDeletedAt: Time
   state: OrganizationState!
   uuid: String!
@@ -23467,6 +23864,8 @@ type PackageSettings {
   nugetSymbolServerEnabled: Boolean!
   pypiPackageRequestsForwarding: Boolean
   pypiPackageRequestsForwardingLocked: Boolean!
+  rubygemsDuplicateExceptionRegex: UntrustedRegexp
+  rubygemsDuplicatesAllowed: Boolean!
   rubygemsPackageRequestsForwarding: Boolean
   rubygemsPackageRequestsForwardingLocked: Boolean!
   terraformModuleDuplicateExceptionRegex: UntrustedRegexp
@@ -23710,6 +24109,7 @@ enum PackagesProtectionRulePackageType {
   NPM
   NUGET
   PYPI
+  RUBYGEMS
   TERRAFORM_MODULE
 }
 
@@ -24618,7 +25018,12 @@ type PipelineSecurityReportFindingEdge {
 
 type PipelineSecurityReportFindingPermissions {
   adminVulnerability: Boolean!
+  confirmVulnerability: Boolean!
   createIssue: Boolean!
+  dismissVulnerability: Boolean!
+  resolveVulnerability: Boolean!
+  revertVulnerability: Boolean!
+  updateVulnerabilitySeverity: Boolean!
 }
 
 enum PipelineSecurityReportFindingSort {
@@ -24938,6 +25343,7 @@ type PolicyStoreRule {
 type PolicyStoreTrigger {
   availableRoles: [PolicyStoreRole!]!
   id: ID!
+  kind: String!
   name: String!
 }
 
@@ -25036,7 +25442,7 @@ type Project implements ProjectInterface & Todoable {
   aiCatalogItem(id: AiCatalogItemID!, showSoftDeleted: Boolean = false): AiCatalogItem
   aiCatalogItemConsumerForItem(id: AiCatalogItemID!): AiCatalogItemConsumer
   aiCatalogItems(after: String, allAvailable: Boolean, before: String, enabled: Boolean, first: Int, itemTypes: [AiCatalogItemType!], last: Int, search: String, sort: AiCatalogItemsSort): AiCatalogItemConnection!
-  aiFlowTriggers(active: Boolean, after: String, before: String, eventType: AiFlowTriggerEventType, first: Int, ids: [AiFlowTriggerID!] = null, kind: AiFlowTriggerKind, last: Int, search: String, sort: AiFlowTriggerSort = CREATED_DESC): AiFlowTriggerTypeConnection
+  aiFlowTriggers(active: Boolean, after: String, before: String, eventType: AiFlowTriggerEventType, first: Int, ids: [AiFlowTriggerID!] = null, kind: AiFlowTriggerKind, last: Int, lastRunStatus: AiFlowTriggerLastRunStatus, search: String, sort: AiFlowTriggerSort = CREATED_DESC): AiFlowTriggerTypeConnection
   aiGovernanceMetrics(agentClass: AiGovernanceAgentClass = ALL, timeframe: AiGovernanceMetricsTimeframe = LAST_7_DAYS): AiGovernanceMetrics
   aiGovernanceSessions(after: String, agentClass: AiGovernanceAgentClass, before: String, first: Int, flowType: String, id: AiGovernanceSessionID, last: Int, not: AiGovernanceSessionNegatedFilterInput, sessionStartedAfter: Time, sessionStartedBefore: Time, triggeredByUserId: UserID): AiGovernanceSessionConnection
   aiGovernanceToolCalls(agentClass: AiGovernanceAgentClass = ALL, timeframe: AiGovernanceMetricsTimeframe = LAST_7_DAYS): AiGovernanceToolCallsReport
@@ -25232,7 +25638,7 @@ type Project implements ProjectInterface & Todoable {
   pendingMemberApprovals(after: String, before: String, first: Int, last: Int): MemberApprovalConnection
   permanentDeletionDate: String
   pipeline(id: CiPipelineID, iid: ID, sha: String): Pipeline
-  pipelineAnalytics(fromTime: Time, ref: String, source: CiPipelineSources, subgroupFullPaths: [String!], toTime: Time): PipelineAnalytics
+  pipelineAnalytics(fromTime: Time, nameSearch: String, ref: String, source: CiPipelineSources, subgroupFullPaths: [String!], toTime: Time): PipelineAnalytics
   pipelineCounts(ref: String, sha: String, source: String): PipelineCounts
   pipelineExecutionPolicies(after: String, before: String, deduplicatePolicies: Boolean = false, first: Int, includeUnscoped: Boolean = true, last: Int, relationship: SecurityPolicyRelationType = DIRECT): PipelineExecutionPolicyConnection
   pipelineExecutionSchedulePolicies(after: String, before: String, deduplicatePolicies: Boolean = false, first: Int, includeUnscoped: Boolean = true, last: Int, relationship: SecurityPolicyRelationType = DIRECT): PipelineExecutionSchedulePolicyConnection
@@ -25240,6 +25646,7 @@ type Project implements ProjectInterface & Todoable {
   pipelineSchedules(after: String, before: String, first: Int, ids: [ID!] = null, last: Int, sort: PipelineScheduleSort = ID_DESC, status: PipelineScheduleStatus): PipelineScheduleConnection
   pipelineTriggers(after: String, before: String, first: Int, last: Int): PipelineTriggerConnection
   pipelines(after: String, before: String, first: Int, ids: [ID!], last: Int, ref: String, refType: RefType, scope: PipelineScopeEnum, sha: String, source: String, status: PipelineStatusEnum, updatedAfter: Time, updatedBefore: Time, username: String): PipelineConnection
+  policyStore: PolicyStore
   preReceiveSecretDetectionEnabled: Boolean
   preventMergeWithoutJiraIssueEnabled: Boolean!
   printingMergeRequestLinkEnabled: Boolean
@@ -25339,9 +25746,9 @@ type Project implements ProjectInterface & Todoable {
   webhook(id: ProjectHookID!): ProjectHook
   wikiEnabled: Boolean
   wikiPages(after: String, first: Int): WikiPageConnection
-  workItemStateCounts(assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeDescendantWorkItems: Boolean, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemStateCountsType
+  workItemStateCounts(assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeDescendantWorkItems: Boolean, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, relativeDateFilters: WorkItemRelativeDateFiltersInput, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemStateCountsType
   workItemTypes(after: String, before: String, first: Int, last: Int, name: IssueType, onlyAvailable: Boolean): WorkItemTypeConnection
-  workItems(after: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, first: Int, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeDescendantWorkItems: Boolean, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], last: Int, milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemConnection
+  workItems(after: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, first: Int, healthStatusFilter: HealthStatusFilter, hierarchyFilters: HierarchyFilterInput, ids: [WorkItemID!], iid: String, iids: [String!], in: [IssuableSearchableField!], includeDescendantWorkItems: Boolean, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationWildcardId: IterationWildcardId, labelName: [String!], last: Int, milestoneTitle: [String!], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedWorkItemFilterInput, or: UnionedWorkItemFilterInput, parentIds: [WorkItemID!], parentWildcardId: WorkItemParentWildcardId, relativeDateFilters: WorkItemRelativeDateFiltersInput, releaseTag: [String!], releaseTagWildcardId: ReleaseTagWildcardId, requirementLegacyWidget: RequirementLegacyFilterInput, search: String, sort: WorkItemSort = CREATED_DESC, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, verificationStatusWidget: VerificationStatusFilterInput, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): WorkItemConnection
 }
 
 enum ProjectArchived {
@@ -25429,6 +25836,7 @@ type ProjectComplianceRequirementStatus {
   complianceRequirement: ComplianceRequirement!
   failCount: Int!
   id: ID!
+  notApplicableCount: Int!
   passCount: Int!
   pendingCount: Int!
   project: Project!
@@ -26749,7 +27157,7 @@ type Query {
   aiSlashCommands(url: String!): [SlashCommand!]
   aiToolRules(actionType: AiToolActionType, after: String, before: String, first: Int, fullPath: ID!, last: Int, projectPath: ID, search: String): AiToolRuleConnection
   aiUsageData: AiInstanceUsageData
-  artifactRegistryRoleAssignments(after: String, first: Int, resourceIds: [String!] = [], roles: [ArtifactRegistryRole!] = []): ArtifactRegistryRoleAssignmentConnection
+  artifactRegistryRoleAssignments(after: String, assigneeIds: [UserID!] = [], first: Int, resourceIds: [String!] = [], roles: [ArtifactRegistryRole!] = []): ArtifactRegistryRoleAssignmentConnection
   auditEventDefinitions(after: String, before: String, first: Int, last: Int): AuditEventDefinitionConnection!
   auditEventsInstanceAmazonS3Configurations(after: String, before: String, first: Int, last: Int): InstanceAmazonS3ConfigurationTypeConnection
   auditEventsInstanceStreamingDestinations(after: String, before: String, first: Int, last: Int): InstanceAuditEventStreamingDestinationConnection
@@ -26789,7 +27197,7 @@ type Query {
   echo(text: String!): String!
   epicBoardList(epicFilters: EpicFilters, id: BoardsEpicListID!): EpicList
   featureFlagEnabled(name: String!): Boolean!
-  frecentGroups: [Group!]
+  frecentGroups(scopeToOrganization: Boolean = false): [Group!]
   frecentProjects: [Project!]
   functionalVerificationStatus(checkType: FunctionalVerificationCheckType!): FunctionalVerificationStatus
   geoNode(name: String): GeoNode
@@ -26804,7 +27212,7 @@ type Query {
   groupSecretsManager(groupPath: ID!): GroupSecretsManager
   groupSecretsNeedingRotation(after: String, before: String, first: Int, groupPath: ID!, last: Int): GroupSecretConnection
   groupSecretsPermissions(after: String, before: String, first: Int, groupPath: ID!, last: Int): GroupSecretsPermissionConnection
-  groups(active: Boolean = null, after: String, aimedForDeletion: Boolean, allAvailable: Boolean = true, before: String, first: Int, ids: [ID!], includeSubgroups: Boolean = false, last: Int, markedForDeletionOn: Date, not: BaseGroupsResolverNegatedParams, ownedOnly: Boolean = false, parentPath: ID, search: String, sort: String = "name_asc", topLevelOnly: Boolean = false, visibilityLevel: VisibilityLevelsEnum, withKnowledgeGraphEnabled: Boolean = false): GroupConnection
+  groups(active: Boolean = null, after: String, aimedForDeletion: Boolean, allAvailable: Boolean = true, before: String, first: Int, ids: [ID!], includeSubgroups: Boolean = false, last: Int, markedForDeletionOn: Date, not: BaseGroupsResolverNegatedParams, ownedOnly: Boolean = false, parentPath: ID, search: String, sort: String = "name_asc", topLevelOnly: Boolean = false, visibilityLevel: VisibilityLevelsEnum, withDuoAgentPlatformEnabled: Boolean = false, withKnowledgeGraphEnabled: Boolean = false): GroupConnection
   instanceExternalAuditEventDestinations(after: String, before: String, first: Int, last: Int): InstanceExternalAuditEventDestinationConnection
   instanceGoogleCloudLoggingConfigurations(after: String, before: String, first: Int, last: Int): InstanceGoogleCloudLoggingConfigurationTypeConnection
   instanceSecretsManagerEnrollment: SecretsManagerInstanceEnrollment
@@ -26814,7 +27222,6 @@ type Query {
   issues(after: String, assigneeId: String, assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, authorUsername: String, before: String, closedAfter: Time, closedBefore: Time, confidential: Boolean, createdAfter: Time, createdBefore: Time, crmContactId: String, crmOrganizationId: String, customField: [WorkItemWidgetCustomFieldFilterInputType!], dueAfter: Time, dueBefore: Time, epicId: String, epicWildcardId: EpicWildcardId, first: Int, healthStatusFilter: HealthStatusFilter, iid: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeSubepics: Boolean, iterationCadenceId: [IterationsCadenceID!], iterationId: [ID], iterationTitle: String, iterationWildcardId: IterationWildcardId, labelName: [String], last: Int, milestoneTitle: [String], milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: NegatedIssueFilterInput, or: UnionedIssueFilterInput, search: String, sort: IssueSort = created_desc, state: IssuableState, status: WorkItemWidgetStatusFilterInput, subscribed: SubscriptionStatus, types: [IssueType!], updatedAfter: Time, updatedBefore: Time, weight: String, weightWildcardId: WeightWildcardId, workItemTypeIds: [WorkItemsTypeID!]): IssueConnection
   iteration(id: IterationID!): Iteration
   jobs(after: String, before: String, compatibleRunnerId: CiRunnerID, failureReason: CiJobFailureReason, first: Int, last: Int, runnerTypes: [CiRunnerType!], statuses: [CiJobStatus!]): CiJobInterfaceConnection
-  knowledgeGraphExcludedNamespaces(after: String, before: String, first: Int, last: Int): GroupConnection!
   ldapAdminRoleLinks(after: String, before: String, first: Int, last: Int): LdapAdminRoleLinkConnection
   licenseHistoryEntries(after: String, before: String, first: Int, last: Int): LicenseHistoryEntryConnection
   memberRole(assignable: Boolean, id: MemberRoleID, ids: [MemberRoleID!], orderBy: MemberRolesOrderBy, sort: SortDirectionEnum): MemberRole
@@ -27408,12 +27815,14 @@ type RequirementConnection {
 
 type RequirementControlCoverage {
   failed: Int!
+  notApplicable: Int!
   passed: Int!
   pending: Int!
 }
 
 type RequirementCoverage {
   failed: Int!
+  notApplicable: Int!
   passed: Int!
   pending: Int!
 }
@@ -28661,7 +29070,7 @@ type SecurityFindingTokenStatus {
 
 type SecurityMetrics {
   mttrOverTime(endDate: ISO8601Date!, severity: [VulnerabilitySeverity!], startDate: ISO8601Date!): [MttrOverTimeBucket!]
-  riskScore: RiskScore
+  riskScore(hasResolution: Boolean = false): RiskScore
   vulnerabilitiesByAge(severity: [VulnerabilitySeverity!]): [VulnerabilitiesByAge!]
   vulnerabilitiesByIdentifier(severity: [VulnerabilitySeverity!]): [VulnerabilitiesByIdentifier!]
   vulnerabilitiesOverTime(after: String, before: String, endDate: ISO8601Date!, first: Int, last: Int, severity: [VulnerabilitySeverity!], startDate: ISO8601Date!): VulnerabilitiesOverTimeConnection
@@ -28851,6 +29260,7 @@ enum SecurityReportTypeEnum {
   SAST_ADVANCED
   SAST_IAC
   SECRET_DETECTION
+  SKILLGUARD
 }
 
 type SecurityScanFeature {
@@ -28873,8 +29283,17 @@ enum SecurityScanProfileAdvancedSastPartialScan {
 input SecurityScanProfileAttachInput {
   clientMutationId: String
   groupIds: [GroupID!] = []
+  mode: SecurityScanProfileAttachMode = SET
   projectIds: [ProjectID!] = []
   securityScanProfileId: SecurityScanProfileID!
+}
+
+enum SecurityScanProfileAttachMode {
+  APPEND
+  FILL_PROFILE_GAPS
+  FILL_SCAN_GAPS
+  REPLACE
+  SET
 }
 
 type SecurityScanProfileAttachPayload {
@@ -29058,6 +29477,7 @@ enum SecurityScanProfileType {
   DEPENDENCY_SCANNING_POST_PROCESSING
   SAST
   SECRET_DETECTION
+  SKILLGUARD
   TRIAGE_AND_REMEDIATION
 }
 
@@ -29104,6 +29524,7 @@ enum SecurityScannerType {
   SAST_ADVANCED
   SAST_IAC
   SECRET_DETECTION
+  SKILLGUARD
 }
 
 type SecurityScanners {
@@ -29113,6 +29534,13 @@ type SecurityScanners {
 }
 
 scalar SecurityScheduledPipelineExecutionPolicyTestRunID
+
+type SecurityTrackedContextQuota {
+  explicitlySet: Boolean!
+  limit: Int
+  remaining: Int
+  usage: Int!
+}
 
 type SecurityTrackedRef {
   commit: Commit
@@ -29538,6 +29966,11 @@ enum SharedRunnersSetting {
   DISABLED_AND_OVERRIDABLE
   DISABLED_AND_UNOVERRIDABLE
   ENABLED
+}
+
+enum SidebarNavigationMode {
+  ALL_CATEGORIES
+  COMPACT
 }
 
 type SlashCommand {
@@ -30128,6 +30561,16 @@ input TerraformStateDeleteInput {
 }
 
 type TerraformStateDeletePayload {
+  clientMutationId: String
+  errors: [String!]!
+}
+
+input TerraformStateDeletePermanentlyInput {
+  clientMutationId: String
+  id: TerraformStateID!
+}
+
+type TerraformStateDeletePermanentlyPayload {
   clientMutationId: String
   errors: [String!]!
 }
@@ -30938,6 +31381,7 @@ type TreeEntryEdge {
 
 type TriageAndRemediationCapability {
   enabled: Boolean!
+  flowStatus: TriageAndRemediationFlowStatus!
   runMode: SecurityScanProfileRunMode
   triggerType: ScanProfileTriggerType!
 }
@@ -30949,6 +31393,14 @@ type TriageAndRemediationCoverage {
 type TriageAndRemediationCoverageCounters {
   autoCount: Int!
   enabledCount: Int!
+}
+
+enum TriageAndRemediationFlowStatus {
+  AVAILABLE
+  FLOW_NOT_ENABLED
+  FLOW_UNAVAILABLE
+  FOUNDATIONAL_FLOWS_DISABLED
+  NOT_APPLICABLE
 }
 
 type TrialUsage {
@@ -31405,6 +31857,8 @@ input UpdateNamespacePackageSettingsInput {
   nugetDuplicatesAllowed: Boolean
   nugetSymbolServerEnabled: Boolean
   pypiPackageRequestsForwarding: Boolean
+  rubygemsDuplicateExceptionRegex: UntrustedRegexp
+  rubygemsDuplicatesAllowed: Boolean
   rubygemsPackageRequestsForwarding: Boolean
   terraformModuleDuplicateExceptionRegex: UntrustedRegexp
   terraformModuleDuplicatesAllowed: Boolean
@@ -31661,6 +32115,7 @@ type UsageTrendsMeasurementEdge {
 }
 
 interface User implements Todoable {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   authoredMergeRequests(after: String, approvedBy: [String!], approver: [String!], assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeAssigned: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -31681,7 +32136,7 @@ interface User implements Todoable {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -31699,7 +32154,7 @@ interface User implements Todoable {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -31742,6 +32197,24 @@ type UserAchievementConnection {
   edges: [UserAchievementEdge]
   nodes: [UserAchievement]
   pageInfo: PageInfo!
+}
+
+type UserAchievementCount {
+  achievement: Achievement!
+  count: Int!
+  firstAwardedAt: Time!
+  latestUserAchievement: UserAchievement
+}
+
+type UserAchievementCountConnection {
+  edges: [UserAchievementCountEdge]
+  nodes: [UserAchievementCount]
+  pageInfo: PageInfo!
+}
+
+type UserAchievementCountEdge {
+  cursor: String!
+  node: UserAchievementCount
 }
 
 type UserAchievementEdge {
@@ -31884,6 +32357,7 @@ enum UserCalloutFeatureNameEnum {
   BRANCH_RULES_TIP_CALLOUT
   BUY_PIPELINE_MINUTES_NOTIFICATION_DOT
   CANARY_DEPLOYMENT
+  CI_CATALOG_RELEASE_ALERT
   CI_DEPRECATION_WARNING_FOR_TYPES_KEYWORD
   CI_MINUTES_LIMIT_ALERT_DANGER_STAGE
   CI_MINUTES_LIMIT_ALERT_EXCEEDED_STAGE
@@ -31933,6 +32407,8 @@ enum UserCalloutFeatureNameEnum {
   SUGGEST_PIPELINE
   SUGGEST_POPOVER_DISMISSED
   TABS_POSITION_HIGHLIGHT
+  TAILORED_NAVIGATION_DEFAULT_PINS_MERGED
+  TAILORED_NAVIGATION_ONBOARDING
   THREAT_MONITORING_INFO
   TRANSITION_TO_JIHU_CALLOUT
   TRIAL_STATUS_REMINDER_D14
@@ -31940,14 +32416,17 @@ enum UserCalloutFeatureNameEnum {
   ULTIMATE_TRIAL
   UNFINISHED_TAG_CLEANUP_CALLOUT
   USER_REACHED_LIMIT_FREE_PLAN_ALERT
+  USE_GITLAB_LOCALLY_HOMEPAGE_WIDGET
   VERIFICATION_REMINDER
   VIRTUAL_REGISTRY_PERMISSION_CHANGE_ALERT
   VULNERABILITY_ARCHIVAL
   VULNERABILITY_REPORT_LIMITED_EXPERIENCE
   WEB_IDE_ALERT_DISMISSED
   WEB_IDE_CI_ENVIRONMENTS_GUIDANCE
+  WORK_ITEM_BOARD_VIEW_POPOVER
   WORK_ITEM_DECISION_LOG_POPOVER
   WORK_ITEM_EPIC_FEEDBACK
+  WORK_ITEM_TICKET_MIGRATION
 }
 
 type UserContributionCalendar {
@@ -31963,6 +32442,7 @@ type UserContributionDay {
 }
 
 type UserCore implements Todoable & User {
+  achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   authoredMergeRequests(after: String, approvedBy: [String!], approver: [String!], assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeAssigned: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -31984,7 +32464,7 @@ type UserCore implements Todoable & User {
   github: String
   gitpodEnabled: Boolean
   groupCallouts(after: String, before: String, first: Int, last: Int): UserGroupCalloutConnection
-  groupCount: Int
+  groupCount(organizationId: OrganizationsOrganizationID): Int
   groupMemberships(after: String, before: String, first: Int, last: Int): GroupMemberConnection
   groups(after: String, before: String, first: Int, last: Int, permissionScope: GroupPermission, search: String, soloOwned: Boolean, sort: GroupSort): GroupConnection
   human: Boolean
@@ -32002,7 +32482,7 @@ type UserCore implements Todoable & User {
   personalAccessTokens(after: String, before: String, createdAfter: Time, createdBefore: Time, expiresAfter: Date, expiresBefore: Date, first: Int, id: PersonalAccessTokenID, last: Int, lastUsedAfter: Time, lastUsedBefore: Time, revoked: Boolean, search: String, sort: AccessTokenSort = EXPIRES_ASC, state: AccessTokenState): PersonalAccessTokenConnection
   preferencesGitpodPath: String
   profileEnableGitpodPath: String
-  projectCount: Int
+  projectCount(organizationId: OrganizationsOrganizationID): Int
   projectMemberships(after: String, before: String, first: Int, last: Int): ProjectMemberConnection
   pronouns: String
   publicEmail: String
@@ -32114,8 +32594,6 @@ enum UserGroupCalloutFeatureName {
   DUO_PANEL_REQUEST_PAINTED_DOOR
   END_OF_TRIAL_MODAL
   ENFORCEMENT_AT_LIMIT_ALERT
-  EXPIRED_DUO_ENTERPRISE_TRIAL_WIDGET
-  EXPIRED_DUO_PRO_TRIAL_WIDGET
   EXPIRED_TRIAL_STATUS_WIDGET
   EXPLORE_PREMIUM_REQUEST_PAINTED_DOOR
   FREE_GROUP_LIMITED_ALERT
@@ -32241,6 +32719,7 @@ type UserPermissions {
 
 type UserPreferences {
   duoDefaultNamespace: Namespace
+  emojiSkinTone: EmojiSkinTone!
   extensionsMarketplaceOptInStatus: ExtensionsMarketplaceOptInStatus!
   firstDayOfWeek: UserFirstDayOfWeek
   issuesSort: IssueSort
@@ -32251,6 +32730,7 @@ type UserPreferences {
   organizationGroupsProjectsDisplay: OrganizationGroupProjectDisplay!
   organizationGroupsProjectsSort: OrganizationGroupProjectSort
   projectsSort: ProjectSort
+  sidebarNavigationMode: SidebarNavigationMode!
   timezone: String
   useWorkItemsView: Boolean
   visibilityPipelineIdType: VisibilityPipelineIdType
@@ -32261,6 +32741,7 @@ type UserPreferences {
 input UserPreferencesUpdateInput {
   clientMutationId: String
   duoDefaultNamespaceId: Int
+  emojiSkinTone: EmojiSkinTone
   extensionsMarketplaceOptInStatus: ExtensionsMarketplaceOptInStatus
   firstDayOfWeek: UserFirstDayOfWeek
   issuesSort: IssueSort
@@ -32272,6 +32753,7 @@ input UserPreferencesUpdateInput {
   organizationGroupsProjectsDisplay: OrganizationGroupProjectDisplay
   organizationGroupsProjectsSort: OrganizationGroupProjectSort
   projectsSort: ProjectSort
+  sidebarNavigationMode: SidebarNavigationMode
   useWorkItemsView: Boolean
   visibilityPipelineIdType: VisibilityPipelineIdType
   wikiUseAutoCommitMessage: Boolean
@@ -33493,6 +33975,7 @@ type VulnerabilityLocationContainerScanning {
 type VulnerabilityLocationCoverageFuzzing {
   blobPath: String
   crashAddress: String
+  crashState: String
   crashType: String
   endLine: String
   file: String
@@ -33633,12 +34116,17 @@ type VulnerabilityPermissions {
   adminVulnerability: Boolean!
   adminVulnerabilityExternalIssueLink: Boolean!
   adminVulnerabilityIssueLink: Boolean!
+  confirmVulnerability: Boolean!
   createVulnerabilityExport: Boolean!
   createVulnerabilityFeedback: Boolean!
   destroyVulnerabilityFeedback: Boolean!
+  dismissVulnerability: Boolean!
   readVulnerability: Boolean!
   readVulnerabilityFeedback: Boolean!
+  resolveVulnerability: Boolean!
+  revertVulnerability: Boolean!
   updateVulnerabilityFeedback: Boolean!
+  updateVulnerabilitySeverity: Boolean!
 }
 
 type VulnerabilityRemediationType {
@@ -34109,6 +34597,7 @@ type WorkItem implements Todoable {
   author: UserCore
   availableQuickActions: [QuickActionCommand!]
   closedAt: Time
+  closedBy: UserCore
   commentTemplatesPaths: [CommentTemplatePathType!]!
   confidential: Boolean!
   createNoteEmail: String
@@ -34348,6 +34837,7 @@ input WorkItemCreateInput {
   milestoneWidget: WorkItemWidgetMilestoneInput
   namespacePath: ID
   projectPath: ID
+  severityWidget: WorkItemWidgetSeverityInput
   startAndDueDateWidget: WorkItemWidgetStartAndDueDateUpdateInput
   statusWidget: WorkItemWidgetStatusInput
   title: String!
@@ -34609,6 +35099,7 @@ input WorkItemExportInput {
   parentIds: [WorkItemID!]
   parentWildcardId: WorkItemParentWildcardId
   projectPath: ID!
+  relativeDateFilters: WorkItemRelativeDateFiltersInput
   releaseTag: [String!]
   releaseTagWildcardId: ReleaseTagWildcardId
   search: String
@@ -34799,6 +35290,29 @@ enum WorkItemRelatedLinkType {
   RELATED
 }
 
+input WorkItemRelativeDateFiltersInput {
+  closedAfter: WorkItemRelativeDateInput
+  closedBefore: WorkItemRelativeDateInput
+  createdAfter: WorkItemRelativeDateInput
+  createdBefore: WorkItemRelativeDateInput
+  dueAfter: WorkItemRelativeDateInput
+  dueBefore: WorkItemRelativeDateInput
+  updatedAfter: WorkItemRelativeDateInput
+  updatedBefore: WorkItemRelativeDateInput
+}
+
+input WorkItemRelativeDateInput {
+  amount: Int!
+  unit: WorkItemRelativeDateUnit!
+}
+
+enum WorkItemRelativeDateUnit {
+  DAY
+  MONTH
+  WEEK
+  YEAR
+}
+
 input WorkItemRemoveLinkedItemsInput {
   clientMutationId: String
   id: WorkItemID!
@@ -34889,6 +35403,7 @@ input WorkItemSavedViewFilterInput {
   myReactionEmoji: String
   not: WorkItemSavedViewNegatedFilterInput
   or: WorkItemSavedViewUnionedFilterInput
+  relativeDateFilters: WorkItemRelativeDateFiltersInput
   releaseTag: [String!]
   releaseTagWildcardId: ReleaseTagWildcardId
   search: String
@@ -35295,6 +35810,7 @@ input WorkItemUpdateInput {
   notesWidget: WorkItemWidgetNotesInput
   notificationsWidget: WorkItemWidgetNotificationsUpdateInput
   progressWidget: WorkItemWidgetProgressInput
+  severityWidget: WorkItemWidgetSeverityInput
   startAndDueDateWidget: WorkItemWidgetStartAndDueDateUpdateInput
   stateEvent: WorkItemStateEvent
   statusWidget: WorkItemWidgetStatusInput
@@ -35696,6 +36212,10 @@ type WorkItemWidgetSeverity implements WorkItemWidget {
   type: WorkItemWidgetType
 }
 
+input WorkItemWidgetSeverityInput {
+  severity: IssuableSeverity!
+}
+
 type WorkItemWidgetStartAndDueDate implements WorkItemWidget {
   dueDate: Date
   dueDateSourcingMilestone: Milestone
@@ -35852,6 +36372,7 @@ input WorkItemsCsvExportInput {
   parentIds: [WorkItemID!]
   parentWildcardId: WorkItemParentWildcardId
   projectPath: ID!
+  relativeDateFilters: WorkItemRelativeDateFiltersInput
   releaseTag: [String!]
   releaseTagWildcardId: ReleaseTagWildcardId
   search: String
@@ -36174,6 +36695,7 @@ type chatUserMetrics {
 }
 
 type codeReviewMetrics {
+  approveMergeRequestDuoCodeReviewEventCount: Int
   assignDuoSuggestedReviewerEventCount: Int
   createDuoSuggestedReviewersEventCount: Int
   encounterDuoCodeReviewErrorDuringReviewEventCount: Int
@@ -36189,6 +36711,7 @@ type codeReviewMetrics {
 }
 
 type codeReviewUserMetrics {
+  approveMergeRequestDuoCodeReviewEventCount: Int
   assignDuoSuggestedReviewerEventCount: Int
   createDuoSuggestedReviewersEventCount: Int
   encounterDuoCodeReviewErrorDuringReviewEventCount: Int
