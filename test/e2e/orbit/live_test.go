@@ -23,9 +23,11 @@
 // status null and the Orbit MCP endpoint 403 as well. So every subtest skips
 // with GitLab's answer when GitLab.com does not serve Orbit to the token, and
 // fails on any other error, which says something about the handler: one that
-// needs the fixture namespace runs under [requireOrbitServed], and one that
-// needs only the account (the status, the schema, the tool list and the query
-// language) under [skipUnlessServed], which skips on a null the handler
+// needs the fixture namespace runs under [requireOrbitServed], which skips on
+// an index the handler does not report only when GitLab, asked for the
+// namespace's index again outside the handler, answers it null too, and one
+// that needs only the account (the status, the schema, the tool list and the
+// query language) under [skipUnlessServed], which skips on a null the handler
 // reports only when GitLab, asked for the same field again outside the
 // handler, answers it null too. The top-level group's Orbit access and
 // trial answer either way, since they are what says which, so
@@ -342,28 +344,107 @@ func testOrbitLiveGitLabComDiscovery(t *testing.T) {
 
 // requireOrbitServed skips the test unless GitLab.com serves Orbit for the
 // fixture namespace to this token, which since Orbit's general availability
-// takes the orbit_promo add-on or a running trial on its top-level group. It
-// asks the indexing status, the cheapest answer that needs the namespace, and
-// skips on the answers GitLab gives an account Orbit is not served to: null
-// where the status is read ([orbit.ErrOrbitUnavailable]), 403, and, for a
-// fixture namespace that is itself a top-level group, its access with no
-// index beside it. Any other failure fails the test, since it says something
-// about the handler.
+// takes the orbit_promo add-on or a running trial on its top-level group, and
+// fails it on any answer [fixtureNamespaceServed] does not read as GitLab's
+// own that it does not, since that says something about the handler.
 func requireOrbitServed(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	out, err := orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace})
-	switch {
-	case err == nil && !out.HasIndex():
-		t.Skipf("GitLab.com answers no Orbit index for %s to this token (Orbit access %s); since 2026-10-29 that takes the orbit_promo add-on or an Orbit trial on its top-level group", namespace, accessState(out.Access))
-	case err == nil:
-		return
-	case errors.Is(err, orbit.ErrOrbitUnavailable), toolutil.IsHTTPStatus(err, http.StatusForbidden):
-		t.Skipf("GitLab.com does not serve Orbit for %s to this token (%v); since 2026-10-29 that takes the orbit_promo add-on or an Orbit trial on its top-level group", namespace, err)
-	default:
+	err := fixtureNamespaceServed(ctx, client, namespace)
+	if errors.Is(err, errNotServed) {
+		t.Skipf("SKIP %s: %v", namespace, err)
+	}
+	if err != nil {
 		t.Fatalf("orbit.GraphStatus(%s): %v", namespace, err)
 	}
+}
+
+// fixtureNamespaceServed asks the indexing status of namespace through the
+// handler, the cheapest answer that needs the namespace. It returns nil when
+// the handler reports an index, and an error wrapping [errNotServed] when the
+// handler reports none and GitLab, asked for the namespace's index again with
+// a document of the test's own ([indexAnsweredNull]), answers it null too. The
+// handler reports none two ways: null where it reads
+// ([orbit.ErrOrbitUnavailable]), which is how GitLab answered the subgroup
+// jmrp-oss/orbit-fixtures from 09:22 UTC on 2026-10-29, and, for a namespace
+// that is itself a top-level group, its Orbit access with no index beside it.
+// Anything else is returned as it is, for the test to fail on: an index
+// GitLab answers where the handler reported none, a refusal of any status
+// (GitLab's GraphQL API answers a namespace Orbit is not served for with
+// null, not with a 403, so a 403 says the token, its scope or the account is
+// refused), a server fault or a GraphQL error.
+// TestFixtureNamespaceServed_AnIndexTheHandlerDoesNotReport_IsAskedOfGitLabAgain
+// holds it able to fail.
+func fixtureNamespaceServed(ctx context.Context, client *gitlabclient.Client, namespace string) error {
+	out, err := orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace})
+	var reported string
+	switch {
+	case err == nil && out.HasIndex():
+		return nil
+	case err == nil:
+		reported = "no index beside the Orbit access " + accessState(out.Access)
+	case errors.Is(err, orbit.ErrOrbitUnavailable):
+		reported = err.Error()
+	default:
+		return err
+	}
+	if askedErr := indexAnsweredNull(ctx, client, namespace); askedErr != nil {
+		return fmt.Errorf("%w; the handler reported %s", askedErr, reported)
+	}
+	return fmt.Errorf("%w: GitLab, asked again for the Orbit index of %s, answered it null; the handler reported %s", errNotServed, namespace, reported)
+}
+
+// orbitIndexDocument asks GitLab for the Orbit index of a full path again, as
+// a group and as a project the way [orbit.GraphStatus] does, with the least of
+// it that says whether GitLab serves it.
+const orbitIndexDocument = `query OrbitLiveIndex($fullPath: ID!) {
+  group(fullPath: $fullPath) { orbit { indexing { state } itemCounts { domains { name } } } }
+  project(fullPath: $fullPath) { orbit { indexing { state } itemCounts { domains { name } } } }
+}`
+
+// indexAnsweredNull asks GitLab's GraphQL API for the Orbit index of fullPath
+// again ([orbitIndexDocument]), decoded into no handler's types, and returns
+// nil only when GitLab answered the group or the project the path names with
+// its orbit null, or with both its indexing and its itemCounts null. Any other
+// answer, an index there, no group or project at the path, or a failure to
+// ask, is the error [fixtureNamespaceServed] returns, since the absent index
+// the handler reported is then its own reading rather than GitLab's.
+func indexAnsweredNull(ctx context.Context, client *gitlabclient.Client, fullPath string) error {
+	op := "asking GitLab again for the Orbit index of " + fullPath
+	var answer struct {
+		Data struct {
+			Group   map[string]any `json:"group"`
+			Project map[string]any `json:"project"`
+		} `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
+	}
+	query := gl.GraphQLQuery{Query: orbitIndexDocument, Variables: map[string]any{"fullPath": fullPath}}
+	if _, err := client.GL().GraphQL.Do(query, &answer, gl.WithContext(ctx)); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	if err := toolutil.GraphQLTopLevelError(op, answer.Errors); err != nil {
+		return err
+	}
+	holder := answer.Data.Group
+	if holder == nil {
+		holder = answer.Data.Project
+	}
+	if holder == nil {
+		return fmt.Errorf("%s: GitLab answered no group or project at that path", op)
+	}
+	orbitAnswer, sent := holder["orbit"]
+	if sent && orbitAnswer == nil {
+		return nil
+	}
+	if fields, isObject := orbitAnswer.(map[string]any); isObject {
+		indexing, indexingSent := fields["indexing"]
+		itemCounts, itemCountsSent := fields["itemCounts"]
+		if indexingSent && itemCountsSent && indexing == nil && itemCounts == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s: GitLab did not answer it null, so the absent index is the handler's reading", op)
 }
 
 // errNotServed is what [skipUnlessServed] wraps an answer in that says
@@ -1229,7 +1310,7 @@ func TestSkipUnlessServed_ANullTheHandlerReports_IsAskedOfGitLabAgain(t *testing
 				againStatus = tt.againStatus
 			}
 			var asked atomic.Int32
-			client := testutil.NewTestClient(t, askedAgainStandIn(t, tt.handler, againStatus, tt.again, &asked))
+			client := testutil.NewTestClient(t, askedAgainStandIn(t, http.StatusOK, tt.handler, againStatus, tt.again, &asked))
 			_, err := skipUnlessServed(client, tt.field, tt.run(client))(context.Background())
 			if err == nil {
 				t.Fatal("skipUnlessServed() error = nil, want the stand-in's answer")
@@ -1257,13 +1338,94 @@ func TestSkipUnlessServed_ANullTheHandlerReports_IsAskedOfGitLabAgain(t *testing
 	})
 }
 
+// TestFixtureNamespaceServed_AnIndexTheHandlerDoesNotReport_IsAskedOfGitLabAgain
+// holds the gate of the subtests that need the fixture namespace able to
+// fail: the graph status handler is run against a stand-in that answers its
+// document with no index (a subgroup's or a project's orbit null, a
+// subgroup's index null, a top-level group's access with no index beside it)
+// and the gate's document for the same index with null, with an index, with
+// no group or project, with a server fault or with a GraphQL error. Only the
+// nulls skip the test, so a handler that reads no index where GitLab sent one
+// fails it. A refusal of the handler's document is not asked again and fails
+// the test whatever it is, the 403 GitLab.com refused Orbit's REST routes
+// with included, and an index the handler reports is served. It needs no
+// network and no token.
+func TestFixtureNamespaceServed_AnIndexTheHandlerDoesNotReport_IsAskedOfGitLabAgain(t *testing.T) {
+	const (
+		subgroupOrbitNull = `{"data":{"group":{"orbit":null},"project":null}}`
+		subgroupIndexNull = `{"data":{"group":{"orbit":{"enabled":true,"access":null,"trial":null,"indexing":null,"itemCounts":null}},"project":null}}`
+		projectOrbitNull  = `{"data":{"group":null,"project":{"orbit":null}}}`
+		topLevelNoIndex   = `{"data":{"group":{"orbit":{"enabled":false,"access":{"state":"TRIAL_NOT_ELIGIBLE","reason":null,"turn_on_denial_reason":"PURCHASE_REQUIRED"},"trial":null,"indexing":null,"itemCounts":null}},"project":null}}`
+		indexNull         = `{"data":{"group":{"orbit":{"indexing":null,"itemCounts":null}},"project":null}}`
+		indexed           = `{"data":{"group":{"orbit":{"indexing":{"state":"READY"},"itemCounts":{"domains":[{"name":"code_review"}]}}},"project":null}}`
+		scopeBody         = `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`
+	)
+	// What the gate makes of an answer: the test runs, skips or fails.
+	const (
+		served = "served"
+		skip   = "skip"
+		fail   = "fail"
+	)
+	tests := []struct {
+		name          string
+		handlerStatus int
+		handler       string
+		againStatus   int
+		again         string
+		want          string
+		wantAsked     bool
+	}{
+		{name: "GitLab answers the subgroup's orbit null again", handler: subgroupOrbitNull, again: subgroupOrbitNull, want: skip, wantAsked: true},
+		{name: "GitLab answers the subgroup's index null again", handler: subgroupIndexNull, again: indexNull, want: skip, wantAsked: true},
+		{name: "GitLab answers the project's orbit null again", handler: projectOrbitNull, again: projectOrbitNull, want: skip, wantAsked: true},
+		{name: "GitLab answers the top-level group's index null again", handler: topLevelNoIndex, again: indexNull, want: skip, wantAsked: true},
+		{name: "GitLab answers an index where the handler read null", handler: subgroupOrbitNull, again: indexed, want: fail, wantAsked: true},
+		{name: "GitLab answers an index beside the top-level group's access", handler: topLevelNoIndex, again: indexed, want: fail, wantAsked: true},
+		{name: "GitLab answers no group or project at the path", handler: subgroupOrbitNull, again: `{"data":{"group":null,"project":null}}`, want: fail, wantAsked: true},
+		{name: "asking GitLab again meets a server fault", handler: subgroupOrbitNull, againStatus: http.StatusInternalServerError, again: `{"message":"500 Internal Server Error"}`, want: fail, wantAsked: true},
+		{name: "asking GitLab again meets a GraphQL error", handler: subgroupOrbitNull, again: `{"data":null,"errors":[{"message":"Internal server error"}]}`, want: fail, wantAsked: true},
+		{name: "the 403 GitLab.com refused Orbit's REST routes with", handlerStatus: http.StatusForbidden, handler: notServedBody, want: fail},
+		{name: "a scope refusal", handlerStatus: http.StatusForbidden, handler: scopeBody, want: fail},
+		{name: "the token refused", handlerStatus: http.StatusUnauthorized, handler: `{"message":"401 Unauthorized"}`, want: fail},
+		{name: "the index the handler reports", handler: `{"data":{"group":{"orbit":{"enabled":true,"access":null,"trial":null,"indexing":{"state":"READY"},"itemCounts":null}},"project":null}}`, want: served},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlerStatus, againStatus := http.StatusOK, http.StatusOK
+			if tt.handlerStatus != 0 {
+				handlerStatus = tt.handlerStatus
+			}
+			if tt.againStatus != 0 {
+				againStatus = tt.againStatus
+			}
+			var asked atomic.Int32
+			client := testutil.NewTestClient(t, askedAgainStandIn(t, handlerStatus, tt.handler, againStatus, tt.again, &asked))
+			err := fixtureNamespaceServed(context.Background(), client, "jmrp-oss/orbit-fixtures")
+			got := fail
+			switch {
+			case err == nil:
+				got = served
+			case errors.Is(err, errNotServed):
+				got = skip
+			}
+			if got != tt.want {
+				t.Errorf("fixtureNamespaceServed() error = %v, read as %s, want %s", err, got, tt.want)
+			}
+			if gotAsked := asked.Load() > 0; gotAsked != tt.wantAsked {
+				t.Errorf("GitLab asked again = %t, want %t", gotAsked, tt.wantAsked)
+			}
+		})
+	}
+}
+
 // askedAgainStandIn is the GitLab of
-// TestSkipUnlessServed_ANullTheHandlerReports_IsAskedOfGitLabAgain: it refuses
-// the Orbit MCP endpoint as GitLab.com refuses an account it does not serve,
-// answers a handler's GraphQL document with handlerAnswer, and answers the
-// gate's own document ([orbitField]), counted in asked, with againStatus and
-// again.
-func askedAgainStandIn(t *testing.T, handlerAnswer string, againStatus int, again string, asked *atomic.Int32) http.Handler {
+// TestSkipUnlessServed_ANullTheHandlerReports_IsAskedOfGitLabAgain and
+// TestFixtureNamespaceServed_AnIndexTheHandlerDoesNotReport_IsAskedOfGitLabAgain:
+// it refuses the Orbit MCP endpoint as GitLab.com refuses an account it does
+// not serve, answers a handler's GraphQL document with handlerStatus and
+// handlerAnswer, and answers the gate's own document ([orbitField] and
+// [orbitIndexDocument]), counted in asked, with againStatus and again.
+func askedAgainStandIn(t *testing.T, handlerStatus int, handlerAnswer string, againStatus int, again string, asked *atomic.Int32) http.Handler {
 	t.Helper()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/orbit/mcp") {
@@ -1276,7 +1438,7 @@ func askedAgainStandIn(t *testing.T, handlerAnswer string, againStatus int, agai
 			return
 		}
 		if !strings.Contains(string(body), "OrbitLive") {
-			testutil.RespondJSON(w, http.StatusOK, handlerAnswer)
+			testutil.RespondJSON(w, handlerStatus, handlerAnswer)
 			return
 		}
 		asked.Add(1)

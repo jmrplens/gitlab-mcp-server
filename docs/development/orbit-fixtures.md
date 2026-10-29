@@ -12,7 +12,7 @@ behind the `orbitlive` build tag and require `GITLAB_COM_TOKEN` in the
 environment. This document explains the data they expect and how to
 re-provision it.
 
-The file holds 13 tests and 87 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written in the JSON DSL GitLab.com removed on 2026-10-27, as text, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network. The last two hold against a stand-in, with no network, which answers make a subtest skip because GitLab.com does not serve Orbit to the token, and that a null a handler reports makes it skip only when GitLab, asked again, answers null too (see [Access since Orbit's general availability](#access-since-orbits-general-availability)).
+The file holds 14 tests and 100 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written in the JSON DSL GitLab.com removed on 2026-10-27, as text, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network. The last three hold against a stand-in, with no network, which answers make a subtest skip because GitLab.com does not serve Orbit to the token, that a null a handler reports makes it skip only when GitLab, asked again, answers null too, and that an index the graph status handler does not report skips a test that needs the fixture namespace only when GitLab, asked again, answers that index null too (see [Access since Orbit's general availability](#access-since-orbits-general-availability)).
 
 ## The fixture namespace
 
@@ -217,7 +217,13 @@ The live suite skips a subtest when GitLab.com does not serve it Orbit,
 naming GitLab's answer, and fails it on any other error, since that says
 something about the handler. A subtest that needs the fixture namespace
 runs under `requireOrbitServed` in `test/e2e/orbit/live_test.go`, which
-asks the namespace's index first. One that needs only the account (the
+asks the namespace's index first and skips only when the handler reports
+no index and GitLab, asked for that index again with a document of the
+test's own, answers it `null` too. GitLab's GraphQL API answers a
+namespace Orbit is not served for with `null` rather than a refusal, so a
+`403` or any other refusal of that request fails the test, and
+`TestFixtureNamespaceServed_AnIndexTheHandlerDoesNotReport_IsAskedOfGitLabAgain`
+holds that against a stand-in. One that needs only the account (the
 service status, the schema in every format, the tool list and the query
 language, in `TestOrbitLiveGitLabCom`, `TestOrbitLiveGitLabCom_DSL` and
 `TestOrbitLiveGitLabCom_SchemaFormats`) runs under `skipUnlessServed`,
