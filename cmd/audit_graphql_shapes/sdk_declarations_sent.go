@@ -267,6 +267,10 @@ func workItemsSDKSent() []sentDeclaration {
 			"the email of the non-GitLab user who opened a Service Desk ticket, obfuscated for a caller who may not "+
 				"read external emails, which the issue tools publish from REST as service_desk_reply_to (the widget "+
 				"reads external_author, an alias of that column in app/models/issue.rb)."+addedIn("19.6")),
+		recordedField(workItemsService, "WorkItem", "closedBy", "107",
+			"the user who closed the work item, which the issue tools publish from REST as closed_by. The pin of "+
+				"2026-10-29 is the first to carry it, so an earlier GitLab refuses a document naming it and client-go "+
+				"could select it only as a field ReturnedFields selects, never by default; no client-go change is open for it."),
 		experimentField(workItemsService, "WorkItem", "archived", "16.5", source),
 		experimentField(workItemsService, "WorkItem", "externalAuthor", "18.8", source),
 		experimentField(workItemsService, "WorkItem", "project", "15.3", source),

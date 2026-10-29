@@ -7068,7 +7068,10 @@ a work item that has it and a caller of a work item tool would read:
   and `service_desk_reply_to`. GitLab added the severity widget in 19.5 and
   the requester widget in 19.6, and an earlier GitLab refuses a document
   naming either, so they could join only as fields `ReturnedFields` selects
-  and never by default, as row 106's two do.
+  and never by default, as row 106's two do;
+- `closedBy`, the user who closed the work item, which the issue tools
+  publish from REST as `closed_by`. The pin of 2026-10-29 was the first to
+  carry it, so it too could join only as a field `ReturnedFields` selects.
 
 Everything else the schema offers on a work item and its widgets is left out
 on purpose, and the client-go run of `cmd/audit_graphql_shapes` holds each
@@ -7078,7 +7081,8 @@ domain's object, or a part of GitLab this server serves no tool for.
 
 **How we found it**: the client-go run of `cmd/audit_graphql_shapes`, issue
 1022, against v3.15.0 and the 19.5.0-pre pin; the severity and requester
-widgets by the same run when the pin moved to 19.6.0-pre.
+widgets by the same run when the pin moved to 19.6.0-pre, and `closedBy` when
+it was re-pinned on 2026-10-29 for the Orbit fields.
 
 **Effort**: small per field; most are a line in the fragment and a field on
 the struct.

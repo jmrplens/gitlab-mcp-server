@@ -581,9 +581,11 @@ func TestRecord_AllowUnanswered_CarriesOrListsWhatGitLabRefused(t *testing.T) {
 		"orbit.query (raw) was refused today and is carried from the recording of 2026-09-24, which sent the same request",
 		"orbit.graph_status (full_path) was refused today and is carried from the recording of 2026-09-24",
 	} {
-		if !strings.Contains(errOut, line) {
-			t.Errorf("stderr lacks %q:\n%s", line, errOut)
-		}
+		t.Run(line, func(t *testing.T) {
+			if !strings.Contains(errOut, line) {
+				t.Errorf("stderr lacks %q:\n%s", line, errOut)
+			}
+		})
 	}
 	doc, err := orbitrecord.Read(dir)
 	if err != nil {
