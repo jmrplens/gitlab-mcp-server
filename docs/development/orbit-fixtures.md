@@ -12,7 +12,7 @@ behind the `orbitlive` build tag and require `GITLAB_COM_TOKEN` in the
 environment. This document explains the data they expect and how to
 re-provision it.
 
-The file holds 12 tests and 76 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written in the JSON DSL GitLab.com removed on 2026-10-27, as text, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network. The last holds against a stand-in, with no network, which answers make a subtest skip because GitLab.com does not serve Orbit to the token (see [Access since Orbit's general availability](#access-since-orbits-general-availability)).
+The file holds 13 tests and 87 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written in the JSON DSL GitLab.com removed on 2026-10-27, as text, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects for a token GitLab.com serves Orbit to at Premium or higher (issue 1224). One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network. The last two hold against a stand-in, with no network, which answers make a subtest skip because GitLab.com does not serve Orbit to the token, and that a null a handler reports makes it skip only when GitLab, asked again, answers null too (see [Access since Orbit's general availability](#access-since-orbits-general-availability)).
 
 ## The fixture namespace
 
@@ -224,9 +224,13 @@ language, in `TestOrbitLiveGitLabCom`, `TestOrbitLiveGitLabCom_DSL` and
 which skips on the two answers GitLab.com gave the account that morning:
 `null` where the handler reads (`orbit.ErrOrbitUnavailable`) and the
 Orbit MCP endpoint's permission refusal, a `403` that carries no RFC 6750
-code and does not refuse the account itself. A `401`, a scope refusal or
-a blocked account still fails, and
-`TestNotServed_ThroughTheAccountLevelHandlers_ReadsGitLabsAnswer` holds
+code and does not refuse the account itself. A `null` is skipped on only
+when GitLab, asked for the same field again with a document of the
+test's own, answers it `null` too, so a handler that reads `null` where
+GitLab sent a value fails its subtest. A `401`, a scope refusal, a
+blocked account or a `404` still fails, and
+`TestNotServed_ThroughTheAccountLevelHandlers_ReadsGitLabsAnswer` and
+`TestSkipUnlessServed_ANullTheHandlerReports_IsAskedOfGitLabAgain` hold
 that reading against a stand-in. A recording made while GitLab.com does
 not serve Orbit needs `ORBIT_RECORD_FLAGS=-allow-unanswered` (below).
 

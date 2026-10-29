@@ -25,7 +25,9 @@
 // fails on any other error, which says something about the handler: one that
 // needs the fixture namespace runs under [requireOrbitServed], and one that
 // needs only the account (the status, the schema, the tool list and the query
-// language) under [skipUnlessServed]. The top-level group's Orbit access and
+// language) under [skipUnlessServed], which skips on a null the handler
+// reports only when GitLab, asked for the same field again outside the
+// handler, answers it null too. The top-level group's Orbit access and
 // trial answer either way, since they are what says which, so
 // [testOrbitLiveAccess] always runs.
 //
@@ -95,10 +97,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -370,34 +374,97 @@ var errNotServed = errors.New("GitLab.com does not serve Orbit to this token; si
 // not the fixture namespace, so that it skips with GitLab's answer when
 // GitLab.com does not serve Orbit to the token ([notServed]) and fails on any
 // other error, as [requireOrbitServed] does for the subtests that need the
-// fixture namespace. It is per subtest rather than one probe before them,
-// since GitLab.com did not stop answering the status, the schema, the tool
-// list and the query language at the same moment.
-func skipUnlessServed(fn func(context.Context) (any, error)) func(context.Context) (any, error) {
+// fixture namespace. field is the field of GitLab's GraphQL API the subtest's
+// handler reads, or [readsMCPOnly] for one that reads only the Orbit MCP
+// endpoint: a null the handler reports is skipped on only when GitLab, asked
+// for field again outside the handler's types, answers it null too
+// ([answeredNull]), so a handler that reads null where GitLab sent a value
+// fails its subtest. It is per subtest rather than one probe before them,
+// since the subtests read two sources, GitLab's GraphQL API and the Orbit MCP
+// endpoint, and nothing measured that the two decline an account together: by
+// 09:51 UTC on 2026-10-29 both had, and what GraphQL answered for the schema
+// then was not asked.
+func skipUnlessServed(client *gitlabclient.Client, field *orbitField, fn func(context.Context) (any, error)) func(context.Context) (any, error) {
 	return func(ctx context.Context) (any, error) {
 		out, err := fn(ctx)
-		if notServed(err) {
-			return nil, fmt.Errorf("%w: %w", errNotServed, err)
+		if !notServed(err) {
+			return out, err
 		}
-		return out, err
+		if errors.Is(err, orbit.ErrOrbitUnavailable) {
+			if askedErr := answeredNull(ctx, client, field); askedErr != nil {
+				return nil, fmt.Errorf("%w; the handler's error: %w", askedErr, err)
+			}
+		}
+		return nil, fmt.Errorf("%w: %w", errNotServed, err)
 	}
 }
 
 // notServed reports whether err is GitLab.com declining to serve Orbit to the
 // token rather than a fault of the handler: null where the handler reads
-// ([orbit.ErrOrbitUnavailable]), which is how GitLab's GraphQL API answers the
-// status and the schema to an account Orbit is not served to, or the Orbit MCP
-// endpoint's permission refusal, a 403 that carries no RFC 6750 code and does
-// not refuse the account itself ([toolutil.IsPermissionRefusal]), which is how
-// it answered the tool list, the query language and the schema's text from
-// 09:51 UTC on 2026-10-29. A 401, a scope refusal and a refusal of the account
-// say the token is wrong rather than that Orbit is withheld, so they are not
-// read as one, and neither is any other failure.
+// ([orbit.ErrOrbitUnavailable]), which is how GitLab's GraphQL API answered
+// the service status from 09:51 UTC on 2026-10-29 (what it answers for the
+// schema then has not been measured, and [skipUnlessServed] asks GitLab again
+// before it skips on a null), or the Orbit MCP endpoint's permission refusal,
+// a 403 that carries no RFC 6750 code and does not refuse the account itself
+// ([toolutil.IsPermissionRefusal]), which is how the endpoint that answers
+// the tool list, the query language and the schema's text answered from then
+// on. A 401, a scope or fine-grained grant refusal and a refusal of the
+// account say the token is wrong rather than that Orbit is withheld, so they
+// are not read as one, and neither is a 404, which a handler sending to a
+// path GitLab does not serve gets, nor any other failure.
 // TestNotServed_ThroughTheAccountLevelHandlers_ReadsGitLabsAnswer holds it
 // able to fail.
 func notServed(err error) bool {
 	return errors.Is(err, orbit.ErrOrbitUnavailable) ||
 		(toolutil.IsHTTPStatus(err, http.StatusForbidden) && toolutil.IsPermissionRefusal(err))
+}
+
+// orbitField is a field of Query.orbit an account-level handler reads, with
+// the least document that asks GitLab for it again.
+type orbitField struct {
+	name     string
+	document string
+}
+
+// The fields of Query.orbit the account-level subtests read, and
+// readsMCPOnly, the field of a subtest whose handler reads only the Orbit MCP
+// endpoint and so has no null to report.
+var (
+	readsServiceStatus = &orbitField{name: "serviceStatus", document: "query OrbitLiveServiceStatus { orbit { serviceStatus { version } } }"}
+	readsSchema        = &orbitField{name: "schema", document: "query OrbitLiveSchema { orbit { schema { nodes(first: 1) { nodes { name } } } } }"}
+	readsMCPOnly       *orbitField
+)
+
+// answeredNull asks GitLab's GraphQL API for field again, with a document of
+// its own decoded into no handler's types, and returns nil only when GitLab
+// answered field null, or Query.orbit itself null. Any other answer, a value
+// there or a failure to ask, is the error [skipUnlessServed] fails the subtest
+// with, since the null the handler reported is then its own reading rather
+// than GitLab's.
+func answeredNull(ctx context.Context, client *gitlabclient.Client, field *orbitField) error {
+	if field == nil {
+		return errors.New("the handler reported null, and it reads no field of GitLab's GraphQL API")
+	}
+	var answer struct {
+		Data   map[string]any          `json:"data"`
+		Errors []toolutil.GraphQLError `json:"errors"`
+	}
+	if _, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: field.document}, &answer, gl.WithContext(ctx)); err != nil {
+		return fmt.Errorf("asking GitLab again for Query.orbit.%s: %w", field.name, err)
+	}
+	if err := toolutil.GraphQLTopLevelError("asking GitLab again for Query.orbit."+field.name, answer.Errors); err != nil {
+		return err
+	}
+	orbitAnswer, sent := answer.Data["orbit"]
+	if sent && orbitAnswer == nil {
+		return nil
+	}
+	if fields, isObject := orbitAnswer.(map[string]any); isObject {
+		if value, fieldSent := fields[field.name]; fieldSent && value == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("the handler reported null, and GitLab, asked again for Query.orbit.%s, did not answer it null: the null is the handler's reading", field.name)
 }
 
 // accessState names an Orbit access state for a skip or a summary, and what its
@@ -450,7 +517,7 @@ func testOrbitLiveAccess(t *testing.T, client *gitlabclient.Client, namespace st
 // does not serve Orbit to the token ([skipUnlessServed]).
 func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
-	summarize(t, "Status", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Status", skipUnlessServed(client, readsServiceStatus, func(ctx context.Context) (any, error) {
 		out, err := orbit.Status(ctx, client, orbit.StatusInput{})
 		if err != nil {
 			return nil, err
@@ -459,7 +526,7 @@ func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 			out.Status, out.Version, len(out.Components)), nil
 	}))
 
-	summarize(t, "Schema", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Schema", skipUnlessServed(client, readsSchema, func(ctx context.Context) (any, error) {
 		out, err := orbit.Schema(ctx, client, orbit.SchemaInput{})
 		if err != nil {
 			return nil, err
@@ -467,7 +534,7 @@ func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 		return fmt.Sprintf("domains=%d nodes=%d edges=%d", len(out.Domains), len(out.Nodes), len(out.Edges)), nil
 	}))
 
-	summarize(t, "Tools", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Tools", skipUnlessServed(client, readsMCPOnly, func(ctx context.Context) (any, error) {
 		out, err := orbit.Tools(ctx, client, orbit.ToolsInput{})
 		if err != nil {
 			return nil, err
@@ -494,7 +561,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 		}
 		return fmt.Sprintf("format=%s command=%s grammar_bytes=%d", out.ResponseFormat, out.Name, len(out.Description)), nil
 	}
-	summarize(t, "DSL_default", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "DSL_default", skipUnlessServed(client, readsMCPOnly, func(ctx context.Context) (any, error) {
 		out, err := orbit.DSL(ctx, client, orbit.DSLInput{})
 		if err != nil {
 			return nil, err
@@ -502,7 +569,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 		return described(out)
 	}))
 
-	summarize(t, "DSL_llm", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "DSL_llm", skipUnlessServed(client, readsMCPOnly, func(ctx context.Context) (any, error) {
 		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormat: "llm"})
 		if err != nil {
 			return nil, err
@@ -513,7 +580,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 		return fmt.Sprintf("format=%s bytes=%d", out.ResponseFormat, len(out.FormattedText)), nil
 	}))
 
-	summarize(t, "DSL_raw", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "DSL_raw", skipUnlessServed(client, readsMCPOnly, func(ctx context.Context) (any, error) {
 		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormat: "raw"})
 		if err != nil {
 			return nil, err
@@ -533,7 +600,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 // the token ([skipUnlessServed]), since the command catalog is then refused.
 func TestOrbitLiveGitLabCom_DSL(t *testing.T) {
 	client := newLiveClient(t)
-	summarize(t, "DSL_is_the_GQL_orbit_query_teaches", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "DSL_is_the_GQL_orbit_query_teaches", skipUnlessServed(client, readsMCPOnly, func(ctx context.Context) (any, error) {
 		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormat: "raw"})
 		if err != nil {
 			return nil, err
@@ -754,10 +821,10 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 func TestOrbitLiveGitLabCom_SchemaFormats(t *testing.T) {
 	client := newLiveClient(t)
 
-	summarize(t, "Schema_default_format", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Schema_default_format", skipUnlessServed(client, readsSchema, func(ctx context.Context) (any, error) {
 		return liveRawSchema(ctx, client, orbit.SchemaInput{})
 	}))
-	summarize(t, "Schema_expand", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Schema_expand", skipUnlessServed(client, readsSchema, func(ctx context.Context) (any, error) {
 		out, err := orbit.Schema(ctx, client, orbit.SchemaInput{Expand: []string{"Project"}})
 		if err != nil {
 			return nil, err
@@ -769,16 +836,16 @@ func TestOrbitLiveGitLabCom_SchemaFormats(t *testing.T) {
 		}
 		return nil, fmt.Errorf("schema expanded on Project carried no Project properties: %+v", out.Nodes)
 	}))
-	summarize(t, "Schema_raw_via_format", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Schema_raw_via_format", skipUnlessServed(client, readsSchema, func(ctx context.Context) (any, error) {
 		return liveRawSchema(ctx, client, orbit.SchemaInput{Format: "raw"})
 	}))
-	summarize(t, "Schema_raw_via_response_format", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Schema_raw_via_response_format", skipUnlessServed(client, readsSchema, func(ctx context.Context) (any, error) {
 		return liveRawSchema(ctx, client, orbit.SchemaInput{ResponseFormat: "raw"})
 	}))
-	summarize(t, "Schema_llm_via_format", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Schema_llm_via_format", skipUnlessServed(client, readsMCPOnly, func(ctx context.Context) (any, error) {
 		return liveLLMSchema(ctx, client, orbit.SchemaInput{Format: "llm"})
 	}))
-	summarize(t, "Schema_llm_via_response_format", skipUnlessServed(func(ctx context.Context) (any, error) {
+	summarize(t, "Schema_llm_via_response_format", skipUnlessServed(client, readsMCPOnly, func(ctx context.Context) (any, error) {
 		return liveLLMSchema(ctx, client, orbit.SchemaInput{ResponseFormat: "llm"})
 	}))
 }
@@ -1052,15 +1119,20 @@ func TestRefusedForScope_ThroughTheQueryHandler_ReadsGitLabsAnswer(t *testing.T)
 	})
 }
 
+// notServedBody is the body GitLab.com refuses an Orbit route with to an
+// account it does not serve Orbit to, as this repository records it.
+const notServedBody = `{"message":"403 Forbidden - No Orbit enabled namespaces available"}`
+
 // TestNotServed_ThroughTheAccountLevelHandlers_ReadsGitLabsAnswer holds the
 // gate of the subtests that need only the account able to fail: the status
 // and the tool list are run against a stand-in answering the two ways
 // GitLab.com declined Orbit to the fixture account on 2026-10-29 (the service
 // status null, the Orbit MCP endpoint's 403) and ways that say something else
-// is wrong (the token refused, its scope, the account blocked, a server fault,
-// a GraphQL error), and only the first two are read as Orbit not being served,
-// so a fault of the handler still fails its subtest. It needs no network and
-// no token.
+// is wrong (the token refused, its scope or its fine-grained grant, the
+// account blocked, a path GitLab does not serve, a server fault, a GraphQL
+// error), and only the first two are read as Orbit not being served, so a
+// fault of the handler still fails its subtest. It needs no network and no
+// token.
 func TestNotServed_ThroughTheAccountLevelHandlers_ReadsGitLabsAnswer(t *testing.T) {
 	status := func(ctx context.Context, client *gitlabclient.Client) error {
 		_, err := orbit.Status(ctx, client, orbit.StatusInput{})
@@ -1078,10 +1150,12 @@ func TestNotServed_ThroughTheAccountLevelHandlers_ReadsGitLabsAnswer(t *testing.
 		want   bool
 	}{
 		{name: "the service status answered null", call: status, status: http.StatusOK, body: `{"data":{"orbit":{"serviceStatus":null}}}`, want: true},
-		{name: "the Orbit MCP endpoint's permission refusal", call: tools, status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`, want: true},
+		{name: "the Orbit MCP endpoint's permission refusal", call: tools, status: http.StatusForbidden, body: notServedBody, want: true},
 		{name: "the token refused", call: tools, status: http.StatusUnauthorized, body: `{"message":"401 Unauthorized"}`},
 		{name: "a scope refusal", call: tools, status: http.StatusForbidden, body: `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token.","scope":"api"}`},
+		{name: "a fine-grained grant refusal", call: tools, status: http.StatusForbidden, body: `{"error":"insufficient_granular_scope","error_description":"Access denied"}`},
 		{name: "the account blocked", call: tools, status: http.StatusForbidden, body: `{"message":"403 Forbidden - Your account has been blocked."}`},
+		{name: "a path GitLab does not serve", call: tools, status: http.StatusNotFound, body: `{"message":"404 Not Found"}`},
 		{name: "a server fault", call: tools, status: http.StatusInternalServerError, body: `{"message":"500 Internal Server Error"}`},
 		{name: "a GraphQL error", call: status, status: http.StatusOK, body: `{"data":null,"errors":[{"message":"Internal server error"}]}`},
 	}
@@ -1103,6 +1177,110 @@ func TestNotServed_ThroughTheAccountLevelHandlers_ReadsGitLabsAnswer(t *testing.
 		if notServed(errors.New("dial tcp: connection refused")) || notServed(nil) {
 			t.Error("notServed() = true for an error that carries no answer from GitLab")
 		}
+	})
+}
+
+// TestSkipUnlessServed_ANullTheHandlerReports_IsAskedOfGitLabAgain holds the
+// gate able to tell GitLab's null from a handler's: the status and the schema
+// handlers are run against a stand-in that answers their own documents with
+// null, and the gate's document for the same field with null, with
+// Query.orbit null, with a value, with a server fault or with a GraphQL error.
+// Only the two nulls skip the subtest, so a handler that reads null where
+// GitLab sent a value fails it. The Orbit MCP endpoint's permission refusal is
+// skipped on without asking GitLab again, and a null reported by a subtest
+// that reads only that endpoint fails. It needs no network and no token.
+func TestSkipUnlessServed_ANullTheHandlerReports_IsAskedOfGitLabAgain(t *testing.T) {
+	const (
+		statusNull = `{"data":{"orbit":{"serviceStatus":null}}}`
+		schemaNull = `{"data":{"orbit":{"schema":null}}}`
+	)
+	status := func(client *gitlabclient.Client) func(context.Context) (any, error) {
+		return func(ctx context.Context) (any, error) { return orbit.Status(ctx, client, orbit.StatusInput{}) }
+	}
+	schema := func(client *gitlabclient.Client) func(context.Context) (any, error) {
+		return func(ctx context.Context) (any, error) { return orbit.Schema(ctx, client, orbit.SchemaInput{}) }
+	}
+	tools := func(client *gitlabclient.Client) func(context.Context) (any, error) {
+		return func(ctx context.Context) (any, error) { return orbit.Tools(ctx, client, orbit.ToolsInput{}) }
+	}
+	tests := []struct {
+		name        string
+		run         func(*gitlabclient.Client) func(context.Context) (any, error)
+		field       *orbitField
+		handler     string
+		againStatus int
+		again       string
+		wantSkip    bool
+		wantAsked   bool
+	}{
+		{name: "GitLab answers the status null again", run: status, field: readsServiceStatus, handler: statusNull, again: statusNull, wantSkip: true, wantAsked: true},
+		{name: "GitLab answers Query.orbit null", run: status, field: readsServiceStatus, handler: statusNull, again: `{"data":{"orbit":null}}`, wantSkip: true, wantAsked: true},
+		{name: "GitLab answers the status with a value", run: status, field: readsServiceStatus, handler: statusNull, again: `{"data":{"orbit":{"serviceStatus":{"version":"0.163.0"}}}}`, wantAsked: true},
+		{name: "GitLab answers the schema null again", run: schema, field: readsSchema, handler: schemaNull, again: schemaNull, wantSkip: true, wantAsked: true},
+		{name: "GitLab answers the schema with a value", run: schema, field: readsSchema, handler: schemaNull, again: `{"data":{"orbit":{"schema":{"nodes":{"nodes":[{"name":"Project"}]}}}}}`, wantAsked: true},
+		{name: "asking GitLab again meets a server fault", run: status, field: readsServiceStatus, handler: statusNull, againStatus: http.StatusInternalServerError, again: `{"message":"500 Internal Server Error"}`, wantAsked: true},
+		{name: "asking GitLab again meets a GraphQL error", run: status, field: readsServiceStatus, handler: statusNull, again: `{"data":null,"errors":[{"message":"Internal server error"}]}`, wantAsked: true},
+		{name: "the Orbit MCP endpoint's permission refusal is not asked again", run: tools, field: readsMCPOnly, wantSkip: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			againStatus := http.StatusOK
+			if tt.againStatus != 0 {
+				againStatus = tt.againStatus
+			}
+			var asked atomic.Int32
+			client := testutil.NewTestClient(t, askedAgainStandIn(t, tt.handler, againStatus, tt.again, &asked))
+			_, err := skipUnlessServed(client, tt.field, tt.run(client))(context.Background())
+			if err == nil {
+				t.Fatal("skipUnlessServed() error = nil, want the stand-in's answer")
+			}
+			if got := errors.Is(err, errNotServed); got != tt.wantSkip {
+				t.Errorf("skipUnlessServed() error = %v, wraps errNotServed = %t, want %t", err, got, tt.wantSkip)
+			}
+			if got := asked.Load() > 0; got != tt.wantAsked {
+				t.Errorf("GitLab asked again = %t, want %t", got, tt.wantAsked)
+			}
+		})
+	}
+	t.Run("a null from a subtest that reads only the Orbit MCP endpoint", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Errorf("request = %s %s, want none", r.Method, r.URL.Path)
+			testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+		}))
+		reportsNull := func(context.Context) (any, error) {
+			return nil, fmt.Errorf("orbit_tools: %w", orbit.ErrOrbitUnavailable)
+		}
+		_, err := skipUnlessServed(client, readsMCPOnly, reportsNull)(context.Background())
+		if err == nil || errors.Is(err, errNotServed) {
+			t.Errorf("skipUnlessServed() error = %v, want a failure that does not wrap errNotServed", err)
+		}
+	})
+}
+
+// askedAgainStandIn is the GitLab of
+// TestSkipUnlessServed_ANullTheHandlerReports_IsAskedOfGitLabAgain: it refuses
+// the Orbit MCP endpoint as GitLab.com refuses an account it does not serve,
+// answers a handler's GraphQL document with handlerAnswer, and answers the
+// gate's own document ([orbitField]), counted in asked, with againStatus and
+// again.
+func askedAgainStandIn(t *testing.T, handlerAnswer string, againStatus int, again string, asked *atomic.Int32) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/orbit/mcp") {
+			testutil.RespondJSON(w, http.StatusForbidden, notServedBody)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read the request body: %v", err)
+			return
+		}
+		if !strings.Contains(string(body), "OrbitLive") {
+			testutil.RespondJSON(w, http.StatusOK, handlerAnswer)
+			return
+		}
+		asked.Add(1)
+		testutil.RespondJSON(w, againStatus, again)
 	})
 }
 
