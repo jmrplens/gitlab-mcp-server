@@ -344,9 +344,10 @@ func testOrbitLiveGitLabComDiscovery(t *testing.T) {
 
 // requireOrbitServed skips the test unless GitLab.com serves Orbit for the
 // fixture namespace to this token, which since Orbit's general availability
-// takes the orbit_promo add-on or a running trial on its top-level group, and
-// fails it on any answer [fixtureNamespaceServed] does not read as GitLab's
-// own that it does not, since that says something about the handler.
+// takes the orbit_promo add-on or a running trial on its top-level group. It
+// skips only on GitLab's own answer that it does not, as
+// [fixtureNamespaceServed] reads it, and fails the test on any other, since
+// that says something about the handler.
 func requireOrbitServed(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
