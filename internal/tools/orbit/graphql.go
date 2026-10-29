@@ -676,13 +676,14 @@ type gqlOrbitHolder struct {
 // GitLab answers indexing and itemCounts null when Orbit is not available to
 // the token there, is off for the top-level group, or the token is below the
 // Reporter role. For a top-level group it answers the group's Orbit access and
-// trial beside them, which say why, so that answer is published with the
-// index absent rather than refused: since Orbit's general availability a
-// group without access is the common case, and its access state is the answer
-// a caller needs. A subgroup or a project carries no access (GitLab answers it
-// null there), so an index answered null with nothing beside it is reported
-// as an error naming what Orbit needs and that the top-level group reports
-// its access.
+// trial beside them to a token with the Owner role there, which say why, so
+// that answer is published with the index absent rather than refused: since
+// Orbit's general availability a group without access is the common case, and
+// its access state is the answer a caller needs. A subgroup or a project
+// carries no access (GitLab answers it null there, and so for a token below
+// Owner), so an index answered null with nothing beside it is reported as an
+// error naming what Orbit needs and that the top-level group reports its
+// access to an Owner.
 func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphStatusInput) (GraphStatusOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return GraphStatusOutput{}, err
@@ -722,9 +723,10 @@ func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphSt
 // graphStatusUnavailableHint follows a group or project whose Orbit index
 // GitLab answered null with no access state beside it: a subgroup or a project,
 // whose access GitLab answers null, or a token that cannot read the group's
-// Orbit setting. It is [orbitUnavailableHint] and where the reason is read,
-// written as one literal for the reason [queryRefusedHint] gives.
-const graphStatusUnavailableHint = "Orbit is served on GitLab.com only, to a token that can read a top-level group with Orbit access and Orbit turned on; check the group's Orbit settings and access. orbit.graph_status with the top-level group's full_path reports its Orbit access and trial"
+// Orbit setting, which takes the Owner role (read_orbit_setting). It is
+// [orbitUnavailableHint] and where the reason is read, written as one literal
+// for the reason [queryRefusedHint] gives.
+const graphStatusUnavailableHint = "Orbit is served on GitLab.com only, to a token that can read a top-level group with Orbit access and Orbit turned on; check the group's Orbit settings and access. orbit.graph_status with the top-level group's full_path reports its Orbit access and trial to a token with the Owner role there"
 
 // graphStatusAnswered classifies a sent graph status request: the HTTP
 // failure, then the top-level GraphQL errors.

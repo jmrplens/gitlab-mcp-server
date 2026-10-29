@@ -42,7 +42,7 @@ Orbit registers only on GitLab.com connections with a Premium or Ultimate tier. 
 
 Self-managed GitLab instances do not register Orbit tools, even on a Premium or Ultimate tier.
 
-GitLab.com itself decides what it answers. Since Orbit's general availability on 29 October 2026, the plan no longer counts there: GitLab.com serves a group's index and queries only for a top-level group with the `orbit_promo` add-on or a running Orbit trial, and answers anything else with `403` or with nothing where the index would be. The server reports either as an error saying Orbit is not served to the token there, never as an empty result. The one exception says why: `graph_status` of a top-level group returns the group's Orbit `access` and `trial`, which GitLab answers beside the missing index, and says that the index is missing because of the access, not because the graph is empty.
+GitLab.com itself decides what it answers. Since Orbit's general availability on 29 October 2026, the plan no longer counts there: GitLab.com serves a group's index and queries only for a top-level group with the `orbit_promo` add-on or a running Orbit trial, and answers anything else with `403` or with nothing where the index would be. The server reports either as an error saying Orbit is not served to the token there, never as an empty result. The one exception says why: `graph_status` of a top-level group, asked with a token that has the Owner role there, returns the group's Orbit `access` and `trial`, which GitLab answers beside the missing index, and says that the index is missing because of the access, not because the graph is empty.
 
 ### Where each action reads from
 
@@ -313,12 +313,12 @@ Runs a read-only Knowledge Graph query. The `query` parameter is a GQL statement
 
 Returns the Orbit index of one group or project, named by `namespace_id`, `project_id` or `full_path`: whether Orbit is turned on for its top-level group and since when (`enabled`, `enabled_at`, sent for a group), the project counts (`indexed`, `total_known`, `gaps`, `not_indexed`, `total`), the indexing `state` (`READY`, `INDEXING`, `NOT_STARTED`, `FAILED` or `UNKNOWN`) with the time of the last completed run and the state of each area, and the number of indexed items of each entity in each domain. Use it to check that a project is indexed before querying it. `response_format` is accepted and changes nothing.
 
-For a top-level group it also returns the group's Orbit `access` and `trial`, which decide whether GitLab.com serves the index at all, with GitLab's names and values:
+For a top-level group, to a token with the Owner role there, it also returns the group's Orbit `access` and `trial`, which say whether GitLab.com serves the index at all, with GitLab's names and values:
 
 - `access`: its `state` (`LICENSED`, `TRIAL_ACTIVE`, `TRIAL_ELIGIBLE`, `TRIAL_ENDED`, `TRIAL_NOT_ELIGIBLE`, `TRIAL_STATUS_UNAVAILABLE`, `UNLICENSED` or `NOT_CONFIGURED`), the `reason` of a state with more than one cause (where a licensed group's access comes from, `PLAN`, `PROMO_ADD_ON` or `BETA`, or why a group has none), and the `turn_on_denial_reason` that says why the token's user cannot turn Orbit on.
 - `trial`: its `state` (`ELIGIBLE`, `NOT_ELIGIBLE`, `ACTIVE` or `ENDED`), its last day (`expires_on`), its `credits` (`remaining` and `total`) and, for a user who can start one, the `offer` of a new trial (`duration_days` and `initial_credits`).
 
-GitLab.com serves the index only under `LICENSED` or `TRIAL_ACTIVE` access. Under any other state it answers the group's access and trial with no index, and `graph_status` returns them rather than an error, with a line saying that the index is missing because of the access. GitLab answers neither for a subgroup or a project, so they are absent there; ask the top-level group's `full_path` for them. A subgroup or project whose index GitLab does not serve is an error that says so.
+GitLab.com serves the index under `LICENSED` or `TRIAL_ACTIVE` access. A top-level group it answers with its access and no index is returned with them rather than as an error, and the card says in a line of its own why the index is missing: the access under any other state, and Orbit turned off, or one of the reasons GitLab documents for a missing index, under those two. GitLab answers neither for a subgroup or a project, nor to a token without the Owner role in the group, so they are absent there; ask the top-level group's `full_path` for them with an Owner's token. A subgroup or project whose index GitLab does not serve is an error that says so.
 
 **Example:** See above.
 

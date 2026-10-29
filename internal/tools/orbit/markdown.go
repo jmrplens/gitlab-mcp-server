@@ -287,8 +287,8 @@ func FormatQueryMarkdown(out QueryOutput) string {
 }
 
 // hintAccessGate is the one next step of a group GitLab.com serves no index
-// for: a query would be refused the same way, and the cluster's health says
-// nothing about one group's access.
+// for because of its access: a query would be refused the same way, and the
+// cluster's health says nothing about one group's access.
 const hintAccessGate = "Orbit access is set on the top-level group on GitLab.com: a license or a running trial there serves the index, which this status shows once it does"
 
 // FormatGraphStatusMarkdown renders Orbit indexing status as the card of one
@@ -296,12 +296,13 @@ const hintAccessGate = "Orbit access is set on the top-level group on GitLab.com
 // how much is indexed, how the last run went, and the per-domain node counts
 // as a nested collection.
 //
-// Since Orbit's general availability GitLab.com serves a group's index only
-// under LICENSED or TRIAL_ACTIVE access, and answers a top-level group under
-// any other with its access and no index. The card then says so in a line of
-// its own ([graphStatusAccessNote]), since a missing or empty index reads as
-// an empty graph to a model that has not read the access row, and its next
-// step leads to the access rather than to a query GitLab would refuse.
+// Since Orbit's general availability GitLab.com serves a group's index under
+// LICENSED or TRIAL_ACTIVE access, and answers a top-level group with no
+// access it serves an index under with its access and no index. The card then
+// says so in a line of its own ([graphStatusAccessNote]), since a missing index
+// reads as an empty graph to a model that has not read the access row, and its
+// next step leads to the access rather than to a query GitLab would refuse. An
+// index GitLab answered all the same keeps the card of any other index.
 func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Graph Status")
@@ -309,7 +310,7 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 		toolutil.HintAction(orbitActionQuery, "query the graph once indexing reaches a healthy state"),
 		toolutil.HintAction(orbitActionStatus, "check the cluster itself when indexing never starts"),
 	}
-	if out.Access != nil && !out.Access.Serves() {
+	if out.Access != nil && !out.Access.Serves() && !out.HasIndex() {
 		hints = []string{hintAccessGate}
 	}
 
@@ -386,25 +387,30 @@ func formatCredits(credits *float64) string {
 }
 
 // graphStatusAccessNote is the line the card ends on when the top-level group's
-// Orbit access explains its index: a state GitLab.com serves no index under, a
-// served state with no index answered, or a trial, which ends. It is empty for
-// a licensed group with its index, and for a subgroup or a project, which carry
-// no access.
+// Orbit access explains its index: an index missing under a state GitLab.com
+// serves none under, an index missing under one it does (Orbit off, or else
+// the causes GitLab's description of the field gives for null), or an index a
+// trial serves, which ends. It is empty for any other index, and for a
+// subgroup or a project, which carry no access.
 func graphStatusAccessNote(out GraphStatusOutput) string {
 	access := out.Access
 	switch {
 	case access == nil:
 		return ""
+	case out.HasIndex():
+		if access.State == AccessTrialActive {
+			return "Orbit is served on a trial, which ends on its last day or when its credits run out."
+		}
+		return ""
 	case !access.Serves():
 		return "Orbit access is " + toolutil.EscapeMdTableCell(access.State) +
-			": GitLab.com serves a group's Orbit index and queries only while its access is LICENSED or TRIAL_ACTIVE, " +
-			"so an index missing or empty here reflects the access, not the graph."
-	case out.Indexing == nil && out.Projects == nil && len(out.Domains) == 0:
-		return "The group has Orbit access and GitLab answered no index: Orbit is off for the top-level group, or the token is below the Reporter role there."
-	case access.State == AccessTrialActive:
-		return "Orbit is served on a trial, which ends on its last day or when its credits run out."
+			": GitLab.com serves a group's Orbit index and queries under LICENSED or TRIAL_ACTIVE access, " +
+			"so the index is missing here because of the access, not because the graph is empty."
+	case out.Enabled != nil && !*out.Enabled:
+		return "The group has Orbit access and Orbit is off for it, which is why GitLab answered no index."
 	}
-	return ""
+	return "The group has Orbit access and GitLab answered no index, which GitLab answers when Orbit is off for the top-level group, " +
+		"is not available to the token's user, or the user is below the Reporter role there."
 }
 
 // domainCounts renders one domain's node counts as the "Name: count" list the

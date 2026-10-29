@@ -244,15 +244,17 @@ var errAccessDeclined = errors.New("GitLab.com serves no Orbit index under the t
 // they came (orbit.GraphStatus). Recorded, it would be a key tree with no
 // index in it, which the next recording made with access would report as keys
 // GitLab added; it is a refusal instead, which -allow-unanswered carries or
-// lists. The fixture namespace is a subgroup by default, for which GitLab
-// answers no access and the handler a null index, so this is the answer of a
-// fixture namespace that is itself a top-level group.
+// lists. An index GitLab answered under such a state all the same (a trial
+// CustomersDot could not report, or one GitLab has not ended yet) is an
+// answer, and is recorded. The fixture namespace is a subgroup by default, for
+// which GitLab answers no access and the handler a null index, so this is the
+// answer of a fixture namespace that is itself a top-level group.
 func declinedByAccess(ex exchange, output any) (string, bool) {
 	status, isStatus := output.(orbit.GraphStatusOutput)
-	if !isStatus || status.Access == nil || status.Access.Serves() {
+	if !isStatus || status.Access == nil || status.Access.Serves() || status.HasIndex() {
 		return "", false
 	}
-	return fmt.Sprintf("%s %s (%s) answered 200 with the top-level group's Orbit access %s, under which GitLab.com serves no index", ex.method, ex.path, ex.operation, status.Access.State), true
+	return fmt.Sprintf("%s %s (%s) answered 200 with no index and the top-level group's Orbit access %s, a state GitLab.com serves no index under", ex.method, ex.path, ex.operation, status.Access.State), true
 }
 
 // makeCall invokes one handler and reads the one exchange it made.

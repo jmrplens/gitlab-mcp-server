@@ -432,18 +432,29 @@ func TestFormatGraphStatusMarkdown_PartsAlone_RenderOnlyWhatCame(t *testing.T) {
 }
 
 // accessGateHints is the guidance section of an indexing status card for a
-// group GitLab.com serves no index: the access, not a query.
+// group GitLab.com serves no index because of its access: the access, not a
+// query.
 const accessGateHints = "\n---\n💡 **Next steps:**\n" +
 	"- Orbit access is set on the top-level group on GitLab.com: a license or a running trial there serves the index, which this status shows once it does\n"
+
+// accessGateNote is the line of a card whose index is missing under the access
+// state it names.
+func accessGateNote(state string) string {
+	return "Orbit access is " + state + ": GitLab.com serves a group's Orbit index and queries under LICENSED or TRIAL_ACTIVE access, " +
+		"so the index is missing here because of the access, not because the graph is empty.\n"
+}
 
 // TestFormatGraphStatusMarkdown_TopLevelGroup_SaysWhatItsAccessMeans verifies
 // the card of a top-level group, which carries its Orbit access and trial: the
 // access as rows and the trial as a nested object, as GitLab spelled them,
-// then a line of its own when the access explains the index. A group
-// GitLab.com serves no index (jmrp-oss since 2026-10-29) is told the missing
-// index is the access, and its one next step leads there; a licensed group
-// with its index gets no such line, one with none is told why, and a running
-// trial is told that it ends.
+// then a line of its own when the access explains the index. A group whose
+// index is missing under an access GitLab.com serves none under (jmrp-oss
+// since 2026-10-29) is told the missing index is the access, and its one next
+// step leads there; an index GitLab answered under such a state all the same
+// (a trial CustomersDot could not report, or one GitLab has not ended yet) is
+// told nothing of the kind. A licensed group with its index gets no line, one
+// with none is told why, Orbit off or GitLab's documented causes, and a
+// running trial is told that it ends.
 func TestFormatGraphStatusMarkdown_TopLevelGroup_SaysWhatItsAccessMeans(t *testing.T) {
 	enabled, disabled := true, false
 	zero, total, offerCredits := 0.0, 1000.0, 500.5
@@ -467,8 +478,7 @@ func TestFormatGraphStatusMarkdown_TopLevelGroup_SaysWhatItsAccessMeans(t *testi
 				"- **Orbit trial**:\n" +
 				"  - **State**: NOT_ELIGIBLE\n" +
 				"  - **Credits remaining**: 0\n\n" +
-				"Orbit access is TRIAL_NOT_ELIGIBLE: GitLab.com serves a group's Orbit index and queries only while its access is LICENSED or TRIAL_ACTIVE, " +
-				"so an index missing or empty here reflects the access, not the graph.\n" +
+				accessGateNote("TRIAL_NOT_ELIGIBLE") +
 				accessGateHints,
 		},
 		{
@@ -481,8 +491,7 @@ func TestFormatGraphStatusMarkdown_TopLevelGroup_SaysWhatItsAccessMeans(t *testi
 				"- **Orbit access**: UNLICENSED\n" +
 				"- **Access reason**: NO_ACCESS\n" +
 				"- **Turn-on denial reason**: PURCHASE_REQUIRED\n\n" +
-				"Orbit access is UNLICENSED: GitLab.com serves a group's Orbit index and queries only while its access is LICENSED or TRIAL_ACTIVE, " +
-				"so an index missing or empty here reflects the access, not the graph.\n" +
+				accessGateNote("UNLICENSED") +
 				accessGateHints,
 		},
 		{
@@ -500,9 +509,21 @@ func TestFormatGraphStatusMarkdown_TopLevelGroup_SaysWhatItsAccessMeans(t *testi
 				"  - **State**: ELIGIBLE\n" +
 				"  - **Offered trial days**: 30\n" +
 				"  - **Offered trial credits**: 500.5\n\n" +
-				"Orbit access is TRIAL_ELIGIBLE: GitLab.com serves a group's Orbit index and queries only while its access is LICENSED or TRIAL_ACTIVE, " +
-				"so an index missing or empty here reflects the access, not the graph.\n" +
+				accessGateNote("TRIAL_ELIGIBLE") +
 				accessGateHints,
+		},
+		{
+			name: "trial status unavailable with its index",
+			out: GraphStatusOutput{
+				Enabled: &enabled, Access: &GraphStatusAccess{State: "TRIAL_STATUS_UNAVAILABLE"},
+				Domains: []GraphStatusDomain{{Name: "core", Items: []GraphStatusDomainItem{{Name: "Project", Count: 2}}}},
+			},
+			want: "- **Orbit enabled**: ✅\n" +
+				"- **Orbit access**: TRIAL_STATUS_UNAVAILABLE\n\n" +
+				"### Domains\n\n" +
+				"| Domain | Counts |\n| --- | --- |\n" +
+				"| core | Project: 2 |\n" +
+				graphStatusHints,
 		},
 		{
 			name: "licensed with its index",
@@ -513,12 +534,22 @@ func TestFormatGraphStatusMarkdown_TopLevelGroup_SaysWhatItsAccessMeans(t *testi
 				graphStatusHints,
 		},
 		{
-			name: "licensed with no index",
+			name: "licensed with Orbit off",
 			out:  GraphStatusOutput{Enabled: &disabled, Access: &GraphStatusAccess{State: AccessLicensed, Reason: "PLAN"}},
 			want: "- **Orbit enabled**: ❌\n" +
 				"- **Orbit access**: LICENSED\n" +
 				"- **Access reason**: PLAN\n\n" +
-				"The group has Orbit access and GitLab answered no index: Orbit is off for the top-level group, or the token is below the Reporter role there.\n" +
+				"The group has Orbit access and Orbit is off for it, which is why GitLab answered no index.\n" +
+				graphStatusHints,
+		},
+		{
+			name: "licensed with Orbit on and no index",
+			out:  GraphStatusOutput{Enabled: &enabled, Access: &GraphStatusAccess{State: AccessLicensed, Reason: "PROMO_ADD_ON"}},
+			want: "- **Orbit enabled**: ✅\n" +
+				"- **Orbit access**: LICENSED\n" +
+				"- **Access reason**: PROMO_ADD_ON\n\n" +
+				"The group has Orbit access and GitLab answered no index, which GitLab answers when Orbit is off for the top-level group, " +
+				"is not available to the token's user, or the user is below the Reporter role there.\n" +
 				graphStatusHints,
 		},
 		{

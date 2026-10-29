@@ -413,9 +413,14 @@ type GraphStatusIndexing struct {
 // The two Orbit access states under which GitLab.com serves a namespace's
 // index and its queries, GitLab's OrbitAccessState: a group with Orbit access
 // (from its plan, the Orbit promo add-on or the free beta, which reason names)
-// and a group whose Orbit trial is running. Every other state (UNLICENSED,
+// and a group whose Orbit trial is running. Under every other state (UNLICENSED,
 // NOT_CONFIGURED, TRIAL_ELIGIBLE, TRIAL_ENDED, TRIAL_NOT_ELIGIBLE and
-// TRIAL_STATUS_UNAVAILABLE) is one GitLab answers with no index.
+// TRIAL_STATUS_UNAVAILABLE) the group has no access GitLab.com serves an index
+// under, but the state does not decide the index on its own: GitLab reads the
+// state from the add-on and from CustomersDot, and the index from the add-on
+// and the trial GitLab recorded, which it ends up to an hour after CustomersDot
+// does. So a trial CustomersDot could not report (TRIAL_STATUS_UNAVAILABLE),
+// or one that has just ended (TRIAL_ENDED), can still come with its index.
 const (
 	AccessLicensed    = "LICENSED"
 	AccessTrialActive = "TRIAL_ACTIVE"
@@ -441,8 +446,10 @@ type GraphStatusAccess struct {
 	TurnOnDenialReason string `json:"turn_on_denial_reason,omitempty"`
 }
 
-// Serves reports whether GitLab.com serves the group's index and its queries
-// under this access state: LICENSED or TRIAL_ACTIVE.
+// Serves reports whether this is an access state GitLab.com serves the group's
+// index and its queries under: LICENSED or TRIAL_ACTIVE. A missing index under
+// any other state is the access, not the graph; the index can still come under
+// one of them for a while, as the constants above say.
 func (a *GraphStatusAccess) Serves() bool {
 	return a != nil && (a.State == AccessLicensed || a.State == AccessTrialActive)
 }
@@ -458,7 +465,8 @@ type GraphStatusTrialCredits struct {
 }
 
 // GraphStatusTrialOffer is the terms of a new Orbit trial, GitLab's
-// OrbitTrialOffer, which GitLab sends only to a user who can start one.
+// OrbitTrialOffer, which GitLab sends only to a user who can start one, and
+// only when CustomersDot sends valid terms.
 type GraphStatusTrialOffer struct {
 	// DurationDays is the number of days a new trial lasts.
 	DurationDays *int64 `json:"duration_days,omitempty"`
@@ -478,7 +486,7 @@ type GraphStatusTrial struct {
 	// Credits are the trial's credits.
 	Credits *GraphStatusTrialCredits `json:"credits,omitempty"`
 	// Offer is the terms of a new trial, absent unless the token's user can
-	// start one.
+	// start one and CustomersDot sends valid terms.
 	Offer *GraphStatusTrialOffer `json:"offer,omitempty"`
 }
 
@@ -502,9 +510,10 @@ type GraphStatusOutput struct {
 	// Access is the Orbit access state of a top-level group, GitLab's
 	// OrbitNamespace.access. GitLab answers it for a top-level group alone,
 	// and null for a subgroup, a project and a token that cannot read the
-	// group's Orbit setting, so it is absent there: the top-level group's
-	// full_path reports it. A state other than LICENSED or TRIAL_ACTIVE is
-	// why the index is absent ([GraphStatusAccess.Serves]).
+	// group's Orbit setting, which takes the Owner role, so it is absent
+	// there: the top-level group's full_path reports it to an Owner. An index
+	// absent under a state other than LICENSED or TRIAL_ACTIVE is absent
+	// because of the access ([GraphStatusAccess.Serves]).
 	Access *GraphStatusAccess `json:"access,omitempty"`
 	// Trial is the Orbit trial of a top-level group, GitLab's
 	// OrbitNamespace.trial: null, and so absent, for a subgroup, a project, a
@@ -521,6 +530,12 @@ type GraphStatusOutput struct {
 	Domains []GraphStatusDomain `json:"domains,omitempty"`
 	// Indexing is the indexing state.
 	Indexing *GraphStatusIndexing `json:"indexing,omitempty"`
+}
+
+// HasIndex reports whether GitLab answered any part of the index: the indexing
+// state, the project counts or the item counts.
+func (o GraphStatusOutput) HasIndex() bool {
+	return o.Indexing != nil || o.Projects != nil || len(o.Domains) > 0
 }
 
 // Query executes a read-only Orbit Knowledge Graph query on GitLab.com.

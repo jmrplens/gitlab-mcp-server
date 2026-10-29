@@ -342,7 +342,7 @@ func requireOrbitServed(t *testing.T, client *gitlabclient.Client, namespace str
 	defer cancel()
 	out, err := orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace})
 	switch {
-	case err == nil && out.Indexing == nil && out.Projects == nil && len(out.Domains) == 0:
+	case err == nil && !out.HasIndex():
 		t.Skipf("GitLab.com answers no Orbit index for %s to this token (Orbit access %s); since 2026-10-29 that takes the orbit_promo add-on or an Orbit trial on its top-level group", namespace, accessState(out.Access))
 	case err == nil:
 		return
@@ -354,10 +354,11 @@ func requireOrbitServed(t *testing.T, client *gitlabclient.Client, namespace str
 }
 
 // accessState names an Orbit access state for a skip or a summary, and what its
-// absence means: GitLab reports access for a top-level group alone.
+// absence means: GitLab reports access for a top-level group alone, to a token
+// with the Owner role there.
 func accessState(access *orbit.GraphStatusAccess) string {
 	if access == nil {
-		return "not reported, which GitLab does for a subgroup or a project"
+		return "not reported, which GitLab does for a subgroup, a project, and a token below the Owner role"
 	}
 	if access.Reason == "" {
 		return access.State
@@ -369,9 +370,12 @@ func accessState(access *orbit.GraphStatusAccess) string {
 // top-level group, the one namespace GitLab answers Orbit access and trial for.
 // It runs whether or not GitLab.com serves Orbit there, since the access is
 // the answer that says which: a group without access is answered with its
-// access and no index rather than refused. It also holds GitLab.com to the
-// rule orbit.GraphStatusAccess.Serves encodes, that no index comes under any
-// state but LICENSED and TRIAL_ACTIVE, which the card's access line relies on.
+// access and no index rather than refused. It needs the fixture account to
+// own the group, since GitLab answers the access to the Owner role alone. It
+// does not hold the index to the access state: GitLab decides the index from
+// the add-on and the trial it recorded, and the state partly from
+// CustomersDot, so an index can come under TRIAL_STATUS_UNAVAILABLE or a
+// trial that has just ended, and the summary reports both.
 func testOrbitLiveAccess(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
 	topLevel, _, _ := strings.Cut(namespace, "/")
@@ -381,12 +385,9 @@ func testOrbitLiveAccess(t *testing.T, client *gitlabclient.Client, namespace st
 			return nil, err
 		}
 		if out.Access == nil {
-			return nil, fmt.Errorf("GitLab.com answered no Orbit access for the top-level group %s, which it reports to a token that can read the group's Orbit setting", topLevel)
+			return nil, fmt.Errorf("GitLab.com answered no Orbit access for the top-level group %s, which it reports to a token that can read the group's Orbit setting, the Owner role", topLevel)
 		}
-		indexed := out.Indexing != nil || out.Projects != nil || len(out.Domains) > 0
-		if indexed && !out.Access.Serves() {
-			return nil, fmt.Errorf("GitLab.com answered the index of %s under Orbit access %s, a state orbit.GraphStatusAccess.Serves reads as serving none: read the access states again", topLevel, out.Access.State)
-		}
+		indexed := out.HasIndex()
 		trial := "<nil>"
 		if out.Trial != nil {
 			trial = out.Trial.State

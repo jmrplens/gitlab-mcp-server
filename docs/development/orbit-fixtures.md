@@ -220,15 +220,21 @@ made then needs `ORBIT_RECORD_FLAGS=-allow-unanswered` (below).
 
 What says which is the top-level group's own Orbit `access` and `trial`,
 which `graph_status` publishes. GitLab answers them for a top-level group
-alone and `null` for a subgroup or a project, the fixture namespace among
-them, so `graph_status` of `jmrp-oss` reports them and that of
-`jmrp-oss/orbit-fixtures` does not. GitLab.com serves the index only under
+alone, to a token with the Owner role there (`read_orbit_setting` and
+`read_orbit_trial`), and `null` for a subgroup or a project, the fixture
+namespace among them, so `graph_status` of `jmrp-oss` reports them and that
+of `jmrp-oss/orbit-fixtures` does not. GitLab.com serves the index under
 `LICENSED` or `TRIAL_ACTIVE` access; at 16:58 UTC on 2026-10-29 `jmrp-oss`
 read `TRIAL_NOT_ELIGIBLE` with the `turn_on_denial_reason`
 `PURCHASE_REQUIRED`, a trial `NOT_ELIGIBLE` with no credit left, and Orbit
-turned off (`enabled: false`). The live suite asks it in
-`GraphStatus_top_level_access`, which runs with or without access and fails
-if GitLab.com ever answers an index under a state other than those two.
+turned off (`enabled: false`). The state does not decide the index on its
+own: GitLab reads the state from the `orbit_promo` add-on and from
+CustomersDot, and serves the index from the add-on and the trial it
+recorded, which an hourly job ends after CustomersDot does, so an index can
+still come under `TRIAL_STATUS_UNAVAILABLE` or a trial that has just ended.
+The live suite asks it in `GraphStatus_top_level_access`, which runs with
+or without access and reports the state, the trial and whether an index
+came.
 
 Renaming or moving the group does not reach the projects' nodes. When
 `plens1` became `gitlab-mcp-server-orbit-fixtures` on 2026-10-26, the

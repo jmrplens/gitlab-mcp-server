@@ -214,13 +214,15 @@ func TestMakeCall_AnAccountGitLabDeclined_IsARefusal(t *testing.T) {
 	}
 }
 
-// TestMakeCall_ATopLevelGroupsAccess_IsARefusalUnlessItServes verifies the
+// TestMakeCall_ATopLevelGroupsAccessWithNoIndex_IsARefusal verifies the
 // indexing status of a fixture namespace that is itself a top-level group:
-// answered with an access GitLab.com serves no index under, as jmrp-oss was
-// at 16:58 UTC on 2026-10-29, it is a refusal naming the access, carrying the
-// request, never a key tree with no index in it; answered under a licensed
-// access, it is recorded.
-func TestMakeCall_ATopLevelGroupsAccess_IsARefusalUnlessItServes(t *testing.T) {
+// answered with no index and an access GitLab.com serves none under, as
+// jmrp-oss was at 16:58 UTC on 2026-10-29, it is a refusal naming the access,
+// carrying the request, never a key tree with no index in it; answered with
+// its index, under a licensed access or under one that serves none (a trial
+// CustomersDot could not report), it is recorded.
+func TestMakeCall_ATopLevelGroupsAccessWithNoIndex_IsARefusal(t *testing.T) {
+	index := strings.TrimPrefix(graphStatusFields, `"enabled":true,"enabled_at":"2026-06-11T23:19:22Z","access":null,"trial":null,`)
 	cases := []struct {
 		name    string
 		orbit   string
@@ -234,7 +236,11 @@ func TestMakeCall_ATopLevelGroupsAccess_IsARefusalUnlessItServes(t *testing.T) {
 		},
 		{
 			name:  "licensed, with its index",
-			orbit: `{"access":{"state":"LICENSED","reason":"BETA","turn_on_denial_reason":null},"trial":null,` + strings.TrimPrefix(graphStatusFields, `"enabled":true,"enabled_at":"2026-06-11T23:19:22Z","access":null,"trial":null,`) + `}`,
+			orbit: `{"access":{"state":"LICENSED","reason":"BETA","turn_on_denial_reason":null},"trial":null,` + index + `}`,
+		},
+		{
+			name:  "trial status unavailable, with its index",
+			orbit: `{"access":{"state":"TRIAL_STATUS_UNAVAILABLE","reason":null,"turn_on_denial_reason":null},"trial":null,` + index + `}`,
 		},
 	}
 	for _, tc := range cases {
@@ -253,7 +259,7 @@ func TestMakeCall_ATopLevelGroupsAccess_IsARefusalUnlessItServes(t *testing.T) {
 				}
 				return
 			}
-			want := "POST /api/graphql (query OrbitGraphStatusByPath) answered 200 with the top-level group's Orbit access TRIAL_NOT_ELIGIBLE, under which GitLab.com serves no index"
+			want := "POST /api/graphql (query OrbitGraphStatusByPath) answered 200 with no index and the top-level group's Orbit access TRIAL_NOT_ELIGIBLE, a state GitLab.com serves no index under"
 			if !strings.Contains(err.Error(), want) || !errors.Is(err, errAccessDeclined) || refused.request.Request.Path == "" {
 				t.Fatalf("refusal = %v (%+v), want %q with the request", err, refused, want)
 			}

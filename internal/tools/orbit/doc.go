@@ -29,9 +29,9 @@
 // orbit_promo add-on or a running Orbit trial. GitLab answers what it does not
 // serve the token with 403 or with null, and the handlers report either as an
 // error naming what Orbit needs ([ErrOrbitUnavailable] for null). The one
-// exception is a top-level group's index: GitLab answers its Orbit access and
-// trial beside the null index, and GraphStatus publishes them, since they are
-// the reason ([GraphStatusAccess.Serves]).
+// exception is a top-level group's index asked by an Owner: GitLab answers its
+// Orbit access and trial beside the null index, and GraphStatus publishes
+// them, since they are the reason ([GraphStatusAccess.Serves]).
 //
 // Reference: https://docs.gitlab.com/api/orbit/
 //
