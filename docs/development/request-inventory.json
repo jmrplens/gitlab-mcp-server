@@ -14006,24 +14006,63 @@
     },
     {
       "package": "internal/tools/orbit",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/orbit/agent/commands",
-      "query": [
-        "command_names",
-        "response_format"
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query OrbitGraphStatusByGroupID groups",
+      "variables": [
+        "ids"
       ]
     },
     {
       "package": "internal/tools/orbit",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query OrbitGraphStatusByPath group,project",
+      "variables": [
+        "fullPath"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query OrbitGraphStatusByProjectID projects",
+      "variables": [
+        "ids"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query OrbitSchema orbit",
+      "variables": [
+        "edgesAfter",
+        "nodesAfter",
+        "withProperties"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query OrbitServiceStatus orbit"
+    },
+    {
+      "package": "internal/tools/orbit",
       "kind": "rest",
-      "method": "GET",
-      "path": "/orbit/graph_status",
-      "query": [
-        "full_path",
-        "namespace_id",
-        "project_id",
-        "response_format"
+      "method": "POST",
+      "path": "/orbit/mcp",
+      "body": [
+        "id",
+        "jsonrpc",
+        "method",
+        "params"
       ]
     },
     {
@@ -14035,31 +14074,6 @@
         "query",
         "response_format"
       ]
-    },
-    {
-      "package": "internal/tools/orbit",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/orbit/schema",
-      "query": [
-        "expand",
-        "response_format"
-      ]
-    },
-    {
-      "package": "internal/tools/orbit",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/orbit/status",
-      "query": [
-        "response_format"
-      ]
-    },
-    {
-      "package": "internal/tools/orbit",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/orbit/tools"
     },
     {
       "package": "internal/tools/packages",

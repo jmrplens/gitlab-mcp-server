@@ -57,27 +57,27 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Orbit: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
-| Parameter         | Type     | Mandatory | Description                                                                                        |
-| ----------------- | -------- | --------- | -------------------------------------------------------------------------------------------------- |
-| `response_format` | `string` | no        | Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies. |
+| Parameter         | Type     | Mandatory | Description                                                           |
+| ----------------- | -------- | --------- | --------------------------------------------------------------------- |
+| `response_format` | `string` | no        | Response format: raw or llm (json is read as raw). When omitted, raw. |
 
 ### `orbit.graph_status`
 
-> Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
+> Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain.
 
 - **Meta-tool**: `gitlab_orbit`, action `graph_status`
 - **Individual tool**: `gitlab_orbit_graph_status`
 - **Tier**: Premium, GitLab.com only
 - **Classic or OAuth token**: `read_api` (or `api`)
-- **Fine-grained token**: Orbit: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Fine-grained token**: one of: Group: Read at group; Orbit: Read at user **or** Project: Read at project; Orbit: Read at user **or** Group: Read at group; Orbit: Read at user; Project: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
-| Parameter         | Type      | Mandatory | Description                                                                                             |
-| ----------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------- |
-| `full_path`       | `string`  | no        | Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field. |
-| `namespace_id`    | `integer` | no        | Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path.               |
-| `project_id`      | `integer` | no        | Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path.                       |
-| `response_format` | `string`  | no        | Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies.      |
+| Parameter         | Type      | Mandatory | Description                                                                                                                                                |
+| ----------------- | --------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `full_path`       | `string`  | no        | Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field.                                                    |
+| `namespace_id`    | `integer` | no        | Group ID to inspect. Set exactly one of namespace_id, project_id, or full_path.                                                                            |
+| `project_id`      | `integer` | no        | Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path.                                                                          |
+| `response_format` | `string`  | no        | Accepted for compatibility: raw, llm or json. GitLab answers this through GraphQL, which has one structured shape, so every value returns the same output. |
 
 ### `orbit.query`
 
@@ -90,46 +90,46 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Orbit: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
-| Parameter         | Type            | Mandatory | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------- | --------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `query`           | `string/object` | yes       | Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern \[WHERE predicates\] RETURN projections \[ORDER BY key \[ASC or DESC\]\] \[LIMIT n or PAGE n \[AFTER cursor\]\]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project \{full_path: 'gitlab-org/gitlab'\}) RETURN p.id, p.full_path LIMIT 1. A relationship type follows a colon, -\[:IN_PROJECT\]-\>, and a repeat is bounded, \*1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. orbit.schema lists the entities, properties and relationship types a query names. A JSON object is forwarded as written, and GitLab.com refuses it while it reads queries as GQL. GitLab refuses a query it cannot compile with a message naming the fault. |
-| `response_format` | `string`        | no        | Response format: raw (structured JSON, the default here), llm (compact text) or gql (the result as a graph pattern table). json is read as raw.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Parameter         | Type            | Mandatory | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------- | --------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`           | `string/object` | yes       | Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern \[WHERE predicates\] RETURN projections \[ORDER BY key \[ASC or DESC\]\] \[SKIP n\] \[LIMIT n\]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project \{full_path: 'gitlab-org/gitlab'\}) RETURN p.id, p.full_path LIMIT 1; LIMIT is not a filter. A relationship type follows a colon, -\[:IN_PROJECT\]-\>, and a repeat is bounded, \*1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups; alias an aggregate and sort by the alias: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. SKIP takes 0 to 10000 and LIMIT 1 to 1000. orbit.schema lists the entities, properties and relationship types a query names. A JSON object is forwarded as written, and GitLab.com refuses it while it reads queries as GQL. GitLab refuses a query it cannot compile with a message naming the fault. |
+| `response_format` | `string`        | no        | Response format: raw (structured JSON, the default here), llm (compact text) or gql (the result as a graph pattern table). json is read as raw.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### `orbit.schema`
 
-> Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
+> Inspect the GitLab Orbit (Knowledge Graph) schema: domains, node kinds and edge kinds, with the properties of the node kinds named in expand, or the schema as compact text.
 
 - **Meta-tool**: `gitlab_orbit`, action `schema`
 - **Individual tool**: `gitlab_orbit_schema`
 - **Tier**: Premium, GitLab.com only
 - **Classic or OAuth token**: `read_api` (or `api`)
-- **Fine-grained token**: Orbit: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Fine-grained token**: one of: Orbit: Read at user **or** no permission ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
-| Parameter         | Type       | Mandatory | Description                                                                                               |
-| ----------------- | ---------- | --------- | --------------------------------------------------------------------------------------------------------- |
-| `expand`          | `string[]` | no        | Node names to expand with full properties and relationships.                                              |
-| `format`          | `string`   | no        | Schema response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies. |
-| `response_format` | `string`   | no        | Alias for format. Must match format when both are set.                                                    |
+| Parameter         | Type       | Mandatory | Description                                                                                                                   |
+| ----------------- | ---------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `expand`          | `string[]` | no        | Node names whose properties to include, for example Project or MergeRequest. Without it, nodes are listed without properties. |
+| `format`          | `string`   | no        | Schema response format: raw (structured, the default) or llm (compact text; json is read as raw).                             |
+| `response_format` | `string`   | no        | Alias for format. Must match format when both are set.                                                                        |
 
 ### `orbit.status`
 
-> Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
+> Inspect the health of the GitLab Orbit (Knowledge Graph) service on GitLab.com: its state, version and the state of each component.
 
 - **Meta-tool**: `gitlab_orbit`, action `status`
 - **Individual tool**: `gitlab_orbit_status`
 - **Tier**: Premium, GitLab.com only
 - **Classic or OAuth token**: `read_api` (or `api`)
-- **Fine-grained token**: Orbit: Read at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
+- **Fine-grained token**: no permission ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit))
 - **Behavior**: read-only, idempotent
 
-| Parameter         | Type     | Mandatory | Description                                                                                        |
-| ----------------- | -------- | --------- | -------------------------------------------------------------------------------------------------- |
-| `response_format` | `string` | no        | Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies. |
+| Parameter         | Type     | Mandatory | Description                                                                                                                                                |
+| ----------------- | -------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `response_format` | `string` | no        | Accepted for compatibility: raw, llm or json. GitLab answers this through GraphQL, which has one structured shape, so every value returns the same output. |
 
 ### `orbit.tools`
 
-> List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
+> List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.
 
 - **Meta-tool**: `gitlab_orbit`, action `tools`
 - **Individual tool**: `gitlab_orbit_tools`

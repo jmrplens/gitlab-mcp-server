@@ -17976,11 +17976,12 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /orbit/agent/commands",
+          "route": "POST /orbit/mcp",
           "class": "mandatory",
           "classic": "read_api",
+          "classic_declaration": "read-api-every-method",
           "sites": [
-            "orbit.getAgentCommands"
+            "orbit.callMCP"
           ]
         }
       ],
@@ -17999,21 +18000,92 @@
       "classic": "read_api",
       "requests": [
         {
-          "kind": "rest",
-          "route": "GET /orbit/graph_status",
-          "class": "mandatory",
+          "kind": "graphql",
+          "operation": "query groups (queryGraphStatusByGroupID)",
+          "root_fields": [
+            "groups"
+          ],
+          "positions": [
+            "groups",
+            "groups.nodes",
+            "groups.nodes.orbit",
+            "groups.nodes.orbit.indexing",
+            "groups.nodes.orbit.indexing.areas",
+            "groups.nodes.orbit.indexing.projects",
+            "groups.nodes.orbit.itemCounts",
+            "groups.nodes.orbit.itemCounts.domains",
+            "groups.nodes.orbit.itemCounts.domains.items"
+          ],
+          "class": "alternative",
           "classic": "read_api",
           "sites": [
-            "orbit.GraphStatus"
+            "orbit.graphStatusByGroupID"
+          ]
+        },
+        {
+          "kind": "graphql",
+          "operation": "query projects (queryGraphStatusByProjectID)",
+          "root_fields": [
+            "projects"
           ],
-          "sdk_methods": [
-            "Orbit.GetGraphStatus"
+          "positions": [
+            "projects",
+            "projects.nodes",
+            "projects.nodes.orbit",
+            "projects.nodes.orbit.indexing",
+            "projects.nodes.orbit.indexing.areas",
+            "projects.nodes.orbit.indexing.projects",
+            "projects.nodes.orbit.itemCounts",
+            "projects.nodes.orbit.itemCounts.domains",
+            "projects.nodes.orbit.itemCounts.domains.items"
+          ],
+          "class": "alternative",
+          "classic": "read_api",
+          "sites": [
+            "orbit.graphStatusByProjectID"
+          ]
+        },
+        {
+          "kind": "graphql",
+          "operation": "query group project (queryGraphStatusByPath)",
+          "root_fields": [
+            "group",
+            "project"
+          ],
+          "positions": [
+            "group",
+            "group.orbit",
+            "group.orbit.indexing",
+            "group.orbit.indexing.areas",
+            "group.orbit.indexing.projects",
+            "group.orbit.itemCounts",
+            "group.orbit.itemCounts.domains",
+            "group.orbit.itemCounts.domains.items",
+            "project",
+            "project.orbit",
+            "project.orbit.indexing",
+            "project.orbit.indexing.areas",
+            "project.orbit.indexing.projects",
+            "project.orbit.itemCounts",
+            "project.orbit.itemCounts.domains",
+            "project.orbit.itemCounts.domains.items"
+          ],
+          "class": "alternative",
+          "classic": "read_api",
+          "sites": [
+            "orbit.graphStatusByPath"
           ]
         }
       ],
       "paths": [
         [
           0
+        ],
+        [
+          1
+        ],
+        [
+          2
         ]
       ]
     },
@@ -18056,20 +18128,60 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /orbit/schema",
-          "class": "mandatory",
+          "route": "POST /orbit/mcp",
+          "class": "alternative",
+          "classic": "read_api",
+          "classic_declaration": "read-api-every-method",
+          "sites": [
+            "orbit.callMCP"
+          ],
+          "directives": [
+            "alternatives: format llm is answered by get_graph_schema of the Orbit MCP endpoint, and GitLab's GraphQL schema below is not asked"
+          ]
+        },
+        {
+          "kind": "graphql",
+          "operation": "query orbit (querySchema)",
+          "root_fields": [
+            "orbit"
+          ],
+          "positions": [
+            "orbit",
+            "orbit.schema",
+            "orbit.schema.edges",
+            "orbit.schema.edges.nodes",
+            "orbit.schema.edges.nodes.variants",
+            "orbit.schema.edges.nodes.variants.nodes",
+            "orbit.schema.edges.nodes.variants.nodes.source",
+            "orbit.schema.edges.nodes.variants.nodes.target",
+            "orbit.schema.edges.nodes.variants.pageInfo",
+            "orbit.schema.edges.pageInfo",
+            "orbit.schema.nodes",
+            "orbit.schema.nodes.nodes",
+            "orbit.schema.nodes.nodes.display",
+            "orbit.schema.nodes.nodes.domain",
+            "orbit.schema.nodes.nodes.properties",
+            "orbit.schema.nodes.nodes.properties.nodes",
+            "orbit.schema.nodes.nodes.properties.pageInfo",
+            "orbit.schema.nodes.pageInfo"
+          ],
+          "class": "alternative",
           "classic": "read_api",
           "sites": [
-            "orbit.Schema"
+            "orbit.schemaPage"
           ],
-          "sdk_methods": [
-            "Orbit.GetSchema"
+          "directives": [
+            "alternatives: every other format is answered by GitLab's GraphQL schema, its first page on every call, and the MCP endpoint is not asked",
+            "optional: a later page is asked only when GitLab says the node or the edge kinds have more than one page holds, which they did not on 2026-10-29"
           ]
         }
       ],
       "paths": [
         [
           0
+        ],
+        [
+          1
         ]
       ]
     },
@@ -18082,15 +18194,20 @@
       "classic": "read_api",
       "requests": [
         {
-          "kind": "rest",
-          "route": "GET /orbit/status",
+          "kind": "graphql",
+          "operation": "query orbit (queryServiceStatus)",
+          "root_fields": [
+            "orbit"
+          ],
+          "positions": [
+            "orbit",
+            "orbit.serviceStatus",
+            "orbit.serviceStatus.components"
+          ],
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
             "orbit.Status"
-          ],
-          "sdk_methods": [
-            "Orbit.GetStatus"
           ]
         }
       ],
@@ -18110,14 +18227,15 @@
       "requests": [
         {
           "kind": "rest",
-          "route": "GET /orbit/tools",
+          "route": "POST /orbit/mcp",
           "class": "mandatory",
           "classic": "read_api",
+          "classic_declaration": "read-api-every-method",
           "sites": [
-            "orbit.Tools"
+            "orbit.callMCP"
           ],
-          "sdk_methods": [
-            "Orbit.GetTools"
+          "directives": [
+            "optional: a later tools/list page is asked only when GitLab names a cursor, which it did not on 2026-10-29"
           ]
         }
       ],

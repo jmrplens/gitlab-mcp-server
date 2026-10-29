@@ -760,14 +760,14 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 
 ## `orbit`
 
-| Action               | Needs               | Served empty |
-| -------------------- | ------------------- | ------------ |
-| `orbit.dsl`          | Orbit: Read at user |              |
-| `orbit.graph_status` | Orbit: Read at user |              |
-| `orbit.query`        | Orbit: Read at user |              |
-| `orbit.schema`       | Orbit: Read at user |              |
-| `orbit.status`       | Orbit: Read at user |              |
-| `orbit.tools`        | Orbit: Read at user |              |
+| Action               | Needs                                                                                                                                                                             | Served empty |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `orbit.dsl`          | Orbit: Read at user                                                                                                                                                               |              |
+| `orbit.graph_status` | one of: Group: Read at group; Orbit: Read at user **or** Project: Read at project; Orbit: Read at user **or** Group: Read at group; Orbit: Read at user; Project: Read at project |              |
+| `orbit.query`        | Orbit: Read at user                                                                                                                                                               |              |
+| `orbit.schema`       | one of: Orbit: Read at user **or** no permission                                                                                                                                  |              |
+| `orbit.status`       | no permission                                                                                                                                                                     |              |
+| `orbit.tools`        | Orbit: Read at user                                                                                                                                                               |              |
 
 ## `package`
 

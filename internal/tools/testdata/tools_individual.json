@@ -5444,7 +5444,7 @@
           "type": "array"
         },
         "security_scan_profile_id": {
-          "description": "Security scan profile identifier: the name of a GitLab default profile (secret_detection, sast, dependency_scanning, dependency_scanning_post_processing, triage_and_remediation_conservative, triage_and_remediation_standard, or triage_and_remediation_proactive), for which attach creates the namespace's default profile on the fly, or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted. sast needs GitLab 18.10 and dependency_scanning needs 18.11, both behind a feature flag until 19.0, dependency_scanning_post_processing needs 19.2, and the triage_and_remediation presets need 19.4. container_scanning and business_logic have no default profile, and the bare triage_and_remediation names none of its presets, so attach refuses all three by name",
+          "description": "Security scan profile identifier: the name of a GitLab default profile (secret_detection, sast, dependency_scanning, dependency_scanning_post_processing, business_logic, skillguard, triage_and_remediation_conservative, triage_and_remediation_standard, or triage_and_remediation_proactive), for which attach creates the namespace's default profile on the fly, or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted. sast needs GitLab 18.10 and dependency_scanning needs 18.11, both behind a feature flag until 19.0, dependency_scanning_post_processing needs 19.2, the triage_and_remediation presets need 19.4, business_logic needs 19.5, and skillguard needs 19.6. container_scanning has no default profile, and the bare triage_and_remediation names none of its presets, so attach refuses both by name",
           "type": "string"
         }
       },
@@ -14607,6 +14607,9 @@
                   "type": "string"
                 },
                 "crash_address": {
+                  "type": "string"
+                },
+                "crash_state": {
                   "type": "string"
                 },
                 "crash_type": {
@@ -29832,6 +29835,9 @@
                   "type": "string"
                 },
                 "crash_address": {
+                  "type": "string"
+                },
+                "crash_state": {
                   "type": "string"
                 },
                 "crash_type": {
@@ -53116,6 +53122,9 @@
                   "type": "string"
                 },
                 "crash_address": {
+                  "type": "string"
+                },
+                "crash_state": {
                   "type": "string"
                 },
                 "crash_type": {
@@ -125782,6 +125791,9 @@
                   "crash_address": {
                     "type": "string"
                   },
+                  "crash_state": {
+                    "type": "string"
+                  },
                   "crash_type": {
                     "type": "string"
                   },
@@ -129951,6 +129963,9 @@
                     "type": "string"
                   },
                   "crash_address": {
+                    "type": "string"
+                  },
+                  "crash_state": {
                     "type": "string"
                   },
                   "crash_type": {
@@ -216201,6 +216216,9 @@
                 "crash_address": {
                   "type": "string"
                 },
+                "crash_state": {
+                  "type": "string"
+                },
                 "crash_type": {
                   "type": "string"
                 },
@@ -218103,6 +218121,9 @@
                   "type": "string"
                 },
                 "crash_address": {
+                  "type": "string"
+                },
+                "crash_state": {
                   "type": "string"
                 },
                 "crash_type": {

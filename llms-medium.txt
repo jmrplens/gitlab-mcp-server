@@ -1175,11 +1175,11 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_notification_project_get: Get the authenticated user's notification settings for a project.
 - gitlab_notification_project_update: Update the authenticated user's notification settings for a project.
 - gitlab_orbit_dsl: Read the GitLab Orbit (Knowledge Graph) query language GitLab.com compiles queries in, GQL, as Orbit's query command describes it: its grammar and the JSON Sche...
-- gitlab_orbit_graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
+- gitlab_orbit_graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing sta...
 - gitlab_orbit_query: Execute a read-only GitLab Orbit (Knowledge Graph) query in GQL, the language orbit.dsl describes, naming what orbit.schema lists.
-- gitlab_orbit_schema: Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
-- gitlab_orbit_status: Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
-- gitlab_orbit_tools: List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
+- gitlab_orbit_schema: Inspect the GitLab Orbit (Knowledge Graph) schema: domains, node kinds and edge kinds, with the properties of the node kinds named in expand, or the schema as c...
+- gitlab_orbit_status: Inspect the health of the GitLab Orbit (Knowledge Graph) service on GitLab.com: its state, version and the state of each component.
+- gitlab_orbit_tools: List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.
 - gitlab_package_delete: Delete a package permanently.
 - gitlab_package_download: Download a single file from the Generic Package Registry to a local path.
 - gitlab_package_file_delete: Delete a single file from a package permanently.
