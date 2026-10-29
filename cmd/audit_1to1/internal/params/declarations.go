@@ -169,6 +169,10 @@ func paramDeclarations() []paramDeclaration {
 			"and presents Entities::MergeRequestBasic with current_user alone: view, with_labels_details and " +
 			"with_merge_status_recheck become presenter options only through serializer_options_for in lib/api/merge_requests.rb, " +
 			"which this route does not call, and MergeRequestsFinder reads none of them, so the route applies none"
+		reasonProjectChecksums = "ee/lib/ee/api/helpers/projects_helpers.rb:38-42 at v19.5.0-ee declares repository_checksum_failed " +
+			"and wiki_checksum_failed among the optional_filter_params_ee of every route that takes the project list filters, " +
+			"and nothing reads them: the finder params the routes build carry neither (EE::API::Helpers#project_finder_params_ee, " +
+			"ee/lib/ee/api/helpers.rb:119-127) and no finder, model or service names them, so a list applies neither"
 		reasonImportNotRestored = "the import's tree restorer merges override_params into the archive's project attributes " +
 			"and keeps only those lib/gitlab/import_export/project/import_export.yml permits for a project " +
 			"(Gitlab::ImportExport::AttributesPermitter, through Group::RelationTreeRestorer#filter_attributes), " +
@@ -212,6 +216,13 @@ func paramDeclarations() []paramDeclaration {
 			Route: "GET /projects/:id/deployments/:deployment_id/merge_requests", Param: param,
 			Category: categoryDeclaredNotApplied, Reason: reasonDeploymentMRs,
 		})
+	}
+	for _, route := range []string{
+		"GET /projects", "GET /projects/:id/forks", "GET /users/:user_id/projects", "GET /users/:user_id/starred_projects",
+	} {
+		for _, param := range []string{"repository_checksum_failed", "wiki_checksum_failed"} {
+			declared = append(declared, paramDeclaration{Route: route, Param: param, Category: categoryDeclaredNotApplied, Reason: reasonProjectChecksums})
+		}
 	}
 	for _, key := range []string{
 		"auto_duo_code_review_enabled", "avatar", "ci_config_path", "cicd_catalog_enabled",

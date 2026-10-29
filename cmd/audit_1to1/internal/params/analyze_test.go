@@ -632,6 +632,34 @@ func TestRun_Repository_OffersOrDeclaresTheParamsNoInputOfferedOnV3300(t *testin
 	}
 }
 
+// TestRun_Repository_DeclaresTheChecksumFiltersNoProjectListReads holds the
+// two checksum filters of the project lists to a declaration. Every route
+// that takes the project list filters declares repository_checksum_failed and
+// wiki_checksum_failed, ListProjectsOptions models both, and GitLab reads
+// neither: a list asked for the failed checksums answered every project, so
+// the inputs no longer offer them. That makes each a param an option struct
+// models and no input offers, which the scope reports not_offered unless a
+// declaration says why, so they are declared declared-not-applied on the
+// four lists the scope reaches them on.
+func TestRun_Repository_DeclaresTheChecksumFiltersNoProjectListReads(t *testing.T) {
+	report := repositoryReport(t)
+	reported := map[string]Finding{}
+	for _, finding := range slices.Concat(report.Findings, report.Declared) {
+		reported[finding.Route+" "+finding.Param] = finding
+	}
+	for _, route := range []string{
+		"GET /projects", "GET /projects/:id/forks", "GET /users/:user_id/projects", "GET /users/:user_id/starred_projects",
+	} {
+		for _, param := range []string{"repository_checksum_failed", "wiki_checksum_failed"} {
+			t.Run(route+" "+param, func(t *testing.T) {
+				if finding := reported[route+" "+param]; finding.Category != categoryDeclaredNotApplied || !finding.SDKModels || finding.Offered {
+					t.Errorf("%s %s = %+v, want the modeled param declared %s and offered by no input", route, param, finding, categoryDeclaredNotApplied)
+				}
+			})
+		}
+	}
+}
+
 // routeParam is one param of one route.
 type routeParam struct{ route, param string }
 
