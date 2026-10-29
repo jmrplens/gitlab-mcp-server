@@ -52,23 +52,24 @@ func wholeRecord() Document {
 	return doc
 }
 
-// TestExpectedCalls_AreTheThirteenInTheOrderTheGeneratorMakesThem pins the
-// call set a whole record holds. The status call is first because the record
-// is stamped with the version it reports, and every other entry is one answer
-// an output type is judged by: each response format a handler offers, the
-// query's gql table among them.
-func TestExpectedCalls_AreTheThirteenInTheOrderTheGeneratorMakesThem(t *testing.T) {
+// TestExpectedCalls_AreTheElevenInTheOrderTheGeneratorMakesThem pins the call
+// set a whole record holds. The status call is first because the record is
+// stamped with the version it reports, and every other entry is one answer an
+// output type is judged by: each response format a handler's source renders,
+// the query's gql table among them. The status and the indexing status have
+// one call each, since GraphQL renders no llm text.
+func TestExpectedCalls_AreTheElevenInTheOrderTheGeneratorMakesThem(t *testing.T) {
 	var got []string
 	for _, id := range ExpectedCalls() {
 		got = append(got, id.String())
 	}
 	want := []string{
-		"orbit.status (raw)", "orbit.status (llm)",
+		"orbit.status (default)",
 		"orbit.schema (raw)", "orbit.schema (llm)", "orbit.schema (expand)",
 		"orbit.tools (default)",
 		"orbit.dsl (raw)", "orbit.dsl (llm)",
 		"orbit.query (raw)", "orbit.query (llm)", "orbit.query (gql)",
-		"orbit.graph_status (raw)", "orbit.graph_status (llm)",
+		"orbit.graph_status (full_path)",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("ExpectedCalls() = %q, want %q", got, want)
@@ -138,9 +139,10 @@ func TestRead_WhatIsNotARecordOfThisBuild_IsRefused(t *testing.T) {
 	}{
 		{name: "missing", want: "reading the Orbit response record"},
 		{name: "not JSON", content: "{", want: "decoding the Orbit response record"},
-		{name: "the schema version before the query DSL was recorded", content: `{"schema_version": 1}`, want: "schema version 1 and this build reads version 3: regenerate it with make gen-orbit-record"},
-		{name: "the schema version that pinned the JSON query DSL", content: `{"schema_version": 2}`, want: "schema version 2 and this build reads version 3: regenerate it with make gen-orbit-record"},
-		{name: "a later schema version", content: `{"schema_version": 4}`, want: "schema version 4 and this build reads version 3: regenerate it with make gen-orbit-record"},
+		{name: "the schema version before the query DSL was recorded", content: `{"schema_version": 1}`, want: "schema version 1 and this build reads version 4: regenerate it with make gen-orbit-record"},
+		{name: "the schema version that pinned the JSON query DSL", content: `{"schema_version": 2}`, want: "schema version 2 and this build reads version 4: regenerate it with make gen-orbit-record"},
+		{name: "the schema version of the REST routes alone", content: `{"schema_version": 3}`, want: "schema version 3 and this build reads version 4: regenerate it with make gen-orbit-record"},
+		{name: "a later schema version", content: `{"schema_version": 5}`, want: "schema version 5 and this build reads version 4: regenerate it with make gen-orbit-record"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -158,17 +160,81 @@ func TestRead_WhatIsNotARecordOfThisBuild_IsRefused(t *testing.T) {
 	}
 }
 
+// TestDecodeCarried_ReadsTheVersionsACallCanBeCarriedFrom verifies the
+// versions a new recording may carry a call from: this one and version 3,
+// whose calls carry every name a REST call has, and no other.
+func TestDecodeCarried_ReadsTheVersionsACallCanBeCarriedFrom(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "version 3", content: `{"schema_version": 3, "calls": [{"action": "orbit.query", "variant": "raw"}]}`},
+		{name: "this version", content: `{"schema_version": 4}`},
+		{name: "version 2", content: `{"schema_version": 2}`, want: "schema version 2 and this build reads versions 3 to 4"},
+		{name: "version 5", content: `{"schema_version": 5}`, want: "schema version 5 and this build reads versions 3 to 4"},
+		{name: "not JSON", content: `{`, want: "decoding the Orbit response record"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := DecodeCarried([]byte(tc.content))
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("DecodeCarried() error = %v, want none", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("DecodeCarried() error = %v, want it to say %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestCall_SameRequest_ComparesEveryNameARequestKeeps verifies what carrying
+// an answer rests on: two calls sent the same request when every name the
+// record keeps of one agrees, whatever order the names were listed in.
+func TestCall_SameRequest_ComparesEveryNameARequestKeeps(t *testing.T) {
+	base := Call{Request: Request{Method: "POST", Path: "/orbit/mcp", Query: []string{"b", "a"}, Body: []string{"x"}, Operation: "tools/list", Arguments: []string{"q", "p"}}}
+	cases := []struct {
+		name string
+		edit func(*Request)
+		want bool
+	}{
+		{name: "the same, reordered", edit: func(r *Request) { r.Query = []string{"a", "b"}; r.Arguments = []string{"p", "q"} }, want: true},
+		{name: "another method", edit: func(r *Request) { r.Method = "GET" }},
+		{name: "another path", edit: func(r *Request) { r.Path = "/orbit/query" }},
+		{name: "another operation", edit: func(r *Request) { r.Operation = "tools/call" }},
+		{name: "another query", edit: func(r *Request) { r.Query = []string{"a"} }},
+		{name: "another body", edit: func(r *Request) { r.Body = nil }},
+		{name: "other arguments", edit: func(r *Request) { r.Arguments = []string{"p"} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			other := base
+			other.Request.Query = slices.Clone(base.Request.Query)
+			tc.edit(&other.Request)
+			if got := base.SameRequest(other); got != tc.want {
+				t.Fatalf("SameRequest() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestEncode_WritesTheCanonicalFormAndLeavesTheInputAlone verifies every list
 // is sorted, the root key first, an empty name list omitted, the output ends
 // in a newline, and the caller's document is not reordered in place.
 func TestEncode_WritesTheCanonicalFormAndLeavesTheInputAlone(t *testing.T) {
 	doc := Document{SchemaVersion: SchemaVersion, Calls: []Call{
 		{
-			Action: "orbit.tools", Variant: "default", Request: Request{Query: []string{"b", "a"}, Body: []string{"z", "y"}},
+			Action: "orbit.tools", Variant: "default", Request: Request{Query: []string{"b", "a"}, Body: []string{"z", "y"}, Arguments: []string{"n", "m"}},
 			Response: Response{Keys: []Key{{Path: "b", Kinds: []string{KindString, KindNull}}, {Path: Root, Kinds: []string{KindObject}}, {Path: "a", Kinds: []string{KindNumber}}}},
 		},
 		{Action: "orbit.status", Variant: "raw"},
 		{Action: "orbit.status", Variant: "llm", Request: Request{Query: []string{}}},
+	}, Unrecorded: []Unrecorded{
+		{Action: "orbit.query", Variant: "raw", Reason: "b"},
+		{Action: "orbit.graph_status", Variant: "full_path", Reason: "a"},
 	}}
 	before := Encode(doc)
 
@@ -181,8 +247,11 @@ func TestEncode_WritesTheCanonicalFormAndLeavesTheInputAlone(t *testing.T) {
 		t.Errorf("call order = %q, want %q", order, want)
 	}
 	tools := canonical.Calls[2]
-	if !slices.Equal(tools.Request.Query, []string{"a", "b"}) || !slices.Equal(tools.Request.Body, []string{"y", "z"}) {
-		t.Errorf("names = %q, %q, want sorted", tools.Request.Query, tools.Request.Body)
+	if !slices.Equal(tools.Request.Query, []string{"a", "b"}) || !slices.Equal(tools.Request.Body, []string{"y", "z"}) || !slices.Equal(tools.Request.Arguments, []string{"m", "n"}) {
+		t.Errorf("names = %q, %q, %q, want sorted", tools.Request.Query, tools.Request.Body, tools.Request.Arguments)
+	}
+	if canonical.Unrecorded[0].Action != "orbit.graph_status" || doc.Unrecorded[0].Action != "orbit.query" {
+		t.Errorf("unrecorded = %+v (input %+v), want the canonical copy sorted and the input left alone", canonical.Unrecorded, doc.Unrecorded)
 	}
 	var paths []string
 	for _, key := range tools.Response.Keys {
@@ -293,6 +362,22 @@ func TestProblems_AWholeRecord_HasNone(t *testing.T) {
 	}
 }
 
+// TestProblems_ACallSaidToBeUnrecordedOrCarried_IsWhole verifies the two ways
+// a recording made while GitLab refused the account stays whole: a call it
+// could not make, listed with the reason, and a call carried from an earlier
+// recording, dated by that recording and inside the window, and a GraphQL
+// call naming its operation.
+func TestProblems_ACallSaidToBeUnrecordedOrCarried_IsWhole(t *testing.T) {
+	doc := wholeRecord()
+	doc.Calls = doc.Calls[1:]
+	doc.Unrecorded = []Unrecorded{{Action: StatusAction, Variant: "default", Reason: "POST /api/graphql answered 200 with null"}}
+	doc.Calls[0].RetrievedAt = "2026-09-20"
+	doc.Calls[1].Request = Request{Method: "POST", Path: GraphQLPath, Operation: "query OrbitSchema"}
+	if problems := Problems(doc, judgedOn); len(problems) != 0 {
+		t.Errorf("Problems() = %q, want none", problems)
+	}
+}
+
 // TestProblems_EachDefect_IsNamed verifies every refusal the check makes, one
 // edit of the whole record each, and that the message says what is wrong.
 func TestProblems_EachDefect_IsNamed(t *testing.T) {
@@ -309,11 +394,29 @@ func TestProblems_EachDefect_IsNamed(t *testing.T) {
 		{name: "no date", edit: func(d *Document) { d.Source.RetrievedAt = "yesterday" }, want: `taken on "yesterday", which is not a date`},
 		{name: "a future date", edit: func(d *Document) { d.Source.RetrievedAt = "2026-12-01" }, want: "has not happened yet"},
 		{name: "too old", edit: func(d *Document) { d.Source.RetrievedAt = "2025-01-01" }, want: "the record is 638 days old and the window is 180: the Knowledge Graph API is in beta"},
-		{name: "a call missing", edit: func(d *Document) { d.Calls = d.Calls[1:] }, want: "orbit.status (raw) is not recorded"},
-		{name: "a call twice", edit: func(d *Document) { d.Calls = append(d.Calls, d.Calls[0]) }, want: "orbit.status (raw) is recorded 2 times"},
+		{name: "a call missing", edit: func(d *Document) { d.Calls = d.Calls[1:] }, want: "orbit.status (default) is not recorded"},
+		{name: "a call twice", edit: func(d *Document) { d.Calls = append(d.Calls, d.Calls[0]) }, want: "orbit.status (default) is recorded 2 times"},
 		{name: "a call nothing makes", edit: func(d *Document) { d.Calls[0].Variant = "xml" }, want: "orbit.status (xml) is recorded and no generator run makes it"},
 		{name: "an output with no package", edit: func(d *Document) { d.Calls[0].Output = "StatusOutput" }, want: `names no output type the audit can find ("StatusOutput")`},
-		{name: "another route", edit: func(d *Document) { d.Calls[0].Request.Path = "/projects" }, want: `was sent to "/projects", which is not an Orbit route`},
+		{name: "another route", edit: func(d *Document) { d.Calls[0].Request.Path = "/projects" }, want: `was sent to "/projects", which is neither an Orbit route nor GitLab's GraphQL endpoint`},
+		{name: "a GraphQL call naming no operation", edit: func(d *Document) { d.Calls[0].Request.Path = GraphQLPath }, want: "names no operation"},
+		{name: "an unrecorded call with no reason", edit: func(d *Document) {
+			d.Calls = d.Calls[1:]
+			d.Unrecorded = []Unrecorded{{Action: StatusAction, Variant: "default", Reason: " "}}
+		}, want: "orbit.status (default) is listed as unrecorded with no reason"},
+		{name: "an unrecorded call listed twice", edit: func(d *Document) {
+			d.Calls = d.Calls[1:]
+			d.Unrecorded = []Unrecorded{{Action: StatusAction, Variant: "default", Reason: "r"}, {Action: StatusAction, Variant: "default", Reason: "r"}}
+		}, want: "orbit.status (default) is listed as unrecorded twice"},
+		{name: "a call both recorded and unrecorded", edit: func(d *Document) {
+			d.Unrecorded = []Unrecorded{{Action: StatusAction, Variant: "default", Reason: "r"}}
+		}, want: "orbit.status (default) is both recorded and listed as unrecorded"},
+		{name: "an unrecorded call nothing makes", edit: func(d *Document) {
+			d.Unrecorded = []Unrecorded{{Action: StatusAction, Variant: "xml", Reason: "r"}}
+		}, want: "orbit.status (xml) is listed as unrecorded and no generator run makes it"},
+		{name: "a carried day that is no day", edit: func(d *Document) { d.Calls[0].RetrievedAt = "last week" }, want: `orbit.status (default) says it was answered on "last week", which is not a day`},
+		{name: "a carried day after the record", edit: func(d *Document) { d.Calls[0].RetrievedAt = "2026-09-28" }, want: "after the record itself (" + recordDay + ")"},
+		{name: "a carried day too old", edit: func(d *Document) { d.Calls[0].RetrievedAt = "2025-01-01" }, want: "orbit.status (default), carried: the record is 638 days old"},
 		{name: "a refusal", edit: func(d *Document) { d.Calls[0].Response.Status = 406 }, want: "was answered 406"},
 		{name: "no body", edit: func(d *Document) { d.Calls[0].Response.Keys = d.Calls[0].Response.Keys[1:2] }, want: "records no body ($)"},
 		{name: "a value as a key", edit: func(d *Document) { d.Calls[0].Response.Keys[1].Path = "plens1/kg" }, want: `whose segment "plens1/kg" is not a key name`},

@@ -12,7 +12,6 @@ import (
 	"io"
 	"maps"
 	"net/http"
-	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/orbitrecord"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // recordedOn is the day every fixture recording is stamped with.
@@ -54,29 +54,93 @@ func agentCommands(description string) string {
 	return `[{"name":"query_graph","description":"` + description + `","parameters":{"type":"object","required":["query"],"properties":{"query":{"type":"string"}},"$defs":{}}}]`
 }
 
-// orbitAnswers are the answers of a healthy GitLab.com, keyed by route and
-// response format, shaped like the ones recorded on 2026-09-27 and carrying
-// keys a verbatim path must keep out of the record ($defs, a JSON Schema's
-// own property names, a metric name that is no identifier) so a test sees the
-// rule work: without the verbatim path the recording would refuse the key.
+// The keys of the fake's answers for the sources the handlers read since
+// GitLab.com removed five of the six Orbit REST routes: a GraphQL document by
+// its operation name, and an MCP request by its method, its tool and the
+// format it asked for.
+const (
+	keyStatus         = "POST /api/graphql OrbitServiceStatus"
+	keySchema         = "POST /api/graphql OrbitSchema"
+	keyGraphStatus    = "POST /api/graphql OrbitGraphStatusByPath"
+	keyTools          = "POST /orbit/mcp tools/list"
+	keySchemaText     = "POST /orbit/mcp tools/call invoke_command llm"
+	keyCommandsRaw    = "POST /orbit/mcp tools/call list_commands raw"
+	keyCommandsLLM    = "POST /orbit/mcp tools/call list_commands llm"
+	keyQueryRaw       = "POST /orbit/query raw"
+	keyQueryLLM       = "POST /orbit/query llm"
+	keyQueryGQL       = "POST /orbit/query gql"
+	graphStatusFields = `"enabled":true,"enabled_at":"2026-06-11T23:19:22Z","indexing":{"state":"READY","last_completed_at":"t","projects":{"indexed":2,"total_known":2,"gaps":0,"not_indexed":0,"total":2},"areas":[{"name":"core","state":"READY"}]},"itemCounts":{"domains":[{"name":"core","items":[{"name":"Project","count":"2"}]}]}`
+)
+
+// toolTextAnswer is an MCP tools/call answer carrying text. A string always
+// encodes, which this repository says at the leaf.
+func toolTextAnswer(text string) string {
+	return `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":` + string(cmdutil.Must(json.Marshal(text))) + `}],"isError":false}}`
+}
+
+// orbitAnswers are the answers of a healthy GitLab.com, keyed by source,
+// shaped like the ones GitLab.com gave on 2026-10-29 and carrying keys a
+// verbatim path must keep out of the record ($defs, a JSON Schema's own
+// property names) so a test sees the rule work: without the verbatim path the
+// recording would refuse the key.
 func orbitAnswers() map[string]fakeAnswer {
 	ok := func(body string) fakeAnswer {
 		return fakeAnswer{status: 200, contentType: "application/json", body: body}
 	}
 	return map[string]fakeAnswer{
-		"GET /orbit/status raw":         ok(`{"user":{"available":true},"system":{"status":"healthy","timestamp":"t","version":"0.130.0","components":[{"name":"api","status":"healthy","replicas":{"ready":1,"desired":2},"metrics":{"kind":"deployment","query-latency.p99_ms":"12"}}]}}`),
-		"GET /orbit/status llm":         ok(`{"user":{"available":true},"system":{"formatted_text":"status: healthy"}}`),
-		"GET /orbit/schema raw":         ok(`{"schema_version":"1","domains":[{"name":"core","description":"d","node_names":["User"]}],"nodes":[{"name":"User","domain":"core"}],"edges":[{"name":"AUTHORED","description":"d","variants":[{"source_type":"User","target_type":"Issue"}]}]}`),
-		"GET /orbit/schema llm":         ok(`{"formatted_text":"nodes: User"}`),
-		"GET /orbit/tools ":             ok(`[{"name":"invoke_command","description":"d","parameters":{"type":"object","properties":{"$ref":{}}}}]`),
-		"GET /orbit/agent/commands raw": ok(agentCommands(fakeGrammar)),
-		"GET /orbit/agent/commands llm": ok(`{"formatted_text":"commands[1]: query_graph, MATCH ... RETURN"}`),
-		"POST /orbit/query raw":         ok(`{"result":{"format_version":"5.0.3","nodes":[{"id":"1","full_path":"plens1/kg-fixtures"}],"edges":[]},"query_type":"traversal","row_count":1}`),
-		"POST /orbit/query llm":         {status: 200, contentType: "text/plain; charset=utf-8", body: "@header\nquery_type:traversal\n"},
-		"POST /orbit/query gql":         {status: 200, contentType: "text/plain; charset=utf-8", body: "+---+\n| p |\n+---+\n\n1 row\n"},
-		"GET /orbit/graph_status raw":   ok(`{"projects":{"indexed":2,"total_known":2},"domains":[{"name":"SDLC","items":[{"name":"Project","count":2}]}],"indexing":{"state":"indexed","last_error":null}}`),
-		"GET /orbit/graph_status llm":   ok(`{"formatted_text":"indexed"}`),
+		keyStatus: ok(`{"data":{"orbit":{"serviceStatus":{"status":"HEALTHY","version":"0.130.0","components":[{"name":"nats","status":"HEALTHY"}]}}}}`),
+		keySchema: ok(`{"data":{"orbit":{"schema":{` +
+			`"nodes":{"pageInfo":{"hasNextPage":false,"endCursor":"MQ"},"nodes":[{"name":"User","description":"d","primary_key":"id","label_field":"username","domain":{"name":"core"},"display":{"color":"#000","size":1},` +
+			`"properties":{"pageInfo":{"hasNextPage":false},"nodes":[{"name":"id","data_type":"Int","nullable":false,"enum_values":[]}]}}]},` +
+			`"edges":{"pageInfo":{"hasNextPage":false,"endCursor":"MQ"},"nodes":[{"name":"AUTHORED","description":"d","variants":{"pageInfo":{"hasNextPage":false},"nodes":[{"source":{"name":"User"},"target":{"name":"Issue"}}]}}]}}}}}`),
+		keySchemaText:  ok(toolTextAnswer("domains[1]:\n  - name: core")),
+		keyTools:       ok(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"invoke_command","description":"d","inputSchema":{"type":"object","properties":{"$ref":{}}},"trusted":true}]}}`),
+		keyCommandsRaw: ok(toolTextAnswer(agentCommands(fakeGrammar))),
+		keyCommandsLLM: ok(toolTextAnswer("commands[1]: query_graph, MATCH ... RETURN")),
+		keyQueryRaw:    ok(`{"result":{"format_version":"5.0.3","nodes":[{"id":"1","full_path":"plens1/kg-fixtures"}],"edges":[]},"query_type":"traversal","row_count":1}`),
+		keyQueryLLM:    {status: 200, contentType: "text/plain; charset=utf-8", body: "@header\nquery_type:traversal\n"},
+		keyQueryGQL:    {status: 200, contentType: "text/plain; charset=utf-8", body: "+---+\n| p |\n+---+\n\n1 row\n"},
+		keyGraphStatus: ok(`{"data":{"group":{"orbit":{` + graphStatusFields + `}},"project":null}}`),
 	}
+}
+
+// fakeRequest is what the fake reads of a request body to key its answer.
+type fakeRequest struct {
+	ResponseFormat string `json:"response_format"`
+	Query          string `json:"query"`
+	Method         string `json:"method"`
+	Params         struct {
+		Name      string `json:"name"`
+		Arguments struct {
+			Format     string `json:"format"`
+			Parameters struct {
+				Format string `json:"format"`
+			} `json:"parameters"`
+		} `json:"arguments"`
+	} `json:"params"`
+}
+
+// fakeKey names the answer one request gets: the method and the route below
+// /api/v4, then the GraphQL operation, or the MCP method, tool and format, or
+// the REST response format.
+func fakeKey(req *http.Request, body []byte) string {
+	route := strings.TrimPrefix(req.URL.Path, "/api/v4")
+	var fields fakeRequest
+	_ = json.Unmarshal(body, &fields)
+	if match := graphQLOperationPattern.FindStringSubmatch(fields.Query); match != nil {
+		return req.Method + " " + route + " " + match[2]
+	}
+	if fields.Method != "" {
+		key := req.Method + " " + route + " " + fields.Method
+		if fields.Params.Name != "" {
+			key += " " + fields.Params.Name
+		}
+		if format := firstNonEmpty(fields.Params.Arguments.Format, fields.Params.Arguments.Parameters.Format); format != "" {
+			key += " " + format
+		}
+		return key
+	}
+	return req.Method + " " + route + " " + firstNonEmpty(fields.ResponseFormat, req.URL.Query().Get("response_format"))
 }
 
 // fakeGitLab answers for GitLab.com in-process: it is the transport the
@@ -94,19 +158,13 @@ type fakeGitLab struct {
 // RoundTrip answers one forwarded request. A route it has no answer for is
 // answered 404, which the handler reports as its own failure.
 func (f *fakeGitLab) RoundTrip(req *http.Request) (*http.Response, error) {
-	format := req.URL.Query().Get("response_format")
+	var body []byte
 	if req.Body != nil {
-		body, _ := io.ReadAll(req.Body)
-		var fields struct {
-			ResponseFormat string `json:"response_format"`
-		}
-		if json.Unmarshal(body, &fields) == nil && fields.ResponseFormat != "" {
-			format = fields.ResponseFormat
-		}
+		body, _ = io.ReadAll(req.Body)
 	}
-	key := req.Method + " " + strings.TrimPrefix(req.URL.Path, "/api/v4") + " " + format
+	key := fakeKey(req, body)
 	f.mu.Lock()
-	f.asked = append(f.asked, req.URL.Scheme+"://"+req.URL.Host+" "+key+" "+req.URL.RawQuery)
+	f.asked = append(f.asked, req.URL.Scheme+"://"+req.URL.Host+" "+key+" "+req.URL.RawQuery+" "+string(body))
 	f.token = append(f.token, req.Header.Get("Private-Token"))
 	f.mu.Unlock()
 	answer, found := f.answers[key]
@@ -221,11 +279,11 @@ func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T)
 	if status != 0 {
 		t.Fatalf("record status = %d, stderr:\n%s", status, errOut)
 	}
-	if !strings.Contains(out, "wrote "+orbitrecord.Path(dir)+": 13 calls, Orbit 0.130.0, query grammar "+fakeGrammarStamp()) || !strings.Contains(out, "nothing to compare this one with") {
+	if !strings.Contains(out, "wrote "+orbitrecord.Path(dir)+": 11 calls, Orbit 0.130.0, query grammar "+fakeGrammarStamp()) || !strings.Contains(out, "nothing to compare this one with") {
 		t.Errorf("stdout = %q", out)
 	}
-	if asked := fake.snapshot(); len(asked) != 13 || !strings.HasPrefix(asked[0], "https://gitlab.com GET /orbit/status raw") {
-		t.Errorf("asked = %q, want the thirteen calls against gitlab.com", asked)
+	if asked := fake.snapshot(); len(asked) != 11 || !strings.HasPrefix(asked[0], "https://gitlab.com "+keyStatus) {
+		t.Errorf("asked = %q, want the eleven calls against gitlab.com", asked)
 	}
 	for _, token := range fake.tokens() {
 		if token != "glpat-test" {
@@ -242,7 +300,7 @@ func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T)
 		t.Errorf("source = %+v, want %+v", doc.Source, want)
 	}
 	checkStatus, checkOut, checkErr := runCapture(genRun{dir: dir, check: true, now: func() time.Time { return recordedOn }})
-	if checkStatus != 0 || !strings.Contains(checkOut, "13 calls recorded from https://gitlab.com, Orbit 0.130.0, query grammar "+fakeGrammarStamp()+", namespace plens1, on 2026-09-27") {
+	if checkStatus != 0 || !strings.Contains(checkOut, "11 calls recorded from https://gitlab.com, Orbit 0.130.0, query grammar "+fakeGrammarStamp()+", namespace plens1, on 2026-09-27") {
 		t.Errorf("check = %d, %q, %q", checkStatus, checkOut, checkErr)
 	}
 
@@ -256,9 +314,11 @@ func TestRecord_AgainstAHealthyGitLab_WritesARecordTheCheckAccepts(t *testing.T)
 
 // TestRecord_WhatTheRecordHolds_IsTheShapeAndNeverAValue verifies the calls
 // the record keeps: each names the output type its handler returned, the
-// parameter names the handler sent (the schema's format as response_format,
-// the query's in its body), the media type, and keys with kinds only, with
-// the data-keyed subtrees kept as their roots.
+// parameter names the handler sent (the MCP tool and its arguments, the
+// GraphQL operation and its variables, the query's body), the media type and
+// the root its key tree is taken from, and keys with kinds only, with the
+// data-keyed subtrees kept as their roots and GraphQL connections recorded as
+// the lists they page.
 func TestRecord_WhatTheRecordHolds_IsTheShapeAndNeverAValue(t *testing.T) {
 	dir := t.TempDir()
 	if status, _, errOut := runCapture(testRun(dir, &fakeGitLab{answers: orbitAnswers()})); status != 0 {
@@ -268,36 +328,91 @@ func TestRecord_WhatTheRecordHolds_IsTheShapeAndNeverAValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"healthy", "deployment", "query-latency", "metrics.kind", "plens1/kg-fixtures", "invoke_command", "AUTHORED", "$defs", "$ref", "query_graph", "openCypher", "MATCH", "@header"} {
+	for _, value := range []string{"HEALTHY", "nats", "username", "#000", "plens1/kg-fixtures", "AUTHORED", "$defs", "$ref", "query_graph", "openCypher", "MATCH", "@header", "pageInfo", "hasNextPage"} {
 		t.Run("no "+value, func(t *testing.T) {
 			if bytes.Contains(raw, []byte(value)) {
 				t.Errorf("the record holds %q, a value or a data key", value)
 			}
 		})
 	}
-	doc, _ := orbitrecord.Read(dir)
-	calls := map[string]orbitrecord.Call{}
-	for _, call := range doc.Calls {
-		calls[call.ID().String()] = call
-	}
-	schema := calls["orbit.schema (llm)"]
-	if schema.Output != "internal/tools/orbit.SchemaOutput" || !slices.Equal(schema.Request.Query, []string{"response_format"}) {
-		t.Errorf("schema llm = %+v", schema)
-	}
-	query := calls["orbit.query (llm)"]
-	if query.Request.Method != http.MethodPost || !slices.Equal(query.Request.Body, []string{"query", "response_format"}) ||
-		query.Response.ContentType != "text/plain" || query.Response.Keys[0].Kinds[0] != orbitrecord.KindText {
-		t.Errorf("query llm = %+v", query)
-	}
+	calls := recordedCalls(t, dir)
 	verbatim := map[string]string{
-		"orbit.status (raw)":    "system.components[].metrics",
-		"orbit.tools (default)": "[].parameters",
+		"orbit.tools (default)": "tools[].inputSchema",
 		"orbit.dsl (raw)":       "[].parameters",
 		"orbit.query (raw)":     "result.nodes[]",
 	}
 	for id, path := range verbatim {
 		t.Run(id, func(t *testing.T) {
 			assertKeptVerbatim(t, calls[id], path)
+		})
+	}
+}
+
+// recordedCalls reads the record under dir, its calls by identity.
+func recordedCalls(t *testing.T, dir string) map[string]orbitrecord.Call {
+	t.Helper()
+	doc, err := orbitrecord.Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := map[string]orbitrecord.Call{}
+	for _, call := range doc.Calls {
+		calls[call.ID().String()] = call
+	}
+	return calls
+}
+
+// TestRecord_EachKindOfCall_NamesItsRequestAndRoot verifies what the record
+// says of each kind of call: an MCP tool call by its method, tool and argument
+// names, its text recorded at the tool result's text; a GraphQL document by its
+// operation and variables, its keys taken below data; and a REST route by its
+// body names alone, recorded whole.
+func TestRecord_EachKindOfCall_NamesItsRequestAndRoot(t *testing.T) {
+	dir := t.TempDir()
+	if status, _, errOut := runCapture(testRun(dir, &fakeGitLab{answers: orbitAnswers()})); status != 0 {
+		t.Fatalf("record failed: %s", errOut)
+	}
+	calls := recordedCalls(t, dir)
+	cases := []struct {
+		id      string
+		request orbitrecord.Request
+		root    string
+		kind    string
+		hasKey  string
+	}{
+		{
+			id:      "orbit.schema (llm)",
+			request: orbitrecord.Request{Method: http.MethodPost, Path: "/orbit/mcp", Body: []string{"id", "jsonrpc", "method", "params"}, Operation: "tools/call invoke_command", Arguments: []string{"command_name", "parameters"}},
+			root:    rootMCPText, kind: mediaText, hasKey: orbitrecord.Root,
+		},
+		{
+			id:      "orbit.schema (expand)",
+			request: orbitrecord.Request{Method: http.MethodPost, Path: orbitrecord.GraphQLPath, Body: []string{"query", "variables"}, Operation: "query OrbitSchema", Arguments: []string{"withProperties"}},
+			root:    rootSchema, kind: mediaJSON, hasKey: "nodes[].properties[].data_type",
+		},
+		{
+			id:      "orbit.status (default)",
+			request: orbitrecord.Request{Method: http.MethodPost, Path: orbitrecord.GraphQLPath, Body: []string{"query"}, Operation: "query OrbitServiceStatus"},
+			root:    rootServiceStatus, kind: mediaJSON, hasKey: "components[].status",
+		},
+		{
+			id:      "orbit.query (llm)",
+			request: orbitrecord.Request{Method: http.MethodPost, Path: "/orbit/query", Body: []string{"query", "response_format"}},
+			hasKey:  orbitrecord.Root,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			call := calls[tc.id]
+			if !call.SameRequest(orbitrecord.Call{Request: tc.request}) || call.Request.Method != tc.request.Method {
+				t.Errorf("request = %+v, want %+v", call.Request, tc.request)
+			}
+			if call.Response.Root != tc.root || call.Response.RootContentType != tc.kind {
+				t.Errorf("root = %q (%q), want %q (%q)", call.Response.Root, call.Response.RootContentType, tc.root, tc.kind)
+			}
+			if !slices.ContainsFunc(call.Response.Keys, func(key orbitrecord.Key) bool { return key.Path == tc.hasKey }) {
+				t.Errorf("keys = %+v, want %q among them", call.Response.Keys, tc.hasKey)
+			}
 		})
 	}
 }
@@ -336,10 +451,10 @@ func TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted(t *testing.T) {
 	}
 	head.commit(t, dir)
 	changed := orbitAnswers()
-	changed["GET /orbit/graph_status llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"formatted_text":"indexed","region":"eu"}`}
-	changed["GET /orbit/schema llm"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"text":"nodes"}`}
+	changed[keyGraphStatus] = fakeAnswer{status: 200, contentType: "application/json", body: `{"data":{"group":{"orbit":{"region":"eu",` + graphStatusFields + `}},"project":null}}`}
+	changed[keyStatus] = fakeAnswer{status: 200, contentType: "application/json", body: `{"data":{"orbit":{"serviceStatus":{"status":"HEALTHY","version":"0.130.0","components":[{"status":"HEALTHY"}]}}}}`}
 	const laterGrammar = "Read-only openCypher 9-based syntax (MATCH ... RETURN), now with OPTIONAL MATCH."
-	changed["GET /orbit/agent/commands raw"] = fakeAnswer{status: 200, contentType: "application/json", body: agentCommands(laterGrammar)}
+	changed[keyCommandsRaw] = fakeAnswer{status: 200, contentType: "application/json", body: toolTextAnswer(agentCommands(laterGrammar))}
 	laterStamp := orbitrecord.GrammarStamp(laterGrammar, map[string]any{
 		"type":       "object",
 		"required":   []any{"query"},
@@ -360,11 +475,10 @@ func TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted(t *testing.T) {
 				t.Fatalf("status = %d, want 1; stderr:\n%s", status, errOut)
 			}
 			for _, line := range []string{
-				"+ orbit.graph_status (llm): region string",
-				"+ orbit.schema (llm): text string",
-				"- orbit.schema (llm): formatted_text string",
+				"+ orbit.graph_status (full_path): region string",
+				"- orbit.status (default): components[].name string",
 				"~ query grammar: " + fakeGrammarStamp() + " -> " + laterStamp + ": read orbit.query's guidance against it",
-				"the key tree or the query grammar differs from the record committed at HEAD in 4 places",
+				"the key tree or the query grammar differs from the record committed at HEAD in 3 places",
 			} {
 				if !strings.Contains(errOut, line) {
 					t.Errorf("stderr lacks %q:\n%s", line, errOut)
@@ -389,15 +503,17 @@ func TestRecord_AChangedAnswer_FailsEveryRunUntilItIsCommitted(t *testing.T) {
 // the record already there.
 func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 	refused := orbitAnswers()
-	delete(refused, "GET /orbit/schema llm")
+	delete(refused, keySchemaText)
 	versionless := orbitAnswers()
-	versionless["GET /orbit/status raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"user":{"available":true},"system":{"status":"unknown"}}`}
+	versionless[keyStatus] = fakeAnswer{status: 200, contentType: "application/json", body: `{"data":{"orbit":{"serviceStatus":{"status":"UNKNOWN","version":null,"components":[]}}}}`}
 	noRows := orbitAnswers()
-	noRows["POST /orbit/query raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"result":{"format_version":"5.0.3","nodes":[],"edges":[]},"query_type":"traversal","row_count":0}`}
+	noRows[keyQueryRaw] = fakeAnswer{status: 200, contentType: "application/json", body: `{"result":{"format_version":"5.0.3","nodes":[],"edges":[]},"query_type":"traversal","row_count":0}`}
 	unindexed := orbitAnswers()
-	unindexed["GET /orbit/graph_status raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `{"projects":{"indexed":0,"total_known":2},"domains":[],"indexing":{"state":"pending"}}`}
+	unindexed[keyGraphStatus] = fakeAnswer{status: 200, contentType: "application/json", body: `{"data":{"group":{"orbit":{"enabled":true,"indexing":{"state":"INDEXING","projects":{"indexed":0,"total_known":2}},"itemCounts":null}},"project":null}}`}
 	unstamped := orbitAnswers()
-	unstamped["GET /orbit/agent/commands raw"] = fakeAnswer{status: 200, contentType: "application/json", body: `[{"name":"list_commands","description":"d","parameters":{"type":"object"}}]`}
+	unstamped[keyCommandsRaw] = fakeAnswer{status: 200, contentType: "application/json", body: toolTextAnswer(`[{"name":"get_graph_schema","description":"d","parameters":{"type":"object"}}]`)}
+	forbidden := orbitAnswers()
+	forbidden[keyQueryRaw] = fakeAnswer{status: 403, contentType: "application/json", body: `{"message":"403 Forbidden - No Orbit enabled namespaces available"}`}
 	cases := []struct {
 		name  string
 		token string
@@ -407,9 +523,10 @@ func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 		{name: "no token", fake: &fakeGitLab{answers: orbitAnswers()}, want: "GITLAB_COM_TOKEN is not set"},
 		{name: "a refused call", token: "glpat-test", fake: &fakeGitLab{answers: refused}, want: "orbit.schema (llm) failed, so its answer cannot be recorded"},
 		{name: "a query that finds no row", token: "glpat-test", fake: &fakeGitLab{answers: noRows}, want: "orbit.query (raw) found no row for the fixture project: the fixture namespace is not indexed"},
-		{name: "a namespace with no indexed project", token: "glpat-test", fake: &fakeGitLab{answers: unindexed}, want: "orbit.graph_status (raw) counts no indexed project"},
+		{name: "a namespace with no indexed project", token: "glpat-test", fake: &fakeGitLab{answers: unindexed}, want: "orbit.graph_status (full_path) counts no indexed project"},
 		{name: "a record the check refuses", token: "glpat-test", fake: &fakeGitLab{answers: versionless}, want: "names no Orbit version"},
 		{name: "no query command described", token: "glpat-test", fake: &fakeGitLab{answers: unstamped}, want: "names no query grammar"},
+		{name: "a refused account, not allowed", token: "glpat-test", fake: &fakeGitLab{answers: forbidden}, want: "orbit.query (raw) was not answered for this account (POST /orbit/query answered 403"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -424,6 +541,101 @@ func TestRecord_RefusesWhatItCannotRecordWhole(t *testing.T) {
 				t.Errorf("a refused recording wrote the record: %v", err)
 			}
 		})
+	}
+}
+
+// TestRecord_AllowUnanswered_CarriesOrListsWhatGitLabRefused verifies a
+// recording made while GitLab refuses the account, as it did from 09:22 UTC on
+// 2026-10-29: a call refused 403 whose request the record at HEAD holds an
+// answer to is carried from it, dated by that record; a call answered with
+// null where the handler reads, which no earlier record answered, is listed as
+// unrecorded with GitLab's answer and the time; the record written passes the
+// check; and each is said on standard error.
+func TestRecord_AllowUnanswered_CarriesOrListsWhatGitLabRefused(t *testing.T) {
+	dir := t.TempDir()
+	head := fakeHead{dir: t.TempDir()}
+	first := testRun(dir, &fakeGitLab{answers: orbitAnswers()})
+	first.git = head.git
+	first.now = func() time.Time { return recordedOn.AddDate(0, 0, -3) }
+	if status, _, errOut := runCapture(first); status != 0 {
+		t.Fatalf("first record failed: %s", errOut)
+	}
+	head.commit(t, dir)
+
+	refused := orbitAnswers()
+	for _, key := range []string{keyQueryRaw, keyQueryLLM, keyQueryGQL} {
+		refused[key] = fakeAnswer{status: 403, contentType: "application/json", body: `{"message":"403 Forbidden - No Orbit enabled namespaces available"}`}
+	}
+	refused[keyGraphStatus] = fakeAnswer{status: 200, contentType: "application/json", body: `{"data":{"group":{"orbit":{"enabled":true,"enabled_at":null,"indexing":null,"itemCounts":null}},"project":null}}`}
+	cfg := testRun(dir, &fakeGitLab{answers: refused})
+	cfg.git = head.git
+	cfg.allowUnanswered = true
+
+	// Every refused request is one HEAD's record answered, so each is carried
+	// and the key tree is HEAD's.
+	status, _, errOut := runCapture(cfg)
+	if status != 0 {
+		t.Fatalf("status = %d, want 0; stderr:\n%s", status, errOut)
+	}
+	for _, line := range []string{
+		"orbit.query (raw) was refused today and is carried from the recording of 2026-09-24, which sent the same request",
+		"orbit.graph_status (full_path) was refused today and is carried from the recording of 2026-09-24",
+	} {
+		if !strings.Contains(errOut, line) {
+			t.Errorf("stderr lacks %q:\n%s", line, errOut)
+		}
+	}
+	doc, err := orbitrecord.Read(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Calls) != 11 || len(doc.Unrecorded) != 0 || doc.Source.RetrievedAt != "2026-09-27" {
+		t.Errorf("record = %d calls, unrecorded %+v, source %+v", len(doc.Calls), doc.Unrecorded, doc.Source)
+	}
+	if problems := orbitrecord.Problems(doc, recordedOn); len(problems) != 0 {
+		t.Errorf("Problems() = %q, want none", problems)
+	}
+
+	// With no record at HEAD there is nothing to carry, so each refused call
+	// is listed as unrecorded, with GitLab's answer and the time.
+	cfg.git = fakeHead{dir: t.TempDir()}.git
+	cfg.dir = t.TempDir()
+	if status, _, errOut = runCapture(cfg); status != 0 {
+		t.Fatalf("status with nothing at HEAD = %d; stderr:\n%s", status, errOut)
+	}
+	if !strings.Contains(errOut, "orbit.graph_status (full_path) is not recorded: POST /api/graphql (query OrbitGraphStatusByPath) answered 200 with null where the handler reads") {
+		t.Errorf("stderr lacks the unrecorded graph status:\n%s", errOut)
+	}
+	if doc, err = orbitrecord.Read(cfg.dir); err != nil || len(doc.Unrecorded) != 4 ||
+		!strings.HasSuffix(doc.Unrecorded[0].Reason, "at 2026-09-27T10:00:00Z, and no earlier recording holds an answer to this request") {
+		t.Errorf("record with nothing at HEAD = %+v, %v, want four unrecorded calls", doc.Unrecorded, err)
+	}
+}
+
+// TestCarryOrSkip_CarriesOnlyTheSameRequest verifies what an earlier record
+// can give a refused call: its answer when it sent the same request, keeping
+// the day it was carried from if it was itself carried, and nothing when the
+// request differs, which lists the call as unrecorded.
+func TestCarryOrSkip_CarriesOnlyTheSameRequest(t *testing.T) {
+	id := orbitrecord.CallID{Action: orbitrecord.QueryAction, Variant: "raw"}
+	request := orbitrecord.Call{Action: id.Action, Variant: id.Variant, Request: orbitrecord.Request{Method: "POST", Path: "/orbit/query", Body: []string{"query"}}}
+	refused := &refusal{id: id, request: request, reason: "POST /orbit/query answered 403"}
+	carried := request
+	carried.RetrievedAt = "2026-09-01"
+	other := request
+	other.Request.Path = "/orbit/query/name"
+	previous := &orbitrecord.Document{Source: orbitrecord.Source{RetrievedAt: "2026-09-20"}, Calls: []orbitrecord.Call{other, carried}}
+
+	var doc orbitrecord.Document
+	carryOrSkip(&doc, previous, refused, recordedOn)
+	if len(doc.Calls) != 1 || doc.Calls[0].RetrievedAt != "2026-09-01" {
+		t.Errorf("carried = %+v, want the earlier answer with the day it was first recorded", doc.Calls)
+	}
+
+	doc = orbitrecord.Document{}
+	carryOrSkip(&doc, &orbitrecord.Document{Calls: []orbitrecord.Call{other}}, refused, recordedOn)
+	if len(doc.Calls) != 0 || len(doc.Unrecorded) != 1 || doc.Unrecorded[0].ID() != id {
+		t.Errorf("record = %+v, want the call unrecorded since no earlier one sent its request", doc)
 	}
 }
 
@@ -479,12 +691,12 @@ func TestCheckRecord_ARecordPinningTheJSONQueryDSL_IsRefused(t *testing.T) {
 		{
 			name: "a record of schema version 2",
 			edit: func(record []byte) []byte {
-				return bytes.Replace(record, []byte(`"schema_version": 3`), []byte(`"schema_version": 2`), 1)
+				return bytes.Replace(record, []byte(`"schema_version": 4`), []byte(`"schema_version": 2`), 1)
 			},
-			want: "the Orbit response record is schema version 2 and this build reads version 3: regenerate it with make gen-orbit-record",
+			want: "the Orbit response record is schema version 2 and this build reads version 4: regenerate it with make gen-orbit-record",
 		},
 		{
-			name: "a record of version 3 that still names the JSON DSL",
+			name: "a record of version 4 that still names the JSON DSL",
 			edit: func(record []byte) []byte {
 				return bytes.Replace(record, []byte(`"namespace": `), []byte(pins+`"namespace": `), 1)
 			},
@@ -605,9 +817,9 @@ func TestRunMain_ReadsTheFlagsAndTheEnvironment(t *testing.T) {
 			if doc.Source.Namespace != tc.want {
 				t.Errorf("namespace = %q, want %q", doc.Source.Namespace, tc.want)
 			}
-			// The query string carries the namespace encoded, so a subgroup's
-			// slash, the default's among them, is asked about as %2F.
-			if want := "full_path=" + url.QueryEscape(tc.want); !slices.ContainsFunc(fake.snapshot(), func(asked string) bool { return strings.Contains(asked, want) }) {
+			// The indexing status asks about the namespace in its GraphQL
+			// variables.
+			if want := `"fullPath":"` + tc.want + `"`; !slices.ContainsFunc(fake.snapshot(), func(asked string) bool { return strings.Contains(asked, want) }) {
 				t.Errorf("asked = %q, want the graph status asked about %s", fake.snapshot(), tc.want)
 			}
 		})

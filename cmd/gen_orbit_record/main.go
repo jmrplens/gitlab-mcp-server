@@ -54,6 +54,12 @@ type genRun struct {
 	// how a recording reads the record committed at HEAD. A test states what
 	// HEAD holds through it without making a commit.
 	git func(ctx context.Context, dir string, args ...string) ([]byte, error)
+	// allowUnanswered lets a recording go on past a call GitLab refused the
+	// account or answered with null: it carries the answer the record at HEAD
+	// holds for the same request, or lists the call as unrecorded with the
+	// reason. Without it such a call fails the run, which is what a recording
+	// made with Orbit access should do.
+	allowUnanswered bool
 }
 
 // Seams over what main does that a test cannot follow it into: ending the
@@ -77,6 +83,7 @@ func runMain(args []string, getenv func(string) string, out, errOut io.Writer) i
 	dir := flags.String("dir", orbitrecord.DefaultDir, "directory holding the Orbit response record")
 	check := flags.Bool("check", false, "judge the committed record offline instead of recording one")
 	namespace := flags.String("namespace", "", "fixture namespace to ask about (default ORBIT_FIXTURES_NAMESPACE, then "+defaultNamespace+")")
+	allowUnanswered := flags.Bool("allow-unanswered", false, "record past a call GitLab refuses the account: carry the answer HEAD's record holds for the same request, or list the call as unrecorded with the reason")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -93,6 +100,8 @@ func runMain(args []string, getenv func(string) string, out, errOut io.Writer) i
 		now:       time.Now,
 		timeout:   timeout,
 		git:       runGit,
+
+		allowUnanswered: *allowUnanswered,
 	}, out, errOut)
 }
 
@@ -156,7 +165,12 @@ func record(cfg genRun, out, errOut io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
 	defer cancel()
 
-	doc, err := recordCalls(ctx, cfg)
+	committed, committedErr := committedRecord(ctx, cfg)
+	var previous *orbitrecord.Document
+	if committedErr == nil {
+		previous = &committed
+	}
+	doc, err := recordCalls(ctx, cfg, previous)
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)
 		return 1
@@ -177,7 +191,14 @@ func record(cfg genRun, out, errOut io.Writer) int {
 	}
 	fmt.Fprintf(out, "%s wrote %s: %d calls, Orbit %s, query grammar %s\n",
 		prefix, orbitrecord.Path(cfg.dir), len(doc.Calls), doc.Source.OrbitVersion, doc.Source.QueryGrammar)
-	committed, committedErr := committedRecord(ctx, cfg)
+	for _, call := range doc.Calls {
+		if call.RetrievedAt != "" {
+			fmt.Fprintf(errOut, "%s %s was refused today and is carried from the recording of %s, which sent the same request\n", prefix, call.ID(), call.RetrievedAt)
+		}
+	}
+	for _, entry := range doc.Unrecorded {
+		fmt.Fprintf(errOut, "%s %s is not recorded: %s\n", prefix, entry.ID(), entry.Reason)
+	}
 	if committedErr != nil {
 		fmt.Fprintf(out, "%s no record committed at HEAD could be read (%v), so there is nothing to compare this one with\n", prefix, committedErr)
 		return 0

@@ -21,13 +21,16 @@ func committedRevision() string { return "HEAD:./" + orbitrecord.FileName }
 // committedRecord reads the record as HEAD holds it in the repository cfg.dir
 // belongs to. A directory outside any repository, a record HEAD does not hold
 // yet, and a machine with no git all come back as the error they are, which
-// the caller reports as having nothing to compare with.
+// the caller reports as having nothing to compare with. A record of an
+// earlier schema version whose calls this build reads is read too
+// ([orbitrecord.DecodeCarried]), so the first recording after a version change
+// can still carry an answer from it and say what changed.
 func committedRecord(ctx context.Context, cfg genRun) (orbitrecord.Document, error) {
 	raw, err := cfg.git(ctx, cfg.dir, "show", committedRevision())
 	if err != nil {
 		return orbitrecord.Document{}, err
 	}
-	return orbitrecord.Decode(raw)
+	return orbitrecord.DecodeCarried(raw)
 }
 
 // runGit runs git in dir and returns what it wrote to standard output.

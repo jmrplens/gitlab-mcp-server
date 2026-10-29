@@ -30,8 +30,20 @@ import (
 // calls are written in GQL, the gql table of a query among them (issue
 // 1414). A record that still pins the JSON DSL is therefore refused by its
 // version, and one of version 3 that carries the old keys anyway is not in
-// the form [Encode] writes, which the generator's -check refuses.
-const SchemaVersion = 3
+// the form [Encode] writes, which the generator's -check refuses. Version 4
+// records the calls GitLab.com answers since it removed five of the six Orbit
+// REST routes on 2026-10-27 and -28: a call may be sent to GitLab's GraphQL
+// endpoint ([GraphQLPath]) or to the Orbit MCP endpoint, so a request names the
+// operation it asked ([Request.Operation]) and its arguments, and a response
+// says where in the body its key tree is taken from ([Response.Root]). The
+// status and indexing calls lost their llm variants with the routes, since
+// GraphQL has one shape.
+const SchemaVersion = 4
+
+// GraphQLPath is the path a call to GitLab's GraphQL endpoint is recorded
+// under. Every other call is recorded below /api/v4, which is where the Orbit
+// REST and MCP routes are.
+const GraphQLPath = "/api/graphql"
 
 // DefaultDir is where the record lives, beside the other pinned records.
 const DefaultDir = "docs/development"
@@ -70,7 +82,25 @@ type Document struct {
 	Source        Source `json:"source"`
 	// Calls are the recorded calls, sorted by action and variant.
 	Calls []Call `json:"calls"`
+	// Unrecorded are the expected calls the recording could not make and had
+	// no earlier answer to carry for, each with the reason, sorted by action
+	// and variant. A recording leaves a call here only when it was told GitLab
+	// might refuse the account (gen_orbit_record -allow-unanswered) and GitLab
+	// refused it or answered it with null.
+	Unrecorded []Unrecorded `json:"unrecorded,omitempty"`
 }
+
+// Unrecorded is one expected call a recording could not make.
+type Unrecorded struct {
+	Action  string `json:"action"`
+	Variant string `json:"variant"`
+	// Reason is what GitLab answered and when, in the words a reader needs to
+	// tell whether a new recording can make the call.
+	Reason string `json:"reason"`
+}
+
+// ID is the unrecorded call's identity.
+func (u Unrecorded) ID() CallID { return CallID{Action: u.Action, Variant: u.Variant} }
 
 // Source is what the record was taken from and when.
 type Source struct {
@@ -108,20 +138,45 @@ type Call struct {
 	// Output is the Go type the handler returned, repository relative
 	// (internal/tools/orbit.StatusOutput). It is what the audit judges
 	// against the keys below.
-	Output   string   `json:"output"`
-	Request  Request  `json:"request"`
-	Response Response `json:"response"`
+	Output string `json:"output"`
+	// RetrievedAt is the day the call was answered when it is not the
+	// record's own: a call carried from an earlier recording because GitLab
+	// refused the account on the day of this one, while the request the
+	// handler builds was still the one that recording made. Empty for a call
+	// made on [Source.RetrievedAt].
+	RetrievedAt string   `json:"retrieved_at,omitempty"`
+	Request     Request  `json:"request"`
+	Response    Response `json:"response"`
+}
+
+// SameRequest reports whether two calls sent the same request, by every name
+// the record keeps of one, which is what carrying an answer from an earlier
+// recording rests on.
+func (c Call) SameRequest(other Call) bool {
+	a, b := c.Request, other.Request
+	return a.Method == b.Method && a.Path == b.Path && a.Operation == b.Operation &&
+		slices.Equal(sortedCopy(a.Query), sortedCopy(b.Query)) &&
+		slices.Equal(sortedCopy(a.Body), sortedCopy(b.Body)) &&
+		slices.Equal(sortedCopy(a.Arguments), sortedCopy(b.Arguments))
 }
 
 // Request is what the handler sent, by name only.
 type Request struct {
 	Method string `json:"method"`
-	// Path is the route below /api/v4.
+	// Path is the route below /api/v4, or [GraphQLPath].
 	Path string `json:"path"`
 	// Query are the query parameter names the handler sent, sorted.
 	Query []string `json:"query,omitempty"`
 	// Body are the top-level names of the JSON body the handler sent, sorted.
 	Body []string `json:"body,omitempty"`
+	// Operation is what the request asked of an endpoint that serves more than
+	// one thing at one route: a GraphQL document's type and name ("query
+	// OrbitServiceStatus"), or an MCP request's method and the tool it calls
+	// ("tools/call list_commands"). Empty for a REST route.
+	Operation string `json:"operation,omitempty"`
+	// Arguments are the names of what the operation was asked with, sorted:
+	// a GraphQL document's variables, or the MCP tool's arguments.
+	Arguments []string `json:"arguments,omitempty"`
 }
 
 // Response is what GitLab answered, reduced to its key tree.
@@ -129,6 +184,17 @@ type Response struct {
 	Status int `json:"status"`
 	// ContentType is the media type without its parameters.
 	ContentType string `json:"content_type"`
+	// Root is where in the body the key tree is taken from: a path below a
+	// GraphQL answer's data ("data.orbit.serviceStatus"), whose connections are
+	// recorded as the lists they page, the JSON-RPC result of an MCP answer
+	// ("result"), or the text of an MCP tool result ("result.content[].text"),
+	// decoded when it is JSON. Empty for the whole body, which is a REST
+	// route's.
+	Root string `json:"root,omitempty"`
+	// RootContentType is the media type of what the root holds when it is not
+	// the whole body: application/json, or text/plain for an MCP tool's text
+	// that is not JSON.
+	RootContentType string `json:"root_content_type,omitempty"`
 	// Keys is every path the body carried, sorted, the body itself first.
 	Keys []Key `json:"keys"`
 }
@@ -168,11 +234,13 @@ const (
 
 // ExpectedCalls is every call a whole record holds, in the order the
 // generator makes them. The status call comes first because it carries the
-// version the record is stamped with.
+// version the record is stamped with. The status and the indexing status have
+// one call each since GitLab answers both through GraphQL, which has no llm
+// rendering: "default" for the status, which takes no argument, and
+// "full_path" for the indexing status, asked by the fixture namespace's path.
 func ExpectedCalls() []CallID {
 	return []CallID{
-		{Action: StatusAction, Variant: "raw"},
-		{Action: StatusAction, Variant: "llm"},
+		{Action: StatusAction, Variant: "default"},
 		{Action: SchemaAction, Variant: "raw"},
 		{Action: SchemaAction, Variant: "llm"},
 		{Action: SchemaAction, Variant: "expand"},
@@ -182,8 +250,7 @@ func ExpectedCalls() []CallID {
 		{Action: QueryAction, Variant: "raw"},
 		{Action: QueryAction, Variant: "llm"},
 		{Action: QueryAction, Variant: "gql"},
-		{Action: GraphStatusAction, Variant: "raw"},
-		{Action: GraphStatusAction, Variant: "llm"},
+		{Action: GraphStatusAction, Variant: "full_path"},
 	}
 }
 
@@ -205,15 +272,49 @@ func Read(dir string) (Document, error) {
 // A schema version this build was not written for is refused rather than
 // decoded, for the reason [SchemaVersion] gives.
 func Decode(raw []byte) (Document, error) {
-	var doc Document
-	if decodeErr := json.Unmarshal(raw, &doc); decodeErr != nil {
-		return Document{}, fmt.Errorf("decoding the Orbit response record: %w", decodeErr)
+	doc, err := unmarshal(raw)
+	if err != nil {
+		return Document{}, err
 	}
 	if doc.SchemaVersion != SchemaVersion {
 		return Document{}, fmt.Errorf(
 			"the Orbit response record is schema version %d and this build reads version %d: regenerate it with make gen-orbit-record",
 			doc.SchemaVersion, SchemaVersion,
 		)
+	}
+	return doc, nil
+}
+
+// carriedSchemaVersion is the oldest schema version a call can be carried
+// from: version 3's calls carry every name version 4 keeps of a REST request
+// and its answer, and lack only what a GraphQL or MCP call adds, which a REST
+// call does not have.
+const carriedSchemaVersion = 3
+
+// DecodeCarried reads a record whose calls a new recording may carry: one of
+// this version, or of a version whose calls this one reads unchanged. It is
+// how a recording made while GitLab refuses the account keeps the answers an
+// earlier one got to the same requests (see [Call.RetrievedAt]); everything
+// else reads a record through [Decode].
+func DecodeCarried(raw []byte) (Document, error) {
+	doc, err := unmarshal(raw)
+	if err != nil {
+		return Document{}, err
+	}
+	if doc.SchemaVersion < carriedSchemaVersion || doc.SchemaVersion > SchemaVersion {
+		return Document{}, fmt.Errorf(
+			"the Orbit response record is schema version %d and this build reads versions %d to %d: regenerate it with make gen-orbit-record",
+			doc.SchemaVersion, carriedSchemaVersion, SchemaVersion,
+		)
+	}
+	return doc, nil
+}
+
+// unmarshal decodes a record's bytes, whatever its version.
+func unmarshal(raw []byte) (Document, error) {
+	var doc Document
+	if decodeErr := json.Unmarshal(raw, &doc); decodeErr != nil {
+		return Document{}, fmt.Errorf("decoding the Orbit response record: %w", decodeErr)
 	}
 	return doc, nil
 }
@@ -239,6 +340,7 @@ func Canonical(doc Document) Document {
 	for i, call := range doc.Calls {
 		call.Request.Query = sortedCopy(call.Request.Query)
 		call.Request.Body = sortedCopy(call.Request.Body)
+		call.Request.Arguments = sortedCopy(call.Request.Arguments)
 		keys := make([]Key, len(call.Response.Keys))
 		for j, key := range call.Response.Keys {
 			key.Kinds = sortedCopy(key.Kinds)
@@ -249,6 +351,10 @@ func Canonical(doc Document) Document {
 		out.Calls[i] = call
 	}
 	slices.SortStableFunc(out.Calls, func(a, b Call) int {
+		return cmp.Or(strings.Compare(a.Action, b.Action), strings.Compare(a.Variant, b.Variant))
+	})
+	out.Unrecorded = slices.Clone(doc.Unrecorded)
+	slices.SortStableFunc(out.Unrecorded, func(a, b Unrecorded) int {
 		return cmp.Or(strings.Compare(a.Action, b.Action), strings.Compare(a.Variant, b.Variant))
 	})
 	return out
@@ -375,9 +481,31 @@ func Problems(doc Document, now time.Time) []string {
 		problems = append(problems, "the record names no fixture namespace: the indexing status and the query were asked about something nobody can find again")
 	}
 	problems = append(problems, provenance.Problems(subject, doc.Source.RetrievedAt, now)...)
-	problems = append(problems, callSetProblems(doc.Calls)...)
+	problems = append(problems, callSetProblems(doc.Calls, doc.Unrecorded)...)
 	for _, call := range doc.Calls {
 		problems = append(problems, callProblems(call)...)
+		problems = append(problems, carriedProblems(call, doc.Source.RetrievedAt, now)...)
+	}
+	return problems
+}
+
+// carriedProblems reports a carried call whose day is not a day, is later than
+// the record's own, or has aged past the window every pinned record is held
+// to: carrying an answer keeps the call judged, and never keeps it current.
+func carriedProblems(call Call, recordDay string, now time.Time) []string {
+	if call.RetrievedAt == "" {
+		return nil
+	}
+	carried, err := time.Parse(time.DateOnly, call.RetrievedAt)
+	if err != nil {
+		return []string{fmt.Sprintf("%s says it was answered on %q, which is not a day", call.ID(), call.RetrievedAt)}
+	}
+	if recorded, recordErr := time.Parse(time.DateOnly, recordDay); recordErr == nil && carried.After(recorded) {
+		return []string{fmt.Sprintf("%s says it was answered on %s, after the record itself (%s)", call.ID(), call.RetrievedAt, recordDay)}
+	}
+	var problems []string
+	for _, problem := range provenance.Problems(subject, call.RetrievedAt, now) {
+		problems = append(problems, call.ID().String()+", carried: "+problem)
 	}
 	return problems
 }
@@ -394,21 +522,38 @@ func grammarProblem(stamp string) string {
 	return ""
 }
 
-// callSetProblems reports an expected call the record lacks, one it holds
-// twice, and one nothing expects.
-func callSetProblems(calls []Call) []string {
+// callSetProblems reports an expected call the record neither holds nor says
+// why it could not make, one it holds twice or both holds and lists as
+// unrecorded, one it lists unrecorded without a reason, and one nothing
+// expects.
+func callSetProblems(calls []Call, unrecorded []Unrecorded) []string {
 	count := map[CallID]int{}
 	for _, call := range calls {
 		count[call.ID()]++
 	}
+	skipped := map[CallID]bool{}
 	var problems []string
+	for _, entry := range unrecorded {
+		if skipped[entry.ID()] {
+			problems = append(problems, fmt.Sprintf("%s is listed as unrecorded twice", entry.ID()))
+		}
+		skipped[entry.ID()] = true
+		if strings.TrimSpace(entry.Reason) == "" {
+			problems = append(problems, fmt.Sprintf("%s is listed as unrecorded with no reason: a reader cannot tell whether a new recording can make it", entry.ID()))
+		}
+	}
 	expected := map[CallID]bool{}
 	for _, id := range ExpectedCalls() {
 		expected[id] = true
 		switch count[id] {
 		case 0:
-			problems = append(problems, fmt.Sprintf("%s is not recorded: the audit cannot judge what its handler returns", id))
+			if !skipped[id] {
+				problems = append(problems, fmt.Sprintf("%s is not recorded: the audit cannot judge what its handler returns", id))
+			}
 		case 1:
+			if skipped[id] {
+				problems = append(problems, fmt.Sprintf("%s is both recorded and listed as unrecorded", id))
+			}
 		default:
 			problems = append(problems, fmt.Sprintf("%s is recorded %d times: a reader could not say which answer the audit read", id, count[id]))
 		}
@@ -416,6 +561,11 @@ func callSetProblems(calls []Call) []string {
 	for _, call := range calls {
 		if !expected[call.ID()] {
 			problems = append(problems, fmt.Sprintf("%s is recorded and no generator run makes it", call.ID()))
+		}
+	}
+	for _, entry := range unrecorded {
+		if !expected[entry.ID()] {
+			problems = append(problems, fmt.Sprintf("%s is listed as unrecorded and no generator run makes it", entry.ID()))
 		}
 	}
 	return problems
@@ -430,8 +580,11 @@ func callProblems(call Call) []string {
 	if !strings.Contains(call.Output, ".") {
 		problems = append(problems, fmt.Sprintf("%s names no output type the audit can find (%q)", id, call.Output))
 	}
-	if !strings.HasPrefix(call.Request.Path, "/orbit/") {
-		problems = append(problems, fmt.Sprintf("%s was sent to %q, which is not an Orbit route", id, call.Request.Path))
+	if !strings.HasPrefix(call.Request.Path, "/orbit/") && call.Request.Path != GraphQLPath {
+		problems = append(problems, fmt.Sprintf("%s was sent to %q, which is neither an Orbit route nor GitLab's GraphQL endpoint", id, call.Request.Path))
+	}
+	if call.Request.Path == GraphQLPath && call.Request.Operation == "" {
+		problems = append(problems, fmt.Sprintf("%s was sent to GitLab's GraphQL endpoint and names no operation, so nobody can say which document was answered", id))
 	}
 	if call.Response.Status != 200 {
 		problems = append(problems, fmt.Sprintf("%s was answered %d: a refusal records no shape, so the call would judge nothing", id, call.Response.Status))

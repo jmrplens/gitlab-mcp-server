@@ -4,8 +4,10 @@
 package orbit
 
 import (
-	"math"
+	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // statusHints is the guidance section every Orbit status card closes with.
@@ -17,25 +19,41 @@ const queryHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'orbit.graph_status' to check indexing when a result looks stale or incomplete\n" +
 	"- Use action 'orbit.dsl' to read the grammar the next query is written in\n"
 
-// TestFormatStatusMarkdown_FlatShape_RendersTheWholeCard verifies that the flat
-// status response renders as a card whose subsystems are a nested collection.
-func TestFormatStatusMarkdown_FlatShape_RendersTheWholeCard(t *testing.T) {
+// schemaHints is the end of a schema card with a node expanded: read the
+// grammar, then run a query.
+const schemaHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
+	"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
+
+// schemaExpandHint is the step a schema answered with nothing expanded adds:
+// the card lists no property, and orbit.query names them (issue 1311).
+const schemaExpandHint = "- Use action 'orbit.schema' to read the properties of the node types a query reads: name them in expand, or set format=llm for the schema as compact text\n"
+
+// graphStatusHints is the guidance section every indexing status card closes
+// with.
+const graphStatusHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
+	"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n"
+
+// TestFormatStatusMarkdown_RendersTheWholeCard verifies that the service
+// status renders as a card whose components are a nested collection.
+func TestFormatStatusMarkdown_RendersTheWholeCard(t *testing.T) {
 	out := StatusOutput{
-		Status:  "healthy",
-		Version: "0.5.0",
+		Status:  "HEALTHY",
+		Version: "0.163.0",
 		Components: []StatusComponent{
-			{Name: "clickhouse", Status: "healthy", Replicas: &StatusReplicas{Ready: 3, Desired: 3}},
-			{Name: "api", Status: "healthy"},
+			{Name: "clickhouse-graph", Status: "DEGRADED"},
+			{Name: "nats", Status: "HEALTHY"},
 		},
 	}
 
 	want := "## Orbit Status\n\n" +
-		"- **Status**: healthy\n" +
-		"- **Version**: 0.5.0\n\n" +
+		"- **Status**: HEALTHY\n" +
+		"- **Version**: 0.163.0\n\n" +
 		"### Components\n\n" +
-		"| Component | Status | Replicas |\n| --- | --- | --- |\n" +
-		"| clickhouse | healthy | 3/3 |\n" +
-		"| api | healthy |  |\n" +
+		"| Component | Status |\n| --- | --- |\n" +
+		"| clickhouse-graph | DEGRADED |\n" +
+		"| nats | HEALTHY |\n" +
 		statusHints
 
 	if got := FormatStatusMarkdown(out); got != want {
@@ -43,107 +61,25 @@ func TestFormatStatusMarkdown_FlatShape_RendersTheWholeCard(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdown_NestedShape_RendersAvailabilityAndError verifies
-// that the nested response shape renders at all, and that it renders the two
-// rows that answer the question the action is asked.
-//
-// Orbit answers in two shapes and the card used to read only the flat one, so
-// every nested answer rendered "no status data" even when it carried the
-// cluster's health. "Available to you" is the user-level access flag, which
-// separates a healthy cluster the caller cannot query from one they can, and
-// "Error" is what the backend says when it cannot reach the gRPC cluster, which
-// is exactly the case where "Status: unknown" alone explains nothing.
-func TestFormatStatusMarkdown_NestedShape_RendersAvailabilityAndError(t *testing.T) {
-	out := StatusOutput{
-		User: &StatusUser{Available: true},
-		System: &StatusSystem{
-			Status:    "unknown",
-			Version:   "0.5.0",
-			Timestamp: "2026-03-20T15:45:00Z",
-			Error:     "cannot reach the gRPC cluster",
-			Components: []StatusComponent{
-				{Name: "clickhouse", Status: "unknown"},
-			},
-		},
-	}
-
-	want := "## Orbit Status\n\n" +
-		"- **Available to you**: ✅\n" +
-		"- **Status**: unknown\n" +
-		"- **Version**: 0.5.0\n" +
-		"- **Timestamp**: 20 Mar 2026 15:45 UTC\n" +
-		"- **Error**: cannot reach the gRPC cluster\n\n" +
-		"### Components\n\n" +
-		"| Component | Status | Replicas |\n| --- | --- | --- |\n" +
-		"| clickhouse | unknown |  |\n" +
-		statusHints
-
-	if got := FormatStatusMarkdown(out); got != want {
-		t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// TestFormatStatusMarkdown_UserWithoutAccess_SaysSo verifies that a caller the
-// Knowledge Graph is not available to reads that as a row rather than as a card
-// with nothing in it.
-func TestFormatStatusMarkdown_UserWithoutAccess_SaysSo(t *testing.T) {
-	want := "## Orbit Status\n\n- **Available to you**: ❌\n" + statusHints
-
-	if got := FormatStatusMarkdown(StatusOutput{User: &StatusUser{}}); got != want {
-		t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// TestFormatStatusMarkdown_FormattedText_RendersOneFence verifies that the
-// pre-formatted body the "llm" response format returns is rendered inside a
-// fence and that none of the structured rows is written beside it.
-func TestFormatStatusMarkdown_FormattedText_RendersOneFence(t *testing.T) {
-	want := "## Orbit Status\n\n```text\nstatus: healthy\n```\n" + statusHints
-
-	if got := FormatStatusMarkdown(StatusOutput{FormattedText: "status: healthy"}); got != want {
-		t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// TestFormatStatusMarkdown_NestedFormattedText_RendersOneFence verifies that
-// the pre-formatted body is found in the nested shape too.
-func TestFormatStatusMarkdown_NestedFormattedText_RendersOneFence(t *testing.T) {
-	out := StatusOutput{System: &StatusSystem{FormattedText: "status: healthy"}}
-	want := "## Orbit Status\n\n```text\nstatus: healthy\n```\n" + statusHints
-
-	if got := FormatStatusMarkdown(out); got != want {
-		t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// TestFormatStatusMarkdown_NoData_SaysSo verifies that a response carrying
-// nothing at all says so in one sentence.
-func TestFormatStatusMarkdown_NoData_SaysSo(t *testing.T) {
-	want := "## Orbit Status\n\nNo Orbit status data returned.\n" + statusHints
-
-	if got := FormatStatusMarkdown(StatusOutput{}); got != want {
-		t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// TestFormatStatusMarkdown_OneFieldAlone_RendersItsRow verifies that "no data"
-// is said only when every fact is missing: a response carrying one label and
-// nothing else renders that one row. The emptiness test joins five facts, and
-// a join that ignored any one of them would call a partial answer empty.
+// TestFormatStatusMarkdown_OneFieldAlone_RendersItsRow verifies that each
+// part of the status renders without the others, so a status with only a
+// version is not read as no status at all.
 func TestFormatStatusMarkdown_OneFieldAlone_RendersItsRow(t *testing.T) {
 	tests := []struct {
 		name string
 		out  StatusOutput
-		row  string
+		want string
 	}{
-		{name: "status", out: StatusOutput{Status: "degraded"}, row: "- **Status**: degraded\n"},
-		{name: "version", out: StatusOutput{Version: "0.5.0"}, row: "- **Version**: 0.5.0\n"},
-		{name: "timestamp", out: StatusOutput{Timestamp: "2026-03-20T15:45:00Z"}, row: "- **Timestamp**: 20 Mar 2026 15:45 UTC\n"},
-		{name: "error", out: StatusOutput{System: &StatusSystem{Error: "cannot reach the gRPC cluster"}}, row: "- **Error**: cannot reach the gRPC cluster\n"},
+		{name: "status", out: StatusOutput{Status: "UNKNOWN"}, want: "- **Status**: UNKNOWN\n"},
+		{name: "version", out: StatusOutput{Version: "0.163.0"}, want: "- **Version**: 0.163.0\n"},
+		{
+			name: "components", out: StatusOutput{Components: []StatusComponent{{Name: "click|house", Status: "healthy\nenough"}}},
+			want: "### Components\n\n| Component | Status |\n| --- | --- |\n| click&#124;house | healthy enough |\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			want := "## Orbit Status\n\n" + tt.row + statusHints
+			want := "## Orbit Status\n\n" + tt.want + statusHints
 			if got := FormatStatusMarkdown(tt.out); got != want {
 				t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
 			}
@@ -151,218 +87,128 @@ func TestFormatStatusMarkdown_OneFieldAlone_RendersItsRow(t *testing.T) {
 	}
 }
 
-// TestFormatSchemaMarkdown_RendersTheWholeCard verifies that the ontology
-// renders as a card with the three type counts as rows and the domains as a
-// nested collection.
+// TestFormatStatusMarkdown_NoData_SaysSo verifies that a status with nothing
+// in it renders a sentence rather than an empty card.
+func TestFormatStatusMarkdown_NoData_SaysSo(t *testing.T) {
+	want := "## Orbit Status\n\nNo Orbit status data returned.\n" + statusHints
+	if got := FormatStatusMarkdown(StatusOutput{}); got != want {
+		t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatSchemaMarkdown_RendersTheWholeCard verifies that the schema
+// renders as a card with the three type counts as rows and the domains and
+// edge kinds as nested collections, and that a schema with no node expanded
+// offers the step that asks for properties.
 func TestFormatSchemaMarkdown_RendersTheWholeCard(t *testing.T) {
 	out := SchemaOutput{
-		SchemaVersion: "1.0",
-		Domains:       []SchemaDomain{{Name: "core", Description: "Core entities", NodeNames: []string{"User", "Project"}}},
-		Nodes:         []any{map[string]any{"name": "User"}},
-		Edges:         []SchemaEdge{{Name: "AUTHORED"}},
-	}
-
-	want := "## Orbit Schema\n\n" +
-		"- **Schema version**: 1.0\n" +
-		"- **Domains**: 1\n" +
-		"- **Nodes**: 1\n" +
-		"- **Edges**: 1\n\n" +
-		"### Domains\n\n" +
-		"| Domain | Description | Nodes |\n| --- | --- | --- |\n" +
-		"| core | Core entities | User, Project |\n\n" +
-		"### Edge types\n\n" +
-		"| Edge | Source -> target | Description |\n| --- | --- | --- |\n" +
-		"| AUTHORED |  |  |\n" +
-		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
-		schemaExpandHint +
-		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
-
-	if got := FormatSchemaMarkdown(out); got != want {
-		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// schemaExpandHint is the step a schema answered with nothing expanded ends
-// with: the card lists no property, and orbit.query names them (issue 1311).
-const schemaExpandHint = "- Use action 'orbit.schema' to read the properties and edges of the node types a query reads: name them in expand, or set format=llm for the whole ontology as compact text\n"
-
-// TestFormatSchemaMarkdown_NoDomains_WritesNoTable verifies that an ontology
-// with no domains renders its counts and no Domains section, rather than a
-// heading over an empty table.
-func TestFormatSchemaMarkdown_NoDomains_WritesNoTable(t *testing.T) {
-	out := SchemaOutput{SchemaVersion: "1.0", Nodes: []any{map[string]any{"name": "User"}}}
-
-	want := "## Orbit Schema\n\n" +
-		"- **Schema version**: 1.0\n" +
-		"- **Domains**: 0\n" +
-		"- **Nodes**: 1\n" +
-		"- **Edges**: 0\n" +
-		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
-		schemaExpandHint +
-		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
-
-	if got := FormatSchemaMarkdown(out); got != want {
-		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// TestFormatSchemaMarkdown_ExpandedNode_ListsItsPropertiesAndEdges verifies
-// that the text answer carries what expand returns and the edge types every
-// answer carries (issue 1311).
-//
-// The card used to write the version, three counts and the domains, and
-// nothing a query is built from: the properties of the nodes the caller asked
-// to expand and every edge type were in the structured output only, so a
-// client that hands the model the text, as most do on the default surface,
-// left it to guess them, while the next step told it to use "the node and
-// edge types listed here". The node that was not expanded gets no section,
-// and with one expanded the step pointing at expand is not offered again.
-// GitLab-authored names are escaped like any other cell.
-func TestFormatSchemaMarkdown_ExpandedNode_ListsItsPropertiesAndEdges(t *testing.T) {
-	out := SchemaOutput{
-		SchemaVersion: "0.1",
-		Nodes: []any{
-			map[string]any{"name": "User", "domain": "core"},
-			map[string]any{
-				"name":           "Project",
-				"domain":         "core",
-				"description":    "A GitLab project",
-				"incoming_edges": []any{"IN_PROJECT"},
-				"outgoing_edges": []any{"IN_GROUP", "OWNED|BY"},
-				"properties": []any{
-					map[string]any{"name": "full_path", "data_type": "String", "nullable": false},
-					map[string]any{"name": "visibility", "data_type": "Enum", "nullable": true, "enum_values": []any{"private", "public"}},
-				},
-			},
-		},
+		Domains: []SchemaDomain{{Name: "core|domain", NodeNames: []string{"User|Account", "Project"}}},
+		Nodes:   []SchemaNode{{Name: "User|Account", Domain: "core|domain"}, {Name: "Project", Domain: "core|domain"}},
 		Edges: []SchemaEdge{{
 			Name:        "IN_GROUP",
-			Description: "A project or subgroup in its group",
+			Description: "A project\nor subgroup in its group",
 			Variants:    []SchemaEdgeVariant{{SourceType: "Project", TargetType: "Group"}, {SourceType: "Group", TargetType: "Group"}},
 		}},
 	}
 
 	want := "## Orbit Schema\n\n" +
-		"- **Schema version**: 0.1\n" +
-		"- **Domains**: 0\n" +
+		"- **Domains**: 1\n" +
 		"- **Nodes**: 2\n" +
 		"- **Edges**: 1\n\n" +
+		"### Domains\n\n" +
+		"| Domain | Nodes |\n| --- | --- |\n" +
+		"| core&#124;domain | User&#124;Account, Project |\n\n" +
 		"### Edge types\n\n" +
 		"| Edge | Source -> target | Description |\n| --- | --- | --- |\n" +
-		"| IN_GROUP | Project -> Group, Group -> Group | A project or subgroup in its group |\n\n" +
-		"### Node Project\n\n" +
-		"- **Domain**: core\n" +
-		"- **Description**: A GitLab project\n" +
-		"- **Incoming edges**: IN_PROJECT\n" +
-		"- **Outgoing edges**: IN_GROUP, OWNED&#124;BY\n\n" +
-		"#### Properties\n\n" +
-		"| Property | Type | Nullable | Values |\n| --- | --- | --- | --- |\n" +
-		"| full_path | String | ❌ |  |\n" +
-		"| visibility | Enum | ✅ | private, public |\n" +
-		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
-		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
-
-	if got := FormatSchemaMarkdown(out); got != want {
-		t.Errorf("FormatSchemaMarkdown() =\n%s\nwant\n%s", got, want)
-	}
-}
-
-// TestFormatSchemaMarkdown_ExpandedNode_IsTheOneCarryingAnyExpandedKey
-// verifies that a node counts as expanded when GitLab sent any one of the
-// three keys only expand adds, each on its own, and that a node carrying no
-// property writes no Properties table under its rows.
-func TestFormatSchemaMarkdown_ExpandedNode_IsTheOneCarryingAnyExpandedKey(t *testing.T) {
-	tests := []struct {
-		name string
-		node map[string]any
-		want string
-	}{
-		{
-			name: "properties alone",
-			node: map[string]any{"name": "Issue", "properties": []any{map[string]any{"name": "iid", "data_type": "Int"}}},
-			want: "### Node Issue\n\n" +
-				"#### Properties\n\n" +
-				"| Property | Type | Nullable | Values |\n| --- | --- | --- | --- |\n" +
-				"| iid | Int | ❌ |  |\n",
-		},
-		{
-			name: "incoming edges alone",
-			node: map[string]any{"name": "Issue", "incoming_edges": []any{"AUTHORED"}},
-			want: "### Node Issue\n\n- **Incoming edges**: AUTHORED\n",
-		},
-		{
-			name: "outgoing edges alone",
-			node: map[string]any{"name": "Issue", "outgoing_edges": []any{"IN_PROJECT"}},
-			want: "### Node Issue\n\n- **Outgoing edges**: IN_PROJECT\n",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			want := "## Orbit Schema\n\n" +
-				"- **Domains**: 0\n" +
-				"- **Nodes**: 1\n" +
-				"- **Edges**: 0\n\n" +
-				tt.want +
-				"\n---\n💡 **Next steps:**\n" +
-				"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
-				"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
-			if got := FormatSchemaMarkdown(SchemaOutput{Nodes: []any{tt.node}}); got != want {
-				t.Errorf("FormatSchemaMarkdown() =\n%s\nwant\n%s", got, want)
-			}
-		})
-	}
-}
-
-// TestFormatSchemaMarkdown_UndecodableNode_IsLeftToTheStructuredOutput
-// verifies that a node definition that cannot be read as the card's node
-// shape is not rendered from a guess: a value JSON cannot encode and a
-// properties key holding a string both leave the node out of the sections,
-// and with no node read as expanded the card offers the step that asks for
-// properties.
-func TestFormatSchemaMarkdown_UndecodableNode_IsLeftToTheStructuredOutput(t *testing.T) {
-	out := SchemaOutput{Nodes: []any{
-		math.NaN(),
-		map[string]any{"name": "Issue", "properties": "iid"},
-	}}
-
-	want := "## Orbit Schema\n\n" +
-		"- **Domains**: 0\n" +
-		"- **Nodes**: 2\n" +
-		"- **Edges**: 0\n" +
+		"| IN_GROUP | Project -> Group, Group -> Group | A project or subgroup in its group |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
 		schemaExpandHint +
 		"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n"
 
 	if got := FormatSchemaMarkdown(out); got != want {
+		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatSchemaMarkdown_ExpandedNode_ListsItsProperties verifies that the
+// text answer carries the properties of the expanded nodes, each node a
+// section with its domain, description, key and label field as rows, and that
+// with one node expanded the step pointing at expand is not offered again
+// (issue 1311). The node that was not expanded gets no section, and a row
+// GitLab sent no value for is left out.
+func TestFormatSchemaMarkdown_ExpandedNode_ListsItsProperties(t *testing.T) {
+	out := SchemaOutput{
+		Nodes: []SchemaNode{
+			{Name: "User", Domain: "core"},
+			{
+				Name: "Project", Domain: "core", Description: "A GitLab project", PrimaryKey: "id", LabelField: "full_path",
+				Properties: []SchemaProperty{
+					{Name: "full_path", DataType: "String"},
+					{Name: "visibility", DataType: "Enum", Nullable: true, EnumValues: []string{"private", "public"}},
+				},
+			},
+			{Name: "Issue", Properties: []SchemaProperty{{Name: "iid", DataType: "Int"}}},
+		},
+	}
+
+	want := "## Orbit Schema\n\n" +
+		"- **Domains**: 0\n" +
+		"- **Nodes**: 3\n" +
+		"- **Edges**: 0\n\n" +
+		"### Node Project\n\n" +
+		"- **Domain**: core\n" +
+		"- **Description**: A GitLab project\n" +
+		"- **Primary key**: id\n" +
+		"- **Label field**: full_path\n\n" +
+		"#### Properties\n\n" +
+		"| Property | Type | Nullable | Values |\n| --- | --- | --- | --- |\n" +
+		"| full_path | String | ❌ |  |\n" +
+		"| visibility | Enum | ✅ | private, public |\n\n" +
+		"### Node Issue\n\n" +
+		"#### Properties\n\n" +
+		"| Property | Type | Nullable | Values |\n| --- | --- | --- | --- |\n" +
+		"| iid | Int | ❌ |  |\n" +
+		schemaHints
+
+	if got := FormatSchemaMarkdown(out); got != want {
 		t.Errorf("FormatSchemaMarkdown() =\n%s\nwant\n%s", got, want)
 	}
 }
 
-// TestFormatToolsMarkdown_RendersTheWholeTable verifies that the tool manifest
+// TestFormatSchemaMarkdown_FormattedText_RendersOneFence verifies that the
+// compact text of the llm format is the whole body of the card.
+func TestFormatSchemaMarkdown_FormattedText_RendersOneFence(t *testing.T) {
+	want := "## Orbit Schema\n\n```text\ndomains[9]:\n```\n" + schemaHints
+	if got := FormatSchemaMarkdown(SchemaOutput{FormattedText: "domains[9]:"}); got != want {
+		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatSchemaMarkdown_NoNodes_OffersNoExpandStep verifies that an empty
+// schema renders its counts and does not send the caller to expand nodes it
+// does not have.
+func TestFormatSchemaMarkdown_NoNodes_OffersNoExpandStep(t *testing.T) {
+	want := "## Orbit Schema\n\n- **Domains**: 0\n- **Nodes**: 0\n- **Edges**: 0\n" + schemaHints
+	if got := FormatSchemaMarkdown(SchemaOutput{}); got != want {
+		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatToolsMarkdown_RendersTheWholeTable verifies that the tool list
 // renders as a table whose name column is a code span, and that its next steps
-// lead to the grammar and the ontology a graph query is built from.
-//
-// The name used to be stripped of every backtick it held and then escaped as a
-// cell inside a hand-written span, which showed the entity as its five
-// characters and quietly deleted part of the name. The span writer for a cell
-// keeps the name whole and escapes only the pipe, which is the one character a
-// span cannot contain in a table. The first row is one of the two tools
-// GitLab.com lists, neither of which carries the query DSL, so the next steps
-// that used to send a model to the tools' parameters sent it nowhere useful.
+// lead to the grammar and the schema a graph query is built from. A name
+// holding a backtick and a pipe stays whole inside its span.
 func TestFormatToolsMarkdown_RendersTheWholeTable(t *testing.T) {
 	out := ToolsOutput{Tools: []ToolDefinition{
 		{Name: "list_commands", Description: "Discover Orbit commands"},
-		{Name: "count`nodes", Description: "Count nodes"},
+		{Name: "query`|graph", Description: "Run\nqueries"},
 	}}
 
 	want := "## Orbit Tools (2)\n\n" +
 		"| Tool | Description |\n| --- | --- |\n" +
 		"| `list_commands` | Discover Orbit commands |\n" +
-		"| ``count`nodes`` | Count nodes |\n" +
+		"| ``query`\\|graph`` | Run queries |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'orbit.dsl' to read the grammar a graph query is written in\n" +
 		"- Use action 'orbit.schema' to read the node and edge names a graph query names\n"
@@ -372,11 +218,10 @@ func TestFormatToolsMarkdown_RendersTheWholeTable(t *testing.T) {
 	}
 }
 
-// TestFormatToolsMarkdown_NoTools_IsOneSentence verifies that an empty manifest
+// TestFormatToolsMarkdown_NoTools_IsOneSentence verifies that an empty list
 // renders the one sentence an empty list renders.
 func TestFormatToolsMarkdown_NoTools_IsOneSentence(t *testing.T) {
 	want := "No Orbit tools found.\n"
-
 	if got := FormatToolsMarkdown(ToolsOutput{}); got != want {
 		t.Errorf("FormatToolsMarkdown() = %q, want %q", got, want)
 	}
@@ -391,8 +236,7 @@ const dslHints = "\n---\n💡 **Next steps:**\n" +
 // TestFormatDSLMarkdown_QueryCommand_RendersGrammarAndInputSchema verifies
 // that the raw description of the query command renders as the card of one
 // object: the command as a row, the grammar as text, and the JSON Schema of the
-// command's input as indented JSON, each fence titled, then the two next steps
-// a reader of a grammar needs.
+// command's input as indented JSON, each fence titled.
 func TestFormatDSLMarkdown_QueryCommand_RendersGrammarAndInputSchema(t *testing.T) {
 	out := DSLOutput{
 		Name:        "query_graph",
@@ -417,10 +261,10 @@ func TestFormatDSLMarkdown_QueryCommand_RendersGrammarAndInputSchema(t *testing.
 // compact text GitLab answers the llm format with is the whole body of the
 // card, one text fence ending on the same two next steps.
 func TestFormatDSLMarkdown_FormattedText_RendersOneFence(t *testing.T) {
-	out := DSLOutput{ResponseFormat: "llm", FormattedText: "commands[1]{name,description}:\n  query_graph,Read-only openCypher 9-based syntax"}
+	out := DSLOutput{ResponseFormat: "llm", FormattedText: "commands[1]:\n  - name: query_graph"}
 
 	want := "## Orbit Query Language\n\n" +
-		"```text\ncommands[1]{name,description}:\n  query_graph,Read-only openCypher 9-based syntax\n```\n" +
+		"```text\ncommands[1]:\n  - name: query_graph\n```\n" +
 		dslHints
 
 	if got := FormatDSLMarkdown(out); got != want {
@@ -429,30 +273,16 @@ func TestFormatDSLMarkdown_FormattedText_RendersOneFence(t *testing.T) {
 }
 
 // TestFormatDSLMarkdown_PartsAlone_RenderOnlyWhatCame verifies that each part
-// of the command renders without the others, so a command GitLab described
-// with no input schema, or an input schema with no description, is not
-// mistaken for no language at all.
+// of the command renders without the others.
 func TestFormatDSLMarkdown_PartsAlone_RenderOnlyWhatCame(t *testing.T) {
 	tests := []struct {
 		name string
 		out  DSLOutput
 		want string
 	}{
-		{
-			name: "a command alone",
-			out:  DSLOutput{Name: "query_graph"},
-			want: "- **Command**: query_graph\n",
-		},
-		{
-			name: "a grammar alone",
-			out:  DSLOutput{Description: "MATCH ... RETURN"},
-			want: "### Grammar\n\n```text\nMATCH ... RETURN\n```\n",
-		},
-		{
-			name: "an input schema alone",
-			out:  DSLOutput{Parameters: map[string]any{"type": "object"}},
-			want: "### Input schema\n\n```json\n{\n  \"type\": \"object\"\n}\n```\n",
-		},
+		{name: "a command alone", out: DSLOutput{Name: "query_graph"}, want: "- **Command**: query_graph\n"},
+		{name: "a grammar alone", out: DSLOutput{Description: "MATCH ... RETURN"}, want: "### Grammar\n\n```text\nMATCH ... RETURN\n```\n"},
+		{name: "an input schema alone", out: DSLOutput{Parameters: map[string]any{"type": "object"}}, want: "### Input schema\n\n```json\n{\n  \"type\": \"object\"\n}\n```\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -466,8 +296,7 @@ func TestFormatDSLMarkdown_PartsAlone_RenderOnlyWhatCame(t *testing.T) {
 
 // TestFormatDSLMarkdown_NoQueryCommand_PointsAtTheSchema verifies that an
 // answer describing no query command renders a sentence rather than an empty
-// card, and ends on the action that lists what a query is built from, which is
-// what a caller of orbit.dsl is told whatever GitLab answered.
+// card, and ends on the action that lists what a query is built from.
 func TestFormatDSLMarkdown_NoQueryCommand_PointsAtTheSchema(t *testing.T) {
 	want := "## Orbit Query Language\n\nGitLab described no query command, so no query language was returned.\n" +
 		"\n---\n💡 **Next steps:**\n" +
@@ -480,7 +309,7 @@ func TestFormatDSLMarkdown_NoQueryCommand_PointsAtTheSchema(t *testing.T) {
 
 // TestFormatQueryMarkdown_StructuredResult_RendersRowsThenFences verifies that
 // a query result renders as a card whose rows say what was asked and whose
-// bodies carry the query text and the rows as JSON.
+// bodies carry the rows as JSON.
 func TestFormatQueryMarkdown_StructuredResult_RendersRowsThenFences(t *testing.T) {
 	out := QueryOutput{
 		QueryType: "traversal",
@@ -511,9 +340,7 @@ func TestFormatQueryMarkdown_FormattedText_RendersOneFence(t *testing.T) {
 }
 
 // TestFormatQueryMarkdown_BacktickRuns_WidenEveryFence verifies that a body
-// holding a run of three backticks cannot close the fence it sits in: the fence
-// is sized to the longest run inside it, in the raw query text and in the JSON
-// alike.
+// holding a run of three backticks cannot close the fence it sits in.
 func TestFormatQueryMarkdown_BacktickRuns_WidenEveryFence(t *testing.T) {
 	out := QueryOutput{
 		QueryType:       "traversal",
@@ -535,150 +362,94 @@ func TestFormatQueryMarkdown_BacktickRuns_WidenEveryFence(t *testing.T) {
 }
 
 // TestFormatGraphStatusMarkdown_RendersTheWholeCard verifies that indexing
-// status renders as a card whose per-domain counts are a nested collection, and
-// that a duration GitLab did not send writes no row.
+// status renders as a card: whether Orbit is on and since when, the project
+// counts, the indexing state with the areas as a nested collection, and the
+// per-domain counts as another. Names GitLab answered are escaped as cells.
 func TestFormatGraphStatusMarkdown_RendersTheWholeCard(t *testing.T) {
+	enabled := true
 	out := GraphStatusOutput{
-		Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3, Gaps: 1},
+		Enabled:   &enabled,
+		EnabledAt: "2026-06-11T23:19:22Z",
+		Projects:  &GraphStatusProjects{Indexed: 2, TotalKnown: 3, Gaps: 1, NotIndexed: 1, Total: 3},
 		Indexing: &GraphStatusIndexing{
-			State:           "indexed",
-			LastStartedAt:   "2026-03-20T15:45:00Z",
-			LastCompletedAt: "2026-03-20T15:50:00Z",
-			LastDurationMs:  5,
-			LastError:       "one project could not be read",
+			State:           "READY",
+			LastCompletedAt: "2026-10-29T08:24:01Z",
+			Areas:           []GraphStatusArea{{Name: "ci|cd", State: "READY"}},
 		},
 		Domains: []GraphStatusDomain{{
-			Name:  "SDLC",
-			Items: []GraphStatusDomainItem{{Name: "Issue", Count: 4}, {Name: "MergeRequest", Count: 7}},
+			Name:  "SDLC|core",
+			Items: []GraphStatusDomainItem{{Name: "Issue|Bug", Count: 4}, {Name: "MergeRequest", Count: 7}},
 		}},
 	}
 
 	want := "## Orbit Graph Status\n\n" +
+		"- **Orbit enabled**: ✅\n" +
+		"- **Enabled at**: 11 Jun 2026 23:19 UTC\n" +
 		"- **Indexed projects**: 2\n" +
 		"- **Total known projects**: 3\n" +
+		"- **Projects not indexed**: 1\n" +
 		"- **Projects out of indexing attempts**: 1\n" +
-		"- **Indexing state**: indexed\n" +
-		"- **Last started at**: 20 Mar 2026 15:45 UTC\n" +
-		"- **Last completed at**: 20 Mar 2026 15:50 UTC\n" +
-		"- **Last duration (ms)**: 5\n" +
-		"- **Last error**: one project could not be read\n\n" +
+		"- **Indexing state**: READY\n" +
+		"- **Last completed at**: 29 Oct 2026 08:24 UTC\n\n" +
+		"### Areas\n\n" +
+		"| Area | State |\n| --- | --- |\n" +
+		"| ci&#124;cd | READY |\n\n" +
 		"### Domains\n\n" +
 		"| Domain | Counts |\n| --- | --- |\n" +
-		"| SDLC | Issue: 4, MergeRequest: 7 |\n" +
-		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
-		"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n"
+		"| SDLC&#124;core | Issue&#124;Bug: 4, MergeRequest: 7 |\n" +
+		graphStatusHints
 
 	if got := FormatGraphStatusMarkdown(out); got != want {
 		t.Errorf("FormatGraphStatusMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatGraphStatusMarkdown_NoDomains_WritesNoTable verifies that an
-// indexing status carrying no per-domain counts renders its project rows and
-// no Domains section, rather than a heading over an empty table. A count of
-// zero projects out of indexing attempts is written too, since GitLab always
-// sends the count and zero is the answer a healthy namespace gives.
-func TestFormatGraphStatusMarkdown_NoDomains_WritesNoTable(t *testing.T) {
-	out := GraphStatusOutput{Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3}}
-
-	want := "## Orbit Graph Status\n\n" +
-		"- **Indexed projects**: 2\n" +
-		"- **Total known projects**: 3\n" +
-		"- **Projects out of indexing attempts**: 0\n" +
-		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
-		"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n"
-
-	if got := FormatGraphStatusMarkdown(out); got != want {
-		t.Errorf("FormatGraphStatusMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// TestFormatGraphStatusMarkdown_FormattedText_RendersOneFence verifies that the
-// pre-formatted body replaces the structured rows here too.
-func TestFormatGraphStatusMarkdown_FormattedText_RendersOneFence(t *testing.T) {
-	want := "## Orbit Graph Status\n\n```text\nindexing: indexed\n```\n" +
-		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
-		"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n"
-
-	if got := FormatGraphStatusMarkdown(GraphStatusOutput{FormattedText: "indexing: indexed"}); got != want {
-		t.Errorf("FormatGraphStatusMarkdown() =\n%q\nwant\n%q", got, want)
-	}
-}
-
-// TestOrbitMarkdownFormatters_HostileValues_StayInsideTheirCells verifies that
-// a name, a description or a status the Knowledge Graph API answered with
-// cannot split a row or end a table: every one of them is a free string, and
-// nothing in this repository constrains any of them.
-func TestOrbitMarkdownFormatters_HostileValues_StayInsideTheirCells(t *testing.T) {
+// TestFormatGraphStatusMarkdown_PartsAlone_RenderOnlyWhatCame verifies that a
+// project, for which GitLab sends no enabled flag, and an indexing state with
+// no area render their rows and nothing for what GitLab did not send.
+func TestFormatGraphStatusMarkdown_PartsAlone_RenderOnlyWhatCame(t *testing.T) {
+	disabled := false
 	tests := []struct {
 		name string
-		got  string
+		out  GraphStatusOutput
 		want string
 	}{
+		{name: "orbit off", out: GraphStatusOutput{Enabled: &disabled}, want: "- **Orbit enabled**: ❌\n"},
 		{
-			name: "status components",
-			got: FormatStatusMarkdown(StatusOutput{Components: []StatusComponent{{
-				Name:   "click|house",
-				Status: "healthy\nenough",
-			}}}),
-			want: "## Orbit Status\n\n" +
-				"### Components\n\n" +
-				"| Component | Status | Replicas |\n| --- | --- | --- |\n" +
-				"| click&#124;house | healthy enough |  |\n" +
-				statusHints,
+			name: "projects alone", out: GraphStatusOutput{Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3}},
+			want: "- **Indexed projects**: 2\n- **Total known projects**: 3\n- **Projects not indexed**: 0\n- **Projects out of indexing attempts**: 0\n",
 		},
-		{
-			name: "schema domains",
-			got: FormatSchemaMarkdown(SchemaOutput{Domains: []SchemaDomain{{
-				Name:        "core|domain",
-				Description: "Core\nentities",
-				NodeNames:   []string{"User|Account"},
-			}}}),
-			want: "## Orbit Schema\n\n" +
-				"- **Domains**: 1\n" +
-				"- **Nodes**: 0\n" +
-				"- **Edges**: 0\n\n" +
-				"### Domains\n\n" +
-				"| Domain | Description | Nodes |\n| --- | --- | --- |\n" +
-				"| core&#124;domain | Core entities | User&#124;Account |\n" +
-				"\n---\n💡 **Next steps:**\n" +
-				"- Use action 'orbit.dsl' to read the grammar a query is written in\n" +
-				"- Use action 'orbit.query' to run a query naming the node and edge types listed here\n",
-		},
-		{
-			name: "tool manifest",
-			got:  FormatToolsMarkdown(ToolsOutput{Tools: []ToolDefinition{{Name: "query`|graph", Description: "Run\nqueries"}}}),
-			want: "## Orbit Tools (1)\n\n" +
-				"| Tool | Description |\n| --- | --- |\n" +
-				"| ``query`\\|graph`` | Run queries |\n" +
-				"\n---\n💡 **Next steps:**\n" +
-				"- Use action 'orbit.dsl' to read the grammar a graph query is written in\n" +
-				"- Use action 'orbit.schema' to read the node and edge names a graph query names\n",
-		},
-		{
-			name: "graph status domains",
-			got: FormatGraphStatusMarkdown(GraphStatusOutput{Domains: []GraphStatusDomain{{
-				Name:  "SDLC|core",
-				Items: []GraphStatusDomainItem{{Name: "Issue|Bug", Count: 4}},
-			}}}),
-			want: "## Orbit Graph Status\n\n" +
-				"### Domains\n\n" +
-				"| Domain | Counts |\n| --- | --- |\n" +
-				"| SDLC&#124;core | Issue&#124;Bug: 4 |\n" +
-				"\n---\n💡 **Next steps:**\n" +
-				"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
-				"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n",
-		},
+		{name: "indexing without areas", out: GraphStatusOutput{Indexing: &GraphStatusIndexing{State: "INDEXING"}}, want: "- **Indexing state**: INDEXING\n"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.got != tt.want {
-				t.Errorf("markdown =\n%q\nwant\n%q", tt.got, tt.want)
+			want := "## Orbit Graph Status\n\n" + tt.want + graphStatusHints
+			if got := FormatGraphStatusMarkdown(tt.out); got != want {
+				t.Errorf("FormatGraphStatusMarkdown() =\n%q\nwant\n%q", got, want)
 			}
 		})
+	}
+}
+
+// TestFormatOrbitNotFound_NamesWhatOrbitNeeds verifies the result a 404 on an
+// Orbit route renders as: informational, marked as an error, and naming the
+// resource with the two checks that explain it.
+func TestFormatOrbitNotFound_NamesWhatOrbitNeeds(t *testing.T) {
+	result := formatOrbitNotFound(orbitNotFoundOutput{Resource: "GitLab Orbit Status", Identifier: "service status"})
+	if !result.IsError || len(result.Content) == 0 {
+		t.Fatalf("formatOrbitNotFound() = %+v, want an error result with content", result)
+	}
+	text, isText := result.Content[0].(*mcp.TextContent)
+	if !isText || !strings.Contains(text.Text, "GitLab Orbit Status") || !strings.Contains(text.Text, "Verify GitLab Orbit is enabled") {
+		t.Fatalf("formatOrbitNotFound() content = %+v, want the resource and the checks", result.Content)
+	}
+}
+
+// TestPrettyAny_ValueThatDoesNotEncode_FallsBackToItsText verifies the one
+// fallback of the JSON fences: a value JSON cannot encode is written as Go
+// formats it rather than lost.
+func TestPrettyAny_ValueThatDoesNotEncode_FallsBackToItsText(t *testing.T) {
+	if got := prettyAny(func() {}); got == "" {
+		t.Fatal("prettyAny() returned empty fallback")
 	}
 }

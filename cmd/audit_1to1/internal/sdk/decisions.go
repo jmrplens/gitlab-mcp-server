@@ -162,4 +162,19 @@ var graphqlDecisions = map[string]decision{
 	// was to be added to gitlab-org/api/client-go!3063, closed unmerged on
 	// 2026-10-21, and goes out instead in a small merge request on its topic.
 	"terraformstates.listPage": {decisionKeep, "TerraformStates.List takes no first or after and selects no count or pageInfo, so a project with more than 100 states read as holding 100; the handler's paged document selects of each state what List and Get select, and retires when client-go's List pages (docs/development/upstream-bugs.md row 104)"},
+
+	// KEEP: client-go's Orbit service wraps the REST routes GitLab.com removed
+	// on 2026-10-27 and -28 (gitlab-org/gitlab!265633, !264745, !265998 and
+	// !266009), and GitLab answers each of these through GraphQL instead, which
+	// the service has no method for. Its Query and QueryRaw, the one route
+	// still served, are what orbit.Query calls. Each method that sends a
+	// removed route is a row of docs/development/upstream-bugs.md.
+	"orbit.Status":                 {decisionKeep, orbitRoutesRemoved},
+	"orbit.schemaPage":             {decisionKeep, orbitRoutesRemoved},
+	"orbit.graphStatusByPath":      {decisionKeep, orbitRoutesRemoved},
+	"orbit.graphStatusByGroupID":   {decisionKeep, orbitRoutesRemoved},
+	"orbit.graphStatusByProjectID": {decisionKeep, orbitRoutesRemoved},
 }
+
+// orbitRoutesRemoved is the shared reason behind the Orbit GraphQL operations.
+const orbitRoutesRemoved = "client-go's Orbit.GetStatus, GetSchema and GetGraphStatus send GET /orbit/status, /orbit/schema and /orbit/graph_status, which GitLab.com answers 404 since gitlab-org/gitlab!265633 and !264745 removed them (2026-10-27 and -28); GitLab answers the same through GraphQL (Query.orbit.serviceStatus, Query.orbit.schema, Group.orbit and Project.orbit), which the service has no method for (docs/development/upstream-bugs.md)"

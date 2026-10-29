@@ -142,7 +142,6 @@ const (
 	// its example bodies carries the webhook limits or the history, so the
 	// entity is the oracle for those four.
 	docPlanLimits         = "plan_limits.md (lib/api/entities/plan_limit.rb exposes every limit and limits_history with no condition; web_hook_calls_low, web_hook_calls_mid and limits_history are on the entity and not on the page)"
-	docOrbitSchemaText    = "orbit.md, which defers to the generated reference, and that gives GET /orbit/schema no response schema; get_graph_schema in ee/lib/analytics/knowledge_graph/grpc_client.rb answers the llm format with `{ formatted_text: response.formatted_text }`, recorded in docs/development/orbit-responses.json as orbit.schema (llm)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -901,12 +900,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"planlimits.PlanLimitItem.web_hook_calls_low":                    docPlanLimits,
 	"planlimits.PlanLimitItem.web_hook_calls_mid":                    docPlanLimits,
 	"planlimits.PlanLimitItem.limits_history":                        docPlanLimits,
-
-	// orbit: the compact text GitLab answers the schema route with for the llm
-	// response format, a key client-go's OrbitSchema does not model, read from
-	// the captured response (ADR-0021, orbit.Schema). Recorded in
-	// docs/development/upstream-bugs.md.
-	"orbit.SchemaOutput.formatted_text": docOrbitSchemaText,
 }}
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

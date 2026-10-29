@@ -225,3 +225,58 @@ func TestNames_AreReadOnlyFromWhatCarriesThem(t *testing.T) {
 		})
 	}
 }
+
+// TestOrbitPath_KeepsTheOrbitRoutesAndGraphQL verifies which requests a
+// recording keeps and the path it names them by: an Orbit route below
+// /api/v4, the MCP endpoint among them, by its route, and GitLab's GraphQL
+// endpoint as it is; anything else is forwarded and not kept.
+func TestOrbitPath_KeepsTheOrbitRoutesAndGraphQL(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+		kept bool
+	}{
+		{path: "/api/v4/orbit/mcp", want: "/orbit/mcp", kept: true},
+		{path: "/api/v4/orbit/query", want: "/orbit/query", kept: true},
+		{path: "/api/graphql", want: "/api/graphql", kept: true},
+		{path: "/api/v4/version"},
+		{path: "/api/graphql/explorer"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			got, kept := orbitPath(tc.path)
+			if got != tc.want || kept != tc.kept {
+				t.Errorf("orbitPath(%q) = %q, %t, want %q, %t", tc.path, got, kept, tc.want, tc.kept)
+			}
+		})
+	}
+}
+
+// TestOperationOf_NamesWhatAnEndpointOfManyOperationsWasAsked verifies the
+// operation a request names and the arguments it was asked with: a GraphQL
+// document by its type and name and its variables, an MCP request by its
+// method and tool and the tool's arguments, an MCP method with no tool alone,
+// and nothing for a REST body or a body that is not JSON.
+func TestOperationOf_NamesWhatAnEndpointOfManyOperationsWasAsked(t *testing.T) {
+	cases := []struct {
+		name      string
+		body      string
+		operation string
+		arguments []string
+	}{
+		{name: "a GraphQL query", body: `{"query":"\n query OrbitSchema($b: String, $a: Boolean!) { orbit { schema { __typename } } }","variables":{"b":"x","a":true}}`, operation: "query OrbitSchema", arguments: []string{"a", "b"}},
+		{name: "an anonymous GraphQL query", body: `{"query":"{ orbit { serviceStatus { state } } }"}`},
+		{name: "an MCP tool call", body: `{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_commands","arguments":{"format":"raw","command_names":["q"]}}}`, operation: "tools/call list_commands", arguments: []string{"command_names", "format"}},
+		{name: "an MCP method", body: `{"jsonrpc":"2.0","method":"tools/list","params":{}}`, operation: "tools/list"},
+		{name: "a REST body", body: `{"query":"MATCH (p:Project {id: 1}) RETURN p","response_format":"raw"}`},
+		{name: "not JSON", body: `query`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			operation, arguments := operationOf([]byte(tc.body))
+			if operation != tc.operation || !slices.Equal(arguments, tc.arguments) {
+				t.Errorf("operationOf() = %q, %q, want %q, %q", operation, arguments, tc.operation, tc.arguments)
+			}
+		})
+	}
+}

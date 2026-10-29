@@ -31,16 +31,20 @@ const modulePath = "github.com/jmrplens/gitlab-mcp-server/v3/"
 // meets the file before the command.
 const recordNote = "What GitLab.com's Orbit routes answered the requests this server's handlers build, as a key tree with no values: written by cmd/gen_orbit_record, judged offline by its -check, and compared with the Orbit output types by cmd/audit_1to1 -scope=paths. A verbatim key is recorded as its root only, because its keys are data."
 
-// callSpec is one recorded call: which handler, with what, and which of its
-// answer's subtrees are data rather than shape.
+// callSpec is one recorded call: which handler, with what, where in its answer
+// the body the handler reads is, and which of that body's subtrees are data
+// rather than shape.
 type callSpec struct {
 	id orbitrecord.CallID
+	// root is where the answer is recorded from (see [rootedAnswer]), empty
+	// for a REST body, which is recorded whole.
+	root string
 	// verbatim names the paths recorded as their root only.
 	verbatim []string
 	invoke   func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error)
 }
 
-// formatted is the response format input the handlers share.
+// formatted is the response format input orbit.dsl takes.
 func formatted(format string) orbit.ResponseFormatInput {
 	return orbit.ResponseFormatInput{ResponseFormat: format}
 }
@@ -54,39 +58,39 @@ func fixtureQuery(namespace string) string {
 	return "MATCH (p:Project {full_path: '" + namespace + "/" + fixtureProject + "'}) RETURN p.id, p.full_path, p.name"
 }
 
+// The roots of the GraphQL calls: the field below data each handler reads.
+const (
+	rootServiceStatus = "data.orbit.serviceStatus"
+	rootSchema        = "data.orbit.schema"
+	rootGroupOrbit    = "data.group.orbit"
+)
+
 // callSpecs is every call a recording makes, in [orbitrecord.ExpectedCalls]
 // order. The verbatim paths are the answers whose keys are data: a JSON
-// Schema document names its own properties (a tool's parameters, and the
-// query command's input schema orbit.dsl reads), a query row carries the
-// columns the query asked for, and a component's metrics are the proto map
-// `map<string, string> metrics` (crates/orbit-server/proto/orbit.proto in
-// gitlab-org/orbit/knowledge-graph), which component_to_hash in
-// ee/lib/analytics/knowledge_graph/grpc_client.rb sends as
-// `component.metrics.to_h`, so its keys are metric names.
+// Schema document names its own properties (a tool's input schema, and the
+// query command's input schema orbit.dsl reads), and a query row carries the
+// columns the query asked for.
 func callSpecs() []callSpec {
 	return []callSpec{
-		{id: orbitrecord.CallID{Action: orbitrecord.StatusAction, Variant: "raw"}, verbatim: []string{"system.components[].metrics"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
-			return orbit.Status(ctx, client, orbit.StatusInput{ResponseFormatInput: formatted("raw")})
+		{id: orbitrecord.CallID{Action: orbitrecord.StatusAction, Variant: "default"}, root: rootServiceStatus, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+			return orbit.Status(ctx, client, orbit.StatusInput{})
 		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.StatusAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
-			return orbit.Status(ctx, client, orbit.StatusInput{ResponseFormatInput: formatted("llm")})
-		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "raw"}, root: rootSchema, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Schema(ctx, client, orbit.SchemaInput{Format: "raw"})
 		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "llm"}, root: rootMCPText, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Schema(ctx, client, orbit.SchemaInput{Format: "llm"})
 		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "expand"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.SchemaAction, Variant: "expand"}, root: rootSchema, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Schema(ctx, client, orbit.SchemaInput{Expand: []string{"Project"}, Format: "raw"})
 		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.ToolsAction, Variant: "default"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.ToolsAction, Variant: "default"}, root: rootMCPResult, verbatim: []string{"tools[].inputSchema"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.Tools(ctx, client, orbit.ToolsInput{})
 		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.DSLAction, Variant: "raw"}, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.DSLAction, Variant: "raw"}, root: rootMCPText, verbatim: []string{"[].parameters"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: formatted("raw")})
 		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.DSLAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
+		{id: orbitrecord.CallID{Action: orbitrecord.DSLAction, Variant: "llm"}, root: rootMCPText, invoke: func(ctx context.Context, client *gitlabclient.Client, _ string) (any, error) {
 			return orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: formatted("llm")})
 		}},
 		{id: orbitrecord.CallID{Action: orbitrecord.QueryAction, Variant: "raw"}, verbatim: []string{"result.edges[]", "result.nodes[]"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
@@ -98,11 +102,8 @@ func callSpecs() []callSpec {
 		{id: orbitrecord.CallID{Action: orbitrecord.QueryAction, Variant: "gql"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
 			return orbit.Query(ctx, client, orbit.QueryInput{Query: fixtureQuery(namespace), ResponseFormat: "gql"})
 		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.GraphStatusAction, Variant: "raw"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
-			return orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace, ResponseFormatInput: formatted("raw")})
-		}},
-		{id: orbitrecord.CallID{Action: orbitrecord.GraphStatusAction, Variant: "llm"}, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
-			return orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace, ResponseFormatInput: formatted("llm")})
+		{id: orbitrecord.CallID{Action: orbitrecord.GraphStatusAction, Variant: "full_path"}, root: rootGroupOrbit, invoke: func(ctx context.Context, client *gitlabclient.Client, namespace string) (any, error) {
+			return orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: namespace})
 		}},
 	}
 }
@@ -120,8 +121,10 @@ var (
 )
 
 // recordCalls makes every expected call through the handlers and returns the
-// record they add up to.
-func recordCalls(ctx context.Context, cfg genRun) (orbitrecord.Document, error) {
+// record they add up to. previous is the record committed at HEAD, or nil,
+// which a call GitLab refused the account is carried from when the run allows
+// unanswered calls.
+func recordCalls(ctx context.Context, cfg genRun, previous *orbitrecord.Document) (orbitrecord.Document, error) {
 	listener, err := listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return orbitrecord.Document{}, fmt.Errorf("start the recording proxy: %w", err)
@@ -154,12 +157,17 @@ func recordCalls(ctx context.Context, cfg genRun) (orbitrecord.Document, error) 
 	for _, spec := range callSpecs() {
 		call, output, callErr := makeCall(ctx, client, proxy, spec, cfg.namespace)
 		if callErr != nil {
-			return orbitrecord.Document{}, callErr
+			var refused *refusal
+			if !cfg.allowUnanswered || !errors.As(callErr, &refused) {
+				return orbitrecord.Document{}, callErr
+			}
+			carryOrSkip(&doc, previous, refused, cfg.now())
+			continue
 		}
 		if indexErr := indexedAnswer(spec.id, output); indexErr != nil {
 			return orbitrecord.Document{}, indexErr
 		}
-		if status, isStatus := output.(orbit.StatusOutput); isStatus && spec.id.Variant == "raw" {
+		if status, isStatus := output.(orbit.StatusOutput); isStatus {
 			doc.Source.OrbitVersion = status.Version
 		}
 		if dsl, isDSL := output.(orbit.DSLOutput); isDSL && spec.id.Variant == "raw" {
@@ -179,36 +187,119 @@ func grammarOf(dsl orbit.DSLOutput) string {
 	return orbitrecord.GrammarStamp(dsl.Description, dsl.Parameters)
 }
 
+// refusal is a call GitLab did not answer for the account: refused 401 or
+// 403, or answered with null where the handler reads, which is how GraphQL
+// answers a field Orbit does not serve the user. It is the one failure a
+// recording told to allow it (-allow-unanswered) records rather than stops
+// on, and it carries the request so an earlier answer to the same one can be
+// kept.
+type refusal struct {
+	id      orbitrecord.CallID
+	request orbitrecord.Call
+	reason  string
+	err     error
+}
+
+// Error renders the refusal with the handler's own error.
+func (r *refusal) Error() string {
+	return fmt.Sprintf("%s was not answered for this account (%s), so its answer cannot be recorded: %v", r.id, r.reason, r.err)
+}
+
+// Unwrap returns the handler's error.
+func (r *refusal) Unwrap() error { return r.err }
+
+// refusedBy reports whether a failed call's one exchange was GitLab declining
+// the account rather than a shape the handler could not read, and why: a 401
+// or 403, or a 200 whose answer is null where the handler reads, which the
+// handler reports as [orbit.ErrOrbitUnavailable].
+func refusedBy(ex exchange, handlerErr error) (reason string, refused bool) {
+	if ex.status == http.StatusUnauthorized || ex.status == http.StatusForbidden {
+		return fmt.Sprintf("%s %s answered %d %s", ex.method, ex.path, ex.status, strings.TrimSpace(string(ex.payload))), true
+	}
+	if ex.status == http.StatusOK && errors.Is(handlerErr, orbit.ErrOrbitUnavailable) {
+		return fmt.Sprintf("%s %s (%s) answered 200 with null where the handler reads, which is GitLab's answer to an account Orbit is not available to", ex.method, ex.path, ex.operation), true
+	}
+	return "", false
+}
+
 // makeCall invokes one handler and reads the one exchange it made.
 func makeCall(ctx context.Context, client *gitlabclient.Client, proxy *recorder, spec callSpec, namespace string) (orbitrecord.Call, any, error) {
 	output, err := spec.invoke(ctx, client, namespace)
 	exchanges := proxy.take()
 	if err != nil {
+		if len(exchanges) == 1 {
+			if reason, refused := refusedBy(exchanges[0], err); refused {
+				return orbitrecord.Call{}, nil, &refusal{id: spec.id, request: requestOf(spec, exchanges[0]), reason: reason, err: err}
+			}
+		}
 		return orbitrecord.Call{}, nil, fmt.Errorf("%s failed, so its answer cannot be recorded: %w", spec.id, err)
 	}
 	if len(exchanges) != 1 {
 		return orbitrecord.Call{}, nil, fmt.Errorf("%s made %d Orbit requests and a call is recorded from exactly one", spec.id, len(exchanges))
 	}
 	ex := exchanges[0]
-	keys, err := keyTree(ex.contentType, ex.payload, spec.verbatim)
+	rootType, rooted, err := rootedAnswer(spec.root, ex.contentType, ex.payload)
 	if err != nil {
 		return orbitrecord.Call{}, nil, fmt.Errorf("%s: %s: %w", spec.id, ex.describe(), err)
+	}
+	keys, err := keyTree(rootType, rooted, spec.verbatim)
+	if err != nil {
+		return orbitrecord.Call{}, nil, fmt.Errorf("%s: %s: %w", spec.id, ex.describe(), err)
+	}
+	rootContentType := ""
+	if spec.root != "" {
+		rootContentType = rootType
 	}
 	outputName, err := outputType(output)
 	if err != nil {
 		return orbitrecord.Call{}, nil, fmt.Errorf("%s: %w", spec.id, err)
 	}
+	call := requestOf(spec, ex)
+	call.Output = outputName
+	call.Response = orbitrecord.Response{
+		Status:          ex.status,
+		ContentType:     ex.contentType,
+		Root:            spec.root,
+		RootContentType: rootContentType,
+		Keys:            keys,
+	}
+	return call, output, nil
+}
+
+// requestOf is the call one exchange made, before its answer is read.
+func requestOf(spec callSpec, ex exchange) orbitrecord.Call {
 	return orbitrecord.Call{
 		Action:  spec.id.Action,
 		Variant: spec.id.Variant,
-		Output:  outputName,
-		Request: orbitrecord.Request{Method: ex.method, Path: ex.path, Query: ex.query, Body: ex.body},
-		Response: orbitrecord.Response{
-			Status:      ex.status,
-			ContentType: ex.contentType,
-			Keys:        keys,
+		Request: orbitrecord.Request{
+			Method: ex.method, Path: ex.path, Query: ex.query, Body: ex.body,
+			Operation: ex.operation, Arguments: ex.arguments,
 		},
-	}, output, nil
+	}
+}
+
+// carryOrSkip is what a recording allowed to go without an answer does with a
+// refused call: it keeps the answer an earlier recording got to the same
+// request, dated by that recording, or else lists the call as unrecorded with
+// the reason and the time GitLab gave it.
+func carryOrSkip(doc, previous *orbitrecord.Document, refused *refusal, now time.Time) {
+	if previous != nil {
+		for _, call := range previous.Calls {
+			if call.ID() != refused.id || !call.SameRequest(refused.request) {
+				continue
+			}
+			if call.RetrievedAt == "" {
+				call.RetrievedAt = previous.Source.RetrievedAt
+			}
+			doc.Calls = append(doc.Calls, call)
+			return
+		}
+	}
+	doc.Unrecorded = append(doc.Unrecorded, orbitrecord.Unrecorded{
+		Action:  refused.id.Action,
+		Variant: refused.id.Variant,
+		Reason:  refused.reason + " at " + now.UTC().Format(time.RFC3339) + ", and no earlier recording holds an answer to this request",
+	})
 }
 
 // errUnindexed is what a recording over a fixture namespace the Knowledge
@@ -224,7 +315,7 @@ var errUnindexed = errors.New("the fixture namespace is not indexed, so the answ
 // make orbit-wait-indexer proceeds when it times out, so this is where a
 // recording over an unindexed namespace is stopped.
 func indexedAnswer(id orbitrecord.CallID, output any) error {
-	if id.Variant != "raw" {
+	if id.Variant != "raw" && id.Variant != "full_path" {
 		return nil
 	}
 	switch typed := output.(type) {

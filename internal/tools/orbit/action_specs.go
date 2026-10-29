@@ -26,22 +26,23 @@ const (
 
 // ActionSpecs returns the canonical ActionSpec definitions for all GitLab.com Orbit MCP tools.
 //
-// Each ActionSpec describes a single public Orbit endpoint (status, schema, tools, dsl, query, graph_status)
-// and is used to project both individual tools and meta-tool routes in the MCP server runtime.
+// Each ActionSpec describes one Orbit action (status, schema, tools, dsl, query, graph_status), answered by
+// GitLab's GraphQL API, its Orbit MCP endpoint or the Orbit query route, and is used to project both
+// individual tools and meta-tool routes in the MCP server runtime.
 //
 // These specs are the single source of truth for tool registration, schema, and documentation.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		orbitReadSpec("status", orbitReadRoute(client, Status, "GitLab Orbit Status", "cluster status"), "gitlab_orbit_status",
-			"Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.",
+		orbitReadSpec("status", orbitReadRoute(client, Status, "GitLab Orbit Status", "service status"), "gitlab_orbit_status",
+			"Inspect the health of the GitLab Orbit (Knowledge Graph) service on GitLab.com: its state, version and the state of each component.",
 			[]string{orbitActionStatus},
 			[]string{"kg.status", "knowledge_graph.status", "orbit.health", "kg.health"}, orbitInput{}),
-		orbitReadSpec("schema", orbitReadRoute(client, Schema, "GitLab Orbit Schema", "graph ontology"), "gitlab_orbit_schema",
-			"Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.",
+		orbitReadSpec("schema", orbitReadRoute(client, Schema, "GitLab Orbit Schema", "graph schema"), "gitlab_orbit_schema",
+			"Inspect the GitLab Orbit (Knowledge Graph) schema: domains, node kinds and edge kinds, with the properties of the node kinds named in expand, or the schema as compact text.",
 			[]string{orbitActionSchema, orbitActionDSL},
 			[]string{"kg.schema", "knowledge_graph.schema", "kg.ontology", "knowledge_graph.ontology"}, orbitInput{}),
-		orbitReadSpec("tools", orbitReadRoute(client, Tools, "GitLab Orbit Tools", "tool manifest"), "gitlab_orbit_tools",
-			"List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.",
+		orbitReadSpec("tools", orbitReadRoute(client, Tools, "GitLab Orbit Tools", "tool list"), "gitlab_orbit_tools",
+			"List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.",
 			[]string{orbitActionTools},
 			[]string{"kg.tools", "knowledge_graph.tools", "kg.manifest", "knowledge_graph.manifest"}, orbitInput{}),
 		orbitReadSpec("dsl", orbitReadRoute(client, DSL, "GitLab Orbit Query Language", queryCommand+" command"), "gitlab_orbit_dsl",
@@ -56,7 +57,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			[]string{orbitActionSchema, orbitActionDSL, orbitActionGraphStatus},
 			[]string{"kg.query", "knowledge_graph.query", "orbit.search", "kg.search", "knowledge_graph.search"}, queryInput()),
 		orbitReadSpec("graph_status", orbitReadRoute(client, GraphStatus, "GitLab Orbit Graph Status", "requested namespace, project, or full_path"), "gitlab_orbit_graph_status",
-			"Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.",
+			"Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain.",
 			[]string{orbitActionQuery},
 			[]string{"kg.indexing", "kg.index_status", "knowledge_graph.indexing", "knowledge_graph.index_status"}, orbitInput{}),
 	}
@@ -102,9 +103,10 @@ func queryGuidance() map[string]toolutil.ParameterGuidance {
 			CommonConfusions: []string{
 				"Every query bounds at least one node by its id or a literal property, inline as {id: 278964} or {full_path: 'gitlab-org/gitlab'}, or in a WHERE comparison. LIMIT bounds nothing, so MATCH (p:Project) RETURN p LIMIT 5 is refused.",
 				"A relationship type follows a colon, -[:IN_PROJECT]->. Written without it, -[IN_PROJECT]-> declares a variable and is refused.",
-				"WHERE combines predicates with AND and NOT. OR, XOR, DISTINCT, count(*), OPTIONAL MATCH, WITH and UNION are refused, and a list is negated as NOT p.visibility_level IN [...], never with NOT IN.",
+				"WHERE combines predicates on one node's properties with AND and NOT. OR, XOR, RETURN DISTINCT, count(*), OPTIONAL MATCH, WITH and UNION are refused, and a list is negated as NOT p.visibility_level IN [...], never with NOT IN. count(DISTINCT x) counts distinct values.",
 				"Between labeled nodes the arrow is -> or <-. The undirected -- is for the neighbors of one node, whose far end has a variable and nothing else: MATCH (p:Project {id: 278964})--(n) RETURN n.",
-				"A shortest path is MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path with both ends bounded, and an aggregate is aliased to be sorted by: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC.",
+				"A shortest path is MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path with both ends bounded and its relationship types named, since a wildcard -[*1..3]-> is refused. An aggregate is aliased to be sorted by, with one sort key: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC.",
+				"A page is SKIP and LIMIT: SKIP 0 to 10000, LIMIT 1 to 1000, as in ORDER BY p.id SKIP 20 LIMIT 20. PAGE and AFTER are refused.",
 				"A query sent as a JSON object is the JSON DSL GitLab.com no longer reads, and is answered compile_error while it reads GQL. Send the query as a string.",
 			},
 			ExampleBinding: queryExampleGQL,

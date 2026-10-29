@@ -11,59 +11,69 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// ResponseFormatInput is the shared response_format selector used by
-// the status, dsl and graph_status Orbit endpoints. The query endpoint takes a
-// third value and declares its own field ([QueryInput.ResponseFormat]).
+// ResponseFormatInput is the response_format selector of orbit.dsl, the one
+// Orbit action besides orbit.query and orbit.schema whose source still renders
+// an llm text: the list_commands tool of GitLab's Orbit MCP endpoint. The query
+// takes a third value and declares its own field ([QueryInput.ResponseFormat]).
 type ResponseFormatInput struct {
-	// ResponseFormat selects the Orbit response shape. GitLab declares
-	// two values on every route that takes it (ee/lib/api/orbit/data.rb,
-	// `values: %w[raw llm]`):
+	// ResponseFormat selects the answer's shape. GitLab declares two values
+	// (the format property of list_commands' input schema):
 	//   - "raw": structured JSON
 	//   - "llm": compact text optimized for LLM consumption
 	//
-	// "json" is accepted here as a synonym of "raw" and sent as "raw":
-	// GitLab answers 400 "response_format does not have a valid value"
-	// to it on every route, and it was offered here as a value of its
-	// own until that was measured.
+	// "json" is accepted here as a synonym of "raw" and sent as "raw": it was
+	// offered here as a value of its own until GitLab's refusal of it was
+	// measured on the REST routes this action read before.
 	//
-	// When empty the parameter is not sent and GitLab applies its own
-	// default, which is "raw" on every route.
-	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies."`
+	// When empty the handler asks for "raw", the default of the REST route
+	// this action read until GitLab.com removed it on 2026-10-28; the MCP tool
+	// defaults to llm.
+	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw or llm (json is read as raw). When omitted, raw."`
 }
 
-// StatusInput holds parameters for retrieving Orbit cluster status.
+// StructuredFormatInput is the response_format of the two Orbit actions GitLab
+// now answers through GraphQL, orbit.status and orbit.graph_status. GraphQL
+// has one shape, so the parameter is accepted for the callers that send it and
+// changes nothing; a value the REST routes never took is still refused, so a
+// typo is not read as a choice.
+type StructuredFormatInput struct {
+	// ResponseFormat is raw, llm or json, all answered with the structured
+	// output. It is checked and not sent: GitLab's GraphQL API has no llm
+	// rendering of the Orbit status or of a namespace's index.
+	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Accepted for compatibility: raw, llm or json. GitLab answers this through GraphQL, which has one structured shape, so every value returns the same output."`
+}
+
+// StatusInput holds parameters for retrieving Orbit service health.
 type StatusInput struct {
-	ResponseFormatInput
+	StructuredFormatInput
 }
 
 // SchemaInput holds parameters for retrieving the Orbit graph schema.
 type SchemaInput struct {
-	// Expand lists node names whose full properties and relationships
-	// should be hydrated in the response.
-	Expand []string `json:"expand,omitempty" jsonschema:"Node names to expand with full properties and relationships."`
-	// Format selects the schema response shape: "raw" or "llm", with
-	// "json" read as "raw" for the reason [ResponseFormatInput] gives.
-	// Empty leaves GitLab's default ("raw"). Whichever of the two
-	// input names carries it, it reaches GitLab as response_format,
-	// which is the only name the route declares.
-	Format string `json:"format,omitempty" jsonschema:"Schema response format: raw or llm (json is read as raw). When omitted, the GitLab default (raw) applies."`
-	// ResponseFormat is an alias for Format, under the name GitLab
-	// declares for the parameter. Must match Format when both are set.
+	// Expand lists node names whose properties should be included in the
+	// response. Without it the schema lists every node kind and edge kind
+	// without the properties, which is most of the answer's size.
+	Expand []string `json:"expand,omitempty" jsonschema:"Node names whose properties to include, for example Project or MergeRequest. Without it, nodes are listed without properties."`
+	// Format selects the schema response shape: "raw" (GitLab's GraphQL
+	// schema, the default) or "llm" (the compact text the get_graph_schema
+	// command of GitLab's Orbit MCP endpoint answers), with "json" read as
+	// "raw". Whichever of the two input names carries it, it means the same.
+	Format string `json:"format,omitempty" jsonschema:"Schema response format: raw (structured, the default) or llm (compact text; json is read as raw)."`
+	// ResponseFormat is an alias for Format. Must match Format when both are
+	// set.
 	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Alias for format. Must match format when both are set."`
 }
 
-// ToolsInput is the input for listing the Orbit MCP tool manifest.
-// The endpoint accepts no parameters; the type exists so the handler
-// signature is uniform with the other Orbit handlers.
+// ToolsInput is the input for listing the Orbit MCP tool manifest. The tool
+// list takes no parameters; the type exists so the handler signature is
+// uniform with the other Orbit handlers.
 type ToolsInput struct{}
 
 // DSLInput holds parameters for retrieving the Orbit query language.
@@ -75,18 +85,17 @@ type DSLInput struct {
 // Orbit command a graph query runs as describes it.
 //
 // GitLab.com reads every query as GQL since it turned orbit_gql_queries on for
-// everyone at 01:06 UTC on 2026-10-15, and GET /api/v4/orbit/schema/dsl, which
-// served the JSON DSL this type used to carry whole, answers 404 since then
-// (issue 1414). What GitLab publishes for GQL instead is the query_graph
-// command of GET /api/v4/orbit/agent/commands: a description of the grammar and
-// the JSON Schema of the command's input. The other two GQL routes publish no
-// grammar: GET /orbit/schema/format is the JSON Schema of a query's answer, and
-// GET /orbit/query/templates lists named queries written in GQL.
+// everyone at 01:06 UTC on 2026-10-15 (issue 1414). What it publishes for GQL
+// is the query_graph command of the Orbit command catalog: a description of
+// the grammar and the JSON Schema of the command's input. The catalog was
+// served at GET /api/v4/orbit/agent/commands until gitlab-org/gitlab!266009
+// removed the route on 2026-10-28; it is now the list_commands tool of the
+// Orbit MCP endpoint, POST /api/v4/orbit/mcp, which answers the same list.
 type DSLOutput struct {
 	toolutil.HintableOutput
 	// ResponseFormat echoes the response_format that was asked for ("raw" for
 	// the command as a JSON object, "llm" for it as compact text), or nothing
-	// when GitLab chose its default, raw.
+	// when the caller chose none and the handler asked for raw.
 	ResponseFormat string `json:"response_format,omitempty"`
 	// FormattedText is the command as compact text, which is the whole of
 	// GitLab's answer when the caller selected the "llm" response format.
@@ -121,35 +130,34 @@ type DSLOutput struct {
 // answers such a query with compile_error, and [wrapQueryErr] then says that
 // GitLab.com reads queries as GQL, with an example (issue 1414).
 //
-// The statement, as the Orbit query frontend states it
-// (docs/design-documents/querying/orbit_query_frontend.md in
-// gitlab-org/orbit/knowledge-graph):
+// The statement, as the query_graph command describes it on GitLab.com
+// (read 2026-10-29):
 //
 //	MATCH pattern [WHERE predicates]
 //	[MATCH pattern [WHERE predicates] ...]
 //	RETURN projections
 //	[ORDER BY key [ASC | DESC]]
-//	[LIMIT rows | PAGE rows [AFTER 'token']]
+//	[SKIP rows] [LIMIT rows]
 //
 // Every node carries a label where it first appears, and at least one is
-// bounded by its id or a literal property, inline or in WHERE. A relationship
-// type follows a colon, -[:IN_PROJECT]->, a repeat is bounded (*1..3), and no
-// path is longer than three hops. WHERE combines predicates with AND and NOT.
-// RETURN selects properties or whole nodes, and count, sum, avg, min and max
-// aggregate, every other item becoming a group key. A neighbors query has one
-// labeled, bounded node and a far endpoint with a variable and nothing else,
-// and a shortest path is written MATCH path = ANY SHORTEST (a)-[...]->(b)
-// RETURN path. CALL db.schema() and CALL db.schema('Node') answer the ontology.
-// The query type of the answer is inferred from the statement.
+// bounded by its id or a literal property, inline or in WHERE; LIMIT is not a
+// filter. A relationship type follows a colon, -[:IN_PROJECT]->, a repeat is
+// bounded (*1..3), and no path is longer than three hops. WHERE combines
+// predicates on one node's properties with AND and NOT. RETURN selects
+// properties or whole nodes, and count, sum, avg, min and max aggregate, every
+// other item becoming a group key; an aggregate is aliased and sorted by its
+// alias, with one sort key. SKIP takes 0 to 10000 and LIMIT 1 to 1000, which
+// replaced PAGE and AFTER (gitlab-org/orbit/knowledge-graph!2924, issue 1527).
+// CALL db.schema() and CALL db.schema('Node') answer the ontology. The query
+// type of the answer is inferred from the statement.
 //
-// Examples, each answered 200 by GitLab.com on 2026-10-26:
+// Examples, each answered 200 by GitLab.com on 2026-10-29:
 //
 //	MATCH (p:Project {full_path: 'jmrp-oss/orbit-fixtures/kg-fixtures'}) RETURN p.id, p.full_path, p.name
-//	MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'jmrp-oss/orbit-fixtures/' RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC
+//	MATCH (j:Job)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'jmrp-oss/orbit-fixtures/' RETURN p, count(j) AS job_count ORDER BY job_count DESC
 //	MATCH (p:Project {full_path: 'jmrp-oss/orbit-fixtures/kg-fixtures'})--(n) RETURN n
-//	MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: 'feature/restock-helper'})-[:IN_PROJECT*1..2]->(p:Project {full_path: 'jmrp-oss/orbit-fixtures/kg-fixtures'}) RETURN path
 type QueryInput struct {
-	Query any `json:"query" jsonschema:"Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [LIMIT n or PAGE n [AFTER cursor]]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. A relationship type follows a colon, -[:IN_PROJECT]->, and a repeat is bounded, *1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. orbit.schema lists the entities, properties and relationship types a query names. A JSON object is forwarded as written, and GitLab.com refuses it while it reads queries as GQL. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
+	Query any `json:"query" jsonschema:"Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [SKIP n] [LIMIT n]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1; LIMIT is not a filter. A relationship type follows a colon, -[:IN_PROJECT]->, and a repeat is bounded, *1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups; alias an aggregate and sort by the alias: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. SKIP takes 0 to 10000 and LIMIT 1 to 1000. orbit.schema lists the entities, properties and relationship types a query names. A JSON object is forwarded as written, and GitLab.com refuses it while it reads queries as GQL. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
 	// ResponseFormat selects the answer's shape. POST /orbit/query declares
 	// a third value beside raw and llm, which is why this input carries its
 	// own field rather than [ResponseFormatInput] (`values: %w[raw llm gql]`
@@ -166,7 +174,7 @@ type QueryInput struct {
 type GraphStatusInput struct {
 	// NamespaceID targets a group by ID. Mutually exclusive with ProjectID
 	// and FullPath; exactly one of the three must be set.
-	NamespaceID int64 `json:"namespace_id,omitempty" jsonschema:"Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path."`
+	NamespaceID int64 `json:"namespace_id,omitempty" jsonschema:"Group ID to inspect. Set exactly one of namespace_id, project_id, or full_path."`
 	// ProjectID targets a project by ID. Mutually exclusive with
 	// NamespaceID and FullPath; exactly one of the three must be set.
 	ProjectID int64 `json:"project_id,omitempty" jsonschema:"Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path."`
@@ -174,147 +182,149 @@ type GraphStatusInput struct {
 	// (e.g. "gitlab-org/gitlab"). Mutually exclusive with NamespaceID
 	// and ProjectID; exactly one of the three must be set.
 	FullPath string `json:"full_path,omitempty" jsonschema:"Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field."`
-	ResponseFormatInput
+	StructuredFormatInput
 }
 
-// StatusReplicas describes ready and desired replica counts for an Orbit component.
-type StatusReplicas struct {
-	// Ready is the current number of healthy replicas.
-	Ready int64 `json:"ready"`
-	// Desired is the target number of replicas.
-	Desired int64 `json:"desired"`
-}
-
-// StatusComponent describes an Orbit subsystem status entry.
+// StatusComponent describes the health of one component of the Orbit service
+// (OrbitServiceComponent in GitLab's GraphQL API).
 type StatusComponent struct {
-	// Name is the subsystem identifier (e.g. "clickhouse", "api").
+	// Name is the component, for example "clickhouse-graph" or "nats".
 	Name string `json:"name,omitempty"`
-	// Status is the subsystem health label (e.g. "healthy").
+	// Status is the component's health state, GitLab's
+	// OrbitServiceComponent.state: HEALTHY, DEGRADED, UNHEALTHY, MIGRATING
+	// or UNKNOWN.
 	Status string `json:"status,omitempty"`
-	// Replicas are the ready/desired counts, or nil when the
-	// subsystem is stateless.
-	Replicas *StatusReplicas `json:"replicas,omitempty"`
-	// Metrics is the decoded raw JSON metrics payload for the subsystem.
-	Metrics any `json:"metrics,omitempty"`
 }
 
-// StatusUser mirrors the user-level access object returned in the new
-// nested shape of the Orbit status response. It is present only when
-// the server emits the nested shape; nil for the old flat shape.
-type StatusUser struct {
-	// Available reports whether the calling user has access to the
-	// Knowledge Graph.
-	Available bool `json:"available"`
-}
-
-// StatusSystem mirrors the cluster health object returned in the new
-// nested shape of the Orbit status response. It carries the same
-// health fields as the flat shape, plus an Error field emitted when
-// the backend cannot reach the gRPC cluster (Status is "unknown" in
-// that case). Present only for the nested shape; nil otherwise.
-type StatusSystem struct {
-	// FormattedText is the pre-formatted text body, when present.
-	FormattedText string `json:"formatted_text,omitempty"`
-	// Status is the cluster-level health label.
-	Status string `json:"status,omitempty"`
-	// Timestamp is the server-side snapshot time, RFC3339.
-	Timestamp string `json:"timestamp,omitempty"`
-	// Version is the Orbit service version.
-	Version string `json:"version,omitempty"`
-	// Error is the backend error message emitted when the gRPC
-	// cluster is unreachable, or empty otherwise.
-	Error string `json:"error,omitempty"`
-	// Components are the per-subsystem status entries.
-	Components []StatusComponent `json:"components,omitempty"`
-}
-
-// StatusOutput is the Orbit cluster health response.
+// StatusOutput is the health of the Orbit service, as GitLab's GraphQL API
+// answers Query.orbit.serviceStatus.
 //
-// The flat fields (FormattedText, Status, Timestamp, Version,
-// Components) are always populated: the SDK promotes the nested
-// system object's fields into them for backward compatibility. User
-// and System carry the new nested shape directly when the server
-// emits it, and are nil for the old flat shape.
+// It used to be GET /api/v4/orbit/status, which gitlab-org/gitlab!265633
+// removed on 2026-10-27. The fields GraphQL no longer sends are gone from the
+// output: user.available (GitLab answers serviceStatus null to a user Orbit is
+// not available to, which [Status] reports as an error), the nested system
+// object, timestamp, formatted_text, and each component's replicas and
+// metrics. The status and component status are GraphQL's state, asked under
+// the output's names in the document.
 type StatusOutput struct {
 	toolutil.HintableOutput
-	// User mirrors the user-level access object from the nested
-	// response shape, or nil for the flat shape.
-	User *StatusUser `json:"user,omitempty"`
-	// System mirrors the cluster health object from the nested
-	// response shape, or nil for the flat shape.
-	System *StatusSystem `json:"system,omitempty"`
-	// FormattedText is the pre-formatted text body returned by the
-	// server when the caller selected the "llm" response format.
-	FormattedText string `json:"formatted_text,omitempty"`
-	// Status is the cluster-level health label.
+	// Status is the overall health state of the Orbit service: HEALTHY,
+	// DEGRADED, UNHEALTHY, MIGRATING or UNKNOWN.
 	Status string `json:"status,omitempty"`
-	// Timestamp is the server-side snapshot time, RFC3339.
-	Timestamp string `json:"timestamp,omitempty"`
 	// Version is the Orbit service version.
 	Version string `json:"version,omitempty"`
-	// Components are the per-subsystem status entries.
+	// Components are the health states of the service's components.
 	Components []StatusComponent `json:"components,omitempty"`
 }
 
-// SchemaDomain describes a logical grouping of Orbit graph node types.
+// SchemaDomain is one domain of the Orbit graph schema and the node kinds in
+// it, grouped from each node's domain in the order GitLab lists the nodes.
 type SchemaDomain struct {
-	// Name is the domain identifier (e.g. "core", "sdlc").
+	// Name is the domain identifier (e.g. "core", "source_code").
 	Name string `json:"name,omitempty"`
-	// Description is the human-readable domain summary.
-	Description string `json:"description,omitempty"`
-	// NodeNames are the ontology node types in the domain.
+	// NodeNames are the node kinds in the domain.
 	NodeNames []string `json:"node_names,omitempty"`
 }
 
-// SchemaEdge describes an Orbit graph edge type.
+// SchemaEdge describes an Orbit graph edge kind.
 type SchemaEdge struct {
-	// Name is the edge type identifier (e.g. "AUTHORED", "IN_PROJECT").
+	// Name is the edge kind, which a query uses as the relationship type
+	// (e.g. "AUTHORED", "IN_PROJECT").
 	Name string `json:"name,omitempty"`
 	// Description is the human-readable edge summary.
 	Description string `json:"description,omitempty"`
-	// Variants are the valid source/target node-type pairs.
+	// Variants are the pairs of node kinds the edge connects, GitLab's
+	// endpoints.
 	Variants []SchemaEdgeVariant `json:"variants,omitempty"`
 }
 
-// SchemaEdgeVariant describes a valid source/target pair for an Orbit edge.
+// SchemaEdgeVariant describes one pair of node kinds an Orbit edge connects.
 type SchemaEdgeVariant struct {
-	// SourceType is the source node type (e.g. "User").
+	// SourceType is the node kind at the start of the edge (e.g. "User").
 	SourceType string `json:"source_type,omitempty"`
-	// TargetType is the target node type (e.g. "Issue").
+	// TargetType is the node kind at the end of the edge (e.g. "Issue").
 	TargetType string `json:"target_type,omitempty"`
 }
 
-// SchemaOutput is the Orbit graph ontology response.
+// SchemaNodeDisplay is how GitLab draws nodes of a kind.
+type SchemaNodeDisplay struct {
+	// Color is the hex color of the node kind.
+	Color string `json:"color,omitempty"`
+	// Size is the relative size of the node kind in a graph.
+	Size int64 `json:"size,omitempty"`
+}
+
+// SchemaProperty is one property of a node kind: the name a query filters
+// or returns, its type, and the values an enum takes.
+type SchemaProperty struct {
+	// Name is the property name.
+	Name string `json:"name"`
+	// DataType is the property's data type, for example String or Int.
+	DataType string `json:"data_type,omitempty"`
+	// Nullable reports whether the property can be empty.
+	Nullable bool `json:"nullable"`
+	// EnumValues are the values an enum property takes, empty otherwise.
+	EnumValues []string `json:"enum_values,omitempty"`
+}
+
+// SchemaNode is one node kind of the Orbit graph schema.
+type SchemaNode struct {
+	// Name is the node kind, which a query uses as the node label.
+	Name string `json:"name"`
+	// Description is the human-readable node summary.
+	Description string `json:"description,omitempty"`
+	// Domain is the domain the node kind belongs to.
+	Domain string `json:"domain,omitempty"`
+	// PrimaryKey is the property that identifies a node.
+	PrimaryKey string `json:"primary_key,omitempty"`
+	// LabelField is the property shown as a node's label, GitLab's
+	// labelProperty.
+	LabelField string `json:"label_field,omitempty"`
+	// Display is how GitLab draws nodes of the kind.
+	Display *SchemaNodeDisplay `json:"display,omitempty"`
+	// Properties are the node kind's properties, present only for the
+	// nodes named in expand.
+	Properties []SchemaProperty `json:"properties,omitempty"`
+}
+
+// SchemaOutput is the Orbit graph schema: GitLab's GraphQL Query.orbit.schema
+// for the structured answer, and the get_graph_schema command of the Orbit MCP
+// endpoint for the llm text.
+//
+// It used to be GET /api/v4/orbit/schema, which gitlab-org/gitlab!265633
+// removed on 2026-10-27. Gone with it: schema_version, each domain's
+// description, and each node's incoming_edges and outgoing_edges, which the
+// edges list carries pair by pair. Added: each node's primary key, label
+// property and display hints, typed where the REST answer was passed on
+// undecoded.
 type SchemaOutput struct {
 	toolutil.HintableOutput
-	// FormattedText is the ontology as compact text, which is the whole
-	// of GitLab's answer when the caller selected the "llm" response
-	// format. client-go's OrbitSchema does not model the key, so it is
-	// read from the captured response.
+	// FormattedText is the schema as compact text, which is the whole of
+	// GitLab's answer when the caller selected the "llm" format.
 	FormattedText string `json:"formatted_text,omitempty"`
-	// SchemaVersion is the Orbit ontology version string.
-	SchemaVersion string `json:"schema_version,omitempty"`
-	// Domains are the logical groupings of node types.
+	// Domains are the domains of the node kinds, each with its nodes.
 	Domains []SchemaDomain `json:"domains,omitempty"`
-	// Nodes are the decoded node-type definitions. The Orbit API
-	// evolves the node shape, so the SDK exposes the list as raw JSON
-	// values rather than fixed Go types.
-	Nodes []any `json:"nodes,omitempty"`
-	// Edges are the graph edge types.
+	// Nodes are the node kinds.
+	Nodes []SchemaNode `json:"nodes,omitempty"`
+	// Edges are the edge kinds.
 	Edges []SchemaEdge `json:"edges,omitempty"`
 }
 
-// ToolDefinition describes one MCP tool manifest entry served by Orbit.
+// ToolDefinition describes one tool GitLab's Orbit MCP endpoint serves.
 type ToolDefinition struct {
 	// Name is the tool name as Orbit exposes it.
 	Name string `json:"name,omitempty"`
 	// Description is the tool's human-readable description.
 	Description string `json:"description,omitempty"`
-	// Parameters is the decoded JSON Schema for the tool's input.
+	// Parameters is the decoded JSON Schema for the tool's input, which
+	// MCP's tools/list answers as inputSchema.
 	Parameters any `json:"parameters,omitempty"`
+	// Trusted is the trust flag GitLab sends beside each tool, absent when
+	// GitLab sends none.
+	Trusted *bool `json:"trusted,omitempty"`
 }
 
-// ToolsOutput is the Orbit MCP tool manifest response.
+// ToolsOutput is the tool list of GitLab's Orbit MCP endpoint.
 type ToolsOutput struct {
 	toolutil.HintableOutput
 	// Tools is the list of MCP tools Orbit exposes.
@@ -344,281 +354,95 @@ type QueryOutput struct {
 	RowCount int64 `json:"row_count,omitempty"`
 }
 
-// GraphStatusProjects describes indexed and known project counts.
+// GraphStatusProjects describes the indexing progress of the projects in the
+// group or project (OrbitIndexingProjects).
 type GraphStatusProjects struct {
-	// Indexed is the number of projects whose Knowledge Graph is
-	// up to date in the index.
+	// Indexed is the number of indexed projects.
 	Indexed int64 `json:"indexed"`
-	// TotalKnown is the total number of projects eligible for indexing.
+	// TotalKnown is the number of projects known to Orbit.
 	TotalKnown int64 `json:"total_known"`
-	// Gaps is the number of projects the indexer gave up on: every attempt
-	// it is allowed was used and none produced an index (ProjectsStatus.gaps
-	// in crates/orbit-server/proto/orbit.proto of
-	// gitlab-org/orbit/knowledge-graph). client-go's OrbitGraphStatusProjects
-	// does not model it, so [GraphStatus] reads it from the captured response
-	// (register row 93 of docs/development/upstream-bugs.md).
+	// Gaps is the number of projects that are not indexed, as GitLab's
+	// gaps field counts them.
 	Gaps int64 `json:"gaps"`
+	// NotIndexed is the number of projects that are not indexed, as
+	// GitLab's notIndexed field counts them.
+	NotIndexed int64 `json:"not_indexed"`
+	// Total is the number of projects known to Orbit, as GitLab's total
+	// field counts them.
+	Total int64 `json:"total"`
 }
 
-// GraphStatusDomainItem describes a count for one Orbit graph node type.
+// GraphStatusDomainItem is the number of indexed items of one entity.
 type GraphStatusDomainItem struct {
-	// Name is the node-type identifier (e.g. "MergeRequest").
+	// Name is the entity (e.g. "MergeRequest").
 	Name string `json:"name,omitempty"`
-	// Count is the number of indexed nodes of this type.
+	// Count is the number of indexed items of the entity.
 	Count int64 `json:"count"`
 }
 
-// GraphStatusDomain describes indexing counts for a graph domain.
+// GraphStatusDomain is the number of indexed items in one domain.
 type GraphStatusDomain struct {
-	// Name is the domain identifier (e.g. "SDLC").
+	// Name is the domain (e.g. "code_review").
 	Name string `json:"name,omitempty"`
-	// Items are the per-node-type counts in this domain.
+	// Items are the counts of each entity in the domain.
 	Items []GraphStatusDomainItem `json:"items,omitempty"`
 }
 
-// GraphStatusIndexing describes the latest indexing pipeline state.
-type GraphStatusIndexing struct {
-	// State is the indexing pipeline state (e.g. "indexed", "running", "error").
+// GraphStatusArea is the indexing state of one area of the graph.
+type GraphStatusArea struct {
+	// Name is the area (e.g. "source_code").
+	Name string `json:"name,omitempty"`
+	// State is the area's indexing state.
 	State string `json:"state,omitempty"`
-	// LastStartedAt is the UTC RFC3339 timestamp of the last indexing run start.
-	LastStartedAt string `json:"last_started_at,omitempty"`
-	// LastCompletedAt is the UTC RFC3339 timestamp of the last successful indexing run.
-	LastCompletedAt string `json:"last_completed_at,omitempty"`
-	// LastDurationMs is the duration of the last indexing run in milliseconds.
-	LastDurationMs int64 `json:"last_duration_ms,omitempty"`
-	// LastError is the last indexing error message, or empty when the
-	// last run completed successfully.
-	LastError string `json:"last_error,omitempty"`
 }
 
-// GraphStatusOutput is the Orbit graph indexing status response.
+// GraphStatusIndexing describes the indexing state of the group or project.
+type GraphStatusIndexing struct {
+	// State is the indexing state: READY, INDEXING, NOT_STARTED, FAILED or
+	// UNKNOWN.
+	State string `json:"state,omitempty"`
+	// LastCompletedAt is when Orbit last completed indexing the group or
+	// project, empty until the first run completes.
+	LastCompletedAt string `json:"last_completed_at,omitempty"`
+	// Areas are the indexing states of each area.
+	Areas []GraphStatusArea `json:"areas,omitempty"`
+}
+
+// GraphStatusOutput is the Orbit indexing status of one group or project, as
+// GitLab's GraphQL API answers Group.orbit and Project.orbit.
+//
+// It used to be GET /api/v4/orbit/graph_status, which gitlab-org/gitlab!264745
+// removed on 2026-10-28 (issue 1516). Gone with it: formatted_text (GraphQL
+// has no llm rendering), each count's state, and the last run's start, duration
+// and error. Added: whether Orbit is on for the group and since when, the
+// state of each area, and two more project counts.
 type GraphStatusOutput struct {
 	toolutil.HintableOutput
-	// FormattedText is the pre-formatted text body returned by the
-	// server when the caller selected the "llm" response format.
-	FormattedText string `json:"formatted_text,omitempty"`
-	// Projects summarizes the indexed vs. known project counts.
+	// Enabled reports whether Orbit is turned on for the group's top-level
+	// group; absent for a project, for which GitLab sends null.
+	Enabled *bool `json:"enabled,omitempty"`
+	// EnabledAt is when Orbit was turned on for the top-level group.
+	EnabledAt string `json:"enabled_at,omitempty"`
+	// Projects is the indexing progress of the projects, GitLab's
+	// indexing.projects.
 	Projects *GraphStatusProjects `json:"projects,omitempty"`
-	// Domains are the per-domain indexing counts.
+	// Domains are the indexed item counts of each domain, GitLab's
+	// itemCounts.domains.
 	Domains []GraphStatusDomain `json:"domains,omitempty"`
-	// Indexing is the latest indexing pipeline state.
+	// Indexing is the indexing state.
 	Indexing *GraphStatusIndexing `json:"indexing,omitempty"`
-}
-
-// Status retrieves the Orbit cluster health snapshot from GitLab.com.
-//
-// Endpoint: GET /api/v4/orbit/status. Returns subsystem components,
-// replica counts, version, and timestamp. Falls back to an informative
-// not-found result when the Orbit feature is not enabled.
-func Status(ctx context.Context, client *gitlabclient.Client, input StatusInput) (StatusOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return StatusOutput{}, err
-	}
-	format, hasFormat, err := responseFormat(input.ResponseFormat, "response_format")
-	if err != nil {
-		return StatusOutput{}, err
-	}
-	opts := &gl.GetOrbitStatusOptions{}
-	if hasFormat {
-		opts.ResponseFormat = format
-	}
-
-	status, _, err := client.GL().Orbit.GetStatus(opts, gl.WithContext(ctx))
-	if err != nil {
-		return StatusOutput{}, wrapOrbitErr("orbit_status", err)
-	}
-	return convertStatus(status), nil
-}
-
-// Schema retrieves the Orbit graph ontology (domains, node types, edge
-// types) from GitLab.com.
-//
-// Endpoint: GET /api/v4/orbit/schema. The expand parameter hydrates the
-// named node types with full properties; the response format selects
-// the structured ontology (raw) or the compact text one (llm).
-//
-// The format is sent as response_format through [responseFormatQuery]
-// rather than through client-go's GetOrbitSchemaOptions.Format, which
-// encodes it as `format`. Grape reserves that name for the
-// representation it renders, so GitLab answered 406 "The requested
-// format 'llm' is not supported." to either value and the response
-// format never reached the route. The option struct is left without a
-// format for that reason, and the compact text GitLab then answers
-// with is read from the captured response, since OrbitSchema models no
-// formatted_text.
-func Schema(ctx context.Context, client *gitlabclient.Client, input SchemaInput) (SchemaOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return SchemaOutput{}, err
-	}
-	format, err := schemaResponseFormat(input)
-	if err != nil {
-		return SchemaOutput{}, err
-	}
-	// An empty expand is left to the encoder, which writes no parameter for
-	// an empty slice behind the pointer; testing its length here would be a
-	// condition with no observable outcome.
-	expand := input.Expand
-	opts := &gl.GetOrbitSchemaOptions{Expand: &expand}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-
-	schema, _, err := client.GL().Orbit.GetSchema(opts, gl.WithContext(ctx), responseFormatQuery(format))
-	if err != nil {
-		return SchemaOutput{}, wrapOrbitErr("orbit_schema", err)
-	}
-	var text struct {
-		FormattedText string `json:"formatted_text"`
-	}
-	if err = captured.Decode(&text); err != nil {
-		return SchemaOutput{}, toolutil.WrapErr("orbit_schema", err)
-	}
-	out := convertSchema(schema)
-	out.FormattedText = text.FormattedText
-	return out, nil
-}
-
-// responseFormatQuery sets response_format on the request's query string,
-// replacing any value already there, or leaves the request as it is when
-// no format was chosen. It is how [Schema] sends the one parameter
-// client-go spells under a name GitLab does not read.
-func responseFormatQuery(format *gl.OrbitResponseFormatValue) gl.RequestOptionFunc {
-	return func(req *retryablehttp.Request) error {
-		if format == nil {
-			return nil
-		}
-		query := req.URL.Query()
-		query.Set("response_format", string(*format))
-		req.URL.RawQuery = query.Encode()
-		return nil
-	}
-}
-
-// Tools retrieves the Orbit MCP tool manifest and parameter schemas.
-//
-// Endpoint: GET /api/v4/orbit/tools. The manifest lists the tools Orbit
-// exposes alongside the JSON Schema of each tool's parameters; use it
-// to learn the canonical query shapes before calling Query.
-func Tools(ctx context.Context, client *gitlabclient.Client, _ ToolsInput) (ToolsOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ToolsOutput{}, err
-	}
-
-	tools, _, err := client.GL().Orbit.GetTools(gl.WithContext(ctx))
-	if err != nil {
-		return ToolsOutput{}, wrapOrbitErr("orbit_tools", err)
-	}
-	return convertTools(tools), nil
-}
-
-// queryCommand is the Orbit command a graph query runs as, the one whose
-// description is the grammar of the query language.
-const queryCommand = "query_graph"
-
-// agentCommandsPath is the route that describes Orbit's commands, below
-// /api/v4. client-go has no method for it.
-const agentCommandsPath = "orbit/agent/commands"
-
-// orbitDSLOp is the operation a [DSL] failure is reported under.
-const orbitDSLOp = "orbit_dsl"
-
-// agentCommandsOptions are the parameters of GET /api/v4/orbit/agent/commands
-// (ee/lib/api/orbit/data.rb): the comma-separated commands to describe, and
-// the response format, which GitLab defaults to raw when it is left out.
-type agentCommandsOptions struct {
-	CommandNames   string                       `url:"command_names"`
-	ResponseFormat *gl.OrbitResponseFormatValue `url:"response_format,omitempty"`
-}
-
-// DSL retrieves the query language GitLab.com compiles orbit.query in, as the
-// query_graph command describes it.
-//
-// Endpoint: GET /api/v4/orbit/agent/commands?command_names=query_graph. With
-// response_format="raw" (GitLab's default) the body is a list of commands, and
-// the query_graph entry gives the grammar's description and the JSON Schema of
-// the command's input; with response_format="llm" it is
-// {"formatted_text": ...}, the same command as compact text. Under GQL, which
-// GitLab.com reads every query in since 2026-10-15, the description is the GQL
-// grammar, and the route this action used to read, GET /orbit/schema/dsl,
-// answers 404, so nothing here asks it (issue 1414). The Knowledge Graph
-// describes only the language it reads for the caller, so the description is
-// of the JSON DSL again for a caller GitLab serves that language to.
-func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return DSLOutput{}, err
-	}
-	format, _, err := responseFormat(input.ResponseFormat, "response_format")
-	if err != nil {
-		return DSLOutput{}, err
-	}
-	body, err := getAgentCommands(ctx, client, agentCommandsPath, agentCommandsOptions{CommandNames: queryCommand, ResponseFormat: format})
-	if err != nil {
-		return DSLOutput{}, wrapOrbitErr(orbitDSLOp, err)
-	}
-	out, err := decodeQueryCommand(body)
-	if err != nil {
-		return DSLOutput{}, toolutil.WrapErr(orbitDSLOp, err)
-	}
-	out.ResponseFormat = responseFormatName(format)
-	return out, nil
-}
-
-// getAgentCommands sends the GET that describes Orbit's commands and returns
-// the body as it came. The path is a parameter so a test reaches the request
-// that cannot be built, which no constant path produces.
-func getAgentCommands(ctx context.Context, client *gitlabclient.Client, path string, opts agentCommandsOptions) ([]byte, error) {
-	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
-	if err != nil {
-		return nil, err
-	}
-	var body bytes.Buffer
-	_, err = client.GL().Do(req, &body)
-	return body.Bytes(), err
-}
-
-// agentCommand is one command of the raw answer of
-// GET /api/v4/orbit/agent/commands.
-type agentCommand struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Parameters  json.RawMessage `json:"parameters"`
-}
-
-// decodeQueryCommand reads the query_graph command out of the answer, by its
-// shape rather than by the format asked for: an object is the llm answer,
-// {"formatted_text": ...}, and anything else is the raw list of commands. A
-// list that holds no query_graph command answers nothing, which the card says
-// rather than describing another command as the query language.
-func decodeQueryCommand(body []byte) (DSLOutput, error) {
-	trimmed := bytes.TrimSpace(body)
-	if bytes.HasPrefix(trimmed, []byte("{")) {
-		var text struct {
-			FormattedText string `json:"formatted_text"`
-		}
-		if err := json.Unmarshal(trimmed, &text); err != nil {
-			return DSLOutput{}, fmt.Errorf("decode the query command as text: %w", err)
-		}
-		return DSLOutput{FormattedText: text.FormattedText}, nil
-	}
-	var commands []agentCommand
-	if err := json.Unmarshal(trimmed, &commands); err != nil {
-		return DSLOutput{}, fmt.Errorf("decode the query command: %w", err)
-	}
-	for _, command := range commands {
-		if command.Name == queryCommand {
-			return DSLOutput{Name: command.Name, Description: command.Description, Parameters: decodeRaw(command.Parameters)}, nil
-		}
-	}
-	return DSLOutput{}, nil
 }
 
 // Query executes a read-only Orbit Knowledge Graph query on GitLab.com.
 //
-// Endpoint: POST /api/v4/orbit/query. The query is forwarded as the caller
-// wrote it, once [encodeQuery] has checked there is one and that it is text or
-// an object: GQL text reaches GitLab as the body's query string,
-// {"query": "<GQL text>"}, and an object as that object. See [QueryInput] for
-// the language. GitLab judges everything else, and a query it refuses comes
-// back as a 400 whose message says what to change, with [wrapQueryErr]'s hint
-// pointing at the two actions that describe the language and the graph.
+// Endpoint: POST /api/v4/orbit/query, one of the Orbit routes GitLab.com still
+// serves after the GA removals. The query is forwarded as the caller wrote it,
+// once [encodeQuery] has checked there is one and that it is text or an object:
+// GQL text reaches GitLab as the body's query string, {"query": "<GQL text>"},
+// and an object as that object. See [QueryInput] for the language. GitLab
+// judges everything else, and a query it refuses comes back as a 400 whose
+// message says what to change, with [wrapQueryErr]'s hint pointing at the two
+// actions that describe the language and the graph.
 //
 // GitLab infers the query type from the statement and answers it beside the
 // result: traversal, aggregation, neighbors or path_finding.
@@ -792,57 +616,10 @@ func writtenAsObject(query any) bool {
 	return isObject
 }
 
-// GraphStatus retrieves Orbit graph indexing status for a single
-// namespace, project, or full path on GitLab.com.
-//
-// Endpoint: GET /api/v4/orbit/graph_status. Exactly one of namespace_id,
-// project_id, or full_path must be set. Useful for verifying that the
-// indexer has caught up before running Query.
-//
-// The count of projects the indexer gave up on, projects.gaps, is read from
-// the captured response ([gitlabclient.WithResponseCapture]), since client-go
-// does not model it; see [GraphStatusProjects.Gaps].
-func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphStatusInput) (GraphStatusOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return GraphStatusOutput{}, err
-	}
-	opts, err := graphStatusOptions(input)
-	if err != nil {
-		return GraphStatusOutput{}, err
-	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-
-	status, _, err := client.GL().Orbit.GetGraphStatus(opts, gl.WithContext(ctx))
-	if err != nil {
-		return GraphStatusOutput{}, wrapOrbitErr(orbitGraphStatusOp, err)
-	}
-	var unmodeled struct {
-		Projects *struct {
-			Gaps int64 `json:"gaps"`
-		} `json:"projects"`
-	}
-	if err = captured.Decode(&unmodeled); err != nil {
-		return GraphStatusOutput{}, toolutil.WrapErr(orbitGraphStatusOp, err)
-	}
-	out := convertGraphStatus(status)
-	// The llm answer carries formatted_text alone, and the structured one
-	// carries projects whenever client-go decoded them, so the two are nil
-	// together and only the second needs asking.
-	if unmodeled.Projects != nil {
-		out.Projects.Gaps = unmodeled.Projects.Gaps
-	}
-	return out, nil
-}
-
-// orbitGraphStatusOp is the operation a [GraphStatus] failure is reported
-// under.
-const orbitGraphStatusOp = "orbit_graph_status"
-
 // schemaResponseFormat normalizes the SchemaInput format fields. The
-// input accepts both Format and ResponseFormat, the name GitLab declares;
-// each is normalized on its own, so "json" and "raw" agree, and the two
-// must then name the same format when both are set. Nil means neither
-// was set.
+// input accepts both Format and ResponseFormat; each is normalized on its
+// own, so "json" and "raw" agree, and the two must then name the same format
+// when both are set. Nil means neither was set.
 func schemaResponseFormat(input SchemaInput) (*gl.OrbitResponseFormatValue, error) {
 	format, _, err := responseFormat(input.Format, "format")
 	if err != nil {
@@ -862,15 +639,12 @@ func schemaResponseFormat(input SchemaInput) (*gl.OrbitResponseFormatValue, erro
 }
 
 // responseFormat normalizes a user-supplied format string to the value
-// GitLab accepts. Returns (nil, false, nil) when the input is empty, so
-// the parameter is not sent and GitLab applies its default ("raw" on
-// every Orbit route).
+// GitLab accepts. Returns (nil, false, nil) when the input is empty.
 //
-// GitLab declares "raw" and "llm" and nothing else, and refuses any
-// other value with 400. "json" is read as "raw" rather than refused,
-// because it was offered here as a value until that refusal was
-// measured and a caller may still send it; anything else is refused
-// here, before a request is made.
+// GitLab declares "raw" and "llm" and nothing else. "json" is read as "raw"
+// rather than refused, because it was offered here as a value until GitLab's
+// refusal of it was measured and a caller may still send it; anything else is
+// refused here, before a request is made.
 func responseFormat(format, field string) (*gl.OrbitResponseFormatValue, bool, error) {
 	normalized := strings.ToLower(strings.TrimSpace(format))
 	if normalized == "" {
@@ -893,75 +667,27 @@ func responseFormat(format, field string) (*gl.OrbitResponseFormatValue, bool, e
 const jsonFormatSynonym = "json"
 
 // responseFormatName returns the string form of a format pointer, or
-// "" when the pointer is nil or the value is empty. The empty result
-// signals "use the API server-side default" to callers.
+// "" when the pointer is nil.
 func responseFormatName(format *gl.OrbitResponseFormatValue) string {
 	if format == nil {
-		return "" // empty = server-side default
+		return ""
 	}
 	return string(*format)
 }
 
-// graphStatusOptions validates that exactly one of namespace_id,
-// project_id, or full_path is set and translates the chosen scope
-// plus the optional response_format into the GitLab SDK options.
-func graphStatusOptions(input GraphStatusInput) (*gl.GetGraphStatusOptions, error) {
-	if input.NamespaceID < 0 {
-		return nil, errors.New("namespace_id must not be negative")
-	}
-	if input.ProjectID < 0 {
-		return nil, errors.New("project_id must not be negative")
-	}
-	format, hasFormat, err := responseFormat(input.ResponseFormat, "response_format")
-	if err != nil {
-		return nil, err
-	}
-
-	scopeCount := 0
-	if input.NamespaceID > 0 {
-		scopeCount++
-	}
-	if input.ProjectID > 0 {
-		scopeCount++
-	}
-	fullPath := strings.TrimSpace(input.FullPath)
-	if fullPath != "" {
-		scopeCount++
-	}
-	if scopeCount != 1 {
-		return nil, errors.New("set exactly one of namespace_id, project_id, or full_path")
-	}
-
-	opts := &gl.GetGraphStatusOptions{}
-	if hasFormat {
-		opts.ResponseFormat = format
-	}
-	if input.NamespaceID > 0 {
-		opts.NamespaceID = &input.NamespaceID
-	}
-	if input.ProjectID > 0 {
-		opts.ProjectID = &input.ProjectID
-	}
-	if fullPath != "" {
-		opts.FullPath = &fullPath
-	}
-	return opts, nil
-}
+// orbitUnavailableHint follows an Orbit answer that is a refusal or that
+// carries nothing: GitLab answers Orbit only on GitLab.com, and since its
+// general availability only for a top-level group that holds Orbit access.
+const orbitUnavailableHint = "Orbit is served on GitLab.com only, to a token that can read a top-level group with Orbit access and Orbit turned on; check the group's Orbit settings and access"
 
 // wrapOrbitErr classifies an HTTP error from the Orbit API and
-// attaches a domain-specific actionable hint. 404 becomes the
-// "Orbit is experimental" hint so callers know to check feature
-// gating; 403 hints at Knowledge Graph namespace access; 400 hints
-// at the query/format/scope parameters; 429 and 503 hint at
-// backoff; everything else uses the generic wrap.
+// attaches a domain-specific actionable hint. 404 and 403 get the
+// availability hint, since GitLab answers both to a user or namespace Orbit
+// does not serve; 400 hints at the query/format/scope parameters; 429 and
+// 503 hint at backoff; everything else uses the generic wrap.
 func wrapOrbitErr(op string, err error) error {
-	if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-		return toolutil.WrapErrWithHint(op, err,
-			"Orbit is experimental and currently available only on GitLab.com with the Enterprise/Premium catalog and the knowledge_graph feature flag enabled")
-	}
-	if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-		return toolutil.WrapErrWithHint(op, err,
-			"verify your token can access a namespace or project with GitLab Knowledge Graph enabled")
+	if toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+		return toolutil.WrapErrWithHint(op, err, orbitUnavailableHint)
 	}
 	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 		return toolutil.WrapErrWithHint(op, err,
@@ -976,127 +702,6 @@ func wrapOrbitErr(op string, err error) error {
 			"Orbit service is temporarily unavailable; retry later")
 	}
 	return toolutil.WrapErr(op, err)
-}
-
-// convertStatus projects a GitLab SDK [gl.OrbitStatus] into the
-// MCP-tool [StatusOutput]. Nil component entries are dropped; raw
-// JSON metrics are decoded for friendlier Markdown rendering.
-func convertStatus(status *gl.OrbitStatus) StatusOutput {
-	if status == nil {
-		return StatusOutput{}
-	}
-	out := StatusOutput{
-		FormattedText: status.FormattedText,
-		Status:        status.Status,
-		Timestamp:     status.Timestamp,
-		Version:       status.Version,
-		Components:    convertStatusComponents(status.Components),
-	}
-	if status.User != nil {
-		out.User = &StatusUser{Available: status.User.Available}
-	}
-	if status.System != nil {
-		out.System = &StatusSystem{
-			FormattedText: status.System.FormattedText,
-			Status:        status.System.Status,
-			Timestamp:     status.System.Timestamp,
-			Version:       status.System.Version,
-			Error:         status.System.Error,
-			Components:    convertStatusComponents(status.System.Components),
-		}
-	}
-	return out
-}
-
-// convertStatusComponents projects a slice of SDK status components
-// into the MCP-tool [StatusComponent] mirror, dropping nil entries
-// and decoding raw JSON metrics for friendlier Markdown rendering.
-func convertStatusComponents(in []*gl.OrbitStatusComponent) []StatusComponent {
-	components := make([]StatusComponent, 0, len(in))
-	for _, component := range in {
-		if component == nil {
-			continue
-		}
-		var replicas *StatusReplicas
-		if component.Replicas != nil {
-			replicas = &StatusReplicas{Ready: component.Replicas.Ready, Desired: component.Replicas.Desired}
-		}
-		components = append(components, StatusComponent{
-			Name:     component.Name,
-			Status:   component.Status,
-			Replicas: replicas,
-			Metrics:  decodeRaw(component.Metrics),
-		})
-	}
-	return components
-}
-
-// convertSchema projects a GitLab SDK [gl.OrbitSchema] into the
-// MCP-tool [SchemaOutput]. Raw JSON node definitions are decoded so
-// downstream Markdown formatters can format them; nil entries in
-// domains, nodes, and edges are skipped.
-func convertSchema(schema *gl.OrbitSchema) SchemaOutput {
-	if schema == nil {
-		return SchemaOutput{}
-	}
-	domains := make([]SchemaDomain, 0, len(schema.Domains))
-	for _, domain := range schema.Domains {
-		if domain == nil {
-			continue
-		}
-		domains = append(domains, SchemaDomain{
-			Name:        domain.Name,
-			Description: domain.Description,
-			NodeNames:   domain.NodeNames,
-		})
-	}
-	edges := make([]SchemaEdge, 0, len(schema.Edges))
-	for _, edge := range schema.Edges {
-		if edge == nil {
-			continue
-		}
-		variants := make([]SchemaEdgeVariant, 0, len(edge.Variants))
-		for _, variant := range edge.Variants {
-			if variant == nil {
-				continue
-			}
-			variants = append(variants, SchemaEdgeVariant{SourceType: variant.SourceType, TargetType: variant.TargetType})
-		}
-		edges = append(edges, SchemaEdge{Name: edge.Name, Description: edge.Description, Variants: variants})
-	}
-	nodes := make([]any, 0, len(schema.Nodes))
-	for _, node := range schema.Nodes {
-		if decoded := decodeRaw(node); decoded != nil {
-			nodes = append(nodes, decoded)
-		}
-	}
-	return SchemaOutput{
-		SchemaVersion: schema.SchemaVersion,
-		Domains:       domains,
-		Nodes:         nodes,
-		Edges:         edges,
-	}
-}
-
-// convertTools projects a GitLab SDK [gl.OrbitTools] into the
-// MCP-tool [ToolsOutput], decoding raw JSON parameter schemas for
-// downstream rendering and dropping nil entries.
-func convertTools(tools *gl.OrbitTools) ToolsOutput {
-	if tools == nil {
-		return ToolsOutput{}
-	}
-	items := make([]ToolDefinition, 0, len(tools.Tools))
-	for _, tool := range tools.Tools {
-		if tool == nil {
-			continue
-		}
-		items = append(items, ToolDefinition{
-			Name:        tool.Name,
-			Description: tool.Description,
-			Parameters:  decodeRaw(tool.Parameters),
-		})
-	}
-	return ToolsOutput{Tools: items}
 }
 
 // convertQuery projects a GitLab SDK [gl.OrbitQueryResult] into the
@@ -1127,53 +732,4 @@ func decodeRaw(raw json.RawMessage) any {
 		return string(raw)
 	}
 	return value
-}
-
-// convertGraphStatus projects a GitLab SDK [gl.OrbitGraphStatus] into
-// the MCP-tool [GraphStatusOutput], normalizing pointer-typed
-// timestamps to UTC RFC3339 strings and dropping nil nested entries.
-func convertGraphStatus(status *gl.OrbitGraphStatus) GraphStatusOutput {
-	if status == nil {
-		return GraphStatusOutput{}
-	}
-	var projects *GraphStatusProjects
-	if status.Projects != nil {
-		projects = &GraphStatusProjects{Indexed: status.Projects.Indexed, TotalKnown: status.Projects.TotalKnown}
-	}
-	domains := make([]GraphStatusDomain, 0, len(status.Domains))
-	for _, domain := range status.Domains {
-		if domain == nil {
-			continue
-		}
-		items := make([]GraphStatusDomainItem, 0, len(domain.Items))
-		for _, item := range domain.Items {
-			if item == nil {
-				continue
-			}
-			items = append(items, GraphStatusDomainItem{Name: item.Name, Count: item.Count})
-		}
-		domains = append(domains, GraphStatusDomain{Name: domain.Name, Items: items})
-	}
-	var indexing *GraphStatusIndexing
-	if status.Indexing != nil {
-		indexing = &GraphStatusIndexing{State: status.Indexing.State}
-		if status.Indexing.LastStartedAt != nil {
-			indexing.LastStartedAt = status.Indexing.LastStartedAt.UTC().Format(time.RFC3339)
-		}
-		if status.Indexing.LastCompletedAt != nil {
-			indexing.LastCompletedAt = status.Indexing.LastCompletedAt.UTC().Format(time.RFC3339)
-		}
-		if status.Indexing.LastDurationMs != nil {
-			indexing.LastDurationMs = *status.Indexing.LastDurationMs
-		}
-		if status.Indexing.LastError != nil {
-			indexing.LastError = *status.Indexing.LastError
-		}
-	}
-	return GraphStatusOutput{
-		FormattedText: status.FormattedText,
-		Projects:      projects,
-		Domains:       domains,
-		Indexing:      indexing,
-	}
 }

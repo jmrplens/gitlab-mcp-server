@@ -563,7 +563,7 @@ e2e-clean-orphans:
 ## provisions the kg-fixtures and security-fixtures projects in
 ## $(ORBIT_FIXTURES_NAMESPACE) (default: jmrp-oss/orbit-fixtures),
 ## polls the indexer until it has caught up, runs the orbitlive-tagged
-## live tests, and re-records what the six Orbit routes answer
+## live tests, and re-records what GitLab.com answers the six Orbit actions
 ## (gen-orbit-record), which fails every run while the recorded key tree
 ## differs from the one committed at HEAD. Idempotent: the setup script
 ## skips already-existing resources, so re-running is safe.
@@ -629,43 +629,35 @@ orbit-setup-fixtures: orbit-ensure-token
 		./scripts/setup-orbit-fixtures.sh $$mirror_flag; \
 	}
 
-## orbit-wait-indexer: poll the Orbit indexer until the projects.indexed
-## count reflects our newly-provisioned projects (baseline + 2), or
-## until ORBIT_FIXTURES_INDEXER_TIMEOUT elapses. Proceeds with a
-## warning in the timeout case — the live test is tolerant of partial
-## indexing.
-## orbit-wait-indexer: poll the Orbit indexer until the projects.indexed
-## count reflects our newly-provisioned projects (baseline + 2), or
-## until ORBIT_FIXTURES_INDEXER_TIMEOUT elapses. Proceeds with a
-## warning in the timeout case — the live test is tolerant of partial
-## indexing.
-##
-## To stay idempotent, the baseline is taken from the FIRST poll in the
-## wait loop, not from a separate pre-flight curl. This keeps the
-## target = baseline + 2 invariant valid even when the fixtures have
-## already been indexed on a prior run.
+## orbit-wait-indexer: poll the Orbit index of $(ORBIT_FIXTURES_NAMESPACE)
+## until it has caught up, or until ORBIT_FIXTURES_INDEXER_TIMEOUT elapses:
+## caught up is GitLab's own answer, indexing.state READY with no project left
+## out (projects.notIndexed 0) and at least the two fixture projects indexed,
+## so a namespace indexed on an earlier run is done on the first poll rather
+## than waiting the whole timeout for a count it already holds (issue 1534).
+## It reads Group.orbit.indexing through GitLab's GraphQL API, which replaced
+## GET /api/v4/orbit/graph_status when GitLab.com removed that route on
+## 2026-10-28 (issue 1516). A null index, GitLab's answer when Orbit is not
+## served to the token there, is said and polled like any other state.
+## Proceeds with a warning in the timeout case: the live test skips what it
+## cannot ask and is tolerant of partial indexing.
 orbit-wait-indexer: orbit-ensure-token
 	@. ./.env && { \
 		echo ""; \
 		echo "=== Waiting for Orbit indexer to catch up (timeout: $(ORBIT_FIXTURES_INDEXER_TIMEOUT)s) ==="; \
 		attempts=$$(( $(ORBIT_FIXTURES_INDEXER_TIMEOUT) / 15 )); \
-		baseline=""; \
-		target=""; \
+		query='{"query":"query OrbitWaitIndexer($$fullPath: ID!) { group(fullPath: $$fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }","variables":{"fullPath":"$(ORBIT_FIXTURES_NAMESPACE)"}}'; \
 		for i in $$(seq 1 $$attempts); do \
-			current=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/v4/orbit/graph_status?full_path=$(ORBIT_FIXTURES_NAMESPACE)" -H "PRIVATE-TOKEN: $$GITLAB_COM_TOKEN" 2>/dev/null \
-				| python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('projects',{}).get('indexed',0))" 2>/dev/null || echo 0); \
-			state=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/v4/orbit/graph_status?full_path=$(ORBIT_FIXTURES_NAMESPACE)" -H "PRIVATE-TOKEN: $$GITLAB_COM_TOKEN" 2>/dev/null \
-				| python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('indexing',{}).get('state','?'))" 2>/dev/null || echo "?"); \
-			if [ -z "$$baseline" ]; then \
-				baseline=$$current; \
-				target=$$((baseline + 2)); \
-				printf "  baseline: %s projects indexed\n" "$$baseline"; \
-				printf "  target:   %s projects (baseline + 2 new fixtures)\n" "$$target"; \
-			fi; \
-			printf "  [%d/%d] indexed=%s state=%s target=%s\n" "$$i" "$$attempts" "$$current" "$$state" "$$target"; \
-			if [ "$$current" -ge "$$target" ] 2>/dev/null; then \
-				printf "  ✓ indexer caught up (%s >= %s)\n" "$$current" "$$target"; \
+			progress=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/graphql" -H "Authorization: Bearer $$GITLAB_COM_TOKEN" -H "Content-Type: application/json" -d "$$query" 2>/dev/null \
+				| python3 -I -c "import sys,json; d=json.load(sys.stdin); x=(((d.get('data') or {}).get('group') or {}).get('orbit') or {}).get('indexing'); p=(x or {}).get('projects') or {}; print((x or {}).get('state') or 'null', p.get('indexed') or 0, p.get('notIndexed') or 0)" 2>/dev/null || echo "? 0 0"); \
+			set -- $$progress; \
+			printf "  [%d/%d] state=%s indexed=%s not_indexed=%s\n" "$$i" "$$attempts" "$$1" "$$2" "$$3"; \
+			if [ "$$1" = "READY" ] && [ "$$3" -eq 0 ] && [ "$$2" -ge 2 ]; then \
+				printf "  ✓ indexer caught up (%s projects indexed)\n" "$$2"; \
 				exit 0; \
+			fi; \
+			if [ "$$1" = "null" ]; then \
+				echo "    GitLab answered the index null: Orbit is not served for $(ORBIT_FIXTURES_NAMESPACE) to this token" 1>&2; \
 			fi; \
 			sleep 15; \
 		done; \
@@ -692,24 +684,31 @@ orbit-run-live-tests: orbit-ensure-token
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
 
-## gen-orbit-record: record what GitLab.com's six Orbit routes answer the
-## requests the handlers build, and write the key tree of every answer, never
-## a value, to docs/development/orbit-responses.json. Reads only, through a
-## proxy on the loopback interface, with GITLAB_COM_TOKEN from .env and the
-## fixture namespace $(ORBIT_FIXTURES_NAMESPACE), and refuses to record over a
+## gen-orbit-record: record what GitLab.com answers the requests the six Orbit
+## handlers build (GraphQL, the Orbit MCP endpoint and POST /orbit/query), and
+## write the key tree of every answer, never a value, to
+## docs/development/orbit-responses.json. Reads only, through a proxy on the
+## loopback interface, with GITLAB_COM_TOKEN from .env and the fixture
+## namespace $(ORBIT_FIXTURES_NAMESPACE), and refuses to record over a
 ## namespace the indexer has not reached. It prints every key added, dropped
 ## or changed against the record committed at HEAD (read through git, not
 ## from the file it has just rewritten) and exits 1 when the tree differs,
 ## after writing it, so every run fails until the record is committed;
 ## `make audit-1to1-paths` then says what the change means for the Orbit
 ## output types (cmd/audit_1to1, shapes.orbit).
+## ORBIT_RECORD_FLAGS=-allow-unanswered records past a call GitLab refuses the
+## account (403, or null where the handler reads, as since Orbit's general
+## availability for a namespace without the orbit_promo add-on or a trial):
+## it carries the answer HEAD's record holds for the same request, or lists
+## the call as unrecorded with GitLab's answer.
+ORBIT_RECORD_FLAGS ?=
 gen-orbit-record: orbit-ensure-token
 	@. ./.env && { \
 		echo ""; \
 		echo "=== Recording the Orbit answers from GitLab.com ==="; \
 		export GITLAB_COM_TOKEN \
 			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
-		go run ./cmd/gen_orbit_record/; \
+		go run ./cmd/gen_orbit_record/ $(ORBIT_RECORD_FLAGS); \
 	}
 
 ## check-orbit-record: fail when the committed Orbit response record is not one

@@ -11,6 +11,7 @@ import (
 	"maps"
 	"mime"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -37,6 +38,8 @@ type exchange struct {
 	path        string
 	query       []string
 	body        []string
+	operation   string
+	arguments   []string
 	status      int
 	contentType string
 	payload     []byte
@@ -104,12 +107,15 @@ func (r *recorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "read the answer: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	if route, isAPI := strings.CutPrefix(req.URL.Path, apiPrefix); isAPI && strings.HasPrefix(route, "/orbit/") {
+	if path, isOrbit := orbitPath(req.URL.Path); isOrbit {
+		operation, arguments := operationOf(body)
 		r.keep(exchange{
 			method:      req.Method,
-			path:        route,
+			path:        path,
 			query:       queryNames(req),
 			body:        bodyNames(req.Header.Get(contentTypeHeader), body),
+			operation:   operation,
+			arguments:   arguments,
 			status:      resp.StatusCode,
 			contentType: mediaType(resp.Header.Get(contentTypeHeader)),
 			payload:     payload,
@@ -120,6 +126,59 @@ func (r *recorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(payload)
+}
+
+// graphQLPath is GitLab's GraphQL endpoint, which three Orbit handlers read
+// since GitLab.com removed their REST routes. It is recorded as it is, beside
+// the REST and MCP routes, which are recorded below /api/v4.
+const graphQLPath = "/api/graphql"
+
+// orbitPath reports whether a request path is one a recording keeps, and the
+// path the record names it by: an Orbit route below /api/v4, MCP included, or
+// GitLab's GraphQL endpoint.
+func orbitPath(path string) (string, bool) {
+	if path == graphQLPath {
+		return path, true
+	}
+	if route, isAPI := strings.CutPrefix(path, apiPrefix); isAPI && strings.HasPrefix(route, "/orbit/") {
+		return route, true
+	}
+	return "", false
+}
+
+// graphQLOperationPattern reads the operation type and name a GraphQL document
+// opens with.
+var graphQLOperationPattern = regexp.MustCompile(`^\s*(query|mutation)\s+([A-Za-z_][A-Za-z0-9_]*)`)
+
+// operationOf names what a request asked of an endpoint that serves more than
+// one thing at its one route, and the names of the arguments it asked with: a
+// GraphQL document by its operation name and its variables, and an MCP request
+// by its method, the tool it calls, and that tool's arguments. A REST body has
+// neither and answers nothing.
+func operationOf(body []byte) (operation string, arguments []string) {
+	var request struct {
+		Query     string         `json:"query"`
+		Variables map[string]any `json:"variables"`
+		Method    string         `json:"method"`
+		Params    struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments"`
+		} `json:"params"`
+	}
+	if json.Unmarshal(body, &request) != nil {
+		return "", nil
+	}
+	if match := graphQLOperationPattern.FindStringSubmatch(request.Query); match != nil {
+		return match[1] + " " + match[2], sortedNames(request.Variables)
+	}
+	if request.Method == "" {
+		return "", nil
+	}
+	operation = request.Method
+	if request.Params.Name != "" {
+		operation += " " + request.Params.Name
+	}
+	return operation, sortedNames(request.Params.Arguments)
 }
 
 // keep records one exchange.

@@ -56,16 +56,11 @@ const (
 	orbitDecoderKind orbitDirection = "decoder-kind"
 )
 
-// Orbit declaration categories. What GitLab.com never sends is the new
-// category the Orbit record needed: the two tables before it answer a record
-// that is incomplete, and this one answers a client library that publishes
-// more than the server sends.
+// Orbit declaration categories. The category for a key client-go promoted to
+// where GitLab never sent it retired with GET /orbit/status, whose flat shape
+// client-go's OrbitStatus promoted; the status is read from GraphQL since
+// 2026-10-29.
 const (
-	// categoryOrbitNeverSent is a key the Orbit route never sends at the place
-	// the type publishes it, because client-go copies it there from where
-	// GitLab does send it, for the callers of an older answer that was flat.
-	// The values are GitLab's; the place is client-go's.
-	categoryOrbitNeverSent = "gitlab-never-sends-the-key-client-go-promotes"
 	// categoryOrbitConditional is a key GitLab sends only under a condition the
 	// recording did not meet and could not, from the Orbit service's or
 	// GitLab's own code.
@@ -78,28 +73,43 @@ const (
 // orbitPkg is the package every Orbit declaration is about.
 const orbitPkg = toolsDir + "/orbit"
 
-// reasonStatusPromoted answers the five flat keys of the status output.
-const reasonStatusPromoted = "ee/lib/api/orbit/data.rb answers GET /orbit/status with `present({ user: { available: available }, system: system })`, " +
-	"and system is the hash get_cluster_health builds (ee/lib/analytics/knowledge_graph/grpc_client.rb): status, timestamp, version " +
-	"and components, or formatted_text for the llm format. Nothing is sent at the top beside user and system, which the recording " +
-	"confirms for both formats. client-go's OrbitStatus.UnmarshalJSON copies the system object's fields to the top for the callers " +
-	"of the flat shape Orbit used to answer with, and StatusOutput publishes what client-go decoded, so the values are GitLab's and " +
-	"each also appears under system, where the recording has it."
+// reasonToolText answers the llm text of an Orbit MCP command.
+const reasonToolText = "the llm format of an Orbit MCP command is the text block of the tools/call result (ee/lib/api/orbit/mcp.rb " +
+	"dispatches tools/call to the command, whose llm answer is TOON text), recorded at result.content[].text as text with no keys. " +
+	"The handler (callMCPTool in internal/tools/orbit/mcp.go) publishes the text as formatted_text, the name the other Orbit answers give their llm text."
+
+// reasonEndpointNames answers the pair of node kinds of a schema edge.
+const reasonEndpointNames = "GitLab's GraphQL OrbitSchemaEdgeEndpoint answers each end of an edge as an OrbitSchemaNode, of which querySchema " +
+	"(internal/tools/orbit/graphql.go) asks the name alone, as source { name } and target { name }; convertSchema publishes the two names " +
+	"as source_type and target_type, the names SchemaEdgeVariant has carried since the REST schema route answered them flat."
+
+// reasonInputSchema answers the input schema of an Orbit MCP tool.
+const reasonInputSchema = "MCP's tools/list answers each tool's input JSON Schema as inputSchema, the key the MCP specification names; Tools " +
+	"(internal/tools/orbit/mcp.go) publishes it as parameters, the name the REST manifest GET /orbit/tools gave it until " +
+	"gitlab-org/gitlab!265998 removed the route, so the output keeps its field."
 
 // declaredOrbitFields holds every Orbit finding that is not a defect, each
 // with the evidence that settles it.
 var declaredOrbitFields = []orbitDeclaration{
-	{Package: orbitPkg, Output: "StatusOutput", Path: "components", Direction: orbitPublished, Category: categoryOrbitNeverSent, Reason: reasonStatusPromoted},
-	{Package: orbitPkg, Output: "StatusOutput", Path: "formatted_text", Direction: orbitPublished, Category: categoryOrbitNeverSent, Reason: reasonStatusPromoted},
-	{Package: orbitPkg, Output: "StatusOutput", Path: "status", Direction: orbitPublished, Category: categoryOrbitNeverSent, Reason: reasonStatusPromoted},
-	{Package: orbitPkg, Output: "StatusOutput", Path: "timestamp", Direction: orbitPublished, Category: categoryOrbitNeverSent, Reason: reasonStatusPromoted},
-	{Package: orbitPkg, Output: "StatusOutput", Path: "version", Direction: orbitPublished, Category: categoryOrbitNeverSent, Reason: reasonStatusPromoted},
+	{Package: orbitPkg, Output: "DSLOutput", Path: "formatted_text", Direction: orbitPublished, Category: categoryOrbitWholeBody, Reason: reasonToolText},
+	{Package: orbitPkg, Output: "SchemaOutput", Path: "formatted_text", Direction: orbitPublished, Category: categoryOrbitWholeBody, Reason: reasonToolText},
 	{
-		Package: orbitPkg, Output: "StatusOutput", Path: "system.error", Direction: orbitPublished, Category: categoryOrbitConditional,
-		Reason: "get_cluster_health (ee/lib/analytics/knowledge_graph/grpc_client.rb) rescues GRPC::BadStatus and answers " +
-			"`{ status: 'unknown', error: 'Service unreachable' }`, and sends no error otherwise. The recording reached a " +
-			"healthy cluster, so the key is published for the one answer it cannot record.",
+		Package: orbitPkg, Output: "SchemaOutput", Path: "domains", Direction: orbitPublished, Category: categoryServerDerived,
+		Reason: "GitLab's GraphQL OrbitSchema lists no domains, and each OrbitSchemaNode names its domain (domain { name }); convertSchema " +
+			"(internal/tools/orbit/graphql.go) groups the node names under each domain in the order GitLab lists the nodes, which is the " +
+			"list the REST schema route answered as domains[].node_names until gitlab-org/gitlab!265633 removed it.",
 	},
+	{Package: orbitPkg, Output: "SchemaOutput", Path: "edges.variants.source_type", Direction: orbitPublished, Category: categoryServerDerived, Reason: reasonEndpointNames},
+	{Package: orbitPkg, Output: "SchemaOutput", Path: "edges.variants.target_type", Direction: orbitPublished, Category: categoryServerDerived, Reason: reasonEndpointNames},
+	{Package: orbitPkg, Output: "SchemaOutput", Path: "edges.variants.source", Direction: orbitSent, Category: categoryServerDerived, Reason: reasonEndpointNames},
+	{Package: orbitPkg, Output: "SchemaOutput", Path: "edges.variants.target", Direction: orbitSent, Category: categoryServerDerived, Reason: reasonEndpointNames},
+	{
+		Package: orbitPkg, Output: "SchemaOutput", Path: "nodes.domain", Direction: orbitKind, Category: categoryServerDerived,
+		Reason: "GitLab's GraphQL OrbitSchemaNode.domain is an OrbitSchemaDomain object whose one field is its name; convertSchema " +
+			"(internal/tools/orbit/graphql.go) publishes the name as the string SchemaNode.domain.",
+	},
+	{Package: orbitPkg, Output: "ToolsOutput", Path: "tools.parameters", Direction: orbitPublished, Category: categoryServerDerived, Reason: reasonInputSchema},
+	{Package: orbitPkg, Output: "ToolsOutput", Path: "tools.inputSchema", Direction: orbitSent, Category: categoryServerDerived, Reason: reasonInputSchema},
 	{
 		Package: orbitPkg, Output: "QueryOutput", Path: "raw_query_strings", Direction: orbitPublished, Category: categoryOrbitConditional,
 		Reason: "workhorse/internal/orbit/sendquery.go writes the query answer as queryResponse, whose RawQueryStrings is " +
@@ -115,9 +125,9 @@ var declaredOrbitFields = []orbitDeclaration{
 	},
 	{
 		Package: orbitPkg, Output: "DSLOutput", Path: "response_format", Direction: orbitPublished, Category: categoryServerDerived,
-		Reason: "the response format the caller asked for, echoed by DSL (internal/tools/orbit/orbit.go) so a reader can " +
-			"tell the query command read as JSON from its compact llm text; GET /orbit/agent/commands answers with the " +
-			"commands alone (`present result` of list_agent_commands, under namespace :agent in ee/lib/api/orbit/data.rb).",
+		Reason: "the response format the caller asked for, echoed by DSL (internal/tools/orbit/mcp.go) so a reader can " +
+			"tell the query command read as JSON from its compact llm text; list_commands of the Orbit MCP endpoint answers " +
+			"with the commands alone.",
 	},
 }
 
