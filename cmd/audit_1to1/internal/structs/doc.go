@@ -23,7 +23,11 @@
 //     result struct to an MCP output struct, whether the package declares it or
 //     instantiates a generic one with its own output type
 //     (toolutil.CapturedThread[Output]). The SDK result fields (by json tag)
-//     are diffed against the MCP output fields (R-OUTPUT).
+//     are diffed against the MCP output fields (R-OUTPUT). The converters of
+//     the shared internal/toolutil package are diffed the same way, under a
+//     toolutil entry, since that is where the shapes every domain nests (a
+//     merge request's head_pipeline, every author) are filled; CollectPairs
+//     and CollectOutputPairings keep to the tool packages.
 //
 // Beside them it reads the projections (CollectProjections): an output struct
 // built field by field in a composite literal out of a client-go struct, with

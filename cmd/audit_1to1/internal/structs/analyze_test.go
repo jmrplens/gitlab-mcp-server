@@ -918,6 +918,206 @@ func findPackage(t *testing.T, rep report, name string) packageReport {
 	return packageReport{}
 }
 
+// TestWithSharedShapes_TheSharedPackage_IsAddedOnlyWithItsSource verifies which
+// imported package the field diff reads beside the tool packages: the shared
+// shapes package, once, and only when the load handed it over with its syntax
+// and type information, since a converter is found by walking a body. A tree
+// whose packages import no such package is diffed as it was.
+func TestWithSharedShapes_TheSharedPackage_IsAddedOnlyWithItsSource(t *testing.T) {
+	const sharedPath = "example.com/x" + sharedShapesPathSuffix
+	withSource := &packages.Package{PkgPath: sharedPath, Syntax: []*ast.File{{}}, TypesInfo: &types.Info{}}
+	cases := []struct {
+		name     string
+		imported *packages.Package
+		path     string
+		want     bool
+	}{
+		{name: "the shared package with its source", imported: withSource, path: sharedPath, want: true},
+		{name: "the shared package without syntax", imported: &packages.Package{PkgPath: sharedPath, TypesInfo: &types.Info{}}, path: sharedPath},
+		{name: "the shared package without type information", imported: &packages.Package{PkgPath: sharedPath, Syntax: []*ast.File{{}}}, path: sharedPath},
+		{name: "another package with its source", imported: &packages.Package{PkgPath: "example.com/x/internal/gitlab", Syntax: []*ast.File{{}}, TypesInfo: &types.Info{}}, path: "example.com/x/internal/gitlab"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tools := []*packages.Package{
+				{PkgPath: "example.com/x/internal/tools/one", Imports: map[string]*packages.Package{tc.path: tc.imported}},
+				{PkgPath: "example.com/x/internal/tools/two", Imports: map[string]*packages.Package{tc.path: tc.imported}},
+			}
+
+			got := withSharedShapes(tools)
+
+			want := slices.Clone(tools)
+			if tc.want {
+				want = append(want, tc.imported)
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("withSharedShapes() = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+// TestBuildReport_Repository_ReportsTheConvertersOfTheSharedShapes is the
+// witness of the field diff reading internal/toolutil, against client-go
+// v3.30.0, written against nothing the parent of this change lacks so that it
+// fails there on the report rather than on the build.
+//
+// A merge request's head_pipeline is filled by toolutil.NewPipelineOutput,
+// which no domain package declares, so gl.Pipeline was paired with nothing and
+// a key client-go adds to it reached no R-OUTPUT finding. The report now
+// carries a toolutil entry, and in v3.30.0 PipelineOutput publishes every key
+// gl.Pipeline deserializes and no other, three of them with a type of its own
+// (the detailed status and the user as the shared shapes, the source as a
+// string): the bump to a client-go whose gl.Pipeline carries archived
+// (v3.36.0) turns this pair into a missing field.
+func TestBuildReport_Repository_ReportsTheConvertersOfTheSharedShapes(t *testing.T) {
+	toolutil := findPackage(t, cachedBuildReport(t, false), "toolutil")
+	if toolutil.OutputPairs == 0 {
+		t.Fatalf("toolutil = %+v, want its converters paired", toolutil)
+	}
+
+	index := slices.IndexFunc(toolutil.Gaps, func(g gap) bool { return g.MCPType == "PipelineOutput" })
+	if index < 0 {
+		t.Fatal("no gap for toolutil.PipelineOutput, want its pair with gl.Pipeline reported with the keys whose types differ")
+	}
+	pipeline := toolutil.Gaps[index]
+	if len(pipeline.MissingFields) > 0 || len(pipeline.ExtraFields) > 0 {
+		t.Errorf("PipelineOutput against gl.Pipeline = missing %+v, extra %+v; want the two to carry the same keys in v3.30.0", pipeline.MissingFields, pipeline.ExtraFields)
+	}
+	mismatched := make([]string, 0, len(pipeline.TypeMismatches))
+	for _, mismatch := range pipeline.TypeMismatches {
+		mismatched = append(mismatched, mismatch.Tag)
+	}
+	if want := []string{"detailed_status", "source", "user"}; !slices.Equal(mismatched, want) {
+		t.Errorf("PipelineOutput type mismatches = %v, want %v", mismatched, want)
+	}
+}
+
+// TestBuildReport_Repository_PairsTheConvertersTheSharedShapesDeclare verifies
+// the pair that witness reads is the one the shared package declares: the
+// load hands the field diff toolutil after the tool packages, and its
+// converters pair PipelineOutput with gl.Pipeline.
+func TestBuildReport_Repository_PairsTheConvertersTheSharedShapesDeclare(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	pkgs, err := shared.LoadToolPackages(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	all := withSharedShapes(pkgs)
+	if !slices.ContainsFunc(CollectPairs(all[len(all)-1]), func(pair Pair) bool {
+		return pair.Kind == "output" && pair.MCPName == "PipelineOutput" && pair.SDKNamed.Obj().Name() == "Pipeline"
+	}) {
+		t.Fatal("no output pair of toolutil.PipelineOutput with gl.Pipeline")
+	}
+}
+
+// sharedShapeSDK is the part of client-go the shared shapes fixture reads: a
+// widget and the part it carries. A tilde stands for a backtick.
+const sharedShapeSDK = `package gitlab
+
+type Part struct {
+	ID   int64  ~json:"id"~
+	Name string ~json:"name"~
+}
+
+type Widget struct {
+	ID   int64 ~json:"id"~
+	Part *Part ~json:"part"~
+}
+
+type Client struct{}
+`
+
+// sharedShapeSources are the shared shapes package of the fixture, whose
+// converter alone reads gl.Part, and a domain package handing it the part.
+var sharedShapeSources = []toolSource{
+	{path: "example.com/x/internal/toolutil", source: `package toolutil
+
+import gl "` + fixtureSDKPath + `"
+
+type PartOutput struct {
+	ID   int64  ~json:"id"~
+	Name string ~json:"name"~
+}
+
+func NewPartOutput(p *gl.Part) PartOutput { return PartOutput{ID: p.ID, Name: p.Name} }
+`},
+	{path: "example.com/x/internal/tools/widgets", source: `package widgets
+
+import (
+	gl "` + fixtureSDKPath + `"
+	"example.com/x/internal/toolutil"
+)
+
+type Output struct {
+	ID   int64               ~json:"id"~
+	Part toolutil.PartOutput ~json:"part"~
+}
+
+func NewOutput(w *gl.Widget) Output { return Output{ID: w.ID, Part: toolutil.NewPartOutput(w.Part)} }
+`},
+}
+
+// TestWithSharedShapes_AKeyClientGoAddsUnderASharedShape_IsReportedOnTheSharedPackage
+// verifies, from a stand-in tree to the report, what reading the shared
+// shapes package buys. The domain package converts its widget and hands the
+// part to toolutil.NewPartOutput, so no pair of its own names gl.Part. Read
+// with the shared package, the field diff pairs PartOutput with gl.Part: with
+// the SDK as it stands the pair has no gap, and with an SDK whose Part gains
+// archived, which is what a client-go bump does to gl.Pipeline, the pair
+// reports archived missing on the shared package.
+func TestWithSharedShapes_AKeyClientGoAddsUnderASharedShape_IsReportedOnTheSharedPackage(t *testing.T) {
+	cases := []struct {
+		name string
+		sdk  string
+		want []string
+	}{
+		{name: "the SDK as it stands", sdk: sharedShapeSDK},
+		{
+			name: "an SDK whose part gains a key",
+			sdk:  strings.NewReplacer("\tName string ~json:\"name\"~\n", "\tName string ~json:\"name\"~\n\tArchived bool ~json:\"archived\"~\n").Replace(sharedShapeSDK),
+			want: []string{"PartOutput.archived"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// The domain package alone, as the load hands the tool packages
+			// over: the shared one is what withSharedShapes adds.
+			shapes := sharedShapeReports(checkedTree(t, tc.sdk, sharedShapeSources...)[1:])
+
+			if len(shapes) != 1 || shapes[0].OutputPairs != 1 {
+				t.Fatalf("toolutil reports = %+v, want one entry pairing its converter", shapes)
+			}
+			var missing []string
+			for _, g := range shapes[0].Gaps {
+				for _, field := range g.MissingFields {
+					missing = append(missing, g.MCPType+"."+field.Tag)
+				}
+			}
+			if !slices.Equal(missing, tc.want) {
+				t.Errorf("missing fields = %v, want %v", missing, tc.want)
+			}
+		})
+	}
+}
+
+// sharedShapeReports runs the field diff over the tool packages of a tree the
+// way buildReport does, the shared shapes package included, and keeps the
+// shared package's entries.
+func sharedShapeReports(tools []*packages.Package) []packageReport {
+	run := newDiffRun()
+	var out []packageReport
+	for _, pkg := range withSharedShapes(tools) {
+		if pr, ok := run.analyzePackage(pkg); ok && pr.Package == "toolutil" {
+			out = append(out, pr)
+		}
+	}
+	return out
+}
+
 // TestDocGroundedSuppression verifies the doc-grounded carve-outs: a curated
 // reference subset suppresses missing-field reporting for the whole nested type,
 // and a doc-omitted field suppresses a single top-level SDK field — both keyed by

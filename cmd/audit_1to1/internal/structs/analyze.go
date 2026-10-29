@@ -1437,7 +1437,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	}
 	run := newDiffRun()
 	reports := make([]packageReport, 0, len(pkgs))
-	for _, pkg := range pkgs {
+	for _, pkg := range withSharedShapes(pkgs) {
 		pr, ok := run.analyzePackage(pkg)
 		if !ok {
 			continue
@@ -1461,6 +1461,36 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		StaleDeclarations: stale,
 		Packages:          reports,
 	}, nil
+}
+
+// sharedShapesPathSuffix is how the package the domain packages share response
+// shapes through ends its import path.
+const sharedShapesPathSuffix = "/internal/toolutil"
+
+// withSharedShapes returns the tool packages followed by the shared shapes
+// package they import, when the load carries it with its syntax, which
+// [shared.LoadToolPackages] does for a tree that has one.
+//
+// The field diff is the one rule that reads a converter, and the converters of
+// the shapes every domain nests live there: toolutil.NewPipelineOutput fills a
+// merge request's head_pipeline, NewBasicUserOutput every author. Read from
+// the domain packages alone, a shape no domain package declares a converter of
+// was paired with nothing, so a key client-go adds to gl.Pipeline reached no
+// finding anywhere, since the domain's converter calls the shared one rather
+// than reading the field itself. [CollectPairs] and [CollectOutputPairings]
+// are left as they are: the enum rule and the type grain of the paths scope
+// join on them, and what they would make of the shared pairs is a measurement
+// of its own.
+func withSharedShapes(pkgs []*packages.Package) []*packages.Package {
+	out := slices.Clone(pkgs)
+	for _, pkg := range pkgs {
+		for path, imported := range pkg.Imports {
+			if strings.HasSuffix(path, sharedShapesPathSuffix) && len(imported.Syntax) > 0 && imported.TypesInfo != nil {
+				return append(out, imported)
+			}
+		}
+	}
+	return out
 }
 
 // Pair is one (MCP struct, SDK struct) pairing the field diff runs over,
