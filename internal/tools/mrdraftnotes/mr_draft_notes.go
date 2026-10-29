@@ -486,9 +486,9 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 // validatePosition fetches the MR diff and validates that the given position
 // refers to a line actually present in the diff. This prevents draft notes
 // from being silently lost when published with out-of-range positions. When
-// the diff cannot be listed the check is skipped and the write that follows
-// is judged by GitLab, for the reasons
-// [toolutil.MergeRequestDiffForPositionCheck] gives.
+// the diff cannot be listed, or cannot be shown to be the one the position's
+// SHAs name, the check is skipped and the write that follows is judged by
+// GitLab, for the reasons [toolutil.MergeRequestDiffForPositionCheck] gives.
 func validatePosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
 	targetPath := pos.NewPath
 	if targetPath == "" {

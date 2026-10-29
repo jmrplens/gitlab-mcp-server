@@ -30,6 +30,19 @@ const mergeRequestDiffPositionMaxPages = 100
 // pages. It reads at most 100 pages of 100 files. The MR's diff refs must match
 // expected before and after the search; this detects changes between reads,
 // not changes after the final read. GitLab still judges the subsequent write.
+//
+// The check exists to hand a model an actionable message before GitLab
+// answers a line outside the diff with a bare 400 or 500, and it is advisory:
+// whenever the second result is false the caller skips the check rather than
+// refusing the write. What is skipped is the message, never the judgement,
+// because the write that follows goes to the same instance with the same
+// credential and GitLab answers it on its own terms. A 401, 403 or 404 on the
+// listing or on the snapshot read is the refusal the write is about to get,
+// with the right status; a cancelled context ends the write the same way; and
+// a transient failure, a snapshot that moved or an exhausted page budget
+// leaves the write judged by GitLab alone, which is exactly what a caller had
+// before the check existed. The cause is logged at debug so that a check
+// skipped every time can be seen without the write having to fail.
 func MergeRequestDiffForPositionCheck(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, targetPath string, expected gl.MergeRequestDiffRefs) (*gl.MergeRequestDiff, bool) {
 	if expected.BaseSha == "" || expected.StartSha == "" || expected.HeadSha == "" {
 		return nil, false
