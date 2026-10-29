@@ -410,6 +410,78 @@ type GraphStatusIndexing struct {
 	Areas []GraphStatusArea `json:"areas,omitempty"`
 }
 
+// The two Orbit access states under which GitLab.com serves a namespace's
+// index and its queries, GitLab's OrbitAccessState: a group with Orbit access
+// (from its plan, the Orbit promo add-on or the free beta, which reason names)
+// and a group whose Orbit trial is running. Every other state (UNLICENSED,
+// NOT_CONFIGURED, TRIAL_ELIGIBLE, TRIAL_ENDED, TRIAL_NOT_ELIGIBLE and
+// TRIAL_STATUS_UNAVAILABLE) is one GitLab answers with no index.
+const (
+	AccessLicensed    = "LICENSED"
+	AccessTrialActive = "TRIAL_ACTIVE"
+)
+
+// GraphStatusAccess is the Orbit access state of a top-level group, GitLab's
+// OrbitAccess. The values are GitLab's enums as it spells them.
+type GraphStatusAccess struct {
+	// State is the group's access state, GitLab's OrbitAccessState: LICENSED,
+	// TRIAL_ACTIVE, TRIAL_ELIGIBLE, TRIAL_ENDED, TRIAL_NOT_ELIGIBLE,
+	// TRIAL_STATUS_UNAVAILABLE, UNLICENSED or NOT_CONFIGURED.
+	State string `json:"state"`
+	// Reason is the cause of a state that has more than one, GitLab's
+	// OrbitAccessReason: where the access of a LICENSED group comes from
+	// (PLAN, PROMO_ADD_ON or BETA), or why a group has none (FREE_PLAN,
+	// NO_LICENSE, NO_ACCESS, TRIAL_EXPIRED or CREDITS_EXHAUSTED). Absent when
+	// the state has one cause, for which GitLab sends null.
+	Reason string `json:"reason,omitempty"`
+	// TurnOnDenialReason is why the token's user cannot turn Orbit on for the
+	// group, GitLab's OrbitTurnOnDenialReason: FORBIDDEN, TRIAL_REQUIRED,
+	// PURCHASE_REQUIRED, TRIAL_ENDED or UNAVAILABLE. Absent when turning Orbit
+	// on is allowed or it is already on.
+	TurnOnDenialReason string `json:"turn_on_denial_reason,omitempty"`
+}
+
+// Serves reports whether GitLab.com serves the group's index and its queries
+// under this access state: LICENSED or TRIAL_ACTIVE.
+func (a *GraphStatusAccess) Serves() bool {
+	return a != nil && (a.State == AccessLicensed || a.State == AccessTrialActive)
+}
+
+// GraphStatusTrialCredits are the credits of an Orbit trial, GitLab's
+// OrbitTrialCredits. Each is absent when GitLab sends null, and a remaining
+// count of zero is published, since it is why a trial ended.
+type GraphStatusTrialCredits struct {
+	// Remaining is the number of trial credits left.
+	Remaining *float64 `json:"remaining,omitempty"`
+	// Total is the number of credits granted to the trial.
+	Total *float64 `json:"total,omitempty"`
+}
+
+// GraphStatusTrialOffer is the terms of a new Orbit trial, GitLab's
+// OrbitTrialOffer, which GitLab sends only to a user who can start one.
+type GraphStatusTrialOffer struct {
+	// DurationDays is the number of days a new trial lasts.
+	DurationDays *int64 `json:"duration_days,omitempty"`
+	// InitialCredits is the number of free credits a new trial starts with.
+	InitialCredits *float64 `json:"initial_credits,omitempty"`
+}
+
+// GraphStatusTrial is the Orbit trial of a top-level group, GitLab's
+// OrbitTrial, as GitLab reads it from CustomersDot.
+type GraphStatusTrial struct {
+	// State is the trial's state, GitLab's OrbitTrialState: ELIGIBLE,
+	// NOT_ELIGIBLE, ACTIVE or ENDED.
+	State string `json:"state"`
+	// ExpiresOn is the last day of the trial, in UTC; absent before a trial
+	// starts.
+	ExpiresOn string `json:"expires_on,omitempty"`
+	// Credits are the trial's credits.
+	Credits *GraphStatusTrialCredits `json:"credits,omitempty"`
+	// Offer is the terms of a new trial, absent unless the token's user can
+	// start one.
+	Offer *GraphStatusTrialOffer `json:"offer,omitempty"`
+}
+
 // GraphStatusOutput is the Orbit indexing status of one group or project, as
 // GitLab's GraphQL API answers Group.orbit and Project.orbit.
 //
@@ -417,7 +489,9 @@ type GraphStatusIndexing struct {
 // removed on 2026-10-28 (issue 1516). Gone with it: formatted_text (GraphQL
 // has no llm rendering), each count's state, and the last run's start, duration
 // and error. Added: whether Orbit is on for the group and since when, the
-// state of each area, and two more project counts.
+// state of each area, two more project counts, and the Orbit access and trial
+// of a top-level group, which decide since Orbit's general availability on
+// 2026-10-29 whether GitLab.com serves the index at all.
 type GraphStatusOutput struct {
 	toolutil.HintableOutput
 	// Enabled reports whether Orbit is turned on for the group's top-level
@@ -425,8 +499,22 @@ type GraphStatusOutput struct {
 	Enabled *bool `json:"enabled,omitempty"`
 	// EnabledAt is when Orbit was turned on for the top-level group.
 	EnabledAt string `json:"enabled_at,omitempty"`
+	// Access is the Orbit access state of a top-level group, GitLab's
+	// OrbitNamespace.access. GitLab answers it for a top-level group alone,
+	// and null for a subgroup, a project and a token that cannot read the
+	// group's Orbit setting, so it is absent there: the top-level group's
+	// full_path reports it. A state other than LICENSED or TRIAL_ACTIVE is
+	// why the index is absent ([GraphStatusAccess.Serves]).
+	Access *GraphStatusAccess `json:"access,omitempty"`
+	// Trial is the Orbit trial of a top-level group, GitLab's
+	// OrbitNamespace.trial: null, and so absent, for a subgroup, a project, a
+	// token that cannot read the trial, and when GitLab could not read it
+	// from CustomersDot.
+	Trial *GraphStatusTrial `json:"trial,omitempty"`
 	// Projects is the indexing progress of the projects, GitLab's
-	// indexing.projects.
+	// indexing.projects. It, Domains and Indexing are absent when GitLab
+	// serves no index: a group without Orbit access, Orbit turned off, or a
+	// token below the Reporter role there.
 	Projects *GraphStatusProjects `json:"projects,omitempty"`
 	// Domains are the indexed item counts of each domain, GitLab's
 	// itemCounts.domains.

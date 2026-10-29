@@ -697,8 +697,9 @@ orbit-run-live-tests: orbit-ensure-token
 ## `make audit-1to1-paths` then says what the change means for the Orbit
 ## output types (cmd/audit_1to1, shapes.orbit).
 ## ORBIT_RECORD_FLAGS=-allow-unanswered records past a call GitLab refuses the
-## account (403, or null where the handler reads, as since Orbit's general
-## availability for a namespace without the orbit_promo add-on or a trial):
+## account (403, null where the handler reads, or a top-level group's Orbit
+## access with no index, as since Orbit's general availability for a
+## namespace without the orbit_promo add-on or a trial):
 ## it carries the answer HEAD's record holds for the same request, or lists
 ## the call as unrecorded with GitLab's answer.
 ORBIT_RECORD_FLAGS ?=

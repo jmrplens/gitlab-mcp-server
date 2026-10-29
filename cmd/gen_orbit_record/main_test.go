@@ -69,7 +69,7 @@ const (
 	keyQueryRaw       = "POST /orbit/query raw"
 	keyQueryLLM       = "POST /orbit/query llm"
 	keyQueryGQL       = "POST /orbit/query gql"
-	graphStatusFields = `"enabled":true,"enabled_at":"2026-06-11T23:19:22Z","indexing":{"state":"READY","last_completed_at":"t","projects":{"indexed":2,"total_known":2,"gaps":0,"not_indexed":0,"total":2},"areas":[{"name":"core","state":"READY"}]},"itemCounts":{"domains":[{"name":"core","items":[{"name":"Project","count":"2"}]}]}`
+	graphStatusFields = `"enabled":true,"enabled_at":"2026-06-11T23:19:22Z","access":null,"trial":null,"indexing":{"state":"READY","last_completed_at":"t","projects":{"indexed":2,"total_known":2,"gaps":0,"not_indexed":0,"total":2},"areas":[{"name":"core","state":"READY"}]},"itemCounts":{"domains":[{"name":"core","items":[{"name":"Project","count":"2"}]}]}`
 )
 
 // toolTextAnswer is an MCP tools/call answer carrying text. A string always
@@ -566,7 +566,7 @@ func TestRecord_AllowUnanswered_CarriesOrListsWhatGitLabRefused(t *testing.T) {
 	for _, key := range []string{keyQueryRaw, keyQueryLLM, keyQueryGQL} {
 		refused[key] = fakeAnswer{status: 403, contentType: "application/json", body: `{"message":"403 Forbidden - No Orbit enabled namespaces available"}`}
 	}
-	refused[keyGraphStatus] = fakeAnswer{status: 200, contentType: "application/json", body: `{"data":{"group":{"orbit":{"enabled":true,"enabled_at":null,"indexing":null,"itemCounts":null}},"project":null}}`}
+	refused[keyGraphStatus] = fakeAnswer{status: 200, contentType: "application/json", body: `{"data":{"group":{"orbit":{"enabled":true,"enabled_at":null,"access":null,"trial":null,"indexing":null,"itemCounts":null}},"project":null}}`}
 	cfg := testRun(dir, &fakeGitLab{answers: refused})
 	cfg.git = head.git
 	cfg.allowUnanswered = true

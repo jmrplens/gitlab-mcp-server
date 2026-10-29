@@ -431,6 +431,131 @@ func TestFormatGraphStatusMarkdown_PartsAlone_RenderOnlyWhatCame(t *testing.T) {
 	}
 }
 
+// accessGateHints is the guidance section of an indexing status card for a
+// group GitLab.com serves no index: the access, not a query.
+const accessGateHints = "\n---\n💡 **Next steps:**\n" +
+	"- Orbit access is set on the top-level group on GitLab.com: a license or a running trial there serves the index, which this status shows once it does\n"
+
+// TestFormatGraphStatusMarkdown_TopLevelGroup_SaysWhatItsAccessMeans verifies
+// the card of a top-level group, which carries its Orbit access and trial: the
+// access as rows and the trial as a nested object, as GitLab spelled them,
+// then a line of its own when the access explains the index. A group
+// GitLab.com serves no index (jmrp-oss since 2026-10-29) is told the missing
+// index is the access, and its one next step leads there; a licensed group
+// with its index gets no such line, one with none is told why, and a running
+// trial is told that it ends.
+func TestFormatGraphStatusMarkdown_TopLevelGroup_SaysWhatItsAccessMeans(t *testing.T) {
+	enabled, disabled := true, false
+	zero, total, offerCredits := 0.0, 1000.0, 500.5
+	thirty := int64(30)
+	index := &GraphStatusIndexing{State: "READY"}
+	tests := []struct {
+		name string
+		out  GraphStatusOutput
+		want string
+	}{
+		{
+			name: "trial not eligible, no index",
+			out: GraphStatusOutput{
+				Enabled: &enabled, EnabledAt: "2026-06-11T23:19:22Z",
+				Access: &GraphStatusAccess{State: "TRIAL_NOT_ELIGIBLE"},
+				Trial:  &GraphStatusTrial{State: "NOT_ELIGIBLE", Credits: &GraphStatusTrialCredits{Remaining: &zero}},
+			},
+			want: "- **Orbit enabled**: ✅\n" +
+				"- **Enabled at**: 11 Jun 2026 23:19 UTC\n" +
+				"- **Orbit access**: TRIAL_NOT_ELIGIBLE\n" +
+				"- **Orbit trial**:\n" +
+				"  - **State**: NOT_ELIGIBLE\n" +
+				"  - **Credits remaining**: 0\n\n" +
+				"Orbit access is TRIAL_NOT_ELIGIBLE: GitLab.com serves a group's Orbit index and queries only while its access is LICENSED or TRIAL_ACTIVE, " +
+				"so an index missing or empty here reflects the access, not the graph.\n" +
+				accessGateHints,
+		},
+		{
+			name: "purchase required, Orbit off",
+			out: GraphStatusOutput{
+				Enabled: &disabled,
+				Access:  &GraphStatusAccess{State: "UNLICENSED", Reason: "NO_ACCESS", TurnOnDenialReason: "PURCHASE_REQUIRED"},
+			},
+			want: "- **Orbit enabled**: ❌\n" +
+				"- **Orbit access**: UNLICENSED\n" +
+				"- **Access reason**: NO_ACCESS\n" +
+				"- **Turn-on denial reason**: PURCHASE_REQUIRED\n\n" +
+				"Orbit access is UNLICENSED: GitLab.com serves a group's Orbit index and queries only while its access is LICENSED or TRIAL_ACTIVE, " +
+				"so an index missing or empty here reflects the access, not the graph.\n" +
+				accessGateHints,
+		},
+		{
+			name: "trial eligible with an offer",
+			out: GraphStatusOutput{
+				Access: &GraphStatusAccess{State: "TRIAL_ELIGIBLE", TurnOnDenialReason: "TRIAL_REQUIRED"},
+				Trial: &GraphStatusTrial{
+					State: "ELIGIBLE", Credits: &GraphStatusTrialCredits{},
+					Offer: &GraphStatusTrialOffer{DurationDays: &thirty, InitialCredits: &offerCredits},
+				},
+			},
+			want: "- **Orbit access**: TRIAL_ELIGIBLE\n" +
+				"- **Turn-on denial reason**: TRIAL_REQUIRED\n" +
+				"- **Orbit trial**:\n" +
+				"  - **State**: ELIGIBLE\n" +
+				"  - **Offered trial days**: 30\n" +
+				"  - **Offered trial credits**: 500.5\n\n" +
+				"Orbit access is TRIAL_ELIGIBLE: GitLab.com serves a group's Orbit index and queries only while its access is LICENSED or TRIAL_ACTIVE, " +
+				"so an index missing or empty here reflects the access, not the graph.\n" +
+				accessGateHints,
+		},
+		{
+			name: "licensed with its index",
+			out:  GraphStatusOutput{Access: &GraphStatusAccess{State: AccessLicensed, Reason: "PROMO_ADD_ON"}, Indexing: index},
+			want: "- **Orbit access**: LICENSED\n" +
+				"- **Access reason**: PROMO_ADD_ON\n" +
+				"- **Indexing state**: READY\n" +
+				graphStatusHints,
+		},
+		{
+			name: "licensed with no index",
+			out:  GraphStatusOutput{Enabled: &disabled, Access: &GraphStatusAccess{State: AccessLicensed, Reason: "PLAN"}},
+			want: "- **Orbit enabled**: ❌\n" +
+				"- **Orbit access**: LICENSED\n" +
+				"- **Access reason**: PLAN\n\n" +
+				"The group has Orbit access and GitLab answered no index: Orbit is off for the top-level group, or the token is below the Reporter role there.\n" +
+				graphStatusHints,
+		},
+		{
+			name: "trial running with its index",
+			out: GraphStatusOutput{
+				Access: &GraphStatusAccess{State: AccessTrialActive},
+				Trial: &GraphStatusTrial{
+					State: "ACTIVE", ExpiresOn: "2026-11-28",
+					Credits: &GraphStatusTrialCredits{Remaining: &offerCredits, Total: &total},
+					Offer:   &GraphStatusTrialOffer{},
+				},
+				Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 2},
+			},
+			want: "- **Orbit access**: TRIAL_ACTIVE\n" +
+				"- **Orbit trial**:\n" +
+				"  - **State**: ACTIVE\n" +
+				"  - **Expires on**: 28 Nov 2026\n" +
+				"  - **Credits remaining**: 500.5\n" +
+				"  - **Credits total**: 1000\n" +
+				"- **Indexed projects**: 2\n" +
+				"- **Total known projects**: 2\n" +
+				"- **Projects not indexed**: 0\n" +
+				"- **Projects out of indexing attempts**: 0\n\n" +
+				"Orbit is served on a trial, which ends on its last day or when its credits run out.\n" +
+				graphStatusHints,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := "## Orbit Graph Status\n\n" + tt.want
+			if got := FormatGraphStatusMarkdown(tt.out); got != want {
+				t.Errorf("FormatGraphStatusMarkdown() =\n%q\nwant\n%q", got, want)
+			}
+		})
+	}
+}
+
 // TestFormatOrbitNotFound_NamesWhatOrbitNeeds verifies the result a 404 on an
 // Orbit route renders as: informational, marked as an error, and naming the
 // resource with the two checks that explain it.

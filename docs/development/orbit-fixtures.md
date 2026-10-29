@@ -218,6 +218,18 @@ GitLab.com does not serve it (`requireOrbitServed` in
 `test/e2e/orbit/live_test.go`), naming GitLab's answer, and a recording
 made then needs `ORBIT_RECORD_FLAGS=-allow-unanswered` (below).
 
+What says which is the top-level group's own Orbit `access` and `trial`,
+which `graph_status` publishes. GitLab answers them for a top-level group
+alone and `null` for a subgroup or a project, the fixture namespace among
+them, so `graph_status` of `jmrp-oss` reports them and that of
+`jmrp-oss/orbit-fixtures` does not. GitLab.com serves the index only under
+`LICENSED` or `TRIAL_ACTIVE` access; at 16:58 UTC on 2026-10-29 `jmrp-oss`
+read `TRIAL_NOT_ELIGIBLE` with the `turn_on_denial_reason`
+`PURCHASE_REQUIRED`, a trial `NOT_ELIGIBLE` with no credit left, and Orbit
+turned off (`enabled: false`). The live suite asks it in
+`GraphStatus_top_level_access`, which runs with or without access and fails
+if GitLab.com ever answers an index under a state other than those two.
+
 Renaming or moving the group does not reach the projects' nodes. When
 `plens1` became `gitlab-mcp-server-orbit-fixtures` on 2026-10-26, the
 `Group` node carried the new path and `graph_status` answered for the
@@ -351,7 +363,7 @@ The record holds, per call, the action and variant, the output type the handler 
 
 A recording refuses to write anything when the fixture namespace is not indexed: a traversal of the fixture project that finds no row, or an indexing status that counts no indexed project, would record a tree without the paths the rows and counts carry. `orbit-wait-indexer` proceeds with a warning when it times out, so on a slow indexer the chain fails here, and the fix is to wait and run `make gen-orbit-record` again.
 
-A recording also stops on a call GitLab refuses the account (`401`, `403`, or GraphQL `null` where the handler reads), unless it is told GitLab may: `make gen-orbit-record ORBIT_RECORD_FLAGS=-allow-unanswered` then carries the call from the record at HEAD when that record sent the same request, dated with the day it was answered (`retrieved_at`, and that day is held to the same window), and otherwise lists it under `unrecorded` with GitLab's answer and the time. The record of 2026-10-29 was made that way at 09:28 UTC, after the fixture namespace lost access: the status, the schema in its three variants, the tool list and the query language were answered through their new sources, the three query calls were carried from the recording of 2026-10-26 (`POST /orbit/query`, the same request), and `orbit.graph_status (full_path)` is unrecorded, its GraphQL document having never been answered for this account. A call listed as unrecorded leaves its output type unjudged by R-PATH until a recording made with access answers it.
+A recording also stops on a call GitLab refuses the account (`401`, `403`, GraphQL `null` where the handler reads, or, for a fixture namespace that is itself a top-level group, its Orbit access with no index beside it), unless it is told GitLab may: `make gen-orbit-record ORBIT_RECORD_FLAGS=-allow-unanswered` then carries the call from the record at HEAD when that record sent the same request, dated with the day it was answered (`retrieved_at`, and that day is held to the same window), and otherwise lists it under `unrecorded` with GitLab's answer and the time. The record of 2026-10-29 was made that way at 09:28 UTC, after the fixture namespace lost access: the status, the schema in its three variants, the tool list and the query language were answered through their new sources, the three query calls were carried from the recording of 2026-10-26 (`POST /orbit/query`, the same request), and `orbit.graph_status (full_path)` is unrecorded, its GraphQL document having never been answered for this account. A call listed as unrecorded leaves its output type unjudged by R-PATH until a recording made with access answers it.
 
 A re-recording prints every key GitLab.com added, dropped or changed against the record committed at HEAD, which it reads through git rather than from the file it has just rewritten. When the key tree differs it writes the new record and exits 1, and every later run does the same until the record is committed, so `make test-e2e-gitlab-com` stays red until somebody has read the change, run the audit and committed the record. `make check-orbit-record` is the offline gate CI runs on the committed file, and it fails every branch once the record is older than the shared staleness window in `cmd/internal/provenance`. Only somebody holding a GitLab.com token entitled to Orbit and this fixture namespace can refresh it, unlike the Docker-regenerated records, so plan the refresh before the window closes. The same gate is step 24 of `make analyze` and a step of CI's generated-artifacts job.
 

@@ -96,22 +96,26 @@ func TestStatus_EachResponseFormat_AnswersTheSameStructuredStatus(t *testing.T) 
 
 // TestGraphQLHandlers_NullAnswers_ReportOrbitUnavailable verifies the answers
 // GitLab gives a user Orbit is not available to: serviceStatus or schema null,
-// or the whole orbit field null, and a namespace whose indexing and item
-// counts are null. Each is an error wrapping [ErrOrbitUnavailable] with the
-// hint naming what Orbit needs, never an empty answer that would read as a
-// service with nothing in it.
+// or the whole orbit field null, and a subgroup or a project whose index GitLab
+// answers null with no access beside it, as it answered jmrp-oss/orbit-fixtures
+// and kg-fixtures under it at 16:58 UTC on 2026-10-29. Each is an error
+// wrapping [ErrOrbitUnavailable] with the hint naming what Orbit needs, never
+// an empty answer that would read as a service with nothing in it; the index's
+// hint adds that the top-level group reports its access.
 func TestGraphQLHandlers_NullAnswers_ReportOrbitUnavailable(t *testing.T) {
 	cases := []struct {
 		name   string
 		answer string
 		call   func(context.Context, *testClient) error
+		hint   string
 	}{
-		{name: "status, serviceStatus null", answer: `{"orbit":{"serviceStatus":null}}`, call: callStatus},
-		{name: "status, orbit null", answer: `{"orbit":null}`, call: callStatus},
-		{name: "schema, schema null", answer: `{"orbit":{"schema":null}}`, call: callSchema},
-		{name: "schema, orbit null", answer: `{"orbit":null}`, call: callSchema},
-		{name: "graph status, orbit null", answer: `{"group":{"orbit":null},"project":null}`, call: callGraphStatus},
-		{name: "graph status, index null", answer: `{"group":{"orbit":{"enabled":true,"enabled_at":null,"indexing":null,"itemCounts":null}},"project":null}`, call: callGraphStatus},
+		{name: "status, serviceStatus null", answer: `{"orbit":{"serviceStatus":null}}`, call: callStatus, hint: orbitUnavailableHint},
+		{name: "status, orbit null", answer: `{"orbit":null}`, call: callStatus, hint: orbitUnavailableHint},
+		{name: "schema, schema null", answer: `{"orbit":{"schema":null}}`, call: callSchema, hint: orbitUnavailableHint},
+		{name: "schema, orbit null", answer: `{"orbit":null}`, call: callSchema, hint: orbitUnavailableHint},
+		{name: "graph status, orbit null", answer: `{"group":{"orbit":null},"project":null}`, call: callGraphStatus, hint: graphStatusUnavailableHint},
+		{name: "graph status, subgroup index null", answer: `{"group":{"orbit":` + subgroupNoIndexAnswer + `},"project":null}`, call: callGraphStatus, hint: graphStatusUnavailableHint},
+		{name: "graph status, project index null", answer: `{"projects":{"nodes":[{"orbit":` + projectNoIndexAnswer + `}]}}`, call: callGraphStatusByProjectID, hint: graphStatusUnavailableHint},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -123,8 +127,8 @@ func TestGraphQLHandlers_NullAnswers_ReportOrbitUnavailable(t *testing.T) {
 			if !errors.Is(err, ErrOrbitUnavailable) {
 				t.Fatalf("error = %v, want it to wrap ErrOrbitUnavailable", err)
 			}
-			if !strings.Contains(err.Error(), "with null") || !strings.Contains(err.Error(), "Suggestion: "+orbitUnavailableHint) {
-				t.Fatalf("error = %q, want the null answer named and the availability hint", err)
+			if !strings.Contains(err.Error(), "with null") || !strings.HasSuffix(err.Error(), "Suggestion: "+tc.hint) {
+				t.Fatalf("error = %q, want the null answer named and the hint %q", err, tc.hint)
 			}
 		})
 	}
@@ -418,9 +422,10 @@ func TestSchema_NestedConnectionNotReadWhole_IsAnError(t *testing.T) {
 
 // graphStatusAnswer is GitLab.com's answer for jmrp-oss/orbit-fixtures on
 // 2026-10-29 at 09:09 UTC, before Orbit stopped answering the fixture
-// namespace, in the shape [graphStatusFragment] asks for and cut to two areas
-// and two domains.
-const graphStatusAnswer = `{"enabled":true,"enabled_at":"2026-06-11T23:19:22Z",` +
+// namespace, in the shape the graph status documents ask for and cut to two
+// areas and two domains. access and trial are null, as GitLab answers them for
+// a subgroup.
+const graphStatusAnswer = `{"enabled":true,"enabled_at":"2026-06-11T23:19:22Z","access":null,"trial":null,` +
 	`"indexing":{"state":"READY","last_completed_at":"2026-10-29T08:24:01Z",` +
 	`"projects":{"indexed":2,"total_known":2,"gaps":0,"not_indexed":0,"total":2},` +
 	`"areas":[{"name":"ci","state":"READY"},{"name":"core","state":"INDEXING"}]},` +
@@ -551,6 +556,169 @@ func TestGraphStatus_ItemCountsWithoutIndexing_PublishesTheCounts(t *testing.T) 
 	}
 }
 
+// The Orbit namespaces GitLab.com answered the graph status documents with, as
+// each was asked, once access and trial were in them.
+const (
+	// licensedTopLevelAnswer is jmrp-oss at 09:09 UTC on 2026-10-29, before
+	// Orbit's general availability reached it: LICENSED through the free beta,
+	// no trial, and its index, cut to one area and one domain.
+	licensedTopLevelAnswer = `{"enabled":true,"enabled_at":"2026-06-11T23:19:22Z",` +
+		`"access":{"state":"LICENSED","reason":"BETA","turn_on_denial_reason":null},"trial":null,` +
+		`"indexing":{"state":"READY","last_completed_at":"2026-10-29T08:24:01Z",` +
+		`"projects":{"indexed":2,"total_known":2,"gaps":0,"not_indexed":0,"total":2},"areas":[{"name":"core","state":"READY"}]},` +
+		`"itemCounts":{"domains":[{"name":"core","items":[{"name":"Group","count":"2"},{"name":"Project","count":"3"}]}]}}`
+	// notEligibleAnswer is jmrp-oss at 09:22 UTC on 2026-10-29, the first
+	// answer after the flip: TRIAL_NOT_ELIGIBLE, a trial it cannot start with
+	// no credit left, and no index.
+	notEligibleAnswer = `{"enabled":true,"enabled_at":"2026-06-11T23:19:22Z",` +
+		`"access":{"state":"TRIAL_NOT_ELIGIBLE","reason":null,"turn_on_denial_reason":null},` +
+		`"trial":{"state":"NOT_ELIGIBLE","expires_on":null,"credits":{"remaining":0.0,"total":null},"offer":null},` +
+		`"indexing":null,"itemCounts":null}`
+	// purchaseRequiredAnswer is jmrp-oss at 16:58 UTC the same day, once Orbit
+	// had been turned off for it: the same access, and the reason the token's
+	// user cannot turn Orbit back on.
+	purchaseRequiredAnswer = `{"enabled":false,"enabled_at":null,` +
+		`"access":{"state":"TRIAL_NOT_ELIGIBLE","reason":null,"turn_on_denial_reason":"PURCHASE_REQUIRED"},` +
+		`"trial":{"state":"NOT_ELIGIBLE","expires_on":null,"credits":{"remaining":0.0,"total":null},"offer":null},` +
+		`"indexing":null,"itemCounts":null}`
+	// subgroupNoIndexAnswer is jmrp-oss/orbit-fixtures at 16:58 UTC on
+	// 2026-10-29: a subgroup, whose access and trial GitLab answers null.
+	subgroupNoIndexAnswer = `{"enabled":false,"enabled_at":null,"access":null,"trial":null,"indexing":null,"itemCounts":null}`
+	// projectNoIndexAnswer is jmrp-oss/orbit-fixtures/kg-fixtures at the same
+	// time: a project, for which GitLab sends no enabled flag either.
+	projectNoIndexAnswer = `{"enabled":null,"enabled_at":null,"access":null,"trial":null,"indexing":null,"itemCounts":null}`
+	// eligibleAnswer is the shape GitLab's schema gives a top-level group that
+	// can start a trial, with every field of the offer and the credits set: no
+	// namespace this repository can reach answered one, so the values are the
+	// test's own.
+	eligibleAnswer = `{"enabled":false,"enabled_at":null,` +
+		`"access":{"state":"TRIAL_ELIGIBLE","reason":null,"turn_on_denial_reason":"TRIAL_REQUIRED"},` +
+		`"trial":{"state":"ELIGIBLE","expires_on":null,"credits":{"remaining":null,"total":null},"offer":{"duration_days":30,"initial_credits":500.5}},` +
+		`"indexing":null,"itemCounts":null}`
+)
+
+// TestGraphStatus_TopLevelGroup_PublishesAccessAndTrial verifies that the
+// access and trial GitLab answers for a top-level group are published as it
+// spelled them: beside the index for a licensed group, and alone for a group
+// GitLab.com serves no index, whose access is the answer rather than an
+// error. A remaining credit count of zero is kept and a null total is left
+// out.
+func TestGraphStatus_TopLevelGroup_PublishesAccessAndTrial(t *testing.T) {
+	enabled, disabled := true, false
+	zero, offerCredits := 0.0, 500.5
+	thirty := int64(30)
+	notEligibleTrial := &GraphStatusTrial{State: "NOT_ELIGIBLE", Credits: &GraphStatusTrialCredits{Remaining: &zero}}
+	cases := []struct {
+		name   string
+		input  GraphStatusInput
+		answer string
+		want   GraphStatusOutput
+	}{
+		{
+			name: "licensed, by full path", input: GraphStatusInput{FullPath: "jmrp-oss"},
+			answer: `{"group":{"orbit":` + licensedTopLevelAnswer + `},"project":null}`,
+			want: GraphStatusOutput{
+				Enabled: &enabled, EnabledAt: "2026-06-11T23:19:22Z",
+				Access:   &GraphStatusAccess{State: AccessLicensed, Reason: "BETA"},
+				Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 2, Total: 2},
+				Domains:  []GraphStatusDomain{{Name: "core", Items: []GraphStatusDomainItem{{Name: "Group", Count: 2}, {Name: "Project", Count: 3}}}},
+				Indexing: &GraphStatusIndexing{State: "READY", LastCompletedAt: "2026-10-29T08:24:01Z", Areas: []GraphStatusArea{{Name: "core", State: "READY"}}},
+			},
+		},
+		{
+			name: "not eligible, by full path", input: GraphStatusInput{FullPath: "jmrp-oss"},
+			answer: `{"group":{"orbit":` + notEligibleAnswer + `},"project":null}`,
+			want: GraphStatusOutput{
+				Enabled: &enabled, EnabledAt: "2026-06-11T23:19:22Z",
+				Access: &GraphStatusAccess{State: "TRIAL_NOT_ELIGIBLE"}, Trial: notEligibleTrial,
+			},
+		},
+		{
+			name: "purchase required, by group id", input: GraphStatusInput{NamespaceID: 134059988},
+			answer: `{"groups":{"nodes":[{"orbit":` + purchaseRequiredAnswer + `}]}}`,
+			want: GraphStatusOutput{
+				Enabled: &disabled,
+				Access:  &GraphStatusAccess{State: "TRIAL_NOT_ELIGIBLE", TurnOnDenialReason: "PURCHASE_REQUIRED"}, Trial: notEligibleTrial,
+			},
+		},
+		{
+			name: "trial eligible with an offer", input: GraphStatusInput{NamespaceID: 1},
+			answer: `{"groups":{"nodes":[{"orbit":` + eligibleAnswer + `}]}}`,
+			want: GraphStatusOutput{
+				Enabled: &disabled,
+				Access:  &GraphStatusAccess{State: "TRIAL_ELIGIBLE", TurnOnDenialReason: "TRIAL_REQUIRED"},
+				Trial: &GraphStatusTrial{
+					State: "ELIGIBLE", Credits: &GraphStatusTrialCredits{},
+					Offer: &GraphStatusTrialOffer{DurationDays: &thirty, InitialCredits: &offerCredits},
+				},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				readGraphQL(t, r)
+				testutil.RespondGraphQL(w, http.StatusOK, tc.answer)
+			}))
+			out, err := GraphStatus(context.Background(), client, tc.input)
+			if err != nil {
+				t.Fatalf("GraphStatus() error: %v", err)
+			}
+			if !reflect.DeepEqual(out, tc.want) {
+				t.Fatalf("GraphStatus() = %+v, want %+v", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestGraphStatus_AccessAndTrial_PublishedUnderGitLabsNames verifies the JSON
+// a caller reads: GitLab's field names in snake case, its enums as it spells
+// them, the zero remaining credits written and every null left out.
+func TestGraphStatus_AccessAndTrial_PublishedUnderGitLabsNames(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		readGraphQL(t, r)
+		testutil.RespondGraphQL(w, http.StatusOK, `{"group":{"orbit":`+purchaseRequiredAnswer+`},"project":null}`)
+	}))
+	out, err := GraphStatus(context.Background(), client, GraphStatusInput{FullPath: "jmrp-oss"})
+	if err != nil {
+		t.Fatalf("GraphStatus() error: %v", err)
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	want := `{"enabled":false,` +
+		`"access":{"state":"TRIAL_NOT_ELIGIBLE","turn_on_denial_reason":"PURCHASE_REQUIRED"},` +
+		`"trial":{"state":"NOT_ELIGIBLE","credits":{"remaining":0}}}`
+	if string(encoded) != want {
+		t.Fatalf("published = %s, want %s", encoded, want)
+	}
+}
+
+// TestGraphStatusAccess_Serves_OnlyLicensedOrTrialActive verifies the two
+// access states GitLab.com serves an index under, and that a group with no
+// access state, a subgroup or a project, is not read as one.
+func TestGraphStatusAccess_Serves_OnlyLicensedOrTrialActive(t *testing.T) {
+	cases := []struct {
+		name   string
+		access *GraphStatusAccess
+		want   bool
+	}{
+		{name: "licensed", access: &GraphStatusAccess{State: AccessLicensed}, want: true},
+		{name: "trial active", access: &GraphStatusAccess{State: AccessTrialActive}, want: true},
+		{name: "trial not eligible", access: &GraphStatusAccess{State: "TRIAL_NOT_ELIGIBLE"}},
+		{name: "unlicensed", access: &GraphStatusAccess{State: "UNLICENSED", Reason: "NO_ACCESS"}},
+		{name: "no access state", access: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.access.Serves(); got != tc.want {
+				t.Fatalf("Serves() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestGraphStatus_InvalidInput_IsRefusedBeforeSending verifies the checks
 // [GraphStatus] makes before asking GitLab: exactly one scope, no negative ID,
 // and a response format the REST route took.
@@ -584,14 +752,16 @@ func TestGraphStatus_InvalidInput_IsRefusedBeforeSending(t *testing.T) {
 
 // TestGraphQLDocuments_CostWhatGitLabMeasured holds each GraphQL document's
 // estimated complexity, which GitLab refuses above its limit, to the figure
-// GitLab.com reported for it at 14:41 UTC on 2026-10-29: each document sent
-// with queryComplexity { score limit } beside its selection, which GitLab
-// answered 3 more than the figures below (the selection costs 3 on its own,
-// measured the same minute), against a limit of 250. A change to a selection
-// changes the estimate and sends whoever made it to measure again. The schema
-// document is not held here: its properties carry @include, which the estimate
-// does not evaluate, and GitLab.com reported 39 for it with properties and 31
-// without, well under the limit.
+// GitLab.com reported for it: each document sent with queryComplexity { score
+// limit } beside its selection, which GitLab answered 3 more than the figures
+// below (the selection costs 3 on its own, measured the same minute), against
+// a limit of 250. The service status was measured at 14:41 UTC on 2026-10-29,
+// and the three graph status documents at 16:58 UTC the same day, once they
+// asked for access and trial (73, 40 and 39 with queryComplexity). A change to
+// a selection changes the estimate and sends whoever made it to measure again.
+// The schema document is not held here: its properties carry @include, which
+// the estimate does not evaluate, and GitLab.com reported 39 for it with
+// properties and 31 without, well under the limit.
 func TestGraphQLDocuments_CostWhatGitLabMeasured(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -600,9 +770,9 @@ func TestGraphQLDocuments_CostWhatGitLabMeasured(t *testing.T) {
 		measured  int
 	}{
 		{name: "service status", document: queryServiceStatus, measured: 7},
-		{name: "graph status by group id", document: queryGraphStatusByGroupID, variables: map[string]any{"ids": []any{"gid://gitlab/Group/1"}}, measured: 24},
-		{name: "graph status by project id", document: queryGraphStatusByProjectID, variables: map[string]any{"ids": []any{"gid://gitlab/Project/1"}}, measured: 23},
-		{name: "graph status by path", document: queryGraphStatusByPath, variables: map[string]any{"fullPath": "a"}, measured: 44},
+		{name: "graph status by group id", document: queryGraphStatusByGroupID, variables: map[string]any{"ids": []any{"gid://gitlab/Group/1"}}, measured: 37},
+		{name: "graph status by project id", document: queryGraphStatusByProjectID, variables: map[string]any{"ids": []any{"gid://gitlab/Project/1"}}, measured: 36},
+		{name: "graph status by path", document: queryGraphStatusByPath, variables: map[string]any{"fullPath": "a"}, measured: 70},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -57,7 +57,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			[]string{orbitActionSchema, orbitActionDSL, orbitActionGraphStatus},
 			[]string{"kg.query", "knowledge_graph.query", "orbit.search", "kg.search", "knowledge_graph.search"}, queryInput()),
 		orbitReadSpec("graph_status", orbitReadRoute(client, GraphStatus, "GitLab Orbit Graph Status", "requested namespace, project, or full_path"), "gitlab_orbit_graph_status",
-			"Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain.",
+			"Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain, "+
+				"and for a top-level group its Orbit access and trial, which decide whether GitLab.com serves the index at all.",
 			[]string{orbitActionQuery},
 			[]string{"kg.indexing", "kg.index_status", "knowledge_graph.indexing", "knowledge_graph.index_status"}, orbitInput{}),
 	}

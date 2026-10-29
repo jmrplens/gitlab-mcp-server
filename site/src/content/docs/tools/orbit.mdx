@@ -42,20 +42,20 @@ Orbit registers only on GitLab.com connections with a Premium or Ultimate tier. 
 
 Self-managed GitLab instances do not register Orbit tools, even on a Premium or Ultimate tier.
 
-GitLab.com itself decides what it answers. Since Orbit's general availability on 29 October 2026, the plan no longer counts there: GitLab.com serves a group's index and queries only for a top-level group with the `orbit_promo` add-on or a running Orbit trial, and answers anything else with `403` or with nothing where the index would be. The server reports either as an error saying Orbit is not served to the token there, never as an empty result.
+GitLab.com itself decides what it answers. Since Orbit's general availability on 29 October 2026, the plan no longer counts there: GitLab.com serves a group's index and queries only for a top-level group with the `orbit_promo` add-on or a running Orbit trial, and answers anything else with `403` or with nothing where the index would be. The server reports either as an error saying Orbit is not served to the token there, never as an empty result. The one exception says why: `graph_status` of a top-level group returns the group's Orbit `access` and `trial`, which GitLab answers beside the missing index, and says that the index is missing because of the access, not because the graph is empty.
 
 ### Where each action reads from
 
 GitLab.com removed five of the six REST routes Orbit used on 27 and 28 October 2026. Each action now reads the source GitLab offers in their place, a documented API where there is one, and the Orbit MCP endpoint only for what nothing else serves:
 
-| Action         | Source on GitLab.com                                                                         |
-| -------------- | -------------------------------------------------------------------------------------------- |
-| `status`       | GraphQL `Query.orbit.serviceStatus`                                                          |
-| `schema`       | GraphQL `Query.orbit.schema`; `llm` from `get_graph_schema` of `POST /api/v4/orbit/mcp`      |
-| `tools`        | `tools/list` of the Orbit MCP endpoint, `POST /api/v4/orbit/mcp`                             |
-| `dsl`          | `list_commands` of the Orbit MCP endpoint                                                    |
-| `query`        | `POST /api/v4/orbit/query`                                                                   |
-| `graph_status` | GraphQL `Group.orbit` and `Project.orbit` (`indexing`, `itemCounts`, `enabled`, `enabledAt`) |
+| Action         | Source on GitLab.com                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `status`       | GraphQL `Query.orbit.serviceStatus`                                                                             |
+| `schema`       | GraphQL `Query.orbit.schema`; `llm` from `get_graph_schema` of `POST /api/v4/orbit/mcp`                         |
+| `tools`        | `tools/list` of the Orbit MCP endpoint, `POST /api/v4/orbit/mcp`                                                |
+| `dsl`          | `list_commands` of the Orbit MCP endpoint                                                                       |
+| `query`        | `POST /api/v4/orbit/query`                                                                                      |
+| `graph_status` | GraphQL `Group.orbit` and `Project.orbit` (`indexing`, `itemCounts`, `enabled`, `enabledAt`, `access`, `trial`) |
 
 ## Actions
 
@@ -313,6 +313,13 @@ Runs a read-only Knowledge Graph query. The `query` parameter is a GQL statement
 
 Returns the Orbit index of one group or project, named by `namespace_id`, `project_id` or `full_path`: whether Orbit is turned on for its top-level group and since when (`enabled`, `enabled_at`, sent for a group), the project counts (`indexed`, `total_known`, `gaps`, `not_indexed`, `total`), the indexing `state` (`READY`, `INDEXING`, `NOT_STARTED`, `FAILED` or `UNKNOWN`) with the time of the last completed run and the state of each area, and the number of indexed items of each entity in each domain. Use it to check that a project is indexed before querying it. `response_format` is accepted and changes nothing.
 
+For a top-level group it also returns the group's Orbit `access` and `trial`, which decide whether GitLab.com serves the index at all, with GitLab's names and values:
+
+- `access`: its `state` (`LICENSED`, `TRIAL_ACTIVE`, `TRIAL_ELIGIBLE`, `TRIAL_ENDED`, `TRIAL_NOT_ELIGIBLE`, `TRIAL_STATUS_UNAVAILABLE`, `UNLICENSED` or `NOT_CONFIGURED`), the `reason` of a state with more than one cause (where a licensed group's access comes from, `PLAN`, `PROMO_ADD_ON` or `BETA`, or why a group has none), and the `turn_on_denial_reason` that says why the token's user cannot turn Orbit on.
+- `trial`: its `state` (`ELIGIBLE`, `NOT_ELIGIBLE`, `ACTIVE` or `ENDED`), its last day (`expires_on`), its `credits` (`remaining` and `total`) and, for a user who can start one, the `offer` of a new trial (`duration_days` and `initial_credits`).
+
+GitLab.com serves the index only under `LICENSED` or `TRIAL_ACTIVE` access. Under any other state it answers the group's access and trial with no index, and `graph_status` returns them rather than an error, with a line saying that the index is missing because of the access. GitLab answers neither for a subgroup or a project, so they are absent there; ask the top-level group's `full_path` for them. A subgroup or project whose index GitLab does not serve is an error that says so.
+
 **Example:** See above.
 
 ### What changed in 3.4.0
@@ -321,7 +328,7 @@ The six action IDs, tool names and parameters are the ones of earlier releases. 
 
 - `status`: the `user` and `system` objects, `timestamp`, `formatted_text`, and each component's `replicas` and `metrics`. A component's `status` and the overall `status` are now GitLab's upper-case states.
 - `schema`: `schema_version`, each domain's `description`, and each node's `incoming_edges` and `outgoing_edges`, which the edges list carries pair by pair. Nodes are typed now, with `primary_key`, `label_field` and `display` added.
-- `graph_status`: `formatted_text`, each item's `state`, and the last run's `last_started_at`, `last_duration_ms` and `last_error`. Added: `enabled`, `enabled_at`, `not_indexed`, `total` and the areas of `indexing`.
+- `graph_status`: `formatted_text`, each item's `state`, and the last run's `last_started_at`, `last_duration_ms` and `last_error`. Added: `enabled`, `enabled_at`, `not_indexed`, `total`, the areas of `indexing`, and a top-level group's `access` and `trial`. A top-level group GitLab.com serves no index is answered with its access and trial instead of an error.
 - `tools`: each tool's `trusted` flag added.
 - `query`: the `query` parameter is a string. It took a JSON object as well, the JSON DSL GitLab.com removed on 27 October 2026, which GitLab.com refuses whatever it holds.
 

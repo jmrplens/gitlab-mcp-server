@@ -214,6 +214,53 @@ func TestMakeCall_AnAccountGitLabDeclined_IsARefusal(t *testing.T) {
 	}
 }
 
+// TestMakeCall_ATopLevelGroupsAccess_IsARefusalUnlessItServes verifies the
+// indexing status of a fixture namespace that is itself a top-level group:
+// answered with an access GitLab.com serves no index under, as jmrp-oss was
+// at 16:58 UTC on 2026-10-29, it is a refusal naming the access, carrying the
+// request, never a key tree with no index in it; answered under a licensed
+// access, it is recorded.
+func TestMakeCall_ATopLevelGroupsAccess_IsARefusalUnlessItServes(t *testing.T) {
+	cases := []struct {
+		name    string
+		orbit   string
+		refused bool
+	}{
+		{
+			name: "trial not eligible, no index",
+			orbit: `{"enabled":false,"enabled_at":null,"access":{"state":"TRIAL_NOT_ELIGIBLE","reason":null,"turn_on_denial_reason":"PURCHASE_REQUIRED"},` +
+				`"trial":{"state":"NOT_ELIGIBLE","expires_on":null,"credits":{"remaining":0.0,"total":null},"offer":null},"indexing":null,"itemCounts":null}`,
+			refused: true,
+		},
+		{
+			name:  "licensed, with its index",
+			orbit: `{"access":{"state":"LICENSED","reason":"BETA","turn_on_denial_reason":null},"trial":null,` + strings.TrimPrefix(graphStatusFields, `"enabled":true,"enabled_at":"2026-06-11T23:19:22Z","access":null,"trial":null,`) + `}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			answers := orbitAnswers()
+			answers[keyGraphStatus] = fakeAnswer{status: 200, contentType: "application/json", body: `{"data":{"group":{"orbit":` + tc.orbit + `},"project":null}}`}
+			proxy, client := startProxy(t, &fakeGitLab{answers: answers})
+			call, _, err := makeCall(context.Background(), client, proxy, callSpecs()[10], "jmrp-oss")
+			refused, isRefusal := errors.AsType[*refusal](err)
+			if isRefusal != tc.refused {
+				t.Fatalf("makeCall() error = %v, want refusal %t", err, tc.refused)
+			}
+			if !tc.refused {
+				if err != nil || call.Response.Root != rootGroupOrbit {
+					t.Fatalf("makeCall() = %+v, %v, want the call recorded", call, err)
+				}
+				return
+			}
+			want := "POST /api/graphql (query OrbitGraphStatusByPath) answered 200 with the top-level group's Orbit access TRIAL_NOT_ELIGIBLE, under which GitLab.com serves no index"
+			if !strings.Contains(err.Error(), want) || !errors.Is(err, errAccessDeclined) || refused.request.Request.Path == "" {
+				t.Fatalf("refusal = %v (%+v), want %q with the request", err, refused, want)
+			}
+		})
+	}
+}
+
 // TestIndexedAnswer_RefusesOnlyTheCountingAnswersOfAnUnindexedNamespace
 // verifies which answers stop a recording: a raw traversal with no row and an
 // indexing status with no project, or none, counted as indexed. The llm

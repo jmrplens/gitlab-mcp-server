@@ -286,9 +286,22 @@ func FormatQueryMarkdown(out QueryOutput) string {
 	return b.String()
 }
 
+// hintAccessGate is the one next step of a group GitLab.com serves no index
+// for: a query would be refused the same way, and the cluster's health says
+// nothing about one group's access.
+const hintAccessGate = "Orbit access is set on the top-level group on GitLab.com: a license or a running trial there serves the index, which this status shows once it does"
+
 // FormatGraphStatusMarkdown renders Orbit indexing status as the card of one
-// object: how much is indexed, how the last run went, and the per-domain node
-// counts as a nested collection.
+// object: whether Orbit is on, the top-level group's Orbit access and trial,
+// how much is indexed, how the last run went, and the per-domain node counts
+// as a nested collection.
+//
+// Since Orbit's general availability GitLab.com serves a group's index only
+// under LICENSED or TRIAL_ACTIVE access, and answers a top-level group under
+// any other with its access and no index. The card then says so in a line of
+// its own ([graphStatusAccessNote]), since a missing or empty index reads as
+// an empty graph to a model that has not read the access row, and its next
+// step leads to the access rather than to a query GitLab would refuse.
 func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Orbit Graph Status")
@@ -296,11 +309,15 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 		toolutil.HintAction(orbitActionQuery, "query the graph once indexing reaches a healthy state"),
 		toolutil.HintAction(orbitActionStatus, "check the cluster itself when indexing never starts"),
 	}
+	if out.Access != nil && !out.Access.Serves() {
+		hints = []string{hintAccessGate}
+	}
 
 	if out.Enabled != nil {
 		c.Bool("Orbit enabled", *out.Enabled)
 	}
 	c.Time("Enabled at", out.EnabledAt)
+	writeGraphStatusAccess(c, out.Access, out.Trial)
 	if out.Projects != nil {
 		c.Int("Indexed projects", out.Projects.Indexed)
 		c.Int("Total known projects", out.Projects.TotalKnown)
@@ -326,8 +343,68 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 			)
 		}
 	}
+	c.Note(graphStatusAccessNote(out))
 	c.End(hints...)
 	return b.String()
+}
+
+// writeGraphStatusAccess writes the top-level group's Orbit access as rows and
+// its trial as a nested object, each as GitLab spelled it, and nothing for a
+// subgroup or a project, for which GitLab answers both null.
+func writeGraphStatusAccess(c *toolutil.Card, access *GraphStatusAccess, trial *GraphStatusTrial) {
+	if access != nil {
+		c.Field("Orbit access", access.State)
+		c.Field("Access reason", access.Reason)
+		c.Field("Turn-on denial reason", access.TurnOnDenialReason)
+	}
+	if trial == nil {
+		return
+	}
+	sub := c.Sub("Orbit trial")
+	sub.Field("State", trial.State)
+	sub.Time("Expires on", trial.ExpiresOn)
+	if trial.Credits != nil {
+		sub.Field("Credits remaining", formatCredits(trial.Credits.Remaining))
+		sub.Field("Credits total", formatCredits(trial.Credits.Total))
+	}
+	if trial.Offer != nil {
+		if trial.Offer.DurationDays != nil {
+			sub.Int("Offered trial days", *trial.Offer.DurationDays)
+		}
+		sub.Field("Offered trial credits", formatCredits(trial.Offer.InitialCredits))
+	}
+}
+
+// formatCredits renders a credit count GitLab sends as a Float, with no
+// trailing zeros, or nothing when GitLab sent null. Zero is written, since a
+// trial with no credits left is an answer.
+func formatCredits(credits *float64) string {
+	if credits == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*credits, 'f', -1, 64)
+}
+
+// graphStatusAccessNote is the line the card ends on when the top-level group's
+// Orbit access explains its index: a state GitLab.com serves no index under, a
+// served state with no index answered, or a trial, which ends. It is empty for
+// a licensed group with its index, and for a subgroup or a project, which carry
+// no access.
+func graphStatusAccessNote(out GraphStatusOutput) string {
+	access := out.Access
+	switch {
+	case access == nil:
+		return ""
+	case !access.Serves():
+		return "Orbit access is " + toolutil.EscapeMdTableCell(access.State) +
+			": GitLab.com serves a group's Orbit index and queries only while its access is LICENSED or TRIAL_ACTIVE, " +
+			"so an index missing or empty here reflects the access, not the graph."
+	case out.Indexing == nil && out.Projects == nil && len(out.Domains) == 0:
+		return "The group has Orbit access and GitLab answered no index: Orbit is off for the top-level group, or the token is below the Reporter role there."
+	case access.State == AccessTrialActive:
+		return "Orbit is served on a trial, which ends on its last day or when its credits run out."
+	}
+	return ""
 }
 
 // domainCounts renders one domain's node counts as the "Name: count" list the

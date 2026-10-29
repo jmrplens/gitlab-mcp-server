@@ -83,7 +83,7 @@ func Status(ctx context.Context, client *gitlabclient.Client, input StatusInput)
 		return StatusOutput{}, err
 	}
 	if resp.Data.Orbit == nil || resp.Data.Orbit.ServiceStatus == nil {
-		return StatusOutput{}, errOrbitUnavailable(orbitStatusOp, "the Orbit service status")
+		return StatusOutput{}, errOrbitUnavailable(orbitStatusOp, "the Orbit service status", orbitUnavailableHint)
 	}
 	status := resp.Data.Orbit.ServiceStatus
 	out := StatusOutput{Status: status.Status, Version: status.Version}
@@ -107,9 +107,9 @@ var ErrOrbitUnavailable = errors.New("orbit is not available to this token")
 //
 // It is written out rather than passed through [toolutil.WrapErrWithHint],
 // which classifies an HTTP failure and would call an answer GitLab gave with
-// 200 an unexpected error.
-func errOrbitUnavailable(op, what string) error {
-	return fmt.Errorf("%s: GitLab answered %s with null: %w. Suggestion: %s", op, what, ErrOrbitUnavailable, orbitUnavailableHint)
+// 200 an unexpected error. hint is what the caller is told to check.
+func errOrbitUnavailable(op, what, hint string) error {
+	return fmt.Errorf("%s: GitLab answered %s with null: %w. Suggestion: %s", op, what, ErrOrbitUnavailable, hint)
 }
 
 // schemaPageSize is the page size of every connection [querySchema] asks for,
@@ -332,7 +332,7 @@ func schemaPage(ctx context.Context, client *gitlabclient.Client, variables map[
 		return nil, err
 	}
 	if page.Data.Orbit == nil || page.Data.Orbit.Schema == nil {
-		return nil, errOrbitUnavailable(orbitSchemaOp, "the Orbit schema")
+		return nil, errOrbitUnavailable(orbitSchemaOp, "the Orbit schema", orbitUnavailableHint)
 	}
 	return page.Data.Orbit.Schema, nil
 }
@@ -406,8 +406,18 @@ func expanded(name string, expand []string) bool {
 // fragment, so each document is whole where it is sent and the audits that
 // read documents judge every one with its decoder. indexingStatus and
 // itemCounts.areas are not asked: they carry what indexing and
-// itemCounts.domains do under GitLab's older and newer names. access and trial
-// are the access gate rather than the index.
+// itemCounts.domains do under GitLab's older and newer names.
+//
+// access and trial are asked in every document: since Orbit's general
+// availability on 2026-10-29 they decide whether GitLab.com serves the index
+// at all, and they are why indexing and itemCounts are null for a top-level
+// group without access. GitLab answers them for a top-level group alone and
+// null for a subgroup and a project, whose OrbitNamespace is the same type
+// (measured 2026-10-29 for jmrp-oss, its subgroup orbit-fixtures and the
+// project kg-fixtures under it). access.trial is not asked: it is the trial
+// OrbitNamespace.trial carries, which GitLab answered identically. GitLab
+// resolves either for at most 10 groups a request, and a document here names
+// one.
 
 // queryGraphStatusByPath asks for the Orbit index of a full path, which names
 // a group or a project; GitLab answers the other root null.
@@ -417,6 +427,23 @@ query OrbitGraphStatusByPath($fullPath: ID!) {
     orbit {
       enabled
       enabled_at: enabledAt
+      access {
+        state
+        reason
+        turn_on_denial_reason: turnOnDenialReason
+      }
+      trial {
+        state
+        expires_on: expiresOn
+        credits {
+          remaining
+          total
+        }
+        offer {
+          duration_days: durationDays
+          initial_credits: initialCredits
+        }
+      }
       indexing {
         state
         last_completed_at: lastCompletedAt
@@ -447,6 +474,23 @@ query OrbitGraphStatusByPath($fullPath: ID!) {
     orbit {
       enabled
       enabled_at: enabledAt
+      access {
+        state
+        reason
+        turn_on_denial_reason: turnOnDenialReason
+      }
+      trial {
+        state
+        expires_on: expiresOn
+        credits {
+          remaining
+          total
+        }
+        offer {
+          duration_days: durationDays
+          initial_credits: initialCredits
+        }
+      }
       indexing {
         state
         last_completed_at: lastCompletedAt
@@ -485,6 +529,23 @@ query OrbitGraphStatusByGroupID($ids: [ID!]) {
       orbit {
         enabled
         enabled_at: enabledAt
+        access {
+          state
+          reason
+          turn_on_denial_reason: turnOnDenialReason
+        }
+        trial {
+          state
+          expires_on: expiresOn
+          credits {
+            remaining
+            total
+          }
+          offer {
+            duration_days: durationDays
+            initial_credits: initialCredits
+          }
+        }
         indexing {
           state
           last_completed_at: lastCompletedAt
@@ -524,6 +585,23 @@ query OrbitGraphStatusByProjectID($ids: [ID!]) {
       orbit {
         enabled
         enabled_at: enabledAt
+        access {
+          state
+          reason
+          turn_on_denial_reason: turnOnDenialReason
+        }
+        trial {
+          state
+          expires_on: expiresOn
+          credits {
+            remaining
+            total
+          }
+          offer {
+            duration_days: durationDays
+            initial_credits: initialCredits
+          }
+        }
         indexing {
           state
           last_completed_at: lastCompletedAt
@@ -555,9 +633,13 @@ query OrbitGraphStatusByProjectID($ids: [ID!]) {
 `
 
 // gqlGraphStatus is an OrbitNamespace as the graph status documents select it.
+// access and trial are asked under the names the output publishes, so they
+// decode into the output's own types.
 type gqlGraphStatus struct {
-	Enabled   *bool  `json:"enabled"`
-	EnabledAt string `json:"enabled_at"`
+	Enabled   *bool              `json:"enabled"`
+	EnabledAt string             `json:"enabled_at"`
+	Access    *GraphStatusAccess `json:"access"`
+	Trial     *GraphStatusTrial  `json:"trial"`
 	Indexing  *struct {
 		State           string               `json:"state"`
 		LastCompletedAt string               `json:"last_completed_at"`
@@ -589,9 +671,18 @@ type gqlOrbitHolder struct {
 // route on 2026-10-28 (issue 1516; client-go's Orbit.GetGraphStatus still
 // sends that GET). Exactly one of namespace_id, project_id or full_path is
 // set: a full path is asked as both a group and a project, and an ID as the
-// global ID of the one it names. GitLab answers indexing and itemCounts null
-// when Orbit is not available to the token there or is off for the top-level
-// group, which is reported as an error naming what Orbit needs.
+// global ID of the one it names.
+//
+// GitLab answers indexing and itemCounts null when Orbit is not available to
+// the token there, is off for the top-level group, or the token is below the
+// Reporter role. For a top-level group it answers the group's Orbit access and
+// trial beside them, which say why, so that answer is published with the
+// index absent rather than refused: since Orbit's general availability a
+// group without access is the common case, and its access state is the answer
+// a caller needs. A subgroup or a project carries no access (GitLab answers it
+// null there), so an index answered null with nothing beside it is reported
+// as an error naming what Orbit needs and that the top-level group reports
+// its access.
 func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphStatusInput) (GraphStatusOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return GraphStatusOutput{}, err
@@ -621,11 +712,19 @@ func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphSt
 	if holder == nil {
 		return GraphStatusOutput{}, fmt.Errorf("%s: GitLab answered no %s visible to this token. Suggestion: check the ID or full path, and that the token can read the group or project", orbitGraphStatusOp, scope)
 	}
-	if holder.Orbit == nil || (holder.Orbit.Indexing == nil && holder.Orbit.ItemCounts == nil) {
-		return GraphStatusOutput{}, errOrbitUnavailable(orbitGraphStatusOp, "the indexing status of "+scope)
+	status := holder.Orbit
+	if status == nil || (status.Indexing == nil && status.ItemCounts == nil && status.Access == nil) {
+		return GraphStatusOutput{}, errOrbitUnavailable(orbitGraphStatusOp, "the indexing status of "+scope, graphStatusUnavailableHint)
 	}
-	return convertGraphStatus(holder.Orbit), nil
+	return convertGraphStatus(status), nil
 }
+
+// graphStatusUnavailableHint follows a group or project whose Orbit index
+// GitLab answered null with no access state beside it: a subgroup or a project,
+// whose access GitLab answers null, or a token that cannot read the group's
+// Orbit setting. It is [orbitUnavailableHint] and where the reason is read,
+// written as one literal for the reason [queryRefusedHint] gives.
+const graphStatusUnavailableHint = "Orbit is served on GitLab.com only, to a token that can read a top-level group with Orbit access and Orbit turned on; check the group's Orbit settings and access. orbit.graph_status with the top-level group's full_path reports its Orbit access and trial"
 
 // graphStatusAnswered classifies a sent graph status request: the HTTP
 // failure, then the top-level GraphQL errors.
@@ -733,11 +832,11 @@ func graphStatusScope(input GraphStatusInput) (string, error) {
 }
 
 // convertGraphStatus projects an Orbit namespace into [GraphStatusOutput]: the
-// project counts where the output has always published them, at the top, and
-// each entity count, which GitLab's GraphQL API spells as a BigInt string, as
-// a number.
+// access and trial as GitLab answered them, the project counts where the output
+// has always published them, at the top, and each entity count, which GitLab's
+// GraphQL API spells as a BigInt string, as a number.
 func convertGraphStatus(status *gqlGraphStatus) GraphStatusOutput {
-	out := GraphStatusOutput{Enabled: status.Enabled, EnabledAt: status.EnabledAt}
+	out := GraphStatusOutput{Enabled: status.Enabled, EnabledAt: status.EnabledAt, Access: status.Access, Trial: status.Trial}
 	if status.Indexing != nil {
 		out.Projects = status.Indexing.Projects
 		out.Indexing = &GraphStatusIndexing{

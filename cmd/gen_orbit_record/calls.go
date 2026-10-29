@@ -196,11 +196,12 @@ func grammarOf(dsl orbit.DSLOutput) string {
 }
 
 // refusal is a call GitLab did not answer for the account: refused 401 or
-// 403, or answered with null where the handler reads, which is how GraphQL
-// answers a field Orbit does not serve the user. It is the one failure a
-// recording told to allow it (-allow-unanswered) records rather than stops
-// on, and it carries the request so an earlier answer to the same one can be
-// kept.
+// 403, answered with null where the handler reads, which is how GraphQL
+// answers a field Orbit does not serve the user, or answered with a top-level
+// group's Orbit access and no index ([declinedByAccess]). It is the one
+// failure a recording told to allow it (-allow-unanswered) records rather than
+// stops on, and it carries the request so an earlier answer to the same one
+// can be kept.
 type refusal struct {
 	id      orbitrecord.CallID
 	request orbitrecord.Call
@@ -213,7 +214,8 @@ func (r *refusal) Error() string {
 	return fmt.Sprintf("%s was not answered for this account (%s), so its answer cannot be recorded: %v", r.id, r.reason, r.err)
 }
 
-// Unwrap returns the handler's error.
+// Unwrap returns the handler's error, or [errAccessDeclined] for an answer the
+// handler published.
 func (r *refusal) Unwrap() error { return r.err }
 
 // refusedBy reports whether a failed call's one exchange was GitLab declining
@@ -228,6 +230,29 @@ func refusedBy(ex exchange, handlerErr error) (reason string, refused bool) {
 		return fmt.Sprintf("%s %s (%s) answered 200 with null where the handler reads, which is GitLab's answer to an account Orbit is not available to", ex.method, ex.path, ex.operation), true
 	}
 	return "", false
+}
+
+// errAccessDeclined is the error a [refusal] carries for an indexing status
+// the handler answered without failing, which [declinedByAccess] reads as
+// GitLab declining the account.
+var errAccessDeclined = errors.New("GitLab.com serves no Orbit index under the top-level group's access")
+
+// declinedByAccess reports whether a call that succeeded is GitLab declining
+// the account all the same, and why: the indexing status of a top-level group
+// whose Orbit access GitLab.com serves no index under, which GitLab answers
+// with the access and trial and the index null, and the handler publishes as
+// they came (orbit.GraphStatus). Recorded, it would be a key tree with no
+// index in it, which the next recording made with access would report as keys
+// GitLab added; it is a refusal instead, which -allow-unanswered carries or
+// lists. The fixture namespace is a subgroup by default, for which GitLab
+// answers no access and the handler a null index, so this is the answer of a
+// fixture namespace that is itself a top-level group.
+func declinedByAccess(ex exchange, output any) (string, bool) {
+	status, isStatus := output.(orbit.GraphStatusOutput)
+	if !isStatus || status.Access == nil || status.Access.Serves() {
+		return "", false
+	}
+	return fmt.Sprintf("%s %s (%s) answered 200 with the top-level group's Orbit access %s, under which GitLab.com serves no index", ex.method, ex.path, ex.operation, status.Access.State), true
 }
 
 // makeCall invokes one handler and reads the one exchange it made.
@@ -246,6 +271,9 @@ func makeCall(ctx context.Context, client *gitlabclient.Client, proxy *recorder,
 		return orbitrecord.Call{}, nil, fmt.Errorf("%s made %d Orbit requests and a call is recorded from exactly one", spec.id, len(exchanges))
 	}
 	ex := exchanges[0]
+	if reason, declined := declinedByAccess(ex, output); declined {
+		return orbitrecord.Call{}, nil, &refusal{id: spec.id, request: requestOf(spec, ex), reason: reason, err: errAccessDeclined}
+	}
 	rootType, rooted, err := rootedAnswer(spec.root, ex.contentType, ex.payload)
 	if err != nil {
 		return orbitrecord.Call{}, nil, fmt.Errorf("%s: %s: %w", spec.id, ex.describe(), err)
