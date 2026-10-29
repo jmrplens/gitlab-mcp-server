@@ -70,6 +70,11 @@ for the fork, branch, fix, test and MR workflow.
   - [Commit declares extended_trailers a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists)
   - [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled)
   - [OrbitGraphStatusProjects does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on)
+  - [Orbit.GetStatus sends GET /orbit/status, which GitLab.com removed](#orbitgetstatus-sends-get-orbitstatus-which-gitlabcom-removed)
+  - [Orbit.GetSchema sends GET /orbit/schema, which GitLab.com removed](#orbitgetschema-sends-get-orbitschema-which-gitlabcom-removed)
+  - [Orbit.GetTools sends GET /orbit/tools, which GitLab.com removed](#orbitgettools-sends-get-orbittools-which-gitlabcom-removed)
+  - [Orbit.GetDsl sends GET /orbit/schema/dsl, which GitLab.com removed](#orbitgetdsl-sends-get-orbitschemadsl-which-gitlabcom-removed)
+  - [Orbit.GetGraphStatus sends GET /orbit/graph_status, which GitLab.com removed](#orbitgetgraphstatus-sends-get-orbitgraph_status-which-gitlabcom-removed)
   - [ListGroupMilestonesOptions misspells include_descendants and GroupMilestone drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project)
   - [CreateGroupIssueBoardListOptions models only label_id where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)
   - [UpdateGroupIssueBoardOptions models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes)
@@ -322,7 +327,7 @@ readable without opening the tracker:
 | 67 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169), closed as working as intended; the rest is the proposal [modelcontextprotocol/go-sdk#1284](https://github.com/modelcontextprotocol/go-sdk/issues/1284) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), closed unmerged; and, for the second `Subscribe`, [modelcontextprotocol/go-sdk#1283](https://github.com/modelcontextprotocol/go-sdk/pull/1283), merged | Partly, by [modelcontextprotocol/go-sdk#1283](https://github.com/modelcontextprotocol/go-sdk/pull/1283), not ours, unreleased: the second `Subscribe` asks again; `Subscribe` still returns nil on a refusal | No | None possible |
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
 | 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | Yes | Yes, [gitlab-org/api/client-go!3082](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3082), open; on 2026-10-17 a client-go code owner asked for the bug recreated in an integration test, which we pushed on 2026-10-19, and it has had no review or approval since | No | Was yes, for `repository.commit_list` with `trailers` | Yes for every action that publishes `extended_trailers`; not for the readers of an embedded commit, resources, prompts and completions included |
-| 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
+| 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Was yes; the handler reads GraphQL and the MCP endpoint since GitLab.com removed the route (row 145) |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260143](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260143), merged | **Yes, 19.5.0** | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), merged | **Yes, 19.5.0** | Yes | Partial |
 | 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open | No | No; it keeps the condition gate from measuring the e2e harness | Partial |
@@ -345,7 +350,7 @@ readable without opening the tracker:
 | 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260959](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260959), merged | **Yes, unreleased**: merged on 2026-10-15 in milestone 19.6 and deployed to GitLab.com at 13:47 UTC that day | No | Not needed; the live record computes the undeclared set itself |
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, 19.5.0** | No | Yes, since [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133): the refusal is described and names the retry with the ID |
-| 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Yes |
+| 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Was yes; the handler reads GraphQL since GitLab.com removed the route (row 148) |
 | 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260458](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260458), merged | **Yes, 19.5.0** | No | None taken |
 | 95 | client-go | [`ListGroupMilestonesOptions` misspells `include_descendants` and `GroupMilestone` drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project) | `web_url`: yes, by another contributor; the rest: no | `web_url`: [gitlab-org/api/client-go!3126](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3126), merged | **`web_url`: v3.26.0**, not ours | No | Retired for `web_url` at the v3.29.0 pin; yes for `include_descendants` and `project_id` |
 | 96 | client-go | [`CreateGroupIssueBoardListOptions` models only `label_id` where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), open, commit 8 | No | No; it narrows `group.group_board_create_list` to label lists | None, by decision |
@@ -396,6 +401,11 @@ readable without opening the tracker:
 | 141 | gitlab-org/gitlab | [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses) | No | No | No | No; GitLab answers both with `400` | Yes, the two custom role creates offer Guest to Maintainer and the two broadcast message writes every target but Security Manager |
 | 142 | gitlab-org/gitlab | [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does) | No; a documentation merge request is drafted, not sent | No | No | No; the schemas followed the pages | Yes ([issue 1240](https://github.com/jmrplens/gitlab-mcp-server/issues/1240)): each row is declared with the source that settles it, and a parameter no tier honors is no longer offered |
 | 143 | gitlab-org/gitlab | [The service account token list examples sort by a value their pages do not list](#the-service-account-token-list-examples-sort-by-a-value-their-pages-do-not-list) | No | No | No | No | None; `group.service_account_pat_list` and `project.service_account_pat_list` publish the eight documented orders and not the example's `id_desc` |
+| 144 | client-go | [`Orbit.GetStatus` sends a route GitLab.com removed](#orbitgetstatus-sends-get-orbitstatus-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.Status` reads GraphQL `Query.orbit.serviceStatus` |
+| 145 | client-go | [`Orbit.GetSchema` sends a route GitLab.com removed](#orbitgetschema-sends-get-orbitschema-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.Schema` reads GraphQL `Query.orbit.schema`, and `get_graph_schema` of the Orbit MCP endpoint for its llm text |
+| 146 | client-go | [`Orbit.GetTools` sends a route GitLab.com removed](#orbitgettools-sends-get-orbittools-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.Tools` sends `tools/list` to the Orbit MCP endpoint |
+| 147 | client-go | [`Orbit.GetDsl` sends a route GitLab.com removed](#orbitgetdsl-sends-get-orbitschemadsl-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.DSL` sends `list_commands` to the Orbit MCP endpoint |
+| 148 | client-go | [`Orbit.GetGraphStatus` sends a route GitLab.com removed](#orbitgetgraphstatus-sends-get-orbitgraph_status-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.GraphStatus` reads GraphQL `Group.orbit` and `Project.orbit` |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -5895,6 +5905,13 @@ right name; add `FormattedText string` with `json:"formatted_text,omitempty"`
 to `OrbitSchema`; correct the option's doc comment, which names `format` as
 the parameter.
 
+**Since 3.4.0** the workaround is gone with the route: GitLab.com removed
+`GET /orbit/schema` on 2026-10-27, and `orbit.Schema` reads GraphQL and the
+Orbit MCP endpoint instead
+([entry 145](#orbitgetschema-sends-get-orbitschema-which-gitlabcom-removed)).
+The gap stays in client-go for a self-managed instance that still serves the
+route.
+
 ### OrbitGraphStatusProjects does not model the projects the indexer gave up on
 
 - **Reported**: no. It was held for the next joint client-go merge request,
@@ -5935,6 +5952,141 @@ reported as a key GitLab sends that the output did not publish.
 
 **Effort**: small. Add `Gaps int64` with `json:"gaps"` to
 `OrbitGraphStatusProjects`, and the key to the graph status decode test.
+
+**Since 3.4.0** the workaround is gone with the route: GitLab.com removed
+`GET /orbit/graph_status` on 2026-10-28 (gitlab-org/gitlab!264745), and
+`orbit.GraphStatus` reads the index from GraphQL, whose `OrbitIndexingProjects`
+carries `gaps` beside the other counts ([entry 148](#orbitgetgraphstatus-sends-get-orbitgraph_status-which-gitlabcom-removed)).
+The gap stays in client-go for a self-managed instance that still serves the
+route, and retires with the struct or with the method.
+
+### Orbit.GetStatus sends GET /orbit/status, which GitLab.com removed
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no here; yes for the SDK's own callers, whom GitLab.com
+  answers `404` since 2026-10-27.
+- **Workaround**: yes. `orbit.Status` (`internal/tools/orbit/graphql.go`)
+  asks GitLab's GraphQL API for `Query.orbit.serviceStatus` instead, which
+  `TestStatus_ServiceStatus_MirrorsEveryField` holds. It retires if client-go
+  gains a method for the GraphQL field, which would be the SDK's way to the
+  status again.
+
+**Where**: `OrbitService.GetStatus` and `routeOrbitStatus` in client-go
+v3.30.0's `orbit.go`.
+
+**What**: gitlab-org/gitlab!265633, merged on 2026-10-27 at 22:59 UTC, removed
+`GET /api/v4/orbit/status` from `ee/lib/api/orbit/data.rb`, with
+`GET /orbit/schema`, `/orbit/schema/format` and `/orbit/query/templates`, in
+favour of the GraphQL fields `Query.orbit.serviceStatus`, `Query.orbit.schema`
+and `Query.orbit.queryTemplates`. GitLab.com answered the route `404` on
+2026-10-29, with and without `response_format`.
+
+**How we found it**: a read-only check of GitLab.com on 2026-10-29 found the
+route `404`, and every Orbit action but `orbit.query` with it.
+
+**Effort**: small. Deprecate `GetStatus`, `GetOrbitStatusOptions` and the
+`OrbitStatus` types with a note naming the GraphQL field, and remove them in
+the next major; or retarget the method at the GraphQL field.
+
+### Orbit.GetSchema sends GET /orbit/schema, which GitLab.com removed
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no here; yes for the SDK's own callers, whom GitLab.com
+  answers `404` since 2026-10-27.
+- **Workaround**: yes. `orbit.Schema` (`internal/tools/orbit/graphql.go`)
+  pages through GraphQL `Query.orbit.schema`, and asks the `get_graph_schema`
+  command of the Orbit MCP endpoint for the llm text GraphQL does not render
+  (`internal/tools/orbit/mcp.go`). This also retires the workaround of
+  [entry 70](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled).
+
+**Where**: `OrbitService.GetSchema`, `GetOrbitSchemaOptions` and
+`routeOrbitSchema` in client-go v3.30.0's `orbit.go`.
+
+**What**: removed by gitlab-org/gitlab!265633 with the status route (see
+[entry 144](#orbitgetstatus-sends-get-orbitstatus-which-gitlabcom-removed)).
+
+**How we found it**: the same check of 2026-10-29.
+
+**Effort**: small, as entry 144.
+
+### Orbit.GetTools sends GET /orbit/tools, which GitLab.com removed
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no here; yes for the SDK's own callers, whom GitLab.com
+  answers `404` since 2026-10-28.
+- **Workaround**: yes. `orbit.Tools` (`internal/tools/orbit/mcp.go`) sends
+  `tools/list` to the Orbit MCP endpoint, `POST /api/v4/orbit/mcp`, the one
+  place GitLab still lists the tools, through `client.GL().NewRequest`, since
+  client-go has no method for the endpoint.
+
+**Where**: `OrbitService.GetTools` and `routeOrbitTools` in client-go
+v3.30.0's `orbit.go`.
+
+**What**: gitlab-org/gitlab!265998, merged on 2026-10-28 at 19:58 UTC, removed
+`GET /api/v4/orbit/tools`; the MCP endpoint (`ee/lib/api/orbit/mcp.rb`) serves
+the same tools.
+
+**How we found it**: the same check of 2026-10-29.
+
+**Effort**: small. Deprecate the method and its types with a note naming the
+MCP endpoint.
+
+### Orbit.GetDsl sends GET /orbit/schema/dsl, which GitLab.com removed
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no here; yes for the SDK's own callers, whom GitLab.com
+  answers `404` since it turned GQL on for everyone on 2026-10-15.
+- **Workaround**: yes. `orbit.DSL` never called it: it read
+  `GET /orbit/agent/commands` from issue 1414 until gitlab-org/gitlab!266009
+  removed that route on 2026-10-28 too, and since then sends `list_commands`
+  to the Orbit MCP endpoint (`internal/tools/orbit/mcp.go`).
+
+**Where**: `OrbitService.GetDsl` and `GetOrbitDslOptions` in client-go
+v3.30.0's `orbit.go`, which builds the path `orbit/schema/dsl` inline.
+
+**What**: the route served the JSON query DSL, which GitLab.com stopped
+reading when GQL replaced it; client-go has no method for the query command
+that describes GQL.
+
+**How we found it**: issue 1414, on 2026-10-17, when GitLab.com answered the
+route `404`; recorded here with the other four on 2026-10-29.
+
+**Effort**: small. Deprecate the method and its options, naming the
+`list_commands` tool of the MCP endpoint.
+
+### Orbit.GetGraphStatus sends GET /orbit/graph_status, which GitLab.com removed
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no here; yes for the SDK's own callers, whom GitLab.com
+  answers `404` since 2026-10-28.
+- **Workaround**: yes. `orbit.GraphStatus` (`internal/tools/orbit/graphql.go`)
+  reads GraphQL `Group.orbit` and `Project.orbit` by full path, group ID or
+  project ID; this also retires the workaround of
+  [entry 93](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on)
+  ([issue 1516](https://github.com/jmrplens/gitlab-mcp-server/issues/1516)).
+
+**Where**: `OrbitService.GetGraphStatus`, `GetGraphStatusOptions` and
+`routeOrbitGraphStatus` in client-go v3.30.0's `orbit.go`.
+
+**What**: gitlab-org/gitlab!264745, merged on 2026-10-28 at 00:55 UTC, removed
+`GET /api/v4/orbit/graph_status` in favour of the GraphQL fields
+`OrbitNamespace.indexing`, `indexingStatus` and `itemCounts`. GitLab.com
+answered it `404` by full path and by namespace ID on 2026-10-29.
+
+**How we found it**: issue 1516 tracked the merge request while it was open;
+the check of 2026-10-29 found it merged and the route gone.
+
+**Effort**: small, as entry 144.
 
 ### ListGroupMilestonesOptions misspells include_descendants and GroupMilestone drops the web URL and project
 
@@ -12230,11 +12382,13 @@ at 19.5.0-pre (`5041f73d695`) on 2026-09-28 and on every stable branch from
 not a root with "Namespace must be a root namespace"), and the mutation throws
 that message away for the generic "The resource that you are attempting to
 access does not exist or you don't have permission to perform this action".
-`container_scanning` and `business_logic` are values of
-`SecurityScanProfileType` no release builds a default profile for, and the
-bare `triage_and_remediation` names none of the three presets its profiles are
-keyed by, so all three are refused this way, as is any name on an instance
-older than the release that added it.
+`container_scanning` is a value of `SecurityScanProfileType` no release builds
+a default profile for, and the bare `triage_and_remediation` names none of the
+three presets its profiles are keyed by, so both are refused this way, as is
+any name on an instance older than the release that added it. `business_logic`
+was a third when this was read on 2026-09-28; GitLab 19.5 builds its default
+profile (a31b9ef3), and 19.6 one for `skillguard` (f2f4fc16), both read on
+2026-10-29.
 
 **Proposal**: return the service's message, as an argument error or in the
 payload's `errors`, the way the mutation already returns the attach

@@ -4,9 +4,9 @@ description: Six read-only MCP tools for GitLab.com's experimental Knowledge Gra
 datePublished: "2026-05-06"
 faq:
   - q: "What is Orbit in GitLab MCP Server?"
-    a: "Orbit exposes GitLab.com's experimental Knowledge Graph API through six read-only MCP tools: `status`, `schema`, `tools`, `dsl`, `query` and `graph_status`. They let an AI assistant check the service's health, inspect the graph ontology, list the MCP tool manifest Orbit serves, read the query language, run read-only queries against the Knowledge Graph and check the indexing state. Orbit performs no writes. It is registered only when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate: its six actions are the `orbit.*` catalog entries on the default dynamic surface, the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or six `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
+    a: "Orbit exposes GitLab.com's experimental Knowledge Graph API through six read-only MCP tools: `status`, `schema`, `tools`, `dsl`, `query` and `graph_status`. They let an AI assistant check the service's health, inspect the graph schema, list the tools Orbit's MCP endpoint serves, read the query language, run read-only queries against the Knowledge Graph and check the indexing state. Since Orbit's general availability on 29 October 2026, GitLab.com serves a group's index and queries only for a top-level group with the `orbit_promo` add-on or a running Orbit trial. Orbit performs no writes. It is registered only when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate: its six actions are the `orbit.*` catalog entries on the default dynamic surface, the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or six `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "What query language does Orbit use?"
-    a: "GQL, a read-only language based on openCypher 9, which GitLab.com compiles every query in since 2026-10-15. The `query` action takes one statement as text: `MATCH` a pattern, optionally filtered by `WHERE`, then `RETURN` properties, whole nodes or aggregates, optionally followed by `ORDER BY` and `LIMIT` or `PAGE`. Every node carries a label, and at least one is bounded by its id or a literal property. A relationship type follows a colon, `-[:IN_PROJECT]->`, the undirected `--` reaches every neighbor of one node, and `MATCH path = ANY SHORTEST (a)-[*1..3]->(b) RETURN path` finds a path. GitLab infers the query type from the statement and answers one it cannot compile with a message naming the fault, which the server passes on."
+    a: "GQL, a read-only language based on openCypher 9, which GitLab.com compiles every query in since 2026-10-15. The `query` action takes one statement as text: `MATCH` a pattern, optionally filtered by `WHERE`, then `RETURN` properties, whole nodes or aggregates, optionally followed by `ORDER BY`, `SKIP` and `LIMIT`. Every node carries a label, and at least one is bounded by its id or a literal property. A relationship type follows a colon, `-[:IN_PROJECT]->`, the undirected `--` reaches every neighbor of one node, and `MATCH path = ANY SHORTEST (a)-[:IN_PROJECT*1..3]->(b) RETURN path` finds a path over the relationship types it names. GitLab infers the query type from the statement and answers one it cannot compile with a message naming the fault, which the server passes on."
   - q: "What happens to a query written as a JSON object?"
     a: "Until 2026-10-15 GitLab.com read queries in a JSON query DSL, a `query_type` and a `nodes` list. The server still forwards an object as written, so it keeps working if GitLab.com turns GQL off again, but GitLab.com parses it as GQL and refuses it with `400 compile_error`. The error then says that GitLab.com reads a query as GQL text and gives an example, so the caller can send the same query as a statement."
   - q: "Is Orbit available on self-managed GitLab?"
@@ -42,16 +42,31 @@ Orbit registers only on GitLab.com connections with a Premium or Ultimate tier. 
 
 Self-managed GitLab instances do not register Orbit tools, even on a Premium or Ultimate tier.
 
+GitLab.com itself decides what it answers. Since Orbit's general availability on 29 October 2026, the plan no longer counts there: GitLab.com serves a group's index and queries only for a top-level group with the `orbit_promo` add-on or a running Orbit trial, and answers anything else with `403` or with nothing where the index would be. The server reports either as an error saying Orbit is not served to the token there, never as an empty result.
+
+### Where each action reads from
+
+GitLab.com removed five of the six REST routes Orbit used on 27 and 28 October 2026. Each action now reads the source GitLab offers in their place, a documented API where there is one, and the Orbit MCP endpoint only for what nothing else serves:
+
+| Action         | Source on GitLab.com                                                                         |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `status`       | GraphQL `Query.orbit.serviceStatus`                                                          |
+| `schema`       | GraphQL `Query.orbit.schema`; `llm` from `get_graph_schema` of `POST /api/v4/orbit/mcp`      |
+| `tools`        | `tools/list` of the Orbit MCP endpoint, `POST /api/v4/orbit/mcp`                             |
+| `dsl`          | `list_commands` of the Orbit MCP endpoint                                                    |
+| `query`        | `POST /api/v4/orbit/query`                                                                   |
+| `graph_status` | GraphQL `Group.orbit` and `Project.orbit` (`indexing`, `itemCounts`, `enabled`, `enabledAt`) |
+
 ## Actions
 
-| Action         | Canonical ID         | Individual tool             | Purpose                                                           |
-| -------------- | -------------------- | --------------------------- | ----------------------------------------------------------------- |
-| `status`       | `orbit.status`       | `gitlab_orbit_status`       | Check Orbit service health and component status                   |
-| `schema`       | `orbit.schema`       | `gitlab_orbit_schema`       | Inspect the graph ontology and optionally expand node definitions |
-| `tools`        | `orbit.tools`        | `gitlab_orbit_tools`        | List the MCP tool manifest Orbit serves                           |
-| `dsl`          | `orbit.dsl`          | `gitlab_orbit_dsl`          | Read the query language GitLab.com compiles queries in, GQL       |
-| `query`        | `orbit.query`        | `gitlab_orbit_query`        | Execute a read-only Knowledge Graph query written in GQL          |
-| `graph_status` | `orbit.graph_status` | `gitlab_orbit_graph_status` | Inspect indexing status for a namespace, project, or full path    |
+| Action         | Canonical ID         | Individual tool             | Purpose                                                        |
+| -------------- | -------------------- | --------------------------- | -------------------------------------------------------------- |
+| `status`       | `orbit.status`       | `gitlab_orbit_status`       | Check Orbit service health and component status                |
+| `schema`       | `orbit.schema`       | `gitlab_orbit_schema`       | Inspect the graph schema and the properties of the nodes named |
+| `tools`        | `orbit.tools`        | `gitlab_orbit_tools`        | List the tools GitLab's Orbit MCP endpoint serves              |
+| `dsl`          | `orbit.dsl`          | `gitlab_orbit_dsl`          | Read the query language GitLab.com compiles queries in, GQL    |
+| `query`        | `orbit.query`        | `gitlab_orbit_query`        | Execute a read-only Knowledge Graph query written in GQL       |
+| `graph_status` | `orbit.graph_status` | `gitlab_orbit_graph_status` | Inspect indexing status for a namespace, project, or full path |
 
 The action name is what the `gitlab_orbit` meta-tool takes in `action`; the canonical ID is what `gitlab_execute_action` takes on the default dynamic surface.
 
@@ -62,7 +77,7 @@ The typical Orbit flow learns the query language and the graph first and queries
 1. Run the `status` action (`gitlab_execute_action` with `action: "orbit.status"` on the default surface; `gitlab_orbit` with `action: "status"` when `GITLAB_MCP_TOOL_SURFACE=meta`) to confirm the service is available.
 2. Run `dsl` for the query language: the grammar of the command a query runs as and the JSON Schema of its input (`raw`), or the same as compact text (`llm`).
 3. Run `schema` for the entities, their properties and the relationship types between them.
-4. (Optional) Run `tools` for the MCP tool manifest Orbit serves, with the parameter schema of each of its own tools.
+4. (Optional) Run `tools` for the tools GitLab's Orbit MCP endpoint serves, with the input schema of each.
 5. Pass a GQL statement as text to `query`, with `response_format` set to `raw`, `llm` or `gql`.
 
 ### The query language
@@ -73,17 +88,18 @@ The `query` parameter of the `query` action is GQL, the read-only language based
 MATCH pattern [WHERE predicates]
 RETURN projections
 [ORDER BY key [ASC | DESC]]
-[LIMIT rows | PAGE rows [AFTER 'cursor']]
+[SKIP rows] [LIMIT rows]
 ```
 
 GitLab infers what kind of query it is from the statement and says so beside the result as `query_type`: a traversal, an aggregation when `RETURN` holds an aggregate, the neighbors of one node, or a shortest path. The rules a model most often gets wrong:
 
 - **Bound at least one node.** Every node carries a label where it first appears, and at least one is bounded by its id or a literal property, inline as `{id: 278964}` or `{full_path: 'gitlab-org/gitlab'}`, or in a `WHERE` comparison. `LIMIT` bounds nothing: `MATCH (p:Project) RETURN p LIMIT 5` is refused with "add filters or node_ids to at least one node".
 - **A relationship type follows a colon.** `-[:IN_PROJECT]->` names the type, and `-[IN_PROJECT]->` declares a variable called `IN_PROJECT` and is refused. A repeat is bounded, `*1..3` at most, and `-[*1..3]->` follows any type.
-- **`WHERE` takes `AND` and `NOT`.** `OR`, `XOR`, `DISTINCT`, `count(*)`, `OPTIONAL MATCH`, `WITH` and `UNION` are refused, and a list is negated as `NOT p.visibility_level IN [...]`. The comparisons are `=`, `<>` or `!=`, `<`, `<=`, `>`, `>=`, `IN`, `STARTS WITH`, `ENDS WITH`, `CONTAINS`, `IS NULL` and `IS NOT NULL`. Values are literals written into the statement, since the language takes no parameters.
+- **`WHERE` takes `AND` and `NOT`, on one node's properties.** `OR`, `XOR`, `RETURN DISTINCT`, `count(*)`, `OPTIONAL MATCH`, `WITH` and `UNION` are refused, and a list is negated as `NOT p.visibility_level IN [...]`; `count(DISTINCT x)` counts distinct values. The comparisons are `=`, `<>` or `!=`, `<`, `<=`, `>`, `>=`, `IN`, `STARTS WITH`, `ENDS WITH`, `CONTAINS`, `IS NULL` and `IS NOT NULL`. Values are literals written into the statement, since the language takes no parameters.
 - **The arrow decides the direction.** Between labeled nodes the arrow is `->` or `<-`, and each relationship is followed only in its defined direction: a merge request is `IN_PROJECT` its project. The undirected `--` is for the neighbors of one node, whose far end has a variable and nothing else: `MATCH (p:Project {id: 278964})--(n) RETURN n`.
-- **A path has both ends bounded.** `MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path`, with `a` and `b` each bounded.
-- **An aggregate is aliased to be sorted by.** `count`, `sum`, `avg`, `min` and `max` aggregate, and every other item of `RETURN` is a group key: `RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC`.
+- **A path has both ends bounded and names its relationship types.** `MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path`, with `a` and `b` each bounded; a wildcard such as `-[*1..3]->` is refused for a shortest path.
+- **An aggregate is aliased to be sorted by.** `count`, `sum`, `avg`, `min` and `max` aggregate, and every other item of `RETURN` is a group key: `RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC`. One sort key, with no tie-breaker.
+- **A page is `SKIP` and `LIMIT`.** `SKIP` takes 0 to 10000 and `LIMIT` 1 to 1000, as in `ORDER BY p.id SKIP 20 LIMIT 20`. `PAGE` and `AFTER` are refused.
 
 ### When GitLab refuses a query
 
@@ -112,13 +128,13 @@ sequenceDiagram
     participant GL as GitLab.com API
     participant IDX as Orbit Indexer
 
-    LLM->>MCP: gitlab_orbit_schema (response_format=llm)
-    MCP->>GL: GET /api/v4/orbit/schema
-    GL-->>MCP: ontology (nodes, edges, versions)
-    MCP-->>LLM: schema text
+    LLM->>MCP: gitlab_orbit_schema (expand=[Project])
+    MCP->>GL: POST /api/graphql (Query.orbit.schema)
+    GL-->>MCP: node kinds, properties, edge kinds
+    MCP-->>LLM: schema
 
     LLM->>MCP: gitlab_orbit_dsl (response_format=llm)
-    MCP->>GL: GET /api/v4/orbit/agent/commands?command_names=query_graph
+    MCP->>GL: POST /api/v4/orbit/mcp (list_commands query_graph)
     GL-->>MCP: query command (GQL grammar, input schema)
     MCP-->>LLM: query language text
 
@@ -255,8 +271,7 @@ The examples below use the default dynamic surface; with `GITLAB_MCP_TOOL_SURFAC
   "arguments": {
     "action": "orbit.graph_status",
     "params": {
-      "project_id": 278964,
-      "response_format": "llm"
+      "project_id": 278964
     }
   }
 }
@@ -266,25 +281,25 @@ The examples below use the default dynamic surface; with `GITLAB_MCP_TOOL_SURFAC
 
 ### `status`: Check Orbit service health
 
-Returns cluster health and backend component status. Use to verify Orbit is available for your token and project.
+Returns the health of the Orbit service: its overall `status` (`HEALTHY`, `DEGRADED`, `UNHEALTHY`, `MIGRATING` or `UNKNOWN`), its `version`, and the `name` and `status` of each component. GitLab answers it through GraphQL in one shape, so `response_format` is accepted and changes nothing. A token Orbit is not served to gets an error saying so rather than an empty status.
 
 **Example:** See above.
 
-### `schema`: Inspect the graph ontology
+### `schema`: Inspect the graph schema
 
-Returns the Orbit graph ontology, including schema version, domains, node summaries, and edges. Use `expand` to get detailed node definitions. Supports `response_format` (`raw` or `llm`).
+Returns the node kinds and edge kinds a query names: each node's `name`, `description`, `domain`, `primary_key`, `label_field` and `display` (color and size), each edge's `name`, `description` and the source and target node kinds it connects (`variants`), and the `domains` with the node kinds in each. Name node kinds in `expand` to get their `properties` (name, data type, whether it can be empty, and the values of an enum). With `format` or `response_format` set to `llm` it returns the schema as compact text instead.
 
 **Example:** See above.
 
-### `tools`: Discover the Orbit tool manifest
+### `tools`: List the Orbit MCP tools
 
-Returns the MCP tool manifest Orbit serves, with the parameter schema of each of its own tools. The query language itself is what `dsl` returns.
+Returns the tools GitLab's Orbit MCP endpoint serves (`list_commands` and `invoke_command` today), each with its description, its input schema as `parameters` and its `trusted` flag. The query language itself is what `dsl` returns.
 
 **Example:** See above.
 
 ### `dsl`: Read the query language
 
-Returns the query language GitLab.com compiles queries in, GQL, as GitLab.com publishes it: the `query_graph` command a query runs as, its grammar and the JSON Schema of its input (`raw`), or the same as compact text (`llm`). It reads `GET /api/v4/orbit/agent/commands`. The route that served the JSON query DSL, `GET /api/v4/orbit/schema/dsl`, answers 404 on GitLab.com since GQL replaced it, and nothing in the server asks it.
+Returns the query language GitLab.com compiles queries in, GQL, as GitLab.com publishes it: the `query_graph` command a query runs as, its grammar and the JSON Schema of its input (`raw`, the default), or the same as compact text (`llm`). It reads `list_commands` of the Orbit MCP endpoint, which answers the command list the removed `GET /api/v4/orbit/agent/commands` did.
 
 **Example:** See above.
 
@@ -296,9 +311,18 @@ Runs a read-only Knowledge Graph query. The `query` parameter is a GQL statement
 
 ### `graph_status`: Inspect indexing status
 
-Returns graph indexing status for a namespace, project, or full path. Use to check if a project is indexed and ready for queries.
+Returns the Orbit index of one group or project, named by `namespace_id`, `project_id` or `full_path`: whether Orbit is turned on for its top-level group and since when (`enabled`, `enabled_at`, sent for a group), the project counts (`indexed`, `total_known`, `gaps`, `not_indexed`, `total`), the indexing `state` (`READY`, `INDEXING`, `NOT_STARTED`, `FAILED` or `UNKNOWN`) with the time of the last completed run and the state of each area, and the number of indexed items of each entity in each domain. Use it to check that a project is indexed before querying it. `response_format` is accepted and changes nothing.
 
 **Example:** See above.
+
+### What changed in 3.4.0
+
+The six action IDs, tool names and parameters are the ones of earlier releases. What GitLab no longer sends anywhere left the outputs with the routes:
+
+- `status`: the `user` and `system` objects, `timestamp`, `formatted_text`, and each component's `replicas` and `metrics`. A component's `status` and the overall `status` are now GitLab's upper-case states.
+- `schema`: `schema_version`, each domain's `description`, and each node's `incoming_edges` and `outgoing_edges`, which the edges list carries pair by pair. Nodes are typed now, with `primary_key`, `label_field` and `display` added.
+- `graph_status`: `formatted_text`, each item's `state`, and the last run's `last_started_at`, `last_duration_ms` and `last_error`. Added: `enabled`, `enabled_at`, `not_indexed`, `total` and the areas of `indexing`.
+- `tools`: each tool's `trusted` flag added.
 
 ## How do I discover query schemas?
 

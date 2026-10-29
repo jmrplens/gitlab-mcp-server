@@ -191,8 +191,30 @@ The Orbit indexer is eventually consistent. After a fresh push:
 
 If `row_count` is consistently 0 long after the script completes, the
 indexer has not yet linked the resource. Re-run the test after a
-few minutes, or check `GET /api/v4/orbit/graph_status?full_path=<ns>`
-to see what the indexer knows.
+few minutes, or ask GraphQL what the indexer knows,
+`group(fullPath: "<ns>") { orbit { indexing { state projects { indexed notIndexed } } } }`
+(`GET /api/v4/orbit/graph_status`, which answered this until 2026-10-28,
+was removed by gitlab-org/gitlab!264745).
+
+### Access since Orbit's general availability
+
+Since 29 October 2026 GitLab.com serves a namespace's index and queries
+only for a top-level group with the `orbit_promo` add-on or a running
+Orbit trial; the plan no longer counts. `jmrp-oss` lost access between
+09:21:35 and 09:22:17 UTC that day (the `state` of its Orbit `access` turned from
+`LICENSED`/`BETA` to `TRIAL_NOT_ELIGIBLE`), after which the index of
+`jmrp-oss/orbit-fixtures` answers `indexing: null` and every query
+`403 No Orbit enabled namespaces available`. The service status, the
+schema, and the MCP tool list and command catalog still answered the
+token until about 09:32 UTC, and by 09:51 UTC `serviceStatus` answered
+`null` and the MCP endpoint `403` too. Starting a trial is the
+maintainer's decision and has not been taken; the Orbit team was asked in
+gitlab-org/orbit/knowledge-graph#1425.
+
+The live suite skips every subtest that needs the fixture namespace when
+GitLab.com does not serve it (`requireOrbitServed` in
+`test/e2e/orbit/live_test.go`), naming GitLab's answer, and a recording
+made then needs `ORBIT_RECORD_FLAGS=-allow-unanswered` (below).
 
 Renaming or moving the group does not reach the projects' nodes. When
 `plens1` became `gitlab-mcp-server-orbit-fixtures` on 2026-10-26, the
@@ -226,8 +248,8 @@ After a rename or a transfer, check two things before running the suite
 or recording, since they follow different columns and did not move
 together after the first rename:
 
-- `GET /api/v4/orbit/graph_status?full_path=<ns>` reports
-  `projects.indexed` equal to the number of fixture projects. It counts
+- GraphQL `group(fullPath: "<ns>") { orbit { indexing { projects { indexed } } } }`
+  reports `indexed` equal to the number of fixture projects. It counts
   by traversal path, and a recording refuses a namespace it counts no
   indexed project in.
 - `MATCH (p:Project) WHERE p.full_path STARTS WITH '<ns>/' RETURN p.full_path`
@@ -304,15 +326,15 @@ sequenceDiagram
     Make->>Make: orbit-ensure-token<br/>(validate .env, GITLAB_COM_TOKEN)
     Make->>GL: orbit-setup-fixtures<br/>POST kg-fixtures + security-fixtures
     GL-->>Make: 201 Created (or 200 if existing)
-    Make->>IDX: orbit-wait-indexer<br/>poll graph_status until baseline+2 indexed
-    IDX-->>Make: indexed count
-    alt indexed >= baseline+2
+    Make->>IDX: orbit-wait-indexer<br/>poll the group's Orbit indexing (GraphQL) until READY
+    IDX-->>Make: state, indexed, not indexed
+    alt READY, nothing left out, both fixtures indexed
         Make->>Go: orbit-run-live-tests<br/>go test -tags orbitlive ./test/e2e/orbit/
     else timeout
         Make->>Go: proceed with warning<br/>(live tests are tolerant)
     end
     Go-->>Dev: PASS / FAIL with row_count assertions
-    Make->>GL: gen-orbit-record<br/>the six routes, through the handlers
+    Make->>GL: gen-orbit-record<br/>the six actions, through the handlers
     GL-->>Make: answers, reduced to their key trees
     Make-->>Dev: key tree unchanged, or every changed key and exit 1
 ```
@@ -321,18 +343,21 @@ After the live tests the target re-records the answers with `make gen-orbit-reco
 
 ## Recording the answers: `make gen-orbit-record`
 
-The six Orbit routes have no response schema anywhere GitLab publishes one, and no self-managed GitLab serves them, so what they answer is recorded here instead and committed as `docs/development/orbit-responses.json`. `cmd/gen_orbit_record` calls each Orbit handler through a proxy on the loopback interface that forwards to GitLab.com with `GITLAB_COM_TOKEN`, so the requests recorded are the ones the server builds. Every call is a read. It asks about the fixture namespace (`ORBIT_FIXTURES_NAMESPACE`, `jmrp-oss/orbit-fixtures` by default): the indexing status of the namespace and a traversal of `<namespace>/kg-fixtures`, which is why the fixtures above have to be indexed before a recording means anything.
+What GitLab.com answers the six Orbit actions is recorded here, since no self-managed GitLab serves Orbit and the query route and the MCP endpoint have no response schema anywhere GitLab publishes one, and committed as `docs/development/orbit-responses.json`. Since GitLab.com removed five of the six REST routes on 2026-10-27 and -28, the actions read three sources: GitLab's GraphQL API (`orbit.status`, the structured `orbit.schema`, `orbit.graph_status`), the Orbit MCP endpoint `POST /api/v4/orbit/mcp` (`orbit.tools`, `orbit.dsl`, the llm `orbit.schema`) and `POST /api/v4/orbit/query`. `cmd/gen_orbit_record` calls each Orbit handler through a proxy on the loopback interface that forwards to GitLab.com with `GITLAB_COM_TOKEN`, so the requests recorded are the ones the server builds. Every call is a read. It asks about the fixture namespace (`ORBIT_FIXTURES_NAMESPACE`, `jmrp-oss/orbit-fixtures` by default): the indexing status of the namespace and a traversal of `<namespace>/kg-fixtures`, which is why the fixtures above have to be indexed before a recording means anything.
 
-The record holds, per call, the action and variant, the output type the handler returned, the parameter names the request carried, and the key tree of the answer with the JSON kinds seen at each path. Its source names the Orbit version and the query grammar GitLab.com published beside the answers, a SHA-256 of the description and input schema of the `query_graph` command `orbit.dsl` returns (schema version 3 of the record, since GitLab.com reads GQL; version 2 named the JSON query DSL by its `$id` and `version`, and the check refuses a version 2 record by its version and a version 3 record still naming it as one not in the form the generator writes), and a re-recording that finds a different grammar fails until the record is committed, which is the prompt to read `orbit.query`'s guidance against the new language. The query calls send a GQL statement, the fixture project by its path. It holds no value: a subtree whose keys are data (the query command's input schema, a tool's parameter schema, the rows a query returns, a status component's metrics) is kept as its root and marked verbatim, and a key outside one that is not an identifier fails the recording. That second rule stops data that cannot be a name, not data shaped like one: a map keyed by identifier-shaped data would be recorded as keys, which is why such a subtree has to be named verbatim in `cmd/gen_orbit_record/calls.go`. `make audit-1to1-paths` holds the Orbit output types to it (see the Orbit paragraph of the audit_1to1 section in [cmd utilities](cmd-utilities.md#audit_1to1)).
+The record holds, per call, the action and variant, the output type the handler returned, the parameter names the request carried, and the key tree of the answer with the JSON kinds seen at each path. Since schema version 4 a call to GraphQL or to the MCP endpoint also names its operation (`query OrbitServiceStatus`, `tools/call list_commands`) and the names of its variables or tool arguments, and its key tree is taken from the part the handler reads (`root`): the field below `data` for GraphQL, a connection recorded as the list it pages and its `pageInfo` left out, the JSON-RPC `result` of `tools/list`, and the text of a tool result, decoded when it is JSON. The status and the index are one call each (`default`, `full_path`), since GraphQL renders no llm text. Its source names the Orbit version and the query grammar GitLab.com published beside the answers, a SHA-256 of the description and input schema of the `query_graph` command `orbit.dsl` returns (schema version 3 of the record, since GitLab.com reads GQL; version 2 named the JSON query DSL by its `$id` and `version`, and the check refuses a version 2 record by its version and a version 3 record still naming it as one not in the form the generator writes), and a re-recording that finds a different grammar fails until the record is committed, which is the prompt to read `orbit.query`'s guidance against the new language. The query calls send a GQL statement, the fixture project by its path. It holds no value: a subtree whose keys are data (the query command's input schema, a tool's input schema, the rows a query returns) is kept as its root and marked verbatim, and a key outside one that is not an identifier fails the recording. That second rule stops data that cannot be a name, not data shaped like one: a map keyed by identifier-shaped data would be recorded as keys, which is why such a subtree has to be named verbatim in `cmd/gen_orbit_record/calls.go`. `make audit-1to1-paths` holds the Orbit output types to it (see the Orbit paragraph of the audit_1to1 section in [cmd utilities](cmd-utilities.md#audit_1to1)).
 
 A recording refuses to write anything when the fixture namespace is not indexed: a traversal of the fixture project that finds no row, or an indexing status that counts no indexed project, would record a tree without the paths the rows and counts carry. `orbit-wait-indexer` proceeds with a warning when it times out, so on a slow indexer the chain fails here, and the fix is to wait and run `make gen-orbit-record` again.
 
+A recording also stops on a call GitLab refuses the account (`401`, `403`, or GraphQL `null` where the handler reads), unless it is told GitLab may: `make gen-orbit-record ORBIT_RECORD_FLAGS=-allow-unanswered` then carries the call from the record at HEAD when that record sent the same request, dated with the day it was answered (`retrieved_at`, and that day is held to the same window), and otherwise lists it under `unrecorded` with GitLab's answer and the time. The record of 2026-10-29 was made that way at 09:28 UTC, after the fixture namespace lost access: the status, the schema in its three variants, the tool list and the query language were answered through their new sources, the three query calls were carried from the recording of 2026-10-26 (`POST /orbit/query`, the same request), and `orbit.graph_status (full_path)` is unrecorded, its GraphQL document having never been answered for this account. A call listed as unrecorded leaves its output type unjudged by R-PATH until a recording made with access answers it.
+
 A re-recording prints every key GitLab.com added, dropped or changed against the record committed at HEAD, which it reads through git rather than from the file it has just rewritten. When the key tree differs it writes the new record and exits 1, and every later run does the same until the record is committed, so `make test-e2e-gitlab-com` stays red until somebody has read the change, run the audit and committed the record. `make check-orbit-record` is the offline gate CI runs on the committed file, and it fails every branch once the record is older than the shared staleness window in `cmd/internal/provenance`. Only somebody holding a GitLab.com token entitled to Orbit and this fixture namespace can refresh it, unlike the Docker-regenerated records, so plan the refresh before the window closes. The same gate is step 24 of `make analyze` and a step of CI's generated-artifacts job.
 
-The recording is what found that `orbit.schema` sent its format as `format`, which Grape reserves and GitLab.com answers 406 to, that every Orbit route taking a response format refuses `json` (`/orbit/tools` takes none), and that the llm DSL grammar arrived as a JSON string, which `orbit.dsl` published as its text until GitLab.com moved to GQL. Since then (issue 1414) `orbit.query` sends GQL text as the body's query string, takes `gql` as a response format beside `raw` and `llm`, forwards a JSON object, or JSON text, as written and answers GitLab.com's refusal of one with a hint that it reads GQL, and `orbit.dsl` reads `GET /orbit/agent/commands?command_names=query_graph`, since `GET /orbit/schema/dsl` answers 404.
+The recording is what found that `orbit.schema` sent its format as `format`, which Grape reserves and GitLab.com answers 406 to, that every Orbit route taking a response format refuses `json` (`/orbit/tools` takes none), and that the llm DSL grammar arrived as a JSON string, which `orbit.dsl` published as its text until GitLab.com moved to GQL. Since then (issue 1414) `orbit.query` sends GQL text as the body's query string, takes `gql` as a response format beside `raw` and `llm`, forwards a JSON object, or JSON text, as written and answers GitLab.com's refusal of one with a hint that it reads GQL, and `orbit.dsl` read `GET /orbit/agent/commands?command_names=query_graph`, since `GET /orbit/schema/dsl` answers 404, until that route was removed too and `orbit.dsl` moved to `list_commands` of the MCP endpoint.
 
 ```bash
 make gen-orbit-record                                   # record, GITLAB_COM_TOKEN from .env
 make gen-orbit-record ORBIT_FIXTURES_NAMESPACE=acme     # against another fixture namespace
+make gen-orbit-record ORBIT_RECORD_FLAGS=-allow-unanswered  # record past what GitLab refuses the account
 make check-orbit-record                                 # the offline gate
 ```

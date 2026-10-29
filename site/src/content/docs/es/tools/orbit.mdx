@@ -4,9 +4,9 @@ description: Seis herramientas MCP de solo lectura para la API experimental Know
 datePublished: "2026-05-06"
 faq:
   - q: "¿Qué es Orbit en GitLab MCP Server?"
-    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`. Permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, listar el manifiesto de herramientas MCP que sirve Orbit, leer el lenguaje de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a `https://gitlab.com` y el nivel resuelto es Premium o Ultimate: sus seis acciones son las entradas `orbit.*` del catálogo en la superficie dinámica predeterminada, la meta-herramienta `gitlab_orbit` con `GITLAB_MCP_TOOL_SURFACE=meta` o seis herramientas `gitlab_orbit_*` con `GITLAB_MCP_TOOL_SURFACE=individual`."
+    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`. Permiten a un asistente de IA comprobar la salud del servicio, inspeccionar el esquema del grafo, listar las herramientas que sirve el endpoint MCP de Orbit, leer el lenguaje de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Desde la disponibilidad general de Orbit el 29 de octubre de 2026, GitLab.com sirve el índice y las consultas de un grupo solo a un grupo de nivel superior con el complemento `orbit_promo` o una prueba de Orbit en curso. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a `https://gitlab.com` y el nivel resuelto es Premium o Ultimate: sus seis acciones son las entradas `orbit.*` del catálogo en la superficie dinámica predeterminada, la meta-herramienta `gitlab_orbit` con `GITLAB_MCP_TOOL_SURFACE=meta` o seis herramientas `gitlab_orbit_*` con `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "¿Qué lenguaje de consulta usa Orbit?"
-    a: "GQL, un lenguaje de solo lectura basado en openCypher 9, en el que GitLab.com compila todas las consultas desde el 2026-10-15. La acción `query` recibe una sentencia como texto: `MATCH` un patrón, filtrado opcionalmente con `WHERE`, y después `RETURN` de propiedades, nodos enteros o agregados, seguido opcionalmente de `ORDER BY` y `LIMIT` o `PAGE`. Todo nodo lleva una etiqueta, y al menos uno está acotado por su id o por una propiedad literal. Un tipo de relación va tras dos puntos, `-[:IN_PROJECT]->`, el `--` sin dirección alcanza todos los vecinos de un nodo, y `MATCH path = ANY SHORTEST (a)-[*1..3]->(b) RETURN path` busca un camino. GitLab deduce el tipo de consulta a partir de la sentencia y responde a la que no puede compilar con un mensaje que nombra el fallo, y el servidor lo transmite."
+    a: "GQL, un lenguaje de solo lectura basado en openCypher 9, en el que GitLab.com compila todas las consultas desde el 2026-10-15. La acción `query` recibe una sentencia como texto: `MATCH` un patrón, filtrado opcionalmente con `WHERE`, y después `RETURN` de propiedades, nodos enteros o agregados, seguido opcionalmente de `ORDER BY`, `SKIP` y `LIMIT`. Todo nodo lleva una etiqueta, y al menos uno está acotado por su id o por una propiedad literal. Un tipo de relación va tras dos puntos, `-[:IN_PROJECT]->`, el `--` sin dirección alcanza todos los vecinos de un nodo, y `MATCH path = ANY SHORTEST (a)-[:IN_PROJECT*1..3]->(b) RETURN path` busca un camino por los tipos de relación que nombra. GitLab deduce el tipo de consulta a partir de la sentencia y responde a la que no puede compilar con un mensaje que nombra el fallo, y el servidor lo transmite."
   - q: "¿Qué ocurre con una consulta escrita como objeto JSON?"
     a: "Hasta el 2026-10-15 GitLab.com leía las consultas en un DSL JSON, un `query_type` y una lista `nodes`. El servidor sigue reenviando un objeto tal cual, para que siga funcionando si GitLab.com vuelve a desactivar GQL, pero GitLab.com lo analiza como GQL y lo rechaza con `400 compile_error`. El error dice entonces que GitLab.com lee una consulta como texto GQL y da un ejemplo, para que quien llama envíe la misma consulta como sentencia."
   - q: "¿Orbit está disponible en GitLab autoalojado?"
@@ -42,13 +42,28 @@ Orbit solo se registra en conexiones a GitLab.com con nivel Premium o Ultimate. 
 
 Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso en un nivel Premium o Ultimate.
 
+Lo que responde lo decide el propio GitLab.com. Desde la disponibilidad general de Orbit el 29 de octubre de 2026 el plan ya no cuenta allí: GitLab.com sirve el índice y las consultas de un grupo solo a un grupo de nivel superior con el complemento `orbit_promo` o una prueba de Orbit en curso, y responde a todo lo demás con `403` o sin nada donde estaría el índice. El servidor informa de cualquiera de los dos como un error que dice que Orbit no se sirve a ese token ahí, nunca como un resultado vacío.
+
+### De dónde lee cada acción
+
+GitLab.com retiró cinco de las seis rutas REST que usaba Orbit el 27 y el 28 de octubre de 2026. Cada acción lee ahora la fuente que GitLab ofrece en su lugar, una API documentada donde la hay, y el endpoint MCP de Orbit solo para lo que nada más sirve:
+
+| Acción         | Fuente en GitLab.com                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `status`       | GraphQL `Query.orbit.serviceStatus`                                                        |
+| `schema`       | GraphQL `Query.orbit.schema`; `llm` desde `get_graph_schema` de `POST /api/v4/orbit/mcp`   |
+| `tools`        | `tools/list` del endpoint MCP de Orbit, `POST /api/v4/orbit/mcp`                           |
+| `dsl`          | `list_commands` del endpoint MCP de Orbit                                                  |
+| `query`        | `POST /api/v4/orbit/query`                                                                 |
+| `graph_status` | GraphQL `Group.orbit` y `Project.orbit` (`indexing`, `itemCounts`, `enabled`, `enabledAt`) |
+
 ## Acciones
 
 | Acción         | ID canónico          | Herramienta individual      | Propósito                                                                      |
 | -------------- | -------------------- | --------------------------- | ------------------------------------------------------------------------------ |
 | `status`       | `orbit.status`       | `gitlab_orbit_status`       | Comprobar la salud del servicio Orbit y el estado de sus componentes           |
-| `schema`       | `orbit.schema`       | `gitlab_orbit_schema`       | Inspeccionar la ontología del grafo y ampliar definiciones de nodos            |
-| `tools`        | `orbit.tools`        | `gitlab_orbit_tools`        | Listar el manifiesto de herramientas MCP que sirve Orbit                       |
+| `schema`       | `orbit.schema`       | `gitlab_orbit_schema`       | Inspeccionar el esquema del grafo y las propiedades de los nodos nombrados     |
+| `tools`        | `orbit.tools`        | `gitlab_orbit_tools`        | Listar las herramientas que sirve el endpoint MCP de Orbit de GitLab           |
 | `dsl`          | `orbit.dsl`          | `gitlab_orbit_dsl`          | Leer el lenguaje de consulta en el que GitLab.com compila las consultas, GQL   |
 | `query`        | `orbit.query`        | `gitlab_orbit_query`        | Ejecutar una consulta de solo lectura sobre el Knowledge Graph escrita en GQL  |
 | `graph_status` | `orbit.graph_status` | `gitlab_orbit_graph_status` | Inspeccionar el estado de indexación de un namespace, proyecto o ruta completa |
@@ -62,7 +77,7 @@ El flujo típico de Orbit aprende primero el lenguaje de consulta y el grafo, y 
 1. Ejecuta la acción `status` (`gitlab_execute_action` con `action: "orbit.status"` en la superficie predeterminada; `gitlab_orbit` con `action: "status"` cuando `GITLAB_MCP_TOOL_SURFACE=meta`) para confirmar que el servicio está disponible.
 2. Ejecuta `dsl` para obtener el lenguaje de consulta: la gramática del comando con el que se ejecuta una consulta y el JSON Schema de su entrada (`raw`), o lo mismo como texto compacto (`llm`).
 3. Ejecuta `schema` para obtener las entidades, sus propiedades y los tipos de relación entre ellas.
-4. (Opcional) Ejecuta `tools` para obtener el manifiesto de herramientas MCP que sirve Orbit, con el esquema de parámetros de cada una de sus herramientas.
+4. (Opcional) Ejecuta `tools` para obtener las herramientas que sirve el endpoint MCP de Orbit de GitLab, con el esquema de entrada de cada una.
 5. Pasa una sentencia GQL como texto a `query`, con `response_format` en `raw`, `llm` o `gql`.
 
 ### El lenguaje de consulta
@@ -73,17 +88,18 @@ El parámetro `query` de la acción `query` es GQL, el lenguaje de solo lectura 
 MATCH pattern [WHERE predicates]
 RETURN projections
 [ORDER BY key [ASC | DESC]]
-[LIMIT rows | PAGE rows [AFTER 'cursor']]
+[SKIP rows] [LIMIT rows]
 ```
 
 GitLab deduce de la sentencia qué tipo de consulta es y lo indica junto al resultado como `query_type`: un recorrido, una agregación cuando `RETURN` contiene un agregado, los vecinos de un nodo o un camino más corto. Las reglas en las que más se equivoca un modelo:
 
 - **Acota al menos un nodo.** Todo nodo lleva una etiqueta donde aparece por primera vez, y al menos uno está acotado por su id o por una propiedad literal, en línea como `{id: 278964}` o `{full_path: 'gitlab-org/gitlab'}`, o en una comparación de `WHERE`. `LIMIT` no acota nada: `MATCH (p:Project) RETURN p LIMIT 5` se rechaza con "add filters or node_ids to at least one node".
 - **Un tipo de relación va tras dos puntos.** `-[:IN_PROJECT]->` nombra el tipo, y `-[IN_PROJECT]->` declara una variable llamada `IN_PROJECT` y se rechaza. Una repetición está acotada, `*1..3` como mucho, y `-[*1..3]->` sigue cualquier tipo.
-- **`WHERE` admite `AND` y `NOT`.** `OR`, `XOR`, `DISTINCT`, `count(*)`, `OPTIONAL MATCH`, `WITH` y `UNION` se rechazan, y una lista se niega como `NOT p.visibility_level IN [...]`. Las comparaciones son `=`, `<>` o `!=`, `<`, `<=`, `>`, `>=`, `IN`, `STARTS WITH`, `ENDS WITH`, `CONTAINS`, `IS NULL` e `IS NOT NULL`. Los valores son literales escritos en la sentencia, porque el lenguaje no admite parámetros.
+- **`WHERE` admite `AND` y `NOT`, sobre las propiedades de un nodo.** `OR`, `XOR`, `RETURN DISTINCT`, `count(*)`, `OPTIONAL MATCH`, `WITH` y `UNION` se rechazan, y una lista se niega como `NOT p.visibility_level IN [...]`; `count(DISTINCT x)` cuenta valores distintos. Las comparaciones son `=`, `<>` o `!=`, `<`, `<=`, `>`, `>=`, `IN`, `STARTS WITH`, `ENDS WITH`, `CONTAINS`, `IS NULL` e `IS NOT NULL`. Los valores son literales escritos en la sentencia, porque el lenguaje no admite parámetros.
 - **La flecha decide la dirección.** Entre nodos etiquetados la flecha es `->` o `<-`, y cada relación se recorre solo en su dirección definida: un merge request está `IN_PROJECT` en su proyecto. El `--` sin dirección es para los vecinos de un nodo, cuyo extremo lejano tiene una variable y nada más: `MATCH (p:Project {id: 278964})--(n) RETURN n`.
-- **Un camino tiene los dos extremos acotados.** `MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path`, con `a` y `b` acotados.
-- **Un agregado lleva un alias para ordenar por él.** `count`, `sum`, `avg`, `min` y `max` agregan, y cualquier otro elemento de `RETURN` es una clave de agrupación: `RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC`.
+- **Un camino tiene los dos extremos acotados y nombra sus tipos de relación.** `MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path`, con `a` y `b` acotados; un comodín como `-[*1..3]->` se rechaza en un camino más corto.
+- **Un agregado lleva un alias para ordenar por él.** `count`, `sum`, `avg`, `min` y `max` agregan, y cualquier otro elemento de `RETURN` es una clave de agrupación: `RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC`. Una sola clave de orden, sin desempate.
+- **Una página es `SKIP` y `LIMIT`.** `SKIP` admite de 0 a 10000 y `LIMIT` de 1 a 1000, como en `ORDER BY p.id SKIP 20 LIMIT 20`. `PAGE` y `AFTER` se rechazan.
 
 ### Cuando GitLab rechaza una consulta
 
@@ -112,13 +128,13 @@ sequenceDiagram
     participant GL as API GitLab.com
     participant IDX as Indexer Orbit
 
-    LLM->>MCP: gitlab_orbit_schema (response_format=llm)
-    MCP->>GL: GET /api/v4/orbit/schema
-    GL-->>MCP: ontología (nodos, aristas, versiones)
-    MCP-->>LLM: texto del esquema
+    LLM->>MCP: gitlab_orbit_schema (expand=[Project])
+    MCP->>GL: POST /api/graphql (Query.orbit.schema)
+    GL-->>MCP: tipos de nodo, propiedades, tipos de arista
+    MCP-->>LLM: esquema
 
     LLM->>MCP: gitlab_orbit_dsl (response_format=llm)
-    MCP->>GL: GET /api/v4/orbit/agent/commands?command_names=query_graph
+    MCP->>GL: POST /api/v4/orbit/mcp (list_commands query_graph)
     GL-->>MCP: comando de consulta (gramática GQL, esquema de entrada)
     MCP-->>LLM: texto del lenguaje de consulta
 
@@ -255,8 +271,7 @@ Los ejemplos siguientes usan la superficie dinámica predeterminada; con `GITLAB
   "arguments": {
     "action": "orbit.graph_status",
     "params": {
-      "project_id": 278964,
-      "response_format": "llm"
+      "project_id": 278964
     }
   }
 }
@@ -266,25 +281,25 @@ Los ejemplos siguientes usan la superficie dinámica predeterminada; con `GITLAB
 
 ### `status`: Comprobar salud del servicio Orbit
 
-Devuelve la salud del clúster y el estado de los componentes backend. Útil para verificar si Orbit está disponible para tu token y proyecto.
+Devuelve la salud del servicio Orbit: su `status` general (`HEALTHY`, `DEGRADED`, `UNHEALTHY`, `MIGRATING` o `UNKNOWN`), su `version`, y el `name` y el `status` de cada componente. GitLab lo responde por GraphQL con una sola forma, así que `response_format` se acepta y no cambia nada. Un token al que no se sirve Orbit recibe un error que lo dice en vez de un estado vacío.
 
 **Ejemplo:** Ver arriba.
 
-### `schema`: Inspeccionar la ontología del grafo
+### `schema`: Inspeccionar el esquema del grafo
 
-Devuelve la ontología del grafo Orbit, incluyendo versión, dominios, nodos y aristas. Usa `expand` para obtener definiciones detalladas de nodos. Soporta `response_format` (`raw` o `llm`).
+Devuelve los tipos de nodo y de arista que nombra una consulta: de cada nodo su `name`, `description`, `domain`, `primary_key`, `label_field` y `display` (color y tamaño), de cada arista su `name`, su `description` y los tipos de nodo de origen y destino que conecta (`variants`), y los `domains` con los tipos de nodo de cada uno. Nombra tipos de nodo en `expand` para obtener sus `properties` (nombre, tipo de dato, si puede estar vacía y los valores de un enum). Con `format` o `response_format` en `llm` devuelve en su lugar el esquema como texto compacto.
 
 **Ejemplo:** Ver arriba.
 
-### `tools`: Descubrir el manifiesto de herramientas Orbit
+### `tools`: Listar las herramientas MCP de Orbit
 
-Devuelve el manifiesto de herramientas MCP que sirve Orbit, con el esquema de parámetros de cada una de sus herramientas. El lenguaje de consulta en sí es lo que devuelve `dsl`.
+Devuelve las herramientas que sirve el endpoint MCP de Orbit de GitLab (hoy `list_commands` e `invoke_command`), cada una con su descripción, su esquema de entrada como `parameters` y su indicador `trusted`. El lenguaje de consulta en sí es lo que devuelve `dsl`.
 
 **Ejemplo:** Ver arriba.
 
 ### `dsl`: Leer el lenguaje de consulta
 
-Devuelve el lenguaje de consulta en el que GitLab.com compila las consultas, GQL, tal como lo publica GitLab.com: el comando `query_graph` con el que se ejecuta una consulta, su gramática y el JSON Schema de su entrada (`raw`), o lo mismo como texto compacto (`llm`). Lee `GET /api/v4/orbit/agent/commands`. La ruta que servía el DSL JSON de consulta, `GET /api/v4/orbit/schema/dsl`, responde 404 en GitLab.com desde que GQL la sustituyó, y nada en el servidor la consulta.
+Devuelve el lenguaje de consulta en el que GitLab.com compila las consultas, GQL, tal como lo publica GitLab.com: el comando `query_graph` con el que se ejecuta una consulta, su gramática y el JSON Schema de su entrada (`raw`, el valor por defecto), o lo mismo como texto compacto (`llm`). Lee `list_commands` del endpoint MCP de Orbit, que responde la lista de comandos que daba la ruta retirada `GET /api/v4/orbit/agent/commands`.
 
 **Ejemplo:** Ver arriba.
 
@@ -296,9 +311,18 @@ Ejecuta una consulta de solo lectura sobre el Knowledge Graph. El parámetro `qu
 
 ### `graph_status`: Inspeccionar estado de indexación
 
-Devuelve el estado de indexación del grafo para un namespace, proyecto o ruta. Útil para saber si un proyecto está indexado y listo para consultas.
+Devuelve el índice Orbit de un grupo o proyecto, nombrado por `namespace_id`, `project_id` o `full_path`: si Orbit está activado en su grupo de nivel superior y desde cuándo (`enabled`, `enabled_at`, enviados para un grupo), los recuentos de proyectos (`indexed`, `total_known`, `gaps`, `not_indexed`, `total`), el `state` de la indexación (`READY`, `INDEXING`, `NOT_STARTED`, `FAILED` o `UNKNOWN`) con la hora de la última ejecución completada y el estado de cada área, y el número de elementos indexados de cada entidad en cada dominio. Úsalo para comprobar que un proyecto está indexado antes de consultarlo. `response_format` se acepta y no cambia nada.
 
 **Ejemplo:** Ver arriba.
+
+### Qué cambió en 3.4.0
+
+Los seis IDs de acción, nombres de herramienta y parámetros son los de versiones anteriores. Lo que GitLab ya no envía en ninguna parte salió de las salidas junto con las rutas:
+
+- `status`: los objetos `user` y `system`, `timestamp`, `formatted_text`, y `replicas` y `metrics` de cada componente. El `status` de un componente y el general son ahora los estados en mayúsculas de GitLab.
+- `schema`: `schema_version`, la `description` de cada dominio, y `incoming_edges` y `outgoing_edges` de cada nodo, que la lista de aristas lleva par a par. Los nodos tienen ahora tipo, con `primary_key`, `label_field` y `display` añadidos.
+- `graph_status`: `formatted_text`, el `state` de cada elemento, y `last_started_at`, `last_duration_ms` y `last_error` de la última ejecución. Añadidos: `enabled`, `enabled_at`, `not_indexed`, `total` y las áreas de `indexing`.
+- `tools`: añadido el indicador `trusted` de cada herramienta.
 
 ## ¿Cómo descubro los schemas de consulta?
 

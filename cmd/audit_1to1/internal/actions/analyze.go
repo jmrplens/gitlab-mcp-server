@@ -142,6 +142,17 @@ var acceptedMissingMethods = map[string]string{
 	"Discussions.ListGroupEpicDiscussions": coveredGraphQLEpicDsc,
 	"Discussions.UpdateEpicDiscussionNote": coveredGraphQLEpicDsc,
 
+	// COVERED_GRAPHQL and COVERED_RAW: the Orbit methods that send the REST
+	// routes GitLab.com removed on 2026-10-15, -27 and -28. The actions read
+	// what GitLab serves in their place: GraphQL, or the Orbit MCP endpoint
+	// through NewRequest, which client-go has no method for. Rows 144 to 148
+	// of docs/development/upstream-bugs.md.
+	"Orbit.GetStatus":      "COVERED_GRAPHQL. orbit.status reads Query.orbit.serviceStatus; GetStatus sends GET /orbit/status, which GitLab.com answers 404 since gitlab-org/gitlab!265633 (upstream-bugs row 144)",
+	"Orbit.GetSchema":      "COVERED_GRAPHQL. orbit.schema reads Query.orbit.schema, and get_graph_schema of POST /orbit/mcp for its llm text; GetSchema sends GET /orbit/schema, removed by gitlab-org/gitlab!265633 (upstream-bugs row 145)",
+	"Orbit.GetTools":       "COVERED_RAW. orbit.tools sends tools/list to POST /orbit/mcp through NewRequest; GetTools sends GET /orbit/tools, removed by gitlab-org/gitlab!265998 (upstream-bugs row 146)",
+	"Orbit.GetDsl":         "COVERED_RAW. orbit.dsl sends list_commands to POST /orbit/mcp through NewRequest; GetDsl sends GET /orbit/schema/dsl, which GitLab.com answers 404 since it read every query as GQL (upstream-bugs row 147)",
+	"Orbit.GetGraphStatus": "COVERED_GRAPHQL. orbit.graph_status reads Group.orbit and Project.orbit; GetGraphStatus sends GET /orbit/graph_status, removed by gitlab-org/gitlab!264745 (upstream-bugs row 148)",
+
 	// COVERED_RAW — raw REST (NewRequest/Do or URL-built); SDK method not called.
 	"Commits.GetGPGSignature":                  "COVERED_RAW. gitlab_commit_signature",
 	"Deployments.GetProjectDeployment":         "COVERED_RAW. gitlab_deployment_get",
