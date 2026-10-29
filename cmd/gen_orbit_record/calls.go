@@ -133,6 +133,14 @@ func recordCalls(ctx context.Context, cfg genRun, previous *orbitrecord.Document
 	// The handlers' client is on this machine, so the headers of a request
 	// wait no longer than the run itself may.
 	server := &http.Server{Handler: proxy, ReadHeaderTimeout: cfg.timeout}
+	// One exchange per connection. The handlers' client speaks through the
+	// process-wide pool of internal/gitlab, which keeps an idle connection to
+	// this address once the run is over; a later proxy listening on the same
+	// freed port would be handed it, and since the handlers read GraphQL and
+	// the Orbit MCP endpoint, the first request is a POST, which net/http does
+	// not retry when the dead connection answers "server closed idle
+	// connection". No connection outlives its exchange, so none is left over.
+	server.SetKeepAlivesEnabled(false)
 	go func() { _ = server.Serve(listener) }()
 	defer func() { _ = server.Close() }()
 
