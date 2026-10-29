@@ -567,19 +567,26 @@ func TestGraphStatus_InvalidInput_IsRefusedBeforeSending(t *testing.T) {
 }
 
 // TestGraphQLDocuments_CostWhatGitLabMeasured holds each GraphQL document's
-// estimated complexity, which GitLab refuses above its limit, to a figure: the
-// documents asked GitLab.com on 2026-10-29 were answered, and a change to a
-// selection changes the figure and sends whoever made it to measure again.
+// estimated complexity, which GitLab refuses above its limit, to the figure
+// GitLab.com reported for it at 14:41 UTC on 2026-10-29: each document sent
+// with queryComplexity { score limit } beside its selection, which GitLab
+// answered 3 more than the figures below (the selection costs 3 on its own,
+// measured the same minute), against a limit of 250. A change to a selection
+// changes the estimate and sends whoever made it to measure again. The schema
+// document is not held here: its properties carry @include, which the estimate
+// does not evaluate, and GitLab.com reported 39 for it with properties and 31
+// without, well under the limit.
 func TestGraphQLDocuments_CostWhatGitLabMeasured(t *testing.T) {
 	cases := []struct {
 		name      string
 		document  string
 		variables map[string]any
+		measured  int
 	}{
-		{name: "service status", document: queryServiceStatus},
-		{name: "graph status by group id", document: queryGraphStatusByGroupID, variables: map[string]any{"ids": []any{"gid://gitlab/Group/1"}}},
-		{name: "graph status by project id", document: queryGraphStatusByProjectID, variables: map[string]any{"ids": []any{"gid://gitlab/Project/1"}}},
-		{name: "graph status by path", document: queryGraphStatusByPath, variables: map[string]any{"fullPath": "a"}},
+		{name: "service status", document: queryServiceStatus, measured: 7},
+		{name: "graph status by group id", document: queryGraphStatusByGroupID, variables: map[string]any{"ids": []any{"gid://gitlab/Group/1"}}, measured: 24},
+		{name: "graph status by project id", document: queryGraphStatusByProjectID, variables: map[string]any{"ids": []any{"gid://gitlab/Project/1"}}, measured: 23},
+		{name: "graph status by path", document: queryGraphStatusByPath, variables: map[string]any{"fullPath": "a"}, measured: 44},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -587,8 +594,11 @@ func TestGraphQLDocuments_CostWhatGitLabMeasured(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GitLabQueryComplexity() error: %v", err)
 			}
-			if cost <= 0 || cost > testutil.GitLabAuthenticatedMaxComplexity {
-				t.Fatalf("complexity = %d, want within GitLab's limit of %d", cost, testutil.GitLabAuthenticatedMaxComplexity)
+			if cost != tc.measured {
+				t.Errorf("complexity = %d by the estimate, and GitLab.com measured %d: measure it again and record the figure", cost, tc.measured)
+			}
+			if cost > testutil.GitLabAuthenticatedMaxComplexity {
+				t.Errorf("complexity = %d, over the %d GitLab refuses a query above", cost, testutil.GitLabAuthenticatedMaxComplexity)
 			}
 		})
 	}

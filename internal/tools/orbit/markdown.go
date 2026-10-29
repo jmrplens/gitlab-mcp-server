@@ -15,7 +15,7 @@ import (
 )
 
 // hintGraphStatus is the next step the status card ends on, whichever of its
-// three shapes it takes: cluster health says nothing about one namespace.
+// two shapes it takes: cluster health says nothing about one namespace.
 const hintGraphStatus = "inspect indexing status for a namespace or project"
 
 // orbitNotFoundOutput is returned by MCP Orbit tools when the requested resource or feature is not found (HTTP 404).
