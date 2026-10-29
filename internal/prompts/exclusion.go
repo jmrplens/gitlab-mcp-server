@@ -75,7 +75,7 @@ var promptBackingActions = map[string][]string{
 	"summarize_mr_changes":      {"mr_review.changes_get"},
 	"review_mr":                 {"merge_request.get", "mr_review.changes_get"},
 	"summarize_pipeline_status": {"pipeline.latest", "job.list"},
-	"suggest_mr_reviewers":      {"project.members"},
+	"suggest_mr_reviewers":      {"merge_request.get", "mr_review.changes_get", "project.members"},
 	"generate_release_notes":    {"repository.compare"},
 	"summarize_open_mrs":        {"merge_request.list"},
 	"project_health_check":      {"project.get", "pipeline.latest", "merge_request.list", "branch.list"},

@@ -69,8 +69,14 @@ func TestRegister_ExcludingAnActionRemovesThePromptServingTheSameData(t *testing
 		{
 			name:    "excluding an action removes every prompt reading it",
 			opts:    []RegisterOptions{{ExcludedActions: []string{"mr_review.changes_get"}}},
-			gone:    []string{"review_mr", "summarize_mr_changes", "mr_risk_assessment", "mr_description_quality"},
+			gone:    []string{"review_mr", "summarize_mr_changes", "suggest_mr_reviewers", "mr_risk_assessment", "mr_description_quality"},
 			present: []string{"team_overview", "release_cadence", "label_distribution"},
+		},
+		{
+			name:    "excluding the merge request removes every prompt reading it",
+			opts:    []RegisterOptions{{ExcludedActions: []string{"merge_request.get"}}},
+			gone:    []string{"review_mr", "suggest_mr_reviewers", "mr_risk_assessment", "mr_description_quality"},
+			present: []string{"summarize_mr_changes", "team_overview"},
 		},
 		{
 			name:    "one of several backing actions is enough",
