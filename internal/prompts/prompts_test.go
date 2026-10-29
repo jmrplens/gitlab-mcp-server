@@ -4390,3 +4390,96 @@ func TestDailyStandup_KeepsTheLast24Hours(t *testing.T) {
 		})
 	}
 }
+
+// TestMRDiffPrompts_MoreFilesThanOnePage_SayWhatTheyRead holds the five
+// prompts that read a merge request's changed files to the page they read.
+//
+// Each reads one page of 100 files, as its description says, and each used to
+// present that page as the merge request's whole diff: review_mr and
+// mr_risk_assessment wrote "Files changed: 100" and the line totals of those
+// files for a merge request of 250, and nothing in the message said the other
+// 150 were never read. mr_review.changes_get said nothing of its next page
+// either until pull request 1517 made its Files line read "N of total" or "N
+// shown, more available", which is what these now say too, beside where the
+// rest is read.
+//
+// The stand-in answers one file with the headers of a first page: with
+// GitLab's total and the next page, with only the next page, with only a total
+// past the page, and as a lone page, where the message has to stay as it was.
+func TestMRDiffPrompts_MoreFilesThanOnePage_SayWhatTheyRead(t *testing.T) {
+	pages := []struct {
+		name    string
+		headers map[string]string
+		count   string
+	}{
+		{name: "counted", headers: map[string]string{"X-Total": "250", "X-Total-Pages": "3", "X-Next-Page": "2"}, count: "1 of 250"},
+		{name: "uncounted", headers: map[string]string{"X-Next-Page": "2"}, count: "1 shown, more available"},
+		{name: "total alone", headers: map[string]string{"X-Total": "250"}, count: "1 of 250"},
+		{name: "lone page", headers: map[string]string{"X-Total": "1", "X-Total-Pages": "1"}},
+	}
+	for _, name := range []string{"summarize_mr_changes", "review_mr", "suggest_mr_reviewers", "mr_risk_assessment", "mr_description_quality"} {
+		for _, page := range pages {
+			t.Run(name+"/"+page.name, func(t *testing.T) {
+				text := getPromptText(t, firstDiffPage(page.headers), name, map[string]string{"project_id": "42", "merge_request_iid": "5"})
+				assertSaysWhatWasRead(t, text, page.count)
+			})
+		}
+	}
+
+	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	if _, ok := catalog.Action(actioncatalog.ActionID(promptChangesGet)); !ok {
+		t.Errorf("%s is not an action the catalog builds", promptChangesGet)
+	}
+}
+
+// promptChangesGet is the action a prompt names for the changed files past
+// the page it read, spelled out rather than taken from the constant the
+// handlers use, so the test holds the served text to the canonical ID.
+const promptChangesGet = "mr_review.changes_get"
+
+// firstDiffPage answers merge request 5 of project 42, its project members,
+// and one changed file under the given pagination headers, as the first page
+// of 100.
+func firstDiffPage(headers map[string]string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == pathMR5:
+			respondJSON(w, http.StatusOK, `{"id":55,"iid":5,"title":"Wide change","source_branch":"feature","target_branch":"main","author":{"username":"alice"}}`)
+		case r.URL.Path == pathMR5Diffs:
+			w.Header().Set("X-Page", "1")
+			w.Header().Set("X-Per-Page", "100")
+			for k, v := range headers {
+				w.Header().Set(k, v)
+			}
+			respondJSON(w, http.StatusOK, `[{"old_path":"handler.go","new_path":"handler.go","diff":"@@ -1 +1 @@\n-a\n+b"}]`)
+		case strings.HasSuffix(r.URL.Path, "/members/all"):
+			respondJSON(w, http.StatusOK, `[]`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// assertSaysWhatWasRead requires a prompt's message to give the changed-file
+// count as count and to say where the rest is read, or, when count is empty
+// because the page read was the whole diff, to say neither.
+func assertSaysWhatWasRead(t *testing.T, text, count string) {
+	t.Helper()
+	if count == "" {
+		if strings.Contains(text, promptChangesGet) || strings.Contains(text, "more available") {
+			t.Errorf("a lone page of changed files was described as part of a larger diff:\n%s", text)
+		}
+		return
+	}
+	rest := "`" + promptChangesGet + "` reads the rest from page 2 with per_page 100"
+	for _, want := range []string{count, "Only the first page of changed files was read", rest} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("the message does not say %q:\n%s", want, text)
+			}
+		})
+	}
+}

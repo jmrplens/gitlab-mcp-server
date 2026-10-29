@@ -21,7 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const fmtFilesChanged = "- **Files changed**: %d\n"
+const fmtFilesChanged = "- **Files changed**: %s\n"
 
 // The actions the review prompt tells a model to call, by canonical catalog
 // ID. The ID is the one spelling every surface resolves: dynamic execute takes
@@ -33,13 +33,17 @@ const fmtFilesChanged = "- **Files changed**: %d\n"
 // No gate reads this package: cmd/audit_action_ids loads internal/tools and
 // internal/toolutil, where the served prose it judges is written, and a
 // prompt is assembled here. TestReviewMR_NamesActionsByCanonicalID holds
-// these to the catalog instead.
+// these to the catalog instead, and
+// TestMRDiffPrompts_MoreFilesThanOnePage_SayWhatTheyRead holds
+// actionChangesGet, which every prompt reading a merge request's changed files
+// names when the merge request changes more than the page it read.
 const (
 	actionDraftNoteCreate     = "mr_review.draft_note_create"
 	actionDraftNotePublishAll = "mr_review.draft_note_publish_all"
 	actionDiscussionCreate    = "mr_review.discussion_create"
 	actionDiscussionReply     = "mr_review.discussion_reply"
 	actionNoteCreate          = "mr_review.note_create"
+	actionChangesGet          = "mr_review.changes_get"
 )
 
 // descriptionExcerptBytes is how much of a merge request description the two
@@ -200,19 +204,29 @@ func handleSummarizeMRChanges(ctx context.Context, client *gitlabclient.Client, 
 	if err != nil {
 		return nil, err
 	}
-	changes, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, diffPage(), gl.WithContext(ctx))
+	files, err := readChangedFiles(ctx, client, projectID, iid)
 	if err != nil {
 		return nil, err
 	}
 
 	var summary []string
-	for _, c := range changes {
+	for _, c := range files.diffs {
 		line := fmt.Sprintf("- %s -> %s (%s)", mdInline(c.OldPath), mdInline(c.NewPath), changeType(c))
 		summary = append(summary, line)
 	}
-	msg := "Changed files:\n" + strings.Join(summary, "\n")
+	var b strings.Builder
+	if files.partial() {
+		fmt.Fprintf(&b, "Changed files (%s):\n", files.count())
+	} else {
+		b.WriteString("Changed files:\n")
+	}
+	b.WriteString(strings.Join(summary, "\n"))
+	if files.partial() {
+		b.WriteString("\n")
+		files.writeUnread(&b)
+	}
 
-	return promptResult(msg), nil
+	return promptResult(b.String()), nil
 }
 
 // registerReviewMRPrompt registers the review_mr prompt.
@@ -232,29 +246,29 @@ func registerReviewMRPrompt(server promptAdder, client *gitlabclient.Client) {
 }
 
 // fetchMRWithDiffs validates the project_id/mr_iid prompt arguments and
-// fetches the merge request plus its diffs — the shared prologue of the
-// MR-centric prompt handlers.
-func fetchMRWithDiffs(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (string, *gl.MergeRequest, []*gl.MergeRequestDiff, error) {
+// fetches the merge request plus the first page of its changed files, the
+// shared prologue of the MR-centric prompt handlers.
+func fetchMRWithDiffs(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (string, *gl.MergeRequest, changedFiles, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	mrIID := req.Params.Arguments[argMRIID]
 	if projectID == "" || mrIID == "" {
-		return "", nil, nil, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
+		return "", nil, changedFiles{}, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
 	}
 
 	iid, err := parseIID(mrIID)
 	if err != nil {
-		return "", nil, nil, err
+		return "", nil, changedFiles{}, err
 	}
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, iid, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return "", nil, nil, fmt.Errorf(fmtGetMRFailed, err)
+		return "", nil, changedFiles{}, fmt.Errorf(fmtGetMRFailed, err)
 	}
 
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, diffPage(), gl.WithContext(ctx))
+	files, err := readChangedFiles(ctx, client, projectID, iid)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
+		return "", nil, changedFiles{}, fmt.Errorf(fmtGetMRDiffsFailed, err)
 	}
-	return projectID, mr, diffs, nil
+	return projectID, mr, files, nil
 }
 
 // diffPage asks for one page of a merge request's changed files at the size
@@ -263,6 +277,64 @@ func fetchMRWithDiffs(ctx context.Context, client *gitlabclient.Client, req *mcp
 // description promised every diff (issue 1169).
 func diffPage() *gl.ListMergeRequestDiffsOptions {
 	return &gl.ListMergeRequestDiffsOptions{PerPage: maxListItems}
+}
+
+// changedFiles is the one page of a merge request's changed files a prompt
+// reads, with what GitLab's answer said about the files past it.
+//
+// A prompt reads one page of each list, and its description says so, but the
+// message it renders is what a model reasons from. Each of the five prompts
+// that read this list used to count the page as the whole diff, so a review
+// or a risk assessment of a merge request changing 250 files read "Files
+// changed: 100" and the line totals of those 100, with nothing saying that
+// the other 150 were never read. mr_review.changes_get published no next page
+// either, until pull request 1517 made its Files line read "N of total" or "N
+// shown, more available"; [changedFiles.count] says the same, and
+// [changedFiles.writeUnread] says where the rest is read.
+type changedFiles struct {
+	diffs []*gl.MergeRequestDiff
+	// page is what the answer's headers said: TotalItems is 0 when GitLab
+	// sent no X-Total, and HasMore reports a page after the one read.
+	page toolutil.PaginationOutput
+}
+
+// readChangedFiles reads the first page of a merge request's changed files.
+func readChangedFiles(ctx context.Context, client *gitlabclient.Client, projectID string, iid int64) (changedFiles, error) {
+	diffs, resp, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, diffPage(), gl.WithContext(ctx))
+	if err != nil {
+		return changedFiles{}, err
+	}
+	return changedFiles{diffs: diffs, page: toolutil.PaginationFromResponse(resp)}, nil
+}
+
+// partial reports a merge request that changes files past the page read.
+func (f changedFiles) partial() bool {
+	return f.page.HasMore || f.page.TotalItems > int64(len(f.diffs))
+}
+
+// count is the number of changed files read, said as mr_review.changes_get
+// says it: "N" for the whole diff, "N of total" when GitLab counted more, and
+// "N shown, more available" when it only announced a next page.
+func (f changedFiles) count() string {
+	switch {
+	case f.page.TotalItems > int64(len(f.diffs)):
+		return fmt.Sprintf("%d of %d", len(f.diffs), f.page.TotalItems)
+	case f.page.HasMore:
+		return fmt.Sprintf("%d shown, more available", len(f.diffs))
+	}
+	return strconv.Itoa(len(f.diffs))
+}
+
+// writeUnread tells the model, when the merge request changes files past the
+// page read, that every count and list of the message covers that page alone,
+// and how to read the rest. The page size has to be named: page 2 at GitLab's
+// default of 20 files would start at the 21st file, which this prompt read.
+func (f changedFiles) writeUnread(b *strings.Builder) {
+	if !f.partial() {
+		return
+	}
+	fmt.Fprintf(b, "\nOnly the first page of changed files was read (%d files), so every count and list here covers those files alone. "+
+		"`%s` reads the rest from page 2 with per_page %d.\n", len(f.diffs), actionChangesGet, maxListItems)
 }
 
 // warnFetch records a listing that failed and is about to be rendered as
@@ -304,14 +376,14 @@ func fetchContributionEvents(ctx context.Context, client *gitlabclient.Client, u
 // categorized by risk level, with the diff of each file read included without
 // truncation.
 func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	_, mr, diffs, err := fetchMRWithDiffs(ctx, client, req)
+	_, mr, files, err := fetchMRWithDiffs(ctx, client, req)
 	if err != nil {
 		return nil, err
 	}
 
 	// Categorize files by risk/type
-	highRisk, logic, tests, docs := categorizeDiffs(diffs)
-	m := computeDiffMetrics(diffs)
+	highRisk, logic, tests, docs := categorizeDiffs(files.diffs)
+	m := computeDiffMetrics(files.diffs)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Code Review: %s (MR !%d)\n\n", mdHeading(mr.Title), mr.IID)
@@ -323,10 +395,11 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 	// Overall metrics
 	fmt.Fprintf(&b, "\n## Metrics\n")
-	fmt.Fprintf(&b, fmtFilesChanged, len(diffs))
+	fmt.Fprintf(&b, fmtFilesChanged, files.count())
 	fmt.Fprintf(&b, "- **Lines added**: %d\n", m.additions)
 	fmt.Fprintf(&b, "- **Lines removed**: %d\n", m.deletions)
 	fmt.Fprintf(&b, "- **Has conflicts**: %s\n", toolutil.BoolEmoji(mr.HasConflicts))
+	files.writeUnread(&b)
 
 	// Review plan
 	fmt.Fprintf(&b, "\n## Review Plan\n")
@@ -495,7 +568,7 @@ func registerSuggestMRReviewersPrompt(server promptAdder, client *gitlabclient.C
 // handleSuggestMRReviewers identifies potential reviewers based on blame data
 // for files changed in a merge request.
 func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	projectID, mr, diffs, err := fetchMRWithDiffs(ctx, client, req)
+	projectID, mr, files, err := fetchMRWithDiffs(ctx, client, req)
 	if err != nil {
 		return nil, err
 	}
@@ -508,10 +581,11 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Reviewer Suggestions for MR !%d: %s\n\n", mr.IID, mdHeading(mr.Title))
 
-	fmt.Fprintf(&b, "## Changed Files (%d)\n", len(diffs))
-	for _, d := range diffs {
+	fmt.Fprintf(&b, "## Changed Files (%s)\n", files.count())
+	for _, d := range files.diffs {
 		fmt.Fprintf(&b, fmtListItem, mdInline(d.NewPath), changeType(d))
 	}
+	files.writeUnread(&b)
 
 	authorName := ""
 	if mr.Author != nil {
@@ -693,7 +767,7 @@ func writeReleaseNotesStats(b *strings.Builder, comparison *gl.Compare) {
 
 	b.WriteString("\n## Statistics\n\n")
 	fmt.Fprintf(b, "- **Commits**: %d\n", len(comparison.Commits))
-	fmt.Fprintf(b, fmtFilesChanged, len(comparison.Diffs))
+	fmt.Fprintf(b, fmtFilesChanged, strconv.Itoa(len(comparison.Diffs)))
 	fmt.Fprintf(b, "- **Contributors**: %d\n", len(contributors))
 }
 
@@ -1526,26 +1600,27 @@ func registerMRRiskAssessmentPrompt(server promptAdder, client *gitlabclient.Cli
 // handleMRRiskAssessment computes diff metrics and identifies sensitive files
 // to produce a merge request risk assessment.
 func handleMRRiskAssessment(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	_, mr, diffs, err := fetchMRWithDiffs(ctx, client, req)
+	_, mr, files, err := fetchMRWithDiffs(ctx, client, req)
 	if err != nil {
 		return nil, err
 	}
 
-	m := computeDiffMetrics(diffs)
+	m := computeDiffMetrics(files.diffs)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# MR Risk Assessment: !%d - %s\n\n", mr.IID, mdHeading(mr.Title))
 	fmt.Fprintf(&b, "## Metrics\n")
-	fmt.Fprintf(&b, fmtFilesChanged, len(diffs))
+	fmt.Fprintf(&b, fmtFilesChanged, files.count())
 	fmt.Fprintf(&b, "- **Lines added**: %d\n", m.additions)
 	fmt.Fprintf(&b, "- **Lines removed**: %d\n", m.deletions)
 	fmt.Fprintf(&b, "- **New files**: %d\n", m.newFiles)
 	fmt.Fprintf(&b, "- **Deleted files**: %d\n", m.deletedFiles)
 	fmt.Fprintf(&b, "- **Sensitive files touched**: %d\n", m.sensitiveFiles)
 	fmt.Fprintf(&b, "- **Has conflicts**: %s\n", toolutil.BoolEmoji(mr.HasConflicts))
+	files.writeUnread(&b)
 
 	fmt.Fprintf(&b, "\n## Changed Files\n")
-	for _, d := range diffs {
+	for _, d := range files.diffs {
 		fmt.Fprintf(&b, fmtListItem, mdInline(d.NewPath), changeType(d))
 	}
 

@@ -128,10 +128,11 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 	if err != nil {
 		return nil, fmt.Errorf(fmtGetMRFailed, err)
 	}
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, diffPage(), gl.WithContext(ctx))
+	files, err := readChangedFiles(ctx, client, projectID, iid)
 	if err != nil {
 		return nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
 	}
+	diffs := files.diffs
 
 	signals := analyzeMRDescription(mr.Description)
 	metrics := computeDiffMetrics(diffs)
@@ -140,7 +141,9 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "# MR Description Quality: !%d - %s\n\n", mr.IID, mdHeading(mr.Title))
 	fmt.Fprintf(&b, "**Branch**: %s -> %s\n", mdInline(mr.SourceBranch), mdInline(mr.TargetBranch))
 	fmt.Fprintf(&b, "**Description length**: %d characters\n", len(strings.TrimSpace(mr.Description)))
-	fmt.Fprintf(&b, "**Files changed**: %d | **Tests changed**: %d | **Docs changed**: %d | **Sensitive files touched**: %d\n\n", len(diffs), countMatchingDiffs(diffs, isTestPath), countMatchingDiffs(diffs, isDocPath), metrics.sensitiveFiles)
+	fmt.Fprintf(&b, "**Files changed**: %s | **Tests changed**: %d | **Docs changed**: %d | **Sensitive files touched**: %d\n", files.count(), countMatchingDiffs(diffs, isTestPath), countMatchingDiffs(diffs, isDocPath), metrics.sensitiveFiles)
+	files.writeUnread(&b)
+	b.WriteString("\n")
 
 	b.WriteString("## Description Signals\n\n")
 	b.WriteString("| Signal | Present |\n|--------|---------|\n")
