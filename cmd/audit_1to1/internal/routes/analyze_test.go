@@ -269,10 +269,56 @@ func TestJudgeAll_TheStandInTree_ClassifiesEveryRoute(t *testing.T) {
 	if !summariesEqual(report.Summary, wantSummary) {
 		t.Errorf("summary = %+v, want %+v", report.Summary, wantSummary)
 	}
-	if len(report.Stale) != 0 {
-		t.Errorf("stale = %v, want none: a finding is a report and no declaration is stale", report.Stale)
+	if len(report.Stale) != 0 || report.Summary.clean() {
+		t.Errorf("stale = %v, clean %t; want no declaration stale and the gate failing on the findings", report.Stale, report.Summary.clean())
 	}
 	checkStandInDetails(t, report)
+}
+
+// TestSummary_Clean_PassesOnlyWithoutAFindingOrAStaleDeclaration verifies
+// the gate: a route left a finding of any class fails it, and so does a
+// declaration that no longer describes the tree, while the routes a rule, an
+// inherited decision or a family row answers do not.
+func TestSummary_Clean_PassesOnlyWithoutAFindingOrAStaleDeclaration(t *testing.T) {
+	cases := map[string]struct {
+		summary Summary
+		want    bool
+	}{
+		"every route answered": {
+			summary: Summary{Routes: 8, Reached: 1, OutsideAPI: 1, Skipped: 1, SlugFromInput: 1, DeprecatedAlias: 1, Inherited: 1, Declared: 2, Families: 1},
+			want:    true,
+		},
+		"a stale declaration":              {summary: Summary{Stale: 1}},
+		"an unanswered route":              {summary: Summary{Unanswered: 1}},
+		"an unknown skip reason":           {summary: Summary{UnknownSkipReason: 1}},
+		"an internal route without a skip": {summary: Summary{InternalUnskipped: 1}},
+		"an internal route left in":        {summary: Summary{InternalNotExcluded: 1}},
+		"a contradicted decision":          {summary: Summary{Contradicted: 1}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := tc.summary.clean(); got != tc.want {
+				t.Errorf("clean(%+v) = %t, want %t", tc.summary, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSummary_Clean_FailsOnEveryFindingClassAndOnNoOther holds the gate to
+// findingClasses rather than to a list of its own: a route of any class that
+// table names fails the gate, and a route of any other class the summary
+// counts does not, so a class added to it is gated without a second list to
+// keep in step.
+func TestSummary_Clean_FailsOnEveryFindingClassAndOnNoOther(t *testing.T) {
+	for class := range (&Summary{}).counters() {
+		t.Run(class, func(t *testing.T) {
+			var summary Summary
+			summary.count(class)
+			if summary.clean() == findingClasses[class] {
+				t.Errorf("one route of class %s: clean() = %t, want %t", class, summary.clean(), !findingClasses[class])
+			}
+		})
+	}
 }
 
 // summariesEqual compares two summaries field by field.
@@ -421,6 +467,27 @@ func TestJudgeAll_AFamilyRow_AnswersItsRoutesUntilTheyChange(t *testing.T) {
 			wantStale: []string{"family GET /projects/*/widgets/*/feed/** answers no route"},
 		},
 		{
+			name: "a tracked row over a route a COVERED_GENERIC decision settles",
+			arrange: func(_ *testing.T, in *judgeInput) {
+				in.families = []routeFamily{{
+					Methods: []string{http.MethodGet}, Pattern: "/gizmos", Category: categoryTracked, Reason: "the gizmos no action lists", Issue: 7, Routes: 1,
+				}}
+			},
+			wantClass: map[string]string{gizmosRoute: ClassDeclared},
+			wantStale: []string{"family GET /gizmos tracks " + gizmosRoute + ", and Gizmos.ListGizmos is decided COVERED_GENERIC, which says the route needs no action of its own: an action still to implement is no method acceptedMissingMethods settles"},
+		},
+		{
+			name: "a tracked row over a route an INTENTIONAL_SKIP_BINARY decision settles",
+			arrange: func(t *testing.T, in *judgeInput) {
+				t.Helper()
+				in.methods = standInMethods(t, true)
+				in.accepted["Widgets.GetWidgetFeed"] = "INTENTIONAL_SKIP_BINARY. Feed bytes"
+				in.families = []routeFamily{trackedFeed()}
+			},
+			wantClass: map[string]string{feedRoute: ClassDeclared},
+			wantStale: []string{"family GET /projects/*/widgets/*/feed/** tracks " + feedRoute + ", and Widgets.GetWidgetFeed is decided INTENTIONAL_SKIP_BINARY, which says the route needs no action of its own: an action still to implement is no method acceptedMissingMethods settles"},
+		},
+		{
 			name: "a skip reason the table does not hold",
 			arrange: func(_ *testing.T, in *judgeInput) {
 				in.live.Routes = append(in.live.Routes, liveRoute(http.MethodGet, apilive.EndpointPrefix+"/widgets/brand_new", "brand_new_auth"))
@@ -507,8 +574,8 @@ func TestJudgeAll_AFamilyRow_AnswersItsRoutesUntilTheyChange(t *testing.T) {
 			if !slices.Equal(report.Stale, append([]string{}, tc.wantStale...)) {
 				t.Errorf("stale = %q, want %q", report.Stale, tc.wantStale)
 			}
-			if report.Summary.Stale != len(tc.wantStale) || report.Summary.clean() != (len(tc.wantStale) == 0) {
-				t.Errorf("summary = %+v, want %d stale and the gate passing only without them", report.Summary, len(tc.wantStale))
+			if report.Summary.Stale != len(tc.wantStale) || report.Summary.clean() != (len(tc.wantStale) == 0 && len(report.Findings) == 0) {
+				t.Errorf("summary = %+v, want %d stale and the gate passing only without them and without a finding", report.Summary, len(tc.wantStale))
 			}
 		})
 	}
@@ -605,15 +672,16 @@ func standInSeams(t *testing.T) {
 
 // TestRun_TheStandInTree_WritesTheReportAndGapsOnlyKeepsTheFindings runs the
 // scope end to end on the stand-in tree through its seams: the report names
-// the two files it reads, the gate passes, and -gaps-only drops the answered
-// routes and the reached ones and keeps the findings.
+// the two files it reads, the gate fails on the findings the stand-in leaves,
+// and -gaps-only drops the answered routes and the reached ones and keeps the
+// findings.
 func TestRun_TheStandInTree_WritesTheReportAndGapsOnlyKeepsTheFindings(t *testing.T) {
 	for _, gapsOnly := range []bool{false, true} {
 		t.Run("gaps only "+map[bool]string{false: "off", true: "on"}[gapsOnly], func(t *testing.T) {
 			standInSeams(t)
 			content, clean, err := Run(t.TempDir(), Options{GapsOnly: gapsOnly})
-			if err != nil || !clean || !strings.HasSuffix(string(content), "}\n") {
-				t.Fatalf("Run = %t, %v; want a clean report ending in a newline", clean, err)
+			if err != nil || clean || !strings.HasSuffix(string(content), "}\n") {
+				t.Fatalf("Run = %t, %v; want a report ending in a newline and the gate failing on its findings", clean, err)
 			}
 			report := decode(t, content)
 			if report.Requests != actionrequests.RecordPath || report.Record != "docs/development/gitlab-api-live.json" {
@@ -626,6 +694,25 @@ func TestRun_TheStandInTree_WritesTheReportAndGapsOnlyKeepsTheFindings(t *testin
 				t.Errorf("%s is %q, want the family row the run reads to answer it", feedRoute, got)
 			}
 		})
+	}
+}
+
+// TestRun_ATreeWhoseRoutesAreAllAnswered_PassesTheGate runs the scope on a
+// tree whose one route an action sends and whose tables hold nothing to go
+// stale: the gate passes, the state the repository's own tree is held to.
+func TestRun_ATreeWhoseRoutesAreAllAnswered_PassesTheGate(t *testing.T) {
+	standInSeams(t)
+	readLive = func(string) (apilive.Document, error) {
+		return apilive.Document{Routes: []apilive.Route{liveRoute(http.MethodGet, apilive.EndpointPrefix+"/projects/:id/widgets", "")}}, nil
+	}
+	skipReasons, skipExceptions, graphqlActions = map[string]skipReason{}, map[string]skipReason{}, map[string][]string{}
+	slugRules, routeFamilies = nil, nil
+	content, clean, err := Run(t.TempDir(), Options{GapsOnly: true})
+	if err != nil || !clean {
+		t.Fatalf("Run = %t, %v; want the gate passing on %s", clean, err, content)
+	}
+	if report := decode(t, content); report.Summary.Reached != 1 || len(report.Findings) != 0 {
+		t.Errorf("summary = %+v, want the one route reached and no finding", report.Summary)
 	}
 }
 
@@ -714,7 +801,9 @@ func TestGroupOf_ARoute_ReadsInTheFamilyOfItsFirstLiteralSegments(t *testing.T) 
 	}
 }
 
-// repositoryReport runs the scope on the repository's own tree.
+// repositoryReport runs the scope on the repository's own tree, and stops the
+// test when the gate fails, naming the first findings with their class and
+// every declaration that no longer describes the tree.
 func repositoryReport(t *testing.T) Report {
 	t.Helper()
 	freshness.SkipIfDeferred(t)
@@ -728,16 +817,22 @@ func repositoryReport(t *testing.T) Report {
 	}
 	report := decode(t, content)
 	if !clean {
-		t.Fatalf("stale route declarations: %v", report.Stale)
+		names := []string{}
+		for _, route := range report.Findings[:min(len(report.Findings), 3)] {
+			names = append(names, route.Route+" ("+route.Class+")")
+		}
+		t.Fatalf("the gate fails: %d routes no action reaches are left findings, among them %q, each to be answered by a rule, an inherited decision or a family row; and the stale declarations %q",
+			len(report.Findings), names, report.Stale)
 	}
 	return report
 }
 
 // TestRun_Repository_GateIsGreen runs the gate on the repository's own
 // request record, live record, client-go and catalog, which is what make
-// audit-1to1-routes does: no declaration that no longer describes the tree.
-// It reads the committed request record, so a stacked layer that defers that
-// record's refresh skips it.
+// audit-1to1-routes does: no route no action reaches is left a finding, and
+// no declaration no longer describes the tree, which repositoryReport holds
+// it to. It reads the committed request record, so a stacked layer that
+// defers that record's refresh skips it.
 func TestRun_Repository_GateIsGreen(t *testing.T) {
 	report := repositoryReport(t)
 	summary := report.Summary
@@ -795,55 +890,75 @@ func TestRun_Repository_HoldsTheRoutesClientGoLaterModels(t *testing.T) {
 	}
 }
 
-// TestRun_Repository_ReportsTheRoutesADecisionDoesNotCarryOnto fixes the
-// routes no action reaches whose client-go method is decided in a way that
-// does not hold for them, each a finding on v3.30.0 until the triage answers
-// it. Six are decided COVERED_GENERIC, which says another route covers the
-// capability, the question this scope asks: a group's and a project's direct
-// members, a group's subgroups, the delete of an LDAP link by its cn, a merge
-// request's changes and the PUT of the error tracking settings. The creation
-// of a vulnerability from a finding is decided COVERED_GRAPHQL with its
-// service, and no GraphQL action creates one, while the list beside it is
-// inherited from vulnerability.list. The five Orbit routes GitLab.com
-// removed are inherited SUPERSEDED_UPSTREAM, since GraphQL and the Orbit
-// MCP endpoint replaced them. A runner's managers and a job request skip
-// the fine-grained check for the reason the runner routes an action sends
-// carry, which therefore excludes neither. The integrations list no action
-// sends is offered through its deprecated /services/ spelling, which the
-// finding names.
-func TestRun_Repository_ReportsTheRoutesADecisionDoesNotCarryOnto(t *testing.T) {
+// TestRun_Repository_DeclaresTheRoutesADecisionDoesNotCarryOnto fixes the
+// routes no action reaches whose client-go method no decision carries onto
+// them: whatever decision there is stays on the route and does not carry,
+// and a tracked row answers the route. Six were decided COVERED_GENERIC,
+// which says another route covers the capability, the question this scope
+// asks: a group's and a project's direct members, a group's subgroups, the
+// delete of an LDAP link by its cn, a merge request's changes and the PUT of
+// the error tracking settings. Eleven were decided INTENTIONAL_SKIP_*: nine
+// downloads (a group's avatar, its relations export, the Markdown uploads of
+// a group and of a project, a secure file and two Terraform states), the
+// streamed repository archive beside the URL repository.archive builds, and
+// the deprecated write of a merge request's approvals. An action still to
+// implement is no method R-ACTION may settle, so those seventeen entries left
+// acceptedMissingMethods and their methods are decided by nothing, R-ACTION's
+// backlog. The creation of a vulnerability from a finding is decided
+// COVERED_GRAPHQL with its service, and no GraphQL action creates one, while
+// the list beside it is inherited from vulnerability.list. The five Orbit
+// routes GitLab.com removed are inherited SUPERSEDED_UPSTREAM, since GraphQL
+// and the Orbit MCP endpoint replaced them. A runner's managers and a job
+// request skip the fine-grained check for the reason the runner routes an
+// action sends carry, which therefore excludes neither. The integrations
+// list no action sends is offered through its deprecated /services/
+// spelling, which its row's reason names.
+func TestRun_Repository_DeclaresTheRoutesADecisionDoesNotCarryOnto(t *testing.T) {
 	report := repositoryReport(t)
-	findings := map[string]Route{}
-	for _, route := range report.Findings {
-		findings[route.Route] = route
-	}
-	cases := map[string]struct{ decisions, twin string }{
-		"GET /groups/:id/members":                                     {decisions: "Groups.ListGroupMembers COVERED_GENERIC"},
-		"GET /projects/:id/members":                                   {decisions: "ProjectMembers.ListProjectMembers COVERED_GENERIC"},
-		"GET /groups/:id/subgroups":                                   {decisions: "Groups.ListSubGroups COVERED_GENERIC"},
-		"DELETE /groups/:id/ldap_group_links/:cn":                     {decisions: "Groups.DeleteGroupLDAPLink COVERED_GENERIC"},
-		"GET /projects/:id/merge_requests/:merge_request_iid/changes": {decisions: "MergeRequests.GetMergeRequestChanges COVERED_GENERIC"},
-		"PUT /projects/:id/error_tracking/settings":                   {decisions: "ErrorTracking.CreateErrorTrackingSettings COVERED_GENERIC"},
-		"POST /projects/:id/vulnerabilities":                          {decisions: "ProjectVulnerabilities.CreateVulnerability COVERED_GRAPHQL"},
-		"DELETE /runners/managers":                                    {},
-		"POST /jobs/request":                                          {},
-		"GET /projects/:id/integrations":                              {twin: "GET /projects/:id/services"},
-	}
-	for name, want := range cases {
-		t.Run(name, func(t *testing.T) {
-			route, found := findings[name]
-			var got []string
-			for _, decision := range route.Adjudications {
-				got = append(got, decision.Method+" "+decision.Category)
-			}
-			if !found || route.Class != ClassUnanswered || strings.Join(got, ", ") != want.decisions || route.Twin != want.twin {
-				t.Errorf("%s = %+v (a finding: %t), want unanswered with the decisions %q and the twin %q", name, route, found, want.decisions, want.twin)
-			}
-		})
-	}
 	answered := map[string]Route{}
 	for _, route := range report.Answered {
 		answered[route.Route] = route
+	}
+	none := func(method string) string { return method + " " + adjudicationNone }
+	cases := map[string]struct{ decisions, reason string }{
+		"GET /groups/:id/members":                                        {decisions: none("Groups.ListGroupMembers")},
+		"GET /projects/:id/members":                                      {decisions: none("ProjectMembers.ListProjectMembers")},
+		"GET /groups/:id/subgroups":                                      {decisions: none("Groups.ListSubGroups")},
+		"DELETE /groups/:id/ldap_group_links/:cn":                        {decisions: none("Groups.DeleteGroupLDAPLink")},
+		"GET /projects/:id/merge_requests/:merge_request_iid/changes":    {decisions: none("MergeRequests.GetMergeRequestChanges")},
+		"PUT /projects/:id/error_tracking/settings":                      {decisions: none("ErrorTracking.CreateErrorTrackingSettings")},
+		"GET /groups/:id/avatar":                                         {decisions: none("Groups.DownloadAvatar")},
+		"GET /groups/:id/export_relations/download":                      {decisions: none("GroupRelationsExport.ExportDownload")},
+		"GET /groups/:id/uploads/:upload_id":                             {decisions: none("GroupMarkdownUploads.DownloadGroupMarkdownUploadByID")},
+		"GET /groups/:id/uploads/:secret/:filename":                      {decisions: none("GroupMarkdownUploads.DownloadGroupMarkdownUploadBySecretAndFilename")},
+		"GET /projects/:id/uploads/:upload_id":                           {decisions: none("ProjectMarkdownUploads.DownloadProjectMarkdownUploadByID")},
+		"GET /projects/:id/uploads/:secret/:filename":                    {decisions: none("ProjectMarkdownUploads.DownloadProjectMarkdownUploadBySecretAndFilename")},
+		"GET /projects/:id/secure_files/:secure_file_id/download":        {decisions: none("SecureFiles.DownloadSecureFile")},
+		"GET /projects/:id/terraform/state/:name":                        {decisions: none("TerraformStates.DownloadLatest")},
+		"GET /projects/:id/terraform/state/:name/versions/:serial":       {decisions: none("TerraformStates.Download")},
+		"GET /projects/:id/repository/archive":                           {decisions: "Repositories.Archive " + adjudicationURLBuilt + " (carries), " + none("Repositories.StreamArchive")},
+		"POST /projects/:id/merge_requests/:merge_request_iid/approvals": {decisions: none("MergeRequestApprovals.ChangeApprovalConfiguration")},
+		"POST /projects/:id/vulnerabilities":                             {decisions: "ProjectVulnerabilities.CreateVulnerability COVERED_GRAPHQL"},
+		"DELETE /runners/managers":                                       {reason: "runner_token_auth"},
+		"POST /jobs/request":                                             {reason: "runner_token_auth"},
+		"GET /projects/:id/integrations":                                 {reason: "GET /projects/:id/services"},
+	}
+	for name, want := range cases {
+		t.Run(name, func(t *testing.T) {
+			route := answered[name]
+			var got []string
+			for _, decision := range route.Adjudications {
+				label := decision.Method + " " + decision.Category
+				if decision.Carries {
+					label += " (carries)"
+				}
+				got = append(got, label)
+			}
+			if route.Class != ClassDeclared || route.Category != categoryTracked || route.Issue == 0 ||
+				strings.Join(got, ", ") != want.decisions || !strings.Contains(route.Reason, want.reason) {
+				t.Errorf("%s = %+v, want it tracked by a family row whose reason names %q, with the decisions %q", name, route, want.reason, want.decisions)
+			}
+		})
 	}
 	inherited := map[string]struct {
 		category string
@@ -871,23 +986,24 @@ func TestRun_Repository_ReportsTheRoutesADecisionDoesNotCarryOnto(t *testing.T) 
 // the routes that skip the fine-grained check for ai_workflows_oauth_auth or
 // ai_workflows_token_auth. Their classes add the ai_workflows scope to the
 // api scope every API class allows and only authenticate the user, so a
-// user's token calls them and they are findings on v3.30.0 until the triage
-// answers them; the three whose handler checks the Duo flow's composite
-// identity are taken out by an exception that cites it.
+// user's token calls them and the fourteen no exception takes out are
+// tracked by the Duo domain's row on v3.30.0; the three whose handler checks
+// the Duo flow's composite identity are taken out by an exception that cites
+// it.
 func TestRun_Repository_HoldsTheDuoWorkflowRoutesToTheTokenThatCallsThem(t *testing.T) {
 	byRoute := map[string]Route{}
 	report := repositoryReport(t)
 	for _, route := range slices.Concat(report.Findings, report.Answered) {
 		byRoute[route.Route] = route
 	}
-	var composite, findings, other []string
+	var composite, tracked, other []string
 	for name, route := range byRoute {
 		switch {
 		case !strings.HasPrefix(route.SkipReason, "ai_workflows_"):
 		case route.Class == ClassSkip && route.Category == skipOtherCaller && strings.Contains(route.Reason, "verify_flow_composite_identity!"):
 			composite = append(composite, name)
-		case route.Class == ClassUnanswered:
-			findings = append(findings, name)
+		case route.Class == ClassDeclared && route.Category == categoryTracked && route.Issue == issueDuoRoutes:
+			tracked = append(tracked, name)
 		default:
 			other = append(other, name+" "+route.Class)
 		}
@@ -898,7 +1014,173 @@ func TestRun_Repository_HoldsTheDuoWorkflowRoutesToTheTokenThatCallsThem(t *test
 		"POST /ai/duo_workflows/tools/risk_classification/results",
 		"POST /projects/:id/merge_requests/:merge_request_iid/suggested_reviewers",
 	}
-	if !slices.Equal(composite, wantComposite) || len(findings) != 14 || len(other) != 0 {
-		t.Errorf("composite identity = %v, %d findings a user's token calls and %v otherwise, want %v, 14 and none", composite, len(findings), other, wantComposite)
+	if !slices.Equal(composite, wantComposite) || len(tracked) != 14 || len(other) != 0 {
+		t.Errorf("composite identity = %v, %d a user's token calls tracked by the Duo row and %v otherwise, want %v, 14 and none", composite, len(tracked), other, wantComposite)
+	}
+}
+
+// protocolRoots are the paths a client-protocol route sits under: a package
+// manager's registry at the instance, a group or a project, MLflow's API,
+// and the cache fill of the Maven virtual registry's downloads. Each is the
+// root of a client-protocol route, or it no longer describes the table.
+var protocolRoots = []string{
+	"/packages/", "/group/:id/-/packages/", "/groups/:id/-/packages/", "/projects/:id/packages/", "/projects/:id/ml/mlflow/",
+	"/virtual_registries/packages/maven/:id/*path/upload",
+}
+
+// conanReference is the path of a Conan v1 recipe reference on the
+// instance's remote, which a project's remote spells under /projects/:id.
+const conanReference = "/packages/conan/v1/conans/:package_name/:package_version/:package_username/:package_channel"
+
+// terraformModule is the path of a module in the instance's Terraform module
+// registry.
+const terraformModule = "/packages/terraform/modules/v1/:module_namespace/:module_name/:module_system"
+
+// protocolDownloads are the client-protocol routes whose summary says
+// download, each with what it serves in place of what a package or a model
+// version holds: the URL or the location a client fetches that content from,
+// or an index or a metadata document a client reads to find and resolve
+// packages. Any other client-protocol route whose summary says download is
+// astray, and an entry that names no such route answers nothing.
+var protocolDownloads = map[string]string{
+	"GET " + conanReference + "/download_urls":                                                "the URLs of a recipe's files",
+	"GET " + conanReference + "/packages/:conan_package_reference/download_urls":              "the URLs of a package's files",
+	"GET /projects/:id" + conanReference + "/download_urls":                                   "the URLs of a recipe's files",
+	"GET /projects/:id" + conanReference + "/packages/:conan_package_reference/download_urls": "the URLs of a package's files",
+	"GET " + terraformModule + "/download":                                                    "the location of a module's latest version",
+	"GET " + terraformModule + "/*module_version/download":                                    "the location of a module version",
+	"GET /projects/:id/ml/mlflow/api/2.0/mlflow/model-versions/get-download-uri":              "the URI of a model version's artifacts",
+	"GET /projects/:id/packages/helm/:channel/index.yaml":                                     "a channel's chart index",
+	"GET /projects/:id/packages/rpm/repodata/*file_name":                                      "the repository's metadata files",
+	"GET /projects/:id/packages/rubygems/:file_name":                                          "the spec indexes",
+	"GET /projects/:id/packages/rubygems/quick/Marshal.4.8/:file_name":                        "a gem version's marshaled gemspec",
+}
+
+// TestRun_Repository_AdjudicatesEveryRouteNoActionReaches fixes the triage of
+// the routes no action reaches on the pinned record (19.5.0) and client-go
+// v3.30.0. No route is left a finding: a REST route whose operation an
+// action does over GraphQL is covered-by-graphql, a package manager's or
+// MLflow's protocol is client-protocol, and the rest is tracked by the issue
+// of its domain, an administrator's, a GitLab.com and a tier's route among
+// them, under 32 issues: one for each of 30 domains of the catalog and one
+// for each of the two it does not hold yet, the virtual registries and
+// GitLab Duo. A download is tracked even where its protocol is
+// client-protocol: a client-protocol route serves an index, a metadata
+// document, the URL or the location of the content, or takes an upload, and
+// what a package or a model version holds is served by a tracked route, so
+// the client-protocol routes whose summary says download are the ones
+// protocolDownloads names. The fifteen public_endpoint routes are tracked,
+// and a route's reason says it is public exactly when it is. It is sensitive
+// to the version on purpose: the client-go bump and a re-pin move its counts,
+// and that change is the evidence the triage was run again.
+func TestRun_Repository_AdjudicatesEveryRouteNoActionReaches(t *testing.T) {
+	report := repositoryReport(t)
+	categories := map[string]int{}
+	issues := map[int]bool{}
+	var public, mislabeled []string
+	for _, route := range report.Answered {
+		if route.Class != ClassDeclared {
+			continue
+		}
+		categories[route.Category]++
+		if route.Issue > 0 {
+			issues[route.Issue] = true
+		}
+		isPublic := route.SkipReason == "public_endpoint"
+		if isPublic && route.Category == categoryTracked {
+			public = append(public, route.Route)
+		}
+		if isPublic != strings.HasSuffix(route.Reason, publicTail) {
+			mislabeled = append(mislabeled, route.Route)
+		}
+	}
+	want := map[string]int{categoryTracked: 534, categoryClientProtocol: 150, categoryCoveredByGraphQL: 49}
+	if !reflect.DeepEqual(categories, want) || len(issues) != 32 || !issues[issueVirtualRegistryRoutes] || !issues[issueDuoRoutes] {
+		t.Errorf("declared %v under %d issues; want %v under one issue for each of 30 catalog domains and of the virtual registries and GitLab Duo, which it does not hold yet", categories, len(issues), want)
+	}
+	if len(public) != 15 || len(mislabeled) != 0 {
+		t.Errorf("%d public_endpoint routes tracked, want 15; routes whose reason says they are public and they are not, or the reverse: %q", len(public), mislabeled)
+	}
+	if astray, unused := protocolProblems(report); len(astray) != 0 || len(unused) != 0 {
+		t.Errorf("client-protocol routes no protocol root holds or whose summary says download unlisted: %q; roots and listed downloads no client-protocol route answers: %q", astray, unused)
+	}
+}
+
+// protocolProblems holds the client-protocol routes of a report to
+// protocolRoots and protocolDownloads: astray are the routes no root holds
+// and those whose summary says download and the list does not name, unused
+// the roots and the listed downloads no client-protocol route answers.
+func protocolProblems(report Report) (astray, unused []string) {
+	roots := map[string]int{}
+	listed := map[string]bool{}
+	for _, route := range report.Answered {
+		if route.Class != ClassDeclared || route.Category != categoryClientProtocol {
+			continue
+		}
+		_, path, _ := strings.Cut(route.Route, " ")
+		under := false
+		for _, root := range protocolRoots {
+			if strings.HasPrefix(path, root) {
+				roots[root]++
+				under = true
+			}
+		}
+		says := strings.Contains(strings.ToLower(route.Summary), "download")
+		_, held := protocolDownloads[route.Route]
+		listed[route.Route] = says && held
+		if !under || (says && !held) {
+			astray = append(astray, route.Route+": "+route.Summary)
+		}
+	}
+	for _, root := range protocolRoots {
+		if roots[root] == 0 {
+			unused = append(unused, root)
+		}
+	}
+	for name := range protocolDownloads {
+		if !listed[name] {
+			unused = append(unused, name)
+		}
+	}
+	slices.Sort(unused)
+	return astray, unused
+}
+
+// TestRun_Repository_HoldsTheWorkItemRoutesToTheActionsThatDoTheirOperation
+// fixes the REST API GitLab serves for work items behind the
+// work_item_rest_api flag, under a group, a project and a namespace. The
+// list, the read, the creation, the update, the deletion and a child's
+// attachment and detachment are covered by the issue.work_item_* actions in
+// every scope. A group's work item's discussions, notes and children are
+// covered by the group.epic_* actions too, whose GraphQL reads any work item
+// of the group by its iid, whatever its type. The rest is tracked, the
+// resolution of a discussion among it.
+func TestRun_Repository_HoldsTheWorkItemRoutesToTheActionsThatDoTheirOperation(t *testing.T) {
+	report := repositoryReport(t)
+	got := map[string]map[string]int{}
+	var astray []string
+	for _, route := range report.Answered {
+		_, path, _ := strings.Cut(route.Route, " ")
+		scope, _, found := strings.Cut(strings.TrimPrefix(path, "/"), "/:id/-/work_items")
+		if !found {
+			continue
+		}
+		if got[scope] == nil {
+			got[scope] = map[string]int{}
+		}
+		got[scope][route.Category]++
+		for _, action := range route.Actions {
+			if !strings.HasPrefix(action, "issue.work_item_") && (scope != "groups" || !strings.HasPrefix(action, "group.epic_")) {
+				astray = append(astray, route.Route+" by "+action)
+			}
+		}
+	}
+	want := map[string]map[string]int{
+		"groups":     {categoryCoveredByGraphQL: 20, categoryTracked: 10},
+		"projects":   {categoryCoveredByGraphQL: 7, categoryTracked: 23},
+		"namespaces": {categoryCoveredByGraphQL: 7, categoryTracked: 23},
+	}
+	if !reflect.DeepEqual(got, want) || len(astray) != 0 {
+		t.Errorf("work item routes by scope and category = %v, want %v; covered by an action of another domain: %q", got, want, astray)
 	}
 }

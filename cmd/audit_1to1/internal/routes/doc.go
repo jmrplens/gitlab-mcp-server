@@ -67,7 +67,11 @@
 //     carry; COVERED_VARIANT and COVERED_RAW say this route is sent, so on a
 //     route no action reaches they are a contradiction, a finding; a method
 //     an action calls, an intentional skip and a method nothing decided do
-//     not carry either.
+//     not carry either. A COVERED_GENERIC or INTENTIONAL_SKIP_* decision on
+//     a route a tracked row answers is a problem of the tables: the row
+//     says an action is still to implement and the decision that none is
+//     needed, and an action still to implement is no method R-ACTION may
+//     settle.
 //  8. declared: a routeFamilies row answers it, with its category
 //     (client-protocol, covered-by-graphql or tracked), its reason and the
 //     number of routes it pins.
@@ -79,15 +83,38 @@
 //
 // # What it gates
 //
-// For now, the declarations alone: a family row that answers no route,
-// answers another number of routes than it pins, overlaps another row, lacks
-// what its category needs, or is client-protocol over a route client-go
-// sends; a skipReasons row no route carries or that lacks its category, and
-// a reason a route carries that no row holds; a skipExceptions row that
-// answers no route, gives no reason or excludes nothing; a graphqlActions
-// row that answers no route, names no action, or names one the catalog does
-// not hold or that sends no GraphQL; a slugRules row that answers nothing or
-// names an action the catalog does not hold. The findings are a report until
-// the triage adjudicates them. It reads the committed request record, so in
-// CI it runs beside R-GRANT under the FRESHNESS deferral.
+// Every finding, of any class: a route no action reaches is answered by a
+// rule, an inherited decision or a family row, so a re-pin that brings one,
+// or an action that stops sending one, fails the gate until the change that
+// causes it decides the route. And every declaration that no longer
+// describes the tree: a family row that answers no route, answers another
+// number of routes than it pins, overlaps another row, lacks what its
+// category needs, is client-protocol over a route client-go sends, or is
+// tracked over a route a COVERED_GENERIC or INTENTIONAL_SKIP_* decision
+// settles; a
+// skipReasons row no route carries or that lacks its category, and a reason
+// a route carries that no row holds; a skipExceptions row that answers no
+// route, gives no reason or excludes nothing; a graphqlActions row that
+// answers no route, names no action, or names one the catalog does not hold
+// or that sends no GraphQL; a slugRules row that answers nothing or names an
+// action the catalog does not hold. It reads the committed request record,
+// so in CI it runs beside R-GRANT under the FRESHNESS deferral.
+//
+// # How the family rows are decided
+//
+// A REST route whose operation an action of the catalog does over GraphQL is
+// covered-by-graphql, with that action: a group's work item's discussions,
+// notes and children among them, which the group.epic_* actions read by the
+// work item's iid whatever its type. The protocol a package manager's or
+// MLflow's own client speaks is client-protocol, except a download: a route
+// that serves what a package or a model version holds (one of its files, its
+// archive, its source or a file inside it, such as a Go module's go.mod) is
+// tracked, so the action that downloads it stays in view, while an index or
+// a metadata document a client reads to find and resolve packages (Debian's
+// Release and Packages files, Helm's index.yaml, RPM's repodata, RubyGems'
+// spec indexes and gemspecs), and the URL or the location of the content,
+// are the protocol's. Everything else GitLab serves to a caller with a token
+// is tracked by the issue of its domain, an administrator's, a GitLab.com
+// and a tier's route among them, and so is a public_endpoint route, which a
+// token reaches as any other.
 package routes

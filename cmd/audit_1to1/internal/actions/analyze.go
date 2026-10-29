@@ -18,7 +18,6 @@ import (
 const (
 	coveredGraphQLEpicDsc = "COVERED_GRAPHQL. Epicdiscussions pkg"
 	coveredGraphQLEpicNts = "COVERED_GRAPHQL. Epicnotes pkg"
-	skipBinaryBytes       = "INTENTIONAL_SKIP_BINARY. File bytes"
 	coveredGraphQLEpics   = "COVERED_GRAPHQL. Epics pkg"
 	coveredGenericDeprPrj = "COVERED_GENERIC. Deprecated; project variant"
 )
@@ -111,12 +110,16 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 // method of a client-go service interface, called in place or handed on as a
 // method value, so it misses: RAW REST handlers (client.GL().NewRequest+Do with
 // a path string), GraphQL handlers (ADR-0006), and capabilities covered by a
-// superseding/generic variant. It also can't know which endpoints are
-// INTENTIONALLY not exposed (binary file transfer, CI-job-token self-lookup).
-// Each entry carries a category+rationale. Key = "<Service>.<Method>" (service
-// name without the ServiceInterface suffix). Methods NOT listed here and still
-// uncovered are the genuine new-tool backlog, and an entry whose method a
-// handler reaches is reported as stale.
+// superseding/generic variant. It also can't know which endpoints a personal
+// access token cannot use (a CI job token's self-lookup). Each entry carries
+// a category+rationale. Key = "<Service>.<Method>" (service name without the
+// ServiceInterface suffix). Methods NOT listed here and still uncovered are
+// the genuine new-tool backlog, and an entry whose method a handler reaches
+// is reported as stale. A route no action sends is not settled here: a
+// download, a route another one covers only generically and a deprecated
+// write GitLab still serves are actions to implement, which R-ROUTE tracks,
+// and its gate refuses a tracked route whose method this table decides
+// COVERED_GENERIC or INTENTIONAL_SKIP_*.
 var acceptedMissingMethods = map[string]string{
 	// COVERED_VARIANT — an alternative SDK binding for an endpoint another
 	// covered method already drives; one action per endpoint is the rule.
@@ -164,11 +167,6 @@ var acceptedMissingMethods = map[string]string{
 
 	// COVERED_GENERIC — superseding/generic variant covers the same capability.
 	"MergeRequests.GetMergeRequestApprovals":                      "COVERED_GENERIC. Mrapprovals config/state",
-	"MergeRequests.GetMergeRequestChanges":                        "COVERED_GENERIC. gitlab_mr_changes_get (ListMergeRequestDiffs)",
-	"ProjectMembers.ListProjectMembers":                           "COVERED_GENERIC. gitlab_project_members_list (ListAllProjectMembers)",
-	"Groups.ListGroupMembers":                                     "COVERED_GENERIC. gitlab_group_members_list (ListAllGroupMembers)",
-	"Groups.ListSubGroups":                                        "COVERED_GENERIC. gitlab_subgroups_list (ListDescendantGroups)",
-	"Groups.DeleteGroupLDAPLink":                                  "COVERED_GENERIC. Groupldap ForProvider/WithCNOrFilter variants",
 	"PersonalAccessTokens.RotatePersonalAccessTokenByID":          "COVERED_GENERIC. gitlab_personal_access_token_rotate",
 	"ExternalStatusChecks.CreateExternalStatusCheck":              coveredGenericDeprPrj,
 	"ExternalStatusChecks.DeleteExternalStatusCheck":              coveredGenericDeprPrj,
@@ -177,28 +175,9 @@ var acceptedMissingMethods = map[string]string{
 	"ExternalStatusChecks.SetExternalStatusCheckStatus":           "COVERED_GENERIC. Deprecated; SetProjectMergeRequestExternalStatusCheckStatus",
 	"ExternalStatusChecks.UpdateExternalStatusCheck":              coveredGenericDeprPrj,
 	"ErrorTracking.EnableDisableErrorTracking":                    "COVERED_GENERIC. Deprecated; gitlab_enable_disable_error_tracking",
-	"ErrorTracking.CreateErrorTrackingSettings":                   "COVERED_GENERIC. Same settings resource as UpdateErrorTrackingSettings",
-
-	// INTENTIONAL_SKIP_BINARY — raw file/archive/state bytes, unsuitable for JSON tools.
-	"GroupMarkdownUploads.DownloadGroupMarkdownUploadByID":                    skipBinaryBytes,
-	"GroupMarkdownUploads.DownloadGroupMarkdownUploadBySecretAndFilename":     skipBinaryBytes,
-	"ProjectMarkdownUploads.DownloadProjectMarkdownUploadByID":                skipBinaryBytes,
-	"ProjectMarkdownUploads.DownloadProjectMarkdownUploadBySecretAndFilename": skipBinaryBytes,
-	"GroupRelationsExport.ExportDownload":                                     "INTENTIONAL_SKIP_BINARY. Export archive bytes",
-	"SecureFiles.DownloadSecureFile":                                          "INTENTIONAL_SKIP_BINARY. Secure file bytes",
-	"TerraformStates.Download":                                                "INTENTIONAL_SKIP_BINARY. Tfstate bytes",
-	"TerraformStates.DownloadLatest":                                          "INTENTIONAL_SKIP_BINARY. Tfstate bytes",
-	"Groups.DownloadAvatar":                                                   "INTENTIONAL_SKIP_BINARY. Group avatar image bytes (*bytes.Reader); upload IS exposed",
 
 	// INTENTIONAL_SKIP_OTHER
-	"Jobs.GetJobTokensJob":       "INTENTIONAL_SKIP_OTHER. CI-job-token self-lookup; not usable with a PAT",
-	"Repositories.StreamArchive": "INTENTIONAL_SKIP_OTHER. Streaming dup of Repositories.Archive (gitlab_repository_archive)",
-	// This used to read "COVERED_RAW. gitlab_mr_approval_config", and it was
-	// the paper trail behind twenty phantom output fields: that action calls
-	// the GET at this path and never the POST, but the claim of coverage made
-	// the POST's 24-field response look like the shape the action should
-	// publish. Set approval requirements through the approval rules instead.
-	"MergeRequestApprovals.ChangeApprovalConfiguration": "INTENTIONAL_SKIP_OTHER. Deprecated in GitLab 16.0; approval rules supersede it (gitlab_mr_approval_rule_create/update)",
+	"Jobs.GetJobTokensJob": "INTENTIONAL_SKIP_OTHER. CI-job-token self-lookup; not usable with a PAT",
 }
 
 // AcceptedMissingMethods returns the adjudications acceptedMissingMethods

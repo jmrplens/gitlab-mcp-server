@@ -5,6 +5,7 @@ package routes
 
 import (
 	"net/http"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -145,6 +146,37 @@ func TestDeclares_TwoRowsOverOneRoute_IsAProblemAndTheFirstAnswers(t *testing.T)
 	}
 }
 
+// TestDeclares_ATrackedRowOverARouteADecisionSettles_IsAProblem verifies a
+// tracked row that answers a route whose client-go method is decided
+// COVERED_GENERIC or INTENTIONAL_SKIP_*, which say the route needs no action
+// of its own, is reported against that decision, and that neither a decision
+// that settles nothing under a tracked row nor a settling one under a row of
+// another category is. The row answers the route all the same.
+func TestDeclares_ATrackedRowOverARouteADecisionSettles_IsAProblem(t *testing.T) {
+	settled := func(category string) []string {
+		return []string{"family GET /a tracks GET /a, and A.Get is decided " + category + ", which says the route needs no action of its own: an action still to implement is no method acceptedMissingMethods settles"}
+	}
+	cases := []struct {
+		name, category, decision string
+		want                     []string
+	}{
+		{name: "tracked over COVERED_GENERIC", category: categoryTracked, decision: "COVERED_GENERIC", want: settled("COVERED_GENERIC")},
+		{name: "tracked over INTENTIONAL_SKIP_BINARY", category: categoryTracked, decision: "INTENTIONAL_SKIP_BINARY", want: settled("INTENTIONAL_SKIP_BINARY")},
+		{name: "tracked over INTENTIONAL_SKIP_OTHER", category: categoryTracked, decision: "INTENTIONAL_SKIP_OTHER", want: settled("INTENTIONAL_SKIP_OTHER")},
+		{name: "tracked over a method nothing decides", category: categoryTracked, decision: adjudicationNone},
+		{name: "covered by graphql over COVERED_GENERIC", category: categoryCoveredByGraphQL, decision: "COVERED_GENERIC"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			j := newJudge(judgeInput{families: []routeFamily{{Methods: []string{http.MethodGet}, Pattern: "/a", Category: tc.category, Reason: "r", Routes: 1}}})
+			verdict := &Route{Route: "GET /a", Adjudications: []Adjudication{{Method: "A.Get", Category: tc.decision}}}
+			if !j.declares(http.MethodGet, "/a", verdict) || verdict.Class != ClassDeclared || !slices.Equal(j.problems, tc.want) {
+				t.Errorf("declares: %+v, problems %q; want the route declared and the problems %q", verdict, j.problems, tc.want)
+			}
+		})
+	}
+}
+
 // TestFamilyProblems_AClientProtocolRow_IsRefusedOnlyOverARouteClientGoSends
 // verifies a client-protocol row is refused for each route it answers that
 // client-go sends, and for no other, and that a row of another category is
@@ -161,6 +193,44 @@ func TestFamilyProblems_AClientProtocolRow_IsRefusedOnlyOverARouteClientGoSends(
 	tracked := routeFamily{Pattern: "/packages/npm/**", Category: categoryTracked, Reason: "pending", Issue: 1, Routes: 2}
 	if got := j.familyProblems(tracked, answered); len(got) != 0 {
 		t.Errorf("familyProblems of a tracked row = %q, want none", got)
+	}
+}
+
+// TestRowBuilders_EachCategory_BuildsTheRowItNames verifies the constructors
+// the table is written with: a tracked row with its issue, a download over
+// GET alone with the tail that says why it is tracked, a public_endpoint row
+// with its own tail, a client-protocol row whose reason names the protocol,
+// and a covered-by-graphql row with its actions. on lists the verbs, none
+// standing for every verb.
+func TestRowBuilders_EachCategory_BuildsTheRowItNames(t *testing.T) {
+	cases := map[string]struct{ got, want routeFamily }{
+		"tracked": {
+			got:  tracked(7, 2, on(http.MethodGet, http.MethodPost), "/a/**", "why"),
+			want: routeFamily{Methods: []string{http.MethodGet, http.MethodPost}, Pattern: "/a/**", Category: categoryTracked, Reason: "why", Issue: 7, Routes: 2},
+		},
+		"download": {
+			got:  download(7, 1, "/a/*/file", "downloads a file"),
+			want: routeFamily{Methods: []string{http.MethodGet}, Pattern: "/a/*/file", Category: categoryTracked, Reason: "downloads a file" + downloadTail, Issue: 7, Routes: 1},
+		},
+		"public endpoint": {
+			got:  publicEndpoint(7, 1, on(), "/a", "reads an index"),
+			want: routeFamily{Pattern: "/a", Category: categoryTracked, Reason: "reads an index" + publicTail, Issue: 7, Routes: 1},
+		},
+		"client protocol": {
+			got:  protocol("npm", 3, on(http.MethodPut), "/b/**", "the dist-tags"),
+			want: routeFamily{Methods: []string{http.MethodPut}, Pattern: "/b/**", Category: categoryClientProtocol, Reason: "the npm protocol: the dist-tags", Routes: 3},
+		},
+		"covered by graphql": {
+			got:  overGraphQL([]string{"epic.list"}, 1, on(http.MethodGet), "/c", "lists them"),
+			want: routeFamily{Methods: []string{http.MethodGet}, Pattern: "/c", Category: categoryCoveredByGraphQL, Reason: "lists them", Actions: []string{"epic.list"}, Routes: 1},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if !reflect.DeepEqual(tc.got, tc.want) {
+				t.Errorf("built %+v, want %+v", tc.got, tc.want)
+			}
+		})
 	}
 }
 

@@ -49,6 +49,17 @@ var contradictingAdjudications = map[string]bool{
 	adjudicationRaw:     true,
 }
 
+// settlingAdjudications are the decisions of acceptedMissingMethods that say
+// a route needs no action of its own: another route covers the capability,
+// or the route is left out on purpose. Neither carries onto a route no
+// action reaches, and a tracked row over such a route says the opposite, an
+// action still to implement, so the two are a problem of the tables.
+var settlingAdjudications = map[string]bool{
+	"COVERED_GENERIC":         true,
+	"INTENTIONAL_SKIP_BINARY": true,
+	"INTENTIONAL_SKIP_OTHER":  true,
+}
+
 // graphqlActions names, for each client-go method decided COVERED_GRAPHQL
 // whose route no action reaches, the actions of the catalog that do the same
 // operation over GraphQL, keyed "Service.Method". The decision says the

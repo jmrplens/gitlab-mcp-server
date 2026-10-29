@@ -2011,11 +2011,12 @@ audit-1to1-params-report:
 ## it or a reason none does (R-ROUTE): outside the API, a skip reason the closed table
 ## excludes, a slug the caller names, a deprecated /services/ alias, a decision about its
 ## client-go methods that holds without a request, or a family row of
-## cmd/audit_1to1/internal/routes/families.go. Anything else is a finding, reported with
-## the client-go methods that send it. It FAILS on a declaration that no longer describes
-## the tree: a family row that answers no route, another number than it pins, a route
-## another row answers, or that lacks what its category needs; a skip row no route
-## carries, or a reason a route carries that no row holds; a skip exception or a GraphQL
+## cmd/audit_1to1/internal/routes/family_table.go. Anything else is a finding, reported
+## with the client-go methods that send it, and it FAILS on a finding as it does on a
+## declaration that no longer describes the tree: a family row that answers no route,
+## another number than it pins, a route another row answers, or that lacks what its
+## category needs; a skip row no route carries, or a reason a route carries that no row
+## holds; a skip exception or a GraphQL
 ## actions row that answers no route; a slug rule that answers nothing. It reads the
 ## committed request record, the live record and the pinned client-go; CI runs it under
 ## the FRESHNESS deferral with R-GRANT.

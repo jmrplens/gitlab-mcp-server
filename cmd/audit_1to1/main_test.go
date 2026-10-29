@@ -517,14 +517,14 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 			wantErr: "boom",
 		},
 		{
-			name: "routes_gate_reports_stale_declarations", scope: scopeRoutes,
+			name: "routes_gate_reports_unanswered_routes_and_stale_declarations", scope: scopeRoutes,
 			arrange: func(t *testing.T) {
 				t.Helper()
 				original := routesRun
 				t.Cleanup(func() { routesRun = original })
 				routesRun = func(string, routes.Options) ([]byte, bool, error) { return []byte("{}\n"), false, nil }
 			},
-			wantErr: "route declarations that no longer describe the tree", wantReport: true,
+			wantErr: "live routes nothing answers, or route declarations that no longer describe the tree", wantReport: true,
 		},
 		{
 			name: "routes_scope_fails", scope: scopeRoutes,

@@ -157,14 +157,30 @@ type Summary struct {
 	SkipReasonsReached []string `json:"skip_reasons_reached"`
 }
 
-// clean reports whether the gate passes: no declaration that no longer
-// describes the tree. A finding is a report, not a failure, until the
-// triage adjudicates them.
-func (s *Summary) clean() bool { return s.Stale == 0 }
+// clean reports whether the gate passes: no route left a finding, of any
+// class findingClasses names, and no declaration that no longer describes
+// the tree. A route no action reaches is answered by a rule, an inherited
+// decision or a family row, so a re-pin that brings one, or an action that
+// stops sending one, fails the gate until the change that causes it decides
+// the route.
+func (s *Summary) clean() bool {
+	counters := s.counters()
+	for class := range findingClasses {
+		if *counters[class] != 0 {
+			return false
+		}
+	}
+	return s.Stale == 0
+}
 
 // count adds one route of class to the summary.
 func (s *Summary) count(class string) {
-	counters := map[string]*int{
+	*s.counters()[class]++
+}
+
+// counters names the counter of each class.
+func (s *Summary) counters() map[string]*int {
+	return map[string]*int{
 		ClassReached:             &s.Reached,
 		ClassOutsideAPI:          &s.OutsideAPI,
 		ClassSkip:                &s.Skipped,
@@ -178,7 +194,6 @@ func (s *Summary) count(class string) {
 		ClassInternalNotExcluded: &s.InternalNotExcluded,
 		ClassContradicted:        &s.Contradicted,
 	}
-	*counters[class]++
 }
 
 // Options is what a run of this scope needs beyond the tree.

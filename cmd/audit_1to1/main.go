@@ -153,7 +153,7 @@ func gateFailure(scopes []string) string {
 	case slices.Equal(scopes, []string{scopeParams}):
 		return "audit_1to1: param declarations that answer nothing (see report)"
 	case slices.Equal(scopes, []string{scopeRoutes}):
-		return "audit_1to1: route declarations that no longer describe the tree (see report)"
+		return "audit_1to1: live routes nothing answers, or route declarations that no longer describe the tree (see report)"
 	default:
 		return "audit_1to1: SDK parity findings (see report)"
 	}
