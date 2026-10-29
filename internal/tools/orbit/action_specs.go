@@ -73,14 +73,13 @@ type orbitInput struct {
 }
 
 // queryInput is what orbit.query says about its parameters: its guidance, and
-// an override of the query property, which is GQL text or a JSON object that a
-// Go field typed any reflects as no type at all, and whose one example is a
-// GQL statement, which reflection has no way to offer.
+// an override of the query property whose one example is a GQL statement,
+// which reflection has no way to offer.
 func queryInput() orbitInput {
 	return orbitInput{
 		guidance: queryGuidance(),
 		overrides: []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("query", map[string]any{"type": []any{"string", "object"}, "examples": []any{queryExampleGQL}}),
+			toolutil.SchemaPropertyOverride("query", map[string]any{"examples": []any{queryExampleGQL}}),
 		},
 	}
 }
@@ -92,9 +91,9 @@ func queryInput() orbitInput {
 // 2026-10-17: an unbounded node is refused with "add filters or node_ids to at
 // least one node" whatever LIMIT says, a relationship type without its colon is
 // a variable, OR and the other openCypher clauses the frontend does not take
-// are refused, the undirected arrow is for neighbors alone, and the object
-// that was the JSON DSL is answered compile_error while GitLab.com reads GQL
-// (issue 1414).
+// are refused, the undirected arrow is for neighbors alone, and the JSON DSL
+// GitLab.com removed on 2026-10-27 (gitlab-org/gitlab!261947) is answered
+// compile_error when it is sent as text (issue 1414).
 func queryGuidance() map[string]toolutil.ParameterGuidance {
 	return map[string]toolutil.ParameterGuidance{
 		"query": {
@@ -107,7 +106,7 @@ func queryGuidance() map[string]toolutil.ParameterGuidance {
 				"Between labeled nodes the arrow is -> or <-. The undirected -- is for the neighbors of one node, whose far end has a variable and nothing else: MATCH (p:Project {id: 278964})--(n) RETURN n.",
 				"A shortest path is MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path with both ends bounded and its relationship types named, since a wildcard -[*1..3]-> is refused. An aggregate is aliased to be sorted by, with one sort key: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC.",
 				"A page is SKIP and LIMIT: SKIP 0 to 10000, LIMIT 1 to 1000, as in ORDER BY p.id SKIP 20 LIMIT 20. PAGE and AFTER are refused.",
-				"A query sent as a JSON object is the JSON DSL GitLab.com no longer reads, and is answered compile_error while it reads GQL. Send the query as a string.",
+				"A query written as a JSON object is the JSON DSL GitLab.com removed, and is answered compile_error at line 1, column 1. Send a GQL statement.",
 			},
 			ExampleBinding: queryExampleGQL,
 		},

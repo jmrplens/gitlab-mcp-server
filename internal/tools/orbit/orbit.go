@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -116,19 +115,22 @@ type DSLOutput struct {
 // The Query field is GQL text, the read-only subset of openCypher 9 syntax the
 // Knowledge Graph compiles, which is the language GitLab.com reads every query
 // in since it turned orbit_gql_queries on for everyone at 01:06 UTC on
-// 2026-10-15 (gitlab-org/gitlab!256465 has Rails send the language the flag
-// selects, and the compiler refuses the other). [DSL] describes it from what
-// GitLab.com publishes. This server checks only that a query was given and
-// that it is text or a JSON object: GitLab compiles it and refuses what it
+// 2026-10-15. [DSL] describes it from what GitLab.com publishes. This server
+// checks only that a query was given: GitLab compiles it and refuses what it
 // cannot run with a message naming the line and column of the fault, which
 // reaches the caller (toolutil's Workhorse query refusal). Rules written here
 // would only go stale, which is what issue 1031 was.
 //
-// A query given as a JSON object is forwarded as written rather than refused
-// here, so it keeps working if GitLab.com turns the flag back off before
-// gitlab-org/gitlab!261947 removes the JSON DSL. While GitLab.com reads GQL it
-// answers such a query with compile_error, and [wrapQueryErr] then says that
-// GitLab.com reads queries as GQL, with an example (issue 1414).
+// The query is text and nothing else, as GitLab declares it (`requires :query,
+// type: String` in ee/lib/api/orbit/data.rb). gitlab-org/gitlab!261947, merged
+// on 2026-10-27, removed the orbit_gql_queries flag and the JSON query DSL with
+// it, and GitLab.com has since refused a query sent as a JSON object with 400
+// {"error":"query is invalid"} before the Knowledge Graph sees it (measured
+// 2026-10-29). This input took an object until then, forwarded so it would work
+// if GitLab.com turned the flag back off (issue 1414); with the flag gone the
+// object is an input GitLab refuses whatever it holds, so it is no longer
+// taken. A JSON query written as text is still sent, since it is text, and
+// [wrapQueryErr] answers GitLab's compile_error for it with an example of GQL.
 //
 // The statement, as the query_graph command describes it on GitLab.com
 // (read 2026-10-29):
@@ -157,7 +159,7 @@ type DSLOutput struct {
 //	MATCH (j:Job)-[:IN_PROJECT]->(p:Project) WHERE p.full_path STARTS WITH 'jmrp-oss/orbit-fixtures/' RETURN p, count(j) AS job_count ORDER BY job_count DESC
 //	MATCH (p:Project {full_path: 'jmrp-oss/orbit-fixtures/kg-fixtures'})--(n) RETURN n
 type QueryInput struct {
-	Query any `json:"query" jsonschema:"Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [SKIP n] [LIMIT n]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1; LIMIT is not a filter. A relationship type follows a colon, -[:IN_PROJECT]->, and a repeat is bounded, *1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups; alias an aggregate and sort by the alias: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. SKIP takes 0 to 10000 and LIMIT 1 to 1000. orbit.schema lists the entities, properties and relationship types a query names. A JSON object is forwarded as written, and GitLab.com refuses it while it reads queries as GQL. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
+	Query string `json:"query" jsonschema:"Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [SKIP n] [LIMIT n]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1; LIMIT is not a filter. A relationship type follows a colon, -[:IN_PROJECT]->, and a repeat is bounded, *1..3 at most. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups; alias an aggregate and sort by the alias: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. SKIP takes 0 to 10000 and LIMIT 1 to 1000. orbit.schema lists the entities, properties and relationship types a query names. The JSON query DSL GitLab.com read before is gone. GitLab refuses a query it cannot compile with a message naming the fault.,required"`
 	// ResponseFormat selects the answer's shape. POST /orbit/query declares
 	// a third value beside raw and llm, which is why this input carries its
 	// own field rather than [ResponseFormatInput] (`values: %w[raw llm gql]`
@@ -437,12 +439,11 @@ type GraphStatusOutput struct {
 //
 // Endpoint: POST /api/v4/orbit/query, one of the Orbit routes GitLab.com still
 // serves after the GA removals. The query is forwarded as the caller wrote it,
-// once [encodeQuery] has checked there is one and that it is text or an object:
-// GQL text reaches GitLab as the body's query string, {"query": "<GQL text>"},
-// and an object as that object. See [QueryInput] for the language. GitLab
-// judges everything else, and a query it refuses comes back as a 400 whose
-// message says what to change, with [wrapQueryErr]'s hint pointing at the two
-// actions that describe the language and the graph.
+// once it is known not to be blank: GQL text reaches GitLab as the body's
+// query string, {"query": "<GQL text>"}. See [QueryInput] for the language.
+// GitLab judges everything else, and a query it refuses comes back as a 400
+// whose message says what to change, with [wrapQueryErr]'s hint pointing at
+// the two actions that describe the language and the graph.
 //
 // GitLab infers the query type from the statement and answers it beside the
 // result: traversal, aggregation, neighbors or path_finding.
@@ -460,22 +461,21 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 	if err := ctx.Err(); err != nil {
 		return QueryOutput{}, err
 	}
-	query, err := encodeQuery(input.Query)
-	if err != nil {
-		return QueryOutput{}, err
+	if strings.TrimSpace(input.Query) == "" {
+		return QueryOutput{}, toolutil.ErrFieldRequired("query")
 	}
 	format, err := queryResponseFormat(input.ResponseFormat)
 	if err != nil {
 		return QueryOutput{}, err
 	}
-	request := &gl.OrbitQueryRequest{Query: query, ResponseFormat: format}
+	request := &gl.OrbitQueryRequest{Query: encodeQuery(input.Query), ResponseFormat: format}
 	if *format != gl.OrbitResponseFormatRaw {
 		var text bytes.Buffer
 		_, err = client.GL().Orbit.QueryRaw(request, &text, gl.WithContext(ctx))
 		if err != nil {
 			return QueryOutput{}, wrapQueryErr(err, input.Query)
 		}
-		return QueryOutput{FormattedText: text.String(), QueryType: queryType(input.Query)}, nil
+		return QueryOutput{FormattedText: text.String()}, nil
 	}
 
 	result, _, err := client.GL().Orbit.Query(request, gl.WithContext(ctx))
@@ -515,51 +515,17 @@ func queryResponseFormat(format string) (*gl.OrbitResponseFormatValue, error) {
 	return value, nil
 }
 
-// errQueryShape is what [encodeQuery] answers for a query that is neither
-// text nor an object, which no language GitLab reads is written as.
-var errQueryShape = errors.New("query must be GQL text or a JSON object")
-
-// encodeQuery checks the things about a query GitLab cannot answer for
-// itself, that one was given and that it is GQL text or a JSON object that
-// encodes, and returns it encoded: text as a JSON string, which is the body
-// GitLab.com compiles as GQL, and an object as itself. Everything else about it
-// is GitLab's to judge, and GitLab's own refusal names the fault it finds: the
-// rules this used to hold a query to were written for an older shape of the
-// JSON DSL and refused the one neighbors query GitLab ran (issue 1031). An
-// object is not refused here although GitLab.com reads queries as GQL, so a
-// caller still gets the JSON DSL if GitLab.com turns GQL back off (issue 1414).
-func encodeQuery(query any) (json.RawMessage, error) {
-	switch typed := query.(type) {
-	case nil:
-		return nil, toolutil.ErrFieldRequired("query")
-	case string:
-		if strings.TrimSpace(typed) == "" {
-			return nil, toolutil.ErrFieldRequired("query")
-		}
-	case map[string]any:
-		// An object is encoded below as it is, like the text.
-	default:
-		return nil, fmt.Errorf("%w, not %T", errQueryShape, query)
-	}
-	// Text always encodes; an object built in Go rather than decoded from
-	// JSON may hold a value that does not, which is refused here since
-	// nothing could then be sent.
-	buf, err := json.Marshal(query)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", errQueryShape, err)
-	}
-	return json.RawMessage(buf), nil
-}
-
-// queryType returns the query_type field of an Orbit query written as a JSON
-// object, or "" for GQL text, a missing field or one of another type. It
-// labels the llm answer, which carries no query type of its own; GitLab
-// infers the type of a GQL query from the statement and says it in the raw
-// answer.
-func queryType(query any) string {
-	object, _ := query.(map[string]any)
-	queryTypeValue, _ := object["query_type"].(string)
-	return queryTypeValue
+// encodeQuery returns the query as the JSON string the body carries, which
+// GitLab.com compiles as GQL. Everything about the text is GitLab's to judge,
+// and GitLab's own refusal names the fault it finds: the rules this used to
+// hold a query to were written for an older shape of the JSON DSL and refused
+// the one neighbors query GitLab ran (issue 1031).
+func encodeQuery(query string) json.RawMessage {
+	// json.Marshal of a string cannot fail: invalid UTF-8 is replaced rather
+	// than refused. There is therefore no error here to report and no branch
+	// worth carrying for one.
+	encoded, _ := json.Marshal(query) //nolint:errchkjson // see above
+	return encoded
 }
 
 // orbitQueryOp is the operation a [Query] failure is reported under.
@@ -573,47 +539,39 @@ const orbitQueryOp = "orbit_query"
 // no coverage block to place it in, so it reads as a mutant no test reaches.
 const queryRefusedHint = "correct the query where GitLab's message points. orbit.dsl serves the query language and orbit.schema the entities, properties and relationship types it accepts"
 
-// queryObjectRefusedHint follows a query sent as a JSON object that GitLab
+// queryObjectRefusedHint follows a query written as a JSON object that GitLab
 // refused for its language rather than for what it asked.
-const queryObjectRefusedHint = "GitLab.com reads a query as GQL text, not as a JSON object. Send the query as a string, such as MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. orbit.dsl serves the language and orbit.schema the entities, properties and relationship types it accepts"
+const queryObjectRefusedHint = "GitLab.com reads a query as GQL text, not as a JSON object. Send a GQL statement, such as MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. orbit.dsl serves the language and orbit.schema the entities, properties and relationship types it accepts"
 
-// queryObjectRefusals are the two refusals GitLab answers a query written as
-// a JSON object with when it reads no JSON. While GitLab.com reads queries as
-// GQL the Knowledge Graph parses the object's text as GQL and answers
+// queryObjectRefusal is the refusal GitLab answers a query written as a JSON
+// object with, sent as text: the Knowledge Graph parses it as GQL and answers
 // compile_error, "schema violation: Orbit query syntax at line 1, column 1:
-// expected Statement" (measured 2026-10-17); once gitlab-org/gitlab!261947
-// removes the JSON DSL, Grape refuses the object as "query is invalid" before
-// the Knowledge Graph sees it. compile_error alone would not do: a JSON DSL
-// query GitLab compiled and refused for what it asked carries that code too,
-// and would be told to send GQL to an instance that reads JSON.
-var queryObjectRefusals = []string{"Orbit query syntax", "query is invalid"}
+// expected Statement" (measured 2026-10-17 and again 2026-10-29). compile_error
+// alone would not do: a GQL query refused for what it asked carries that code
+// too, and would be told to send GQL when it was GQL.
+const queryObjectRefusal = "Orbit query syntax"
 
 // wrapQueryErr classifies a failed [Query]. A 400 is a query GitLab refused
 // to run: one written as a JSON object and refused for its language is
 // answered by [queryObjectRefusedHint], and any other by [queryRefusedHint].
 // Anything else is classified the way every Orbit failure is, by
 // [wrapOrbitErr].
-func wrapQueryErr(err error, query any) error {
+func wrapQueryErr(err error, query string) error {
 	if !toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 		return wrapOrbitErr(orbitQueryOp, err)
 	}
-	if writtenAsObject(query) && toolutil.ContainsAny(err, queryObjectRefusals...) {
+	if writtenAsObject(query) && toolutil.ContainsAny(err, queryObjectRefusal) {
 		return toolutil.WrapErrWithHint(orbitQueryOp, err, queryObjectRefusedHint)
 	}
 	return toolutil.WrapErrWithHint(orbitQueryOp, err, queryRefusedHint)
 }
 
-// writtenAsObject reports whether a query was written as a JSON object: an
-// object, or text that opens one, which a client that serializes nested
-// objects sends in place of the object and GitLab.com refuses the same way
-// (measured 2026-10-17). No GQL statement opens with a brace, since one
-// starts with MATCH or CALL.
-func writtenAsObject(query any) bool {
-	if text, isText := query.(string); isText {
-		return strings.HasPrefix(strings.TrimSpace(text), "{")
-	}
-	_, isObject := query.(map[string]any)
-	return isObject
+// writtenAsObject reports whether a query is text that opens a JSON object,
+// which a client that serializes a nested object sends in place of the
+// object, and a caller still writing the JSON query DSL sends as its query. No
+// GQL statement opens with a brace, since one starts with MATCH or CALL.
+func writtenAsObject(query string) bool {
+	return strings.HasPrefix(strings.TrimSpace(query), "{")
 }
 
 // schemaResponseFormat normalizes the SchemaInput format fields. The

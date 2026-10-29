@@ -150,20 +150,11 @@ func TestQuery_NoResponseFormat_DefaultsToRaw(t *testing.T) {
 // node, labeled where it appears and bounded by its id.
 const projectByIDGQL = "MATCH (p:Project {id: 1}) RETURN p.id, p.full_path"
 
-// projectByIDObject is the same query written as an object in version 12 of
-// the JSON DSL, which GitLab.com read until 2026-10-15 and which [Query] still
-// forwards as written.
-func projectByIDObject() map[string]any {
-	return map[string]any{
-		"query_type": "traversal",
-		"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}},
-	}
-}
-
-// projectByIDObjectText is that object written as JSON text, which a client
-// that serializes a nested object sends as a string, and which GitLab.com
-// refused on 2026-10-17 with the same "Orbit query syntax at line 1, column 1"
-// it answers the object with.
+// projectByIDObjectText is the same query written in version 12 of the JSON
+// DSL, which GitLab.com read until 2026-10-15 and removed on 2026-10-27, as the
+// JSON text a client that serializes a nested object sends, and which
+// GitLab.com refused on 2026-10-17 and 2026-10-29 with "Orbit query syntax at
+// line 1, column 1".
 const projectByIDObjectText = `{"query_type":"traversal","nodes":[{"id":"p","entity":"Project","node_ids":[1]}]}`
 
 // TestQuery_EveryQueryShape_InGQL_ReachesTheWire verifies that a query of each
@@ -213,149 +204,40 @@ func TestQuery_EveryQueryShape_InGQL_ReachesTheWire(t *testing.T) {
 	}
 }
 
-// TestQuery_JSONObject_IsForwardedAsWritten verifies that a query written as
-// an object, in the version 12 shape of the JSON DSL GitLab.com answered 200
-// to on 2026-10-05, is still forwarded to GitLab exactly as the caller wrote
-// it rather than refused here: a filtered traversal, an aggregation, a
-// neighbors query and a path. GitLab.com reads GQL now and refuses it, but an
-// object keeps working if GitLab.com turns GQL back off before
-// gitlab-org/gitlab!261947 removes the JSON DSL (issue 1414). The neighbors
-// case is the shape the validator this package once carried refused before
-// sending anything (issue 1031).
-func TestQuery_JSONObject_IsForwardedAsWritten(t *testing.T) {
-	tests := []struct {
-		name  string
-		query map[string]any
-	}{
-		{
-			name: "traversal",
-			query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{
-					map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"starts_with": "plens1/"}}, "columns": []any{"id", "full_path"}},
-				},
-				"limit": 3,
-			},
-		},
-		{
-			name: "aggregation",
-			query: map[string]any{
-				"query_type": "aggregation",
-				"nodes": []any{
-					map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"starts_with": "plens1/"}}},
-					map[string]any{"id": "mr", "entity": "MergeRequest"},
-				},
-				"relationships":    []any{map[string]any{"type": "IN_PROJECT", "from": "mr", "to": "p"}},
-				"group_by":         []any{"p"},
-				"aggregations":     []any{map[string]any{"count": "mr", "as": "mr_count"}},
-				"aggregation_sort": "-mr_count",
-			},
-		},
-		{
-			name: "neighbors",
-			query: map[string]any{
-				"query_type": "neighbors",
-				"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}},
-				"neighbors":  map[string]any{"direction": "both"},
-				"limit":      5,
-			},
-		},
-		{
-			name: "path_finding",
-			query: map[string]any{
-				"query_type": "path_finding",
-				"nodes": []any{
-					map[string]any{"id": "u", "entity": "User", "node_ids": []any{7}},
-					map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}},
-				},
-				"path": map[string]any{"type": "shortest", "from": "u", "to": "p", "max_depth": 3, "rel_types": []any{"*"}},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			wantQuery, marshalErr := json.Marshal(tt.query)
-			if marshalErr != nil {
-				t.Fatalf("marshal query: %v", marshalErr)
-			}
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodPost)
-				testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
-				var got map[string]json.RawMessage
-				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-					t.Errorf("decode request: %v", err)
-					http.Error(w, "decode request", http.StatusInternalServerError)
-					return
-				}
-				if string(got["query"]) != string(wantQuery) {
-					t.Errorf("query body = %s, want %s", got["query"], wantQuery)
-					http.Error(w, "query body differs from the caller's", http.StatusInternalServerError)
-					return
-				}
-				testutil.RespondJSON(w, http.StatusOK, `{"result":[],"query_type":"`+tt.name+`","row_count":0}`)
-			}))
-
-			out, err := Query(context.Background(), client, QueryInput{Query: tt.query})
-			if err != nil {
-				t.Fatalf("Query() error: %v", err)
-			}
-			if out.QueryType != tt.name {
-				t.Fatalf("Query() query type = %q, want %q", out.QueryType, tt.name)
-			}
-		})
-	}
-}
-
 // TestQuery_LLMResponseFormat_UsesRawResponse verifies that [Query] uses the
 // raw Orbit API path for LLM/text responses instead of JSON decoding, sending
 // the query as it was written. The llm answer carries no query type of its
-// own: a query written as an object is labeled with the query_type it names,
-// and a GQL one, whose type GitLab infers from the statement, with none.
+// own, and GitLab infers the type of a GQL query from the statement, so the
+// output names none.
 func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
-	cases := []struct {
-		name      string
-		query     any
-		wantQuery any
-		wantType  string
-	}{
-		{name: "GQL text", query: projectByIDGQL, wantQuery: projectByIDGQL, wantType: ""},
-		{name: "a JSON object", query: projectByIDObject(), wantQuery: map[string]any{
-			"query_type": "traversal",
-			"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{float64(1)}}},
-		}, wantType: "traversal"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodPost)
-				testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
-				var got map[string]any
-				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-					t.Errorf("decode request: %v", err)
-					http.Error(w, "decode request", http.StatusInternalServerError)
-					return
-				}
-				if want := map[string]any{"query": tc.wantQuery, "response_format": "llm"}; !reflect.DeepEqual(got, want) {
-					t.Errorf("request body = %v, want %v", got, want)
-					http.Error(w, "request body differs", http.StatusInternalServerError)
-					return
-				}
-				w.Header().Set("Content-Type", "text/plain")
-				_, _ = w.Write([]byte("@header\nProject(name: gitlab)\n"))
-			}))
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+		var got map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, "decode request", http.StatusInternalServerError)
+			return
+		}
+		if want := map[string]any{"query": projectByIDGQL, "response_format": "llm"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("request body = %v, want %v", got, want)
+			http.Error(w, "request body differs", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("@header\nProject(name: gitlab)\n"))
+	}))
 
-			out, err := Query(context.Background(), client, QueryInput{
-				Query:          tc.query,
-				ResponseFormat: "llm",
-			})
-			if err != nil {
-				t.Fatalf("Query() error: %v", err)
-			}
-			want := QueryOutput{FormattedText: "@header\nProject(name: gitlab)\n", QueryType: tc.wantType}
-			if !reflect.DeepEqual(out, want) {
-				t.Fatalf("Query() = %+v, want %+v", out, want)
-			}
-		})
+	out, err := Query(context.Background(), client, QueryInput{
+		Query:          projectByIDGQL,
+		ResponseFormat: "llm",
+	})
+	if err != nil {
+		t.Fatalf("Query() error: %v", err)
+	}
+	want := QueryOutput{FormattedText: "@header\nProject(name: gitlab)\n"}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("Query() = %+v, want %+v", out, want)
 	}
 }
 
@@ -468,26 +350,19 @@ func TestOrbitReads_GQLResponseFormat_IsRefusedWhereGitLabDeclaresNone(t *testin
 
 // TestQuery_AnyShape_IsLeftForGitLabToJudge verifies that the handler holds a
 // query to nothing but being one: GQL text GitLab refuses (an unbounded node,
-// OR, PAGE, a syntax error), objects in the older shape of the JSON DSL this
-// package taught, an unbounded object, one with an unknown or missing
-// query_type, and an empty object all reach GitLab exactly as the caller
-// wrote them (issue 1031).
+// OR, PAGE, a syntax error) and a query written in the JSON DSL GitLab.com
+// removed, sent as text, all reach GitLab exactly as the caller wrote them
+// (issue 1031).
 func TestQuery_AnyShape_IsLeftForGitLabToJudge(t *testing.T) {
 	tests := []struct {
 		name  string
-		query any
+		query string
 	}{
 		{name: "an unbounded GQL node", query: "MATCH (p:Project) RETURN p LIMIT 5"},
 		{name: "GQL with OR", query: "MATCH (p:Project) WHERE p.id = 1 OR p.id = 2 RETURN p.id"},
 		{name: "GQL with PAGE", query: "MATCH (p:Project {id: 1}) RETURN p.id PAGE 10"},
 		{name: "GQL that does not parse", query: "MATCH (p:Project {id: 1}) RETURN p.id GROUP BY p.id"},
-		{name: "a top-level node", query: map[string]any{"query_type": "traversal", "node": map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}},
-		{name: "an op and value filter", query: map[string]any{"query_type": "traversal", "nodes": []any{map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"op": "starts_with", "value": "plens1/"}}}}}},
-		{name: "a node named inside neighbors", query: map[string]any{"query_type": "neighbors", "nodes": []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}, "neighbors": map[string]any{"node": "p"}}},
-		{name: "an unbounded node", query: map[string]any{"query_type": "traversal", "nodes": []any{map[string]any{"id": "p", "entity": "Project"}}}},
-		{name: "an unknown query_type", query: map[string]any{"query_type": "search", "nodes": []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}}},
-		{name: "no query_type", query: map[string]any{"nodes": []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}}}}},
-		{name: "an empty object", query: map[string]any{}},
+		{name: "the JSON DSL written as text", query: projectByIDObjectText},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -568,32 +443,27 @@ func TestQuery_GitLabRefusal_ReachesTheCallerWithTheQueryHint(t *testing.T) {
 }
 
 // TestQuery_JSONObjectRefusedForItsLanguage_SaysGitLabReadsGQL verifies what
-// a caller who sent an object is told: GitLab.com's two refusals of a query
-// written as a JSON object get the hint that it reads GQL text, with an
-// example, and an object refused for what it asked, or GQL text refused for
-// its syntax, keep the hint that points at the fault (issue 1414).
+// a caller who wrote the query as a JSON object, sent as text, is told:
+// GitLab.com's refusal of it for its language gets the hint that it reads GQL
+// text, with an example, while the same text refused for anything else, and
+// GQL text refused for its syntax, keep the hint that points at the fault
+// (issue 1414).
 func TestQuery_JSONObjectRefusedForItsLanguage_SaysGitLabReadsGQL(t *testing.T) {
 	const (
 		gqlSyntax  = `{"code":"compile_error","message":"schema violation: Orbit query syntax at line 1, column 1: expected Statement"}`
-		grape      = `{"error":"query is invalid"}`
 		jsonSchema = `{"code":"compile_error","message":"schema violation: \"nodes\" is a required property"}`
 	)
 	cases := []struct {
 		name   string
-		query  any
+		query  string
 		format string
 		body   string
 		hint   string
 	}{
-		{name: "an object GitLab.com parsed as GQL", query: projectByIDObject(), body: gqlSyntax, hint: queryObjectRefusedHint},
-		{name: "an object GitLab.com parsed as GQL, llm", query: projectByIDObject(), format: "llm", body: gqlSyntax, hint: queryObjectRefusedHint},
-		{name: "an object Grape refused", query: projectByIDObject(), body: grape, hint: queryObjectRefusedHint},
-		{name: "an object refused as the JSON DSL", query: projectByIDObject(), body: jsonSchema, hint: queryRefusedHint},
 		{name: "GQL text refused for its syntax", query: "MATCH (p:Project {id: 1}) RETURN", body: gqlSyntax, hint: queryRefusedHint},
 		{name: "an object written as JSON text, parsed as GQL", query: projectByIDObjectText, body: gqlSyntax, hint: queryObjectRefusedHint},
 		{name: "an object written as JSON text after white space, llm", query: "\n  " + projectByIDObjectText, format: "llm", body: gqlSyntax, hint: queryObjectRefusedHint},
-		{name: "an object written as JSON text Grape refused", query: projectByIDObjectText, body: grape, hint: queryObjectRefusedHint},
-		{name: "an object written as JSON text refused as the JSON DSL", query: projectByIDObjectText, body: jsonSchema, hint: queryRefusedHint},
+		{name: "an object written as JSON text refused for something else", query: projectByIDObjectText, body: jsonSchema, hint: queryRefusedHint},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -610,53 +480,25 @@ func TestQuery_JSONObjectRefusedForItsLanguage_SaysGitLabReadsGQL(t *testing.T) 
 	}
 }
 
-// TestQuery_NeitherTextNorObject_IsRefusedBeforeSending verifies the one
-// thing [Query] judges about a query: that there is one, as text that is not
-// blank or as an object.
-func TestQuery_NeitherTextNorObject_IsRefusedBeforeSending(t *testing.T) {
+// TestQuery_BlankQuery_IsRefusedBeforeSending verifies the one thing [Query]
+// judges about a query: that there is one, as text that is not blank.
+func TestQuery_BlankQuery_IsRefusedBeforeSending(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("handler should not be called for a query that is not one: %s %s", r.Method, r.URL.Path)
 		http.Error(w, "unexpected request", http.StatusInternalServerError)
 	}))
 	cases := []struct {
 		name  string
-		query any
-		want  string
+		query string
 	}{
-		{name: "a number", query: float64(42), want: "query must be GQL text or a JSON object, not float64"},
-		{name: "a list", query: []any{"MATCH (p:Project {id: 1}) RETURN p.id"}, want: "query must be GQL text or a JSON object, not []interface {}"},
-		{name: "a boolean", query: true, want: "query must be GQL text or a JSON object, not bool"},
-		{name: "an empty string", query: "", want: "query is required"},
-		{name: "blank text", query: " \n\t", want: "query is required"},
-		{name: "no query", query: nil, want: "query is required"},
+		{name: "an empty string", query: ""},
+		{name: "blank text", query: " \n\t"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Query(context.Background(), client, QueryInput{Query: tc.query})
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("Query() error = %v, want %q", err, tc.want)
-			}
-			if tc.want != "query is required" && !errors.Is(err, errQueryShape) {
-				t.Fatalf("Query() error = %v, want it to wrap errQueryShape", err)
-			}
-		})
-	}
-}
-
-// TestQueryType_NonString_ReturnsEmpty verifies that queryType labels only a
-// query written as an object naming its query_type as a string.
-func TestQueryType_NonString_ReturnsEmpty(t *testing.T) {
-	cases := []struct {
-		name  string
-		query any
-	}{
-		{name: "a number for query_type", query: map[string]any{"query_type": 42}},
-		{name: "GQL text", query: projectByIDGQL},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := queryType(tc.query); got != "" {
-				t.Fatalf("queryType() = %q, want empty", got)
+			if err == nil || !strings.Contains(err.Error(), "query is required") {
+				t.Fatalf("Query() error = %v, want %q", err, "query is required")
 			}
 		})
 	}
@@ -698,13 +540,6 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 		}},
 		{name: "empty query", want: "query is required", call: func() error {
 			_, err := Query(context.Background(), client, QueryInput{})
-			return err
-		}},
-		{name: "unmarshalable query", want: "query must be GQL text or a JSON object: json: unsupported type: func()", call: func() error {
-			// A func value cannot be JSON-encoded, which is one of the two
-			// things about a query GitLab cannot be asked to judge, since
-			// nothing can be sent.
-			_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{"bad": func() {}}})
 			return err
 		}},
 		{name: "invalid schema format", want: "use raw or llm", call: func() error {

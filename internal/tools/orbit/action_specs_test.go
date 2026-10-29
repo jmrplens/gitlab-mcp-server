@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"unicode/utf8"
 
@@ -183,7 +184,7 @@ func TestOrbit_QuerySpec_TeachesGQL(t *testing.T) {
 		{name: "description refuses OR", text: description, want: "never OR"},
 		{name: "description gives an aggregation", text: description, want: "count(mr) AS mr_count"},
 		{name: "description names where the vocabulary comes from", text: description, want: "orbit.schema lists the entities, properties and relationship types"},
-		{name: "description says what an object gets", text: description, want: "GitLab.com refuses it while it reads queries as GQL"},
+		{name: "description says the JSON DSL is gone", text: description, want: "The JSON query DSL GitLab.com read before is gone"},
 		{name: "description keeps the parameter required", text: description, want: ",required"},
 		{name: "value source names GQL", text: guidance.ValueSource, want: "GQL text"},
 		{name: "value source points at the language", text: guidance.ValueSource, want: "orbit.dsl"},
@@ -197,7 +198,7 @@ func TestOrbit_QuerySpec_TeachesGQL(t *testing.T) {
 		{name: "confusions negate a list", text: confusions, want: "NOT p.visibility_level IN [...]"},
 		{name: "confusions keep -- for neighbors", text: confusions, want: "The undirected -- is for the neighbors of one node"},
 		{name: "confusions give a shortest path", text: confusions, want: "ANY SHORTEST"},
-		{name: "confusions say what an object gets", text: confusions, want: "answered compile_error while it reads GQL"},
+		{name: "confusions say what an object gets", text: confusions, want: "the JSON DSL GitLab.com removed, and is answered compile_error at line 1, column 1"},
 	}
 	for _, tt := range served {
 		t.Run(tt.name, func(t *testing.T) {
@@ -318,20 +319,19 @@ func TestOrbit_DSLSpec_DescribesGQL(t *testing.T) {
 	}
 }
 
-// TestOrbit_QuerySchema_TakesTextOrAnObjectOnEverySurface verifies that the
-// query parameter is served as a string or an object on every surface that
-// carries a schema: the individual tool, and the meta tool's per-action schema
-// in its full and compact modes. A Go field typed any reflects as no type at
-// all, which the compact mode would serve as an empty schema, and the type
-// override is what says both forms are taken; a schema typed object alone, as
-// it was until issue 1414, refuses the GQL text GitLab.com reads before the
-// handler sees it.
-func TestOrbit_QuerySchema_TakesTextOrAnObjectOnEverySurface(t *testing.T) {
+// TestOrbit_QuerySchema_TakesTextOnEverySurface verifies that the query
+// parameter is served as a string on every surface that carries a schema: the
+// individual tool, and the meta tool's per-action schema in its full and
+// compact modes, with the GQL example where the mode keeps examples. GitLab's
+// query route declares the query a String, and refuses an object as "query is
+// invalid" since gitlab-org/gitlab!261947 removed the JSON DSL on 2026-10-27;
+// the schema took a string or an object until then (issue 1414).
+func TestOrbit_QuerySchema_TakesTextOnEverySurface(t *testing.T) {
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.com", "tok", false)
 	if err != nil {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
-	want := []any{"string", "object"}
+	want := "string"
 
 	tool, err := toolutil.IndividualToolFromSpecs(ActionSpecs(client), "gitlab_orbit_query", toolutil.IndividualToolProjectionOptions{Description: "Run an Orbit query."})
 	if err != nil {
@@ -406,6 +406,27 @@ func TestOrbit_MetaFullSchema_AcceptsGQLText(t *testing.T) {
 	}
 }
 
+// TestOrbit_MetaFullSchema_RefusesAJSONObject verifies the other half: a query
+// written as a JSON object, the JSON DSL GitLab.com removed on 2026-10-27, is
+// refused before anything is sent, since the query parameter is a string,
+// rather than reaching GitLab to be answered "query is invalid".
+func TestOrbit_MetaFullSchema_RefusesAJSONObject(t *testing.T) {
+	restore := toolutil.SetMetaParamSchemaModeScoped(toolutil.MetaParamSchemaFull)
+	t.Cleanup(restore)
+	session := newOrbitMetaSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("handler should not be called for a query written as an object: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
+	}))
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "gitlab_orbit",
+		Arguments: map[string]any{"action": "query", "params": map[string]any{"query": map[string]any{"query_type": "traversal"}}},
+	})
+	if err == nil && !result.IsError {
+		t.Fatalf("gitlab_orbit query with a JSON object = %#v, want it refused", result.Content)
+	}
+}
+
 // TestOrbit_DSLRoute_ReadsTheQueryCommandFromTheMCPEndpoint verifies the
 // orbit.dsl route as a caller meets it: GitLab.com answers 404 at the two
 // REST routes this action read before (GET /orbit/schema/dsl since issue 1414,
@@ -439,18 +460,21 @@ func TestOrbit_DSLRoute_ReadsTheQueryCommandFromTheMCPEndpoint(t *testing.T) {
 
 // TestOrbit_QueryRoute_SendsGQLTextAndExplainsARefusedObject verifies the
 // orbit.query route as a caller meets it: GQL text passed as the query
-// argument reaches GitLab as the body's query string, and a JSON object that
-// GitLab.com refuses for its language is answered with the hint that it reads
-// a query as GQL text.
+// argument reaches GitLab as the body's query string, a JSON query written as
+// text, which GitLab.com refuses for its language, is answered with the hint
+// that it reads a query as GQL text, and a JSON object is refused before
+// anything is sent, since the query is text.
 func TestOrbit_QueryRoute_SendsGQLTextAndExplainsARefusedObject(t *testing.T) {
+	var sent atomic.Int32
 	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sent.Add(1)
 		var got struct {
-			Query any `json:"query"`
+			Query string `json:"query"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
-		if _, isObject := got.Query.(map[string]any); isObject {
+		if got.Query == projectByIDObjectText {
 			testutil.RespondJSON(w, http.StatusBadRequest, `{"code":"compile_error","message":"schema violation: Orbit query syntax at line 1, column 1: expected Statement"}`)
 			return
 		}
@@ -464,9 +488,15 @@ func TestOrbit_QueryRoute_SendsGQLTextAndExplainsARefusedObject(t *testing.T) {
 	if _, err := route.Handler(t.Context(), map[string]any{"query": projectByIDGQL}); err != nil {
 		t.Fatalf("Route.Handler() with GQL text error: %v", err)
 	}
-	_, err := route.Handler(t.Context(), map[string]any{"query": projectByIDObject()})
+	_, err := route.Handler(t.Context(), map[string]any{"query": projectByIDObjectText})
 	if err == nil || !strings.Contains(err.Error(), "GitLab.com reads a query as GQL text, not as a JSON object") {
-		t.Fatalf("Route.Handler() with an object error = %v, want the hint that GitLab.com reads GQL", err)
+		t.Fatalf("Route.Handler() with JSON text error = %v, want the hint that GitLab.com reads GQL", err)
+	}
+	if _, err = route.Handler(t.Context(), map[string]any{"query": map[string]any{"query_type": "traversal"}}); err == nil {
+		t.Fatal("Route.Handler() with a JSON object error = nil, want it refused")
+	}
+	if got := sent.Load(); got != 2 {
+		t.Fatalf("requests sent = %d, want 2: the GQL text and the JSON text, and none for the object", got)
 	}
 }
 

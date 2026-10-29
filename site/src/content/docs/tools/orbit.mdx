@@ -8,7 +8,7 @@ faq:
   - q: "What query language does Orbit use?"
     a: "GQL, a read-only language based on openCypher 9, which GitLab.com compiles every query in since 2026-10-15. The `query` action takes one statement as text: `MATCH` a pattern, optionally filtered by `WHERE`, then `RETURN` properties, whole nodes or aggregates, optionally followed by `ORDER BY`, `SKIP` and `LIMIT`. Every node carries a label, and at least one is bounded by its id or a literal property. A relationship type follows a colon, `-[:IN_PROJECT]->`, the undirected `--` reaches every neighbor of one node, and `MATCH path = ANY SHORTEST (a)-[:IN_PROJECT*1..3]->(b) RETURN path` finds a path over the relationship types it names. GitLab infers the query type from the statement and answers one it cannot compile with a message naming the fault, which the server passes on."
   - q: "What happens to a query written as a JSON object?"
-    a: "Until 2026-10-15 GitLab.com read queries in a JSON query DSL, a `query_type` and a `nodes` list. The server still forwards an object as written, so it keeps working if GitLab.com turns GQL off again, but GitLab.com parses it as GQL and refuses it with `400 compile_error`. The error then says that GitLab.com reads a query as GQL text and gives an example, so the caller can send the same query as a statement."
+    a: "Until 2026-10-15 GitLab.com read queries in a JSON query DSL, a `query_type` and a `nodes` list, and on 2026-10-27 it removed that DSL: its query route takes the query as text and refuses an object with `400 query is invalid`. Since 3.4.0 the `query` parameter is a string, so an object is refused before anything is sent. A JSON query written as text still reaches GitLab.com, which parses it as GQL and refuses it with `400 compile_error`; the error then says that GitLab.com reads a query as GQL text and gives an example, so the caller can send the same query as a statement."
   - q: "Is Orbit available on self-managed GitLab?"
     a: "No. Orbit is available **only** when GitLab MCP Server connects to `https://gitlab.com`. Self-managed GitLab instances do not register Orbit tools, even on a Premium or Ultimate tier, because the underlying experimental Knowledge Graph API is hosted on GitLab.com. There is no flag that adds Orbit to a self-managed connection."
   - q: "What license and configuration does Orbit require?"
@@ -103,7 +103,7 @@ GitLab infers what kind of query it is from the statement and says so beside the
 
 ### When GitLab refuses a query
 
-The server checks only that a query was given, as text or as an object; GitLab judges the rest. A query it cannot compile is answered with `400` and a message naming the fault, which reaches the model in the error text with a suggestion to correct the query from `dsl` and `schema`:
+The server checks only that a query was given, as text; GitLab judges the rest. A query it cannot compile is answered with `400` and a message naming the fault, which reaches the model in the error text with a suggestion to correct the query from `dsl` and `schema`:
 
 ```text
 orbit_query: bad request: check your input parameters ({code: compile_error}, {message: schema violation: add filters or node_ids to at least one node}). Suggestion: correct the query where GitLab's message points. orbit.dsl serves the query language and orbit.schema the entities, properties and relationship types it accepts: POST https://gitlab.com/api/v4/orbit/query: 400 ...
@@ -111,10 +111,10 @@ orbit_query: bad request: check your input parameters ({code: compile_error}, {m
 
 A syntax error is answered with its line and column and what GitLab expected there, and a name GitLab does not know with every name it does know, so the correction is usually in the message itself.
 
-A query written as a JSON object, the JSON DSL GitLab.com read until 2026-10-15, is still forwarded as written, so it keeps working if GitLab.com turns GQL off again. While GitLab.com reads GQL it parses the object as GQL and refuses it, and the error says what to send instead. The same object sent as JSON text gets the same answer:
+The JSON DSL GitLab.com read until 2026-10-15 is gone: GitLab.com removed it on 2026-10-27, and its query route takes the query as text. The `query` parameter is therefore a string, and an object is refused before anything is sent. A JSON query written as text still reaches GitLab.com, which parses it as GQL and refuses it, and the error says what to send instead:
 
 ```text
-orbit_query: bad request: check your input parameters ({code: compile_error}, {message: schema violation: Orbit query syntax at line 1, column 1: expected Statement ...}). Suggestion: GitLab.com reads a query as GQL text, not as a JSON object. Send the query as a string, such as MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. orbit.dsl serves the language and orbit.schema the entities, properties and relationship types it accepts: POST https://gitlab.com/api/v4/orbit/query: 400 ...
+orbit_query: bad request: check your input parameters ({code: compile_error}, {message: schema violation: Orbit query syntax at line 1, column 1: expected Statement ...}). Suggestion: GitLab.com reads a query as GQL text, not as a JSON object. Send a GQL statement, such as MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1. orbit.dsl serves the language and orbit.schema the entities, properties and relationship types it accepts: POST https://gitlab.com/api/v4/orbit/query: 400 ...
 ```
 
 ### Discover → query workflow
@@ -305,7 +305,7 @@ Returns the query language GitLab.com compiles queries in, GQL, as GitLab.com pu
 
 ### `query`: Execute a Knowledge Graph query
 
-Runs a read-only Knowledge Graph query. The `query` parameter is a GQL statement sent as text, in the language `dsl` describes, naming entities, properties and relationship types `schema` lists. A JSON object is forwarded as written, and refused by GitLab.com while it reads GQL. GitLab judges the query and answers one it cannot run with a message naming the fault, which the server passes on. Supports `response_format`: `raw` (structured JSON, the default), `llm` (compact text) or `gql` (the result as a graph pattern table, text like `llm`).
+Runs a read-only Knowledge Graph query. The `query` parameter is a GQL statement sent as text, in the language `dsl` describes, naming entities, properties and relationship types `schema` lists. GitLab judges the query and answers one it cannot run with a message naming the fault, which the server passes on. Supports `response_format`: `raw` (structured JSON, the default), `llm` (compact text) or `gql` (the result as a graph pattern table, text like `llm`).
 
 **Example:** See above.
 
@@ -323,6 +323,7 @@ The six action IDs, tool names and parameters are the ones of earlier releases. 
 - `schema`: `schema_version`, each domain's `description`, and each node's `incoming_edges` and `outgoing_edges`, which the edges list carries pair by pair. Nodes are typed now, with `primary_key`, `label_field` and `display` added.
 - `graph_status`: `formatted_text`, each item's `state`, and the last run's `last_started_at`, `last_duration_ms` and `last_error`. Added: `enabled`, `enabled_at`, `not_indexed`, `total` and the areas of `indexing`.
 - `tools`: each tool's `trusted` flag added.
+- `query`: the `query` parameter is a string. It took a JSON object as well, the JSON DSL GitLab.com removed on 27 October 2026, which GitLab.com refuses whatever it holds.
 
 ## How do I discover query schemas?
 

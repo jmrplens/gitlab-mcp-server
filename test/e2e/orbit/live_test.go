@@ -64,9 +64,9 @@
 // and LIMIT (issue 1527), and a shortest path must name its relationship types
 // (issue 1528). A query GitLab cannot compile fails its subtest by name
 // ([liveQuery]), and TestOrbitLiveGitLabCom_DSL fails when GitLab.com stops
-// describing the query command as GQL (issue 1414). A query written as a
-// JSON object, the JSON DSL this suite used until then, is refused, and a
-// subtest holds what a caller is told about it.
+// describing the query command as GQL (issue 1414). A query written in the
+// JSON DSL this suite used until then, which GitLab.com removed on
+// 2026-10-27, is refused, and a subtest holds what a caller is told about it.
 //
 // No project, user or namespace id is written down: each is found by its
 // path in the fixture namespace, since re-provisioning the fixtures gives
@@ -533,25 +533,30 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client, names
 		"MATCH path = ANY SHORTEST (mr:MergeRequest {source_branch: '"+fixtureBranch+"'})-[:IN_PROJECT*1..2]->"+
 			"(p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'}) RETURN path"))
 
-	summarize(t, "Query_as_a_JSON_object_is_refused_with_the_GQL_hint", func(ctx context.Context) (any, error) {
-		// The JSON DSL this suite and orbit.query taught until issue 1414. It
-		// reaches GitLab as written, and GitLab.com, reading GQL, answers
-		// compile_error; the caller is told GitLab.com reads a query as GQL
-		// text, with an example. The account is held by its code and by this
-		// server's hint, never by GitLab's prose, which is the GQL parser's
-		// wording rather than Workhorse's contract; the summary carries the
-		// prose to the run's log instead.
-		_, err := orbit.Query(ctx, client, orbit.QueryInput{
-			Query: map[string]any{
-				"query_type": "traversal",
-				"nodes": []any{map[string]any{
-					"id": "p", "entity": "Project",
-					"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
-				}},
-			},
+	summarize(t, "Query_as_JSON_DSL_text_is_refused_with_the_GQL_hint", func(ctx context.Context) (any, error) {
+		// The JSON DSL this suite and orbit.query taught until issue 1414,
+		// which gitlab-org/gitlab!261947 removed on 2026-10-27, written as the
+		// text a client that serializes a nested object sends. orbit.query
+		// takes text alone since then, so it reaches GitLab as written, and
+		// GitLab.com parses it as GQL and answers compile_error; the caller is
+		// told GitLab.com reads a query as GQL text, with an example. The
+		// account is held by its code and by this server's hint, never by
+		// GitLab's prose, which is the GQL parser's wording rather than
+		// Workhorse's contract; the summary carries the prose to the run's log
+		// instead.
+		dsl, err := json.Marshal(map[string]any{
+			"query_type": "traversal",
+			"nodes": []any{map[string]any{
+				"id": "p", "entity": "Project",
+				"filters": map[string]any{"full_path": projectPath(namespace, kgFixturesProjectPath)},
+			}},
 		})
+		if err != nil {
+			return nil, err
+		}
+		_, err = orbit.Query(ctx, client, orbit.QueryInput{Query: string(dsl)})
 		if err == nil {
-			return nil, errors.New("GitLab.com ran a query written as a JSON object, which it stopped reading on 2026-10-15: read orbit.dsl, GitLab.com may have turned GQL off again")
+			return nil, errors.New("GitLab.com ran a query written in the JSON DSL, which it removed on 2026-10-27: read orbit.dsl")
 		}
 		for _, want := range []string{"{code: compile_error}", "GitLab.com reads a query as GQL text, not as a JSON object"} {
 			if !strings.Contains(err.Error(), want) {

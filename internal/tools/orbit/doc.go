@@ -33,16 +33,16 @@
 // Reference: https://docs.gitlab.com/api/orbit/
 //
 // The Query handler forwards a query as the caller wrote it, checking only
-// that one was given as GQL text or a JSON object. GQL, the read-only
-// openCypher 9 based language, is what GitLab.com compiles every query in
-// since it turned orbit_gql_queries on for everyone on 2026-10-15, and [DSL]
-// describes it from the query_graph command GitLab.com publishes; the route
-// that served the JSON query DSL before, GET /api/v4/orbit/schema/dsl, answers
-// 404 since then, and nothing here asks it (issue 1414). An object is the
-// JSON DSL, still forwarded rather than refused so it works if GitLab.com
-// turns GQL back off, and answered with a hint that GitLab.com reads GQL when
-// GitLab refuses it for its language. The language changes during the Orbit
-// beta: GitLab compiles each query and refuses what it cannot run with a
-// message naming the fault, which reaches the caller rather than being
-// replaced by rules written here, which went stale once already (issue 1031).
+// that one was given. GQL, the read-only openCypher 9 based language, is what
+// GitLab.com compiles every query in since it turned orbit_gql_queries on for
+// everyone on 2026-10-15, and [DSL] describes it from the query_graph command
+// GitLab.com publishes; the route that served the JSON query DSL before, GET
+// /api/v4/orbit/schema/dsl, answers 404 since then, and nothing here asks it
+// (issue 1414). gitlab-org/gitlab!261947 removed the flag and the JSON DSL
+// with it on 2026-10-27, and GitLab's query route takes the query as text, so
+// the handler takes text alone; a JSON query written as text is answered with
+// a hint that GitLab.com reads GQL. The language keeps changing: GitLab
+// compiles each query and refuses what it cannot run with a message naming
+// the fault, which reaches the caller rather than being replaced by rules
+// written here, which went stale once already (issue 1031).
 package orbit
