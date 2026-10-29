@@ -957,27 +957,41 @@ func liveLLMSchema(ctx context.Context, client *gitlabclient.Client, input orbit
 	return fmt.Sprintf("formatted_text bytes=%d", len(out.FormattedText)), nil
 }
 
-// TestOrbitLiveGitLabCom_DetectTier_IsPaidWhereOrbitIsServed holds the tier
-// detection to GitLab.com's own answer (issue 1224). GitLab.com serves Orbit
-// only to a member, at Reporter or higher, of a group whose top-level group's
-// plan carries the orbit feature, which GitlabSubscriptions::Features files
-// under Premium, so a token GitLab.com serves Orbit to belongs to a paid group
-// and the server must resolve it to Premium or higher whether or not it
-// administers that group. Before issue 1224 the maintainer's token, a Developer
-// of a subgroup of a licensed group, was served Orbit and resolved Free. A
-// token GitLab.com does not serve Orbit to proves nothing about the tier, and
-// the test says so and skips. It needs no fixture namespace, and reads only:
-// the tier probe sends GET /license, GET /namespaces and one GraphQL query per
-// page of top-level groups.
-func TestOrbitLiveGitLabCom_DetectTier_IsPaidWhereOrbitIsServed(t *testing.T) {
+// TestOrbitLiveGitLabCom_DetectTier_IsAtLeastTheFixtureGroupsPlan holds the
+// tier detection to GitLab.com's own answer (issue 1224): the server resolves
+// a token to at least the tier of the plan GitLab.com reports for a top-level
+// group the token reaches, here the fixture namespace's top-level group, whose
+// plan GET /namespaces/:id reports to a token that administers it (jmrp-oss
+// read opensource, an Ultimate plan, on 2026-10-26). Orbit takes no part in
+// it. Until Orbit's general availability this test took a token GitLab.com
+// served Orbit to for a member of a paid group; since 2026-10-29 GitLab.com
+// serves Orbit to a top-level group with the orbit_promo add-on or a running
+// Orbit trial whatever its plan, so Orbit access says nothing about the tier,
+// and the tier detection never read it. A token GitLab.com reports no plan to,
+// or a free one, proves nothing either, and the test says so and skips. The
+// case issue 1224 was found in, a Developer of a subgroup of a licensed group
+// who administers no paid namespace, is held by
+// TestDetectTier_GitLabDotComMember_ResolvesTheTopLevelGroupsPlan in
+// internal/gitlab. It reads only: GET /namespaces/:id here, and the tier
+// probe's GET /license, GET /namespaces and one GraphQL query per page of
+// top-level groups.
+func TestOrbitLiveGitLabCom_DetectTier_IsAtLeastTheFixtureGroupsPlan(t *testing.T) {
 	client := newLiveClient(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	requireOrbitServed(t, client, orbitFixturesNamespace())
-	if tier := client.DetectTier(ctx); tier < edition.Premium {
-		t.Errorf("DetectTier() = %v for a token GitLab.com serves Orbit to, want Premium or higher: "+
-			"Orbit is served only to a member of a group whose top-level group's plan is paid", tier)
+	topLevel, _, _ := strings.Cut(orbitFixturesNamespace(), "/")
+	group, _, err := client.GL().Namespaces.GetNamespace(topLevel, gl.WithContext(ctx))
+	if err != nil {
+		t.Fatalf("GET /namespaces/%s: %v", topLevel, err)
+	}
+	plan := edition.TierFromPlan(group.Plan)
+	if plan < edition.Premium {
+		t.Skipf("GitLab.com reports the plan %q of %s to this token, so it names no paid tier to hold the detection to: "+
+			"it reports a plan only to a token that administers the namespace", group.Plan, topLevel)
+	}
+	if tier := client.DetectTier(ctx); tier < plan {
+		t.Errorf("DetectTier() = %v for a token GitLab.com reports the plan %q of %s to, want %v or higher", tier, group.Plan, topLevel, plan)
 	}
 }
 
