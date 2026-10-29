@@ -626,8 +626,7 @@ func TestActionSpecs_ActionIDs_NameActionsThatExist(t *testing.T) {
 // and the description names them instead. A value added here that the enum no
 // longer holds fails the test below, so the table cannot outlive its reason.
 var scanTypesRefusedByName = map[string]string{
-	"container_scanning": "Security::DefaultScanProfilesHelper builds no container scanning profile at any release from 18.7 to 19.5",
-	"business_logic":     "added to the enum at 19.5 as a scan run by an AI flow (Enums::Security::FLOW_BACKED_SCAN_TYPES), with no default profile",
+	"container_scanning": "Security::DefaultScanProfilesHelper builds no container scanning profile at any release from 18.7 to 19.5, nor on master on 2026-10-29",
 }
 
 // presetsOfScanType are the scan types whose default profiles are named by
