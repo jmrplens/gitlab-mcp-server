@@ -1096,7 +1096,10 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 			"and web_url, and projectimportexport.ExportStatusOutput publishes both one level up under the same names.",
 	},
 
-	// The diffs the two note packages list for a position pre-check.
+	// The merge request the two note packages read to compare its diff_refs
+	// with the position, and the diffs they list for the position pre-check.
+	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
+	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
 	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
 	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
 
@@ -1201,10 +1204,15 @@ const reasonStatusCheckResponse = "POST /projects/:id/merge_requests/:merge_requ
 	"external_status_check.set_project_mr_status answers with a confirmation; merge_request.get returns the merge request " +
 	"and external_status_check.list_project_mr_checks the checks with the status each now has."
 
+// reasonPositionSnapshot answers the merge request read for an inline position.
+const reasonPositionSnapshot = "the package reads a merge request only to compare its diff_refs with the position " +
+	"before and after the diff lookup, and publishes nothing of that response. merge_request.get is the action " +
+	"that answers with the merge request."
+
 // reasonPositionPreCheck answers the file diffs the two note packages list
 // before they write a note on a line.
 const reasonPositionPreCheck = "the package lists a merge request's diffs through " +
-	"toolutil.MergeRequestDiffsForPositionCheck only to tell a caller that a line is outside them before GitLab refuses the " +
+	"toolutil.MergeRequestDiffForPositionCheck only to tell a caller that a line is outside them before GitLab refuses the " +
 	"note with a bare 400 or 500, and returns nothing of the answer. mr_review.changes_get is the action that answers with a " +
 	"merge request's file diffs."
 

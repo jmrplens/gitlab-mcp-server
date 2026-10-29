@@ -22,7 +22,7 @@ const (
 // ActionSpecs returns canonical specs for merge request changes and diff version actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		mrChangeListSpec("changes_get", toolutil.RouteAction(client, Get), "gitlab_mr_changes_get"),
+		mrChangeReadSpec("changes_get", toolutil.RouteAction(client, Get), "gitlab_mr_changes_get"),
 		mrChangeReadSpec("raw_diffs", toolutil.RouteAction(client, RawDiffs), "gitlab_mr_raw_diffs"),
 		mrChangeReadSpec("diff_versions_list", toolutil.RouteAction(client, ListDiffVersions), "gitlab_mr_diff_versions_list"),
 		mrChangeReadSpec("diff_version_get", toolutil.RouteAction(client, GetDiffVersion), "gitlab_mr_diff_version_get"),
@@ -37,17 +37,6 @@ func mrChangeReadSpec(name string, route toolutil.ActionRoute, individualTool st
 	options := mrChangeOptions(individualTool)
 	decorateMRChangeMeta(&options, individualTool)
 	return toolutil.NewReadActionSpec(name, route, options)
-}
-
-// mrChangeListSpec is mrChangeReadSpec for the changed files, a list the
-// output's shape cannot show: GitLab pages the diffs, and one page of them is
-// published beside the merge_request_iid it was asked for and the paths whose
-// diff came back empty, with no pagination block, which the catalog would
-// derive as a read of one object.
-func mrChangeListSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	spec := mrChangeReadSpec(name, route, individualTool)
-	spec.ContentKind = toolutil.ActionSpecContentList
-	return spec
 }
 
 // decorateMRChangeMeta applies the per-action discovery metadata, replacing the
@@ -97,13 +86,21 @@ var (
 // mrChangeActionMeta maps each individual MR-changes tool to its discovery metadata.
 var mrChangeActionMeta = map[string]mrChangeActionMetaEntry{
 	"gitlab_mr_changes_get": {
-		usage:       "Get the current file diffs (changes) for a merge request by project_id and merge_request_iid. Use this first when the prompt asks to inspect, view, or analyze MR changes without running an LLM analyzer. Returns structured per-file diffs with old/new paths and line metadata for inline review.",
+		usage:       "Get the current file diffs (changes) for a merge request by project_id and merge_request_iid. Use this first when the prompt asks to inspect, view, or analyze MR changes without running an LLM analyzer. Returns one page of structured per-file diffs with old/new paths and line metadata for inline review. While has_more is true, pass next_page as page for offset pagination. Use per_page: 100 to reduce round trips.",
 		aliases:     []string{"get merge request changes", "view mr changes", "inspect mr diff", "list merge request changes", "mr code diff"},
 		related:     []string{actionRawDiffs, actionDiffVersionsList, actionMRGet, actionMRDiscussionsList},
-		description: "Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, and truncated_files when GitLab collapses large diffs. See also: gitlab_mr_diff_versions_list, gitlab_mr_raw_diffs, gitlab_mr_get.",
+		description: "Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, pagination metadata, and truncated_files when GitLab collapses large diffs. See also: gitlab_mr_diff_versions_list, gitlab_mr_raw_diffs, gitlab_mr_get.",
 		params: map[string]toolutil.ParameterGuidance{
 			"project_id":        scopeProjectGuidance,
 			"merge_request_iid": mrIIDGuidance,
+			"page": {
+				ValueSource:    "For offset pagination, next_page from the previous response. Omit for the first page.",
+				ExampleBinding: "params.page:2",
+			},
+			"per_page": {
+				ValueSource:    "Number of files per page, up to 100.",
+				ExampleBinding: "params.per_page:100",
+			},
 		},
 	},
 	"gitlab_mr_raw_diffs": {

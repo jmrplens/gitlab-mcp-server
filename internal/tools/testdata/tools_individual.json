@@ -136962,7 +136962,7 @@
   },
   {
     "name": "gitlab_mr_changes_get",
-    "description": "Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, and truncated_files when GitLab collapses large diffs. See also: gitlab_mr_diff_versions_list, gitlab_mr_raw_diffs, gitlab_mr_get.",
+    "description": "Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, pagination metadata, and truncated_files when GitLab collapses large diffs. See also: gitlab_mr_diff_versions_list, gitlab_mr_raw_diffs, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -137090,6 +137090,45 @@
             "array"
           ]
         },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "next_page_token": {
+              "type": "string"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        },
         "truncated_files": {
           "items": {
             "type": "string"
@@ -137102,7 +137141,8 @@
       },
       "required": [
         "merge_request_iid",
-        "changes"
+        "changes",
+        "pagination"
       ],
       "type": "object"
     },

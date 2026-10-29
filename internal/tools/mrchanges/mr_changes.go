@@ -48,9 +48,14 @@ type FileDiffOutput struct {
 // Output holds the list of file diffs for a merge request.
 type Output struct {
 	toolutil.HintableOutput
-	MRIID          int64            `json:"merge_request_iid"`
-	Changes        []FileDiffOutput `json:"changes"`
-	TruncatedFiles []string         `json:"truncated_files,omitempty"`
+	// MRIID is the project-scoped merge request number.
+	MRIID int64 `json:"merge_request_iid"`
+	// Changes contains the file diffs on this page.
+	Changes []FileDiffOutput `json:"changes"`
+	// TruncatedFiles names this page's non-deleted files with no diff content.
+	TruncatedFiles []string `json:"truncated_files,omitempty"`
+	// Pagination describes the returned page and how to request its successor.
+	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
 // DiffToOutput converts a GitLab API [gl.MergeRequestDiff] to the MCP tool
@@ -72,8 +77,8 @@ func DiffToOutput(d *gl.MergeRequestDiff) FileDiffOutput {
 }
 
 // Get retrieves the list of file diffs for a merge request by calling
-// the GitLab Merge Request Diffs API. Returns all changed files with their
-// diff content, old/new paths, and file status flags.
+// the GitLab Merge Request Diffs API. Returns one page of changed files with
+// their diff content, old/new paths, file status flags, and pagination.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -95,7 +100,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.Unidiff {
 		opts.Unidiff = new(true)
 	}
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
+	diffs, resp, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrChangesGet", err, http.StatusNotFound, hintVerifyMR)
 	}
@@ -107,7 +112,12 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 			truncated = append(truncated, d.NewPath)
 		}
 	}
-	return Output{MRIID: input.MRIID, Changes: out, TruncatedFiles: truncated}, nil
+	return Output{
+		MRIID:          input.MRIID,
+		Changes:        out,
+		TruncatedFiles: truncated,
+		Pagination:     toolutil.PaginationFromResponse(resp),
+	}, nil
 }
 
 // ---------------------------------------------------------------------------

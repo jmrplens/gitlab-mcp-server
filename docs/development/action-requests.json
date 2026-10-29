@@ -17383,11 +17383,23 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/merge_requests/:merge_request_iid",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "toolutil.mergeRequestPositionSnapshotMatches"
+          ],
+          "sdk_methods": [
+            "MergeRequests.GetMergeRequest"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /projects/:id/merge_requests/:merge_request_iid/diffs",
           "class": "optional",
           "classic": "read_api",
           "sites": [
-            "toolutil.MergeRequestDiffsForPositionCheck"
+            "toolutil.MergeRequestDiffForPositionCheck"
           ],
           "sdk_methods": [
             "MergeRequests.ListMergeRequestDiffs"
@@ -17408,7 +17420,7 @@
       ],
       "paths": [
         [
-          1
+          2
         ]
       ]
     },
@@ -17577,11 +17589,23 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/merge_requests/:merge_request_iid",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "toolutil.mergeRequestPositionSnapshotMatches"
+          ],
+          "sdk_methods": [
+            "MergeRequests.GetMergeRequest"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /projects/:id/merge_requests/:merge_request_iid/diffs",
           "class": "optional",
           "classic": "read_api",
           "sites": [
-            "toolutil.MergeRequestDiffsForPositionCheck"
+            "toolutil.MergeRequestDiffForPositionCheck"
           ],
           "sdk_methods": [
             "MergeRequests.ListMergeRequestDiffs"
@@ -17602,7 +17626,7 @@
       ],
       "paths": [
         [
-          1
+          2
         ]
       ]
     },
@@ -17745,11 +17769,23 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/merge_requests/:merge_request_iid",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "toolutil.mergeRequestPositionSnapshotMatches"
+          ],
+          "sdk_methods": [
+            "MergeRequests.GetMergeRequest"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "GET /projects/:id/merge_requests/:merge_request_iid/diffs",
           "class": "optional",
           "classic": "read_api",
           "sites": [
-            "toolutil.MergeRequestDiffsForPositionCheck"
+            "toolutil.MergeRequestDiffForPositionCheck"
           ],
           "sdk_methods": [
             "MergeRequests.ListMergeRequestDiffs"
@@ -17770,7 +17806,7 @@
       ],
       "paths": [
         [
-          1
+          2
         ]
       ]
     },

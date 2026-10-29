@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -48,6 +49,122 @@ func TestMRChangesGet_Success(t *testing.T) {
 	}
 	if !out.Changes[1].NewFile {
 		t.Error("out.Changes[1].NewFile = false, want true")
+	}
+}
+
+// TestMRChangesGet_Pagination retains GitLab's page headers without fetching
+// more files than the caller requested.
+func TestMRChangesGet_Pagination(t *testing.T) {
+	cases := []struct {
+		name, page, next, previous string
+		hasMore                    bool
+	}{
+		{"First", "1", "2", "", true},
+		{"Middle", "2", "3", "1", true},
+		{"Last", "3", "", "2", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				testutil.AssertQueryParam(t, r, "page", tc.page)
+				testutil.AssertQueryParam(t, r, "per_page", "100")
+				testutil.AssertQueryParam(t, r, "unidiff", "true")
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"new_path":"a.go","diff":"+a"}]`,
+					testutil.PaginationHeaders{Page: tc.page, PerPage: "100", Total: "201", TotalPages: "3", NextPage: tc.next, PrevPage: tc.previous})
+			}))
+			page, err := strconv.Atoi(tc.page)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			out, err := Get(t.Context(), client, GetInput{
+				ProjectID: "42", MRIID: 1, Unidiff: true,
+				Page: page, PerPage: 100,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			next, _ := strconv.ParseInt(tc.next, 10, 64)
+			previous, _ := strconv.ParseInt(tc.previous, 10, 64)
+			want := toolutil.PaginationOutput{
+				Page: int64(page), PerPage: 100, TotalItems: 201, TotalPages: 3,
+				NextPage: next, PrevPage: previous, HasMore: tc.hasMore,
+			}
+			if out.Pagination != want {
+				t.Errorf("Pagination = %+v, want %+v", out.Pagination, want)
+			}
+			if calls != 1 || len(out.Changes) != 1 {
+				t.Errorf("calls = %d, files = %d, want 1 each", calls, len(out.Changes))
+			}
+		})
+	}
+}
+
+// TestFormatOutputMarkdown_Pagination keeps page state visible in both empty
+// and populated results, including instances that send no total counts.
+func TestFormatOutputMarkdown_Pagination(t *testing.T) {
+	cases := []struct {
+		name       string
+		changes    []FileDiffOutput
+		pagination toolutil.PaginationOutput
+		want       string
+	}{
+		{
+			"WithTotals",
+			[]FileDiffOutput{{NewPath: "a.go", Diff: "+a"}},
+			toolutil.PaginationOutput{Page: 2, PerPage: 100, TotalItems: 201, TotalPages: 3, NextPage: 3, HasMore: true},
+			"Page 2 of 3 | 201 items total | 100 per page",
+		},
+		{
+			"WithoutTotals",
+			[]FileDiffOutput{{NewPath: "a.go", Diff: "+a"}},
+			toolutil.PaginationOutput{Page: 2, PerPage: 100, NextPage: 3, HasMore: true},
+			"Page 2 | 100 per page | more pages available",
+		},
+		{
+			"EmptyLastPage", nil,
+			toolutil.PaginationOutput{Page: 3, PerPage: 100},
+			"Page 3 | 100 per page | no more pages",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatOutputMarkdown(Output{MRIID: 1, Changes: tc.changes, Pagination: tc.pagination})
+
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("rendered = %q, want pagination %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFormatOutputMarkdown_FileCount distinguishes a page size from a known
+// total and from an unfinished listing without totals.
+func TestFormatOutputMarkdown_FileCount(t *testing.T) {
+	cases := []struct {
+		name       string
+		pagination toolutil.PaginationOutput
+		want       string
+	}{
+		{"KnownTotal", toolutil.PaginationOutput{TotalItems: 201, HasMore: true}, "1 of 201"},
+		{"UnknownTotal", toolutil.PaginationOutput{HasMore: true}, "1 shown, more available"},
+		{"Complete", toolutil.PaginationOutput{TotalItems: 1}, "1"},
+		{"CompleteWithoutTotal", toolutil.PaginationOutput{}, "1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatOutputMarkdown(Output{
+				MRIID:      1,
+				Changes:    []FileDiffOutput{{NewPath: "a.go", Diff: "+a"}},
+				Pagination: tc.pagination,
+			})
+
+			if !strings.Contains(got, "**Files**: "+tc.want+"\n") {
+				t.Errorf("rendered = %q, want file count %q", got, tc.want)
+			}
+		})
 	}
 }
 

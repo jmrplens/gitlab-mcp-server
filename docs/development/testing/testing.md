@@ -20,11 +20,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,694 |
-| Unit test functions                                   | 21,027 |
+| Total test functions                                  | 22,714 |
+| Unit test functions                                   | 21,047 |
 | E2E test functions                                    |  1,667 |
 | cmd test functions                                    |  5,299 |
-| Test files (internal/)                                |    741 |
+| Test files (internal/)                                |    742 |
 | Test files (cmd/)                                     |    401 |
 | Test files (test/e2e/)                                |    435 |
 | Tool sub-packages tested                              |    181 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,623 | 60.0% |
+| `TestFunc_Scenario` (2-part)           | 13,626 | 60.0% |
 | `TestFunc` (no underscore)             |    909 |  4.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,162 | 36.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,179 | 36.0% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,160 |        253 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            428 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,140 |        472 | domain-specific GitLab tool handlers                                                            |
+| Core packages           |          4,170 |        253 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            433 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (181) |         11,145 |        473 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,667 |        435 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,299 |        401 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,694** |  **1,577** |                                                                                                 |
+| **Total**               |     **22,714** |  **1,578** |                                                                                                 |
 
 ### Core Packages
 
@@ -92,8 +92,8 @@
 | testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,349 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,160** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,359 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,170** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -246,10 +246,10 @@
 | modelregistry           |         13 |          3 |   100.0% |         1 |
 | mrapprovals             |        108 |          3 |   100.0% |         7 |
 | mrapprovalsettings      |         14 |          4 |   100.0% |         4 |
-| mrchanges               |         43 |          1 |   100.0% |         4 |
+| mrchanges               |         47 |          2 |   100.0% |         4 |
 | mrcontextcommits        |         40 |          3 |   100.0% |         3 |
 | mrdiscussions           |         67 |          1 |   100.0% |         7 |
-| mrdraftnotes            |         80 |          3 |   100.0% |         7 |
+| mrdraftnotes            |         81 |          3 |   100.0% |         7 |
 | mrnotes                 |         52 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
 | notifications           |         40 |          2 |   100.0% |         6 |
@@ -313,7 +313,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,140** |    **472** |          | **1,195** |
+| **Total**               | **11,145** |    **473** |          | **1,195** |
 
 </details>
 

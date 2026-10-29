@@ -553,8 +553,8 @@ alternative lists, so it is no envelope, and it is still a list.
 
 `ActionSpecOptions.ContentKind` is the override, for the case the shape cannot
 show: a list published beside an echo of the scope it was asked for, or a
-count, or two lists side by side, with no pagination block. Five actions
-declare one (`admin.bulk_import_entity_failures`, `mr_review.changes_get`,
+count, or two lists side by side, with no pagination block. Four actions
+declare one (`admin.bulk_import_entity_failures`,
 `repository.list_submodules`, `runner.controller_scope_list`,
 `security_scan_profile.list_project_statuses`), and validation admits only
 `list`, `detail` and `mutate`. A declaration that agrees with the derivation

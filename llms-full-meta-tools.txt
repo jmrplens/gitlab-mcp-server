@@ -6344,7 +6344,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 Use {"action":"changes_get","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_mr_review.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so mr_review.changes_get is {"action":"changes_get"} on this one.
 Action guidance:
-- changes_get: Get the current file diffs (changes) for a merge request by project_id and merge_request_iid. Use this first when the prompt asks to inspect, view, or analyze MR changes without running an LLM analyzer. Returns structured per-file diffs with old/new paths and line metadata for inline review.
+- changes_get: Get the current file diffs (changes) for a merge request by project_id and merge_request_iid. Use this first when the prompt asks to inspect, view, or analyze MR changes without running an LLM analyzer. Returns one page of structured per-file diffs with old/new paths and line metadata for inline review. While has_more is true, pass next_page as page for offset pagination. Use per_page: 100 to reduce round trips.
 - diff_version_get: Get a single merge request diff version with its commits and file diffs. Use the version_id from diff_versions_list. Set unidiff to return diffs in unified-diff format.
 - diff_versions_list: List the diff versions (historical snapshots) of a merge request. Use when the prompt asks for the MR's diff revisions or version history. Returns version IDs and SHAs but not the diffs themselves. Pass a version_id to diff_version_get to retrieve the actual diff.
 - discussion_create: Open a new discussion thread on a merge request. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners.
@@ -6369,6 +6369,8 @@ Action guidance:
 - raw_diffs: Get the raw unified-diff output for a merge request in plain-text git-apply format. Use this when a raw patch or unified diff is requested, or when changes_get reports truncated_files and the full diff payload is needed.
 Parameter guidance:
 - changes_get.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the MR URL or prior list output. Avoid: Use the project-scoped IID, not the MR's global database ID.
+- changes_get.page. Source: For offset pagination, next_page from the previous response. Omit for the first page.
+- changes_get.per_page. Source: Number of files per page, up to 100.
 - changes_get.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or the MR's global ID.
 - diff_version_get.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the MR URL or prior list output. Avoid: Use the project-scoped IID, not the MR's global database ID.
 - diff_version_get.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or the MR's global ID.
@@ -6455,7 +6457,7 @@ IMPORTANT for action choice: use note_create only for a general/top-level MR com
 Returns:
 - *_list: array with pagination (page, per_page, total, next_page).
 - note_*, discussion_*, draft_note_*, diff_*: resource object(s) with id, body/note, author, position (when inline).
-- changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files}. If truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
+- changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files, pagination: {has_more, next_page, ...}}. While has_more is true, pass next_page as page for offset pagination. Use per_page: 100 to reduce round trips. If truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
 - raw_diffs: {raw_diff: string}. Full unified diff for the MR head. Ideal when changes_get returns truncated_files.
 - *_delete / *_publish: {success: bool, message: string}.
 Errors: 404 not found (hint: check note_id/discussion_id and merge_request_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
@@ -6478,7 +6480,7 @@ Discussions (threaded, can be inline via position):
 - discussion_note_delete: discussion_id*, note_id*
 
 Changes and diff versions:
-- changes_get: unidiff (bool), order_by, sort. Returns structured MR file diffs. Use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
+- changes_get: page, per_page, unidiff (bool), order_by, sort. Returns one page of structured MR file diffs. Use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
 - raw_diffs: project_id*, merge_request_iid*. Returns the full raw unified diff for the MR head (use only when a raw patch/unified diff is requested or changes_get reports truncated_files)
 - diff_versions_list: order_by, sort. Lists the MR diff revisions.
 - diff_version_get: version_id*, unidiff (bool)
@@ -6500,7 +6502,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>changes_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"changes":{"items":{"additionalProperties":false,"properties":{"a_mode":{"type":"string"},"b_mode":{"type":"string"},"collapsed":{"type":"boolean"},"deleted_file":{"type":"boolean"},"diff":{"type":"string"},"generated_file":{"type":"boolean"},"new_file":{"type":"boolean"},"new_path":{"type":"string"},"old_path":{"type":"string"},"renamed_file":{"type":"boolean"},"too_large":{"type":"boolean"}},"required":["old_path","new_path","diff","new_file","renamed_file","deleted_file","a_mode","b_mode","generated_file"],"type":"object"},"type":["null","array"]},"merge_request_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"truncated_files":{"items":{"type":"string"},"type":["null","array"]}},"required":["merge_request_iid","changes"],"type":"object"}
+{"additionalProperties":false,"properties":{"changes":{"items":{"additionalProperties":false,"properties":{"a_mode":{"type":"string"},"b_mode":{"type":"string"},"collapsed":{"type":"boolean"},"deleted_file":{"type":"boolean"},"diff":{"type":"string"},"generated_file":{"type":"boolean"},"new_file":{"type":"boolean"},"new_path":{"type":"string"},"old_path":{"type":"string"},"renamed_file":{"type":"boolean"},"too_large":{"type":"boolean"}},"required":["old_path","new_path","diff","new_file","renamed_file","deleted_file","a_mode","b_mode","generated_file"],"type":"object"},"type":["null","array"]},"merge_request_iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"next_page_token":{"type":"string"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"},"truncated_files":{"items":{"type":"string"},"type":["null","array"]}},"required":["merge_request_iid","changes","pagination"],"type":"object"}
 ```
 
 </details>

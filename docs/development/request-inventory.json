@@ -13473,8 +13473,19 @@
       "package": "internal/tools/mrdiscussions",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/mrdiscussions",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/diffs",
       "query": [
+        "page",
         "per_page"
       ],
       "identifiers": {
@@ -13638,8 +13649,19 @@
       "package": "internal/tools/mrdraftnotes",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/mrdraftnotes",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/diffs",
       "query": [
+        "page",
         "per_page"
       ],
       "identifiers": {
@@ -20245,8 +20267,19 @@
       "package": "internal/toolutil",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id",
+      "identifiers": {
+        ":merge_request_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/toolutil",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/diffs",
       "query": [
+        "page",
         "per_page"
       ],
       "identifiers": {

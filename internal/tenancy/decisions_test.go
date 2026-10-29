@@ -37,7 +37,7 @@ var specRequirementIDs = []string{
 	"DST-001", "DST-002", "DST-003",
 	"END-001", "END-002", "END-003", "END-004", "END-005",
 	"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
-	"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012",
+	"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012", "RQB-013",
 }
 
 // TestDecisions_EveryRequirementHasOneRow holds the register to the
@@ -108,7 +108,8 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // the thirty-third. IDN-014, whether the tool name and the action are
 // dimensions of telemetry's metrics, which issue 957 gave a row so that its
 // variable and its malformed value are held as every setting's are, is the
-// thirty-seventh ruled row.
+// thirty-seventh ruled row. RQB-013 bounds advisory merge request diff searches
+// and is the thirteenth request bound.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -123,7 +124,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		{"ruled", Ruled, 38},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
-		{"request-bound", RequestBound, 12},
+		{"request-bound", RequestBound, 13},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if counts[tc.disposition] != tc.want {
@@ -1626,7 +1627,7 @@ func rowPins() map[string]rowPin {
 	}
 	for _, id := range []string{
 		"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
-		"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012",
+		"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012", "RQB-013",
 	} {
 		pins[id] = rowPin{Allow, Bound, ClassP, RequestBound, KeyRequest, KeyRequest, KeyNone, KeyNone, nil}
 	}
