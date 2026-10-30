@@ -172,6 +172,10 @@ func (j *judge) skipped(route *apilive.Route, verdict *Route) bool {
 	return true
 }
 
+// noReason is what a row of a table that gives no reason is reported as,
+// after its label.
+const noReason = " gives no reason"
+
 // skipProblems lists what is wrong with the skip table: a row with a category
 // it does not define or no reason, a row whose reason no route carries, and a
 // reason a route carries that no row holds.
@@ -183,7 +187,7 @@ func skipProblems(skips map[string]skipReason, carried map[string]bool) []string
 			out = append(out, label+": category "+strconv.Quote(row.Category)+" is not one the table defines")
 		}
 		if row.Reason == "" {
-			out = append(out, label+" gives no reason")
+			out = append(out, label+noReason)
 		}
 		if !carried[reason] {
 			out = append(out, label+" is carried by no route of the record")
@@ -208,7 +212,7 @@ func exceptionProblems(exceptions map[string]skipReason, excepted map[string]boo
 			out = append(out, label+": category "+strconv.Quote(exception.Category)+" excludes nothing or is not one the table defines")
 		}
 		if exception.Reason == "" {
-			out = append(out, label+" gives no reason")
+			out = append(out, label+noReason)
 		}
 		if !excepted[name] {
 			out = append(out, label+" answers no route: the record does not mount it, an action reaches it, or its skip reason excludes it on its own")
@@ -301,7 +305,7 @@ func slugProblems(rules []slugRule, answered [][]string, catalog map[string]bool
 			out = append(out, label+" names an action the catalog does not hold")
 		}
 		if rule.Reason == "" {
-			out = append(out, label+" gives no reason")
+			out = append(out, label+noReason)
 		}
 		if len(answered[index]) == 0 {
 			out = append(out, label+" answers no route: no request of the action derives a spelling that meets one")
