@@ -5,6 +5,8 @@ package graphqlschema
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
 )
@@ -70,17 +72,24 @@ func TestReleaseSchema_IsNotThePin(t *testing.T) {
 
 // TestReleaseSourceInfo_EmbeddedRecord_NamesTheReleaseAndTheJob verifies that
 // the committed release record decodes and is filled in, since a record that
-// names no release cannot be held to the REST record's.
+// names no release cannot be held to the REST record's, and that the embedded
+// schema is the one it was written beside: the copy compiled in hashes to the
+// digest the record carries, as the files on disk must for the generator's
+// check.
 func TestReleaseSourceInfo_EmbeddedRecord_NamesTheReleaseAndTheJob(t *testing.T) {
 	source, err := ReleaseSourceInfo()
 	if err != nil {
 		t.Fatalf("ReleaseSourceInfo() error = %v, want nil", err)
+	}
+	if digest := sha256.Sum256(releaseSDL); hex.EncodeToString(digest[:]) != source.SDLSHA256 {
+		t.Errorf("the embedded release schema hashes to %x and the record names %q", digest, source.SDLSHA256)
 	}
 	for _, testCase := range []struct{ name, value string }{
 		{name: "gitlab_version", value: source.GitLabVersion},
 		{name: "gitlab_revision", value: source.GitLabRevision},
 		{name: "origin", value: source.Origin},
 		{name: "sha256", value: source.SHA256},
+		{name: "sdl_sha256", value: source.SDLSHA256},
 		{name: "retrieved_at", value: source.RetrievedAt},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -120,7 +129,9 @@ func TestParseReleaseSource_WellFormedRecord_ReadsEveryField(t *testing.T) {
 	  "gitlab_version": "19.5.0-ee",
 	  "gitlab_revision": "883b289c40e",
 	  "origin": "https://gitlab.com/gitlab-org/gitlab/-/jobs/1/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql",
+	  "from_file": true,
 	  "sha256": "abc",
+	  "sdl_sha256": "def",
 	  "retrieved_at": "2026-10-30",
 	  "types": 42
 	}`))
@@ -131,7 +142,9 @@ func TestParseReleaseSource_WellFormedRecord_ReadsEveryField(t *testing.T) {
 		GitLabVersion:  "19.5.0-ee",
 		GitLabRevision: "883b289c40e",
 		Origin:         "https://gitlab.com/gitlab-org/gitlab/-/jobs/1/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql",
+		FromFile:       true,
 		SHA256:         "abc",
+		SDLSHA256:      "def",
 		RetrievedAt:    "2026-10-30",
 		Types:          42,
 	}
@@ -141,17 +154,37 @@ func TestParseReleaseSource_WellFormedRecord_ReadsEveryField(t *testing.T) {
 }
 
 // TestReleaseSource_String_ReadsAsOneReportLine verifies the line the document
-// gate appends to its release summary.
+// gate appends to its release summary, and that a pin read from a file says
+// its release is the REST record's word rather than reading like the tag's.
 func TestReleaseSource_String_ReadsAsOneReportLine(t *testing.T) {
-	source := ReleaseSource{
-		GitLabVersion:  "19.5.0-ee",
-		GitLabRevision: "883b289c40e",
-		Origin:         "https://gitlab.com/gitlab-org/gitlab/-/jobs/1/artifacts/raw/x.graphql",
-		RetrievedAt:    "2026-10-30",
-		Types:          4546,
-	}
-	const want = "4546 types of GitLab 19.5.0-ee (883b289c40e), from https://gitlab.com/gitlab-org/gitlab/-/jobs/1/artifacts/raw/x.graphql, retrieved 2026-10-30"
-	if got := source.String(); got != want {
-		t.Errorf("String() = %q, want %q", got, want)
+	for _, testCase := range []struct {
+		name     string
+		origin   string
+		fromFile bool
+		want     string
+	}{
+		{
+			name:   "the tag's job",
+			origin: "https://gitlab.com/gitlab-org/gitlab/-/jobs/1/artifacts/raw/x.graphql",
+			want:   "4546 types of GitLab 19.5.0-ee (883b289c40e), from https://gitlab.com/gitlab-org/gitlab/-/jobs/1/artifacts/raw/x.graphql, retrieved 2026-10-30",
+		},
+		{
+			name: "a file", origin: "/tmp/gitlab_schema.graphql", fromFile: true,
+			want: "4546 types of GitLab 19.5.0-ee (883b289c40e), from the file /tmp/gitlab_schema.graphql (release as the REST record names it), retrieved 2026-10-30",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			source := ReleaseSource{
+				GitLabVersion:  "19.5.0-ee",
+				GitLabRevision: "883b289c40e",
+				Origin:         testCase.origin,
+				FromFile:       testCase.fromFile,
+				RetrievedAt:    "2026-10-30",
+				Types:          4546,
+			}
+			if got := source.String(); got != testCase.want {
+				t.Errorf("String() = %q, want %q", got, testCase.want)
+			}
+		})
 	}
 }

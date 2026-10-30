@@ -51,8 +51,8 @@ type genRun struct {
 	// dumpBase is where the release tag's dump is downloaded from, as a
 	// field so a test can point it at a server of its own.
 	dumpBase string
-	// dumpLimit bounds that download, maxDumpBytes when zero, as a field so
-	// a test can reach the refusal without sending 64 MiB.
+	// dumpLimit bounds that download or the file from names, maxDumpBytes
+	// when zero, as a field so a test can reach the refusal without 64 MiB.
 	dumpLimit int64
 }
 

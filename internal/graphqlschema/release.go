@@ -77,10 +77,21 @@ type ReleaseSource struct {
 	// job of the tag's pipeline, by the URL that names the job, or the file a
 	// re-pin was handed instead.
 	Origin string `json:"origin"`
+	// FromFile is true when Origin is a file a re-pin was handed (-from)
+	// rather than the dump of the release tag's job. A dump names no release
+	// of its own, so GitLabVersion and GitLabRevision are then the ones the
+	// REST record names, taken on its word: nothing checked that the file is
+	// the schema of that release.
+	FromFile bool `json:"from_file,omitempty"`
 	// SHA256 is of the schema text as it was read, before it was rendered
 	// into the form committed here, so a reader can compare it with the job's
 	// artifact without trusting the renderer.
 	SHA256 string `json:"sha256"`
+	// SDLSHA256 is of the rendered schema written beside this record, which
+	// the check recomputes from the file and holds the record to: a hand edit
+	// of the schema, or a regeneration that wrote one of the two files and
+	// not the other, fails it even where the type count still agrees.
+	SDLSHA256 string `json:"sdl_sha256"`
 	// RetrievedAt is the UTC day the schema text was read, as YYYY-MM-DD.
 	RetrievedAt string `json:"retrieved_at"`
 	// Types is how many types the schema beside this record loads with, which
@@ -104,10 +115,16 @@ func ParseReleaseSource(record []byte) (ReleaseSource, error) {
 	return source, nil
 }
 
-// String renders the provenance as one reportable line.
+// String renders the provenance as one reportable line. A pin read from a
+// file says so, since its release is the REST record's word rather than the
+// tag's.
 //
 //gitlab:allow-raw s.RetrievedAt: a date the committed record carries as text, printed for a log rather than for a card
 func (s ReleaseSource) String() string {
+	origin := s.Origin
+	if s.FromFile {
+		origin = "the file " + s.Origin + " (release as the REST record names it)"
+	}
 	return fmt.Sprintf("%d types of GitLab %s (%s), from %s, retrieved %s",
-		s.Types, s.GitLabVersion, s.GitLabRevision, s.Origin, s.RetrievedAt)
+		s.Types, s.GitLabVersion, s.GitLabRevision, origin, s.RetrievedAt)
 }

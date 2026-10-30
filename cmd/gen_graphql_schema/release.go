@@ -44,9 +44,10 @@ const (
 	dumpArtifactPath = "raw/tmp/tests/graphql/gitlab_schema.graphql"
 	// dumpJob is the job that writes it.
 	dumpJob = "graphql-schema-dump"
-	// maxDumpBytes bounds the download. The 19.5.0 dump is 3.8 MiB, so this
-	// is room for growth and not a limit any release comes near; it exists so
-	// an answer that is not a schema at all cannot fill memory.
+	// maxDumpBytes bounds the dump, downloaded or read from -from. The 19.5.0
+	// dump is 3.8 MiB, so this is room for growth and not a limit any release
+	// comes near; it exists so an answer or a file that is not a schema at all
+	// cannot fill memory.
 	maxDumpBytes = 64 << 20
 	// regenerateRelease is the command a refusal names.
 	regenerateRelease = "make gen-graphql-release-schema"
@@ -75,6 +76,12 @@ func supportedRelease(apiLiveDir string) (apilive.Source, error) {
 
 // generateRelease writes the release pin: the schema of the release the REST
 // record names, from the dump of its tag or from the file -from hands it.
+//
+// Either way the version and revision recorded are the REST record's. The
+// download asks for the dump of that version's tag, so the two agree by
+// construction; a file names no release of its own, so a pin read from one is
+// recorded as such (FromFile) and its release is taken on the REST record's
+// word, which is what the person handing the file vouches for.
 func generateRelease(cfg genRun, out, errOut io.Writer) int {
 	release, err := supportedRelease(cfg.apiLiveDir)
 	if err != nil {
@@ -108,12 +115,13 @@ func generateRelease(cfg genRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	digest := sha256.Sum256(dump)
 	source := graphqlschema.ReleaseSource{
 		GitLabVersion:  release.Version,
 		GitLabRevision: release.Revision,
 		Origin:         origin,
-		SHA256:         hex.EncodeToString(digest[:]),
+		FromFile:       cfg.from != "",
+		SHA256:         hexDigest(dump),
+		SDLSHA256:      hexDigest([]byte(sdl)),
 		RetrievedAt:    provenance.Clock(cfg.now).UTC().Format(time.DateOnly),
 		Types:          len(loaded.Types),
 	}
@@ -130,10 +138,20 @@ func generateRelease(cfg genRun, out, errOut io.Writer) int {
 // came from: the file -from names, or the dump of the release's tag, named by
 // the URL the download ended at, which is the one that names GitLab's job.
 func readDump(cfg genRun, version string, out io.Writer) (dump []byte, origin string, err error) {
+	limit := cmp.Or(cfg.dumpLimit, maxDumpBytes)
 	if cfg.from != "" {
-		dump, err = os.ReadFile(cfg.from) //#nosec G304 -- the path is the operator's own -from flag
+		var file *os.File
+		file, err = os.Open(cfg.from) //#nosec G304 -- the path is the operator's own -from flag
 		if err != nil {
 			return nil, "", fmt.Errorf("read the release schema: %w", err)
+		}
+		defer func() { _ = file.Close() }()
+		dump, err = io.ReadAll(io.LimitReader(file, limit+1))
+		if err != nil {
+			return nil, "", fmt.Errorf("read the release schema: %w", err)
+		}
+		if int64(len(dump)) > limit {
+			return nil, "", fmt.Errorf("%s holds more than %d bytes, which is not a schema dump", cfg.from, limit)
 		}
 		return dump, cfg.from, nil
 	}
@@ -159,7 +177,6 @@ func readDump(cfg genRun, version string, out io.Writer) (dump []byte, origin st
 			location, response.Status,
 		)
 	}
-	limit := cmp.Or(cfg.dumpLimit, maxDumpBytes)
 	dump, err = io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
 		return nil, "", fmt.Errorf("read %s: %w", location, err)
@@ -174,13 +191,21 @@ func readDump(cfg genRun, version string, out io.Writer) (dump []byte, origin st
 // parse, agree with one another, and are the schema of the release the REST
 // record is taken from. Like the gitlab.com pin's check it needs no network.
 //
+// The two files agree when the schema hashes to the digest the record carries
+// and loads with the count it records. The digest is what a hand edit of the
+// schema and a regeneration that wrote one file and not the other both fail,
+// whatever the count says. It cannot say which release a dump read with -from
+// was of: the dump is not committed, and a file names no release of its own,
+// which the record states (FromFile) rather than this check pretending to
+// verify it.
+//
 // It asks no age of the pin. A release's schema does not change once the
 // release is cut; what ages is which release this repository is pinned to,
 // and that is the REST record's to say, under the staleness window
 // cmd/gen_api_live holds it to. Holding this pin to the record's version and
 // revision is what moves it with the record.
 func checkReleaseArtifacts(cfg genRun, out, errOut io.Writer) int {
-	types, source, err := readReleaseArtifacts(cfg.dir)
+	types, sdlDigest, source, err := readReleaseArtifacts(cfg.dir)
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)
 		return 1
@@ -192,6 +217,12 @@ func checkReleaseArtifacts(cfg genRun, out, errOut io.Writer) int {
 	}
 
 	problems := releaseProblems(source, release)
+	if sdlDigest != source.SDLSHA256 {
+		problems = append(problems, fmt.Sprintf(
+			"%s hashes to %s and %s records %q: the schema was changed after it was rendered, or the two files were not written by one regeneration",
+			graphqlschema.ReleaseSDLFileName, sdlDigest, graphqlschema.ReleaseSourceFileName, source.SDLSHA256,
+		))
+	}
 	if types != source.Types {
 		problems = append(problems, fmt.Sprintf(
 			"%s records %d types and %s loads with %d: the two files were not written by one regeneration",
@@ -236,41 +267,63 @@ func releaseProblems(source graphqlschema.ReleaseSource, release apilive.Source)
 
 // writeReleaseArtifacts writes the release schema and its record into dir.
 // The text is committed uncompressed for the reasons writeArtifacts gives.
+//
+// The schema is written first, so a record that cannot be written would leave
+// a new schema beside the old record. The check refuses that pair, since the
+// schema no longer hashes to the record's digest, and the schema the directory
+// held before is put back as well, or the new one removed when there was none,
+// so a failed run leaves the pair it found.
 func writeReleaseArtifacts(dir, sdl string, source graphqlschema.ReleaseSource) error {
-	if err := docgen.WriteOrCheck(filepath.Join(dir, graphqlschema.ReleaseSDLFileName),
-		[]byte(sdl), false, regenerateRelease); err != nil {
+	schemaPath := filepath.Join(dir, graphqlschema.ReleaseSDLFileName)
+	previous, readErr := os.ReadFile(schemaPath)
+	if err := docgen.WriteOrCheck(schemaPath, []byte(sdl), false, regenerateRelease); err != nil {
 		return err
 	}
 	// Marshaling a struct built one line earlier cannot fail.
 	record := cmdutil.Must(json.MarshalIndent(source, "", "  "))
-	return docgen.WriteOrCheck(filepath.Join(dir, graphqlschema.ReleaseSourceFileName),
+	recordErr := docgen.WriteOrCheck(filepath.Join(dir, graphqlschema.ReleaseSourceFileName),
 		record, false, regenerateRelease)
+	switch {
+	case recordErr == nil:
+		return nil
+	case readErr != nil:
+		return errors.Join(recordErr, os.Remove(schemaPath))
+	default:
+		return errors.Join(recordErr, docgen.WriteOrCheck(schemaPath, previous, false, regenerateRelease))
+	}
 }
 
 // readReleaseArtifacts loads the committed release schema and record from dir,
 // from disk rather than the embedded copies for the reason readArtifacts
-// gives.
-func readReleaseArtifacts(dir string) (int, graphqlschema.ReleaseSource, error) {
+// gives, and returns the count the schema loads with and the digest of its
+// bytes, the two things the record is held to.
+func readReleaseArtifacts(dir string) (types int, sdlDigest string, source graphqlschema.ReleaseSource, err error) {
 	schemaPath := filepath.Join(dir, graphqlschema.ReleaseSDLFileName)
 	sdl, err := os.ReadFile(schemaPath)
 	if err != nil {
-		return 0, graphqlschema.ReleaseSource{}, fmt.Errorf("read %s: %w", schemaPath, err)
+		return 0, "", graphqlschema.ReleaseSource{}, fmt.Errorf("read %s: %w", schemaPath, err)
 	}
 	schema, err := graphqlschema.Load(sdl)
 	if err != nil {
-		return 0, graphqlschema.ReleaseSource{}, fmt.Errorf("%s: %w", schemaPath, err)
+		return 0, "", graphqlschema.ReleaseSource{}, fmt.Errorf("%s: %w", schemaPath, err)
 	}
 
 	recordPath := filepath.Join(dir, graphqlschema.ReleaseSourceFileName)
 	record, err := os.ReadFile(recordPath)
 	if err != nil {
-		return 0, graphqlschema.ReleaseSource{}, fmt.Errorf("read %s: %w", recordPath, err)
+		return 0, "", graphqlschema.ReleaseSource{}, fmt.Errorf("read %s: %w", recordPath, err)
 	}
-	source, err := graphqlschema.ParseReleaseSource(record)
+	source, err = graphqlschema.ParseReleaseSource(record)
 	if err != nil {
-		return 0, graphqlschema.ReleaseSource{}, fmt.Errorf("%s: %w", recordPath, err)
+		return 0, "", graphqlschema.ReleaseSource{}, fmt.Errorf("%s: %w", recordPath, err)
 	}
-	return len(schema.Types), source, nil
+	return len(schema.Types), hexDigest(sdl), source, nil
+}
+
+// hexDigest is the SHA-256 of data as the record spells it.
+func hexDigest(data []byte) string {
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
 }
 
 // errReleaseFlags refuses -from without -release, which would otherwise be

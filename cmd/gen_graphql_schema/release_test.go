@@ -6,6 +6,8 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -59,8 +61,9 @@ func digestOf(sdl string) string {
 // TestRunRelease_FromAFile_WritesThePinTheCheckAccepts verifies a whole
 // release generation from a dump on disk and the check that follows it: the
 // record names the release and revision the REST record does, the file it was
-// read from and the digest of what was read, and the pair it writes is one the
-// offline check accepts against the same REST record.
+// read from and that it was a file, the digest of what was read and of the
+// schema written, and the pair it writes is one the offline check accepts
+// against the same REST record.
 func TestRunRelease_FromAFile_WritesThePinTheCheckAccepts(t *testing.T) {
 	records := recordDir(t, fixtureRelease, fixtureRevision)
 	from := dumpFile(t, wholeSDL)
@@ -70,23 +73,32 @@ func TestRunRelease_FromAFile_WritesThePinTheCheckAccepts(t *testing.T) {
 	if status != 0 {
 		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
 	}
-	if !strings.Contains(out, "wrote "+graphqlschema.ReleaseSDLFileName) {
-		t.Errorf("stdout does not report the write:\n%s", out)
+	for _, want := range []string{"wrote " + graphqlschema.ReleaseSDLFileName, "from the file " + from + " (release as the REST record names it)"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stdout does not say %q:\n%s", want, out)
+		}
 	}
-	types, source, err := readReleaseArtifacts(dir)
+	types, sdlDigest, source, err := readReleaseArtifacts(dir)
 	if err != nil {
 		t.Fatalf("readReleaseArtifacts() error = %v", err)
+	}
+	rendered, err := os.ReadFile(filepath.Join(dir, graphqlschema.ReleaseSDLFileName))
+	if err != nil {
+		t.Fatalf("read the rendered schema: %v", err)
 	}
 	want := graphqlschema.ReleaseSource{
 		GitLabVersion:  fixtureRelease,
 		GitLabRevision: fixtureRevision,
 		Origin:         from,
+		FromFile:       true,
 		SHA256:         digestOf(wholeSDL),
+		SDLSHA256:      digestOf(string(rendered)),
 		RetrievedAt:    "2026-09-06",
 		Types:          loadedTypes(wholeSDL),
 	}
-	if source != want || types != want.Types {
-		t.Errorf("the release pin is %d types and %+v, want %d and %+v", types, source, want.Types, want)
+	if source != want || types != want.Types || sdlDigest != want.SDLSHA256 {
+		t.Errorf("the release pin is %d types hashing to %s and %+v, want %d, %s and %+v",
+			types, sdlDigest, source, want.Types, want.SDLSHA256, want)
 	}
 
 	status, out, errOut = runCommand(t, genRun{release: true, check: true, dir: dir, apiLiveDir: records})
@@ -134,12 +146,12 @@ func TestRunRelease_FromTheReleaseTag_DownloadsTheDumpAndNamesTheJob(t *testing.
 	if !strings.Contains(out, "downloading the schema of GitLab "+fixtureRelease) {
 		t.Errorf("stdout does not say what it downloads:\n%s", out)
 	}
-	_, source, err := readReleaseArtifacts(dir)
+	_, _, source, err := readReleaseArtifacts(dir)
 	if err != nil {
 		t.Fatalf("readReleaseArtifacts() error = %v", err)
 	}
-	if want := server.URL + "/jobs/17/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql"; source.Origin != want {
-		t.Errorf("the record names %q, want the job's URL %q", source.Origin, want)
+	if want := server.URL + "/jobs/17/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql"; source.Origin != want || source.FromFile {
+		t.Errorf("the record names %q (from a file: %v), want the job's URL %q", source.Origin, source.FromFile, want)
 	}
 }
 
@@ -177,6 +189,13 @@ func TestRunRelease_GenerationFailures_ExitNonZeroAndSayWhy(t *testing.T) {
 		{name: "no REST record", cfg: genRun{apiLiveDir: t.TempDir(), from: dumpFile(t, wholeSDL)}, want: "reading the live API record"},
 		{name: "a REST record naming no version", cfg: genRun{apiLiveDir: recordDir(t, "", ""), from: dumpFile(t, wholeSDL)}, want: "names no GitLab version"},
 		{name: "a dump file that is not there", cfg: genRun{apiLiveDir: records, from: filepath.Join(t.TempDir(), "absent.graphql")}, want: "read the release schema"},
+		// A directory opens and then refuses the read, which is the read
+		// failing after the open succeeded.
+		{name: "a dump path that is a directory", cfg: genRun{apiLiveDir: records, from: t.TempDir()}, want: "read the release schema"},
+		{
+			name: "a dump file larger than any dump", cfg: genRun{apiLiveDir: records, from: dumpFile(t, strings.Repeat("x", 64)), dumpLimit: 32},
+			want: "holds more than 32 bytes, which is not a schema dump",
+		},
 		{name: "a dump that is not SDL", cfg: genRun{apiLiveDir: records, from: dumpFile(t, "type Query {")}, want: "parse "},
 		{name: "a dump too small to be a release", cfg: genRun{apiLiveDir: records, from: dumpFile(t, minimalSDL)}, want: "it is not the dump of a whole release"},
 		{name: "a dump whose rendering does not load", cfg: genRun{apiLiveDir: records, from: dumpFile(t, rootless)}, want: "the converted release schema does not parse"},
@@ -214,9 +233,14 @@ var soundRelease = graphqlschema.ReleaseSource{
 	GitLabRevision: fixtureRevision,
 	Origin:         "https://gitlab.com/gitlab-org/gitlab/-/jobs/17/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql",
 	SHA256:         digestOf(wholeSDL),
+	SDLSHA256:      digestOf(wholeSDL),
 	RetrievedAt:    "2026-10-30",
 	Types:          loadedTypes(wholeSDL),
 }
+
+// editedSDL is wholeSDL with one field's type changed by hand: it loads with
+// the same count of types, which is what the count alone could not tell apart.
+var editedSDL = strings.Replace(wholeSDL, "type Padding0 {\n  ok: Boolean\n}", "type Padding0 {\n  ok: String\n}", 1)
 
 // TestRunRelease_CheckMode_RefusesAPinOfAnotherRelease verifies every refusal
 // of the offline check, each spelled whole: the two releases are named in the
@@ -248,8 +272,20 @@ func TestRunRelease_CheckMode_RefusesAPinOfAnotherRelease(t *testing.T) {
 		},
 		{
 			name: "a truncated dump", sdl: minimalSDL,
-			source: spoil(func(s *graphqlschema.ReleaseSource) { s.Types = loadedTypes(minimalSDL) }),
-			want:   "the release schema carries " + strconv.Itoa(loadedTypes(minimalSDL)) + " types and a GitLab schema has more than 4000",
+			source: spoil(func(s *graphqlschema.ReleaseSource) {
+				s.Types, s.SDLSHA256 = loadedTypes(minimalSDL), digestOf(minimalSDL)
+			}),
+			want: "the release schema carries " + strconv.Itoa(loadedTypes(minimalSDL)) + " types and a GitLab schema has more than 4000",
+		},
+		{
+			name: "a schema edited by hand", sdl: editedSDL, source: soundRelease,
+			want: "gitlab-release-schema.graphql hashes to " + digestOf(editedSDL) + " and release-source.json records \"" +
+				digestOf(wholeSDL) + "\": the schema was changed after it was rendered, or the two files were not written by one regeneration",
+		},
+		{
+			name: "a record written before the schema digest", sdl: wholeSDL,
+			source: spoil(func(s *graphqlschema.ReleaseSource) { s.SDLSHA256 = "" }),
+			want:   "gitlab-release-schema.graphql hashes to " + digestOf(wholeSDL) + " and release-source.json records \"\"",
 		},
 		{
 			name: "no origin", sdl: wholeSDL,
@@ -326,6 +362,49 @@ func TestRunRelease_CheckMode_FilesThatCannotBeRead_NameTheFile(t *testing.T) {
 			}
 			if !strings.Contains(errOut, testCase.want) {
 				t.Errorf("stderr does not name %q:\n%s", testCase.want, errOut)
+			}
+		})
+	}
+}
+
+// TestWriteReleaseArtifacts_ARecordThatCannotBeWritten_LeavesThePairItFound
+// verifies that a write which fails at the record, the second of the two
+// files, takes back the schema it already wrote: the one the directory held
+// is restored, and a schema the directory did not hold is removed, so the
+// failure leaves no new schema beside an old record.
+func TestWriteReleaseArtifacts_ARecordThatCannotBeWritten_LeavesThePairItFound(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		// previous is the schema the directory holds before the write, none
+		// when empty.
+		previous string
+	}{
+		{name: "a schema there before", previous: minimalSDL},
+		{name: "no schema there before"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			schemaPath := filepath.Join(dir, graphqlschema.ReleaseSDLFileName)
+			if testCase.previous != "" {
+				write(t, dir, graphqlschema.ReleaseSDLFileName, []byte(testCase.previous))
+			}
+			// A directory where the record goes refuses the record's write
+			// after the schema's succeeded.
+			if err := os.Mkdir(filepath.Join(dir, graphqlschema.ReleaseSourceFileName), 0o750); err != nil {
+				t.Fatalf("prepare the fixture: %v", err)
+			}
+
+			err := writeReleaseArtifacts(dir, wholeSDL, soundRelease)
+			if err == nil || !strings.Contains(err.Error(), graphqlschema.ReleaseSourceFileName) {
+				t.Fatalf("writeReleaseArtifacts() error = %v, want one naming %s", err, graphqlschema.ReleaseSourceFileName)
+			}
+			got, readErr := os.ReadFile(schemaPath)
+			switch {
+			case testCase.previous == "" && !errors.Is(readErr, fs.ErrNotExist):
+				t.Errorf("the failed write left %s behind (read error %v), want it removed", graphqlschema.ReleaseSDLFileName, readErr)
+			case testCase.previous != "" && string(got) != testCase.previous:
+				t.Errorf("the failed write left %s as %d bytes (read error %v), want the %d it held before",
+					graphqlschema.ReleaseSDLFileName, len(got), readErr, len(testCase.previous))
 			}
 		})
 	}
