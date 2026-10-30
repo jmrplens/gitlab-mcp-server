@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,971 |
-| Unit test functions                                   | 21,296 |
+| Total test functions                                  | 22,999 |
+| Unit test functions                                   | 21,324 |
 | E2E test functions                                    |  1,675 |
-| cmd test functions                                    |  5,521 |
-| Test files (internal/)                                |    744 |
-| Test files (cmd/)                                     |    428 |
+| cmd test functions                                    |  5,540 |
+| Test files (internal/)                                |    745 |
+| Test files (cmd/)                                     |    431 |
 | Test files (test/e2e/)                                |    435 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     35 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,633 | 59.3% |
+| `TestFunc_Scenario` (2-part)           | 13,636 | 59.3% |
 | `TestFunc` (no underscore)             |    909 |  4.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,429 | 36.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,454 | 36.8% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,174 |        253 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,181 |        254 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            433 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,168 |        475 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (181) |         11,170 |        475 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,675 |        435 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,521 |        428 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,971** |  **1,607** |                                                                                                 |
+| cmd packages            |          5,540 |        431 | server entry point and developer command utilities                                              |
+| **Total**               |     **22,999** |  **1,611** |                                                                                                 |
 
 ### Core Packages
 
@@ -70,7 +70,7 @@
 | freshness                |         7 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                                                                             |
 | gatewaycompat            |        21 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.                                                                  |
 | gitlab                   |       246 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
-| graphqlschema            |        21 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                                                                                    |
+| graphqlschema            |        28 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                                                                                    |
 | i18n                     |        45 |      n/a | Package i18n holds the texts this server shows a person directly, in every language it serves them in, and renders them in the language a request carries (issue 1547).                                                                                                                                                             |
 | mcpotel                  |       116 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                                                                                |
 | oauth                    |       111 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
@@ -93,7 +93,7 @@
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
 | toolutil                 |     1,360 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,174** |          |                                                                                                                                                                                                                                                                                                                                     |
+| **Subtotal**             | **4,181** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -287,7 +287,7 @@
 | securefiles             |         33 |          1 |   100.0% |         4 |
 | securityattributes      |         39 |          1 |   100.0% |         5 |
 | securitycategories      |         29 |          1 |   100.0% |         3 |
-| securityfindings        |         31 |          1 |   100.0% |         1 |
+| securityfindings        |         32 |          1 |   100.0% |         1 |
 | securityscanprofiles    |         26 |          1 |   100.0% |         3 |
 | securitysettings        |         43 |          3 |   100.0% |         3 |
 | settings                |         41 |          1 |   100.0% |         2 |
@@ -308,12 +308,12 @@
 | useremails              |         32 |          2 |   100.0% |         6 |
 | usergpgkeys             |         56 |          2 |   100.0% |         8 |
 | users                   |        274 |          7 |   100.0% |        38 |
-| vulnerabilities         |         96 |          3 |   100.0% |         8 |
+| vulnerabilities         |         97 |          3 |   100.0% |         8 |
 | waitpoll                |         45 |          3 |   100.0% |         0 |
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,168** |    **475** |          | **1,195** |
+| **Total**               | **11,170** |    **475** |          | **1,195** |
 
 </details>
 
