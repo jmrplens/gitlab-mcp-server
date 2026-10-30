@@ -121,7 +121,10 @@ function markdownTables(text) {
 				.map((line) =>
 					line
 						.replace(/^\||\|$/g, "")
-						.split("|")
+						// A pipe a backslash escapes stays in its cell, as in
+						// GitHub Flavored Markdown: the tool reference writes `\|`
+						// for a pipe inside a code span.
+						.split(/(?<!\\)\|/)
 						.map((cell) => render(cell.trim())),
 				),
 		);

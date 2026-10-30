@@ -79,6 +79,23 @@ var (
 	cellEscape     = regexp.MustCompile(`\\(.)`)
 )
 
+// splitRow splits a table row on the pipes a backslash does not escape,
+// keeping an escaped pipe in its cell for renderCell to unescape.
+func splitRow(row string) []string {
+	var cells []string
+	start := 0
+	for i := 0; i < len(row); i++ {
+		switch row[i] {
+		case '\\':
+			i++
+		case '|':
+			cells = append(cells, row[start:i])
+			start = i + 1
+		}
+	}
+	return append(cells, row[start:])
+}
+
 // renderCell renders a cell the way site/scripts/check-facts.mjs does.
 func renderCell(cell string) string {
 	cell = cellExpression.ReplaceAllString(cell, "9999")
@@ -88,8 +105,10 @@ func renderCell(cell string) string {
 	return cellEscape.ReplaceAllString(cell, "$1")
 }
 
-// measureTables measures every pipe table of a page, splitting rows on every
-// pipe as check-facts does.
+// measureTables measures every pipe table of a page, splitting rows on the
+// pipes a backslash does not escape, as GitHub Flavored Markdown and
+// check-facts do: a cell may hold `\|`, which the generator writes for a pipe
+// inside a code span.
 func measureTables(page string) []tableMeasure {
 	lines := strings.Split(page, "\n")
 	var measures []tableMeasure
@@ -103,7 +122,7 @@ func measureTables(page string) []tableMeasure {
 				continue
 			}
 			var cells []string
-			for cell := range strings.SplitSeq(strings.Trim(lines[j], "|"), "|") {
+			for _, cell := range splitRow(strings.Trim(lines[j], "|")) {
 				cells = append(cells, renderCell(strings.TrimSpace(cell)))
 			}
 			rows = append(rows, cells)
