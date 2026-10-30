@@ -14609,9 +14609,6 @@
                 "crash_address": {
                   "type": "string"
                 },
-                "crash_state": {
-                  "type": "string"
-                },
                 "crash_type": {
                   "type": "string"
                 },
@@ -29885,9 +29882,6 @@
                   "type": "string"
                 },
                 "crash_address": {
-                  "type": "string"
-                },
-                "crash_state": {
                   "type": "string"
                 },
                 "crash_type": {
@@ -53172,9 +53166,6 @@
                   "type": "string"
                 },
                 "crash_address": {
-                  "type": "string"
-                },
-                "crash_state": {
                   "type": "string"
                 },
                 "crash_type": {
@@ -126058,9 +126049,6 @@
                   "crash_address": {
                     "type": "string"
                   },
-                  "crash_state": {
-                    "type": "string"
-                  },
                   "crash_type": {
                     "type": "string"
                   },
@@ -130230,9 +130218,6 @@
                     "type": "string"
                   },
                   "crash_address": {
-                    "type": "string"
-                  },
-                  "crash_state": {
                     "type": "string"
                   },
                   "crash_type": {
@@ -216562,9 +216547,6 @@
                 "crash_address": {
                   "type": "string"
                 },
-                "crash_state": {
-                  "type": "string"
-                },
                 "crash_type": {
                   "type": "string"
                 },
@@ -218467,9 +218449,6 @@
                   "type": "string"
                 },
                 "crash_address": {
-                  "type": "string"
-                },
-                "crash_state": {
                   "type": "string"
                 },
                 "crash_type": {

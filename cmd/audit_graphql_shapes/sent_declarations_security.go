@@ -142,6 +142,22 @@ func securitySentDeclarations() []sentDeclaration {
 				"the admin.cluster_agent_get and admin.cluster_agent_list actions"),
 		},
 		{
+			// The sent walk files a union member's field under the union the
+			// decoder reads, which is why this names VulnerabilityLocation
+			// and not the coverage fuzzing member that declares the field.
+			Package:    toolutilDir,
+			SchemaType: "VulnerabilityLocation",
+			Field:      "crashState",
+			Category:   categoryNewerThanFloor,
+			Reason: "crashState (the minimized and normalized stack trace of a coverage fuzzing crash) was added in GitLab " +
+				"19.6 by gitlab-org/gitlab!264173, merged on 2026-10-23: the pin of 2026-10-29 has it and the " +
+				"schema of GitLab 19.5.0 does not. GitLab refuses a whole document that names a field it does not " +
+				"have, and the location selection is spliced into the vulnerability list, get and four state " +
+				"changes (served from 18.10) and the security finding list (served from 18.5), so selecting it " +
+				"stopped all seven actions on every release up to 19.5, as the Enterprise end-to-end run against " +
+				"19.5.3 showed. The stack trace a fuzzing location carries is published as stacktrace_snippet.",
+		},
+		{
 			Package:    toolutilDir,
 			SchemaType: "VulnerabilityFindingTokenStatus",
 			Field:      "id",
