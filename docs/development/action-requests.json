@@ -15878,7 +15878,7 @@
             "mergerequests.postCancelAutoMerge"
           ],
           "directives": [
-            "alternatives: an instance on 19.5 or later is sent cancel_auto_merge and the deprecated route below is not sent"
+            "alternatives: an instance on 19.5 or later is sent cancel_auto_merge in place of the deprecated route below, which it is sent only after cancel_auto_merge answered 404"
           ]
         },
         {
@@ -15887,13 +15887,14 @@
           "class": "alternative",
           "classic": "api",
           "sites": [
-            "mergerequests.CancelAutoMerge"
+            "mergerequests.cancelMergeWhenPipelineSucceedsRoute"
           ],
           "sdk_methods": [
             "MergeRequests.CancelMergeWhenPipelineSucceeds"
           ],
           "directives": [
-            "alternatives: an instance older than 19.5, or one whose release is not known, is sent the deprecated route instead of cancel_auto_merge"
+            "alternatives: an instance older than 19.5, or one whose release is not known, is sent the deprecated route instead of cancel_auto_merge",
+            "optional: the deprecated route is sent only when cancel_auto_merge answered 404, as an older node does during a rolling upgrade"
           ]
         },
         {
@@ -15906,6 +15907,10 @@
           ],
           "sdk_methods": [
             "MergeRequests.GetMergeRequest"
+          ],
+          "directives": [
+            "alternatives: an instance older than 19.5, or one whose release is not known, is sent the deprecated route instead of cancel_auto_merge",
+            "optional: the deprecated route is sent only when cancel_auto_merge answered 404, as an older node does during a rolling upgrade"
           ]
         }
       ],

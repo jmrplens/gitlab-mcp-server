@@ -12614,8 +12614,8 @@
         "render_html"
       ],
       "identifiers": {
-        ":merge_request_id": 7,
-        ":project_id": 3
+        ":merge_request_id": 8,
+        ":project_id": 4
       }
     },
     {
@@ -12720,8 +12720,8 @@
       "method": "POST",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/cancel_auto_merge",
       "identifiers": {
-        ":merge_request_id": 1,
-        ":project_id": 3
+        ":merge_request_id": 2,
+        ":project_id": 4
       }
     },
     {
@@ -12730,8 +12730,8 @@
       "method": "POST",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/cancel_merge_when_pipeline_succeeds",
       "identifiers": {
-        ":merge_request_id": 1,
-        ":project_id": 2
+        ":merge_request_id": 2,
+        ":project_id": 3
       }
     },
     {

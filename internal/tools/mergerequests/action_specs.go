@@ -494,7 +494,7 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 		options.IndividualTool.Description = "Trigger a new CI/CD pipeline for a merge request. Returns: the created pipeline with id, status, ref, sha, and web URL. See also: gitlab_mr_pipelines, gitlab_pipeline_get."
 	case "cancel_auto_merge":
 		options.Usage = "Cancels auto-merge on a merge request and returns the merge request. It does not cancel a running pipeline. " +
-			"When the instance is known to run GitLab 19.5 or later, a merge request with no auto-merge set is refused, while an older instance, or one whose version cannot be read, answers with the merge request as it is."
+			"When the instance is known to run GitLab 19.5 or later, a merge request with no auto-merge set is refused, while an older instance, one whose version cannot be read, or a node of the instance not yet on 19.5 answers with the merge request as it is."
 		options.Aliases = []string{"cancel auto merge", "cancel merge when pipeline succeeds", "stop auto merge"}
 		options.RelatedActions = []string{actionMRMerge, actionMRGet}
 		options.IndividualTool.Description = "Cancel auto-merge (merge-when-pipeline-succeeds) on a merge request. Returns: the MR with auto-merge disabled. See also: gitlab_mr_merge, gitlab_mr_get."
