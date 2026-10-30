@@ -122,6 +122,17 @@ var captureCategories = map[string]captureCategory{
 // client-go struct beside them on the pinned SDK.
 var captureDeclarations = slices.Concat(trailerCaptures, nullCaptures, presenceCaptures, valueCaptures, siblingCaptures, objectCaptures)
 
+// The captured types several declarations are written on, spelled with their
+// package's name as a declaration's Type is.
+const (
+	capturedMergeTrainMeasures = "mergetrains.trainMeasures"
+	capturedBridgeExtra        = "toolutil.BridgeExtra"
+	capturedJobMeasures        = "toolutil.JobMeasures"
+	capturedMergeRequestExtra  = "toolutil.MergeRequestExtra"
+	capturedNamespaceExtra     = "toolutil.NamespaceExtra"
+	capturedEnterpriseApproval = "mrapprovals.enterpriseApprovalCapture"
+)
+
 // trailerReason is why a commit's extended_trailers is read off the capture.
 const trailerReason = "client-go's Commit declares extended_trailers a map of strings where GitLab sends each trailer's list of values, so its decoder fails on a commit carrying one (register row 69)"
 
@@ -158,29 +169,29 @@ func nullCapture(typeName, key, reason string, kinds ...waits.FieldKind) capture
 var nullCaptures = []captureDeclaration{
 	nullCapture("dorametrics.capturedMetric", "value", "GitLab sends null for a data point with no rows, which client-go decodes as 0, the best score a lead time can have (register row 116)",
 		waits.FieldKind{Type: "DORAMetric", Field: "Value", Kind: "float64"}),
-	nullCapture("mergetrains.trainMeasures", "duration", measureReason, waits.FieldKind{Type: "MergeTrain", Field: "Duration", Kind: "int64"}),
-	nullCapture("mergetrains.trainMeasures", "pipeline.duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "Duration", Kind: "int64"}),
-	nullCapture("mergetrains.trainMeasures", "pipeline.queued_duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "QueuedDuration", Kind: "int64"}),
+	nullCapture(capturedMergeTrainMeasures, "duration", measureReason, waits.FieldKind{Type: "MergeTrain", Field: "Duration", Kind: "int64"}),
+	nullCapture(capturedMergeTrainMeasures, "pipeline.duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "Duration", Kind: "int64"}),
+	nullCapture(capturedMergeTrainMeasures, "pipeline.queued_duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "QueuedDuration", Kind: "int64"}),
 	nullCapture("resourceevents.capturedWeight", "weight", "GitLab sends null for an event that took the weight away, which client-go decodes as a weight of 0 (register row 116)",
 		waits.FieldKind{Type: "WeightEvent", Field: "Weight", Kind: "int64"}),
 	nullCapture("toolutil.BoardExtra", "weight", "GitLab sends null for a board with no weight scope, which client-go decodes as a board scoped to weight 0 (register row 116)",
 		waits.FieldKind{Type: "IssueBoard", Field: "Weight", Kind: "int64"}),
-	nullCapture("toolutil.BridgeExtra", "coverage", measureReason,
+	nullCapture(capturedBridgeExtra, "coverage", measureReason,
 		waits.FieldKind{Type: "Bridge", Field: "Coverage", Kind: "float64"}, waits.FieldKind{Type: "TriggerJob", Field: "Coverage", Kind: "float64"}),
-	nullCapture("toolutil.BridgeExtra", "duration", measureReason,
+	nullCapture(capturedBridgeExtra, "duration", measureReason,
 		waits.FieldKind{Type: "Bridge", Field: "Duration", Kind: "float64"}, waits.FieldKind{Type: "TriggerJob", Field: "Duration", Kind: "float64"}),
-	nullCapture("toolutil.BridgeExtra", "queued_duration", measureReason,
+	nullCapture(capturedBridgeExtra, "queued_duration", measureReason,
 		waits.FieldKind{Type: "Bridge", Field: "QueuedDuration", Kind: "float64"}, waits.FieldKind{Type: "TriggerJob", Field: "QueuedDuration", Kind: "float64"}),
-	nullCapture("toolutil.JobMeasures", "coverage", measureReason, waits.FieldKind{Type: "Job", Field: "Coverage", Kind: "float64"}),
-	nullCapture("toolutil.JobMeasures", "duration", measureReason, waits.FieldKind{Type: "Job", Field: "Duration", Kind: "float64"}),
-	nullCapture("toolutil.JobMeasures", "queued_duration", measureReason, waits.FieldKind{Type: "Job", Field: "QueuedDuration", Kind: "float64"}),
-	nullCapture("toolutil.MergeRequestExtra", "head_pipeline.duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "Duration", Kind: "int64"}),
-	nullCapture("toolutil.MergeRequestExtra", "head_pipeline.queued_duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "QueuedDuration", Kind: "int64"}),
-	nullCapture("toolutil.NamespaceExtra", "additional_purchased_storage_size", namespaceLimitReason,
+	nullCapture(capturedJobMeasures, "coverage", measureReason, waits.FieldKind{Type: "Job", Field: "Coverage", Kind: "float64"}),
+	nullCapture(capturedJobMeasures, "duration", measureReason, waits.FieldKind{Type: "Job", Field: "Duration", Kind: "float64"}),
+	nullCapture(capturedJobMeasures, "queued_duration", measureReason, waits.FieldKind{Type: "Job", Field: "QueuedDuration", Kind: "float64"}),
+	nullCapture(capturedMergeRequestExtra, "head_pipeline.duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "Duration", Kind: "int64"}),
+	nullCapture(capturedMergeRequestExtra, "head_pipeline.queued_duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "QueuedDuration", Kind: "int64"}),
+	nullCapture(capturedNamespaceExtra, "additional_purchased_storage_size", namespaceLimitReason,
 		waits.FieldKind{Type: "Namespace", Field: "AdditionalPurchasedStorageSize", Kind: "int64"}),
-	nullCapture("toolutil.NamespaceExtra", "extra_shared_runners_minutes_limit", namespaceLimitReason,
+	nullCapture(capturedNamespaceExtra, "extra_shared_runners_minutes_limit", namespaceLimitReason,
 		waits.FieldKind{Type: "Namespace", Field: "ExtraSharedRunnersMinutesLimit", Kind: "int64"}),
-	nullCapture("toolutil.NamespaceExtra", "shared_runners_minutes_limit", namespaceLimitReason,
+	nullCapture(capturedNamespaceExtra, "shared_runners_minutes_limit", namespaceLimitReason,
 		waits.FieldKind{Type: "Namespace", Field: "SharedRunnersMinutesLimit", Kind: "int64"}),
 	nullCapture("toolutil.PipelineExtra", "duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "Duration", Kind: "int64"}),
 	nullCapture("toolutil.PipelineExtra", "queued_duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "QueuedDuration", Kind: "int64"}),
@@ -197,7 +208,7 @@ const approvalStateReason = "only an Enterprise Edition instance sends the appro
 // kept for its presence.
 func presenceCapture(key, field, kind string) captureDeclaration {
 	return captureDeclaration{
-		Type: "mrapprovals.enterpriseApprovalCapture", Key: key, Category: keptForPresence,
+		Type: capturedEnterpriseApproval, Key: key, Category: keptForPresence,
 		Predicates: []waits.Predicate{waits.FieldKind{Type: "MergeRequestApprovals", Field: field, Kind: kind}},
 		Reason:     approvalStateReason,
 	}
@@ -249,7 +260,7 @@ var siblingCaptures = []captureDeclaration{
 		Reason:     "client-go's GroupMember models the public email and ProjectMember does not, so a project member reads it from the capture",
 	},
 	{
-		Type: "toolutil.MergeRequestExtra", Key: "work_in_progress", Category: keptForSiblingPairing,
+		Type: capturedMergeRequestExtra, Key: "work_in_progress", Category: keptForSiblingPairing,
 		Predicates: []waits.Predicate{waits.LacksKey{Type: "BasicMergeRequest", Key: "work_in_progress"}},
 		Reason:     "client-go's MergeRequest models work_in_progress and BasicMergeRequest, which every list decodes into, does not",
 	},
@@ -277,17 +288,17 @@ var objectCaptures = []captureDeclaration{
 		Reason:     "each approval's user is GitLab's UserBasic, whose public_email and locked client-go's BasicUser does not model, so each approval is read whole with the time it was given",
 	},
 	{
-		Type: "mrapprovals.enterpriseApprovalCapture", Key: "approver_groups", Category: keptWithItsObject,
+		Type: capturedEnterpriseApproval, Key: "approver_groups", Category: keptWithItsObject,
 		Predicates: []waits.Predicate{waits.LacksKey{Type: "MergeRequestApproverNestedGroup", Key: "parent_id"}},
 		Reason:     "each group carries the parent_id client-go's MergeRequestApproverNestedGroup does not model, so the list is read whole",
 	},
 	{
-		Type: "mrapprovals.enterpriseApprovalCapture", Key: "approvers", Category: keptWithItsObject,
+		Type: capturedEnterpriseApproval, Key: "approvers", Category: keptWithItsObject,
 		Predicates: []waits.Predicate{waits.LacksKey{Type: "BasicUser", Key: "public_email"}, waits.LacksKey{Type: "BasicUser", Key: "locked"}},
 		Reason:     userBasicReason,
 	},
 	{
-		Type: "mrapprovals.enterpriseApprovalCapture", Key: "suggested_approvers", Category: keptWithItsObject,
+		Type: capturedEnterpriseApproval, Key: "suggested_approvers", Category: keptWithItsObject,
 		Predicates: []waits.Predicate{waits.LacksKey{Type: "BasicUser", Key: "public_email"}, waits.LacksKey{Type: "BasicUser", Key: "locked"}},
 		Reason:     userBasicReason,
 	},
