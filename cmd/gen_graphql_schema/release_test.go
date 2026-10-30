@@ -73,10 +73,15 @@ func TestRunRelease_FromAFile_WritesThePinTheCheckAccepts(t *testing.T) {
 	if status != 0 {
 		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
 	}
-	for _, want := range []string{"wrote " + graphqlschema.ReleaseSDLFileName, "from the file " + from + " (release as the REST record names it)"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("stdout does not say %q:\n%s", want, out)
-		}
+	for _, line := range []struct{ name, want string }{
+		{name: "names the schema it wrote", want: "wrote " + graphqlschema.ReleaseSDLFileName},
+		{name: "names the file the dump came from", want: "from the file " + from + " (release as the REST record names it)"},
+	} {
+		t.Run(line.name, func(t *testing.T) {
+			if !strings.Contains(out, line.want) {
+				t.Errorf("stdout does not say %q:\n%s", line.want, out)
+			}
+		})
 	}
 	types, sdlDigest, source, err := readReleaseArtifacts(dir)
 	if err != nil {

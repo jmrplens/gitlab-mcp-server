@@ -53,6 +53,13 @@ type releaseDeclaration struct {
 // orbitPackage is where the Orbit documents live.
 const orbitPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/orbit"
 
+// orbitQueryFields and orbitNamespaceFields name what each Orbit document asks
+// of a schema that no self-managed release has.
+const (
+	orbitQueryFields     = "Query.orbit"
+	orbitNamespaceFields = "OrbitNamespace.enabled, access, trial and indexing"
+)
+
 // orbitReason is why the release refuses every Orbit document and why that is
 // right. TestReleaseDeclarations_OrbitDocuments_BelongToGitLabDotComOnlyActions
 // holds the claim about the actions to the catalog.
@@ -66,11 +73,11 @@ func orbitReason(fields string) string {
 // releaseDeclarations are the documents the release pin refuses on purpose.
 func releaseDeclarations() []releaseDeclaration {
 	return []releaseDeclaration{
-		{Package: orbitPackage, Document: "queryServiceStatus", Reason: orbitReason("Query.orbit")},
-		{Package: orbitPackage, Document: "querySchema", Reason: orbitReason("Query.orbit")},
-		{Package: orbitPackage, Document: "queryGraphStatusByPath", Reason: orbitReason("OrbitNamespace.enabled, access, trial and indexing")},
-		{Package: orbitPackage, Document: "queryGraphStatusByGroupID", Reason: orbitReason("OrbitNamespace.enabled, access, trial and indexing")},
-		{Package: orbitPackage, Document: "queryGraphStatusByProjectID", Reason: orbitReason("OrbitNamespace.enabled, access, trial and indexing")},
+		{Package: orbitPackage, Document: "queryServiceStatus", Reason: orbitReason(orbitQueryFields)},
+		{Package: orbitPackage, Document: "querySchema", Reason: orbitReason(orbitQueryFields)},
+		{Package: orbitPackage, Document: "queryGraphStatusByPath", Reason: orbitReason(orbitNamespaceFields)},
+		{Package: orbitPackage, Document: "queryGraphStatusByGroupID", Reason: orbitReason(orbitNamespaceFields)},
+		{Package: orbitPackage, Document: "queryGraphStatusByProjectID", Reason: orbitReason(orbitNamespaceFields)},
 	}
 }
 
