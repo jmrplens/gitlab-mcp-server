@@ -115,9 +115,15 @@ func TestSecurityScanProfiles_ProjectInGroup_AttachesListsAndDetaches(t *testing
 
 // assertAttachRefusesScanTypeWithoutDefaultProfile attaches by
 // container_scanning, a scan type GitLab builds no default profile for, and
-// holds the refusal to naming the default profiles that attach does take:
-// GitLab's own answer is a generic resource-not-available error, and the
-// action used to offer this very name.
+// holds the refusal to naming the default profiles that attach does take and
+// the sentence saying which names it refuses: GitLab's own answer is a generic
+// resource-not-available error, and the action used to offer this very name.
+//
+// Both are the handler's constants rather than words copied out of them. The
+// sentence was asserted as "have no default profile" while it named two scan
+// types, and the 3.4.0 candidate failed here when business_logic gained its
+// default profile and the sentence became "container_scanning has no default
+// profile": GitLab refused container_scanning exactly as before.
 func assertAttachRefusesScanTypeWithoutDefaultProfile(e *harness.Env, s *harness.Session, projectID int64) {
 	e.T.Helper()
 	refused, refusal := harness.Try[securityscanprofiles.MutationOutput](s, actionScanProfileAttach, map[string]any{
@@ -128,5 +134,5 @@ func assertAttachRefusesScanTypeWithoutDefaultProfile(e *harness.Env, s *harness
 		return
 	}
 	assertMentions(e, "attach by "+scanTypeWithoutDefaultProfile, refusal.Error(),
-		securityscanprofiles.DefaultProfileNames, "have no default profile")
+		securityscanprofiles.DefaultProfileNames, securityscanprofiles.RefusedByName, scanTypeWithoutDefaultProfile+" has no default profile")
 }
