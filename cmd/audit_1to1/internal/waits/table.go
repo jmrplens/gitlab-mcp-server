@@ -65,6 +65,13 @@ var pagedWithoutOptions = []string{
 	"Users.ListGPGKeysForUser",
 }
 
+// The pointer types several FieldKind predicates hold an option field to,
+// spelled as FieldKind spells them.
+const (
+	kindInt64Pointer   = "*int64"
+	kindISOTimePointer = "*ISOTime"
+)
+
 // upstreamWaits are the workarounds that wait on client-go, grouped by the
 // register row each waits on.
 var upstreamWaits = []Entry{
@@ -195,11 +202,11 @@ var upstreamWaits = []Entry{
 		Row: 119, Category: CategoryUpstream,
 		Sites: []string{"toolutil.ApplyWorkItemWidgets"},
 		Predicates: []Predicate{
-			FieldKind{Type: "UpdateWorkItemOptions", Field: "MilestoneID", Kind: "*int64"},
-			FieldKind{Type: "UpdateWorkItemOptions", Field: "ParentID", Kind: "*int64"},
-			FieldKind{Type: "UpdateWorkItemOptions", Field: "IterationID", Kind: "*int64"},
-			FieldKind{Type: "UpdateWorkItemOptions", Field: "StartDate", Kind: "*ISOTime"},
-			FieldKind{Type: "UpdateWorkItemOptions", Field: "DueDate", Kind: "*ISOTime"},
+			FieldKind{Type: "UpdateWorkItemOptions", Field: "MilestoneID", Kind: kindInt64Pointer},
+			FieldKind{Type: "UpdateWorkItemOptions", Field: "ParentID", Kind: kindInt64Pointer},
+			FieldKind{Type: "UpdateWorkItemOptions", Field: "IterationID", Kind: kindInt64Pointer},
+			FieldKind{Type: "UpdateWorkItemOptions", Field: "StartDate", Kind: kindISOTimePointer},
+			FieldKind{Type: "UpdateWorkItemOptions", Field: "DueDate", Kind: kindISOTimePointer},
 			FieldKind{Type: "UpdateWorkItemOptions", Field: "HealthStatus", Kind: "*string"},
 		},
 		Reason: "UpdateWorkItemOptions wraps any reference, 0 included, into a global ID and omits an unset date or health status, so it cannot ask for a removal; the request option writes null into the mutation input for each one asked for",
@@ -274,9 +281,9 @@ var upstreamWaits = []Entry{
 		Row: 125, Category: CategoryUpstream,
 		Sites: []string{"toolutil.Int64UserIDFilter"},
 		Predicates: []Predicate{
-			FieldKind{Type: "GetIssuesStatisticsOptions", Field: "AssigneeID", Kind: "*int64"},
-			FieldKind{Type: "GetGroupIssuesStatisticsOptions", Field: "AssigneeID", Kind: "*int64"},
-			FieldKind{Type: "GetProjectIssuesStatisticsOptions", Field: "AssigneeID", Kind: "*int64"},
+			FieldKind{Type: "GetIssuesStatisticsOptions", Field: "AssigneeID", Kind: kindInt64Pointer},
+			FieldKind{Type: "GetGroupIssuesStatisticsOptions", Field: "AssigneeID", Kind: kindInt64Pointer},
+			FieldKind{Type: "GetProjectIssuesStatisticsOptions", Field: "AssigneeID", Kind: kindInt64Pointer},
 		},
 		Reason: "the issue statistics options type assignee_id *int64, which cannot carry None or Any, so the three statistics actions write either literal into the query through a request option",
 	},
@@ -284,11 +291,11 @@ var upstreamWaits = []Entry{
 		Row: 126, Category: CategoryUpstream,
 		Sites: []string{"toolutil.TimestampParam"},
 		Predicates: []Predicate{
-			FieldKind{Type: "AddSSHKeyOptions", Field: "ExpiresAt", Kind: "*ISOTime"},
-			FieldKind{Type: "ListAllSnippetsOptions", Field: "CreatedAfter", Kind: "*ISOTime"},
-			FieldKind{Type: "ListAllSnippetsOptions", Field: "CreatedBefore", Kind: "*ISOTime"},
-			FieldKind{Type: "AddChangelogOptions", Field: "Date", Kind: "*ISOTime"},
-			FieldKind{Type: "GenerateChangelogDataOptions", Field: "Date", Kind: "*ISOTime"},
+			FieldKind{Type: "AddSSHKeyOptions", Field: "ExpiresAt", Kind: kindISOTimePointer},
+			FieldKind{Type: "ListAllSnippetsOptions", Field: "CreatedAfter", Kind: kindISOTimePointer},
+			FieldKind{Type: "ListAllSnippetsOptions", Field: "CreatedBefore", Kind: kindISOTimePointer},
+			FieldKind{Type: "AddChangelogOptions", Field: "Date", Kind: kindISOTimePointer},
+			FieldKind{Type: "GenerateChangelogDataOptions", Field: "Date", Kind: kindISOTimePointer},
 		},
 		Reason: "five option fields carry a parameter GitLab declares DateTime as a date, which GitLab reads as midnight UTC, so the SSH key adds, the snippet list and the two changelog actions leave the field unset and write the instant through a request option",
 	},

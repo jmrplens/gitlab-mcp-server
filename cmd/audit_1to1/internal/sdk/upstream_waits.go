@@ -902,6 +902,10 @@ func judgeEntry(entry waits.Entry, sdk waits.SDK) waitEntry {
 	return judged
 }
 
+// siteClause follows an entry's label in what staleWait reports about one of
+// its sites.
+const siteClause = ": site "
+
 // staleWait lists what of one entry no longer describes the tree: a site
 // that no longer exists or that the walk finds no workaround at, an unseen
 // site the walk does see or whose strings name no key a field predicate of
@@ -916,16 +920,16 @@ func staleWait(entry waits.Entry, judged waitEntry, in waitsInput, bySite map[st
 	var stale []string
 	for _, site := range entry.Sites {
 		if !in.sites[site] {
-			stale = append(stale, label+": site "+site+" no longer exists")
+			stale = append(stale, label+siteClause+site+" no longer exists")
 			continue
 		}
 		if len(bySite[site]) == 0 {
-			stale = append(stale, label+": site "+site+" carries no workaround the walk finds")
+			stale = append(stale, label+siteClause+site+" carries no workaround the walk finds")
 		}
 	}
 	for _, site := range entry.Unseen {
 		if !in.sites[site] {
-			stale = append(stale, label+": site "+site+" no longer exists")
+			stale = append(stale, label+siteClause+site+" no longer exists")
 			continue
 		}
 		if len(bySite[site]) != 0 {
