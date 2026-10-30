@@ -225,7 +225,7 @@ func TestRequestStructsOf_AStandInSDK_SeparatesWhatMethodsTakeFromWhatTheyReach(
 	if got, want := namesOf(requests.Nested), []string{"Level", "PermissionOptions"}; !slices.Equal(got, want) {
 		t.Errorf("Nested = %v, want %v", got, want)
 	}
-	if again := RequestStructsOf(sdk); again != requests {
+	if RequestStructsOf(sdk) != requests {
 		t.Error("RequestStructsOf read the SDK a second time instead of answering from its cache")
 	}
 }
