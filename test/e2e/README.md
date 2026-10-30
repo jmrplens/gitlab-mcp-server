@@ -173,7 +173,7 @@ All Docker infrastructure is version-controlled in this directory:
 - `scripts/register-runner.sh` — Registers CI runner
 - `scripts/wait-for-gitlab.sh` — Polls readiness endpoint
 - `scripts/docker-images.sh`: holds the GitLab and runner images to the images their tags name today, pulling only a newer one, and reads the release the run tested
-- `scripts/skip-gate.sh`: hands a complete run's `go test -json` stream to the skip gate, and settles what a complete run is started with or refused for (see [A complete run](#a-complete-run))
+- `scripts/skip-gate.sh`: hands a complete run's `go test -json` streams to the skip gate, settles what a complete run is started with or refused for, and names the scenario its final pass runs last (see [A complete run](#a-complete-run))
 - `scripts/gitlab-exceptions.sh`: copies GitLab's exceptions log into the reports before the teardown deletes it
 
 The manual steps below start whatever images the daemon holds, like a bare `docker compose up`; `run-docker-e2e.sh`, which every target runs, checks them against the registry first.
@@ -367,7 +367,10 @@ the MCP transport and every tool surface together.
 otherwise: `e2e-<runtime>-junit.xml`, the `go test -json` stream
 `e2e-<runtime>-log.json` that the skip gate and `cmd/audit_e2e_coverage` read,
 and the console output `e2e-<runtime>-output.txt`, beside the copy of GitLab's
-exceptions log. The stack is torn down with its volumes whatever the run
+exceptions log. A complete CE run writes three more under the same stem with
+`-final` added (`e2e-ce-final-junit.xml`, `e2e-ce-final-log.json` and
+`e2e-ce-final-output.txt`), the reports of the final pass that runs the
+[throttle probe](#the-throttle-probe) last. The stack is torn down with its volumes whatever the run
 ended with; `E2E_KEEP_STACK=true` leaves it up, so GitLab's data and the
 runner's logs can be read after a failure. Remove it afterwards with
 `docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v`.
