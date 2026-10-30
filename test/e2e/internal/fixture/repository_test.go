@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"errors"
 	"image/png"
+	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -58,6 +59,55 @@ func TestCommitRetryReason_ByClass_NamesTheStep(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := commitRetryReason(testCase.err, testCase.needStartBranch); got != testCase.want {
 				t.Errorf("commitRetryReason() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// branchRefusedThroughTheServer is the branch refusal as a scenario reads it
+// off a tool error, the server's words around GitLab's.
+const branchRefusedThroughTheServer = "tool_error after 41ms: repository.commit_create: You can only create or edit files when you are on a branch"
+
+// TestRetryWhileBranchSettles_RetriesOnlyTheBranchRefusal checks what a
+// scenario's write to a branch it has just created through the server is tried
+// again for: the branch refusal, as the tool error carries it, until the write
+// goes through, and nothing else, so a refusal of another kind comes back after
+// the one attempt that met it.
+func TestRetryWhileBranchSettles_RetriesOnlyTheBranchRefusal(t *testing.T) {
+	cases := []struct {
+		name      string
+		answers   []error
+		wantCalls int
+		wantErr   string
+	}{
+		{name: "refused once, then written", answers: []error{errors.New(branchRefusedThroughTheServer), nil}, wantCalls: 2},
+		{name: "written at once", answers: []error{nil}, wantCalls: 1},
+		{
+			name:      "another refusal is not retried",
+			answers:   []error{errors.New("tool_error after 9ms: repository.commit_create: A file with this name already exists")},
+			wantCalls: 1, wantErr: "A file with this name already exists",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, e := detachedStub(t)
+			calls := 0
+			got, err := RetryWhileBranchSettles(e, "commit create on feature", func() (string, error) {
+				answer := testCase.answers[calls]
+				calls++
+				if answer != nil {
+					return "", answer
+				}
+				return "written", nil
+			})
+			if calls != testCase.wantCalls {
+				t.Errorf("the write was sent %d times, want %d", calls, testCase.wantCalls)
+			}
+			switch {
+			case testCase.wantErr == "" && (err != nil || got != "written"):
+				t.Errorf("RetryWhileBranchSettles() = %q, %v; want the write's answer", got, err)
+			case testCase.wantErr != "" && (err == nil || !strings.Contains(err.Error(), testCase.wantErr)):
+				t.Errorf("RetryWhileBranchSettles() error = %v, want the refusal %q", err, testCase.wantErr)
 			}
 		})
 	}

@@ -10,7 +10,10 @@
 // branch the API has just created is not yet one the commits API will write
 // to, and the refusal it gives ("you can only create or edit files when you
 // are on a branch") is answered here by naming a start branch and trying
-// again, which is what the suite this replaces learned to do.
+// again, which is what the suite this replaces learned to do. A scenario that
+// creates the branch through the server and commits to it there meets the same
+// refusal, and RetryWhileBranchSettles tries it again the same way, without
+// the start branch.
 
 package fixture
 
@@ -155,12 +158,11 @@ func commitAction(e *harness.Env, project Project, branch, path, content, messag
 // commitRetryable classifies a commit failure and flips the start-branch
 // switch the next attempt reads.
 func commitRetryable(err error, needStartBranch *bool) bool {
-	message := err.Error()
 	switch {
-	case strings.Contains(message, "only create or edit files when you are on a branch"):
+	case branchNotReady(err):
 		*needStartBranch = true
 		return true
-	case *needStartBranch && strings.Contains(message, "already exists"):
+	case *needStartBranch && strings.Contains(err.Error(), "already exists"):
 		*needStartBranch = false
 		return true
 	default:
@@ -171,13 +173,29 @@ func commitRetryable(err error, needStartBranch *bool) bool {
 // commitRetryReason names a retried commit failure for the log.
 func commitRetryReason(err error, needStartBranch bool) string {
 	switch {
-	case strings.Contains(err.Error(), "only create or edit files when you are on a branch"):
+	case branchNotReady(err):
 		return "branch not ready, naming a start branch"
 	case needStartBranch:
 		return "branch exists now, dropping the start branch"
 	default:
 		return "transient network error"
 	}
+}
+
+// RetryWhileBranchSettles runs op, a write a scenario sends through the server
+// under test to a branch it has just created there, until GitLab can see the
+// branch. The commits API refuses such a write with [branchNotReadyAnswer] for
+// a moment after branch.create answered, as it refuses the fixture's own
+// commits ([CommitFile]), so the refusal is tried again within the attempts
+// and the waits a fixture commit gets, and any other outcome is returned as it
+// came, a success or the first other failure.
+//
+// It never names a start branch, as the fixture's commit does: the scenario's
+// subject is a commit to the branch it created, and a start branch would let
+// GitLab create that branch itself while it still could not see it.
+func RetryWhileBranchSettles[O any](e *harness.Env, label string, op func() (O, error)) (O, error) {
+	e.T.Helper()
+	return retryWhen(e, label, commitRetries, branchNotReady, op)
 }
 
 // readFile returns the commit that last wrote path on branch and the file's

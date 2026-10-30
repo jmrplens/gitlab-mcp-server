@@ -90,15 +90,26 @@ func IsRetryable(err error) bool {
 	case toolutil.IsHTTPStatus(err, http.StatusNotFound):
 		return true
 	}
-	message := strings.ToLower(err.Error())
-	// The commits API refuses to write to a branch it cannot see yet.
-	if strings.Contains(message, "only create or edit files when you are on a branch") {
+	if branchNotReady(err) {
 		return true
 	}
 	// GitLab's NotificationSetting row is created inside a read with
 	// find_or_initialize_by, so two concurrent readers both insert and the
 	// loser is refused with a uniqueness error on a request that only read.
-	return strings.Contains(message, "already exists in source")
+	return strings.Contains(strings.ToLower(err.Error()), "already exists in source")
+}
+
+// branchNotReadyAnswer is what the commits API answers a write to a branch it
+// cannot see yet, which it does for a moment after the branch was created,
+// whoever created it: the fixture through client-go or a scenario through the
+// server under test.
+const branchNotReadyAnswer = "only create or edit files when you are on a branch"
+
+// branchNotReady reports whether err carries [branchNotReadyAnswer], whatever
+// its case and whatever wraps it: a client-go error, or the text of a tool
+// error the server answered with.
+func branchNotReady(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), branchNotReadyAnswer)
 }
 
 // CreateRetryable reports whether a project or group creation failed for a
@@ -209,6 +220,8 @@ func describeRetry(err error) string {
 		return "server error"
 	case statusOf(err) == http.StatusNotFound:
 		return "not visible yet"
+	case branchNotReady(err):
+		return "branch not ready"
 	case strings.Contains(err.Error(), "already been taken"):
 		return "name collision inside GitLab's own validation"
 	default:

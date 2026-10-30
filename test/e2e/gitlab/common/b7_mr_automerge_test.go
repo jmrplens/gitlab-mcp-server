@@ -43,12 +43,17 @@ const mrAutoMergeCIYAML = `blocked:
 // than the merge happening at once.
 var activePipelineStatuses = []string{"created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"}
 
+// missingMergeRequestIID is a merge request IID no project of the run holds.
+const missingMergeRequestIID = int64(999999)
+
 // TestMergeRequest_CancelAutoMerge_DisarmsTheScheduledMerge opens a merge
 // request of its own on every surface whose branch carries a pipeline that
 // cannot finish, waits until that pipeline is the request's head pipeline,
 // merges it with auto_merge so the merge is scheduled rather than done, and
 // then cancels the schedule: the answer must be the same request, still open,
-// and no longer waiting to merge.
+// and no longer waiting to merge. It then cancels the auto-merge of a request
+// the project does not hold, which must be refused as not found with the hint
+// naming the two identifiers to check.
 func TestMergeRequest_CancelAutoMerge_DisarmsTheScheduledMerge(t *testing.T) {
 	e := harness.New(t)
 
@@ -78,5 +83,14 @@ func TestMergeRequest_CancelAutoMerge_DisarmsTheScheduledMerge(t *testing.T) {
 		if cancelled.IID != f.mr.IID || cancelled.State != "opened" || cancelled.MergeWhenPipelineSucceeds {
 			e.T.Errorf("cancel_auto_merge answered %+v, want request !%d open with no merge scheduled", cancelled, f.mr.IID)
 		}
+
+		// GitLab 19.5 answers 404 on both cancel routes for a request the
+		// project does not hold, cancel_auto_merge and the deprecated route
+		// issue 1446 falls back to after a 404, so the refusal carries the
+		// merge request hint whichever route answered last.
+		refused := harness.Refused(s, actionMergeRequestCancelAutoMerge,
+			withParams(params, map[string]any{"merge_request_iid": missingMergeRequestIID}), harness.FailureNotFound)
+		assertMentions(e, "the cancel of a merge request the project does not hold", refused,
+			"verify project_id and merge_request_iid")
 	})
 }
