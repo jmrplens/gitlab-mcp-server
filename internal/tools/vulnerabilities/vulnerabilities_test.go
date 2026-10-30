@@ -2706,9 +2706,9 @@ func TestDependencyLabel_NamesTheVersionOnlyWhenTheReportGaveOne(t *testing.T) {
 // documents of this package to the schema of the GitLab release the REST
 // record is taken from, beside the gitlab.com pin the test transport judges
 // them by. The pin is a pre-release, and GitLab refuses a whole document that
-// names a field it does not have: the list, the get and the four state changes
-// selected crashState for three days after a re-pin, and GitLab 19.5 answered
-// each of them with "Field 'crashState' doesn't exist on type
+// names a field it does not have: after the re-pin of 2026-10-29 the list, the
+// get and the four state changes selected crashState, and GitLab 19.5.3
+// answered each of them with "Field 'crashState' doesn't exist on type
 // 'VulnerabilityLocationCoverageFuzzing'" while every test here passed.
 func TestDocuments_ReleasePin_AcceptsEveryDocumentThePackageSends(t *testing.T) {
 	release, err := graphqlschema.ReleaseSchema()

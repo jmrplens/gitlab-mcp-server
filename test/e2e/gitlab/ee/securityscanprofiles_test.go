@@ -123,7 +123,9 @@ func TestSecurityScanProfiles_ProjectInGroup_AttachesListsAndDetaches(t *testing
 // sentence was asserted as "have no default profile" while it named two scan
 // types, and the 3.4.0 candidate failed here when business_logic gained its
 // default profile and the sentence became "container_scanning has no default
-// profile": GitLab refused container_scanning exactly as before.
+// profile": GitLab refused container_scanning exactly as before. The third
+// string ties the scan type this test attaches by to that sentence, so the
+// test cannot go on attaching by a name the sentence no longer refuses.
 func assertAttachRefusesScanTypeWithoutDefaultProfile(e *harness.Env, s *harness.Session, projectID int64) {
 	e.T.Helper()
 	refused, refusal := harness.Try[securityscanprofiles.MutationOutput](s, actionScanProfileAttach, map[string]any{
