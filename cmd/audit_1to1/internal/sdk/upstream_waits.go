@@ -531,25 +531,52 @@ func (s bodyScan) bodyEditKeys(fn funcBody) []string {
 }
 
 // collectEditKeys adds the keys body writes into a BodyEdit to keys. A
-// variable handed to Set or Drop is followed to the keys assigned into it
-// and the strings appended to it.
+// variable handed to Set or Drop is followed to the keys assigned into it,
+// the strings appended to it and what it is assigned whole: a literal's
+// keys or names, or another variable, followed in turn. The passes repeat
+// until one hands on no new variable, which they reach because body's
+// variables are finite.
 func (s bodyScan) collectEditKeys(body *ast.BlockStmt, keys map[string]bool) {
 	dropped := s.collectEditValues(body, keys)
 	handed := func(expr ast.Expr) bool {
-		ident, isIdent := expr.(*ast.Ident)
-		return isIdent && dropped[identVar(s.info, ident)]
+		variable := assignedVar(s.info, expr)
+		return variable != nil && dropped[variable]
 	}
-	ast.Inspect(body, func(node ast.Node) bool {
-		switch typed := node.(type) {
-		case *ast.CallExpr:
-			if len(typed.Args) > 0 && handed(typed.Args[0]) {
-				s.addAppended(typed, keys)
+	for before := -1; before != len(dropped); {
+		before = len(dropped)
+		ast.Inspect(body, func(node ast.Node) bool {
+			switch typed := node.(type) {
+			case *ast.CallExpr:
+				if len(typed.Args) > 0 && handed(typed.Args[0]) {
+					s.addAppended(typed, keys)
+				}
+			case *ast.AssignStmt:
+				s.addIndexedKeys(typed.Lhs, handed, keys)
+				s.handedValues(typed.Lhs, typed.Rhs, handed, keys, dropped)
+			case *ast.ValueSpec:
+				names := make([]ast.Expr, len(typed.Names))
+				for i, name := range typed.Names {
+					names[i] = name
+				}
+				s.handedValues(names, typed.Values, handed, keys, dropped)
 			}
-		case *ast.AssignStmt:
-			s.addIndexedKeys(typed.Lhs, handed, keys)
+			return true
+		})
+	}
+}
+
+// handedValues adds what each variable of lhs that handed says goes to the
+// edit is assigned: the value in its place, read as a value set into the
+// edit. A call whose several results are assigned at once is not read.
+func (s bodyScan) handedValues(lhs, rhs []ast.Expr, handed func(ast.Expr) bool, keys map[string]bool, dropped map[*types.Var]bool) {
+	if len(lhs) != len(rhs) {
+		return
+	}
+	for i, target := range lhs {
+		if handed(target) {
+			s.editValue(rhs[i], keys, dropped)
 		}
-		return true
-	})
+	}
 }
 
 // collectEditValues adds to keys what body writes into a BodyEdit in place:
@@ -633,11 +660,11 @@ func (s bodyScan) editField(expr ast.Expr) string {
 }
 
 // editValue adds what one value set into a BodyEdit names: the keys of a map
-// literal, the strings of a list literal or of an append, or, for a
-// variable, the variable, whose keys and appended strings the caller
-// collects.
+// literal, the strings of a list literal, the strings an append adds and
+// what the list it extends names, or, for a variable, the variable, whose
+// keys and appended strings the caller collects.
 func (s bodyScan) editValue(value ast.Expr, keys map[string]bool, dropped map[*types.Var]bool) {
-	switch typed := value.(type) {
+	switch typed := ast.Unparen(value).(type) {
 	case *ast.CompositeLit:
 		for _, elt := range typed.Elts {
 			if kv, isKV := elt.(*ast.KeyValueExpr); isKV {
@@ -646,9 +673,13 @@ func (s bodyScan) editValue(value ast.Expr, keys map[string]bool, dropped map[*t
 			s.addKey(elt, keys)
 		}
 	case *ast.CallExpr:
-		// edit.Drop = append(edit.Drop, "key") appends what follows the
-		// list it extends.
+		// edit.Drop = append(existing, "key") drops what follows the list
+		// it extends and what that list already holds; extending edit.Drop
+		// itself adds nothing beyond its own assignments.
 		s.addAppended(typed, keys)
+		if isBuiltin(s.info, typed.Fun, "append") {
+			s.editValue(typed.Args[0], keys, dropped)
+		}
 	case *ast.Ident:
 		if variable := identVar(s.info, typed); variable != nil {
 			dropped[variable] = true

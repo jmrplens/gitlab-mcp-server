@@ -20,10 +20,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 22,957 |
-| Unit test functions                                   | 21,284 |
+| Total test functions                                  | 22,959 |
+| Unit test functions                                   | 21,286 |
 | E2E test functions                                    |  1,673 |
-| cmd test functions                                    |  5,515 |
+| cmd test functions                                    |  5,516 |
 | Test files (internal/)                                |    744 |
 | Test files (cmd/)                                     |    428 |
 | Test files (test/e2e/)                                |    435 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,631 | 59.4% |
 | `TestFunc` (no underscore)             |    909 |  4.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,417 | 36.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,419 | 36.7% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,173 |        253 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,174 |        253 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            433 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,163 |        475 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,673 |        435 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,515 |        428 | server entry point and developer command utilities                                              |
-| **Total**               |     **22,957** |  **1,607** |                                                                                                 |
+| cmd packages            |          5,516 |        428 | server entry point and developer command utilities                                              |
+| **Total**               |     **22,959** |  **1,607** |                                                                                                 |
 
 ### Core Packages
 
@@ -92,8 +92,8 @@
 | testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,359 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,173** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,360 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,174** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 

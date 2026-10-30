@@ -846,6 +846,35 @@ func Reused(c *gl.Client) error {
 	return err
 }
 
+func Swapped(c *gl.Client) error {
+	first, err := c.NewRequest("GET", "widgets/1", nil, nil)
+	if err != nil {
+		return err
+	}
+	second, err := c.NewRequest("GET", "widgets/2", nil, nil)
+	if err != nil {
+		return err
+	}
+	first = second
+	var archived widgetAPI
+	_, err = c.Do(first, &archived)
+	return err
+}
+
+func Aliased(c *gl.Client) error {
+	if _, err := c.NewRequest("GET", "widgets/1", nil, nil); err != nil {
+		return err
+	}
+	built, err := c.NewRequest("GET", "widgets/2", nil, nil)
+	if err != nil {
+		return err
+	}
+	var sent = built
+	var archived widgetAPI
+	_, err = c.Do(sent, &archived)
+	return err
+}
+
 func twice(c *gl.Client, opts any) error {
 	if _, err := c.NewRequest("PUT", "widgets/1", opts, nil); err != nil {
 		return err
@@ -865,7 +894,9 @@ func Twice(c *gl.Client) error { return twice(c, &widgetBody{}) }
 // struct that reads archived, and neither does a request sending nothing
 // beside one sending a struct that writes shade. A variable assigned two
 // requests could send either, so what Do decodes through it is counted
-// against both, and a function forwarding its options to two requests hands
+// against both, and so is one assigned a request of its own and then
+// another variable's; one assigned only another variable's holds that
+// request alone. A function forwarding its options to two requests hands
 // each one every call of it.
 func TestWalkToolWorkarounds_TwoRawRequestsOfOneFunction_EachCarryTheirOwnSupersets(t *testing.T) {
 	fixture := newWaitsFixtureWith(t, nil, map[string]string{"internal/tools/pairs/pairs.go": strings.ReplaceAll(pairsTool, "~", "`")})
@@ -880,6 +911,10 @@ func TestWalkToolWorkarounds_TwoRawRequestsOfOneFunction_EachCarryTheirOwnSupers
 		{Form: formRawRequest, Site: "pairs.Both", Constructor: "NewRequest", Verb: "PUT", Options: "*pairs.widgetBody", Decodes: decode, Sends: body},
 		{Form: formRawRequest, Site: "pairs.Reused", Constructor: "NewRequest", Verb: "GET", Decodes: decode},
 		{Form: formRawRequest, Site: "pairs.Reused", Constructor: "NewRequest", Verb: "GET", Decodes: decode},
+		{Form: formRawRequest, Site: "pairs.Swapped", Constructor: "NewRequest", Verb: "GET", Decodes: decode},
+		{Form: formRawRequest, Site: "pairs.Swapped", Constructor: "NewRequest", Verb: "GET", Decodes: decode},
+		{Form: formRawRequest, Site: "pairs.Aliased", Constructor: "NewRequest", Verb: "GET"},
+		{Form: formRawRequest, Site: "pairs.Aliased", Constructor: "NewRequest", Verb: "GET", Decodes: decode},
 		{Form: formRawRequest, Site: "pairs.twice", Constructor: "NewRequest", Verb: "PUT", Options: "any", Callers: twiceCaller, Sends: body},
 		{Form: formRawRequest, Site: "pairs.twice", Constructor: "NewRequest", Verb: "PUT", Options: "any", Callers: twiceCaller, Sends: body},
 	}
@@ -900,6 +935,8 @@ func TestWalkToolWorkarounds_TwoRawRequestsOfOneFunction_EachCarryTheirOwnSupers
 const editorsTool = `package editors
 
 import (
+	"slices"
+
 	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
 	"example.com/fixture/internal/toolutil"
 )
@@ -919,7 +956,25 @@ func Built(c *gl.Client) error {
 	nulls["shade"] = nil
 	unset := []string{}
 	unset = append(unset, "hue")
+	if slices.Contains(unset, "gone") || len(unset) == 0 {
+		return nil
+	}
 	_, _, err := c.Widgets.UpdateWidget(1, nil, toolutil.EditJSONBody(toolutil.BodyEdit{Set: nulls, Drop: unset}))
+	return err
+}
+
+func Extended(c *gl.Client) error {
+	existing := []string{"name"}
+	edit := toolutil.BodyEdit{}
+	edit.Drop = append(existing, "title")
+	_, _, err := c.Widgets.UpdateWidget(1, nil, toolutil.EditJSONBody(edit))
+	return err
+}
+
+func Seeded(c *gl.Client) error {
+	var seeded = map[string]any{"tint": nil}
+	nulls := seeded
+	_, _, err := c.Widgets.UpdateWidget(1, nil, toolutil.EditJSONBody(toolutil.BodyEdit{Set: nulls}))
 	return err
 }
 `
@@ -928,9 +983,12 @@ func Built(c *gl.Client) error {
 // keys a body edit writes outside a literal: one assigned into its Set
 // beside a literal's, so the edit is not taken as answered by the literal's
 // alone, one appended onto its Drop, and one assigned into a map or
-// appended to a list handed to the edit whole. A key that is no constant
-// adds nothing, and neither does a name written over an element of the
-// Drop.
+// appended to a list handed to the edit whole. A Drop appended onto
+// another list drops what that list holds too, and a map handed to the edit
+// through another variable sets the keys the map was filled with. A key
+// that is no constant adds nothing, and neither does a name written over an
+// element of the Drop or one a call other than append is handed beside a
+// list the edit takes.
 func TestWalkToolWorkarounds_KeysABodyEditIsAssigned_AreEachRead(t *testing.T) {
 	fixture := newWaitsFixtureWith(t, nil, map[string]string{"internal/tools/editors/editors.go": editorsTool})
 
@@ -942,7 +1000,12 @@ func TestWalkToolWorkarounds_KeysABodyEditIsAssigned_AreEachRead(t *testing.T) {
 			got[edit.Site] = edit.Keys
 		}
 	}
-	want := map[string][]string{"editors.Built": {"hue", "shade"}, "editors.Clear": {"name", "tags", "title"}}
+	want := map[string][]string{
+		"editors.Built":    {"hue", "shade"},
+		"editors.Clear":    {"name", "tags", "title"},
+		"editors.Extended": {"name", "title"},
+		"editors.Seeded":   {"tint"},
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("body edit keys = %v, want %v", got, want)
 	}

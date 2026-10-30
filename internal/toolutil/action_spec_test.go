@@ -5,6 +5,7 @@ package toolutil
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -1556,7 +1557,7 @@ func TestDefaultScopeParameterGuidance_KnownNames_ReturnsGuidance(t *testing.T) 
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := defaultScopeParameterGuidance(tc.name)
+			got := defaultScopeParameterGuidance(tc.name, nil)
 			if got.SemanticRole != tc.role {
 				t.Errorf("defaultScopeParameterGuidance(%q).SemanticRole = %q, want %q", tc.name, got.SemanticRole, tc.role)
 			}
@@ -1571,9 +1572,33 @@ func TestDefaultScopeParameterGuidance_KnownNames_ReturnsGuidance(t *testing.T) 
 // fall-through branch: names outside the scope-suggestive set yield the zero
 // ParameterGuidance so callers never attach fabricated guidance.
 func TestDefaultScopeParameterGuidance_UnknownName_ReturnsZero(t *testing.T) {
-	got := defaultScopeParameterGuidance("definitely_not_a_scope_param")
+	got := defaultScopeParameterGuidance("definitely_not_a_scope_param", nil)
 	if !reflect.DeepEqual(got, ParameterGuidance{}) {
 		t.Errorf("defaultScopeParameterGuidance(unknown) = %+v, want zero value", got)
+	}
+}
+
+// TestFillScopeParameterGuidanceSingle_Ref_NamesShaOnlyWhereTheActionTakesIt
+// verifies the confusion the default ref guidance warns of: it sends the
+// caller to sha, so it is given to an action that takes sha beside ref and
+// left out of one that does not, which would refuse sha as an unknown field.
+func TestFillScopeParameterGuidanceSingle_Ref_NamesShaOnlyWhereTheActionTakesIt(t *testing.T) {
+	cases := []struct {
+		name  string
+		props map[string]any
+		want  []string
+	}{
+		{name: "ref beside sha", props: map[string]any{"ref": map[string]any{}, "sha": map[string]any{}}, want: []string{"Use \"sha\" for an exact commit hash, not \"ref\"."}},
+		{name: "ref alone", props: map[string]any{"ref": map[string]any{}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := ActionSpec{Route: ActionRoute{InputSchema: map[string]any{"type": "object", "properties": tc.props}}}
+			got := FillScopeParameterGuidanceSingle(spec).ParameterGuidance["ref"]
+			if got.SemanticRole != "branch_or_tag" || !slices.Equal(got.CommonConfusions, tc.want) {
+				t.Errorf("ref guidance = %+v, want role branch_or_tag and confusions %q", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -114,8 +114,15 @@ type bodyRequests struct {
 	vars   map[*types.Var]int
 }
 
+// requestAlias is one variable assigned another: to holds the request from
+// holds, beside any it is assigned elsewhere.
+type requestAlias struct {
+	to, from *types.Var
+}
+
 // requestsOf numbers the raw requests body builds in source order, from
-// first, and maps each variable one is assigned to to its place.
+// first, and maps each variable one is assigned to to its place, directly
+// or through another variable it is assigned.
 func (s bodyScan) requestsOf(body *ast.BlockStmt, site string, first int) bodyRequests {
 	found := bodyRequests{site: site, places: map[*ast.CallExpr]int{}, vars: map[*types.Var]int{}}
 	ast.Inspect(body, func(node ast.Node) bool {
@@ -126,17 +133,23 @@ func (s bodyScan) requestsOf(body *ast.BlockStmt, site string, first int) bodyRe
 		}
 		return true
 	})
+	var aliases []requestAlias
 	ast.Inspect(body, func(node ast.Node) bool {
 		switch typed := node.(type) {
 		case *ast.AssignStmt:
 			found.bind(s.info, typed.Lhs, typed.Rhs)
+			aliases = append(aliases, variableAliases(s.info, typed.Lhs, typed.Rhs)...)
 		case *ast.ValueSpec:
-			if len(typed.Names) > 0 {
-				found.bind(s.info, []ast.Expr{typed.Names[0]}, typed.Values)
+			names := make([]ast.Expr, len(typed.Names))
+			for i, name := range typed.Names {
+				names[i] = name
 			}
+			found.bind(s.info, names, typed.Values)
+			aliases = append(aliases, variableAliases(s.info, names, typed.Values)...)
 		}
 		return true
 	})
+	found.follow(aliases)
 	return found
 }
 
@@ -148,21 +161,60 @@ func (b bodyRequests) bind(info *types.Info, lhs, rhs []ast.Expr) {
 	}
 	call, _ := ast.Unparen(rhs[0]).(*ast.CallExpr)
 	place, isRaw := b.places[call]
-	ident, isIdent := lhs[0].(*ast.Ident)
-	if !isRaw || !isIdent {
-		return
+	if variable := assignedVar(info, lhs[0]); isRaw && variable != nil {
+		b.assign(variable, place)
 	}
-	variable, isVar := info.Defs[ident].(*types.Var)
-	if !isVar {
-		variable = identVar(info, ident)
-	}
-	if variable == nil {
-		return
-	}
-	if bound, isBound := b.vars[variable]; isBound && bound != place {
+}
+
+// assign records that variable is assigned the request at place, and
+// reports whether that changed what it holds: a variable assigned two
+// requests holds -1, which no later assignment changes.
+func (b bodyRequests) assign(variable *types.Var, place int) bool {
+	bound, isBound := b.vars[variable]
+	if isBound && bound != place {
 		place = -1
 	}
+	if isBound && bound == place {
+		return false
+	}
 	b.vars[variable] = place
+	return true
+}
+
+// variableAliases returns each variable of lhs assigned the variable rhs
+// names in its place, one value to each target.
+func variableAliases(info *types.Info, lhs, rhs []ast.Expr) []requestAlias {
+	if len(lhs) != len(rhs) {
+		return nil
+	}
+	var out []requestAlias
+	for i, target := range lhs {
+		source, isIdent := ast.Unparen(rhs[i]).(*ast.Ident)
+		if !isIdent {
+			continue
+		}
+		to, from := assignedVar(info, target), identVar(info, source)
+		if to != nil && from != nil && to != from {
+			out = append(out, requestAlias{to: to, from: from})
+		}
+	}
+	return out
+}
+
+// follow gives each variable assigned another the request the other holds,
+// until a pass changes nothing, which it reaches because a variable's place
+// changes at most twice: so first = second, with first assigned a request
+// of its own, makes first a variable of two requests, and a call of Do
+// reading it is counted against both.
+func (b bodyRequests) follow(aliases []requestAlias) {
+	for changed := true; changed; {
+		changed = false
+		for _, alias := range aliases {
+			if place, isBound := b.vars[alias.from]; isBound {
+				changed = b.assign(alias.to, place) || changed
+			}
+		}
+	}
 }
 
 // sent returns the raw request expr, the request a call of Do sends, is: the

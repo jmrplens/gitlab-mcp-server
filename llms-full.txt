@@ -7146,7 +7146,7 @@ Parameter guidance:
 - schedule_take_ownership.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_take_ownership.schedule_id: pipeline_schedule_id. Source: Numeric ID of the schedule whose ownership to take.
 - schedule_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- schedule_update.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- schedule_update.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - schedule_update.schedule_id: pipeline_schedule_id. Source: Numeric ID of the schedule to edit, from a prior list or get.
 - test_report.pipeline_id: pipeline_identifier. Source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context. Avoid: Use pipeline_id, not job_id or merge_request_iid.
 - test_report.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -9407,30 +9407,30 @@ Parameter guidance:
 - compare.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - contributors.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - file_blame.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- file_blame.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- file_blame.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - file_create.branch: branch_name. Source: Branch name (without the "refs/heads/" prefix).
 - file_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - file_delete.branch: branch_name. Source: Branch name (without the "refs/heads/" prefix).
 - file_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - file_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- file_get.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- file_get.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - file_history.path: path_component. Source: Path component relative to the project or repository root (no leading slash).
 - file_history.project_id: scope_project. Source: Project numeric ID or full path that owns the repository.
 - file_metadata.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- file_metadata.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- file_metadata.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - file_raw.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- file_raw.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- file_raw.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - file_raw_metadata.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- file_raw_metadata.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- file_raw_metadata.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - file_update.branch: branch_name. Source: Branch name (without the "refs/heads/" prefix).
 - file_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - list_submodules.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- list_submodules.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- list_submodules.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - merge_base.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - raw_blob.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - raw_blob.sha: commit_sha. Source: Full or short commit SHA that uniquely identifies a commit.
 - read_submodule_file.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- read_submodule_file.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- read_submodule_file.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - tree.path: path_component. Source: Path component relative to the project or repository root (no leading slash).
 - tree.project_id: scope_project. Source: Project ID or path containing the repository.
 - tree.ref: git_ref. Source: Branch/tag/commit to inspect. Default branch when omitted.
@@ -10249,10 +10249,10 @@ Action guidance:
 Parameter guidance:
 - code.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - code.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- code.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- code.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - commits.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - commits.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- commits.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- commits.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - issues.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - issues.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - merge_requests.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
@@ -10265,7 +10265,7 @@ Parameter guidance:
 - users.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - wiki.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - wiki.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- wiki.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- wiki.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id. If both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
@@ -10479,7 +10479,7 @@ Parameter guidance:
 - emoji_snippet_note_get.snippet_id: snippet_iid. Source: Snippet IID from snippet list/get outputs.
 - emoji_snippet_note_list.project_id: scope_project. Source: Project ID or path that owns the snippet.
 - emoji_snippet_note_list.snippet_id: snippet_iid. Source: Snippet IID from snippet list/get outputs.
-- file_content.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- file_content.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - note_create.body. Source: The comment text the user wants to post. Markdown is supported. Avoid: body is the comment content, not a snippet content update. Updating the snippet body is snippet.update.
 - note_create.created_at. Source: Optional RFC 3339 timestamp to backdate the note. Requires admin or owner permissions. Avoid: created_at is ignored unless you have administrator or project/group owner permissions.
 - note_create.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
@@ -11199,9 +11199,9 @@ Parameter guidance:
 - license_list.popular: popular_filter. Source: Set true to restrict the listing to popular/featured license templates.
 - license_list.sort: sort. Source: Sort direction for ordered results.
 - lint.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- lint.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- lint.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - lint_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- lint_project.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix). Avoid: Use "sha" for an exact commit hash, not "ref".
+- lint_project.ref: branch_or_tag. Source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).
 - project_template_get.key: template_key. Source: Template key from project template list output (e.g. mit, apache-2.0, Go, Python).
 - project_template_get.project_id: scope_project. Source: Project ID or path whose template namespace is queried.
 - project_template_get.template_type: template_type. Source: Template family, one of: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests.

@@ -494,7 +494,7 @@ func FillScopeParameterGuidanceSingle(spec ActionSpec) ActionSpec {
 		if guidance == nil {
 			guidance = map[string]ParameterGuidance{}
 		}
-		guidance[name] = defaultScopeParameterGuidance(name)
+		guidance[name] = defaultScopeParameterGuidance(name, props)
 		changed = true
 	}
 
@@ -521,7 +521,10 @@ func isScopeSuggestiveParameterName(name string) bool {
 	return false
 }
 
-func defaultScopeParameterGuidance(name string) ParameterGuidance {
+// defaultScopeParameterGuidance returns the guidance a scope-suggestive
+// parameter gets when its action declares none, props being the action's
+// input properties, and the zero value for any other name.
+func defaultScopeParameterGuidance(name string, props map[string]any) ParameterGuidance {
 	switch name {
 	case "project_id":
 		return ParameterGuidance{
@@ -563,11 +566,17 @@ func defaultScopeParameterGuidance(name string) ParameterGuidance {
 			ValueSource:  "Group-scoped epic IID (integer) within the parent group.",
 		}
 	case "ref":
-		return ParameterGuidance{
-			SemanticRole:     "branch_or_tag",
-			ValueSource:      "Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix).",
-			CommonConfusions: []string{"Use \"sha\" for an exact commit hash, not \"ref\"."},
+		guidance := ParameterGuidance{
+			SemanticRole: "branch_or_tag",
+			ValueSource:  "Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix).",
 		}
+		// The confusion sends the caller to sha, which only some of the
+		// actions taking ref take beside it; any other refuses it as an
+		// unknown field.
+		if _, takesSHA := props["sha"]; takesSHA {
+			guidance.CommonConfusions = []string{"Use \"sha\" for an exact commit hash, not \"ref\"."}
+		}
+		return guidance
 	case "branch":
 		return ParameterGuidance{
 			SemanticRole: "branch_name",
