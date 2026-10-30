@@ -198,7 +198,6 @@ func writeLocationRows(c *toolutil.Card, location *LocationItem) {
 	}
 	c.Field("Crash Type", location.CrashType)
 	c.Code("Crash Address", location.CrashAddress)
-	c.Code("Crash State", location.CrashState)
 }
 
 // writeRiskRows writes what GitLab knows about how dangerous the vulnerability

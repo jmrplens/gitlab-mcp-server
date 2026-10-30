@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // Command audit_graphql_documents fails when a raw GraphQL document in this
-// repository is one the pinned GitLab schema refuses.
+// repository is one the pinned GitLab schema refuses, or when a document this
+// server sends is one the GitLab release it is pinned to refuses.
 //
 // The reading and the judging both live in cmd/internal/graphqldocs, which
 // documents what the check can and cannot see. This command is the standalone
@@ -17,6 +18,19 @@
 // runs in a second, and predates the dimension that absorbed it. Keeping the
 // name working keeps `make check-graphql-documents` and the CI step that calls
 // it pointing at the same thing.
+//
+// # The release pass
+//
+// The pinned run then judges every document again, this repository's and
+// client-go's, against the release pin: the schema of the GitLab release the
+// REST record is taken from (internal/graphqlschema, ReleaseSchema). The
+// gitlab.com pin is a pre-release, so a field it adds passes the pin and is
+// refused by every release, and GitLab refuses the whole document naming it.
+// A document the release refuses fails the run unless release.go declares
+// why, and a declaration that answers nothing fails it too. client-go's
+// documents gate here although the pin leaves them to R-PATH, because a
+// document the release refuses is a dependency that stopped working on the
+// release this server is pinned to, whoever wrote it.
 //
 // # The live re-probe
 //

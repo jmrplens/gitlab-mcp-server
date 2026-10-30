@@ -36,13 +36,30 @@
 // anticipates.
 //
 // Being ahead costs something in each direction. A field the pre-release adds
-// is accepted here and refused by every released instance: the weekly
-// ee-schema.yml re-probe judges every document against the release that
-// shipped last, and a domain whose document needs a recent field states the
-// oldest GitLab it works on. A field GitLab removes leaves gitlab.com first, so
+// is accepted here and refused by every released instance: the release pin
+// below refuses it on the commit that selects it, the weekly ee-schema.yml
+// re-probe judges every document against the release that shipped last, and a
+// domain whose document needs a recent field states the oldest GitLab it works
+// on. A field GitLab removes leaves gitlab.com first, so
 // the pin refuses a document that stopped working there while it still works
 // on every self-managed instance, and nothing lets a document declare why;
 // docs/development/graphql.md records that as deliberate.
+//
+// # The release pin
+//
+// A second schema sits beside the first: gitlab-release-schema.graphql, with
+// release-source.json, is the schema of the GitLab release the REST record and
+// the fine-grained table are taken from, rendered the way the gitlab.com pin
+// is, and [ReleaseSchema] loads it. cmd/gen_graphql_schema -release writes it
+// from the schema dump GitLab's own CI keeps for the release's tag, and its
+// -check holds the record to the REST record's release and revision, so the
+// two move together. cmd/audit_graphql_documents judges every document this
+// server sends against it after the gitlab.com pin, which is what a
+// pre-release field needs: the re-pin of 2026-10-29 let crashState into a
+// selection seven security actions share, every gate that read this pin stayed
+// green, and GitLab 19.5 refused the seven. The test transport keeps to the
+// gitlab.com pin, since the values a caller sends may name what only a newer
+// GitLab has on purpose.
 //
 // # Cost
 //

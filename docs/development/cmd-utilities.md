@@ -964,7 +964,17 @@ It loads the whole program with `go/packages` rather than matching the source wi
 
 What it cannot check is variables: a document read out of the source has no request behind it, so nothing says which variables a handler will send or what they will hold. That half belongs to the test transport, which sees a real request.
 
-What it does not judge is client-go, which builds another 42 documents of its own for the achievements, work item, security attribute and terraform state services among others. Those reach GitLab through this server too; R-PATH judges them against the pin (`audit_1to1 -scope=paths`, the `sdk_graphql` block) and reports rather than gates, and the drift report below compares them in a section of its own. The gate and its summary count this repository's documents, not the server's whole GraphQL surface.
+What it does not judge against the gitlab.com pin is client-go, which builds another 42 documents of its own for the achievements, work item, security attribute and terraform state services among others. Those reach GitLab through this server too; R-PATH judges them against the pin (`audit_1to1 -scope=paths`, the `sdk_graphql` block) and reports rather than gates, the drift report below compares them in a section of its own, and the release pass judges them. The pin's summary counts this repository's documents, not the server's whole GraphQL surface.
+
+#### The release pass
+
+A run that judges by the gitlab.com pin, which is the one `make check-graphql-documents` and CI make, then judges every document against the release pin as well: `graphqlschema.ReleaseSchema()`, the schema of the GitLab release the REST record is taken from (see [The release pin](graphql.md#the-release-pin)). The gitlab.com pin is a pre-release, and a field it adds is refused by every release: the location selection seven security actions splice in took `crashState` after the re-pin of 2026-10-29, every gate here stayed green, and GitLab 19.5.3 refused all seven. This pass fails such a document on the commit that selects it.
+
+It judges client-go's documents too, read as the drift report reads them (`readSDKDocuments`, every shell the collector can render rendered), and names the one it cannot render as not judged. Under the gitlab.com pin a client-go document GitLab refuses is client-go's to fix; under the release it is a dependency this server took that stops working on the release the server is pinned to, so it fails the run until the bump is held or the document declared. A module whose client-go documents cannot be read fails the run, since a pass over half of what the server sends is not a pass.
+
+A document the release refuses on purpose is declared in `cmd/audit_graphql_documents/release.go` (`releaseDeclarations`) by package and name, with its reason; a declaration that answers no refusal fails the run as well. The five Orbit documents are declared, since Orbit is GitLab.com's alone and every Orbit action is `GitLabDotComOnly`, which a test holds to the catalog. The summary line counts both sets and names the declared documents and the release pin's provenance.
+
+A run handed `-live` or `-schema` makes no release pass: it is already a comparison against a schema of its own, which is the question the release pass asks of one schema in particular.
 
 #### The live re-probe
 
@@ -974,7 +984,7 @@ An introspection carrying fewer types than a GitLab schema has is refused rather
 
 The same run reports where the pin and the probed schema disagree **about a type, field or argument one of our documents touches**. Whole-schema drift between two GitLab releases is thousands of lines and says nothing; the drift under our own selection sets is a handful of coordinates, and it is what turns the pin's age into a number a reader sees. Each document is walked through whichever of the two schemas accepts it, preferring the probed one, so a document the pin accepts and the instance refuses is still walked and the field that stopped existing is named. A touched type is compared by kind, an enum by its values, and a union or an interface by its members, since an abstract type changes under a document without any field of it changing: an inline fragment on a member withdrawn is refused, and a member added is an object the decoder meets with no fragment for it.
 
-The documents client-go builds are compared in a section of their own. They reach GitLab through this server as much as this repository's do, and the 19.5 re-pin changed something only they read (`BUSINESS_LOGIC`, added to the `SecurityScanProfileType` client-go's scan profile document selects as `scanType`) without any report saying so. The run reads them from the client-go the module's go.mod requires (`graphqldocs.SDKDirectory`, under `-mod=readonly` so a module that requires none is refused rather than handed whatever the module cache holds), with every shell the collector can render rendered, and names the one it cannot, the work item list, as not walked with the reason. A document neither schema accepts is named as not walked too, since nothing else in this command judges client-go's documents and a count that left it out in silence would read as a document that touches nothing. A module it cannot read is said so on a line of its own rather than shown as a clean section. They are never judged here: a document client-go builds that a schema refuses is fixed upstream, which is why R-PATH reports those refusals and this gate does not fail on them.
+The documents client-go builds are compared in a section of their own. They reach GitLab through this server as much as this repository's do, and the 19.5 re-pin changed something only they read (`BUSINESS_LOGIC`, added to the `SecurityScanProfileType` client-go's scan profile document selects as `scanType`) without any report saying so. The run reads them from the client-go the module's go.mod requires (`graphqldocs.SDKDirectory`, under `-mod=readonly` so a module that requires none is refused rather than handed whatever the module cache holds), with every shell the collector can render rendered, and names the one it cannot, the work item list, as not walked with the reason. A document neither schema accepts is named as not walked too, since nothing else in a run of this kind judges client-go's documents and a count that left it out in silence would read as a document that touches nothing. A module it cannot read is said so on a line of its own rather than shown as a clean section. They are never judged against the schema such a run is handed: a document client-go builds that the gitlab.com pin or a live instance refuses is fixed upstream, which is why R-PATH reports those refusals; the release pass of the pinned run is the one place they gate.
 
 `-schema` is the same comparison against an SDL file already on disk: a schema captured earlier, or the one belonging to the particular self-managed release a document is meant for. Naming both `-live` and `-schema` is refused, since which schema judged the documents is the whole meaning of the result.
 
@@ -2140,6 +2150,12 @@ Generating needs the network, so it is not a gate. `--check` is, and it asks mor
 
 The window that last refusal measures against, and the reason for its length, are [`cmd/internal/provenance`](#cmdinternalprovenance)'s and are stated once there. What is this command's own is the way out of it: to catch a narrowing on the day it happens rather than at the next re-pin, use `make check-graphql-documents-live`.
 
+#### The release pin
+
+`-release` writes the second pin beside the first: `gitlab-release-schema.graphql` and `release-source.json`, the schema of the GitLab release the REST record in `-api-live-dir` is taken from, which `audit_graphql_documents` judges every document against after the gitlab.com pin (see [The release pin](graphql.md#the-release-pin) for why). It reads the version from the REST record, downloads the schema GitLab's own CI dumped for the tag `v<version>` (the artifact of the `graphql-schema-dump` job), reads it back through `graphqlintrospect.FromSDL`, which drops the descriptions and directives as an introspection does, and renders it with the renderer above, so a `diff` of the two pins lists what gitlab.com has that the release lacks. The record names the release and the revision the REST record names, the URL the download ended at (the one naming GitLab's job), the SHA-256 of the dump and of the schema rendered from it, and the day. `-from` reads a dump on disk instead, for when GitLab no longer keeps the tag's artifact: `bundle exec rake gitlab:graphql:schema:dump` at the tag in a GitLab checkout writes one under `tmp/tests/graphql/`, the file the job keeps. A dump names no release of its own, so the record then says `"from_file": true` and its release and revision are the REST record's, not checked against the file. Either source is refused above 64 MiB. `-from` without `-release` is refused with exit `2`, and so is `-from` with `--check`: the check judges the committed pair and never reads the file, so its success would name the committed record while the dump went unread.
+
+`--check -release` holds the committed pair to that REST record: the schema parses and hashes to the record's schema digest, the record decodes and carries the count the file loads with, an origin, a digest, a retrieval day that is a date and not one in the future, more than 4000 types, and the REST record's release and revision. It asks no age, because a release's schema does not change once it is cut; what ages is which release the repository is pinned to, and that is the REST record's to say, so a `make gen-api-live` onto another release fails this check until the release pin follows.
+
 #### Usage
 
 ```bash
@@ -2150,26 +2166,37 @@ GITLAB_URL=https://gitlab.com GITLAB_TOKEN=<a gitlab.com token> go run ./cmd/gen
 # Probe a self-managed instance; a pin written this way will not pass --check
 go run ./cmd/gen_graphql_schema/ -url https://gitlab.example.com/api/graphql -dir /tmp/probe
 
-# CI gate, no network
+# Pin the schema of the release the REST record is taken from
+go run ./cmd/gen_graphql_schema/ -release
+
+# The same, from a dump on disk, the one the rake task writes under tmp/tests/graphql/
+go run ./cmd/gen_graphql_schema/ -release -from /path/to/the/dump.graphql
+
+# CI gates, no network
 go run ./cmd/gen_graphql_schema/ --check
+go run ./cmd/gen_graphql_schema/ --check -release
 ```
 
 #### Flags
 
-| Flag     | Type     | Default                          | Description                                                                                                              |
-| -------- | -------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `-url`   | `string` | `https://gitlab.com/api/graphql` | GraphQL endpoint to introspect                                                                                           |
-| `-dir`   | `string` | `internal/graphqlschema`         | Directory holding the pinned schema and its provenance record                                                            |
-| `-check` | `bool`   | `false`                          | Load the committed schema instead of fetching one, and fail when it does not parse or is not a current pin of gitlab.com |
+| Flag            | Type     | Default                          | Description                                                                                                                                                                |
+| --------------- | -------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-url`          | `string` | `https://gitlab.com/api/graphql` | GraphQL endpoint to introspect                                                                                                                                             |
+| `-dir`          | `string` | `internal/graphqlschema`         | Directory holding the pinned schemas and their provenance records                                                                                                          |
+| `-check`        | `bool`   | `false`                          | Load the committed schema instead of fetching one, and fail when it does not parse or is not a current pin of gitlab.com, or with `-release`, of the REST record's release |
+| `-release`      | `bool`   | `false`                          | Pin, or with `-check` judge, the schema of the GitLab release the REST record is taken from instead of gitlab.com's                                                        |
+| `-api-live-dir` | `string` | `docs/development`               | Directory holding the REST record that names the release                                                                                                                   |
+| `-from`         | `string` | _(empty)_                        | With `-release` and without `-check`, a schema dump on disk to read instead of the one GitLab's CI published for the release tag                                           |
 
 #### Output
 
-Writes `gitlab-schema.graphql` and `source.json` into `-dir`, and reports the type count and provenance on stdout. `--check` writes only the summary. Exits `1` on any failure, so a half-written artifact never reaches a branch.
+Writes `gitlab-schema.graphql` and `source.json` into `-dir`, or with `-release` `gitlab-release-schema.graphql` and `release-source.json`, and reports the type count and provenance on stdout. `--check` writes only the summary. Exits `1` on any failure, so a half-written artifact never reaches a branch, and a `-release` run that fails at either file puts both back as it found them.
 
 #### Make targets
 
 - `make gen-graphql-schema`
-- `make check-graphql-schema` — CI gate.
+- `make gen-graphql-release-schema`, with `RELEASE_SCHEMA_FROM=<path>` for `-from`
+- `make check-graphql-schema`, the CI gate, over both pins.
 
 ### gen_api_live
 

@@ -290,7 +290,7 @@ Otras tres listas solo avanzan, y por otro motivo, porque GitLab rechaza `last` 
 Los documentos GraphQL que envía este servidor se comprueban contra una copia del schema de GitLab tomada de GitLab.com, que ejecuta la versión previa de la siguiente versión menor, así que esa copia va por delante de cualquier versión autoalojada:
 
 - GitLab rechaza un documento entero que nombra un campo que no tiene, así que una acción cuyo documento lee un campo reciente falla por completo en una instancia más antigua en lugar de responder con menos. La lista, la consulta y los cuatro cambios de estado de vulnerabilidades necesitan GitLab 18.10, `security_finding.list` necesita la 18.5, y las acciones de perfiles de análisis de seguridad necesitan la 18.7.
-- Un campo añadido en la versión previa pasaría esa comprobación y lo rechazaría cualquier instancia publicada, así que una tarea semanal comprueba también los documentos contra la última imagen publicada de GitLab Enterprise Edition.
+- Un campo añadido en la versión previa pasaría esa comprobación y lo rechazaría cualquier instancia publicada, así que cada cambio se comprueba también contra una segunda copia, el schema de la versión de GitLab de la que se toman los registros REST y de tokens de grano fino del servidor (hoy la 19.5.0), y una tarea semanal comprueba los documentos contra la última imagen publicada de GitLab Enterprise Edition. Los documentos de Orbit son la excepción, porque solo GitLab.com sirve Orbit.
 - Un campo que GitLab elimina desaparece primero de GitLab.com, así que un documento puede dejar de pasar la comprobación mientras sigue funcionando en una instancia autoalojada.
 
 ### Tokens de grano fino sobre GraphQL

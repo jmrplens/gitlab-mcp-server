@@ -26,7 +26,7 @@
 	audit-tenancy check-tenancy tenancy-code-identity \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
-	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent check-graphql-sdk-shapes audit-graphql-sdk-sent \
+	gen-graphql-schema gen-graphql-release-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent check-graphql-sdk-shapes audit-graphql-sdk-sent \
 	gen-api-live check-api-live check-meta-descriptions \
 	gen-action-grants check-action-grants check-action-grants-derivation \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
@@ -1174,7 +1174,7 @@ analyze:
 	run_check "[9/35] supply-chain policy" go run ./cmd/audit_supply_chain; \
 	run_check "[10/35] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
 	run_check "[11/35] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/35] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[12/35] pinned GraphQL schemas, gitlab.com's and the release's" $(MAKE) --no-print-directory check-graphql-schema; \
 	run_check "[13/35] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
 	run_check "[14/35] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
 	run_check "[15/35] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
@@ -2423,13 +2423,29 @@ audit-readonly-graphql:
 gen-graphql-schema:
 	go run ./cmd/gen_graphql_schema/
 
-## check-graphql-schema: fail when the committed schema does not parse, its
-## provenance record does not decode, or the pin is not of what this project
-## claims to be pinned to: another instance, a truncated or narrower answer, no
-## recorded version, or past the shared staleness window
-## (cmd/internal/provenance). No network, so it is a gate.
+## gen-graphql-release-schema: pin the GraphQL schema of the GitLab release the
+## REST record (docs/development/gitlab-api-live.json) is taken from, beside the
+## gitlab.com pin, so check-graphql-documents can refuse a document that
+## release does not accept. It downloads the schema GitLab's own CI dumped for
+## the release's tag (the graphql-schema-dump job), so it needs the network and
+## no Docker; RELEASE_SCHEMA_FROM names a dump on disk instead, written by
+## `bundle exec rake gitlab:graphql:schema:dump` at the tag once GitLab no
+## longer keeps the job's artifact. Run it whenever gen-api-live moves the REST
+## record to another release: check-graphql-schema refuses the two naming
+## different releases.
+RELEASE_SCHEMA_FROM ?=
+gen-graphql-release-schema:
+	go run ./cmd/gen_graphql_schema/ -release $(if $(RELEASE_SCHEMA_FROM),-from "$(RELEASE_SCHEMA_FROM)")
+
+## check-graphql-schema: fail when either committed schema does not parse or
+## its provenance record does not decode; when the gitlab.com pin is not of what
+## this project claims to be pinned to (another instance, a truncated or
+## narrower answer, no recorded version, or past the shared staleness window,
+## cmd/internal/provenance); or when the release pin is not the schema of the
+## release the REST record is taken from. No network, so it is a gate.
 check-graphql-schema:
 	go run ./cmd/gen_graphql_schema/ --check
+	go run ./cmd/gen_graphql_schema/ --check -release
 
 ## gen-api-live: boot a released GitLab image, ask the loaded application what
 ## its REST API is, and rewrite docs/development/gitlab-api-live.json. It needs

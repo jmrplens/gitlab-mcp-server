@@ -2701,3 +2701,38 @@ func TestDependencyLabel_NamesTheVersionOnlyWhenTheReportGaveOne(t *testing.T) {
 		})
 	}
 }
+
+// TestDocuments_ReleasePin_AcceptsEveryDocumentThePackageSends holds the eight
+// documents of this package to the schema of the GitLab release the REST
+// record is taken from, beside the gitlab.com pin the test transport judges
+// them by. The pin is a pre-release, and GitLab refuses a whole document that
+// names a field it does not have: after the re-pin of 2026-10-29 the list, the
+// get and the four state changes selected crashState, and GitLab 19.5.3
+// answered each of them with "Field 'crashState' doesn't exist on type
+// 'VulnerabilityLocationCoverageFuzzing'" while every test here passed.
+func TestDocuments_ReleasePin_AcceptsEveryDocumentThePackageSends(t *testing.T) {
+	release, err := graphqlschema.ReleaseSchema()
+	if err != nil {
+		t.Fatalf("graphqlschema.ReleaseSchema() error: %v", err)
+	}
+	source, err := graphqlschema.ReleaseSourceInfo()
+	if err != nil {
+		t.Fatalf("graphqlschema.ReleaseSourceInfo() error: %v", err)
+	}
+	for _, tc := range []struct{ name, document string }{
+		{"queryListVulnerabilities", queryListVulnerabilities},
+		{"queryGetVulnerability", queryGetVulnerability},
+		{"mutationDismiss", mutationDismiss},
+		{"mutationConfirm", mutationConfirm},
+		{"mutationResolve", mutationResolve},
+		{"mutationRevert", mutationRevert},
+		{"querySeverityCount", querySeverityCount},
+		{"queryPipelineSecuritySummary", queryPipelineSecuritySummary},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if validationErr := graphqlschema.ValidateDocumentAgainst(release, tc.document); validationErr != nil {
+				t.Errorf("GitLab %s refuses %s: %v", source.GitLabVersion, tc.name, validationErr)
+			}
+		})
+	}
+}

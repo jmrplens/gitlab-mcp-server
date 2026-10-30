@@ -1423,3 +1423,23 @@ func assertPartialPage(t *testing.T, tc partialPageCase, items int, card func() 
 		t.Errorf("the card says it was answered in part: %t, want %t naming %q:\n%s", partial, tc.wantHint != "", tc.wantHint, text)
 	}
 }
+
+// TestQueryListFindings_ReleasePin_AcceptsTheDocument holds the findings list
+// to the schema of the GitLab release the REST record is taken from, beside the
+// gitlab.com pin the test transport judges it by. The location selection it
+// splices in selected crashState, which only the pin's pre-release has, and
+// GitLab 19.5 refused the whole document with "Field 'crashState' doesn't exist
+// on type 'VulnerabilityLocationCoverageFuzzing'".
+func TestQueryListFindings_ReleasePin_AcceptsTheDocument(t *testing.T) {
+	release, err := graphqlschema.ReleaseSchema()
+	if err != nil {
+		t.Fatalf("graphqlschema.ReleaseSchema() error: %v", err)
+	}
+	source, err := graphqlschema.ReleaseSourceInfo()
+	if err != nil {
+		t.Fatalf("graphqlschema.ReleaseSourceInfo() error: %v", err)
+	}
+	if err = graphqlschema.ValidateDocumentAgainst(release, queryListFindings); err != nil {
+		t.Errorf("GitLab %s refuses queryListFindings: %v", source.GitLabVersion, err)
+	}
+}
