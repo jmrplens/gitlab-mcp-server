@@ -300,13 +300,16 @@ func TestPrepareStdioCatalog_FineGrainedToken_AListingParkedAtStartupIsAlreadyNa
 	if client.Authority() == nil {
 		t.Fatal("the start attached no authority to a fine-grained token's client")
 	}
-	answerCtx, cancelAnswer := context.WithTimeout(t.Context(), gateReach)
+	// Answering it lists the whole individual surface, one of the slow phases
+	// of a registration under the race detector, so the bound is the one a
+	// registration gets rather than gateReach.
+	answerCtx, cancelAnswer := context.WithTimeout(t.Context(), testCatalogBuildTimeout)
 	defer cancelAnswer()
 	var got listed
 	select {
 	case got = <-parked:
 	case <-answerCtx.Done():
-		t.Fatalf("the listing parked at startup was not answered within %s of the catalog being prepared", gateReach)
+		t.Fatalf("the listing parked at startup was not answered within %s of the catalog being prepared", testCatalogBuildTimeout)
 	}
 	if got.err != nil {
 		t.Fatalf("the parked listing failed: %v", got.err)
