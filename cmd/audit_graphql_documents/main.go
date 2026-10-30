@@ -63,6 +63,12 @@ type auditRun struct {
 	// now supplies the day the pin's age is measured from, as a parameter so a
 	// test can assert on the drift report it produced.
 	now func() time.Time
+	// release puts the documents, this repository's and client-go's, through
+	// the release pin as well, on a run that judges by the gitlab.com pin. It
+	// is what `make check-graphql-documents` gates on beside the pin, and a
+	// field rather than a constant so a test of the pinned run over a fixture
+	// module, which requires no client-go, can leave it out.
+	release bool
 }
 
 // exitProcess ends the process with the status main was handed. It is a
@@ -99,6 +105,7 @@ func runMain(args []string, getenv func(string) string, out, errOut io.Writer) i
 		schemaPath:    *schemaPath,
 		token:         credential,
 		tokenWithheld: withheld,
+		release:       true,
 	}, out, errOut)
 }
 
@@ -154,13 +161,42 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		))
 	}
 
+	status := 0
 	if len(result.Refusals) > 0 {
 		fmt.Fprintf(errOut, "\n%s the schema refuses %d of %d document(s) (%s)\n",
 			prefix, len(result.Refusals), len(result.Documents), result.Provenance)
-		return 1
+		status = 1
+	} else {
+		fmt.Fprintf(out, "%s %d document(s) accepted (%s)\n", prefix, len(result.Documents), result.Provenance)
 	}
-	fmt.Fprintf(out, "%s %d document(s) accepted (%s)\n", prefix, len(result.Documents), result.Provenance)
-	return 0
+
+	// The release is asked only of a run that judged by the gitlab.com pin. A
+	// run handed a schema of its own is asking about that schema, and is
+	// already the comparison the release pass makes, against another one.
+	if cfg.release && probed == nil && releaseFails(cfg.dir, result.Documents, roots, out, errOut) {
+		status = 1
+	}
+	return status
+}
+
+// releasePin returns the release schema and its record. It is a variable so a
+// test can hand the release pass a schema of its own; the default reads the
+// embedded pin, whose own gate (make check-graphql-schema) refuses a build
+// where either file does not load, so a failure there is not something this
+// command could act on.
+var releasePin = func() (*ast.Schema, graphqlschema.ReleaseSource) {
+	return cmdutil.Must(graphqlschema.ReleaseSchema()), cmdutil.Must(graphqlschema.ReleaseSourceInfo())
+}
+
+// releaseFails runs the release pass over the documents the pinned run read
+// and the ones client-go builds, reports it, and says whether it fails the run.
+func releaseFails(dir string, documents []graphqldocs.Document, roots []string, out, errOut io.Writer) bool {
+	schema, source := releasePin()
+	var sdk sdkRead
+	sdk.documents, sdk.err = readSDKDocuments(dir)
+	verdict := judgeRelease(schema, documents, sdk, releaseDeclarations())
+	reportRelease(verdict, source, roots, out, errOut)
+	return verdict.failed()
 }
 
 // readSDKDocuments reads the documents client-go builds, for the drift report

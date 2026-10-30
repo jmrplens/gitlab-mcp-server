@@ -208,7 +208,11 @@ jobs:
       # or a reasoned exemption.
       - name: Check tenant policy is declared once
         run: make check-tenancy
-      - name: Check the pinned GraphQL schema parses
+      # Two pins: gitlab.com's, a pre-release, and the schema of the release
+      # the REST record is taken from, which the documents gate holds every
+      # document to as well, since a field only the pre-release has is
+      # refused by every self-managed instance.
+      - name: Check the pinned GraphQL schemas parse
         run: make check-graphql-schema
       # The REST twin of the schema pin, and the oracle that is evaluated
       # rather than parsed: what a booted GitLab says its own API is. It
@@ -271,8 +275,12 @@ jobs:
       - name: Check every meta-tool description against its routes
         run: make check-meta-descriptions
       # The test transport judges every document a test sends. This judges the
-      # ones no test reaches, which is why it is a gate of its own.
-      - name: Check every GraphQL document against the pinned schema
+      # ones no test reaches, which is why it is a gate of its own, and judges
+      # every document, client-go's included, against the release pin too: the
+      # transport reads only the gitlab.com pin, and a field its pre-release
+      # added passed every test while GitLab 19.5 refused seven security
+      # actions over it.
+      - name: Check every GraphQL document against the pinned schemas
         run: make check-graphql-documents
       # The other half of the same exchange: the struct each document is
       # decoded into, judged against the selection set. No test can see a

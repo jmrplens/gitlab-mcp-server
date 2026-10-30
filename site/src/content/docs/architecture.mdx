@@ -290,7 +290,7 @@ Three more lists walk forwards only, and for another reason, because GitLab refu
 The GraphQL documents this server sends are checked against a copy of GitLab's schema taken from GitLab.com, which runs the pre-release of the next minor, so that copy is ahead of every self-managed release:
 
 - GitLab refuses a whole document that names a field it does not have, so an action whose document reads a recent field fails as a whole on an older instance rather than answering with less. The vulnerability list, get and four state changes need GitLab 18.10, `security_finding.list` needs 18.5, and the security scan profile actions need 18.7.
-- A field added in the pre-release would pass that check and be refused by every released instance, so a weekly job also checks the documents against the latest released GitLab Enterprise Edition image.
+- A field added in the pre-release would pass that check and be refused by every released instance, so every change is also checked against a second copy, the schema of the GitLab release the server's REST and fine-grained token records are taken from (19.5.0 today), and a weekly job checks the documents against the latest released GitLab Enterprise Edition image. The Orbit documents are the exception, since only GitLab.com serves Orbit.
 - A field GitLab removes leaves GitLab.com first, so a document can stop passing the check while it still works on a self-managed instance.
 
 ### Fine-grained tokens over GraphQL

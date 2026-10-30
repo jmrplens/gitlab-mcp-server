@@ -86,7 +86,7 @@ gitlab-mcp-server/
 │   ├── audit_e2e_coverage/           # What the e2e suite covered; static, skip and release gates (make check-e2e-static)
 │   ├── audit_edition_tier/           # Doc-grounded edition tier gating
 │   ├── audit_gateway_chars/          # Characters strict MCP gateways reject (make check-gateway-chars)
-│   ├── audit_graphql_documents/      # Raw GraphQL documents against the pinned schema (make check-graphql-documents)
+│   ├── audit_graphql_documents/      # Raw GraphQL documents against the gitlab.com pin and the release pin (make check-graphql-documents)
 │   ├── audit_graphql_shapes/         # GraphQL documents against the structs they decode into (make check-graphql-shapes)
 │   ├── audit_install_buttons/        # One-click install payloads (make check-install-buttons)
 │   ├── audit_binary_vulns/           # Release binaries against the Go vulnerability database (make check-binary-vulns)
@@ -120,7 +120,7 @@ gitlab-mcp-server/
 │   ├── gen_api_live/                 # REST oracle evaluated from a booted GitLab: gitlab-api-live.json (make gen-api-live)
 │   ├── gen_action_grants/            # What each action sends and what a token needs for it (make gen-action-grants)
 │   ├── gen_brand/                    # Every vector brand asset from one geometry
-│   ├── gen_graphql_schema/           # Pins GitLab's GraphQL schema (make gen-graphql-schema)
+│   ├── gen_graphql_schema/           # Pins GitLab's GraphQL schema, gitlab.com's and the REST record's release's (make gen-graphql-schema, gen-graphql-release-schema)
 │   ├── gen_icon_webp/                # WebP icon fallbacks (maintainer-only)
 │   ├── gen_orbit_record/             # What GitLab.com's Orbit routes answer (make gen-orbit-record)
 │   ├── gen_lhm_manifest/             # Capability arrays of lhm.plugin.json (LobeHub)
@@ -141,7 +141,7 @@ gitlab-mcp-server/
 │   ├── freshness/                    # Test-only reader of GITLAB_MCP_TEST_SNAPSHOT_PARITY
 │   ├── gatewaycompat/                # Description and title rewriting for strict MCP gateways
 │   ├── gitlab/                       # GitLab API client wrapper (client.GL() accessor)
-│   ├── graphqlschema/                # The pinned GitLab GraphQL schema and Validate()
+│   ├── graphqlschema/                # The pinned GitLab GraphQL schemas (gitlab.com's and the release's) and Validate()
 │   ├── i18n/                         # Person-facing message catalog (English source, Spanish translation) and the request language (GITLAB_MCP_LANGUAGE)
 │   ├── mcpotel/                      # OpenTelemetry instrumentation of MCP request handling (API only)
 │   ├── oauth/                        # OAuth HTTP mode: token cache, verifier, RFC 9728 metadata
