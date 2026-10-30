@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
@@ -298,12 +299,14 @@ var writeArtifact = func(path string, content []byte) error {
 //
 // The schema is written first, so a record that cannot be written would leave
 // a new schema beside the old record. The check refuses that pair, since the
-// schema no longer hashes to the record's digest, and both files are put back
+// schema no longer hashes to the record's digest, and the files are put back
 // as the directory held them as well, the bytes of each that was there and no
-// file where there was none, because a record write can fail after it has
-// changed the record. A failed run therefore leaves the pair it found. A file
-// that is there and cannot be read is not replaced at all: it could not be put
-// back, and removing the file that took its place would lose it.
+// file where there was none, because a write can fail after it has changed
+// the file it writes: a schema write that fails puts the schema back, and a
+// record write that fails puts back both. A failed run therefore leaves the
+// pair it found. A file that is there and cannot be read is not replaced at
+// all: it could not be put back, and removing the file that took its place
+// would lose it.
 func writeReleaseArtifacts(dir, sdl string, source graphqlschema.ReleaseSource) error {
 	schemaPath := filepath.Join(dir, graphqlschema.ReleaseSDLFileName)
 	recordPath := filepath.Join(dir, graphqlschema.ReleaseSourceFileName)
@@ -316,7 +319,7 @@ func writeReleaseArtifacts(dir, sdl string, source graphqlschema.ReleaseSource) 
 		return recordErr
 	}
 	if err := writeArtifact(schemaPath, []byte(sdl)); err != nil {
-		return err
+		return errors.Join(err, schemaBefore.restore())
 	}
 	// Marshaling a struct built one line earlier cannot fail.
 	record := cmdutil.Must(json.MarshalIndent(source, "", "  "))
@@ -353,13 +356,15 @@ func readPrior(path string) (priorFile, error) {
 // restore puts back what the path held. The bytes are written as they were
 // read, not through writeArtifact, which would give a file that lacked one the
 // trailing newline every artifact ends with. A file that was not there is
-// removed, and one the failed write never created is already as it was found,
-// so its absence is not reported as a removal that failed.
+// removed. One the failed write never created is already as it was found, so
+// the removal's answer is not reported then: it finds nothing there, or finds
+// a file where the path's directory should be, which is what refused a write
+// into that directory (Windows reports the second as the first).
 func (p priorFile) restore() error {
 	if p.existed {
 		return os.WriteFile(p.path, p.content, docgen.GeneratedFileMode)
 	}
-	if err := os.Remove(p.path); !errors.Is(err, fs.ErrNotExist) {
+	if err := os.Remove(p.path); !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
 		return err
 	}
 	return nil

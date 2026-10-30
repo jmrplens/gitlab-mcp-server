@@ -397,35 +397,45 @@ func TestRunRelease_CheckMode_FilesThatCannotBeRead_NameTheFile(t *testing.T) {
 	}
 }
 
-// TestWriteReleaseArtifacts_ARecordWriteThatFails_LeavesThePairItFound
-// verifies that a write which fails at the record, the second of the two
-// files, puts both back as the directory held them: the bytes of each file
-// that was there, and no file where there was none, so the failure leaves
-// neither a new schema beside an old record nor a record half written.
+// TestWriteReleaseArtifacts_AWriteThatFails_LeavesThePairItFound verifies
+// that a write which fails at either file puts both back as the directory
+// held them: the bytes of each file that was there, and no file where there
+// was none, so the failure leaves neither a new schema beside an old record
+// nor a file half written.
 //
-// The record's write is failed through the writeArtifact seam, after it has
-// changed the record where the case says so, which is how a full disk ends a
-// write and what no fixture on disk can arrange. The record held before has no
-// trailing newline, so a restore through the generator's own write, which adds
-// one, would not give back the bytes it found. A write refused before the
-// record was created leaves nothing to remove, and the error is then the
-// write's own and nothing more, rather than a removal that failed beside it.
-func TestWriteReleaseArtifacts_ARecordWriteThatFails_LeavesThePairItFound(t *testing.T) {
+// The failing write goes through the writeArtifact seam, after it has changed
+// its file where the case says so, which is how a full disk ends a write and
+// what no fixture on disk can arrange. The record held before has no trailing
+// newline, so a restore through the generator's own write, which adds one,
+// would not give back the bytes it found. A write refused before the record
+// was created leaves nothing to remove, and the error is then the write's own
+// and nothing more, rather than a removal that failed beside it.
+func TestWriteReleaseArtifacts_AWriteThatFails_LeavesThePairItFound(t *testing.T) {
 	errDiskFull := errors.New("no space left on device")
 	realWrite := writeArtifact
 	t.Cleanup(func() { writeArtifact = realWrite })
 	for _, testCase := range []struct {
 		name string
+		// fails is the file whose write fails.
+		fails string
 		// schema and record are what the directory holds before the write,
 		// no file when empty.
 		schema, record string
-		// changes says whether the failing record write changes the record
-		// before it fails.
+		// changes says whether the failing write changes its file before it
+		// fails.
 		changes bool
 	}{
-		{name: "a pair there before, the record changed before the failure", schema: minimalSDL, record: `{"gitlab_version": "19.4.1-ee"}`, changes: true},
-		{name: "no pair there before, the record created before the failure", changes: true},
-		{name: "no pair there before, the record refused before it was created"},
+		{
+			name: "a pair there before, the record changed before the failure", fails: graphqlschema.ReleaseSourceFileName,
+			schema: minimalSDL, record: `{"gitlab_version": "19.4.1-ee"}`, changes: true,
+		},
+		{name: "no pair there before, the record created before the failure", fails: graphqlschema.ReleaseSourceFileName, changes: true},
+		{name: "no pair there before, the record refused before it was created", fails: graphqlschema.ReleaseSourceFileName},
+		{
+			name: "a pair there before, the schema changed before the failure", fails: graphqlschema.ReleaseSDLFileName,
+			schema: minimalSDL, record: `{"gitlab_version": "19.4.1-ee"}`, changes: true,
+		},
+		{name: "no pair there before, the schema created before the failure", fails: graphqlschema.ReleaseSDLFileName, changes: true},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -438,11 +448,11 @@ func TestWriteReleaseArtifacts_ARecordWriteThatFails_LeavesThePairItFound(t *tes
 					write(t, dir, name, []byte(content))
 				}
 			}
-			writeArtifact = failingRecordWrite(realWrite, testCase.changes, errDiskFull)
+			writeArtifact = failingWrite(realWrite, testCase.fails, testCase.changes, errDiskFull)
 
 			err := writeReleaseArtifacts(dir, wholeSDL, soundRelease)
 			if !errors.Is(err, errDiskFull) || err.Error() != errDiskFull.Error() {
-				t.Fatalf("writeReleaseArtifacts() error = %v, want the record write's own %v and nothing beside it", err, errDiskFull)
+				t.Fatalf("writeReleaseArtifacts() error = %v, want the failed write's own %v and nothing beside it", err, errDiskFull)
 			}
 			for name, want := range before {
 				t.Run(name, func(t *testing.T) {
@@ -453,12 +463,12 @@ func TestWriteReleaseArtifacts_ARecordWriteThatFails_LeavesThePairItFound(t *tes
 	}
 }
 
-// failingRecordWrite is a writeArtifact that writes the schema as realWrite
-// does and fails the record with failure, after writing half of it when
-// changes is set.
-func failingRecordWrite(realWrite func(string, []byte) error, changes bool, failure error) func(string, []byte) error {
+// failingWrite is a writeArtifact that writes every file but the one named
+// fails as realWrite does and fails that one with failure, after writing half
+// of it when changes is set.
+func failingWrite(realWrite func(string, []byte) error, fails string, changes bool, failure error) func(string, []byte) error {
 	return func(path string, content []byte) error {
-		if filepath.Base(path) != graphqlschema.ReleaseSourceFileName {
+		if filepath.Base(path) != fails {
 			return realWrite(path, content)
 		}
 		if changes {
@@ -503,6 +513,24 @@ func TestWriteReleaseArtifacts_ARecordThereThatCannotBeRead_WritesNothing(t *tes
 	if got, readErr := os.ReadFile(filepath.Join(dir, graphqlschema.ReleaseSDLFileName)); string(got) != minimalSDL {
 		t.Errorf("the refused write left %s as %d bytes (read error %v), want the %d it held before",
 			graphqlschema.ReleaseSDLFileName, len(got), readErr, len(minimalSDL))
+	}
+}
+
+// TestWriteReleaseArtifacts_ADirectoryThatIsAFile_ReportsTheWriteAlone
+// verifies that a schema write refused because its directory is a file
+// reports that refusal and nothing beside it. The write created no schema, so
+// there is nothing to take back, and the removal that would take one back
+// meets the same file where the directory should be, which is not a removal
+// that failed.
+func TestWriteReleaseArtifacts_ADirectoryThatIsAFile_ReportsTheWriteAlone(t *testing.T) {
+	blocked := filepath.Join(t.TempDir(), "blocked")
+	if err := os.WriteFile(blocked, []byte("a file where a directory should be"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	err := writeReleaseArtifacts(blocked, wholeSDL, soundRelease)
+	if err == nil || !strings.Contains(err.Error(), "create directory for") || strings.Contains(err.Error(), "\n") {
+		t.Fatalf("writeReleaseArtifacts() error = %v, want the directory's refusal alone, on one line", err)
 	}
 }
 

@@ -2190,7 +2190,7 @@ go run ./cmd/gen_graphql_schema/ --check -release
 
 #### Output
 
-Writes `gitlab-schema.graphql` and `source.json` into `-dir`, or with `-release` `gitlab-release-schema.graphql` and `release-source.json`, and reports the type count and provenance on stdout. `--check` writes only the summary. Exits `1` on any failure, so a half-written artifact never reaches a branch, and a `-release` run that fails at the record puts both files back as it found them.
+Writes `gitlab-schema.graphql` and `source.json` into `-dir`, or with `-release` `gitlab-release-schema.graphql` and `release-source.json`, and reports the type count and provenance on stdout. `--check` writes only the summary. Exits `1` on any failure, so a half-written artifact never reaches a branch, and a `-release` run that fails at either file puts both back as it found them.
 
 #### Make targets
 
