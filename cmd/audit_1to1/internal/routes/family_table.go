@@ -120,6 +120,23 @@ func overGraphQL(actions []string, routes int, methods []string, pattern, reason
 	return routeFamily{Methods: methods, Pattern: pattern, Category: categoryCoveredByGraphQL, Reason: reason, Actions: actions, Routes: routes}
 }
 
+// The GraphQL actions several covered-by-graphql rows stand for.
+const (
+	actionEpicDiscussionGet = "group.epic_discussion_get"
+	actionEpicNoteGet       = "group.epic_note_get"
+)
+
+// workItemPattern is one work item of a group, a project or a namespace at
+// the REST API GitLab serves behind the work_item_rest_api flag, which a
+// covered-by-graphql row per verb answers.
+const workItemPattern = "/*/*/-/work_items/*"
+
+// The client protocols several client-protocol rows name.
+const (
+	debianRepository        = "Debian repository"
+	terraformModuleRegistry = "Terraform module registry"
+)
+
 // routeFamilies answers the routes no action reaches that no rule and no
 // inherited decision answers, by the catalog domain whose issue tracks them.
 // A row's count is pinned: a re-pin that adds a route under it, or an action
@@ -209,9 +226,9 @@ var routeFamilies = []routeFamily{
 		"makes an epic the child of another and removes it, which group.epic_update does by setting and clearing its parent_id"),
 	overGraphQL([]string{"group.epic_issue_update"}, 1, on(http.MethodPut), "/groups/*/epics/*/epics/*",
 		"reorders an epic's child epics, which group.epic_issue_update does for any child the epic's hierarchy holds"),
-	overGraphQL([]string{"group.epic_discussion_get"}, 1, on(http.MethodGet), "/groups/*/epics/*/discussions/*/notes",
+	overGraphQL([]string{actionEpicDiscussionGet}, 1, on(http.MethodGet), "/groups/*/epics/*/discussions/*/notes",
 		"lists the comments of an epic discussion, which group.epic_discussion_get reads with the discussion"),
-	overGraphQL([]string{"group.epic_note_get"}, 1, on(http.MethodGet), "/groups/*/epics/*/discussions/*/notes/*",
+	overGraphQL([]string{actionEpicNoteGet}, 1, on(http.MethodGet), "/groups/*/epics/*/discussions/*/notes/*",
 		"reads one comment of an epic discussion, which group.epic_note_get reads as any note of the epic"),
 	tracked(issueGroupRoutes, 1, on(http.MethodGet), "/discover-cert-based-clusters",
 		"lists the certificate-based clusters in a group's hierarchy, which GitLab deprecated for the agent for Kubernetes and whose routes the sdk scope declares SUPERSEDED_UPSTREAM"),
@@ -281,25 +298,25 @@ var routeFamilies = []routeFamily{
 		"lists the work items of a group, a project or a namespace through the REST API GitLab serves behind the work_item_rest_api flag, which issue.work_item_list does over GraphQL"),
 	overGraphQL([]string{"issue.work_item_create"}, 3, on(http.MethodPost), "/*/*/-/work_items",
 		"creates a work item through the REST API GitLab serves behind the work_item_rest_api flag, which issue.work_item_create does over GraphQL"),
-	overGraphQL([]string{"issue.work_item_get"}, 3, on(http.MethodGet), "/*/*/-/work_items/*",
+	overGraphQL([]string{"issue.work_item_get"}, 3, on(http.MethodGet), workItemPattern,
 		"reads a work item through the REST API GitLab serves behind the work_item_rest_api flag, which issue.work_item_get does over GraphQL"),
-	overGraphQL([]string{"issue.work_item_update"}, 3, on(http.MethodPatch), "/*/*/-/work_items/*",
+	overGraphQL([]string{"issue.work_item_update"}, 3, on(http.MethodPatch), workItemPattern,
 		"updates a work item through the REST API GitLab serves behind the work_item_rest_api flag, which issue.work_item_update does over GraphQL"),
-	overGraphQL([]string{"issue.work_item_delete"}, 3, on(http.MethodDelete), "/*/*/-/work_items/*",
+	overGraphQL([]string{"issue.work_item_delete"}, 3, on(http.MethodDelete), workItemPattern,
 		"deletes a work item through the REST API GitLab serves behind the work_item_rest_api flag, which issue.work_item_delete does over GraphQL"),
 	overGraphQL([]string{"issue.work_item_update"}, 6, on(http.MethodPost, http.MethodDelete), "/*/*/-/work_items/*/children/*",
 		"attaches a child work item and detaches it through the REST API GitLab serves behind the work_item_rest_api flag, which issue.work_item_update does over GraphQL by setting and clearing the child's parent_id"),
 	overGraphQL([]string{"group.epic_discussion_list", "group.epic_discussion_create"}, 2, on(http.MethodGet, http.MethodPost), "/groups/*/-/work_items/*/discussions",
 		"lists and starts the discussions of a group's work item through the REST API GitLab serves behind the work_item_rest_api flag, which group.epic_discussion_list and group.epic_discussion_create do over GraphQL, reading the group's work item by its iid whatever its type"),
-	overGraphQL([]string{"group.epic_discussion_get"}, 1, on(http.MethodGet), "/groups/*/-/work_items/*/discussions/*",
+	overGraphQL([]string{actionEpicDiscussionGet}, 1, on(http.MethodGet), "/groups/*/-/work_items/*/discussions/*",
 		"reads a discussion of a group's work item through the REST API GitLab serves behind the work_item_rest_api flag, which group.epic_discussion_get does over GraphQL"),
-	overGraphQL([]string{"group.epic_discussion_get", "group.epic_discussion_add_note"}, 2, on(http.MethodGet, http.MethodPost), "/groups/*/-/work_items/*/discussions/*/notes",
+	overGraphQL([]string{actionEpicDiscussionGet, "group.epic_discussion_add_note"}, 2, on(http.MethodGet, http.MethodPost), "/groups/*/-/work_items/*/discussions/*/notes",
 		"lists the notes of a discussion of a group's work item and replies to it through the REST API GitLab serves behind the work_item_rest_api flag, which group.epic_discussion_get, reading the discussion with its notes, and group.epic_discussion_add_note do over GraphQL"),
-	overGraphQL([]string{"group.epic_note_get", "group.epic_discussion_update_note", "group.epic_discussion_delete_note"}, 3, on(http.MethodGet, http.MethodPut, http.MethodDelete), "/groups/*/-/work_items/*/discussions/*/notes/*",
+	overGraphQL([]string{actionEpicNoteGet, "group.epic_discussion_update_note", "group.epic_discussion_delete_note"}, 3, on(http.MethodGet, http.MethodPut, http.MethodDelete), "/groups/*/-/work_items/*/discussions/*/notes/*",
 		"reads, updates and deletes a note of a discussion of a group's work item through the REST API GitLab serves behind the work_item_rest_api flag, which group.epic_note_get, group.epic_discussion_update_note and group.epic_discussion_delete_note do over GraphQL"),
 	overGraphQL([]string{"group.epic_note_list", "group.epic_note_create"}, 2, on(http.MethodGet, http.MethodPost), "/groups/*/-/work_items/*/notes",
 		"lists and creates the notes of a group's work item through the REST API GitLab serves behind the work_item_rest_api flag, which group.epic_note_list and group.epic_note_create do over GraphQL"),
-	overGraphQL([]string{"group.epic_note_get"}, 1, on(http.MethodGet), "/groups/*/-/work_items/*/notes/*",
+	overGraphQL([]string{actionEpicNoteGet}, 1, on(http.MethodGet), "/groups/*/-/work_items/*/notes/*",
 		"reads a note of a group's work item through the REST API GitLab serves behind the work_item_rest_api flag, which group.epic_note_get does over GraphQL"),
 	overGraphQL([]string{"group.epic_issue_list"}, 1, on(http.MethodGet), "/groups/*/-/work_items/*/children",
 		"lists the children of a group's work item through the REST API GitLab serves behind the work_item_rest_api flag, which group.epic_issue_list does over GraphQL"),
@@ -497,7 +514,7 @@ var routeFamilies = []routeFamily{
 	tracked(issueAdminRoutes, 1, on(http.MethodPut), "/projects/*/error_tracking/settings",
 		"creates a project's error tracking settings, through ErrorTracking.CreateErrorTrackingSettings; admin.error_tracking_update_settings sends the PATCH that updates them, another route"),
 	// The package domain (issuePackageRoutes).
-	protocol("Debian repository", 9, on(http.MethodGet), "/groups/*/-/packages/debian/dists/**",
+	protocol(debianRepository, 9, on(http.MethodGet), "/groups/*/-/packages/debian/dists/**",
 		"the index files of a group's Debian distribution (Release, InRelease and its signature, the Packages and Sources indexes and their by-hash copies)"),
 	download(issuePackageRoutes, 1, "/groups/*/-/packages/debian/pool/**",
 		"downloads a Debian package file from a group's repository"),
@@ -535,11 +552,11 @@ var routeFamilies = []routeFamily{
 		"the dist-tags of a package in the instance's registry (npm dist-tag ls, add and rm)"),
 	download(issuePackageRoutes, 1, "/packages/maven/**",
 		"downloads a Maven package file from the instance's repository"),
-	protocol("Terraform module registry", 1, on(http.MethodGet), "/packages/terraform/modules/v1/*/*/*",
+	protocol(terraformModuleRegistry, 1, on(http.MethodGet), "/packages/terraform/modules/v1/*/*/*",
 		"the latest version of a module in the instance's module registry"),
-	protocol("Terraform module registry", 3, on(http.MethodGet), "/packages/terraform/modules/v1/*/*/*/*",
+	protocol(terraformModuleRegistry, 3, on(http.MethodGet), "/packages/terraform/modules/v1/*/*/*/*",
 		"a module version's details, the versions of a module and the download location of its latest version, in the instance's module registry"),
-	protocol("Terraform module registry", 1, on(http.MethodGet), "/packages/terraform/modules/v1/*/*/*/*/download",
+	protocol(terraformModuleRegistry, 1, on(http.MethodGet), "/packages/terraform/modules/v1/*/*/*/*/download",
 		"the download location of a module version, which the registry answers with an X-Terraform-Get header"),
 	download(issuePackageRoutes, 1, "/packages/terraform/modules/v1/*/*/*/*/file",
 		"downloads a module version's archive from the instance's Terraform module registry"),
@@ -585,11 +602,11 @@ var routeFamilies = []routeFamily{
 		"the v2 search of a project's remote"),
 	protocol("Conan", 2, on(http.MethodGet), "/projects/*/packages/conan/v2/users/*",
 		"the authentication of a project's v2 remote"),
-	protocol("Debian repository", 9, on(http.MethodGet), "/projects/*/packages/debian/dists/**",
+	protocol(debianRepository, 9, on(http.MethodGet), "/projects/*/packages/debian/dists/**",
 		"the index files of a project's Debian distribution (Release, InRelease and its signature, the Packages and Sources indexes and their by-hash copies)"),
 	download(issuePackageRoutes, 1, "/projects/*/packages/debian/pool/**",
 		"downloads a Debian package file from a project's repository"),
-	protocol("Debian repository", 1, on(http.MethodPut), "/projects/*/packages/debian/*",
+	protocol(debianRepository, 1, on(http.MethodPut), "/projects/*/packages/debian/*",
 		"the upload of a Debian package file"),
 	protocol("Go module proxy", 1, on(http.MethodGet), "/projects/*/packages/go/*/@v/list",
 		"the versions of a module in a project's proxy"),
@@ -661,7 +678,7 @@ var routeFamilies = []routeFamily{
 		"the dependencies of the gems asked for, which Bundler reads, and the push of a gem"),
 	download(issuePackageRoutes, 2, "/projects/*/packages/terraform/modules/**",
 		"downloads a module's latest version or one version from a project's Terraform module registry"),
-	protocol("Terraform module registry", 1, on(http.MethodPut), "/projects/*/packages/terraform/modules/**",
+	protocol(terraformModuleRegistry, 1, on(http.MethodPut), "/projects/*/packages/terraform/modules/**",
 		"the upload of a module version"),
 	download(issuePackageRoutes, 2, "/projects/*/dependency_proxy/packages/**",
 		"downloads a Maven package file or an npm tarball through a project's dependency proxy for packages, which fetches it from the upstream registry"),

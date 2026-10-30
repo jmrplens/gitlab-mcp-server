@@ -104,6 +104,10 @@ func patternMatches(pattern, path string) bool {
 	return len(got) == len(want)
 }
 
+// familySubject opens a problem of the family table, before the label of the
+// row it is about.
+const familySubject = "family "
+
 // declares decides a route a family row answers, the first row that matches
 // answering it and a second that matches too being a problem of the table,
 // and so is a tracked row over a route a decision of acceptedMissingMethods
@@ -119,7 +123,7 @@ func (j *judge) declares(method, path string, verdict *Route) bool {
 		return false
 	}
 	for _, other := range matched[1:] {
-		j.problems = append(j.problems, "family "+j.in.families[other].label()+" answers "+verdict.Route+", which family "+j.in.families[matched[0]].label()+" answers too")
+		j.problems = append(j.problems, familySubject+j.in.families[other].label()+" answers "+verdict.Route+", which "+familySubject+j.in.families[matched[0]].label()+" answers too")
 	}
 	family := j.in.families[matched[0]]
 	j.familyRoutes[matched[0]] = append(j.familyRoutes[matched[0]], verdict.Route)
@@ -128,7 +132,7 @@ func (j *judge) declares(method, path string, verdict *Route) bool {
 	verdict.Actions = slices.Clone(family.Actions)
 	for _, decision := range verdict.Adjudications {
 		if family.Category == categoryTracked && settlingAdjudications[decision.Category] {
-			j.problems = append(j.problems, "family "+family.label()+" tracks "+verdict.Route+", and "+decision.Method+" is decided "+decision.Category+
+			j.problems = append(j.problems, familySubject+family.label()+" tracks "+verdict.Route+", and "+decision.Method+" is decided "+decision.Category+
 				", which says the route needs no action of its own: an action still to implement is no method acceptedMissingMethods settles")
 		}
 	}
@@ -139,7 +143,7 @@ func (j *judge) declares(method, path string, verdict *Route) bool {
 // it: what it lacks, the number of routes it answers against the number it
 // pins, and a client-protocol row over a route client-go sends.
 func (j *judge) familyProblems(family routeFamily, answered []string) []string {
-	label := "family " + family.label()
+	label := familySubject + family.label()
 	var out []string
 	for _, need := range j.familyNeeds(family) {
 		out = append(out, label+": "+need)
