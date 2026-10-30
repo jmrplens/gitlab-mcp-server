@@ -800,6 +800,13 @@ func judgeCopy(build optionBuild, declared map[string]optionStructDeclaration, a
 	return judged, true
 }
 
+// The words a stale option declaration is reported with: the subject it
+// opens with, and the clause that names the category it declares.
+const (
+	staleOptionSubject  = "option struct "
+	staleCategoryClause = " (category "
+)
+
 // staleOptionDeclarations lists the declarations the run asked nothing of: a
 // struct now held or no longer sent, a field a copy now fills or that no
 // copy shares, and a category on a key of the other kind.
@@ -819,19 +826,19 @@ func staleOptionDeclarations(report optionStructsReport, declared map[string]opt
 		}
 		requirement, isStructCategory := structCategories[declaration.Category]
 		if !isStructCategory {
-			stale = append(stale, "option struct "+key+" (category "+declaration.Category+" does not answer a struct)")
+			stale = append(stale, staleOptionSubject+key+staleCategoryClause+declaration.Category+" does not answer a struct)")
 			continue
 		}
 		status, isSent := statuses[key]
 		if !isSent {
-			stale = append(stale, "option struct "+key+" (no call sends it)")
+			stale = append(stale, staleOptionSubject+key+" (no call sends it)")
 			continue
 		}
 		if status == optionUnpaired {
-			stale = append(stale, "option struct "+key+" (category "+declaration.Category+" requires that "+requirement+")")
+			stale = append(stale, staleOptionSubject+key+staleCategoryClause+declaration.Category+" requires that "+requirement+")")
 			continue
 		}
-		stale = append(stale, "option struct "+key+" (now "+status+")")
+		stale = append(stale, staleOptionSubject+key+" (now "+status+")")
 	}
 	sort.Strings(stale)
 	return stale
@@ -841,9 +848,9 @@ func staleOptionDeclarations(report optionStructsReport, declared map[string]opt
 // leaves out.
 func staleCopyDeclaration(key string, declaration optionStructDeclaration) string {
 	if declaration.Category != categoryDroppedOnPurpose {
-		return "option struct copy " + key + " (category " + declaration.Category + " does not answer a field a copy leaves out)"
+		return staleOptionSubject + "copy " + key + staleCategoryClause + declaration.Category + " does not answer a field a copy leaves out)"
 	}
-	return "option struct copy " + key + " (no copy leaves the field out)"
+	return staleOptionSubject + "copy " + key + " (no copy leaves the field out)"
 }
 
 // summarizeOptionStructs counts the section into the summary.
