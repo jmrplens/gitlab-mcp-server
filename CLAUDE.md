@@ -45,7 +45,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v3.30.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 3.3.0                                               |
+| Version       | 3.4.0                                               |
 
 ### Scale
 
@@ -178,7 +178,7 @@ gitlab-mcp-server/
 ├── mcpb/                             # Claude Desktop extension manifest, icon, platform.jq and the Linux launcher
 ├── .github/                          # AI assistance infrastructure: agents, skills, instructions
 ├── Makefile                          # Build, test, lint targets
-└── VERSION                           # Semantic version (3.3.0)
+└── VERSION                           # Semantic version (3.4.0)
 ```
 
 The site is where every user page lives, in English with its Spanish twin under `es/`, changed together and held by `pnpm run i18n:check`; a page writes the release a reader installs as `%%VERSION%%`, and generated pages (the tool reference, the fine-grained permissions reference, the benchmark figures and data) are never edited by hand.
