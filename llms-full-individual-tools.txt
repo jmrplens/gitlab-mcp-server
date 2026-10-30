@@ -7346,7 +7346,7 @@ Download one artifact file from a job by job_id and artifact_path. Returns: file
 
 **Parameters:**
 
-- `artifact_path` (string) (required): Path to the artifact file within the archive
+- `artifact_path` (string) (required): Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..)
 - `job_id` (integer) (required): Job ID
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
@@ -7358,7 +7358,7 @@ Download one artifact file from the latest successful job on a ref by name and p
 
 **Parameters:**
 
-- `artifact_path` (string) (required): Path to the artifact file within the archive
+- `artifact_path` (string) (required): Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..)
 - `job` (string) (required): Job name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `ref_name` (string) (required): Branch or tag name

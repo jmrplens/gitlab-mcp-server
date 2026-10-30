@@ -41,7 +41,7 @@
 
 <!-- START TOKEN CLAIM -->
 
-**11,396 tokens of startup context by default, the same on every GitLab tier (1,994 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog, where listing every tool as its own costs from 578,892 to 739,998 tokens. Measured with the cl100k_base tokenizer and checked in CI. [How it is measured](https://docs.jmrp.io/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save)
+**11,396 tokens of startup context by default, the same on every GitLab tier (1,994 with `GITLAB_MCP_CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog, where listing every tool as its own costs from 578,926 to 740,032 tokens. Measured with the cl100k_base tokenizer and checked in CI. [How it is measured](https://docs.jmrp.io/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save)
 
 <!-- END TOKEN CLAIM -->
 

@@ -522,6 +522,9 @@ func EditVariable(ctx context.Context, client *gitlabclient.Client, input EditVa
 	if input.Key == "" {
 		return VariableOutput{}, errors.New("edit_pipeline_schedule_variable: key is required")
 	}
+	if err := toolutil.RejectTraversalArg("edit_pipeline_schedule_variable", "key", input.Key); err != nil {
+		return VariableOutput{}, err
+	}
 	if input.Value == "" {
 		return VariableOutput{}, errors.New("edit_pipeline_schedule_variable: value is required")
 	}
@@ -534,8 +537,10 @@ func EditVariable(ctx context.Context, client *gitlabclient.Client, input EditVa
 	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	// client-go places the key into the path as given, so it is escaped here
+	// as the one segment the route gives it.
 	v, _, err := client.GL().PipelineSchedules.EditPipelineScheduleVariable(
-		string(input.ProjectID), int64(input.ScheduleID), input.Key, opts, gitlab.WithContext(ctx),
+		string(input.ProjectID), int64(input.ScheduleID), toolutil.EscapePathSegment(input.Key), opts, gitlab.WithContext(ctx),
 	)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -566,9 +571,13 @@ func DeleteVariable(ctx context.Context, client *gitlabclient.Client, input Dele
 	if input.Key == "" {
 		return errors.New("delete_pipeline_schedule_variable: key is required")
 	}
+	if err := toolutil.RejectTraversalArg("delete_pipeline_schedule_variable", "key", input.Key); err != nil {
+		return err
+	}
 
+	// The key is escaped as EditVariable escapes it.
 	_, _, err := client.GL().PipelineSchedules.DeletePipelineScheduleVariable(
-		string(input.ProjectID), int64(input.ScheduleID), input.Key, gitlab.WithContext(ctx),
+		string(input.ProjectID), int64(input.ScheduleID), toolutil.EscapePathSegment(input.Key), gitlab.WithContext(ctx),
 	)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {

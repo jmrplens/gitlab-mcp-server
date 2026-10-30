@@ -882,6 +882,9 @@ func DownloadArtifacts(ctx context.Context, client *gitlabclient.Client, input D
 	if input.RefName == "" {
 		return ArtifactsOutput{}, errors.New("jobDownloadArtifacts: ref_name is required")
 	}
+	if err := toolutil.RejectTraversalArg("jobDownloadArtifacts", "ref_name", input.RefName); err != nil {
+		return ArtifactsOutput{}, err
+	}
 	// GitLab requires the job on this route: the ref alone names a pipeline,
 	// and the job is what picks whose artifacts come back.
 	if input.JobName == "" {
@@ -889,7 +892,9 @@ func DownloadArtifacts(ctx context.Context, client *gitlabclient.Client, input D
 	}
 	opts := &gl.DownloadArtifactsFileOptions{Job: new(input.JobName)}
 
-	reader, _, err := client.GL().Jobs.DownloadArtifactsFile(string(input.ProjectID), input.RefName, opts, gl.WithContext(ctx))
+	// client-go places ref_name into the path as given, and the route takes
+	// a slashed ref across segments, so each segment is escaped here.
+	reader, _, err := client.GL().Jobs.DownloadArtifactsFile(string(input.ProjectID), toolutil.EscapePathSegments(input.RefName), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsDownloadTooLarge(err) {
 			return ArtifactsOutput{}, toolutil.WrapErrWithHint("jobDownloadArtifacts", err, errRefArtifactTooLarge)
@@ -904,7 +909,7 @@ func DownloadArtifacts(ctx context.Context, client *gitlabclient.Client, input D
 type SingleArtifactInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
 	JobID        int64                `json:"job_id"         jsonschema:"Job ID,required"`
-	ArtifactPath string               `json:"artifact_path"  jsonschema:"Path to the artifact file within the archive,required"`
+	ArtifactPath string               `json:"artifact_path"  jsonschema:"Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..),required"`
 }
 
 // SingleArtifactOutput holds the content of a single artifact file.
@@ -932,11 +937,16 @@ func DownloadSingleArtifact(ctx context.Context, client *gitlabclient.Client, in
 	if input.ArtifactPath == "" {
 		return SingleArtifactOutput{}, errors.New("jobDownloadSingleArtifact: artifact_path is required")
 	}
+	if err := toolutil.RejectTraversalArg("jobDownloadSingleArtifact", "artifact_path", input.ArtifactPath); err != nil {
+		return SingleArtifactOutput{}, err
+	}
 	if input.JobID <= 0 {
 		return SingleArtifactOutput{}, toolutil.ErrRequiredInt64("jobDownloadSingleArtifact", "job_id")
 	}
 
-	reader, _, err := client.GL().Jobs.DownloadSingleArtifactsFile(string(input.ProjectID), input.JobID, input.ArtifactPath, gl.WithContext(ctx))
+	// client-go places artifact_path into the path as given, so each of its
+	// segments is escaped here and its "/" kept.
+	reader, _, err := client.GL().Jobs.DownloadSingleArtifactsFile(string(input.ProjectID), input.JobID, toolutil.EscapePathSegments(input.ArtifactPath), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsDownloadTooLarge(err) {
 			return SingleArtifactOutput{}, toolutil.WrapErrWithHint("jobDownloadSingleArtifact", err, errSingleArtifactTooLarge)
@@ -951,7 +961,7 @@ func DownloadSingleArtifact(ctx context.Context, client *gitlabclient.Client, in
 type SingleArtifactRefInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
 	RefName      string               `json:"ref_name"       jsonschema:"Branch or tag name,required"`
-	ArtifactPath string               `json:"artifact_path"  jsonschema:"Path to the artifact file within the archive,required"`
+	ArtifactPath string               `json:"artifact_path"  jsonschema:"Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..),required"`
 	JobName      string               `json:"job"            jsonschema:"Job name,required"`
 }
 
@@ -972,12 +982,17 @@ func DownloadSingleArtifactByRef(ctx context.Context, client *gitlabclient.Clien
 	if input.ArtifactPath == "" {
 		return SingleArtifactOutput{}, errors.New("jobDownloadSingleArtifactByRef: artifact_path is required")
 	}
+	if err := toolutil.RejectTraversalArg("jobDownloadSingleArtifactByRef", "artifact_path", input.ArtifactPath); err != nil {
+		return SingleArtifactOutput{}, err
+	}
 	if input.JobName == "" {
 		return SingleArtifactOutput{}, errors.New("jobDownloadSingleArtifactByRef: job is required")
 	}
 
+	// client-go escapes ref_name itself and places artifact_path into the
+	// path as given, so only artifact_path is escaped here, per segment.
 	reader, _, err := client.GL().Jobs.DownloadSingleArtifactsFileByTagOrBranch(
-		string(input.ProjectID), input.RefName, input.ArtifactPath,
+		string(input.ProjectID), input.RefName, toolutil.EscapePathSegments(input.ArtifactPath),
 		&gl.DownloadArtifactsFileOptions{Job: new(input.JobName)},
 		gl.WithContext(ctx),
 	)

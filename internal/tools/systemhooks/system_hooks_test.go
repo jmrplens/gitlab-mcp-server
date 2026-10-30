@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -1163,5 +1164,178 @@ func TestFormatHookMarkdown_CustomHeaderValuesRedacted(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "prod") {
 		t.Errorf("hook output exposed a custom header value: %s", encoded)
+	}
+}
+
+// recordingHookMock returns a client whose mock records every request URI and
+// answers 200, so a refused request (none recorded) is told apart from one
+// that reached the wire.
+func recordingHookMock(t *testing.T) (*gitlabclient.Client, func() []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var seen []string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.RequestURI)
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	return client, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), seen...)
+	}
+}
+
+// TestSetURLVariable_DotSegmentKey_IsRefused asserts that a key with a "." or
+// ".." segment, literal or percent-encoded, is refused before any request is
+// sent, with an error that names the parameter, and that a plain key is still
+// sent. client-go places the key into the request path without escaping it,
+// so the handler checks that it names one URL variable.
+func TestSetURLVariable_DotSegmentKey_IsRefused(t *testing.T) {
+	for _, tc := range dotSegmentKeys {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingHookMock(t)
+			err := SetURLVariable(context.Background(), client, SetURLVariableInput{ID: 5, Key: tc.key, Value: "v"})
+			assertKeyRefused(t, err, "system_hook_set_url_variable", tc.segment, requests())
+		})
+	}
+
+	t.Run("allows a plain key", func(t *testing.T) {
+		client, requests := recordingHookMock(t)
+		if err := SetURLVariable(context.Background(), client, SetURLVariableInput{ID: 5, Key: "TOKEN_A", Value: "v"}); err != nil {
+			t.Fatalf("SetURLVariable with a plain key = %v, want it sent", err)
+		}
+		if got := requests(); len(got) != 1 || !strings.Contains(got[0], "/hooks/5/url_variables/TOKEN_A") {
+			t.Errorf("a plain key reached %v, want the url_variables route", got)
+		}
+	})
+
+	t.Run("allows a dot inside a segment", func(t *testing.T) {
+		client, requests := recordingHookMock(t)
+		if err := SetURLVariable(context.Background(), client, SetURLVariableInput{ID: 5, Key: "v1.2", Value: "v"}); err != nil {
+			t.Fatalf("SetURLVariable with a dot inside a segment = %v, want it sent", err)
+		}
+		if got := requests(); len(got) != 1 || !strings.Contains(got[0], "/hooks/5/url_variables/v1.2") {
+			t.Errorf("a dotted key reached %v, want the url_variables route", got)
+		}
+	})
+}
+
+// dotSegmentKeys are the dot-segment forms the URL variable tests pass as the
+// key, which client-go places into the request path without escaping it,
+// each with the segment the refusal must report.
+var dotSegmentKeys = []struct {
+	name    string
+	key     string
+	segment string
+}{
+	{"dot dot between names", "a/../b", `".."`},
+	{"bare dot dot", "..", `".."`},
+	{"bare dot", ".", `"."`},
+	{"bare encoded dot dot", "%2e%2e", `".." once its percent-encoding is undone`},
+	{"encoded dot dot between names", "a/%2e%2e/b", `".." once its percent-encoding is undone`},
+	{"dot dot before an encoded separator", "..%2Fb", `".." once its percent-encoding is undone`},
+	{"dot between names", "x/./y", `"."`},
+}
+
+// assertKeyRefused checks that err is the whole refusal of key under
+// operation, naming segment, and that no request reached the wire.
+func assertKeyRefused(t *testing.T, err error, operation, segment string, requests []string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s accepted a key with a dot segment, want a refusal", operation)
+	}
+	want := operation + ": key has the segment " + segment +
+		`; pass a value with no "." or ".." segment, written plainly or percent-encoded`
+	if got := err.Error(); got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+	if len(requests) != 0 {
+		t.Errorf("a refused key still reached the wire: %v", requests)
+	}
+}
+
+// TestDeleteURLVariable_DotSegmentKey_IsRefused asserts the same check on the
+// delete route, which also places the key into the request path without
+// escaping it: a key with a dot segment is refused before any request is
+// sent, with an error that names the parameter, and a key with a dot inside a
+// segment is sent.
+func TestDeleteURLVariable_DotSegmentKey_IsRefused(t *testing.T) {
+	for _, tc := range dotSegmentKeys {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingHookMock(t)
+			err := DeleteURLVariable(context.Background(), client, DeleteURLVariableInput{ID: 5, Key: tc.key})
+			assertKeyRefused(t, err, "system_hook_delete_url_variable", tc.segment, requests())
+		})
+	}
+
+	t.Run("allows a dot inside a segment", func(t *testing.T) {
+		client, requests := recordingHookMock(t)
+		if err := DeleteURLVariable(context.Background(), client, DeleteURLVariableInput{ID: 5, Key: "v1.2"}); err != nil {
+			t.Fatalf("DeleteURLVariable with a dot inside a segment = %v, want it sent", err)
+		}
+		if got := requests(); len(got) != 1 || !strings.Contains(got[0], "/hooks/5/url_variables/v1.2") {
+			t.Errorf("a dotted key reached %v, want the url_variables route", got)
+		}
+	})
+}
+
+// keyEncodings are keys with a byte a request path segment cannot carry as
+// it is, each with the exact form it must reach the path in: percent-encoded
+// as one segment, a "/" included. The last case has no such byte and must
+// reach the path unchanged.
+var keyEncodings = []struct {
+	name    string
+	key     string
+	escaped string
+}{
+	{"a space", "my key", "my%20key"},
+	{"a non-ASCII byte", "clé", "cl%C3%A9"},
+	{"a slash", "a/b", "a%2Fb"},
+	{"a percent sign", "100%", "100%25"},
+	{"no byte to escape", "TOKEN_A", "TOKEN_A"},
+}
+
+// assertRequestPath checks that exactly one request reached the mock and that
+// its path, as the client wrote it on the wire and without the query, is want.
+func assertRequestPath(t *testing.T, requests []string, want string) {
+	t.Helper()
+	if len(requests) != 1 {
+		t.Fatalf("requests = %v, want exactly one", requests)
+	}
+	if path, _, _ := strings.Cut(requests[0], "?"); path != want {
+		t.Errorf("request path = %q, want %q", path, want)
+	}
+}
+
+// TestSetURLVariable_Key_IsEscapedAsOneSegment asserts the exact path the
+// URL variable route is requested at: the key is percent-encoded as one path
+// segment, a "/" in it included, and a key with no byte to escape is sent
+// unchanged. client-go places the key into the request path as given, so
+// the handler escapes it first.
+func TestSetURLVariable_Key_IsEscapedAsOneSegment(t *testing.T) {
+	for _, tc := range keyEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingHookMock(t)
+			if err := SetURLVariable(context.Background(), client, SetURLVariableInput{ID: 5, Key: tc.key, Value: "v"}); err != nil {
+				t.Fatalf("SetURLVariable(%q) = %v, want it sent", tc.key, err)
+			}
+			assertRequestPath(t, requests(), "/api/v4/hooks/5/url_variables/"+tc.escaped)
+		})
+	}
+}
+
+// TestDeleteURLVariable_Key_IsEscapedAsOneSegment asserts the same on the
+// delete route.
+func TestDeleteURLVariable_Key_IsEscapedAsOneSegment(t *testing.T) {
+	for _, tc := range keyEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingHookMock(t)
+			if err := DeleteURLVariable(context.Background(), client, DeleteURLVariableInput{ID: 5, Key: tc.key}); err != nil {
+				t.Fatalf("DeleteURLVariable(%q) = %v, want it sent", tc.key, err)
+			}
+			assertRequestPath(t, requests(), "/api/v4/hooks/5/url_variables/"+tc.escaped)
+		})
 	}
 }

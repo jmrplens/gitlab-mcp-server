@@ -40,6 +40,7 @@ in this order:
 | `context.DeadlineExceeded`           | "the request exceeded its deadline and was canceled"                                                                                 |
 | `gitlabclient.ErrUnboundClient`      | `UnattributedRequestMessage`: the request could not be attributed to a credential and was not sent                                   |
 | `gitlabclient.ErrDestinationRefused` | `DestinationRefusedMessage`: this server refused to connect to that address                                                          |
+| `gitlabclient.ErrRequestPathRefused` | `RequestPathRefusedMessage`: this server refused a path argument with a "." or ".." segment                                          |
 | A fine-grained token refusal         | The refusal in GitLab's terms (below)                                                                                                |
 | A GitLab answer, REST or GraphQL     | `ClassifyHTTPStatus` of the status, except a 401 that names the credential and a 405 that refuses a moved project's old path (below) |
 | Connection refused                   | "GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running"                              |
@@ -51,9 +52,11 @@ in this order:
 
 Cancellation is checked first because a cancelled request often surfaces as a
 transport failure underneath, which every later branch would describe as
-something GitLab did. The unbound client and the refused destination are
-checked before the network branches, which would otherwise describe a request
-that never left the process as an unreachable host.
+something GitLab did. The unbound client, the refused destination and the
+refused request path are checked before the network branches, which would
+otherwise describe a request that never left the process as an unreachable
+host, or, when the URL happens to contain the word "certificate", as a failed
+TLS handshake.
 
 A 404 is one of GitLab's answers although client-go hands it back without the
 response: it answers every 404 with its `ErrNotFound` sentinel, over REST as it
@@ -316,8 +319,9 @@ error into the result:
 - **Read** (list, get, search): `return zero, toolutil.WrapErr("listIssues", err)`
 - **Write** (create, update, delete): `return zero, toolutil.WrapErrWithMessage("createIssue", err)`
 
-All four wrapping functions first catch an unattributed request and a refused
-destination, which they describe with their own messages.
+All four wrapping functions first catch an unattributed request, a refused
+destination and a refused request path, which they describe with their own
+messages.
 
 ### `WrapErr`
 

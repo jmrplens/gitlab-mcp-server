@@ -4104,3 +4104,290 @@ func TestListProject_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
 		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Jobs)}, err
 	})
 }
+
+// recordingArtifactMock returns a client whose mock records every request URI
+// it receives and answers 200, so a test can tell a refused request (none
+// recorded) from one that reached the wire.
+func recordingArtifactMock(t *testing.T) (*gitlabclient.Client, func() []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var seen []string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.RequestURI)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	return client, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), seen...)
+	}
+}
+
+// TestDownloadSingleArtifact_DotSegmentArtifactPath_IsRefused asserts that an
+// artifact_path with a "." or ".." segment, literal or percent-encoded, is
+// refused before any request is sent, with an error that names the
+// parameter and the exact segment found, and that a plain nested artifact
+// path still reaches the artifacts route. client-go places artifact_path into
+// the request path without escaping it, so the handler checks that it names
+// one artifact file.
+func TestDownloadSingleArtifact_DotSegmentArtifactPath_IsRefused(t *testing.T) {
+	cases := []struct {
+		name    string
+		path    string
+		segment string
+	}{
+		{"dot dot between names", "a/../b", `".."`},
+		{"bare dot dot", "..", `".."`},
+		{"bare dot", ".", `"."`},
+		{"bare encoded dot dot", "%2e%2e", `".."` + onceDecoded},
+		{"lower-case encoded dot dot", "a/%2e%2e/b", `".."` + onceDecoded},
+		{"upper-case encoded dot dot", "a/%2E%2E/b", `".."` + onceDecoded},
+		{"dot dot before an encoded separator", "..%2Fb", `".."` + onceDecoded},
+		{"single dot between names", "x/./y", `"."`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingArtifactMock(t)
+			_, err := DownloadSingleArtifact(context.Background(), client, SingleArtifactInput{
+				ProjectID: "group/sub/proj", JobID: 7, ArtifactPath: tc.path,
+			})
+			assertPathArgRefused(t, err, "jobDownloadSingleArtifact", "artifact_path", tc.segment, requests())
+		})
+	}
+
+	t.Run("allows a plain nested artifact path", func(t *testing.T) {
+		client, requests := recordingArtifactMock(t)
+		_, err := DownloadSingleArtifact(context.Background(), client, SingleArtifactInput{
+			ProjectID: "group/sub/proj", JobID: 7, ArtifactPath: "build/output/report.txt",
+		})
+		if err != nil {
+			t.Fatalf("DownloadSingleArtifact with a clean path = %v, want it sent", err)
+		}
+		got := requests()
+		if len(got) != 1 || !strings.Contains(got[0], "/jobs/7/artifacts/build/output/report.txt") {
+			t.Errorf("clean artifact path reached %v, want the artifacts route", got)
+		}
+	})
+}
+
+// onceDecoded is how a refusal describes a segment found only once the
+// value's percent-encoding is undone.
+const onceDecoded = " once its percent-encoding is undone"
+
+// pathArgCases are the dot-segment forms the by-ref and archive tests below
+// pass as an argument client-go places into the request path without
+// escaping it, each with the segment the refusal must report.
+var pathArgCases = []struct {
+	name    string
+	value   string
+	segment string
+}{
+	{"dot dot between names", "a/../b", `".."`},
+	{"bare dot dot", "..", `".."`},
+	{"bare dot", ".", `"."`},
+	{"encoded dot dot", "%2e%2e", `".."` + onceDecoded},
+	{"dot between names", "x/./y", `"."`},
+}
+
+// assertPathArgRefused checks that err is the whole refusal of field under
+// operation, naming segment, and that no request reached the wire.
+func assertPathArgRefused(t *testing.T, err error, operation, field, segment string, requests []string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s accepted a %s with a dot segment, want a refusal", operation, field)
+	}
+	want := operation + ": " + field + " has the segment " + segment +
+		`; pass a value with no "." or ".." segment, written plainly or percent-encoded`
+	if got := err.Error(); got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+	if len(requests) != 0 {
+		t.Errorf("a refused %s still reached the wire: %v", field, requests)
+	}
+}
+
+// TestDownloadSingleArtifactByRef_DotSegmentArtifactPath_IsRefused asserts
+// the same check on the by-ref route, which also places artifact_path into
+// the request path without escaping it: a value with a dot segment is refused
+// before any request is sent, with an error that names the parameter, and a
+// value with a dot inside a segment is sent.
+func TestDownloadSingleArtifactByRef_DotSegmentArtifactPath_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingArtifactMock(t)
+			_, err := DownloadSingleArtifactByRef(context.Background(), client, SingleArtifactRefInput{
+				ProjectID: "group/proj", RefName: "main", JobName: "build",
+				ArtifactPath: tc.value,
+			})
+			assertPathArgRefused(t, err, "jobDownloadSingleArtifactByRef", "artifact_path", tc.segment, requests())
+		})
+	}
+
+	t.Run("allows a dot inside a segment", func(t *testing.T) {
+		client, requests := recordingArtifactMock(t)
+		_, err := DownloadSingleArtifactByRef(context.Background(), client, SingleArtifactRefInput{
+			ProjectID: "group/proj", RefName: "main", JobName: "build",
+			ArtifactPath: "dist/v1.2/app.txt",
+		})
+		if err != nil {
+			t.Fatalf("DownloadSingleArtifactByRef with a dot inside a segment = %v, want it sent", err)
+		}
+		if got := requests(); len(got) != 1 || !strings.Contains(got[0], "/raw/dist/v1.2/app.txt") {
+			t.Errorf("artifact path reached %v, want the raw artifact route", got)
+		}
+	})
+}
+
+// TestDownloadArtifacts_DotSegmentRefName_IsRefused asserts that the archive
+// download, whose route places ref_name into the request path without
+// escaping it, refuses a ref_name with a dot segment before any request is
+// sent, with an error that names the parameter, while a ref that carries a
+// slash, or a dot inside a segment, is still sent.
+func TestDownloadArtifacts_DotSegmentRefName_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingArtifactMock(t)
+			_, err := DownloadArtifacts(context.Background(), client, DownloadArtifactsInput{
+				ProjectID: "group/sub/proj", RefName: tc.value, JobName: "build",
+			})
+			assertPathArgRefused(t, err, "jobDownloadArtifacts", "ref_name", tc.segment, requests())
+		})
+	}
+
+	t.Run("allows a dot inside a segment", func(t *testing.T) {
+		client, requests := recordingArtifactMock(t)
+		_, err := DownloadArtifacts(context.Background(), client, DownloadArtifactsInput{
+			ProjectID: "group/sub/proj", RefName: "v1.2", JobName: "build",
+		})
+		if err != nil {
+			t.Fatalf("DownloadArtifacts with a dotted tag = %v, want it sent", err)
+		}
+		if got := requests(); len(got) != 1 || !strings.Contains(got[0], "/artifacts/v1.2/download") {
+			t.Errorf("a dotted tag reached %v, want the archive route", got)
+		}
+	})
+
+	t.Run("allows a ref with a slash", func(t *testing.T) {
+		client, requests := recordingArtifactMock(t)
+		_, err := DownloadArtifacts(context.Background(), client, DownloadArtifactsInput{
+			ProjectID: "group/sub/proj", RefName: "feature/my-branch", JobName: "build",
+		})
+		if err != nil {
+			t.Fatalf("DownloadArtifacts with a slashed ref = %v, want it sent", err)
+		}
+		if got := requests(); len(got) != 1 {
+			t.Errorf("a slashed ref reached %v, want one request", got)
+		}
+	})
+}
+
+// pathEncodings are values with a byte a request path cannot carry as it is,
+// each with the exact form it must reach the path in: every "/"-separated
+// segment percent-encoded and the "/" between segments kept. The last case
+// has no such byte and must reach the path unchanged.
+var pathEncodings = []struct {
+	name    string
+	value   string
+	escaped string
+}{
+	{"a space", "build/my report.txt", "build/my%20report.txt"},
+	{"a non-ASCII byte", "build/résumé.txt", "build/r%C3%A9sum%C3%A9.txt"},
+	{"a percent sign", "build/100%.txt", "build/100%25.txt"},
+	{"a quote and braces", `build/"{a}".txt`, "build/%22%7Ba%7D%22.txt"},
+	{"a question mark and a hash", "build/a?b#c.txt", "build/a%3Fb%23c.txt"},
+	{"no byte to escape", "build/output/report.txt", "build/output/report.txt"},
+}
+
+// assertRequestPath checks that exactly one request reached the mock and that
+// its path, as the client wrote it on the wire and without the query, is want.
+func assertRequestPath(t *testing.T, requests []string, want string) {
+	t.Helper()
+	if len(requests) != 1 {
+		t.Fatalf("requests = %v, want exactly one", requests)
+	}
+	if path, _, _ := strings.Cut(requests[0], "?"); path != want {
+		t.Errorf("request path = %q, want %q", path, want)
+	}
+}
+
+// TestDownloadSingleArtifact_ArtifactPath_IsEscapedPerSegment asserts the
+// exact path the artifacts route is requested at: each segment of
+// artifact_path is percent-encoded and the "/" between its segments kept,
+// the full-path project_id stays one escaped segment, and a path with no
+// byte to escape is sent unchanged. client-go places artifact_path into the
+// request path as given, so the handler escapes it first; the output still
+// names the path as the caller passed it.
+func TestDownloadSingleArtifact_ArtifactPath_IsEscapedPerSegment(t *testing.T) {
+	for _, tc := range pathEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingArtifactMock(t)
+			out, err := DownloadSingleArtifact(context.Background(), client, SingleArtifactInput{
+				ProjectID: "group/sub/proj", JobID: 7, ArtifactPath: tc.value,
+			})
+			if err != nil {
+				t.Fatalf("DownloadSingleArtifact(%q) = %v, want it sent", tc.value, err)
+			}
+			assertRequestPath(t, requests(), "/api/v4/projects/group%2Fsub%2Fproj/jobs/7/artifacts/"+tc.escaped)
+			if out.ArtifactPath != tc.value {
+				t.Errorf("output artifact_path = %q, want %q as passed", out.ArtifactPath, tc.value)
+			}
+		})
+	}
+}
+
+// TestDownloadSingleArtifactByRef_ArtifactPath_IsEscapedPerSegment asserts
+// the same on the by-ref route: artifact_path is escaped per segment with its
+// "/" kept, while the full-path project_id and the slashed ref_name, which
+// client-go escapes itself, each stay one escaped segment.
+func TestDownloadSingleArtifactByRef_ArtifactPath_IsEscapedPerSegment(t *testing.T) {
+	for _, tc := range pathEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingArtifactMock(t)
+			out, err := DownloadSingleArtifactByRef(context.Background(), client, SingleArtifactRefInput{
+				ProjectID: "group/sub/proj", RefName: "feature/x", JobName: "build", ArtifactPath: tc.value,
+			})
+			if err != nil {
+				t.Fatalf("DownloadSingleArtifactByRef(%q) = %v, want it sent", tc.value, err)
+			}
+			assertRequestPath(t, requests(), "/api/v4/projects/group%2Fsub%2Fproj/jobs/artifacts/feature%2Fx/raw/"+tc.escaped)
+			if out.ArtifactPath != tc.value {
+				t.Errorf("output artifact_path = %q, want %q as passed", out.ArtifactPath, tc.value)
+			}
+		})
+	}
+}
+
+// TestDownloadArtifacts_RefName_IsEscapedPerSegment asserts the exact path
+// the archive route is requested at for a ref_name with a byte a request path
+// cannot carry as it is: each segment of ref_name is percent-encoded and the
+// "/" of a slashed ref kept, as the route takes the ref across segments, the
+// full-path project_id stays one escaped segment, and a ref with no byte to
+// escape is sent unchanged.
+func TestDownloadArtifacts_RefName_IsEscapedPerSegment(t *testing.T) {
+	cases := []struct {
+		name    string
+		ref     string
+		escaped string
+	}{
+		{"a non-ASCII byte", "feature/über", "feature/%C3%BCber"},
+		{"a percent sign", "fix/100%", "fix/100%25"},
+		{"a hash", "fix#12", "fix%2312"},
+		{"braces and a quote", `feat/{a}"b`, "feat/%7Ba%7D%22b"},
+		{"no byte to escape", "feature/my-branch", "feature/my-branch"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, requests := recordingArtifactMock(t)
+			_, err := DownloadArtifacts(context.Background(), client, DownloadArtifactsInput{
+				ProjectID: "group/sub/proj", RefName: tc.ref, JobName: "build",
+			})
+			if err != nil {
+				t.Fatalf("DownloadArtifacts(%q) = %v, want it sent", tc.ref, err)
+			}
+			assertRequestPath(t, requests(), "/api/v4/projects/group%2Fsub%2Fproj/jobs/artifacts/"+tc.escaped+"/download")
+		})
+	}
+}

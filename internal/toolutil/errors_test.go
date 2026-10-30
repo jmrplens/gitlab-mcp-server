@@ -19,6 +19,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 
@@ -27,6 +28,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 const (
@@ -2244,6 +2246,110 @@ func TestClassifyError_DestinationRefused_IsNotAnUnreachableHost(t *testing.T) {
 				t.Errorf("ClassifyError() = %q, want %q", got, DestinationRefusedMessage)
 			}
 		})
+	}
+}
+
+// requestPathRefusal is a request path refusal as net/http hands it back from
+// a transport: a *url.Error around the error the GitLab transport returns. The
+// URL carries the word "certificate", which the TLS branch of [ClassifyError]
+// matches in the text of an error, so a classification that reached that
+// branch would show.
+func requestPathRefusal() error {
+	return &url.Error{
+		Op:  "Put",
+		URL: "https://gitlab.example.com/api/v4/x/certificate/../b",
+		Err: fmt.Errorf(`%w: the path "/api/v4/x/certificate/../b" has the segment ".."`,
+			gitlabclient.ErrRequestPathRefused),
+	}
+}
+
+// TestClassifyError_RequestPathRefused_SaysThePathArgumentWasRefused pins the
+// classification of a request the GitLab transport declined to send because
+// its path had a "." or ".." segment apart from the network and TLS branches
+// below it: the caller is told a path argument was refused and nothing was
+// sent, never that GitLab is unreachable or that TLS verification failed.
+func TestClassifyError_RequestPathRefused_SaysThePathArgumentWasRefused(t *testing.T) {
+	tests := map[string]error{
+		"as the transport reports it":  requestPathRefusal(),
+		"wrapped without a round trip": fmt.Errorf("sending: %w", gitlabclient.ErrRequestPathRefused),
+	}
+
+	for name, err := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := ClassifyError(err); got != RequestPathRefusedMessage {
+				t.Errorf("ClassifyError() = %q, want %q", got, RequestPathRefusedMessage)
+			}
+		})
+	}
+}
+
+// TestWrapErr_RequestPathRefused_ReplacesTheHandlersHint asserts what each
+// wrapper composes for a request path refusal: the classification and the
+// hint that say which argument to correct, in place of a handler's hint about
+// GitLab state, which GitLab was never asked about; no network or TLS
+// description; the refused path from the cause; and the chain kept, so the
+// refusal can still be recognized downstream.
+func TestWrapErr_RequestPathRefused_ReplacesTheHandlersHint(t *testing.T) {
+	cause := requestPathRefusal()
+	wrappers := map[string]func() error{
+		"WrapErr":               func() error { return WrapErr("op", cause) },
+		"WrapErrWithMessage":    func() error { return WrapErrWithMessage("op", cause) },
+		"WrapErrWithHint":       func() error { return WrapErrWithHint("op", cause, "check the job id") },
+		"WrapErrWithStatusHint": func() error { return WrapErrWithStatusHint("op", cause, 404, "check the job id") },
+	}
+
+	for name, wrap := range wrappers {
+		t.Run(name, func(t *testing.T) {
+			got := wrap()
+			text := got.Error()
+
+			want := "op: " + RequestPathRefusedMessage + ". Suggestion: " + RequestPathRefusedHint + ": "
+			if !strings.HasPrefix(text, want) {
+				t.Errorf("the composed message = %q, want it to start with %q", text, want)
+			}
+			if !strings.Contains(text, `has the segment ".."`) {
+				t.Errorf("the composed message does not carry the refused path's description:\n%s", text)
+			}
+			for _, wrong := range []string{"check the job id", "network error", "TLS", "GITLAB_MCP_SKIP_TLS_VERIFY"} {
+				if strings.Contains(text, wrong) {
+					t.Errorf("the composed message carries %q:\n%s", wrong, text)
+				}
+			}
+			if !errors.Is(got, gitlabclient.ErrRequestPathRefused) {
+				t.Error("the wrapping lost the cause, so nothing downstream can recognize it any more")
+			}
+		})
+	}
+}
+
+// TestWrapErrWithMessage_PathRefusedByTheClient_IsARefusedArgument drives a
+// client-go route that places an argument into the path without escaping it
+// through a client of the GitLab package against a recording mock: an
+// argument with a dot segment reaches the caller classified as a refused path
+// argument, and no request reaches the mock. It holds the classification to
+// the error the client actually returns, not to a hand-built one.
+func TestWrapErrWithMessage_PathRefusedByTheClient_IsARefusedArgument(t *testing.T) {
+	var requests atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	value := "v"
+	_, err := client.GL().SystemHooks.SetHookURLVariable(5, "a/../b",
+		&gl.SetHookURLVariableOptions{Value: &value}, gl.WithContext(context.Background()))
+	if err == nil {
+		t.Fatal("SetHookURLVariable with a dot-segment key = nil error, want a refusal")
+	}
+
+	text := WrapErrWithMessage("op", err).Error()
+	if want := "op: " + RequestPathRefusedMessage + ". Suggestion: " + RequestPathRefusedHint + ": "; !strings.HasPrefix(text, want) {
+		t.Errorf("the composed message = %q, want it to start with %q", text, want)
+	}
+	if strings.Contains(text, "network error") {
+		t.Errorf("the composed message describes a network error:\n%s", text)
+	}
+	if n := requests.Load(); n != 0 {
+		t.Errorf("the mock received %d request(s); a refused request must never leave the process", n)
 	}
 }
 

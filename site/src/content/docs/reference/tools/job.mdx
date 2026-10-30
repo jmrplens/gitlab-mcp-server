@@ -157,11 +157,11 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Job Artifact: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#job))
 - **Behavior**: read-only, idempotent
 
-| Parameter       | Type             | Mandatory | Description                                  |
-| --------------- | ---------------- | --------- | -------------------------------------------- |
-| `artifact_path` | `string`         | yes       | Path to the artifact file within the archive |
-| `job_id`        | `integer`        | yes       | Job ID                                       |
-| `project_id`    | `string/integer` | yes       | Project ID or URL-encoded path               |
+| Parameter       | Type             | Mandatory | Description                                                                                                                  |
+| --------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `artifact_path` | `string`         | yes       | Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..) |
+| `job_id`        | `integer`        | yes       | Job ID                                                                                                                       |
+| `project_id`    | `string/integer` | yes       | Project ID or URL-encoded path                                                                                               |
 
 ### `job.download_single_artifact_by_ref`
 
@@ -174,12 +174,12 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Job Artifact: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#job))
 - **Behavior**: read-only, idempotent
 
-| Parameter       | Type             | Mandatory | Description                                  |
-| --------------- | ---------------- | --------- | -------------------------------------------- |
-| `artifact_path` | `string`         | yes       | Path to the artifact file within the archive |
-| `job`           | `string`         | yes       | Job name                                     |
-| `project_id`    | `string/integer` | yes       | Project ID or URL-encoded path               |
-| `ref_name`      | `string`         | yes       | Branch or tag name                           |
+| Parameter       | Type             | Mandatory | Description                                                                                                                  |
+| --------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `artifact_path` | `string`         | yes       | Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..) |
+| `job`           | `string`         | yes       | Job name                                                                                                                     |
+| `project_id`    | `string/integer` | yes       | Project ID or URL-encoded path                                                                                               |
+| `ref_name`      | `string`         | yes       | Branch or tag name                                                                                                           |
 
 ### `job.erase`
 

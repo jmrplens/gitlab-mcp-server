@@ -829,6 +829,85 @@ func TestGet_NotFoundSuggestsTheListAndOtherFailuresDoNot(t *testing.T) {
 	}
 }
 
+// TestGet_DotSegmentKey_IsRefused asserts that a template key with a "." or
+// ".." segment is refused before any request is sent, with an error that
+// names key and the exact segment found, and that a key with a dot inside a
+// segment is sent. client-go places the key into the request path without
+// escaping it.
+func TestGet_DotSegmentKey_IsRefused(t *testing.T) {
+	cases := []struct {
+		name    string
+		key     string
+		segment string
+	}{
+		{"dot dot between names", "a/../b", `".."`},
+		{"bare dot dot", "..", `".."`},
+		{"bare dot", ".", `"."`},
+		{"encoded dot dot", "%2e%2e", `".." once its percent-encoding is undone`},
+		{"dot between names", "x/./y", `"."`},
+		{"dot inside a segment", "v1.2", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{"key":"v1.2","name":"Version 1.2"}`)
+			_, err := Get(t.Context(), client, GetInput{Key: tc.key})
+			if tc.segment == "" {
+				if err != nil {
+					t.Fatalf("Get(%q) = %v, want it sent", tc.key, err)
+				}
+				if got := recorder.Requests(); got != 1 {
+					t.Errorf("Get(%q) sent %d requests, want 1", tc.key, got)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Get(%q) = nil error, want a refusal", tc.key)
+			}
+			want := opGet + ": key has the segment " + tc.segment +
+				`; pass a value with no "." or ".." segment, written plainly or percent-encoded`
+			if got := err.Error(); got != want {
+				t.Errorf("error = %q, want %q", got, want)
+			}
+			if got := recorder.Requests(); got != 0 {
+				t.Errorf("Get(%q) sent %d requests, want none", tc.key, got)
+			}
+		})
+	}
+}
+
+// TestGet_Key_IsEscapedAsOneSegment asserts the exact path the license
+// template route is requested at: the key is percent-encoded as one path
+// segment, a "/" in it included, and a key with no byte to escape is sent
+// unchanged. client-go places the key into the request path as given, so the
+// handler escapes it first.
+func TestGet_Key_IsEscapedAsOneSegment(t *testing.T) {
+	cases := []struct {
+		name    string
+		key     string
+		escaped string
+	}{
+		{"a space", "my license", "my%20license"},
+		{"a non-ASCII byte", "licencia-española", "licencia-espa%C3%B1ola"},
+		{"a slash", "a/b", "a%2Fb"},
+		{"a percent sign", "100%", "100%25"},
+		{"no byte to escape", "apache-2.0", "apache-2.0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{"key":"mit","name":"MIT License"}`)
+			if _, err := Get(t.Context(), client, GetInput{Key: tc.key}); err != nil {
+				t.Fatalf("Get(%q) = %v, want it sent", tc.key, err)
+			}
+			if recorder.Requests() != 1 {
+				t.Fatalf("Get(%q) sent %d requests, want 1", tc.key, recorder.Requests())
+			}
+			if got, want := recorder.Path(), "/api/v4/templates/licenses/"+tc.escaped; got != want {
+				t.Errorf("request path = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // licenseTemplateSpecsByTool supports license template specs by tool assertions in licensetemplates tests.
 func licenseTemplateSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))

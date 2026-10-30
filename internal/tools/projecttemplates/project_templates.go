@@ -55,6 +55,9 @@ type TemplateItem struct {
 
 // List retrieves project templates of a given type.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
+	if err := toolutil.RejectTraversalArg("list_project_templates", "template_type", input.TemplateType); err != nil {
+		return ListOutput{}, err
+	}
 	opts := &gl.ListProjectTemplatesOptions{
 		ID:   optInt64(input.ID),
 		Type: optStr(input.Type),
@@ -66,8 +69,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	// client-go places template_type into the path as given, so it is
+	// escaped here as the one segment the route gives it.
 	templates, resp, err := client.GL().ProjectTemplates.ListTemplates(
-		string(input.ProjectID), input.TemplateType, opts, gl.WithContext(ctx),
+		string(input.ProjectID), toolutil.EscapePathSegment(input.TemplateType), opts, gl.WithContext(ctx),
 	)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_project_templates", err, http.StatusNotFound, "verify project_id and template_type (dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests)")
@@ -102,8 +107,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	if input.Key == "" {
 		return GetOutput{}, errors.New("get_project_template: key is required")
 	}
+	if err := toolutil.RejectTraversalArg("get_project_template", "template_type", input.TemplateType); err != nil {
+		return GetOutput{}, err
+	}
+	if err := toolutil.RejectTraversalArg("get_project_template", "key", input.Key); err != nil {
+		return GetOutput{}, err
+	}
+	// client-go places template_type and the key into the path as given, so
+	// each is escaped here as the one segment the route gives it; a template
+	// named with a space, such as an issue template, is the ordinary case.
 	tpl, _, err := client.GL().ProjectTemplates.GetProjectTemplate(
-		string(input.ProjectID), input.TemplateType, input.Key, gl.WithContext(ctx),
+		string(input.ProjectID), toolutil.EscapePathSegment(input.TemplateType), toolutil.EscapePathSegment(input.Key), gl.WithContext(ctx),
 	)
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_template", err, http.StatusNotFound, "verify template_type and template_name with template.project_template_list")

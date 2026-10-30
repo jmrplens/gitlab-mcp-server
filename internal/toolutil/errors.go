@@ -51,6 +51,21 @@ const UnattributedRequestMessage = "this request could not be attributed to a cr
 // names a flag instead.
 const DestinationRefusedMessage = "this server refused to connect to that address, so the request never left the process"
 
+// RequestPathRefusedMessage is what a caller is told when this server declined
+// to send a request because its path had a "." or ".." segment.
+//
+// It says a path argument was refused and that the request never left the
+// process, for the reason [DestinationRefusedMessage] says the latter: nothing
+// was sent and nothing answered, so a reading of the symptom as a network or
+// TLS failure sends the caller to check a connection that was never made.
+const RequestPathRefusedMessage = `this server refused a path argument with a "." or ".." segment, so the request never left the process`
+
+// RequestPathRefusedHint is the next step offered with a request path
+// refusal: the path is built from the action's arguments, so what changes the
+// outcome is the argument the segment came from, and the cause names the path
+// and the segment to look for in it.
+const RequestPathRefusedHint = `pass each path argument with no "." or ".." segment, written plainly or percent-encoded`
+
 // UnattributedRequestError is [UnattributedRequestMessage] as a JSON-RPC
 // internal error, for the surfaces that answer with an error value rather than
 // a classified string.
@@ -118,6 +133,9 @@ func WrapErr(operation string, err error) error {
 	if refused := wrapDestinationRefused(operation, err); refused != nil {
 		return refused
 	}
+	if refused := wrapRequestPathRefused(operation, err); refused != nil {
+		return refused
+	}
 	semantic := ClassifyError(err)
 	return fmt.Errorf("%s: %s: %w", operation, semantic, sanitize(err))
 }
@@ -142,6 +160,22 @@ func wrapDestinationRefused(operation string, err error) error {
 		return nil
 	}
 	return hintedError(operation, err, gitlabclient.DestinationRefusedHintFor(err))
+}
+
+// wrapRequestPathRefused returns the message for a request this server
+// declined to send because its path had a "." or ".." segment, or nil when
+// that is not the cause.
+//
+// It is here for the reason [wrapDestinationRefused] is: the transport refuses
+// such a path on any call, so there is no subset of handlers the refusal
+// belongs to. The cause is kept, since it names the path and the segment, and
+// the hint is [RequestPathRefusedHint] in place of the handler's, which
+// advises about GitLab state when GitLab was never asked.
+func wrapRequestPathRefused(operation string, err error) error {
+	if !errors.Is(err, gitlabclient.ErrRequestPathRefused) {
+		return nil
+	}
+	return hintedError(operation, err, RequestPathRefusedHint)
 }
 
 // wrapUnattributed returns the whole message for a request that never reached
@@ -208,6 +242,16 @@ func ClassifyError(err error) string {
 	// for a connection that was never attempted.
 	if errors.Is(err, gitlabclient.ErrDestinationRefused) {
 		return DestinationRefusedMessage
+	}
+
+	// This server declined to send a request whose path had a "." or ".."
+	// segment. Checked here for the same reason as the line above, and for one
+	// more: the TLS branch below matches the text of the error, which carries
+	// the request URL, so a path with the word "certificate" in it would read
+	// as a failed handshake and the caller would be told to turn verification
+	// off.
+	if errors.Is(err, gitlabclient.ErrRequestPathRefused) {
+		return RequestPathRefusedMessage
 	}
 
 	// GitLab refused the call under its fine-grained token rules. Checked
@@ -1382,6 +1426,9 @@ func WrapErrWithMessage(operation string, err error) error {
 	if refused := wrapDestinationRefused(operation, err); refused != nil {
 		return refused
 	}
+	if refused := wrapRequestPathRefused(operation, err); refused != nil {
+		return refused
+	}
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {
@@ -1415,6 +1462,11 @@ func WrapErrWithHint(operation string, err error, hint string) error {
 	if refused := wrapDestinationRefused(operation, err); refused != nil {
 		return refused
 	}
+	// A refused request path is replaced the same way: GitLab was not asked,
+	// and the one suggestion that changes the outcome is the argument.
+	if refused := wrapRequestPathRefused(operation, err); refused != nil {
+		return refused
+	}
 	// A refusal under GitLab's fine-grained token rules drops the hint too,
 	// and the composition is [WrapErrWithMessage]'s. What [ClassifyError]
 	// says of it names what the token's grant lacks and the way out, which no
@@ -1431,8 +1483,9 @@ func WrapErrWithHint(operation string, err error, hint string) error {
 }
 
 // hintedError is the composition [WrapErrWithHint] produces, shared with
-// [wrapDestinationRefused] so a refusal reads exactly like every other hinted
-// error rather than like a second format that has to be kept in step by hand.
+// [wrapDestinationRefused] and [wrapRequestPathRefused] so a refusal reads
+// exactly like every other hinted error rather than like a second format that
+// has to be kept in step by hand.
 func hintedError(operation string, err error, hint string) error {
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)

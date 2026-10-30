@@ -584,8 +584,14 @@ func SetHookCustomHeader(ctx context.Context, client *gitlabclient.Client, input
 	if input.Key == "" {
 		return errors.New("groupSetHookCustomHeader: key is required")
 	}
+	if err := toolutil.RejectTraversalArg("groupSetHookCustomHeader", "key", input.Key); err != nil {
+		return err
+	}
 	opts := &gl.SetHookCustomHeaderOptions{Value: &input.Value}
-	_, err := client.GL().Groups.SetGroupCustomHeader(string(input.GroupID), input.HookID, input.Key, opts, gl.WithContext(ctx))
+	// client-go places the key into the path as given, so it is escaped here
+	// as the one segment the route gives it; the other hook sub-operations
+	// escape their key or trigger the same way.
+	_, err := client.GL().Groups.SetGroupCustomHeader(string(input.GroupID), input.HookID, toolutil.EscapePathSegment(input.Key), opts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupSetHookCustomHeader", err, http.StatusNotFound,
 			"webhook not found. Use group.hook_list to verify hook_id; requires Owner role")
@@ -614,7 +620,10 @@ func DeleteHookCustomHeader(ctx context.Context, client *gitlabclient.Client, in
 	if input.Key == "" {
 		return errors.New("groupDeleteHookCustomHeader: key is required")
 	}
-	_, err := client.GL().Groups.DeleteGroupCustomHeader(string(input.GroupID), input.HookID, input.Key, gl.WithContext(ctx))
+	if err := toolutil.RejectTraversalArg("groupDeleteHookCustomHeader", "key", input.Key); err != nil {
+		return err
+	}
+	_, err := client.GL().Groups.DeleteGroupCustomHeader(string(input.GroupID), input.HookID, toolutil.EscapePathSegment(input.Key), gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupDeleteHookCustomHeader", err, http.StatusNotFound,
 			"header key not currently set on this hook (or hook not found). Use group.hook_get to inspect configured custom headers")
@@ -644,8 +653,11 @@ func SetHookURLVariable(ctx context.Context, client *gitlabclient.Client, input 
 	if input.Key == "" {
 		return errors.New("groupSetHookURLVariable: key is required")
 	}
+	if err := toolutil.RejectTraversalArg("groupSetHookURLVariable", "key", input.Key); err != nil {
+		return err
+	}
 	opts := &gl.SetHookURLVariableOptions{Value: &input.Value}
-	_, err := client.GL().Groups.SetGroupHookURLVariable(string(input.GroupID), input.HookID, input.Key, opts, gl.WithContext(ctx))
+	_, err := client.GL().Groups.SetGroupHookURLVariable(string(input.GroupID), input.HookID, toolutil.EscapePathSegment(input.Key), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
 			return toolutil.WrapErrWithHint("groupSetHookURLVariable", err,
@@ -678,7 +690,10 @@ func DeleteHookURLVariable(ctx context.Context, client *gitlabclient.Client, inp
 	if input.Key == "" {
 		return errors.New("groupDeleteHookURLVariable: key is required")
 	}
-	_, err := client.GL().Groups.DeleteGroupHookURLVariable(string(input.GroupID), input.HookID, input.Key, gl.WithContext(ctx))
+	if err := toolutil.RejectTraversalArg("groupDeleteHookURLVariable", "key", input.Key); err != nil {
+		return err
+	}
+	_, err := client.GL().Groups.DeleteGroupHookURLVariable(string(input.GroupID), input.HookID, toolutil.EscapePathSegment(input.Key), gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupDeleteHookURLVariable", err, http.StatusNotFound,
 			"variable key not currently set on this hook (or hook not found). Use group.hook_get to inspect configured URL variables")
@@ -707,7 +722,10 @@ func TestHook(ctx context.Context, client *gitlabclient.Client, input TestHookIn
 	if input.Trigger == "" {
 		return errors.New("groupTestHook: trigger is required (e.g. push_events, pipeline_events)")
 	}
-	_, err := client.GL().Groups.TriggerTestGroupHook(string(input.GroupID), input.HookID, gl.GroupHookTrigger(input.Trigger), gl.WithContext(ctx))
+	if err := toolutil.RejectTraversalArg("groupTestHook", "trigger", input.Trigger); err != nil {
+		return err
+	}
+	_, err := client.GL().Groups.TriggerTestGroupHook(string(input.GroupID), input.HookID, gl.GroupHookTrigger(toolutil.EscapePathSegment(input.Trigger)), gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupTestHook", err, http.StatusNotFound,
 			"webhook not found, or trigger is not a valid event type. Use group.hook_list to verify hook_id; requires Owner role")

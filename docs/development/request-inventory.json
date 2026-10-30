@@ -8950,6 +8950,54 @@
       "package": "internal/tools/groups",
       "kind": "rest",
       "method": "DELETE",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/100%25",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/100%25",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/:custom_header_id",
+      "identifiers": {
+        ":custom_header_id": 1,
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/:custom_header_id",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":custom_header_id": 1,
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "DELETE",
       "path": "/groups/:group_id/hooks/:hook_id/custom_headers/X-K",
       "identifiers": {
         ":group_id": 1,
@@ -8984,6 +9032,98 @@
       "kind": "rest",
       "method": "PUT",
       "path": "/groups/:group_id/hooks/:hook_id/custom_headers/X-Token",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/X_Token",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/X_Token",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/cl%C3%A9",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/cl%C3%A9",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/my%20key",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/my%20key",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/v1.2",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/v1.2",
       "body": [
         "value"
       ],
@@ -9007,6 +9147,57 @@
       "package": "internal/tools/groups",
       "kind": "rest",
       "method": "POST",
+      "path": "/groups/:group_id/hooks/:hook_id/test/100%25",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/hooks/:hook_id/test/:test_id",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1,
+        ":test_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/hooks/:hook_id/test/X_Token",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/hooks/:hook_id/test/cl%C3%A9",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/hooks/:hook_id/test/my%20key",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "POST",
       "path": "/groups/:group_id/hooks/:hook_id/test/push_events",
       "identifiers": {
         ":group_id": 2,
@@ -9016,12 +9207,22 @@
     {
       "package": "internal/tools/groups",
       "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/hooks/:hook_id/test/v1.2",
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
       "method": "DELETE",
       "path": "/groups/:group_id/hooks/:hook_id/url_variables/:key",
       "identifiers": {
-        ":group_id": 2,
+        ":group_id": 3,
         ":hook_id": 2,
-        ":key": 2
+        ":key": 8
       }
     },
     {
@@ -9033,9 +9234,9 @@
         "value"
       ],
       "identifiers": {
-        ":group_id": 2,
+        ":group_id": 3,
         ":hook_id": 2,
-        ":key": 3
+        ":key": 9
       }
     },
     {
@@ -11666,6 +11867,66 @@
     {
       "package": "internal/tools/jobs",
       "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/build/%22%7Ba%7D%22.txt",
+      "identifiers": {
+        ":job_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/build/100%25.txt",
+      "identifiers": {
+        ":job_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/build/a%3Fb%23c.txt",
+      "identifiers": {
+        ":job_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/build/my%20report.txt",
+      "identifiers": {
+        ":job_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/build/output/report.txt",
+      "identifiers": {
+        ":job_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/build/r%C3%A9sum%C3%A9.txt",
+      "identifiers": {
+        ":job_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/jobs/:job_id/artifacts/keep",
       "identifiers": {
@@ -11754,6 +12015,144 @@
       "package": "internal/tools/jobs",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/:artifact_id/raw/build/%22%7Ba%7D%22.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":artifact_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/:artifact_id/raw/build/100%25.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":artifact_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/:artifact_id/raw/build/a%3Fb%23c.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":artifact_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/:artifact_id/raw/build/my%20report.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":artifact_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/:artifact_id/raw/build/output/report.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":artifact_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/:artifact_id/raw/build/r%C3%A9sum%C3%A9.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":artifact_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/feat/%7Ba%7D%22b/download",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/feature/%C3%BCber/download",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/feature/my-branch/download",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/fix%2312/download",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/fix/100%25/download",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/jobs/artifacts/main/download",
       "query": [
         "job"
@@ -11790,6 +12189,18 @@
       "package": "internal/tools/jobs",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/main/raw/dist/v1.2/app.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/jobs/artifacts/main/raw/out.bin",
       "query": [
         "job"
@@ -11803,6 +12214,18 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/jobs/artifacts/main/raw/report.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/v1.2/download",
       "query": [
         "job"
       ],
@@ -12217,7 +12640,34 @@
       "package": "internal/tools/licensetemplates",
       "kind": "rest",
       "method": "GET",
+      "path": "/templates/licenses/100%25"
+    },
+    {
+      "package": "internal/tools/licensetemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/templates/licenses/:license_id",
+      "identifiers": {
+        ":license_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/licensetemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/templates/licenses/apache-2.0"
+    },
+    {
+      "package": "internal/tools/licensetemplates",
+      "kind": "rest",
+      "method": "GET",
       "path": "/templates/licenses/bad"
+    },
+    {
+      "package": "internal/tools/licensetemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/templates/licenses/licencia-espa%C3%B1ola"
     },
     {
       "package": "internal/tools/licensetemplates",
@@ -12233,7 +12683,19 @@
       "package": "internal/tools/licensetemplates",
       "kind": "rest",
       "method": "GET",
+      "path": "/templates/licenses/my%20license"
+    },
+    {
+      "package": "internal/tools/licensetemplates",
+      "kind": "rest",
+      "method": "GET",
       "path": "/templates/licenses/nope"
+    },
+    {
+      "package": "internal/tools/licensetemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/templates/licenses/v1.2"
     },
     {
       "package": "internal/tools/licensetemplates",
@@ -13182,7 +13644,47 @@
       "package": "internal/tools/modelregistry",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/deep%5Cmodels/model.bin",
+      "identifiers": {
+        ":ml_model_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/deep/mod%C3%A8le.bin",
+      "identifiers": {
+        ":ml_model_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/deep/my%20model.bin",
+      "identifiers": {
+        ":ml_model_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/empty/empty.bin",
+      "identifiers": {
+        ":ml_model_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/mod%C3%A8le.bin",
       "identifiers": {
         ":ml_model_id": 1,
         ":project_id": 1
@@ -13212,9 +13714,38 @@
       "package": "internal/tools/modelregistry",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/my%20model.bin",
+      "identifiers": {
+        ":ml_model_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/:ml_model_id/files/v1.2",
+      "identifiers": {
+        ":ml_model_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/packages/ml_models/candidate:5/files/:file_id/weights.h5",
       "identifiers": {
         ":file_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/modelregistry",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/packages/ml_models/v1.2/files/models/model.bin",
+      "identifiers": {
         ":project_id": 1
       }
     },
@@ -14837,9 +15368,9 @@
       "method": "DELETE",
       "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/:key",
       "identifiers": {
-        ":key": 3,
-        ":pipeline_schedule_id": 1,
-        ":project_id": 2
+        ":key": 8,
+        ":pipeline_schedule_id": 2,
+        ":project_id": 3
       }
     },
     {
@@ -14852,9 +15383,9 @@
         "variable_type"
       ],
       "identifiers": {
-        ":key": 3,
-        ":pipeline_schedule_id": 1,
-        ":project_id": 2
+        ":key": 8,
+        ":pipeline_schedule_id": 2,
+        ":project_id": 3
       }
     },
     {
@@ -16447,6 +16978,81 @@
       "package": "internal/tools/projecttemplates",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/templates/100%25",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/100%25/100%25",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/:template_id",
+      "identifiers": {
+        ":project_id": 1,
+        ":template_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/:template_id/:id",
+      "identifiers": {
+        ":id": 1,
+        ":project_id": 1,
+        ":template_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/Bug%20Report",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/Bug%20Report/Bug%20Report",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/Fehlerbericht-%C3%A4",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/Fehlerbericht-%C3%A4/Fehlerbericht-%C3%A4",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/templates/dockerfiles",
       "identifiers": {
         ":project_id": 1
@@ -16470,6 +17076,24 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/templates/gitignores/Go",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/issues",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/issues/issues",
       "identifiers": {
         ":project_id": 1
       }
@@ -16515,7 +17139,34 @@
       "package": "internal/tools/projecttemplates",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/templates/licenses/v1.2",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/templates/licenses/x",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/v1.2",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projecttemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/templates/v1.2/mit",
       "identifiers": {
         ":project_id": 1
       }
@@ -18705,8 +19356,8 @@
       "method": "DELETE",
       "path": "/hooks/:hook_id/url_variables/:key",
       "identifiers": {
-        ":hook_id": 1,
-        ":key": 1
+        ":hook_id": 2,
+        ":key": 7
       }
     },
     {
@@ -18718,8 +19369,8 @@
         "value"
       ],
       "identifiers": {
-        ":hook_id": 2,
-        ":key": 3
+        ":hook_id": 3,
+        ":key": 9
       }
     },
     {

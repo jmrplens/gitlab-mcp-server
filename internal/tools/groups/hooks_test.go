@@ -1323,3 +1323,180 @@ func TestEditHook_CarriesEveryIdentityFieldUnderItsOwnKey(t *testing.T) {
 		t.Errorf("edit body = %v, want %v", body, want)
 	}
 }
+
+// pathArgCases are the values the hook sub-operation tests below pass as the
+// argument client-go places into the request path without escaping it: the
+// forms with a "." or ".." segment, which the handler refuses, each with the
+// segment the refusal must report, and a value with a dot inside a segment,
+// which it sends and which has none.
+var pathArgCases = []struct {
+	name    string
+	value   string
+	segment string
+}{
+	{"dot dot between names", "a/../b", `".."`},
+	{"bare dot dot", "..", `".."`},
+	{"bare dot", ".", `"."`},
+	{"encoded dot dot", "%2e%2e", `".." once its percent-encoding is undone`},
+	{"dot between names", "x/./y", `"."`},
+	{"dot inside a segment", "v1.2", ""},
+}
+
+// assertPathArgOutcome checks what a handler did with one of [pathArgCases]:
+// a value with a segment to report returns the whole refusal of field under
+// operation naming that segment and sends nothing, and any other value is
+// sent once.
+func assertPathArgOutcome(t *testing.T, err error, operation, field, segment string, requests int) {
+	t.Helper()
+	if segment == "" {
+		if err != nil {
+			t.Fatalf("%s with a %s that has a dot inside a segment = %v, want it sent", operation, field, err)
+		}
+		if requests != 1 {
+			t.Errorf("%s sent %d requests, want 1", operation, requests)
+		}
+		return
+	}
+	if err == nil {
+		t.Fatalf("%s accepted a %s with a dot segment, want a refusal", operation, field)
+	}
+	want := operation + ": " + field + " has the segment " + segment +
+		`; pass a value with no "." or ".." segment, written plainly or percent-encoded`
+	if got := err.Error(); got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+	if requests != 0 {
+		t.Errorf("%s sent %d requests for a refused %s, want none", operation, requests, field)
+	}
+}
+
+// TestSetHookCustomHeader_DotSegmentKey_IsRefused asserts that a custom header
+// key with a "." or ".." segment is refused before any request is sent, with
+// an error that names key, and that a key with a dot inside a segment is sent.
+// client-go places the key into the request path without escaping it.
+func TestSetHookCustomHeader_DotSegmentKey_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{}`)
+			err := SetHookCustomHeader(t.Context(), client, SetHookCustomHeaderInput{GroupID: "99", HookID: 10, Key: tc.value, Value: "v"})
+			assertPathArgOutcome(t, err, "groupSetHookCustomHeader", "key", tc.segment, recorder.Requests())
+		})
+	}
+}
+
+// TestDeleteHookCustomHeader_DotSegmentKey_IsRefused asserts the same check
+// on the custom header delete route, which also places the key into the
+// request path without escaping it.
+func TestDeleteHookCustomHeader_DotSegmentKey_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{}`)
+			err := DeleteHookCustomHeader(t.Context(), client, DeleteHookCustomHeaderInput{GroupID: "99", HookID: 10, Key: tc.value})
+			assertPathArgOutcome(t, err, "groupDeleteHookCustomHeader", "key", tc.segment, recorder.Requests())
+		})
+	}
+}
+
+// TestSetHookURLVariable_DotSegmentKey_IsRefused asserts that a URL variable
+// key with a "." or ".." segment is refused before any request is sent, with
+// an error that names key, and that a key with a dot inside a segment is sent.
+// client-go places the key into the request path without escaping it.
+func TestSetHookURLVariable_DotSegmentKey_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{}`)
+			err := SetHookURLVariable(t.Context(), client, SetHookURLVariableInput{GroupID: "99", HookID: 10, Key: tc.value, Value: "v"})
+			assertPathArgOutcome(t, err, "groupSetHookURLVariable", "key", tc.segment, recorder.Requests())
+		})
+	}
+}
+
+// TestDeleteHookURLVariable_DotSegmentKey_IsRefused asserts the same check on
+// the URL variable delete route, which also places the key into the request
+// path without escaping it.
+func TestDeleteHookURLVariable_DotSegmentKey_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{}`)
+			err := DeleteHookURLVariable(t.Context(), client, DeleteHookURLVariableInput{GroupID: "99", HookID: 10, Key: tc.value})
+			assertPathArgOutcome(t, err, "groupDeleteHookURLVariable", "key", tc.segment, recorder.Requests())
+		})
+	}
+}
+
+// TestTestHook_DotSegmentTrigger_IsRefused asserts that a test trigger with a
+// "." or ".." segment is refused before any request is sent, with an error
+// that names trigger, and that a trigger with a dot inside a segment is sent.
+// client-go places the trigger into the request path without escaping it.
+func TestTestHook_DotSegmentTrigger_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{}`)
+			err := TestHook(t.Context(), client, TestHookInput{GroupID: "99", HookID: 10, Trigger: tc.value})
+			assertPathArgOutcome(t, err, "groupTestHook", "trigger", tc.segment, recorder.Requests())
+		})
+	}
+}
+
+// segmentEncodings are values with a byte a request path segment cannot
+// carry as it is, each with the exact form it must reach the path in:
+// percent-encoded as one segment, a "/" included. The last case has no such
+// byte and must reach the path unchanged.
+var segmentEncodings = []struct {
+	name    string
+	value   string
+	escaped string
+}{
+	{"a space", "my key", "my%20key"},
+	{"a non-ASCII byte", "clé", "cl%C3%A9"},
+	{"a slash", "a/b", "a%2Fb"},
+	{"a percent sign", "100%", "100%25"},
+	{"no byte to escape", "X_Token", "X_Token"},
+}
+
+// TestHookSubOperations_PathArgument_IsEscapedAsOneSegment asserts the exact
+// path each hook sub-operation is requested at: the key or trigger is
+// percent-encoded as one path segment, a "/" in it included, the full-path
+// group_id stays one escaped segment, and a value with no byte to escape is
+// sent unchanged. client-go places the key and the trigger into the request
+// path as given, so each handler escapes it first.
+func TestHookSubOperations_PathArgument_IsEscapedAsOneSegment(t *testing.T) {
+	const hook = "/api/v4/groups/group%2Fsub/hooks/10/"
+	operations := []struct {
+		name  string
+		route string
+		call  func(ctx context.Context, client *gitlabclient.Client, value string) error
+	}{
+		{"set custom header", "custom_headers/", func(ctx context.Context, client *gitlabclient.Client, value string) error {
+			return SetHookCustomHeader(ctx, client, SetHookCustomHeaderInput{GroupID: "group/sub", HookID: 10, Key: value, Value: "v"})
+		}},
+		{"delete custom header", "custom_headers/", func(ctx context.Context, client *gitlabclient.Client, value string) error {
+			return DeleteHookCustomHeader(ctx, client, DeleteHookCustomHeaderInput{GroupID: "group/sub", HookID: 10, Key: value})
+		}},
+		{"set URL variable", "url_variables/", func(ctx context.Context, client *gitlabclient.Client, value string) error {
+			return SetHookURLVariable(ctx, client, SetHookURLVariableInput{GroupID: "group/sub", HookID: 10, Key: value, Value: "v"})
+		}},
+		{"delete URL variable", "url_variables/", func(ctx context.Context, client *gitlabclient.Client, value string) error {
+			return DeleteHookURLVariable(ctx, client, DeleteHookURLVariableInput{GroupID: "group/sub", HookID: 10, Key: value})
+		}},
+		{"test trigger", "test/", func(ctx context.Context, client *gitlabclient.Client, value string) error {
+			return TestHook(ctx, client, TestHookInput{GroupID: "group/sub", HookID: 10, Trigger: value})
+		}},
+	}
+	for _, op := range operations {
+		for _, tc := range segmentEncodings {
+			t.Run(op.name+"/"+tc.name, func(t *testing.T) {
+				client, recorder := testutil.RecordQueries(t, `{}`)
+				if err := op.call(t.Context(), client, tc.value); err != nil {
+					t.Fatalf("%s(%q) = %v, want it sent", op.name, tc.value, err)
+				}
+				if recorder.Requests() != 1 {
+					t.Fatalf("%s sent %d requests, want 1", op.name, recorder.Requests())
+				}
+				if got, want := recorder.Path(), hook+op.route+tc.escaped; got != want {
+					t.Errorf("request path = %q, want %q", got, want)
+				}
+			})
+		}
+	}
+}

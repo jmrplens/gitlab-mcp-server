@@ -2432,3 +2432,135 @@ func TestPipelineScheduleGet_WithTimestamps(t *testing.T) {
 		t.Errorf("UpdatedAt = %q, want 2026-03-20T12:00:00Z", out.UpdatedAt)
 	}
 }
+
+// pathArgCases are the variable keys the edit and delete tests below pass:
+// the forms with a "." or ".." segment, which the handlers refuse, each with
+// the segment the refusal must report, and a key with a dot inside a segment,
+// which they send and which has none. client-go places the key into the
+// request path without escaping it.
+var pathArgCases = []struct {
+	name    string
+	value   string
+	segment string
+}{
+	{"dot dot between names", "a/../b", `".."`},
+	{"bare dot dot", "..", `".."`},
+	{"bare dot", ".", `"."`},
+	{"encoded dot dot", "%2e%2e", `".." once its percent-encoding is undone`},
+	{"dot between names", "x/./y", `"."`},
+	{"dot inside a segment", "v1.2", ""},
+}
+
+// assertPathArgOutcome checks what a handler did with one of [pathArgCases]:
+// a key with a segment to report returns the whole refusal of key under
+// operation naming that segment and sends nothing, and any other key is sent
+// once.
+func assertPathArgOutcome(t *testing.T, err error, operation, segment string, requests int) {
+	t.Helper()
+	if segment == "" {
+		if err != nil {
+			t.Fatalf("%s with a key that has a dot inside a segment = %v, want it sent", operation, err)
+		}
+		if requests != 1 {
+			t.Errorf("%s sent %d requests, want 1", operation, requests)
+		}
+		return
+	}
+	if err == nil {
+		t.Fatalf("%s accepted a key with a dot segment, want a refusal", operation)
+	}
+	want := operation + ": key has the segment " + segment +
+		`; pass a value with no "." or ".." segment, written plainly or percent-encoded`
+	if got := err.Error(); got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+	if requests != 0 {
+		t.Errorf("%s sent %d requests for a refused key, want none", operation, requests)
+	}
+}
+
+// TestEditVariable_DotSegmentKey_IsRefused asserts that a variable key with a
+// "." or ".." segment is refused before any request is sent, with an error
+// that names key, and that a key with a dot inside a segment is sent.
+func TestEditVariable_DotSegmentKey_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{"key":"v1.2","value":"staging","variable_type":"env_var"}`)
+			_, err := EditVariable(t.Context(), client, EditVariableInput{ProjectID: "42", ScheduleID: 1, Key: tc.value, Value: "staging"})
+			assertPathArgOutcome(t, err, "edit_pipeline_schedule_variable", tc.segment, recorder.Requests())
+		})
+	}
+}
+
+// TestDeleteVariable_DotSegmentKey_IsRefused asserts the same check on the
+// delete route, which also places the key into the request path without
+// escaping it.
+func TestDeleteVariable_DotSegmentKey_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{"key":"v1.2","value":"staging","variable_type":"env_var"}`)
+			err := DeleteVariable(t.Context(), client, DeleteVariableInput{ProjectID: "42", ScheduleID: 1, Key: tc.value})
+			assertPathArgOutcome(t, err, "delete_pipeline_schedule_variable", tc.segment, recorder.Requests())
+		})
+	}
+}
+
+// keyEncodings are keys with a byte a request path segment cannot carry as
+// it is, each with the exact form it must reach the path in: percent-encoded
+// as one segment, a "/" included. The last case has no such byte and must
+// reach the path unchanged.
+var keyEncodings = []struct {
+	name    string
+	key     string
+	escaped string
+}{
+	{"a space", "my key", "my%20key"},
+	{"a non-ASCII byte", "clé", "cl%C3%A9"},
+	{"a slash", "a/b", "a%2Fb"},
+	{"a percent sign", "100%", "100%25"},
+	{"no byte to escape", "DEPLOY_ENV", "DEPLOY_ENV"},
+}
+
+// assertKeyPath checks that exactly one request reached the recorder and
+// that its path is the schedule variable route for the escaped key, with the
+// full-path project_id still one escaped segment.
+func assertKeyPath(t *testing.T, recorder *testutil.QueryRecorder, escaped string) {
+	t.Helper()
+	if recorder.Requests() != 1 {
+		t.Fatalf("sent %d requests, want 1", recorder.Requests())
+	}
+	if got, want := recorder.Path(), "/api/v4/projects/group%2Fproj/pipeline_schedules/3/variables/"+escaped; got != want {
+		t.Errorf("request path = %q, want %q", got, want)
+	}
+}
+
+// TestEditVariable_Key_IsEscapedAsOneSegment asserts the exact path the edit
+// route is requested at: the key is percent-encoded as one path segment, a
+// "/" in it included, the full-path project_id stays one escaped segment, and
+// a key with no byte to escape is sent unchanged. client-go places the key
+// into the request path as given, so the handler escapes it first.
+func TestEditVariable_Key_IsEscapedAsOneSegment(t *testing.T) {
+	for _, tc := range keyEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{"key":"DEPLOY_ENV","value":"staging","variable_type":"env_var"}`)
+			if _, err := EditVariable(t.Context(), client, EditVariableInput{ProjectID: "group/proj", ScheduleID: 3, Key: tc.key, Value: "staging"}); err != nil {
+				t.Fatalf("EditVariable(%q) = %v, want it sent", tc.key, err)
+			}
+			assertKeyPath(t, recorder, tc.escaped)
+		})
+	}
+}
+
+// TestDeleteVariable_Key_IsEscapedAsOneSegment asserts the same on the delete
+// route.
+func TestDeleteVariable_Key_IsEscapedAsOneSegment(t *testing.T) {
+	for _, tc := range keyEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{"key":"DEPLOY_ENV","value":"staging","variable_type":"env_var"}`)
+			if err := DeleteVariable(t.Context(), client, DeleteVariableInput{ProjectID: "group/proj", ScheduleID: 3, Key: tc.key}); err != nil {
+				t.Fatalf("DeleteVariable(%q) = %v, want it sent", tc.key, err)
+			}
+			assertKeyPath(t, recorder, tc.escaped)
+		})
+	}
+}

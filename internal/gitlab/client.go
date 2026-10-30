@@ -1457,18 +1457,24 @@ func insecureTLSConfig() *tls.Config {
 // this chain as a request of its own, and the stamp says whether that hop's
 // URL is still the instance's own host. The same layer chooses which of the
 // two pools serves the hop, for the reason [destinationPools] gives.
+//
+// [pathTraversalGuardTransport] sits just inside [dotUnescapeTransport] so it
+// reads the final path after the "%2E" -> "." rewrite and refuses one that
+// carries a dot segment on any hop, the first included.
 func apiTransport(pools destinationPools, c *Client) http.RoundTripper {
 	return mcpotel.NewTransport(&outboundBoundaryTransport{
 		base: &dotUnescapeTransport{
-			base: &resilienceTransport{
-				base: &captureTransport{
-					base: &responseLimitTransport{
-						base:                &destinationTransport{pools: pools, client: c},
-						client:              c,
-						reportsUnauthorized: true,
+			base: &pathTraversalGuardTransport{
+				base: &resilienceTransport{
+					base: &captureTransport{
+						base: &responseLimitTransport{
+							base:                &destinationTransport{pools: pools, client: c},
+							client:              c,
+							reportsUnauthorized: true,
+						},
 					},
+					client: c,
 				},
-				client: c,
 			},
 		},
 	})

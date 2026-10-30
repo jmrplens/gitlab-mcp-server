@@ -104934,7 +104934,7 @@
       "additionalProperties": false,
       "properties": {
         "artifact_path": {
-          "description": "Path to the artifact file within the archive",
+          "description": "Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..)",
           "type": "string"
         },
         "job_id": {
@@ -105009,7 +105009,7 @@
       "additionalProperties": false,
       "properties": {
         "artifact_path": {
-          "description": "Path to the artifact file within the archive",
+          "description": "Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..)",
           "type": "string"
         },
         "job": {

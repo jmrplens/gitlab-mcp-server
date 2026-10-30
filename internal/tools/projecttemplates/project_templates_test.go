@@ -592,6 +592,157 @@ func newProjectTemplateRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return projectTemplateSpecsByTool(ActionSpecs(client))
 }
 
+// pathArgCases are the values the template type and key tests below pass:
+// the forms with a "." or ".." segment, which the handlers refuse, each with
+// the segment the refusal must report, and a value with a dot inside a
+// segment, which they send and which has none. client-go places both the
+// template type and the key into the request path without escaping them.
+var pathArgCases = []struct {
+	name    string
+	value   string
+	segment string
+}{
+	{"dot dot between names", "a/../b", `".."`},
+	{"bare dot dot", "..", `".."`},
+	{"bare dot", ".", `"."`},
+	{"encoded dot dot", "%2e%2e", `".." once its percent-encoding is undone`},
+	{"dot between names", "x/./y", `"."`},
+	{"dot inside a segment", "v1.2", ""},
+}
+
+// assertPathArgOutcome checks what a handler did with one of [pathArgCases]:
+// a value with a segment to report returns the whole refusal of field under
+// operation naming that segment and sends nothing, and any other value is
+// sent once.
+func assertPathArgOutcome(t *testing.T, err error, operation, field, segment string, requests int) {
+	t.Helper()
+	if segment == "" {
+		if err != nil {
+			t.Fatalf("%s with a %s that has a dot inside a segment = %v, want it sent", operation, field, err)
+		}
+		if requests != 1 {
+			t.Errorf("%s sent %d requests, want 1", operation, requests)
+		}
+		return
+	}
+	if err == nil {
+		t.Fatalf("%s accepted a %s with a dot segment, want a refusal", operation, field)
+	}
+	want := operation + ": " + field + " has the segment " + segment +
+		`; pass a value with no "." or ".." segment, written plainly or percent-encoded`
+	if got := err.Error(); got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+	if requests != 0 {
+		t.Errorf("%s sent %d requests for a refused %s, want none", operation, requests, field)
+	}
+}
+
+// TestList_DotSegmentTemplateType_IsRefused asserts that a template type with
+// a "." or ".." segment is refused before any request is sent, with an error
+// that names template_type, and that a type with a dot inside a segment is
+// sent.
+func TestList_DotSegmentTemplateType_IsRefused(t *testing.T) {
+	for _, tc := range pathArgCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `[]`)
+			_, err := List(t.Context(), client, ListInput{ProjectID: "1", TemplateType: tc.value})
+			assertPathArgOutcome(t, err, "list_project_templates", "template_type", tc.segment, recorder.Requests())
+		})
+	}
+}
+
+// TestGet_DotSegmentTemplateTypeOrKey_IsRefused asserts that a template type
+// or a key with a "." or ".." segment is refused before any request is sent,
+// with an error that names the parameter, and that a value with a dot inside
+// a segment is sent.
+func TestGet_DotSegmentTemplateTypeOrKey_IsRefused(t *testing.T) {
+	fields := []struct {
+		field string
+		input func(value string) GetInput
+	}{
+		{"template_type", func(value string) GetInput {
+			return GetInput{ProjectID: "1", TemplateType: value, Key: "mit"}
+		}},
+		{"key", func(value string) GetInput {
+			return GetInput{ProjectID: "1", TemplateType: "licenses", Key: value}
+		}},
+	}
+	for _, f := range fields {
+		for _, tc := range pathArgCases {
+			t.Run(f.field+"/"+tc.name, func(t *testing.T) {
+				client, recorder := testutil.RecordQueries(t, `{"key":"mit","name":"MIT License"}`)
+				_, err := Get(t.Context(), client, f.input(tc.value))
+				assertPathArgOutcome(t, err, "get_project_template", f.field, tc.segment, recorder.Requests())
+			})
+		}
+	}
+}
+
+// segmentEncodings are values with a byte a request path segment cannot
+// carry as it is, each with the exact form it must reach the path in:
+// percent-encoded as one segment, a "/" included. The last case has no such
+// byte and must reach the path unchanged.
+var segmentEncodings = []struct {
+	name    string
+	value   string
+	escaped string
+}{
+	{"a space", "Bug Report", "Bug%20Report"},
+	{"a non-ASCII byte", "Fehlerbericht-ä", "Fehlerbericht-%C3%A4"},
+	{"a slash", "a/b", "a%2Fb"},
+	{"a percent sign", "100%", "100%25"},
+	{"no byte to escape", "issues", "issues"},
+}
+
+// assertTemplatePath checks that exactly one request reached the recorder
+// and that its path is want.
+func assertTemplatePath(t *testing.T, recorder *testutil.QueryRecorder, want string) {
+	t.Helper()
+	if recorder.Requests() != 1 {
+		t.Fatalf("sent %d requests, want 1", recorder.Requests())
+	}
+	if got := recorder.Path(); got != want {
+		t.Errorf("request path = %q, want %q", got, want)
+	}
+}
+
+// TestList_TemplateType_IsEscapedAsOneSegment asserts the exact path the
+// list route is requested at: template_type is percent-encoded as one path
+// segment, a "/" in it included, the full-path project_id stays one escaped
+// segment, and a type with no byte to escape is sent unchanged. client-go
+// places the type into the request path as given, so the handler escapes it
+// first.
+func TestList_TemplateType_IsEscapedAsOneSegment(t *testing.T) {
+	for _, tc := range segmentEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `[]`)
+			if _, err := List(t.Context(), client, ListInput{ProjectID: "group/proj", TemplateType: tc.value}); err != nil {
+				t.Fatalf("List(%q) = %v, want it sent", tc.value, err)
+			}
+			assertTemplatePath(t, recorder, "/api/v4/projects/group%2Fproj/templates/"+tc.escaped)
+		})
+	}
+}
+
+// TestGet_TemplateTypeAndKey_AreEachEscapedAsOneSegment asserts the exact
+// path the get route is requested at: template_type and key are each
+// percent-encoded as one path segment, a "/" in either included, the
+// full-path project_id stays one escaped segment, and values with no byte to
+// escape are sent unchanged. A template named with a space, such as an issue
+// template, is the ordinary case.
+func TestGet_TemplateTypeAndKey_AreEachEscapedAsOneSegment(t *testing.T) {
+	for _, tc := range segmentEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{"name":"Bug Report","content":"x"}`)
+			if _, err := Get(t.Context(), client, GetInput{ProjectID: "group/proj", TemplateType: tc.value, Key: tc.value}); err != nil {
+				t.Fatalf("Get(%q) = %v, want it sent", tc.value, err)
+			}
+			assertTemplatePath(t, recorder, "/api/v4/projects/group%2Fproj/templates/"+tc.escaped+"/"+tc.escaped)
+		})
+	}
+}
+
 // projectTemplateSpecsByTool supports project template specs by tool assertions in projecttemplates tests.
 func projectTemplateSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	specByTool := make(map[string]toolutil.ActionSpec, len(specs))

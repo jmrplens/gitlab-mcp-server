@@ -415,11 +415,16 @@ func SetURLVariable(ctx context.Context, client *gitlabclient.Client, input SetU
 	if input.Key == "" {
 		return toolutil.ErrRequiredString("system_hook_set_url_variable", "key")
 	}
+	if err := toolutil.RejectTraversalArg("system_hook_set_url_variable", "key", input.Key); err != nil {
+		return err
+	}
 	if input.Value == "" {
 		return toolutil.ErrRequiredString("system_hook_set_url_variable", "value")
 	}
 	opts := &gl.SetHookURLVariableOptions{Value: &input.Value}
-	_, err := client.GL().SystemHooks.SetHookURLVariable(input.ID, input.Key, opts, gl.WithContext(ctx))
+	// client-go places the key into the path as given, so it is escaped here
+	// as the one segment the route gives it.
+	_, err := client.GL().SystemHooks.SetHookURLVariable(input.ID, toolutil.EscapePathSegment(input.Key), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
 			return toolutil.WrapErrWithHint("system_hook_set_url_variable", err,
@@ -439,7 +444,11 @@ func DeleteURLVariable(ctx context.Context, client *gitlabclient.Client, input D
 	if input.Key == "" {
 		return toolutil.ErrRequiredString("system_hook_delete_url_variable", "key")
 	}
-	_, err := client.GL().SystemHooks.DeleteHookURLVariable(input.ID, input.Key, gl.WithContext(ctx))
+	if err := toolutil.RejectTraversalArg("system_hook_delete_url_variable", "key", input.Key); err != nil {
+		return err
+	}
+	// The key is escaped as SetURLVariable escapes it.
+	_, err := client.GL().SystemHooks.DeleteHookURLVariable(input.ID, toolutil.EscapePathSegment(input.Key), gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("system_hook_delete_url_variable", err, http.StatusNotFound,
 			"variable key not currently set on this hook, or hook not found; use admin.system_hook_get to inspect configured URL variables")

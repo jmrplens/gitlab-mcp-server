@@ -98,6 +98,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	if input.Key == "" {
 		return GetOutput{}, errors.New("get_license_template: key is required. Use list action to see available template keys")
 	}
+	if err := toolutil.RejectTraversalArg("get_license_template", "key", input.Key); err != nil {
+		return GetOutput{}, err
+	}
 	opts := &gl.GetLicenseTemplateOptions{}
 	if input.Project != nil {
 		opts.Project = input.Project
@@ -105,7 +108,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	if input.Fullname != nil {
 		opts.Fullname = input.Fullname
 	}
-	l, _, err := client.GL().LicenseTemplates.GetLicenseTemplate(input.Key, opts, gl.WithContext(ctx))
+	// client-go places the key into the path as given, so it is escaped here
+	// as the one segment the route gives it.
+	l, _, err := client.GL().LicenseTemplates.GetLicenseTemplate(toolutil.EscapePathSegment(input.Key), opts, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_license_template", err, http.StatusNotFound, "verify key with template.license_list")
 	}

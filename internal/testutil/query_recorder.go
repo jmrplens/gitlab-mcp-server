@@ -15,12 +15,14 @@ import (
 )
 
 // QueryRecorder is a stand-in GitLab that answers every request with one body
-// and keeps the query of the last request it received, for a test that holds a
-// list filter to the query parameter it becomes.
+// and keeps the query and the path of the last request it received, for a test
+// that holds a list filter to the query parameter it becomes or an argument to
+// the path segment it becomes.
 type QueryRecorder struct {
 	mu       sync.Mutex
 	requests int
 	query    url.Values
+	path     string
 }
 
 // RecordQueries returns a client on a [QueryRecorder] that answers every
@@ -33,6 +35,7 @@ func RecordQueries(tb testing.TB, answer string) (*gitlabclient.Client, *QueryRe
 		recorder.mu.Lock()
 		recorder.requests++
 		recorder.query = r.URL.Query()
+		recorder.path, _, _ = strings.Cut(r.RequestURI, "?")
 		recorder.mu.Unlock()
 		RespondJSON(w, http.StatusOK, answer)
 	}))
@@ -49,6 +52,17 @@ func (r *QueryRecorder) Param(name string) (string, bool) {
 		return "", false
 	}
 	return values[0], true
+}
+
+// Path returns the path of the last request exactly as the client wrote it on
+// the wire, its percent-encoding included and its query left out, or "" before
+// any request. It is read from the request-target rather than from the parsed
+// URL, whose Path is decoded, so a test can tell "group%2Fproj" from
+// "group/proj" and "my%20key" from a re-encoded path.
+func (r *QueryRecorder) Path() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.path
 }
 
 // Requests returns how many requests reached the recorder.

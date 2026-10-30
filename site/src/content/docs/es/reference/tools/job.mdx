@@ -157,11 +157,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Job Artifact: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#job))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro       | Tipo             | Requerido | Descripción                                  |
-| --------------- | ---------------- | --------- | -------------------------------------------- |
-| `artifact_path` | `string`         | sí        | Path to the artifact file within the archive |
-| `job_id`        | `integer`        | sí        | Job ID                                       |
-| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path               |
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                                                  |
+| --------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `artifact_path` | `string`         | sí        | Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..) |
+| `job_id`        | `integer`        | sí        | Job ID                                                                                                                       |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path                                                                                               |
 
 ### `job.download_single_artifact_by_ref`
 
@@ -174,12 +174,12 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Job Artifact: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#job))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro       | Tipo             | Requerido | Descripción                                  |
-| --------------- | ---------------- | --------- | -------------------------------------------- |
-| `artifact_path` | `string`         | sí        | Path to the artifact file within the archive |
-| `job`           | `string`         | sí        | Job name                                     |
-| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path               |
-| `ref_name`      | `string`         | sí        | Branch or tag name                           |
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                                                  |
+| --------------- | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `artifact_path` | `string`         | sí        | Path to the artifact file within the archive. May include / to describe a directory structure (segments must not be . or ..) |
+| `job`           | `string`         | sí        | Job name                                                                                                                     |
+| `project_id`    | `string/integer` | sí        | Project ID or URL-encoded path                                                                                               |
+| `ref_name`      | `string`         | sí        | Branch or tag name                                                                                                           |
 
 ### `job.erase`
 

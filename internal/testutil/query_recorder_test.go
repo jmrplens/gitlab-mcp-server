@@ -39,6 +39,26 @@ func TestRecordQueries_KeepsTheLastQueryAndCountsRequests(t *testing.T) {
 	}
 }
 
+// TestRecordQueries_Path_KeepsTheLastPathAsSent holds Path to reading empty
+// before any request and to keeping the path of the last request as it was
+// written on the wire: an escaped "/" of a full-path project stays "%2F", and
+// the query is left out.
+func TestRecordQueries_Path_KeepsTheLastPathAsSent(t *testing.T) {
+	client, recorder := RecordQueries(t, `[]`)
+	if got := recorder.Path(); got != "" {
+		t.Fatalf("Path() = %q before any request, want empty", got)
+	}
+	if _, _, err := client.GL().Milestones.ListMilestones("1", nil, gl.WithContext(context.Background())); err != nil {
+		t.Fatalf("ListMilestones() error: %v", err)
+	}
+	if _, _, err := client.GL().Milestones.ListMilestones("group/proj", &gl.ListMilestonesOptions{State: new("active")}, gl.WithContext(context.Background())); err != nil {
+		t.Fatalf("ListMilestones() error: %v", err)
+	}
+	if got, want := recorder.Path(), "/api/v4/projects/group%2Fproj/milestones"; got != want {
+		t.Errorf("Path() = %q, want the last request's %q", got, want)
+	}
+}
+
 // TestUserIDFilterCase_Params_CopiesTheBaseAndAddsTheValue holds Params to
 // leaving the base map untouched, adding the case's value under the name, and
 // adding nothing for a filter left out, an empty base included.

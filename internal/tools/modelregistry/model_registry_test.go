@@ -713,3 +713,156 @@ func TestDownload_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
 		})
 	}
 }
+
+// TestDownload_DotSegmentVersionOrFilename_IsRefused asserts that a model
+// version or a file name with a "." or ".." segment is refused before any
+// request is sent, with an error that names the parameter and the exact
+// segment found, and that a value with a dot inside a segment is sent. Both
+// reach the request path as one segment whose dots are not escaped, on the
+// nested route and on the package root alike.
+func TestDownload_DotSegmentVersionOrFilename_IsRefused(t *testing.T) {
+	cases := []struct {
+		name    string
+		value   string
+		segment string
+	}{
+		{"dot dot between names", "a/../b", `".."`},
+		{"bare dot dot", "..", `".."`},
+		{"bare dot", ".", `"."`},
+		{"encoded dot dot", "%2e%2e", `".." once its percent-encoding is undone`},
+		{"dot between names", "x/./y", `"."`},
+		{"dot inside a segment", "v1.2", ""},
+	}
+	fields := []struct {
+		field string
+		input func(value string) DownloadInput
+	}{
+		{"model_version_id", func(value string) DownloadInput {
+			return DownloadInput{ProjectID: "42", ModelVersionID: toolutil.StringOrInt(value), Path: "models", Filename: "model.bin"}
+		}},
+		{"filename", func(value string) DownloadInput {
+			return DownloadInput{ProjectID: "42", ModelVersionID: "7", Filename: value}
+		}},
+	}
+	for _, f := range fields {
+		for _, tc := range cases {
+			t.Run(f.field+"/"+tc.name, func(t *testing.T) {
+				client, recorder := testutil.RecordQueries(t, `{}`)
+				_, err := Download(t.Context(), client, f.input(tc.value))
+				assertPathArgOutcome(t, err, f.field, tc.segment, recorder.Requests())
+			})
+		}
+	}
+}
+
+// TestDownload_DotSegmentPath_IsRefusedWhereNormalizationKeepsIt asserts that
+// a path with a "." or ".." segment that the normalization of the path keeps
+// as a name, one delimited by a backslash or written percent-encoded, is
+// refused before any request is sent, with an error that names path and the
+// exact segment found. A dot segment delimited by "/" alone is still resolved
+// within the package and sent, and so is a backslash with no dot segment
+// beside it.
+func TestDownload_DotSegmentPath_IsRefusedWhereNormalizationKeepsIt(t *testing.T) {
+	const decoded = " once its percent-encoding is undone"
+	refused := []struct {
+		name    string
+		path    string
+		segment string
+	}{
+		{"dot dot between backslashes", `a\..\b`, `".."`},
+		{"dot dot after a slash and before a backslash", `deep/..\models`, `".."`},
+		{"single dot before a backslash", `.\models`, `"."`},
+		{"dot dot after a backslash", `models\..`, `".."`},
+		{"encoded dot dot", "deep/%2e%2e", `".."` + decoded},
+		{"dot dot before an encoded backslash", "..%5Cmodels", `".."` + decoded},
+	}
+	for _, tc := range refused {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `{}`)
+			_, err := Download(t.Context(), client, DownloadInput{ProjectID: "42", ModelVersionID: "7", Path: tc.path, Filename: "model.bin"})
+			assertPathArgOutcome(t, err, "path", tc.segment, recorder.Requests())
+		})
+	}
+
+	sent := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"dot dot delimited by slashes", "deep/../models", "/api/v4/projects/42/packages/ml_models/7/files/models/model.bin"},
+		{"leading dot dot", "../models", "/api/v4/projects/42/packages/ml_models/7/files/models/model.bin"},
+		{"backslash inside a name", `deep\models`, "/api/v4/projects/42/packages/ml_models/7/files/deep%5Cmodels/model.bin"},
+	}
+	for _, tc := range sent {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `"weights"`)
+			if _, err := Download(t.Context(), client, DownloadInput{ProjectID: "42", ModelVersionID: "7", Path: tc.path, Filename: "model.bin"}); err != nil {
+				t.Fatalf("Download(%q) = %v, want it sent", tc.path, err)
+			}
+			if got := recorder.Path(); got != tc.want {
+				t.Errorf("request path = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// assertPathArgOutcome checks what Download did with a model version, file
+// name or path: a refused value, one with a segment to report, returns the
+// whole refusal of field naming that segment and sends nothing, and any other
+// value is sent once.
+func assertPathArgOutcome(t *testing.T, err error, field, segment string, requests int) {
+	t.Helper()
+	if segment == "" {
+		if err != nil {
+			t.Fatalf("Download with a %s that has a dot inside a segment = %v, want it sent", field, err)
+		}
+		if requests != 1 {
+			t.Errorf("Download sent %d requests, want 1", requests)
+		}
+		return
+	}
+	if err == nil {
+		t.Fatalf("Download accepted a %s with a dot segment, want a refusal", field)
+	}
+	want := wantDownloadOp + field + " has the segment " + segment +
+		`; pass a value with no "." or ".." segment, written plainly or percent-encoded`
+	if got := err.Error(); got != want {
+		t.Errorf("error = %q, want %q", got, want)
+	}
+	if requests != 0 {
+		t.Errorf("Download sent %d requests for a refused %s, want none", requests, field)
+	}
+}
+
+// TestDownload_FileName_IsEscapedOnBothRoutes asserts the exact path a file
+// name with a byte a request path cannot carry as it is reaches on both
+// routes, the nested one client-go builds and the package root one this
+// package builds: the file name is percent-encoded as one segment and the
+// full-path project_id stays one escaped segment. client-go escapes each value
+// of its own route before placing it, so this action passes them as they are.
+func TestDownload_FileName_IsEscapedOnBothRoutes(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		file string
+		want string
+	}{
+		{"a space under a directory", "deep", "my model.bin", "/api/v4/projects/group%2Fproj/packages/ml_models/7/files/deep/my%20model.bin"},
+		{"a non-ASCII byte under a directory", "deep", "modèle.bin", "/api/v4/projects/group%2Fproj/packages/ml_models/7/files/deep/mod%C3%A8le.bin"},
+		{"a space at the package root", "", "my model.bin", "/api/v4/projects/group%2Fproj/packages/ml_models/7/files/my%20model.bin"},
+		{"a non-ASCII byte at the package root", "", "modèle.bin", "/api/v4/projects/group%2Fproj/packages/ml_models/7/files/mod%C3%A8le.bin"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `"weights"`)
+			if _, err := Download(t.Context(), client, DownloadInput{
+				ProjectID: "group/proj", ModelVersionID: "7", Path: tc.path, Filename: tc.file,
+			}); err != nil {
+				t.Fatalf("Download(%q, %q) = %v, want it sent", tc.path, tc.file, err)
+			}
+			if got := recorder.Path(); got != tc.want {
+				t.Errorf("request path = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

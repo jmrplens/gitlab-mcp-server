@@ -49,7 +49,12 @@ type DownloadOutput struct {
 // The request carries the token as "Authorization: Bearer", which is the only
 // header the route reads ([gitlabclient.Client.BearerToken]); a file at the
 // package root is requested without a path segment, which client-go cannot
-// write ([downloadFromPackageRoot]).
+// write ([downloadFromPackageRoot]). The model version and the file name each
+// reach the path as one segment whose dots are not escaped, so a value with a
+// "." or ".." segment is refused before any request, naming the parameter;
+// the path is normalized instead ([downloadModelFile]), and a dot segment in
+// it that the normalization does not read as one is refused the same way
+// ([rejectUnresolvedDotSegment]).
 func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput) (DownloadOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DownloadOutput{}, err
@@ -62,6 +67,15 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 	}
 	if in.Filename == "" {
 		return DownloadOutput{}, toolutil.ErrFieldRequired("filename")
+	}
+	if err := toolutil.RejectTraversalArg(opDownloadModelPackage, "model_version_id", in.ModelVersionID.String()); err != nil {
+		return DownloadOutput{}, err
+	}
+	if err := toolutil.RejectTraversalArg(opDownloadModelPackage, "filename", in.Filename); err != nil {
+		return DownloadOutput{}, err
+	}
+	if err := rejectUnresolvedDotSegment(in.Path); err != nil {
+		return DownloadOutput{}, err
 	}
 
 	reader, err := downloadModelFile(ctx, client, in)
@@ -94,6 +108,30 @@ func downloadModelFile(ctx context.Context, client *gitlabclient.Client, in Down
 		gl.WithContext(ctx), client.BearerToken(),
 	)
 	return reader, err
+}
+
+// rejectUnresolvedDotSegment returns the refusal of the path parameter when
+// one of its "/"-separated components is a "." or ".." segment in a form
+// [path.Clean] does not resolve, before the path is normalized.
+//
+// path.Clean splits on "/" alone and resolves only a component written exactly
+// "." or "..", which is what lets [downloadModelFile] accept "./deep" or
+// "deep/../models" as the directory they name. A component that path.Clean
+// keeps as a name can still carry a dot segment: one delimited by "\", which
+// GitLab reads as a separator too ("a\..\b"), or one written percent-encoded
+// ("%2e%2e", "..%5Cx"). Each such component is held to the rule the model
+// version and the file name are held to ([toolutil.RejectTraversalArg]), so
+// the refusal names path and the segment found.
+func rejectUnresolvedDotSegment(dir string) error {
+	for component := range strings.SplitSeq(dir, "/") {
+		if component == "." || component == ".." {
+			continue
+		}
+		if err := toolutil.RejectTraversalArg(opDownloadModelPackage, "path", component); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // rootFilePath is the route of a file at the root of a model package, the
