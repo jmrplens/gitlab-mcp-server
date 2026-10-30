@@ -240,6 +240,31 @@ func TestReleaseDeclarations_OrbitDocuments_BelongToGitLabDotComOnlyActions(t *t
 	}
 }
 
+// TestReleasePin_Default_IsTheEmbeddedReleasePin verifies what the release
+// pass reads when no test hands it a schema: the release pin
+// internal/graphqlschema embeds, with that pin's own record, so the gate
+// judges by the file make check-graphql-schema holds to the REST record and
+// not by a schema of its own.
+func TestReleasePin_Default_IsTheEmbeddedReleasePin(t *testing.T) {
+	embedded, err := graphqlschema.ReleaseSchema()
+	if err != nil {
+		t.Fatalf("graphqlschema.ReleaseSchema() error: %v", err)
+	}
+	record, err := graphqlschema.ReleaseSourceInfo()
+	if err != nil {
+		t.Fatalf("graphqlschema.ReleaseSourceInfo() error: %v", err)
+	}
+
+	schema, source := releasePin()
+
+	if schema != embedded {
+		t.Error("releasePin() returned a schema other than graphqlschema.ReleaseSchema()")
+	}
+	if source != record {
+		t.Errorf("releasePin() reports %+v, want the embedded record %+v", source, record)
+	}
+}
+
 // stubRelease hands the release pass a schema of its own for one test.
 func stubRelease(t *testing.T, sdl string) {
 	t.Helper()
