@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -216,7 +217,7 @@ func checkReleaseArtifacts(cfg genRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	problems := releaseProblems(source, release)
+	problems := releaseProblems(source, release, provenance.Clock(cfg.now))
 	if sdlDigest != source.SDLSHA256 {
 		problems = append(problems, fmt.Sprintf(
 			"%s hashes to %s and %s records %q: the schema was changed after it was rendered, or the two files were not written by one regeneration",
@@ -243,7 +244,14 @@ func checkReleaseArtifacts(cfg genRun, out, errOut io.Writer) int {
 
 // releaseProblems reports every way the release record fails to be the schema
 // of the release the REST record names.
-func releaseProblems(source graphqlschema.ReleaseSource, release apilive.Source) []string {
+//
+// The retrieval day is held to what the gitlab.com pin's is, less the window:
+// a date nothing can read, or one that has not happened, is a record no
+// regeneration wrote, and the line that reports a sound pin prints that day. It
+// reads the date through [provenance.Age] rather than [provenance.Problems],
+// whose third refusal is the age this pin is deliberately not held to, which
+// is how cmd/audit_e2e_coverage reads a date held to a window of its own.
+func releaseProblems(source graphqlschema.ReleaseSource, release apilive.Source, now time.Time) []string {
 	var problems []string
 	if source.GitLabVersion != release.Version || source.GitLabRevision != release.Revision {
 		problems = append(problems, fmt.Sprintf(
@@ -262,7 +270,27 @@ func releaseProblems(source graphqlschema.ReleaseSource, release apilive.Source)
 		problems = append(problems,
 			"the release record names no origin or no digest, so nothing says which dump it was rendered from")
 	}
+	switch age, err := provenance.Age(source.RetrievedAt, now); {
+	case err != nil:
+		problems = append(problems, fmt.Sprintf(
+			"the release record says the dump was read on %q, which is not a date: every regeneration writes the day, so no regeneration wrote this record",
+			source.RetrievedAt,
+		))
+	case age < 0:
+		problems = append(problems, fmt.Sprintf(
+			"the release record says the dump was read on %s, which has not happened yet: no regeneration writes a day in the future",
+			source.RetrievedAt,
+		))
+	}
 	return problems
+}
+
+// writeArtifact writes one release artifact, as docgen.WriteOrCheck does in
+// write mode. It is a seam so a test can fail a write after it has changed the
+// file, which is how a full disk ends one and which no fixture on disk can
+// arrange: a path that refuses the write refuses it before touching anything.
+var writeArtifact = func(path string, content []byte) error {
+	return docgen.WriteOrCheck(path, content, false, regenerateRelease)
 }
 
 // writeReleaseArtifacts writes the release schema and its record into dir.
@@ -270,36 +298,71 @@ func releaseProblems(source graphqlschema.ReleaseSource, release apilive.Source)
 //
 // The schema is written first, so a record that cannot be written would leave
 // a new schema beside the old record. The check refuses that pair, since the
-// schema no longer hashes to the record's digest, and the schema the directory
-// held before is put back as well, or the new one removed when there was none,
-// so a failed run leaves the pair it found. A schema that is there and cannot
-// be read is not replaced at all: it could not be put back, and removing the
-// file that took its place would lose it.
+// schema no longer hashes to the record's digest, and both files are put back
+// as the directory held them as well, the bytes of each that was there and no
+// file where there was none, because a record write can fail after it has
+// changed the record. A failed run therefore leaves the pair it found. A file
+// that is there and cannot be read is not replaced at all: it could not be put
+// back, and removing the file that took its place would lose it.
 func writeReleaseArtifacts(dir, sdl string, source graphqlschema.ReleaseSource) error {
 	schemaPath := filepath.Join(dir, graphqlschema.ReleaseSDLFileName)
-	_, statErr := os.Stat(schemaPath)
-	var previous []byte
-	if statErr == nil {
-		var err error
-		if previous, err = os.ReadFile(schemaPath); err != nil {
-			return fmt.Errorf("read %s, which a failed write would put back: %w", schemaPath, err)
-		}
+	recordPath := filepath.Join(dir, graphqlschema.ReleaseSourceFileName)
+	schemaBefore, schemaErr := readPrior(schemaPath)
+	if schemaErr != nil {
+		return schemaErr
 	}
-	if err := docgen.WriteOrCheck(schemaPath, []byte(sdl), false, regenerateRelease); err != nil {
+	recordBefore, recordErr := readPrior(recordPath)
+	if recordErr != nil {
+		return recordErr
+	}
+	if err := writeArtifact(schemaPath, []byte(sdl)); err != nil {
 		return err
 	}
 	// Marshaling a struct built one line earlier cannot fail.
 	record := cmdutil.Must(json.MarshalIndent(source, "", "  "))
-	recordErr := docgen.WriteOrCheck(filepath.Join(dir, graphqlschema.ReleaseSourceFileName),
-		record, false, regenerateRelease)
-	switch {
-	case recordErr == nil:
-		return nil
-	case statErr != nil:
-		return errors.Join(recordErr, os.Remove(schemaPath))
-	default:
-		return errors.Join(recordErr, docgen.WriteOrCheck(schemaPath, previous, false, regenerateRelease))
+	if err := writeArtifact(recordPath, record); err != nil {
+		return errors.Join(err, schemaBefore.restore(), recordBefore.restore())
 	}
+	return nil
+}
+
+// priorFile is what a path held before writeReleaseArtifacts wrote it: its
+// bytes, or that there was no file.
+type priorFile struct {
+	path    string
+	content []byte
+	existed bool
+}
+
+// readPrior reads what path holds before it is written. A path that does not
+// stat holds no file, which is what a run into a directory not yet created
+// meets; one that stats and cannot be read is refused, since it could not be
+// put back.
+func readPrior(path string) (priorFile, error) {
+	prior := priorFile{path: path}
+	if _, statErr := os.Stat(path); statErr == nil {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return priorFile{}, fmt.Errorf("read %s, which a failed write would put back: %w", path, err)
+		}
+		prior.content, prior.existed = content, true
+	}
+	return prior, nil
+}
+
+// restore puts back what the path held. The bytes are written as they were
+// read, not through writeArtifact, which would give a file that lacked one the
+// trailing newline every artifact ends with. A file that was not there is
+// removed, and one the failed write never created is already as it was found,
+// so its absence is not reported as a removal that failed.
+func (p priorFile) restore() error {
+	if p.existed {
+		return os.WriteFile(p.path, p.content, docgen.GeneratedFileMode)
+	}
+	if err := os.Remove(p.path); !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // readReleaseArtifacts loads the committed release schema and record from dir,
@@ -335,6 +398,29 @@ func hexDigest(data []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 
-// errReleaseFlags refuses -from without -release, which would otherwise be
-// ignored by the gitlab.com pin's run that has no use for it.
-var errReleaseFlags = errors.New("-from names a release schema dump and needs -release")
+// The two command lines that would read -from and then never open the file.
+var (
+	// errReleaseFlags refuses -from without -release, which would otherwise be
+	// ignored by the gitlab.com pin's run that has no use for it.
+	errReleaseFlags = errors.New("-from names a release schema dump and needs -release")
+	// errCheckFrom refuses -from with -check. The check judges the committed
+	// pair and reads no dump, so it would report success naming the committed
+	// record while the file it was handed went unread, which reads as that
+	// file having been checked.
+	errCheckFrom = errors.New("-from names a dump to pin and -check judges only the committed pin, which never reads it: pin the dump without -check, then run the check")
+)
+
+// fromFlagProblem is the refusal a -from value earns on this command line, nil
+// when it is empty or names a dump a release generation will read.
+func fromFlagProblem(from string, release, check bool) error {
+	switch {
+	case from == "":
+		return nil
+	case !release:
+		return errReleaseFlags
+	case check:
+		return errCheckFrom
+	default:
+		return nil
+	}
+}

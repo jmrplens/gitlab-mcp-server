@@ -29,7 +29,9 @@
 // pins differ only where GitLab does. A dump names no release of its own, so a
 // pin read with -from records that it came from a file, and the release and
 // revision it records are the REST record's, taken on its word rather than
-// checked against the file. cmd/audit_graphql_documents judges every
+// checked against the file. -from is refused beside --check, which reads only
+// the committed pair and would report it sound with the file unread.
+// cmd/audit_graphql_documents judges every
 // document against it as well, because a field gitlab.com's pre-release adds
 // is refused by every release. --check -release holds it to the REST record's
 // release and revision instead of to an age, since a release's schema does not

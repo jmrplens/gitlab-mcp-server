@@ -63,7 +63,8 @@ func digestOf(sdl string) string {
 // record names the release and revision the REST record does, the file it was
 // read from and that it was a file, the digest of what was read and of the
 // schema written, and the pair it writes is one the offline check accepts
-// against the same REST record.
+// against the same REST record, on the day it was written, which is the edge
+// of the check's refusal of a day that has not happened.
 func TestRunRelease_FromAFile_WritesThePinTheCheckAccepts(t *testing.T) {
 	records := recordDir(t, fixtureRelease, fixtureRevision)
 	from := dumpFile(t, wholeSDL)
@@ -106,7 +107,7 @@ func TestRunRelease_FromAFile_WritesThePinTheCheckAccepts(t *testing.T) {
 			types, sdlDigest, source, want.Types, want.SDLSHA256, want)
 	}
 
-	status, out, errOut = runCommand(t, genRun{release: true, check: true, dir: dir, apiLiveDir: records})
+	status, out, errOut = runCommand(t, genRun{release: true, check: true, dir: dir, apiLiveDir: records, now: fixedClock})
 	if status != 0 {
 		t.Fatalf("the check refuses the pin it was just handed (exit %d):\n%s", status, errOut)
 	}
@@ -242,14 +243,15 @@ func TestRunRelease_GenerationFailures_ExitNonZeroAndSayWhy(t *testing.T) {
 }
 
 // soundRelease is a release record the check accepts against the fixture REST
-// record, for a check test about something else.
+// record, for a check test about something else. Its day is fixedClock's, so
+// a check run on that clock or on the real one finds it in the past.
 var soundRelease = graphqlschema.ReleaseSource{
 	GitLabVersion:  fixtureRelease,
 	GitLabRevision: fixtureRevision,
 	Origin:         "https://gitlab.com/gitlab-org/gitlab/-/jobs/17/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql",
 	SHA256:         digestOf(wholeSDL),
 	SDLSHA256:      digestOf(wholeSDL),
-	RetrievedAt:    "2026-10-30",
+	RetrievedAt:    "2026-09-06",
 	Types:          loadedTypes(wholeSDL),
 }
 
@@ -260,7 +262,8 @@ var editedSDL = strings.Replace(wholeSDL, "type Padding0 {\n  ok: Boolean\n}", "
 // TestRunRelease_CheckMode_RefusesAPinOfAnotherRelease verifies every refusal
 // of the offline check, each spelled whole: the two releases are named in the
 // order the sentence gives them, since a message reporting the pair the wrong
-// way round tells a reader to re-pin the half that was right.
+// way round tells a reader to re-pin the half that was right. The check runs on
+// fixedClock, so the day after it is a retrieval day that has not happened.
 func TestRunRelease_CheckMode_RefusesAPinOfAnotherRelease(t *testing.T) {
 	records := recordDir(t, fixtureRelease, fixtureRevision)
 	spoil := func(change func(*graphqlschema.ReleaseSource)) graphqlschema.ReleaseSource {
@@ -318,13 +321,25 @@ func TestRunRelease_CheckMode_RefusesAPinOfAnotherRelease(t *testing.T) {
 			want: "release-source.json records " + strconv.Itoa(loadedTypes(wholeSDL)+1) + " types and gitlab-release-schema.graphql loads with " +
 				strconv.Itoa(loadedTypes(wholeSDL)) + ": the two files were not written by one regeneration",
 		},
+		{
+			name: "a retrieval day that is not a date", sdl: wholeSDL,
+			source: spoil(func(s *graphqlschema.ReleaseSource) { s.RetrievedAt = "" }),
+			want: `the release record says the dump was read on "", which is not a date: ` +
+				"every regeneration writes the day, so no regeneration wrote this record",
+		},
+		{
+			name: "a retrieval day that has not happened", sdl: wholeSDL,
+			source: spoil(func(s *graphqlschema.ReleaseSource) { s.RetrievedAt = "2026-09-07" }),
+			want: "the release record says the dump was read on 2026-09-07, which has not happened yet: " +
+				"no regeneration writes a day in the future",
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			dir := t.TempDir()
 			if err := writeReleaseArtifacts(dir, testCase.sdl, testCase.source); err != nil {
 				t.Fatalf("prepare the pin: %v", err)
 			}
-			status, _, errOut := runCommand(t, genRun{release: true, check: true, dir: dir, apiLiveDir: records})
+			status, _, errOut := runCommand(t, genRun{release: true, check: true, dir: dir, apiLiveDir: records, now: fixedClock})
 			if status != 1 {
 				t.Fatalf("exit status %d, want 1. stderr:\n%s", status, errOut)
 			}
@@ -382,46 +397,112 @@ func TestRunRelease_CheckMode_FilesThatCannotBeRead_NameTheFile(t *testing.T) {
 	}
 }
 
-// TestWriteReleaseArtifacts_ARecordThatCannotBeWritten_LeavesThePairItFound
+// TestWriteReleaseArtifacts_ARecordWriteThatFails_LeavesThePairItFound
 // verifies that a write which fails at the record, the second of the two
-// files, takes back the schema it already wrote: the one the directory held
-// is restored, and a schema the directory did not hold is removed, so the
-// failure leaves no new schema beside an old record.
-func TestWriteReleaseArtifacts_ARecordThatCannotBeWritten_LeavesThePairItFound(t *testing.T) {
+// files, puts both back as the directory held them: the bytes of each file
+// that was there, and no file where there was none, so the failure leaves
+// neither a new schema beside an old record nor a record half written.
+//
+// The record's write is failed through the writeArtifact seam, after it has
+// changed the record where the case says so, which is how a full disk ends a
+// write and what no fixture on disk can arrange. The record held before has no
+// trailing newline, so a restore through the generator's own write, which adds
+// one, would not give back the bytes it found. A write refused before the
+// record was created leaves nothing to remove, and the error is then the
+// write's own and nothing more, rather than a removal that failed beside it.
+func TestWriteReleaseArtifacts_ARecordWriteThatFails_LeavesThePairItFound(t *testing.T) {
+	errDiskFull := errors.New("no space left on device")
+	realWrite := writeArtifact
+	t.Cleanup(func() { writeArtifact = realWrite })
 	for _, testCase := range []struct {
 		name string
-		// previous is the schema the directory holds before the write, none
-		// when empty.
-		previous string
+		// schema and record are what the directory holds before the write,
+		// no file when empty.
+		schema, record string
+		// changes says whether the failing record write changes the record
+		// before it fails.
+		changes bool
 	}{
-		{name: "a schema there before", previous: minimalSDL},
-		{name: "no schema there before"},
+		{name: "a pair there before, the record changed before the failure", schema: minimalSDL, record: `{"gitlab_version": "19.4.1-ee"}`, changes: true},
+		{name: "no pair there before, the record created before the failure", changes: true},
+		{name: "no pair there before, the record refused before it was created"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			dir := t.TempDir()
-			schemaPath := filepath.Join(dir, graphqlschema.ReleaseSDLFileName)
-			if testCase.previous != "" {
-				write(t, dir, graphqlschema.ReleaseSDLFileName, []byte(testCase.previous))
+			before := map[string]string{
+				graphqlschema.ReleaseSDLFileName:    testCase.schema,
+				graphqlschema.ReleaseSourceFileName: testCase.record,
 			}
-			// A directory where the record goes refuses the record's write
-			// after the schema's succeeded.
-			if err := os.Mkdir(filepath.Join(dir, graphqlschema.ReleaseSourceFileName), 0o750); err != nil {
-				t.Fatalf("prepare the fixture: %v", err)
+			for name, content := range before {
+				if content != "" {
+					write(t, dir, name, []byte(content))
+				}
 			}
+			writeArtifact = failingRecordWrite(realWrite, testCase.changes, errDiskFull)
 
 			err := writeReleaseArtifacts(dir, wholeSDL, soundRelease)
-			if err == nil || !strings.Contains(err.Error(), graphqlschema.ReleaseSourceFileName) {
-				t.Fatalf("writeReleaseArtifacts() error = %v, want one naming %s", err, graphqlschema.ReleaseSourceFileName)
+			if !errors.Is(err, errDiskFull) || err.Error() != errDiskFull.Error() {
+				t.Fatalf("writeReleaseArtifacts() error = %v, want the record write's own %v and nothing beside it", err, errDiskFull)
 			}
-			got, readErr := os.ReadFile(schemaPath)
-			switch {
-			case testCase.previous == "" && !errors.Is(readErr, fs.ErrNotExist):
-				t.Errorf("the failed write left %s behind (read error %v), want it removed", graphqlschema.ReleaseSDLFileName, readErr)
-			case testCase.previous != "" && string(got) != testCase.previous:
-				t.Errorf("the failed write left %s as %d bytes (read error %v), want the %d it held before",
-					graphqlschema.ReleaseSDLFileName, len(got), readErr, len(testCase.previous))
+			for name, want := range before {
+				t.Run(name, func(t *testing.T) {
+					assertHeldAsBefore(t, filepath.Join(dir, name), want)
+				})
 			}
 		})
+	}
+}
+
+// failingRecordWrite is a writeArtifact that writes the schema as realWrite
+// does and fails the record with failure, after writing half of it when
+// changes is set.
+func failingRecordWrite(realWrite func(string, []byte) error, changes bool, failure error) func(string, []byte) error {
+	return func(path string, content []byte) error {
+		if filepath.Base(path) != graphqlschema.ReleaseSourceFileName {
+			return realWrite(path, content)
+		}
+		if changes {
+			if err := os.WriteFile(path, content[:len(content)/2], 0o600); err != nil {
+				return err
+			}
+		}
+		return failure
+	}
+}
+
+// assertHeldAsBefore reports a path a failed write did not put back: one that
+// held want and holds anything else, or one that held no file, which want
+// spells as empty, and holds one.
+func assertHeldAsBefore(t *testing.T, path, want string) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	switch {
+	case want == "" && !errors.Is(err, fs.ErrNotExist):
+		t.Errorf("the failed write left %s behind (read error %v), want it removed", path, err)
+	case want != "" && string(got) != want:
+		t.Errorf("the failed write left %s as %q (read error %v), want the %q it held before", path, got, err, want)
+	}
+}
+
+// TestWriteReleaseArtifacts_ARecordThereThatCannotBeRead_WritesNothing
+// verifies that a record the directory holds and cannot read stops the write
+// before the schema is touched: a failed write could not put that record back,
+// so neither file is replaced.
+func TestWriteReleaseArtifacts_ARecordThereThatCannotBeRead_WritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, graphqlschema.ReleaseSDLFileName, []byte(minimalSDL))
+	// A directory where the record goes stats and then refuses the read.
+	if err := os.Mkdir(filepath.Join(dir, graphqlschema.ReleaseSourceFileName), 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	err := writeReleaseArtifacts(dir, wholeSDL, soundRelease)
+	if err == nil || !strings.Contains(err.Error(), graphqlschema.ReleaseSourceFileName+", which a failed write would put back") {
+		t.Fatalf("writeReleaseArtifacts() error = %v, want one naming the %s it could not read", err, graphqlschema.ReleaseSourceFileName)
+	}
+	if got, readErr := os.ReadFile(filepath.Join(dir, graphqlschema.ReleaseSDLFileName)); string(got) != minimalSDL {
+		t.Errorf("the refused write left %s as %d bytes (read error %v), want the %d it held before",
+			graphqlschema.ReleaseSDLFileName, len(got), readErr, len(minimalSDL))
 	}
 }
 
@@ -445,8 +526,11 @@ func TestRunRelease_CheckMode_AcceptsTheCommittedRepositoryArtifacts(t *testing.
 
 // TestMainEntry_Release_TheFlagsReachTheRun verifies the command line the
 // Makefile runs for the release pin, -release with --check, -dir and
-// -api-live-dir, and the one it refuses, -from without -release, which the
-// gitlab.com pin's run would otherwise ignore in silence.
+// -api-live-dir, and the two it refuses: -from without -release, which the
+// gitlab.com pin's run would otherwise ignore in silence, and -from with
+// --check, which would report the committed pin sound while the file it names
+// went unread. The directory holds a sound pin, so a check that ran would exit
+// 0: the status 2 and the empty stdout are what say none did.
 func TestMainEntry_Release_TheFlagsReachTheRun(t *testing.T) {
 	t.Setenv("GITLAB_URL", "")
 	t.Setenv("GITLAB_TOKEN", "")
@@ -474,4 +558,42 @@ func TestMainEntry_Release_TheFlagsReachTheRun(t *testing.T) {
 			t.Errorf("stderr does not refuse the flag:\n%s", errOut)
 		}
 	})
+	t.Run("-from with --check", func(t *testing.T) {
+		status, out, errOut := runMainCapturing(t, "-release", "--check", "-from", dumpFile(t, wholeSDL), "-dir", dir, "-api-live-dir", records)
+		if status != 2 {
+			t.Fatalf("exit status %d, want 2. stdout:\n%s", status, out)
+		}
+		if !strings.Contains(errOut, errCheckFrom.Error()) {
+			t.Errorf("stderr does not refuse the combination:\n%s", errOut)
+		}
+		if out != "" {
+			t.Errorf("stdout reports %q, want nothing: the check ran", out)
+		}
+	})
+}
+
+// TestFromFlagProblem_EveryCombination_RefusesOnlyAFromNothingReads verifies
+// the flag rule whole: -from is refused exactly where nothing would read the
+// file it names, with the refusal that says why, and an empty -from is never a
+// problem whatever else the command line sets.
+func TestFromFlagProblem_EveryCombination_RefusesOnlyAFromNothingReads(t *testing.T) {
+	for _, testCase := range []struct {
+		name           string
+		from           string
+		release, check bool
+		want           error
+	}{
+		{name: "no -from, with -release and -check", release: true, check: true},
+		{name: "-from alone", from: "dump.graphql", want: errReleaseFlags},
+		{name: "-from with -check and no -release", from: "dump.graphql", check: true, want: errReleaseFlags},
+		{name: "-from with -release and -check", from: "dump.graphql", release: true, check: true, want: errCheckFrom},
+		{name: "-from with -release, a generation that reads it", from: "dump.graphql", release: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := fromFlagProblem(testCase.from, testCase.release, testCase.check); !errors.Is(got, testCase.want) {
+				t.Errorf("fromFlagProblem(%q, release %v, check %v) = %v, want %v",
+					testCase.from, testCase.release, testCase.check, got, testCase.want)
+			}
+		})
+	}
 }

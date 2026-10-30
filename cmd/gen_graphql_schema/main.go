@@ -74,10 +74,10 @@ func main() {
 	check := flag.Bool("check", false, "load the committed schema instead of fetching one, and fail when it does not parse")
 	release := flag.Bool("release", false, "pin, or with -check judge, the schema of the GitLab release the REST record is taken from instead of gitlab.com's")
 	apiLiveDir := flag.String("api-live-dir", apilive.DefaultDir, "directory holding the REST record that names the release")
-	from := flag.String("from", "", "with -release, a schema dump on disk to read instead of the one GitLab's CI published for the release tag")
+	from := flag.String("from", "", "with -release and without -check, a schema dump on disk to read instead of the one GitLab's CI published for the release tag")
 	flag.Parse()
-	if *from != "" && !*release {
-		fmt.Fprintln(os.Stderr, prefix, errReleaseFlags)
+	if err := fromFlagProblem(*from, *release, *check); err != nil {
+		fmt.Fprintln(os.Stderr, prefix, err)
 		osExit(2)
 		return
 	}
