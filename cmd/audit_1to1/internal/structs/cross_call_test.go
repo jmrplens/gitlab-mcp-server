@@ -277,6 +277,52 @@ func TokenConst(c *gl.Client, in TokenConstInput) error {
 	return withToken(token{search: "x"}, func(t token) error { return sendToken(c, t) })
 }
 
+// protectOf builds the protection out of the intermediate.
+func protectOf(f filter) *gl.ProtectOptions { return &gl.ProtectOptions{Name: &f.search} }
+
+// protectRead carries an intermediate and the helper that builds the
+// protection from it.
+type protectRead struct {
+	f     filter
+	build func(filter) *gl.ProtectOptions
+}
+
+type MixedInput struct {
+	Search string ~json:"search"~
+}
+
+// Mixed fills the intermediate from its input for the list, and with
+// constants for the protection: in a literal, in a local, beside a closure
+// whose parameter is the intermediate and beside the helper named as a
+// value. Only the list is built for its input.
+func Mixed(c *gl.Client, in MixedInput) error {
+	if _, err := c.Widgets.ListWidgets(optionsOf(filter{search: in.Search})); err != nil {
+		return err
+	}
+	fixed := filter{search: "x"}
+	_ = c.Widgets.Protect(1, protectOf(fixed))
+	_ = c.Widgets.Protect(1, protectOf(filter{search: "y"}))
+	_ = protectRead{f: filter{search: "v"}, build: protectOf}
+	return scoped(filter{search: "z"}, func(f filter) error { return c.Widgets.Protect(1, protectOf(f)) })
+}
+
+type HeldInput struct {
+	Search string ~json:"search"~
+}
+
+// Held fills the intermediate from its input into a local, copies it into
+// another, and hands the protection helper each one a loop over them binds.
+func Held(c *gl.Client, in HeldInput) error {
+	held := filter{search: in.Search}
+	var copied = held
+	for _, each := range []filter{copied} {
+		if err := c.Widgets.Protect(1, protectOf(each)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type ForkInput struct {
 	Search string ~json:"search"~
 }
@@ -347,11 +393,14 @@ func callerPairs(pkg *packages.Package) []string {
 // deep, or a struct of arguments the handler fills and a shared body reads,
 // and each pair says it was found through the caller. An intermediate the
 // handler fills from its input carries the input on: into the parameter of a
-// closure, into a helper named as a value beside it, and into a helper that
-// sends the options itself. A function that takes an input and references no
-// method builds for its caller, whether the caller hands it its own input or
-// a literal of the builder's. A handler that hands the helper constants, or
-// an intermediate filled with them, one that sends nothing taking the
+// closure, into a helper named as a value beside it, into a helper that
+// sends the options itself, and through a local, a copy of it and a loop
+// over them. A function that takes an input and references no method builds
+// for its caller, whether the caller hands it its own input or a literal of
+// the builder's. A handler that hands the helper constants, or an
+// intermediate filled with them (even one whose type the same handler fills
+// from its input elsewhere, in a literal, a local, beside a closure or
+// beside a helper named as a value), one that sends nothing taking the
 // struct, one that calls a handler, one whose input no model sends, one
 // whose input has no name, and the calls that name no function pair nothing.
 func TestCollectCallerInputs_AHelperBuildsTheOptions_PairsThemWithTheInputOfItsCaller(t *testing.T) {
@@ -364,7 +413,9 @@ func TestCollectCallerInputs_AHelperBuildsTheOptions_PairsThemWithTheInputOfItsC
 		"ChainInput v3.ListWidgetsOptions caller",
 		"ForkInput v3.ListWidgetsOptions caller",
 		"GroupForkInput v3.ListWidgetsOptions caller",
+		"HeldInput v3.ProtectOptions caller",
 		"ListInput v3.ListWidgetsOptions caller",
+		"MixedInput v3.ListWidgetsOptions caller",
 		"RunInput v3.ListWidgetsOptions caller",
 		"ScopedInput v3.ListWidgetsOptions caller",
 		"TokenInput v3.ListWidgetsOptions caller",

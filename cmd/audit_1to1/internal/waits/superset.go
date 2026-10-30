@@ -5,6 +5,7 @@ package waits
 
 import (
 	"go/types"
+	"iter"
 	"maps"
 	"reflect"
 	"slices"
@@ -62,17 +63,56 @@ func SupersetOf(sdk SDK, t types.Type) (Superset, bool) {
 }
 
 // embeddedClientGo returns the first client-go struct st embeds, through a
-// pointer or not, and nil when st embeds none or is no struct.
+// pointer or not, and nil when st embeds none or is no struct. One st
+// embeds through a struct of the package's own it embeds counts too, as its
+// keys are st's own in the JSON: the shallowest is first.
 func (s SDK) embeddedClientGo(st *types.Struct) *types.Named {
-	if st == nil {
-		return nil
-	}
-	for field := range st.Fields() {
-		if named := s.clientGoStruct(field.Type()); field.Embedded() && named != nil {
-			return named
-		}
+	for named := range s.embeddedClientGoStructs(st) {
+		return named
 	}
 	return nil
+}
+
+// embeddedClientGoStructs yields every client-go struct st embeds, through a
+// pointer or not, directly or through the structs of the package's own it
+// embeds, the shallowest first. Each struct of the package's own is read
+// once, so one that embeds itself through a pointer ends the walk.
+func (s SDK) embeddedClientGoStructs(st *types.Struct) iter.Seq[*types.Named] {
+	return func(yield func(*types.Named) bool) {
+		seen := map[*types.Struct]bool{}
+		for level := []*types.Struct{st}; len(level) > 0; {
+			var found []*types.Named
+			found, level = s.embeddedLevel(level, seen)
+			for _, named := range found {
+				if !yield(named) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// embeddedLevel returns the client-go structs the structs of level embed, in
+// field order, and the structs of the package's own they embed, the level
+// below. A struct seen records is not read again, and is recorded once read.
+func (s SDK) embeddedLevel(level []*types.Struct, seen map[*types.Struct]bool) (found []*types.Named, next []*types.Struct) {
+	for _, current := range level {
+		if current == nil || seen[current] {
+			continue
+		}
+		seen[current] = true
+		for field := range current.Fields() {
+			if !field.Embedded() {
+				continue
+			}
+			if named := s.clientGoStruct(field.Type()); named != nil {
+				found = append(found, named)
+			} else if inner := s.localStruct(field.Type()); inner != nil {
+				next = append(next, inner)
+			}
+		}
+	}
+	return found, next
 }
 
 // collectNeeds records in needs, by key, what each key local carries beside
@@ -80,12 +120,23 @@ func (s SDK) embeddedClientGo(st *types.Struct) *types.Named {
 // package's own that local embeds carries its keys at local's depth, and
 // one of client-go's is the half client-go already carries.
 func (s SDK) collectNeeds(local *types.Struct, sdkNamed *types.Named, root, prefix string, needs map[string]string) {
+	s.collectEmbeddedNeeds(local, sdkNamed, root, prefix, needs, map[*types.Struct]bool{})
+}
+
+// collectEmbeddedNeeds is collectNeeds for local and the structs of the
+// package's own it embeds, walked records each of them already read at this
+// depth, so one that embeds itself through a pointer is read once.
+func (s SDK) collectEmbeddedNeeds(local *types.Struct, sdkNamed *types.Named, root, prefix string, needs map[string]string, walked map[*types.Struct]bool) {
+	if walked[local] {
+		return
+	}
+	walked[local] = true
 	sdkStruct, _ := sdkNamed.Underlying().(*types.Struct)
 	embeds := s.embeds(local, sdkNamed)
 	for i := range local.NumFields() {
 		field := structField{v: local.Field(i), tag: reflect.StructTag(local.Tag(i))}
 		if inner := s.localStruct(field.v.Type()); field.v.Embedded() && inner != nil {
-			s.collectNeeds(inner, sdkNamed, root, prefix, needs)
+			s.collectEmbeddedNeeds(inner, sdkNamed, root, prefix, needs, walked)
 		}
 		written, _ := field.encoding(EncoderJSON)
 		if field.v.Embedded() || !field.v.Exported() || written.skipped {
@@ -126,10 +177,12 @@ func (s SDK) addNeed(field structField, name string, sdkStruct *types.Struct, em
 	}
 }
 
-// embeds reports whether st embeds named, through a pointer or not.
+// embeds reports whether st embeds named, through a pointer or not, directly
+// or through a struct of the package's own it embeds: a key st carries the
+// way named models it shadows named's either way.
 func (s SDK) embeds(st *types.Struct, named *types.Named) bool {
-	for field := range st.Fields() {
-		if field.Embedded() && s.clientGoStruct(field.Type()) == named {
+	for embedded := range s.embeddedClientGoStructs(st) {
+		if embedded == named {
 			return true
 		}
 	}

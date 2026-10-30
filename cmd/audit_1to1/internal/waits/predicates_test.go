@@ -232,6 +232,9 @@ func TestFieldKind_StandInFields_HoldWhileTheTypeIsSpelledAsDeclared(t *testing.
 // spelled as one, or that names its identifiers (":id") where the SDK's
 // routes write a bare ":", could never be sent, and an SDK none of whose
 // routes was read sends nothing at all, so each is refused rather than held.
+// A request whose path the reading did not fold could send any route, so
+// beside one a route no route read sends is refused too, naming it, while a
+// route one sends is still sent.
 func TestNoMethodFor_Routes_HoldWhileNoMethodSendsTheRoute(t *testing.T) {
 	runPredicateCases(t, standInSDK(t, "GET /widgets/:/events"), []predicateCase{
 		{name: "sent", predicate: NoMethodFor{"GET /widgets/:/events"}},
@@ -243,6 +246,12 @@ func TestNoMethodFor_Routes_HoldWhileNoMethodSendsTheRoute(t *testing.T) {
 	})
 	runPredicateCases(t, standInSDK(t), []predicateCase{
 		{name: "no route read", predicate: NoMethodFor{"POST /widgets/:/events"}, wantErr: "no route of the pinned client-go was read"},
+	})
+	unread := standInSDK(t, "GET /widgets/:/events")
+	unread.Unresolved = []string{"WidgetsService.Fetch: the path of a request it builds folds to no static segment"}
+	runPredicateCases(t, unread, []predicateCase{
+		{name: "sent beside an unread path", predicate: NoMethodFor{"GET /widgets/:/events"}},
+		{name: "not sent beside an unread path", predicate: NoMethodFor{"POST /widgets/:/events"}, wantErr: "could be POST /widgets/:/events, so it cannot be told unsent: WidgetsService.Fetch: the path"},
 	})
 }
 

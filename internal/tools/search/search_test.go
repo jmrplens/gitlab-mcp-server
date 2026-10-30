@@ -1513,31 +1513,47 @@ func TestSearchCode_WithRef(t *testing.T) {
 	}
 }
 
-// TestSearchCommitsAndWiki_WithRef_SendsTheRef verifies the ref GET
-// /projects/:id/search declares for the commits and wiki_blobs scopes: each
-// search sends the branch or tag it was given, and sends no ref when none is
-// given, so GitLab searches the default branch.
-func TestSearchCommitsAndWiki_WithRef_SendsTheRef(t *testing.T) {
+// TestSearchCommitsWikiAndCode_WithRef_SendItToAProjectSearchAlone verifies
+// the ref GET /projects/:id/search declares for the commits, wiki_blobs and
+// blobs scopes: a project search sends the branch or tag it was given, and
+// sends no ref when none is given, so GitLab searches the default branch. The
+// group and instance searches declare no ref, so one given to them is not
+// sent.
+func TestSearchCommitsWikiAndCode_WithRef_SendItToAProjectSearchAlone(t *testing.T) {
 	cases := []struct {
 		name  string
+		path  string
 		scope string
 		ref   string
+		want  string
 		run   func(*gitlabclient.Client, string) error
 	}{
-		{name: "commits on a branch", scope: "commits", ref: "develop", run: func(client *gitlabclient.Client, ref string) error {
+		{name: "commits on a branch", path: pathSearchProject, scope: "commits", ref: "develop", want: "develop", run: func(client *gitlabclient.Client, ref string) error {
 			_, err := Commits(context.Background(), client, CommitsInput{ProjectID: "42", Query: "fix", Ref: ref})
 			return err
 		}},
-		{name: "commits on the default branch", scope: "commits", run: func(client *gitlabclient.Client, ref string) error {
+		{name: "commits on the default branch", path: pathSearchProject, scope: "commits", run: func(client *gitlabclient.Client, ref string) error {
 			_, err := Commits(context.Background(), client, CommitsInput{ProjectID: "42", Query: "fix", Ref: ref})
 			return err
 		}},
-		{name: "wiki on a branch", scope: "wiki_blobs", ref: "wiki-main", run: func(client *gitlabclient.Client, ref string) error {
+		{name: "wiki on a branch", path: pathSearchProject, scope: "wiki_blobs", ref: "wiki-main", want: "wiki-main", run: func(client *gitlabclient.Client, ref string) error {
 			_, err := Wiki(context.Background(), client, WikiInput{ProjectID: "42", Query: "home", Ref: ref})
 			return err
 		}},
-		{name: "wiki on the default branch", scope: "wiki_blobs", run: func(client *gitlabclient.Client, ref string) error {
+		{name: "wiki on the default branch", path: pathSearchProject, scope: "wiki_blobs", run: func(client *gitlabclient.Client, ref string) error {
 			_, err := Wiki(context.Background(), client, WikiInput{ProjectID: "42", Query: "home", Ref: ref})
+			return err
+		}},
+		{name: "commits of a group", path: pathSearchGroup, scope: "commits", ref: "develop", run: func(client *gitlabclient.Client, ref string) error {
+			_, err := Commits(context.Background(), client, CommitsInput{GroupID: "7", Query: "fix", Ref: ref})
+			return err
+		}},
+		{name: "wiki of the instance", path: pathSearchGlobal, scope: "wiki_blobs", ref: "wiki-main", run: func(client *gitlabclient.Client, ref string) error {
+			_, err := Wiki(context.Background(), client, WikiInput{Query: "home", Ref: ref})
+			return err
+		}},
+		{name: "code of a group", path: pathSearchGroup, scope: scopeBlobs, ref: "feature", run: func(client *gitlabclient.Client, ref string) error {
+			_, err := Code(context.Background(), client, CodeInput{GroupID: "7", Query: "main", Ref: ref})
 			return err
 		}},
 	}
@@ -1546,7 +1562,7 @@ func TestSearchCommitsAndWiki_WithRef_SendsTheRef(t *testing.T) {
 			var got string
 			var sent bool
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodGet || r.URL.Path != pathSearchProject || r.URL.Query().Get(queryScope) != tc.scope {
+				if r.Method != http.MethodGet || r.URL.Path != tc.path || r.URL.Query().Get(queryScope) != tc.scope {
 					http.NotFound(w, r)
 					return
 				}
@@ -1557,8 +1573,8 @@ func TestSearchCommitsAndWiki_WithRef_SendsTheRef(t *testing.T) {
 			if err := tc.run(client, tc.ref); err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
-			if sent != (tc.ref != "") || got != tc.ref {
-				t.Errorf("ref sent = %v as %q, want %q", sent, got, tc.ref)
+			if sent != (tc.want != "") || got != tc.want {
+				t.Errorf("ref sent = %v as %q, want %q", sent, got, tc.want)
 			}
 		})
 	}

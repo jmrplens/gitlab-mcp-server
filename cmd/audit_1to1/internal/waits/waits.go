@@ -98,8 +98,19 @@ func (e Entry) Label() string {
 }
 
 // Entries returns every entry, the upstream waits first, as a copy a caller
-// may keep.
-func Entries() []Entry { return slices.Concat(upstreamWaits, rawReasons) }
+// may keep: each entry's lists are copied too, so writing into a site or a
+// predicate of the result leaves the table as it was. A predicate holds
+// strings alone, so copying the list copies it.
+func Entries() []Entry {
+	entries := slices.Concat(upstreamWaits, rawReasons)
+	for i := range entries {
+		entries[i].Sites = slices.Clone(entries[i].Sites)
+		entries[i].Unseen = slices.Clone(entries[i].Unseen)
+		entries[i].Replaces = slices.Clone(entries[i].Replaces)
+		entries[i].Predicates = slices.Clone(entries[i].Predicates)
+	}
+	return entries
+}
 
 // CoveredRawMethods returns the client-go methods the entries replace, keyed
 // "Service.Method" as acceptedMissingMethods keys them, each with the entry

@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/types"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 
@@ -45,10 +46,12 @@ var helperCache sync.Map // *packages.Package -> helperBuilds
 // The input also travels inside an intermediate, a tool struct the caller
 // fills from it (runners.runnerListRequest, issuestatistics.statisticsFilters,
 // accesstokens.accessTokenCreateRequest) and hands on whole. A literal of an
-// intermediate, and every variable of the caller's body that holds one, a
-// closure's parameter included, carries the input: a helper handed one, or
-// named as a value with an intermediate among its parameters (build:
-// groupIssueStatsOptions), builds for the caller.
+// intermediate that reads the input, a variable of the caller's body assigned
+// one, and the parameter of a closure handed on beside one carry the input:
+// a helper handed one, or named as a value beside one with an intermediate
+// among its parameters (build: groupIssueStatsOptions), builds for the
+// caller. An intermediate the same body fills with constants alone carries
+// nothing, whatever its type.
 //
 // Three conditions keep the pairing to the request the caller sends:
 //
@@ -95,26 +98,22 @@ type callerInput struct {
 
 // collect records what every helper body hands the input to builds: one
 // handed something read off the input when the body sends the struct, and
-// one handed an intermediate, or named as a value beside one, whatever it
-// sends.
+// one handed an intermediate filled from the input, or named as a value
+// beside one, whatever it sends.
 func (c callerInput) collect(info *types.Info, body *ast.BlockStmt, reachable helperBuilds, out map[[2]string]structPair) {
 	direct := map[*types.Var]bool{c.input: true}
-	carried := intermediateTypes(info, body, c.input)
+	held := holdIntermediates(info, body, c.input, intermediateTypes(info, body, c.input))
 	readsInput := func(arg ast.Expr) bool { return reads(info, arg, direct) }
-	carriesInput := func(arg ast.Expr) bool { return carries(info, arg, c.input, carried) }
-	called := calledIdents(body)
 	ast.Inspect(body, func(node ast.Node) bool {
-		switch typed := node.(type) {
-		case *ast.CallExpr:
-			c.record(helperCall(info, typed, reachable, readsInput), false, out)
-			c.record(helperCall(info, typed, reachable, carriesInput), true, out)
-		case *ast.Ident:
-			if !called[typed] {
-				c.record(helperValue(info, typed, reachable, carried), true, out)
-			}
+		if call, isCall := node.(*ast.CallExpr); isCall {
+			c.record(helperCall(info, call, reachable, readsInput), false, out)
+			c.record(helperCall(info, call, reachable, held.carries), true, out)
 		}
 		return true
 	})
+	for _, ident := range held.besideValues {
+		c.record(helperValue(info, ident, reachable, held.carried), true, out)
+	}
 }
 
 // record pairs the input with each struct built, one read off the input
@@ -149,47 +148,165 @@ func intermediateTypes(info *types.Info, body *ast.BlockStmt, input *types.Var) 
 	return carried
 }
 
-// carries reports whether expr hands on an intermediate: a literal of one of
-// carried, or a variable whose type is one or points to one (a local, a
-// closure's parameter, a field). The input itself is never one, even when
-// the body fills a copy of its type, so a call handed the input is held to
-// the conditions of a direct read.
-func carries(info *types.Info, expr ast.Expr, input *types.Var, carried map[*types.TypeName]bool) bool {
+// intermediates is what a caller's body holds of its input under the types
+// it fills from it: the variables holding something of the input, and the
+// helpers named as values beside an intermediate filled from it.
+type intermediates struct {
+	info    *types.Info
+	input   *types.Var
+	carried map[*types.TypeName]bool
+	// from is the input and every variable of the body that holds something
+	// of it: a local assigned a value read off it or off another such
+	// variable, the key or value a range over one binds, and a closure's
+	// parameter of an intermediate type when the closure is handed on beside
+	// an intermediate filled from the input, which is what whoever calls the
+	// closure hands it.
+	from map[*types.Var]bool
+	// besideValues are the identifiers, once each in source order, that
+	// name a function as a value beside an intermediate filled from the
+	// input, among a call's arguments or a literal's elements.
+	besideValues []*ast.Ident
+	beside       map[*ast.Ident]bool
+}
+
+// holdIntermediates reads body for what it holds of input under the types of
+// carried. The passes repeat until one adds nothing, which they reach because
+// what is held only grows and body's variables are finite.
+func holdIntermediates(info *types.Info, body *ast.BlockStmt, input *types.Var, carried map[*types.TypeName]bool) *intermediates {
+	held := &intermediates{info: info, input: input, carried: carried, from: map[*types.Var]bool{input: true}, beside: map[*ast.Ident]bool{}}
+	for grew := true; grew; {
+		grew = false
+		ast.Inspect(body, func(node ast.Node) bool {
+			switch typed := node.(type) {
+			case *ast.AssignStmt:
+				grew = held.assign(typed.Lhs, typed.Rhs) || grew
+			case *ast.ValueSpec:
+				names := make([]ast.Expr, len(typed.Names))
+				for i, name := range typed.Names {
+					names[i] = name
+				}
+				grew = held.assign(names, typed.Values) || grew
+			case *ast.RangeStmt:
+				grew = held.assign([]ast.Expr{typed.Key, typed.Value}, []ast.Expr{typed.X}) || grew
+			case *ast.CallExpr:
+				grew = held.handOn(typed.Args) || grew
+			case *ast.CompositeLit:
+				grew = held.handOn(elementValues(typed)) || grew
+			}
+			return true
+		})
+	}
+	return held
+}
+
+// assign marks the variable under each of lhs (the one a field is written
+// into included) as holding the input when the value assigned to it reads
+// the input or a variable holding it; a single value assigned to several (a
+// call's results, a range's key and value) marks each of them.
+func (h *intermediates) assign(lhs, rhs []ast.Expr) bool {
+	grew := false
+	for i, target := range lhs {
+		var value ast.Expr
+		switch {
+		case len(rhs) == 1:
+			value = rhs[0]
+		case i < len(rhs):
+			value = rhs[i]
+		default:
+			continue
+		}
+		if variable := rootVar(h.info, target); variable != nil && variable != h.input && !h.from[variable] && reads(h.info, value, h.from) {
+			h.from[variable] = true
+			grew = true
+		}
+	}
+	return grew
+}
+
+// handOn reads one call's arguments or one literal's elements: when one of
+// them carries an intermediate filled from the input, each closure among
+// the others holds it in its parameters of an intermediate type, and each
+// function named among them as a value is named beside it.
+func (h *intermediates) handOn(elements []ast.Expr) bool {
+	if !slices.ContainsFunc(elements, h.carries) {
+		return false
+	}
+	grew := false
+	for _, element := range elements {
+		switch typed := ast.Unparen(element).(type) {
+		case *ast.FuncLit:
+			for _, field := range typed.Type.Params.List {
+				for _, name := range field.Names {
+					param, isVar := h.info.Defs[name].(*types.Var)
+					if isVar && h.isCarried(param.Type()) && !h.from[param] {
+						h.from[param] = true
+						grew = true
+					}
+				}
+			}
+		case *ast.Ident:
+			h.nameBeside(typed)
+		case *ast.SelectorExpr:
+			h.nameBeside(typed.Sel)
+		}
+	}
+	return grew
+}
+
+// nameBeside records ident as a function named as a value beside an
+// intermediate, when it names a function.
+func (h *intermediates) nameBeside(ident *ast.Ident) {
+	if _, isFunc := h.info.Uses[ident].(*types.Func); isFunc && !h.beside[ident] {
+		h.beside[ident] = true
+		h.besideValues = append(h.besideValues, ident)
+	}
+}
+
+// carries reports whether expr hands on an intermediate filled from the
+// input: a literal of one of carried that reads the input or a variable
+// holding it, a variable of one of those types that holds it (a local, a
+// closure's parameter), or a field of one of those types read off such a
+// variable. The input itself is never one, even when the body fills a copy
+// of its type, so a call handed the input is held to the conditions of a
+// direct read; nor is an intermediate the body fills with constants alone,
+// nor a closure, whose own calls are read where they are made.
+func (h *intermediates) carries(expr ast.Expr) bool {
 	found := false
 	ast.Inspect(expr, func(node ast.Node) bool {
-		var value types.Type
 		switch typed := node.(type) {
+		case *ast.FuncLit:
+			return false
 		case *ast.CompositeLit:
-			value = info.TypeOf(typed)
+			found = found || (h.isCarried(h.info.TypeOf(typed)) && reads(h.info, typed, h.from))
+		case *ast.SelectorExpr:
+			_, isField := h.info.Uses[typed.Sel].(*types.Var)
+			found = found || (isField && h.isCarried(h.info.TypeOf(typed)) && reads(h.info, typed.X, h.from))
 		case *ast.Ident:
-			if variable, isVar := info.Uses[typed].(*types.Var); isVar && variable != input {
-				value = variable.Type()
-			}
+			variable, isVar := h.info.Uses[typed].(*types.Var)
+			found = found || (isVar && variable != h.input && h.from[variable] && h.isCarried(variable.Type()))
 		}
-		named, _, isStruct := derefNamedStruct(value)
-		found = found || (isStruct && carried[named.Obj()])
 		return !found
 	})
 	return found
 }
 
-// calledIdents returns the identifiers that name the function of a call in
-// body, the selector's name for a qualified or method call, so a function
-// named anywhere else is known to be named as a value.
-func calledIdents(body *ast.BlockStmt) map[*ast.Ident]bool {
-	called := map[*ast.Ident]bool{}
-	ast.Inspect(body, func(node ast.Node) bool {
-		if call, isCall := node.(*ast.CallExpr); isCall {
-			switch fun := ast.Unparen(call.Fun).(type) {
-			case *ast.Ident:
-				called[fun] = true
-			case *ast.SelectorExpr:
-				called[fun.Sel] = true
-			}
+// isCarried reports whether t is, or points to, one of carried.
+func (h *intermediates) isCarried(t types.Type) bool {
+	named, _, isStruct := derefNamedStruct(t)
+	return isStruct && h.carried[named.Obj()]
+}
+
+// elementValues returns the values a composite literal lists, the value of
+// each keyed element.
+func elementValues(lit *ast.CompositeLit) []ast.Expr {
+	values := make([]ast.Expr, len(lit.Elts))
+	for i, elt := range lit.Elts {
+		if kv, isKV := elt.(*ast.KeyValueExpr); isKV {
+			elt = kv.Value
 		}
-		return true
-	})
-	return called
+		values[i] = elt
+	}
+	return values
 }
 
 // helperValue returns what the helper ident names builds, when the helper

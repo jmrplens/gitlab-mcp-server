@@ -69,6 +69,7 @@ const (
 	editJSONBodyName      = "EditJSONBody"
 	nullWhenZeroName      = "NullWhenZero"
 	bodyEditName          = "BodyEdit"
+	bodyEditSetName       = "Set"
 	glAccessor            = "GL"
 	httpMethodPrefix      = "Method"
 	verbParam             = "method"
@@ -209,11 +210,12 @@ func analyzeUpstreamWaits(root string, pkgs []*packages.Package, clientGo *types
 		}
 	}
 	rows, rowsErr := waits.ReadRows(filepath.Join(root, filepath.FromSlash(waits.RegisterPath)))
+	routes, unresolved := sdkRoutes(structs.ClientGoDir(pkgs))
 	report, stale := buildUpstreamWaits(waitsInput{
 		found:   found,
 		sites:   sites,
 		strings: reads.strings,
-		sdk:     waits.SDK{Types: clientGo, Routes: sdkRouteSet(structs.ClientGoDir(pkgs))},
+		sdk:     waits.SDK{Types: clientGo, Routes: routes, Unresolved: unresolved},
 		rows:    rows,
 		called:  calledMethods(usage),
 		entries: entries,
@@ -224,16 +226,19 @@ func analyzeUpstreamWaits(root string, pkgs []*packages.Package, clientGo *types
 	return report, stale, nil
 }
 
-// sdkRouteSet returns every route a method of the client-go source in dir
-// sends, spelled the way a [waits.NoMethodFor] spells one.
-func sdkRouteSet(dir string) map[string]bool {
-	routes := map[string]bool{}
+// sdkRoutes returns every route a method of the client-go source in dir
+// sends, spelled the way a [waits.NoMethodFor] spells one, and every request
+// one sends whose path the reading did not fold to a route, which a route
+// unsent by the first could still be.
+func sdkRoutes(dir string) (routes map[string]bool, unresolved []string) {
+	routes = map[string]bool{}
 	for _, method := range sdkroutes.Read(dir).Methods() {
 		for _, route := range method.Routes {
 			routes[route.String()] = true
 		}
+		unresolved = append(unresolved, method.Unresolved...)
 	}
-	return routes
+	return routes, unresolved
 }
 
 // calledMethods spells every method a handler references "Service.Method".
@@ -526,27 +531,32 @@ func (s bodyScan) bodyEditKeys(fn funcBody) []string {
 }
 
 // collectEditKeys adds the keys body writes into a BodyEdit to keys. A
-// variable handed to Drop is followed to the strings appended to it.
+// variable handed to Set or Drop is followed to the keys assigned into it
+// and the strings appended to it.
 func (s bodyScan) collectEditKeys(body *ast.BlockStmt, keys map[string]bool) {
 	dropped := s.collectEditValues(body, keys)
+	handed := func(expr ast.Expr) bool {
+		ident, isIdent := expr.(*ast.Ident)
+		return isIdent && dropped[identVar(s.info, ident)]
+	}
 	ast.Inspect(body, func(node ast.Node) bool {
-		call, isCall := node.(*ast.CallExpr)
-		if !isCall || len(call.Args) < 2 || !isBuiltin(s.info, call.Fun, "append") {
-			return true
-		}
-		if target, isIdent := call.Args[0].(*ast.Ident); isIdent && dropped[identVar(s.info, target)] {
-			for _, arg := range call.Args[1:] {
-				s.addKey(arg, keys)
+		switch typed := node.(type) {
+		case *ast.CallExpr:
+			if len(typed.Args) > 0 && handed(typed.Args[0]) {
+				s.addAppended(typed, keys)
 			}
+		case *ast.AssignStmt:
+			s.addIndexedKeys(typed.Lhs, handed, keys)
 		}
 		return true
 	})
 }
 
 // collectEditValues adds to keys what body writes into a BodyEdit in place:
-// the key of each NullWhenZero, and the keys and names a literal or an
-// assignment sets on its Set or Drop. It returns the variables handed to one
-// whole, whose appended strings the caller collects.
+// the key of each NullWhenZero, the keys and names a literal or an
+// assignment sets on its Set or Drop, the key an assignment writes into its
+// Set, and the strings an append adds to its Drop. It returns the variables
+// handed to one whole, whose keys and appended strings the caller collects.
 func (s bodyScan) collectEditValues(body *ast.BlockStmt, keys map[string]bool) map[*types.Var]bool {
 	dropped := map[*types.Var]bool{}
 	ast.Inspect(body, func(node ast.Node) bool {
@@ -558,29 +568,74 @@ func (s bodyScan) collectEditValues(body *ast.BlockStmt, keys map[string]bool) m
 				s.addKey(typed.Args[1], keys)
 			}
 		case *ast.CompositeLit:
-			if !isBodyEdit(s.info.TypeOf(typed)) {
-				return true
-			}
-			for _, elt := range typed.Elts {
-				if kv, isKV := elt.(*ast.KeyValueExpr); isKV {
-					s.editValue(kv.Value, keys, dropped)
-				}
-			}
+			s.editLiteral(typed, keys, dropped)
 		case *ast.AssignStmt:
-			for i, lhs := range typed.Lhs {
-				if sel, isSel := lhs.(*ast.SelectorExpr); isSel && isBodyEdit(s.info.TypeOf(sel.X)) && i < len(typed.Rhs) {
-					s.editValue(typed.Rhs[i], keys, dropped)
-				}
-			}
+			s.editAssign(typed, keys, dropped)
 		}
 		return true
 	})
 	return dropped
 }
 
+// editLiteral adds what lit sets on its Set and Drop, when it is a BodyEdit.
+func (s bodyScan) editLiteral(lit *ast.CompositeLit, keys map[string]bool, dropped map[*types.Var]bool) {
+	if !isBodyEdit(s.info.TypeOf(lit)) {
+		return
+	}
+	for _, elt := range lit.Elts {
+		if kv, isKV := elt.(*ast.KeyValueExpr); isKV {
+			s.editValue(kv.Value, keys, dropped)
+		}
+	}
+}
+
+// editAssign adds what one assignment writes into a BodyEdit: the key
+// edit.Set["key"] = value writes whatever the value, and what a value set
+// as its Set or Drop names.
+func (s bodyScan) editAssign(assign *ast.AssignStmt, keys map[string]bool, dropped map[*types.Var]bool) {
+	s.addIndexedKeys(assign.Lhs, func(expr ast.Expr) bool { return s.editField(expr) == bodyEditSetName }, keys)
+	for i, lhs := range assign.Lhs {
+		if s.editField(lhs) != "" && i < len(assign.Rhs) {
+			s.editValue(assign.Rhs[i], keys, dropped)
+		}
+	}
+}
+
+// addIndexedKeys adds to keys the key each of lhs writes into a map, when
+// into says the map is one the edit writes.
+func (s bodyScan) addIndexedKeys(lhs []ast.Expr, into func(ast.Expr) bool, keys map[string]bool) {
+	for _, target := range lhs {
+		if index, isIndex := target.(*ast.IndexExpr); isIndex && into(index.X) {
+			s.addKey(index.Index, keys)
+		}
+	}
+}
+
+// addAppended adds to keys the strings call appends, when it is a call of
+// the builtin append.
+func (s bodyScan) addAppended(call *ast.CallExpr, keys map[string]bool) {
+	if len(call.Args) < 2 || !isBuiltin(s.info, call.Fun, "append") {
+		return
+	}
+	for _, arg := range call.Args[1:] {
+		s.addKey(arg, keys)
+	}
+}
+
+// editField returns the name of the field of a BodyEdit expr selects, Set
+// or Drop, and the empty string for any other expression.
+func (s bodyScan) editField(expr ast.Expr) string {
+	sel, isSel := expr.(*ast.SelectorExpr)
+	if !isSel || !isBodyEdit(s.info.TypeOf(sel.X)) {
+		return ""
+	}
+	return sel.Sel.Name
+}
+
 // editValue adds what one value set into a BodyEdit names: the keys of a map
-// literal, the strings of a list literal, or, for a variable, the variable,
-// whose appended strings the caller collects.
+// literal, the strings of a list literal or of an append, or, for a
+// variable, the variable, whose keys and appended strings the caller
+// collects.
 func (s bodyScan) editValue(value ast.Expr, keys map[string]bool, dropped map[*types.Var]bool) {
 	switch typed := value.(type) {
 	case *ast.CompositeLit:
@@ -590,6 +645,10 @@ func (s bodyScan) editValue(value ast.Expr, keys map[string]bool, dropped map[*t
 			}
 			s.addKey(elt, keys)
 		}
+	case *ast.CallExpr:
+		// edit.Drop = append(edit.Drop, "key") appends what follows the
+		// list it extends.
+		s.addAppended(typed, keys)
 	case *ast.Ident:
 		if variable := identVar(s.info, typed); variable != nil {
 			dropped[variable] = true

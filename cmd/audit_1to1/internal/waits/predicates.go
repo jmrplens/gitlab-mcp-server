@@ -31,6 +31,11 @@ type SDK struct {
 	// "VERB /path" with each identifier segment as ":", the way
 	// cmd/internal/sdkroutes spells them.
 	Routes map[string]bool
+	// Unresolved names every request a client-go method sends whose path
+	// the reading did not fold to a route, the way cmd/internal/sdkroutes
+	// reports one. Any of them could send any route, so while one is listed
+	// no route can be told unsent.
+	Unresolved []string
 }
 
 // Predicate is one thing that is true of the pinned client-go while a
@@ -225,7 +230,8 @@ func (p NoMethodFor) Subject() string { return p.Route }
 // nothing there, never for a reason of its own: a route not spelled as one,
 // or naming an identifier the SDK's routes write bare, can never be sent,
 // and an SDK none of whose routes was read sends nothing at all, so the
-// predicate would hold forever. Each is refused.
+// predicate would hold forever. Each is refused, and so is a route no route
+// read sends while a request whose path was not read could send it.
 func (p NoMethodFor) Holds(sdk SDK) (bool, error) {
 	if !routeSpelling.MatchString(p.Route) || namedIdentifier.MatchString(p.Route) {
 		return false, fmt.Errorf("%q is not spelled \"VERB /path\" with each identifier as \":\"", p.Route)
@@ -233,7 +239,13 @@ func (p NoMethodFor) Holds(sdk SDK) (bool, error) {
 	if len(sdk.Routes) == 0 {
 		return false, errors.New("no route of the pinned client-go was read, so none can be told unsent")
 	}
-	return !sdk.Routes[p.Route], nil
+	if sdk.Routes[p.Route] {
+		return false, nil
+	}
+	if len(sdk.Unresolved) > 0 {
+		return false, fmt.Errorf("the pinned client-go sends requests whose path was not read, any of which could be %s, so it cannot be told unsent: %s", p.Route, strings.Join(sdk.Unresolved, "; "))
+	}
+	return true, nil
 }
 
 // TakesNoOptions holds while the method ("Service.Method") takes no

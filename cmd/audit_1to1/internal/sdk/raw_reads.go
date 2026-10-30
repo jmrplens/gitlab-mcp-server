@@ -32,45 +32,60 @@ type rawCaller struct {
 	Options string `json:"options,omitempty"`
 }
 
-// forwarder is a function that hands a raw request its own verb or options
-// parameter: the site it is, the index of each parameter it forwards (-1
-// for one it does not), and what the request carries in place of one it
-// does not.
+// rawRequest names one raw request: the site of the function that builds it
+// and its place among the raw requests that site builds, in source order,
+// which is the order the walk lists them in.
+type rawRequest struct {
+	site  string
+	place int
+}
+
+// forwarder is a raw request that a function hands its own verb or options
+// parameter: the request, the index of each parameter it forwards (-1 for
+// one it does not), and what the request carries in place of one it does
+// not.
 type forwarder struct {
-	site                    string
+	request                 rawRequest
 	verb, options           int
 	verbValue, optionsValue string
 }
 
 // rawReads is what the walk of the tool packages reads around the
-// workarounds it finds, keyed by site: the types a raw request's answer is
-// decoded into and the ones it sends as options, the functions that forward
-// a raw request their verb or options and each call of them, the type
-// arguments a generic one is instantiated with, the client-go methods each
-// function's result is handed to, and the strings each function's body
-// holds.
+// workarounds it finds: by raw request, the types its answer is decoded
+// into, the ones it sends as options and each call of the function that
+// forwards it a verb or options; by site, the answers decoded from a request
+// the walk cannot tell (one handed in, or built by another function), the
+// type arguments a generic function is instantiated with, the client-go
+// methods each function's result is handed to, and the strings each
+// function's body holds; and the forwarding requests of each function.
 type rawReads struct {
-	sdk        waits.SDK
-	decodes    map[string][]types.Type
-	sends      map[string][]types.Type
-	forwarders map[types.Object]forwarder
-	callers    map[string][]rawCaller
-	instances  map[string][][]types.Type
-	passedTo   map[string]map[string]bool
-	strings    map[string][]string
+	sdk         waits.SDK
+	decodes     map[rawRequest][]types.Type
+	siteDecodes map[string][]types.Type
+	sends       map[rawRequest][]types.Type
+	forwarders  map[types.Object][]forwarder
+	callers     map[rawRequest][]rawCaller
+	instances   map[string][][]types.Type
+	passedTo    map[string]map[string]bool
+	strings     map[string][]string
+	// placed counts the raw requests read at each site so far, so two bodies
+	// a site names (a package's init functions) number theirs in turn.
+	placed map[string]int
 }
 
 // newRawReads returns an empty rawReads for clientGo.
 func newRawReads(clientGo *types.Package) *rawReads {
 	return &rawReads{
-		sdk:        waits.SDK{Types: clientGo},
-		decodes:    map[string][]types.Type{},
-		sends:      map[string][]types.Type{},
-		forwarders: map[types.Object]forwarder{},
-		callers:    map[string][]rawCaller{},
-		instances:  map[string][][]types.Type{},
-		passedTo:   map[string]map[string]bool{},
-		strings:    map[string][]string{},
+		sdk:         waits.SDK{Types: clientGo},
+		decodes:     map[rawRequest][]types.Type{},
+		siteDecodes: map[string][]types.Type{},
+		sends:       map[rawRequest][]types.Type{},
+		forwarders:  map[types.Object][]forwarder{},
+		callers:     map[rawRequest][]rawCaller{},
+		instances:   map[string][][]types.Type{},
+		passedTo:    map[string]map[string]bool{},
+		strings:     map[string][]string{},
+		placed:      map[string]int{},
 	}
 }
 
@@ -80,33 +95,120 @@ func newRawReads(clientGo *types.Package) *rawReads {
 // with the functions whose results it is handed.
 func (r *rawReads) read(scan bodyScan, fn funcBody, site string) {
 	r.strings[site] = append(r.strings[site], syntaxStrings(fn.body)...)
+	body := scan.requestsOf(fn.body, site, r.placed[site])
+	r.placed[site] += len(body.places)
 	ast.Inspect(fn.body, func(node ast.Node) bool {
 		if call, isCall := node.(*ast.CallExpr); isCall {
-			r.readCall(scan, fn, site, call)
+			r.readCall(scan, fn, body, call)
 		}
 		return true
 	})
 }
 
-// readCall records one call of the function body at site.
-func (r *rawReads) readCall(scan bodyScan, fn funcBody, site string, call *ast.CallExpr) {
+// bodyRequests are the raw requests one function body builds: the place of
+// each, and the place of the one each variable is assigned, -1 for a
+// variable assigned more than one.
+type bodyRequests struct {
+	site   string
+	places map[*ast.CallExpr]int
+	vars   map[*types.Var]int
+}
+
+// requestsOf numbers the raw requests body builds in source order, from
+// first, and maps each variable one is assigned to to its place.
+func (s bodyScan) requestsOf(body *ast.BlockStmt, site string, first int) bodyRequests {
+	found := bodyRequests{site: site, places: map[*ast.CallExpr]int{}, vars: map[*types.Var]int{}}
+	ast.Inspect(body, func(node ast.Node) bool {
+		if call, isCall := node.(*ast.CallExpr); isCall {
+			if constructor, _ := s.rawConstructor(call); constructor != nil {
+				found.places[call] = first + len(found.places)
+			}
+		}
+		return true
+	})
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.AssignStmt:
+			found.bind(s.info, typed.Lhs, typed.Rhs)
+		case *ast.ValueSpec:
+			if len(typed.Names) > 0 {
+				found.bind(s.info, []ast.Expr{typed.Names[0]}, typed.Values)
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// bind maps the variable the first of lhs names to the place of the raw
+// request rhs builds, when rhs is the one call that builds one.
+func (b bodyRequests) bind(info *types.Info, lhs, rhs []ast.Expr) {
+	if len(lhs) == 0 || len(rhs) != 1 {
+		return
+	}
+	call, _ := ast.Unparen(rhs[0]).(*ast.CallExpr)
+	place, isRaw := b.places[call]
+	ident, isIdent := lhs[0].(*ast.Ident)
+	if !isRaw || !isIdent {
+		return
+	}
+	variable, isVar := info.Defs[ident].(*types.Var)
+	if !isVar {
+		variable = identVar(info, ident)
+	}
+	if variable == nil {
+		return
+	}
+	if bound, isBound := b.vars[variable]; isBound && bound != place {
+		place = -1
+	}
+	b.vars[variable] = place
+}
+
+// sent returns the raw request expr, the request a call of Do sends, is: the
+// one request every variable it reads is assigned, and false when it reads
+// none, or several, or one assigned more than one.
+func (b bodyRequests) sent(info *types.Info, expr ast.Expr) (rawRequest, bool) {
+	read := map[int]bool{}
+	ast.Inspect(expr, func(node ast.Node) bool {
+		if ident, isIdent := node.(*ast.Ident); isIdent {
+			if place, isRequest := b.vars[identVar(info, ident)]; isRequest {
+				read[place] = true
+			}
+		}
+		return true
+	})
+	places := slices.Collect(maps.Keys(read))
+	if len(places) != 1 || places[0] < 0 {
+		return rawRequest{}, false
+	}
+	return rawRequest{site: b.site, place: places[0]}, true
+}
+
+// readCall records one call of the function body.
+func (r *rawReads) readCall(scan bodyScan, fn funcBody, body bodyRequests, call *ast.CallExpr) {
 	info := scan.info
 	if constructor, verb, opt := scan.rawRequestArgs(call); constructor != nil {
+		request := rawRequest{site: body.site, place: body.places[call]}
 		forward := forwarder{
-			site: site, verb: paramIndex(info, fn.signature, verb, false), options: paramIndex(info, fn.signature, opt, true),
+			request: request, verb: paramIndex(info, fn.signature, verb, false), options: paramIndex(info, fn.signature, opt, true),
 			verbValue: constantString(info, verb), optionsValue: spellOptions(info, opt),
 		}
 		if forward.verb >= 0 || forward.options >= 0 {
-			r.forwarders[fn.object] = forward
+			r.forwarders[fn.object] = append(r.forwarders[fn.object], forward)
 		}
 		// A forwarded parameter's own type is an interface, which is no
 		// superset; what it carries is read off each caller.
-		r.sends[site] = append(r.sends[site], info.TypeOf(opt))
+		r.sends[request] = append(r.sends[request], info.TypeOf(opt))
 		return
 	}
 	sel, _ := ast.Unparen(call.Fun).(*ast.SelectorExpr)
 	if decoded := doTarget(info, sel, call); decoded != nil {
-		r.decodes[site] = append(r.decodes[site], decoded)
+		if request, isTold := body.sent(info, call.Args[0]); isTold {
+			r.decodes[request] = append(r.decodes[request], decoded)
+		} else {
+			r.siteDecodes[body.site] = append(r.siteDecodes[body.site], decoded)
+		}
 		return
 	}
 	if method := serviceMethod(info, sel); method != nil {
@@ -200,38 +302,47 @@ func (r *rawReads) readCallers(pkgs []*packages.Package) {
 	}
 }
 
-// readCaller records one call, made at site, when it calls a forwarder.
+// readCaller records one call, made at site, when it calls a forwarder: for
+// each raw request the function forwards its verb or options to, what that
+// request then carries.
 func (r *rawReads) readCaller(info *types.Info, site string, call *ast.CallExpr) {
-	forward, isForwarder := r.forwarders[calledObject(info, call)]
-	if !isForwarder {
+	forwards := r.forwarders[calledObject(info, call)]
+	if len(forwards) == 0 {
 		return
 	}
-	caller := rawCaller{Site: site, Verb: forward.verbValue, Options: forward.optionsValue}
-	if forward.verb >= 0 {
-		caller.Verb = constantString(info, call.Args[forward.verb])
+	for _, forward := range forwards {
+		caller := rawCaller{Site: site, Verb: forward.verbValue, Options: forward.optionsValue}
+		if forward.verb >= 0 {
+			caller.Verb = constantString(info, call.Args[forward.verb])
+		}
+		if forward.options >= 0 {
+			caller.Options = spellOptions(info, call.Args[forward.options])
+			r.sends[forward.request] = append(r.sends[forward.request], info.TypeOf(call.Args[forward.options]))
+		}
+		r.callers[forward.request] = append(r.callers[forward.request], caller)
 	}
-	if forward.options >= 0 {
-		caller.Options = spellOptions(info, call.Args[forward.options])
-		r.sends[forward.site] = append(r.sends[forward.site], info.TypeOf(call.Args[forward.options]))
-	}
-	r.callers[forward.site] = append(r.callers[forward.site], caller)
 	if instance, isGeneric := info.Instances[calledIdent(call)]; isGeneric {
-		r.instances[forward.site] = append(r.instances[forward.site], slices.Collect(instance.TypeArgs.Types()))
+		forwarderSite := forwards[0].request.site
+		r.instances[forwarderSite] = append(r.instances[forwarderSite], slices.Collect(instance.TypeArgs.Types()))
 	}
 }
 
 // attach fills in each raw request of found what was read around it: the
-// calls of its function when it forwards, and the supersets it decodes its
-// answer into and sends.
+// calls of its function when it forwards it, and the supersets it decodes
+// its answer into and sends. An answer decoded from a request the walk
+// cannot tell is counted against every raw request of its site.
 func (r *rawReads) attach(found []workaround) {
+	placed := map[string]int{}
 	for i := range found {
 		if found[i].Form != formRawRequest {
 			continue
 		}
 		site := found[i].Site
-		found[i].Callers = sortedCallers(r.callers[site])
-		found[i].Decodes = r.supersets(site, r.decodes[site])
-		found[i].Sends = r.supersets(site, r.sends[site])
+		request := rawRequest{site: site, place: placed[site]}
+		placed[site]++
+		found[i].Callers = sortedCallers(r.callers[request])
+		found[i].Decodes = r.supersets(site, slices.Concat(r.decodes[request], r.siteDecodes[site]))
+		found[i].Sends = r.supersets(site, r.sends[request])
 	}
 }
 

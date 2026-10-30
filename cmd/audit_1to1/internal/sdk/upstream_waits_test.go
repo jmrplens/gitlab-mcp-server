@@ -22,6 +22,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/waits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
@@ -489,6 +490,11 @@ var (
 		"Key   string ~json:\"key\"~", "Key   string ~json:\"key,omitempty\"~",
 		"Group string ~json:\"group\"~", "Group string ~json:\"group,omitempty\"~",
 	)
+	// anyPathGained adds a method that sends whatever path it is handed,
+	// which the reading of client-go folds to no route.
+	anyPathGained = strings.NewReplacer(
+		"var _ = http.MethodGet\n", "func (s *WidgetsService) FetchAny(path string, options ...RequestOptionFunc) (*Response, error) {\n\treq, err := s.client.NewRequest(http.MethodPost, path, nil, options)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn s.client.Do(req, nil)\n}\n",
+	)
 )
 
 // fixtureWaits are the entries that answer every workaround of the stand-in
@@ -771,6 +777,175 @@ func TestBuildUpstreamWaits_AClientGoThatFixesThings_RetiresOrEditsEachEntry(t *
 			t.Errorf("row 6 = %+v, want obsolete_workaround naming widgets.SetFlag and fixture.setFeature", first)
 		}
 	})
+}
+
+// TestAnalyzeUpstreamWaits_AClientGoRequestWhosePathIsNotRead_LeavesNoRouteUnsent
+// verifies that a request of client-go whose path the reading folds to no
+// route is handed to the predicates beside the routes it read: it could be
+// the archive no method sends, so the entry waiting on that route does not
+// hold, and its verdict names the request rather than calling the route
+// unsent.
+func TestAnalyzeUpstreamWaits_AClientGoRequestWhosePathIsNotRead_LeavesNoRouteUnsent(t *testing.T) {
+	fixture := newWaitsFixture(t, anyPathGained)
+
+	routes, unresolved := sdkRoutes(structs.ClientGoDir(fixture.pkgs))
+	if !routes["GET /widgets"] || len(unresolved) != 1 || !strings.HasPrefix(unresolved[0], "WidgetsService.FetchAny: ") {
+		t.Fatalf("sdkRoutes = %v, %q, want GET /widgets read and WidgetsService.FetchAny unresolved", routes, unresolved)
+	}
+	report, _ := fixture.analyze(t, fixture.root, fixtureWaits())
+	archive := report.Entries[2]
+	if archive.Status == waitHolds || len(archive.Predicates) != 1 || !strings.Contains(archive.Predicates[0].Error, "cannot be told unsent: WidgetsService.FetchAny: ") {
+		t.Errorf("the archive's entry = %+v, want a verdict naming WidgetsService.FetchAny rather than the route unsent", archive)
+	}
+}
+
+// pairsTool is a tool package whose functions build two raw requests each:
+// one decoding into client-go's widget and one into a struct that reads
+// archived beside it while sending one that writes shade, a variable
+// assigned both, and a function forwarding its options to both.
+const pairsTool = `package pairs
+
+import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
+
+type widgetAPI struct {
+	gl.Widget
+	Archived bool ~json:"archived"~
+}
+
+type widgetBody struct {
+	*gl.UpdateWidgetOptions
+	Shade string ~json:"shade"~
+}
+
+func Both(c *gl.Client) error {
+	plain, err := c.NewRequest("GET", "widgets/1", nil, nil)
+	if err != nil {
+		return err
+	}
+	var widget gl.Widget
+	if _, err := c.Do(plain, &widget); err != nil {
+		return err
+	}
+	var read, _ = c.NewRequest("PUT", "widgets/2", &widgetBody{}, nil)
+	var archived widgetAPI
+	_, err = c.Do(read, &archived)
+	return err
+}
+
+func Reused(c *gl.Client) error {
+	req, err := c.NewRequest("GET", "widgets/1", nil, nil)
+	if err != nil {
+		return err
+	}
+	req, err = c.NewRequest("GET", "widgets/2", nil, nil)
+	if err != nil {
+		return err
+	}
+	var archived widgetAPI
+	_, err = c.Do(req, &archived)
+	return err
+}
+
+func twice(c *gl.Client, opts any) error {
+	if _, err := c.NewRequest("PUT", "widgets/1", opts, nil); err != nil {
+		return err
+	}
+	_, err := c.NewRequest("PUT", "widgets/2", opts, nil)
+	return err
+}
+
+func Twice(c *gl.Client) error { return twice(c, &widgetBody{}) }
+`
+
+// TestWalkToolWorkarounds_TwoRawRequestsOfOneFunction_EachCarryTheirOwnSupersets
+// verifies that what a raw request decodes and sends is read for that
+// request, not for every request its function builds: the request a call of
+// Do sends is the one the variable it reads was assigned, so a request
+// decoding client-go's own widget carries no superset beside one decoding a
+// struct that reads archived, and neither does a request sending nothing
+// beside one sending a struct that writes shade. A variable assigned two
+// requests could send either, so what Do decodes through it is counted
+// against both, and a function forwarding its options to two requests hands
+// each one every call of it.
+func TestWalkToolWorkarounds_TwoRawRequestsOfOneFunction_EachCarryTheirOwnSupersets(t *testing.T) {
+	fixture := newWaitsFixtureWith(t, nil, map[string]string{"internal/tools/pairs/pairs.go": strings.ReplaceAll(pairsTool, "~", "`")})
+
+	found, _, _ := walkToolWorkarounds(fixture.pkgs, fixture.clientGo)
+
+	decode := []waits.Superset{{Type: "pairs.widgetAPI", Root: "Widget", Keys: []string{"archived"}, Needs: []string{"LacksKey{Widget, archived}"}}}
+	body := []waits.Superset{{Type: "pairs.widgetBody", Root: "UpdateWidgetOptions", Keys: []string{"shade"}, Needs: []string{"LacksKey{UpdateWidgetOptions, shade}"}}}
+	twiceCaller := []rawCaller{{Site: "pairs.Twice", Verb: "PUT", Options: "*pairs.widgetBody"}}
+	want := []workaround{
+		{Form: formRawRequest, Site: "pairs.Both", Constructor: "NewRequest", Verb: "GET"},
+		{Form: formRawRequest, Site: "pairs.Both", Constructor: "NewRequest", Verb: "PUT", Options: "*pairs.widgetBody", Decodes: decode, Sends: body},
+		{Form: formRawRequest, Site: "pairs.Reused", Constructor: "NewRequest", Verb: "GET", Decodes: decode},
+		{Form: formRawRequest, Site: "pairs.Reused", Constructor: "NewRequest", Verb: "GET", Decodes: decode},
+		{Form: formRawRequest, Site: "pairs.twice", Constructor: "NewRequest", Verb: "PUT", Options: "any", Callers: twiceCaller, Sends: body},
+		{Form: formRawRequest, Site: "pairs.twice", Constructor: "NewRequest", Verb: "PUT", Options: "any", Callers: twiceCaller, Sends: body},
+	}
+	var got []workaround
+	for _, raw := range found {
+		if raw.Form == formRawRequest && strings.HasPrefix(raw.Site, "pairs.") {
+			got = append(got, raw)
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("raw requests =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// editorsTool is a tool package whose body edits write keys by assignment
+// as well as in literals: into the edit's Set and onto its Drop, and into a
+// map and a list handed to the edit whole.
+const editorsTool = `package editors
+
+import (
+	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
+	"example.com/fixture/internal/toolutil"
+)
+
+func Clear(c *gl.Client, key string) error {
+	edit := toolutil.BodyEdit{Set: map[string]any{"name": nil}}
+	edit.Set["title"] = nil
+	edit.Set[key] = nil
+	edit.Drop = append(edit.Drop, "tags")
+	edit.Drop[0] = "ignored"
+	_, _, err := c.Widgets.UpdateWidget(1, nil, toolutil.EditJSONBody(edit))
+	return err
+}
+
+func Built(c *gl.Client) error {
+	nulls := map[string]any{}
+	nulls["shade"] = nil
+	unset := []string{}
+	unset = append(unset, "hue")
+	_, _, err := c.Widgets.UpdateWidget(1, nil, toolutil.EditJSONBody(toolutil.BodyEdit{Set: nulls, Drop: unset}))
+	return err
+}
+`
+
+// TestWalkToolWorkarounds_KeysABodyEditIsAssigned_AreEachRead verifies the
+// keys a body edit writes outside a literal: one assigned into its Set
+// beside a literal's, so the edit is not taken as answered by the literal's
+// alone, one appended onto its Drop, and one assigned into a map or
+// appended to a list handed to the edit whole. A key that is no constant
+// adds nothing, and neither does a name written over an element of the
+// Drop.
+func TestWalkToolWorkarounds_KeysABodyEditIsAssigned_AreEachRead(t *testing.T) {
+	fixture := newWaitsFixtureWith(t, nil, map[string]string{"internal/tools/editors/editors.go": editorsTool})
+
+	found, _, _ := walkToolWorkarounds(fixture.pkgs, fixture.clientGo)
+
+	got := map[string][]string{}
+	for _, edit := range found {
+		if edit.Form == formBodyEdit && strings.HasPrefix(edit.Site, "editors.") {
+			got[edit.Site] = edit.Keys
+		}
+	}
+	want := map[string][]string{"editors.Built": {"hue", "shade"}, "editors.Clear": {"name", "tags", "title"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("body edit keys = %v, want %v", got, want)
+	}
 }
 
 // presetsTool is a tool package whose body edit is built by a function of

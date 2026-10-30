@@ -144,16 +144,19 @@ func (args scopedSearchArgs[T]) wrap(err error) error {
 }
 
 // search sends the query to the narrowest scope the caller named: the
-// project, else the group, else the whole instance.
+// project, else the group, else the whole instance. Only the project search
+// declares ref, so a group or instance search is sent without it.
 func (args scopedSearchArgs[T]) search(ctx context.Context, opts *gl.SearchOptions) ([]T, *gl.Response, error) {
 	options := append([]gl.RequestOptionFunc{gl.WithContext(ctx)}, args.options...)
 	if args.projectID != "" {
 		return args.projectSearch(string(args.projectID), args.query, opts, options...)
 	}
+	unscoped := *opts
+	unscoped.Ref = nil
 	if args.groupID != "" {
-		return args.groupSearch(string(args.groupID), args.query, opts, options...)
+		return args.groupSearch(string(args.groupID), args.query, &unscoped, options...)
 	}
-	return args.globalSearch(args.query, opts, options...)
+	return args.globalSearch(args.query, &unscoped, options...)
 }
 
 func convertSearchResults[T, O any](items []T, convert func(T) O) []O {

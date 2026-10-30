@@ -4,9 +4,11 @@
 package waits
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,8 +26,9 @@ func TestEntryLabel_Categories_NameTheRowOrTheCategory(t *testing.T) {
 }
 
 // TestEntries_ACallerEditingTheResult_LeavesTheTableAsItWas verifies the
-// table is handed out as a copy, so a reader cannot change what the next one
-// reads.
+// table is handed out as a copy, each entry's lists included, so a reader
+// cannot change what the next one reads by replacing an entry or by writing
+// into one of its sites, unseen functions, replaced methods or predicates.
 func TestEntries_ACallerEditingTheResult_LeavesTheTableAsItWas(t *testing.T) {
 	first := Entries()
 	if len(first) != len(upstreamWaits)+len(rawReasons) || first[0].Row != upstreamWaits[0].Row {
@@ -35,6 +38,30 @@ func TestEntries_ACallerEditingTheResult_LeavesTheTableAsItWas(t *testing.T) {
 	if Entries()[0].Row != upstreamWaits[0].Row {
 		t.Error("editing what Entries returned changed the table")
 	}
+	want := fmt.Sprintf("%+v", Entries())
+	var edited [4]bool
+	for _, entry := range Entries() {
+		edited[0] = overwriteFirst(entry.Sites, "edited.Site") || edited[0]
+		edited[1] = overwriteFirst(entry.Unseen, "edited.Unseen") || edited[1]
+		edited[2] = overwriteFirst(entry.Replaces, "Edited.Method") || edited[2]
+		edited[3] = overwriteFirst(entry.Predicates, nil) || edited[3]
+	}
+	if slices.Contains(edited[:], false) {
+		t.Fatalf("edited sites, unseen, replaces, predicates = %v, want an entry of the table listing each", edited)
+	}
+	if got := fmt.Sprintf("%+v", Entries()); got != want {
+		t.Error("writing into the lists of what Entries returned changed the table")
+	}
+}
+
+// overwriteFirst writes value over the first element of list and reports
+// whether it had one to write over.
+func overwriteFirst[T any](list []T, value T) bool {
+	if len(list) == 0 {
+		return false
+	}
+	list[0] = value
+	return true
 }
 
 // TestCoveredRaw_Entries_SplitMethodsFromServicesAndKeepTheFirst verifies

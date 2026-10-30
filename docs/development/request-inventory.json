@@ -17812,7 +17812,6 @@
       "path": "/groups/:group_id/-/search",
       "query": [
         "num_context_lines",
-        "ref",
         "regex",
         "scope",
         "search"
