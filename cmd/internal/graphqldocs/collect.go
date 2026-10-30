@@ -238,10 +238,12 @@ func documentsUnder(root *os.Root, base string) ([]Document, error) {
 // graphQLExt is the extension a standalone document carries.
 const graphQLExt = ".graphql"
 
-// isPinnedSchema reports whether path is the pinned schema itself, which is an
-// SDL and not a document anybody sends.
+// isPinnedSchema reports whether path is one of the two pinned schemas, the
+// gitlab.com pin or the release pin beside it, which are SDL and not documents
+// anybody sends.
 func isPinnedSchema(name string) bool {
-	return path.Base(name) == graphqlschema.SDLFileName
+	base := path.Base(name)
+	return base == graphqlschema.SDLFileName || base == graphqlschema.ReleaseSDLFileName
 }
 
 // walkRoots turns the load patterns into the directories to search for

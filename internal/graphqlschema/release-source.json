@@ -1,0 +1,8 @@
+{
+  "gitlab_version": "19.5.0-ee",
+  "gitlab_revision": "883b289c40e",
+  "origin": "https://gitlab.com/gitlab-org/gitlab/-/jobs/17187176880/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql",
+  "sha256": "4223e634c7b04ce5067f39b440f12c10c3c3c32ef436176419efe3bbd8a06287",
+  "retrieved_at": "2026-10-30",
+  "types": 4546
+}

@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqlintrospect"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/provenance"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
@@ -38,6 +39,21 @@ type genRun struct {
 	// now supplies the day recorded in the provenance file, as a parameter so
 	// a test can assert on the record it produced.
 	now func() time.Time
+	// release selects the release pin instead of the gitlab.com one: the
+	// schema of the GitLab release the REST record in apiLiveDir is taken
+	// from, written beside the gitlab.com pin in dir.
+	release bool
+	// apiLiveDir holds the REST record that names the release.
+	apiLiveDir string
+	// from names a schema dump already on disk, read instead of downloading
+	// the one GitLab's CI published for the release's tag.
+	from string
+	// dumpBase is where the release tag's dump is downloaded from, as a
+	// field so a test can point it at a server of its own.
+	dumpBase string
+	// dumpLimit bounds that download, maxDumpBytes when zero, as a field so
+	// a test can reach the refusal without sending 64 MiB.
+	dumpLimit int64
 }
 
 // target is the instance this run asks, in the shape the introspection package
@@ -56,7 +72,15 @@ func main() {
 	endpoint := flag.String("url", defaultEndpoint, "GraphQL endpoint to introspect")
 	dir := flag.String("dir", defaultDir, "directory holding the pinned schema and its provenance record")
 	check := flag.Bool("check", false, "load the committed schema instead of fetching one, and fail when it does not parse")
+	release := flag.Bool("release", false, "pin, or with -check judge, the schema of the GitLab release the REST record is taken from instead of gitlab.com's")
+	apiLiveDir := flag.String("api-live-dir", apilive.DefaultDir, "directory holding the REST record that names the release")
+	from := flag.String("from", "", "with -release, a schema dump on disk to read instead of the one GitLab's CI published for the release tag")
 	flag.Parse()
+	if *from != "" && !*release {
+		fmt.Fprintln(os.Stderr, prefix, errReleaseFlags)
+		osExit(2)
+		return
+	}
 
 	// -url takes an arbitrary endpoint, so the credential is resolved against
 	// the instance GITLAB_URL names rather than followed wherever the flag
@@ -69,12 +93,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, prefix+" note:", withheld)
 	}
 	osExit(run(genRun{
-		endpoint: *endpoint,
-		dir:      *dir,
-		check:    *check,
-		token:    credential,
-		client:   &http.Client{Timeout: graphqlintrospect.FetchTimeout},
-		now:      time.Now,
+		endpoint:   *endpoint,
+		dir:        *dir,
+		check:      *check,
+		token:      credential,
+		client:     &http.Client{Timeout: graphqlintrospect.FetchTimeout},
+		now:        time.Now,
+		release:    *release,
+		apiLiveDir: *apiLiveDir,
+		from:       *from,
+		dumpBase:   defaultDumpBase,
 	}, os.Stdout, os.Stderr))
 }
 
@@ -82,6 +110,12 @@ func main() {
 // the ways this command ends are reachable from a test instead of only from a
 // process. It returns the exit status rather than calling os.Exit.
 func run(cfg genRun, out, errOut io.Writer) int {
+	if cfg.release && cfg.check {
+		return checkReleaseArtifacts(cfg, out, errOut)
+	}
+	if cfg.release {
+		return generateRelease(cfg, out, errOut)
+	}
 	if cfg.check {
 		return checkArtifacts(cfg, out, errOut)
 	}

@@ -645,8 +645,10 @@ func TestDocumentLabel_UnnamedDocument_SaysSo(t *testing.T) {
 // A go:embed variable is not a constant, so a document moved into its own file
 // folds to nothing and would leave the inventory in silence: the audit would
 // report one fewer document and still exit 0. Reading the files directly closes
-// that. The pinned schema is the one .graphql file that must be skipped, since
-// it is an SDL and not a document anybody sends.
+// that. The two pinned schemas, gitlab.com's and the release's, are the
+// .graphql files that must be skipped, since they are SDL and not documents
+// anybody sends; the release pin read as a document is the first thing the
+// release pass refused when it was added.
 //
 // Every field is asserted rather than the name alone, because the four strings
 // this shape fills are all derived from the one walk entry and nothing else
@@ -673,6 +675,7 @@ func TestStandalone_DocumentsInFilesOfTheirOwn_AreFoundAndThePinIsNot(t *testing
 	write(tree, "helper.go", "package customemoji\n")
 	write(tree, "notes.txt", "mutation { nothing }\n")
 	write(filepath.Join(root, "internal"), graphqlschema.SDLFileName, "type Query {\n  ok: Boolean\n}\n")
+	write(filepath.Join(root, "internal"), graphqlschema.ReleaseSDLFileName, "type Query {\n  ok: Boolean\n}\n")
 
 	found, err := Standalone(root, []string{"./internal/..."})
 	if err != nil {
