@@ -197,6 +197,15 @@
 // it through run-docker-e2e.sh, after the tests, and it decides the status
 // only of a run whose tests passed.
 //
+// A complete run of a runtime with a scenario to run last, the CE throttle
+// probe today, also names the stream of its final pass (-final-results): the
+// pass run-docker-e2e.sh makes after the main one, on the same stack and
+// before the one teardown, which runs that scenario alone with its switch on.
+// A runs-last entry excuses the main pass's skip of its scenario only when
+// that stream records the scenario passed, so a final pass that failed it,
+// skipped it or never ran fails the run, and so does any skip of the final
+// pass itself.
+//
 // # The release a run tests
 //
 // -check-release holds the GitLab release a run is about to test

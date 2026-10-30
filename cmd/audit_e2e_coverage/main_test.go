@@ -907,9 +907,9 @@ func TestMain_ExitStatus_HandedToTheProcess(t *testing.T) {
 	if readErr != nil {
 		t.Fatalf("readSkips() error = %v", readErr)
 	}
-	live := judgeSkips("ce", recordedSkips, declaredSkips)
-	liveSummary := fmt.Sprintf("skips: %d skipped on ce, %d declared, %d undeclared, %d stale declarations\n",
-		len(recordedSkips), len(live.excused), len(live.undeclared), len(live.stale))
+	live := judgeSkips("ce", recordedSkips, declaredSkips, finalPass{})
+	liveSummary := fmt.Sprintf("skips: %d skipped on ce, %d declared, %d undeclared, %d stale declarations, %d runs-last not passed, %d skipped in the final pass\n",
+		len(recordedSkips), len(live.excused), len(live.undeclared), len(live.stale), len(live.unproven), len(live.finalSkips))
 	cases := []struct {
 		name   string
 		args   []string

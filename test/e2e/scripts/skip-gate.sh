@@ -10,8 +10,9 @@
 #
 # The judgement is cmd/audit_e2e_coverage -check-skips, whose table of
 # declared skips is cmd/audit_e2e_coverage/skip_declarations.go. What is here
-# is how a run reaches it, what it does to the run's status, and what a run
-# asking to be complete has to be started with so that the gate can pass.
+# is how a run reaches it, what it does to the run's status, what a run asking
+# to be complete has to be started with so that the gate can pass, and which
+# scenario such a run runs last, in a final pass of its own.
 
 # shellcheck source=test/e2e/scripts/audit-command.sh
 . "$(dirname "${BASH_SOURCE[0]}")/audit-command.sh"
@@ -23,14 +24,45 @@
 # the stream could not be judged. The command is built and run by
 # run_audit_e2e_coverage, so the 2 reaches the run as a 2.
 #
-#   gate_skips <ce|ee> <go test -json stream> <saved output>
+# A run that made a final pass names that pass's stream as well, which the
+# gate reads as -final-results: a runs-last declaration excuses the main
+# pass's skip of its scenario only when that stream records the scenario
+# passed, and a path with no stream there is a final pass that never ran.
+#
+#   gate_skips <ce|ee> <go test -json stream> <saved output> [final pass's stream]
 gate_skips() {
-    local runtime="$1" results="$2" output="$3"
+    local runtime="$1" results="$2" output="$3" final="${4:-}"
+    local final_pass=()
+    if [ -n "${final}" ]; then
+        final_pass=(-final-results "${final}")
+    fi
     (
         cd "${REPO_ROOT}" || exit 1
-        run_audit_e2e_coverage -check-skips -runtime "${runtime}" -results "${results}"
+        # The guarded expansion: bash before 4.4 calls an empty array unbound
+        # under set -u.
+        run_audit_e2e_coverage -check-skips -runtime "${runtime}" -results "${results}" ${final_pass[@]+"${final_pass[@]}"}
     ) 2>&1 | tee -a "${output}"
     return "${PIPESTATUS[0]}"
+}
+
+# final_pass_test prints the scenario a complete run of the runtime runs last,
+# as its package under test/e2e/gitlab, its test and the switch that lets it
+# run, and nothing for a runtime that has none. On ce that is the throttle
+# probe of issue 954, which turns GitLab's unauthenticated API throttle on for
+# the whole instance: run beside the other packages, a probe cut short before
+# its cleanup would leave the throttle on for every one after it. So the main
+# pass skips it with the switch off, and run-docker-e2e.sh runs it alone, with
+# the switch on, in a final pass on the stack the main pass ran on and before
+# the one teardown: nothing runs after it on the instance it changed, and no
+# second stack is booted for it. Each line answers a runs-last declaration of
+# cmd/audit_e2e_coverage/skip_declarations.go, and that table's test holds the
+# two to each other.
+#
+#   final_pass_test <ce|ee>
+final_pass_test() {
+    case "$1" in
+        ce) echo "ce TestAuthThrottle_InvalidTokens_SpendTheAddressUnauthenticatedAllowance E2E_AUTH_THROTTLE_PROBE" ;;
+    esac
 }
 
 # complete_run_value prints the value the caller gave a key, looked for where
@@ -86,11 +118,12 @@ complete_run_external_network() {
 # reads it, case aside; E2E_BITBUCKET the way run-docker-e2e.sh reads it.
 #
 # The throttle probe's switch, E2E_AUTH_THROTTLE_PROBE, is refused for a
-# different reason: the probe changes an instance-wide setting, which issue
-# 954 decided no complete run may do, so a complete run must skip it (the one
-# skip the table declares for it) and must never be the run that turns the
-# throttle on. It is read the way the probe reads it, case aside, and may be
-# left out.
+# different reason: the probe changes an instance-wide setting, so a complete
+# run turns the switch on for its final pass alone (final_pass_test), and a
+# switch a person set would have the main pass run the probe beside the other
+# packages, where a probe cut short would leave the throttle on for the ones
+# after it. It is read the way the probe reads it, case aside, and may be left
+# out.
 #
 #   complete_run_refusal <E2E_EXTERNAL_NETWORK> <E2E_BITBUCKET> [E2E_AUTH_THROTTLE_PROBE]
 complete_run_refusal() {
@@ -101,7 +134,22 @@ complete_run_refusal() {
         echo "E2E_BITBUCKET is '$2', so the Bitbucket fixture would not start and the Bitbucket Server import would skip"
     fi
     if [[ ${3:-} =~ ^[Tt][Rr][Uu][Ee]$ ]]; then
-        echo "E2E_AUTH_THROTTLE_PROBE is '$3', so the throttle probe would turn GitLab's unauthenticated API throttle on for the whole instance, which no complete run may do; run the probe on its own"
+        echo "E2E_AUTH_THROTTLE_PROBE is '$3', so the main pass would run the throttle probe beside the other packages, where a probe cut short would leave GitLab's unauthenticated API throttle on for the ones after it; a complete run turns the switch on for its final pass alone, so leave it unset"
+    fi
+}
+
+# run_status_after_final_pass prints the status a run's tests end with once
+# its final pass has run: the main pass's when it failed, so the failure the
+# run reports is the one that came first, and the final pass's when the main
+# pass passed. A final pass that could not run leaves its status at 0, and the
+# gate fails the run for the skip it leaves unproven.
+#
+#   run_status_after_final_pass <main pass's status> <final pass's status>
+run_status_after_final_pass() {
+    if [ "$1" -ne 0 ]; then
+        echo "$1"
+    else
+        echo "$2"
     fi
 }
 

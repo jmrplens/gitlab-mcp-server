@@ -16,13 +16,20 @@
 // host the server runs on, and has the real binary send it in HTTP mode, so
 // the address GitLab counts is the one a deployment's verification comes from.
 //
-// It changes an instance-wide setting, the unauthenticated API throttle, which
-// issue 954 decided no complete run may do: a run cut short before the probe's
-// cleanup would leave the throttle on for every package that runs after it.
-// So it runs only when E2E_AUTH_THROTTLE_PROBE=true, only against the
-// disposable Docker stack, and on its own. A complete run refuses to start
-// with the switch set (test/e2e/scripts/skip-gate.sh), and the skip it sees
-// without it is declared in cmd/audit_e2e_coverage/skip_declarations.go.
+// It changes an instance-wide setting, the unauthenticated API throttle, so it
+// never runs beside the other packages: a probe cut short before its cleanup
+// would leave the throttle on for every package that runs after it. It runs
+// only when E2E_AUTH_THROTTLE_PROBE=true, only against the disposable Docker
+// stack, and on its own. A complete CE run (test/e2e/scripts/run-docker-e2e.sh
+// with E2E_GATE_SKIPS=true) starts its main pass with the switch off, so the
+// probe skips there for the reason cmd/audit_e2e_coverage/skip_declarations.go
+// declares under runs-last, and then runs it alone in a final pass with the
+// switch on, on the same stack and before the one teardown: nothing runs after
+// it on the instance it changed, and no second stack is booted for it. The skip
+// gate accepts the main pass's skip only when that final pass passed the probe.
+// A complete run still refuses to start with the switch set by hand
+// (test/e2e/scripts/skip-gate.sh), since its main pass would then run the probe
+// beside the other packages.
 
 package ce
 
@@ -51,7 +58,8 @@ const actionUserCurrent harness.ActionID = "user.current"
 
 const (
 	// settingAuthThrottleProbe is the switch that lets the probe change the
-	// instance's throttle. Nothing sets it but a person running the probe.
+	// instance's throttle. Nothing sets it but a person running the probe and
+	// the final pass of a complete CE run, which runs the probe alone.
 	settingAuthThrottleProbe = "E2E_AUTH_THROTTLE_PROBE"
 
 	// unauthenticatedAPIThrottle is the throttle under test, as GitLab names
@@ -133,7 +141,8 @@ const (
 func TestAuthThrottle_InvalidTokens_SpendTheAddressUnauthenticatedAllowance(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin), harness.Locks(harness.LockInstanceGlobal), harness.Serial())
 	if !strings.EqualFold(e.Setting(settingAuthThrottleProbe), "true") {
-		e.Skipf("the throttle probe turns GitLab's unauthenticated API throttle on for the whole instance; set %s=true to run it alone", settingAuthThrottleProbe)
+		e.Skipf("the throttle probe turns GitLab's unauthenticated API throttle on for the whole instance, so it runs alone after every other test: "+
+			"a complete CE run runs it last on the same stack, and %s=true runs it by hand", settingAuthThrottleProbe)
 	}
 	if !e.DockerMode() {
 		e.Skipf("the throttle probe changes instance-wide settings and runs only against the disposable Docker stack")

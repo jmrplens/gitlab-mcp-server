@@ -50,10 +50,22 @@
 # scenarios nothing declares, so the gate would fail the run an hour later for
 # a reason known before it began. It refuses the throttle probe's switch,
 # E2E_AUTH_THROTTLE_PROBE=true, looked for in the same places, since the probe
-# changes an instance-wide setting no complete run may change, and starts every
-# complete run with that switch off in the environment, which outranks any
-# file the harness reads. An offline host runs with E2E_GATE_SKIPS=false, which
-# is not a complete run.
+# changes an instance-wide setting and a switch a person set would have the
+# main pass run it beside the other packages, and starts every complete run
+# with that switch off in the environment, which outranks any file the harness
+# reads. An offline host runs with E2E_GATE_SKIPS=false, which is not a
+# complete run.
+#
+# A complete run of a runtime that has a scenario to run last (the throttle
+# probe on ce, as final_pass_test in skip-gate.sh names it) makes a final pass
+# after the main one, on the same stack and before the one teardown: that
+# scenario alone, with its switch on, into report files of its own
+# (<name>-final-junit.xml, -final-log.json and -final-output.txt). Nothing runs
+# after it on the instance it changed, and no second stack is booted for it. It
+# runs whatever the main pass ended with, since it is last and takes minutes,
+# unless GitLab no longer answers its readiness probe; a pass that could not
+# run leaves no stream, which the skip gate then reports. It records no calls:
+# the coverage record is the main pass's, joined with the main pass's stream.
 #
 # Before the teardown takes the volumes with it, GitLab's exceptions log is
 # copied into the reports, so a 500 a scenario met can be traced to the
@@ -70,10 +82,12 @@
 #   E2E_AUTH_THROTTLE_PROBE        true lets the throttle probe of test/e2e/gitlab/ce run;
 #                                  a run asked to be complete refuses it, read from the
 #                                  environment, the file E2E_ENV_FILE names or the
-#                                  repository .env, and sets it to false otherwise
+#                                  repository .env, sets it to false otherwise, and
+#                                  sets it to true for its final pass alone
 #   E2E_KEEP_STACK                 true leaves the stack up after the run, for a look
 #   E2E_REPORT_DIR                 dist/e2e-reports, resolved from the repository root
-#   E2E_REPORT_NAME                stem of the junit, json and output files: e2e-<runtime>
+#   E2E_REPORT_NAME                stem of the junit, json and output files: e2e-<runtime>;
+#                                  a final pass writes under <stem>-final
 #   GITLAB_MCP_TEST_E2E_CALLS_DIR  where the suite records its calls; cleared first, must be absolute
 #   E2E_COVER_DIR                  where the children write Go coverage data; cleared first, must be
 #                                  absolute, and only useful when the binary was built with -cover
@@ -142,8 +156,9 @@ derive_fixture_addresses
 # wherever the harness would have read that, and is refused before anything
 # starts when it cannot be complete: its gate would fail it for a skip nothing
 # declares, after an hour of tests, and a throttle probe switch left on would
-# have it change an instance-wide setting no complete run may change. The
-# refusal says how to run such a host.
+# have its main pass change an instance-wide setting beside the other
+# packages, which only its final pass may do. The refusal says how to run such
+# a host.
 if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
     E2E_EXTERNAL_NETWORK="$(complete_run_external_network "${E2E_ENV_FILE:-}" "${REPO_ROOT}/.env")"
     export E2E_EXTERNAL_NETWORK
@@ -160,14 +175,24 @@ if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
         } >&2
         exit 2
     fi
-    # Whatever the files say, a complete run never runs the throttle probe.
-    # The lookup above reads a file by sourcing it, and the harness reads it
-    # with godotenv, which also takes KEY: value and KEY = value and reads on
-    # past a reference to a variable nobody set, so a switch the shell could
-    # not see would still reach the probe. The process environment outranks
-    # every file the harness reads, so the probe skips for the reason the
-    # skip table declares.
+    # Whatever the files say, the main pass of a complete run never runs the
+    # throttle probe. The lookup above reads a file by sourcing it, and the
+    # harness reads it with godotenv, which also takes KEY: value and
+    # KEY = value and reads on past a reference to a variable nobody set, so a
+    # switch the shell could not see would still reach the probe. The process
+    # environment outranks every file the harness reads, so the probe skips
+    # there for the reason the skip table declares, and the final pass below
+    # turns the switch on in its own environment alone.
     export E2E_AUTH_THROTTLE_PROBE=false
+fi
+
+# The scenario a complete run runs last, if its runtime has one: its package,
+# its test and the switch that lets it run. Nothing for any other run.
+FINAL_PACKAGE=""
+FINAL_TEST=""
+FINAL_SWITCH=""
+if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
+    read -r FINAL_PACKAGE FINAL_TEST FINAL_SWITCH <<<"$(final_pass_test "${RUNTIME}")" || true
 fi
 
 E2E_REPORT_DIR="${E2E_REPORT_DIR:-dist/e2e-reports}"
@@ -177,6 +202,7 @@ case "${E2E_REPORT_DIR}" in
     /*) ;;
     *) E2E_REPORT_DIR="${REPO_ROOT}/${E2E_REPORT_DIR}" ;;
 esac
+FINAL_REPORT_NAME="${E2E_REPORT_NAME}-final"
 
 # What the compose file publishes follows the address the fixture is reached
 # from, so the web_url fields GitLab answers with are the ones the tests reach.
@@ -323,6 +349,13 @@ fi
 
 echo "=== Running E2E tests (${RUNTIME}) ==="
 mkdir -p "${E2E_REPORT_DIR}"
+# The final pass's reports, whether or not this run makes one: a stream an
+# earlier run left under those names would read to the skip gate as this run's
+# final pass, and the gate reads a stream that is not there as a final pass
+# that never ran, which is the answer a run that made none must get.
+rm -f "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-junit.xml" \
+    "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-log.json" \
+    "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-output.txt"
 if [ -n "${GITLAB_MCP_TEST_E2E_CALLS_DIR:-}" ]; then
     case "${GITLAB_MCP_TEST_E2E_CALLS_DIR}" in
         /*) ;;
@@ -369,16 +402,64 @@ set +e
 RUN_STATUS="${PIPESTATUS[0]}"
 set -e
 
+# The final pass of a complete run: the scenario that changes an instance-wide
+# setting, alone, last, on the stack the main pass just ran on, with its switch
+# on in this subshell's environment and nowhere else, so the teardown and the
+# gate after it see the switch as the main pass did. It runs whatever the main
+# pass ended with: it is last and takes minutes, and its verdict does not
+# depend on the main pass's. What stops it is a GitLab that no longer answers
+# its readiness probe, since a pass against a stack that is gone would only
+# time out; it then leaves no stream, and the gate below fails the run for the
+# skip it leaves unproven.
+#
+# The calls directory is unset for it: the coverage record is joined with the
+# main pass's stream, where the probe is the declared skip, so calls this pass
+# recorded would be credited to a test that stream says skipped, and its
+# filtered run line would read as a partial run. The coverage directory is
+# kept, since a child's statement counters are the same measurement whichever
+# pass started it.
+FINAL_STATUS=0
+if [ -n "${FINAL_TEST}" ]; then
+    echo "=== Final pass: ${FINAL_TEST} alone, after every other test, on the same stack (${RUNTIME}) ==="
+    if "${SCRIPT_DIR}/wait-for-gitlab.sh" "${E2E_DOCKER_GITLAB_URL}" 120; then
+        set +e
+        (
+            echo "GitLab under test: ${TESTED_VERSION}, from ${GITLAB_IMAGE}"
+            set -a
+            # shellcheck disable=SC1091
+            . "${REPO_ROOT}/test/e2e/.env.docker"
+            set +a
+            export "${FINAL_SWITCH}=true"
+            unset GITLAB_MCP_TEST_E2E_CALLS_DIR
+            cd "${REPO_ROOT}" || exit 1
+            E2E_MODE=docker "${GOTESTSUM}" \
+                --format testdox \
+                --junitfile "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-junit.xml" \
+                --jsonfile "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-log.json" \
+                -- -tags e2e -p 1 -count=1 -timeout 1800s -run "^${FINAL_TEST}\$" "./test/e2e/gitlab/${FINAL_PACKAGE}/"
+        ) 2>&1 | tee "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-output.txt"
+        FINAL_STATUS="${PIPESTATUS[0]}"
+        set -e
+    else
+        echo "ERROR: GitLab no longer answers its readiness probe, so the final pass does not run ${FINAL_TEST}; the skip gate fails the run for the skip it leaves unproven" >&2
+    fi
+    RUN_STATUS="$(run_status_after_final_pass "${RUN_STATUS}" "${FINAL_STATUS}")"
+fi
+
 # A complete run is held to the skips it may end with as well: the gate reads
-# the stream gotestsum just wrote and fails on a skip that no declaration in
-# cmd/audit_e2e_coverage/skip_declarations.go covers, and on a declaration no
-# skip of this run matches. It runs whatever the tests did, so a failing run
-# still names its undeclared skips, and it decides the status only of a run
-# whose tests passed, so a failing run is never reported as a skip finding.
+# the stream gotestsum wrote for the main pass and fails on a skip that no
+# declaration in cmd/audit_e2e_coverage/skip_declarations.go covers, and on a
+# declaration no skip of this run matches. A run that made a final pass hands
+# it that pass's stream too, which must have passed the scenario a runs-last
+# declaration excuses the main pass's skip of, and skipped nothing. It runs
+# whatever the tests did, so a failing run still names its undeclared skips,
+# and it decides the status only of a run whose tests, both passes of them,
+# passed, so a failing run is never reported as a skip finding.
 if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
     echo "=== Holding the run's skips to the declared ones (${RUNTIME}) ==="
     GATE_STATUS=0
     gate_skips "${RUNTIME}" "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-log.json" \
-        "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-output.txt" || GATE_STATUS=$?
+        "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-output.txt" \
+        ${FINAL_TEST:+"${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-log.json"} || GATE_STATUS=$?
     RUN_STATUS="$(run_status_after_gate "${RUN_STATUS}" "${GATE_STATUS}")"
 fi

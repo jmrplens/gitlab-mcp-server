@@ -66,6 +66,10 @@ type options struct {
 	// for -runtime, which is how a complete Docker run fails on a skip nobody
 	// declared.
 	checkSkips bool
+	// finalResults is the go test -json stream of the run's final pass, the
+	// one that runs the runs-last scenarios alone after every other test;
+	// empty when no final pass is named.
+	finalResults string
 	// skipDeclarations is the skip gate's table.
 	skipDeclarations []skipDeclaration
 	// checkRelease holds the GitLab release a run is about to test
@@ -145,6 +149,7 @@ func main() {
 	flag.StringVar(&opts.recordPath, "record-path", "", "the coverage record to write, check or render (default: the repository's "+recordRelPath+")")
 	flag.StringVar(&opts.recordPage, "record-page", "", "the page rendered from the record (default: the repository's "+recordPageRelPath+")")
 	flag.BoolVar(&opts.checkSkips, "check-skips", false, "fail on a skip in the -results stream that no declaration for -runtime (ce or ee) covers, and on a declaration no skip of it matches")
+	flag.StringVar(&opts.finalResults, "final-results", "", "with -check-skips, the go test -json stream of the run's final pass, which must have passed the test of every runs-last skip and skipped nothing; a path with no stream is a final pass that never ran")
 	flag.BoolVar(&opts.checkRelease, "check-release", false, "stop a run whose GitLab (-gitlab-version) is newer than the release the fine-grained action table was recorded from: exit 1 naming both and the steps to re-record it, 2 for a version that does not parse, 0 with one line otherwise")
 	flag.StringVar(&opts.gitlabVersion, "gitlab-version", "", "with -check-release, the version the instance under test reported on GET /api/v4/version")
 	flag.Parse()
