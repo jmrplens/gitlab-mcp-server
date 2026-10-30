@@ -272,10 +272,19 @@ func releaseProblems(source graphqlschema.ReleaseSource, release apilive.Source)
 // a new schema beside the old record. The check refuses that pair, since the
 // schema no longer hashes to the record's digest, and the schema the directory
 // held before is put back as well, or the new one removed when there was none,
-// so a failed run leaves the pair it found.
+// so a failed run leaves the pair it found. A schema that is there and cannot
+// be read is not replaced at all: it could not be put back, and removing the
+// file that took its place would lose it.
 func writeReleaseArtifacts(dir, sdl string, source graphqlschema.ReleaseSource) error {
 	schemaPath := filepath.Join(dir, graphqlschema.ReleaseSDLFileName)
-	previous, readErr := os.ReadFile(schemaPath)
+	_, statErr := os.Stat(schemaPath)
+	var previous []byte
+	if statErr == nil {
+		var err error
+		if previous, err = os.ReadFile(schemaPath); err != nil {
+			return fmt.Errorf("read %s, which a failed write would put back: %w", schemaPath, err)
+		}
+	}
 	if err := docgen.WriteOrCheck(schemaPath, []byte(sdl), false, regenerateRelease); err != nil {
 		return err
 	}
@@ -286,7 +295,7 @@ func writeReleaseArtifacts(dir, sdl string, source graphqlschema.ReleaseSource) 
 	switch {
 	case recordErr == nil:
 		return nil
-	case readErr != nil:
+	case statErr != nil:
 		return errors.Join(recordErr, os.Remove(schemaPath))
 	default:
 		return errors.Join(recordErr, docgen.WriteOrCheck(schemaPath, previous, false, regenerateRelease))

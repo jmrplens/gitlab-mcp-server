@@ -176,6 +176,12 @@ func TestRunRelease_GenerationFailures_ExitNonZeroAndSayWhy(t *testing.T) {
 	if err := os.WriteFile(blocked, []byte("a file where a directory should be"), 0o600); err != nil {
 		t.Fatalf("prepare the fixture: %v", err)
 	}
+	// A directory where the schema goes is a schema that is there and cannot
+	// be read, which a failed record write would have nothing to put back from.
+	unreadable := t.TempDir()
+	if err := os.Mkdir(filepath.Join(unreadable, graphqlschema.ReleaseSDLFileName), 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
 	// Types and no query root: the loader takes it, and its rendering, a
 	// schema block naming no root, does not load.
 	rootless := strings.Replace(strings.Replace(wholeSDL, "type Query {\n  ok: Boolean\n}\n\n", "", 1), "schema {\n  query: Query\n}\n", "", 1)
@@ -200,6 +206,10 @@ func TestRunRelease_GenerationFailures_ExitNonZeroAndSayWhy(t *testing.T) {
 		{name: "a dump too small to be a release", cfg: genRun{apiLiveDir: records, from: dumpFile(t, minimalSDL)}, want: "it is not the dump of a whole release"},
 		{name: "a dump whose rendering does not load", cfg: genRun{apiLiveDir: records, from: dumpFile(t, rootless)}, want: "the converted release schema does not parse"},
 		{name: "a directory that cannot be written", cfg: genRun{apiLiveDir: records, from: dumpFile(t, wholeSDL), dir: blocked}, want: "blocked"},
+		{
+			name: "a schema there that cannot be read", cfg: genRun{apiLiveDir: records, from: dumpFile(t, wholeSDL), dir: unreadable},
+			want: "which a failed write would put back",
+		},
 		{name: "a base that is not a URL", cfg: genRun{apiLiveDir: records, dumpBase: "://nowhere"}, want: "build the request"},
 		{name: "a host nothing answers on", cfg: genRun{apiLiveDir: records, dumpBase: netfixture.DeadEndpoint(t), client: http.DefaultClient}, want: "download "},
 		{name: "an artifact GitLab no longer keeps", cfg: genRun{apiLiveDir: records, dumpBase: missing.URL, client: missing.Client()}, want: "answered 404 Not Found: GitLab keeps a job's artifacts"},
