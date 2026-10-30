@@ -58,6 +58,7 @@ func TestIsRetryable_ByClass_MatchesTheDocumentedSet(t *testing.T) {
 		{name: "unavailable", err: statusError(http.StatusServiceUnavailable, "maintenance"), want: true},
 		{name: "not visible yet", err: statusError(http.StatusNotFound, "404 Branch Not Found"), want: true},
 		{name: "branch not ready", err: statusError(http.StatusBadRequest, "You can only create or edit files when you are on a branch"), want: true},
+		{name: "branch not ready, read off a tool error", err: errors.New(branchRefusedThroughTheServer), want: true},
 		{name: "notification row race", err: statusError(http.StatusBadRequest, "Key (user_id) already exists in source"), want: true},
 		{name: "forbidden", err: statusError(http.StatusForbidden, "403 Forbidden"), want: false},
 		{name: "validation", err: statusError(http.StatusBadRequest, "name is invalid"), want: false},
@@ -136,6 +137,7 @@ func TestDescribeRetry_ByClass_NamesTheReason(t *testing.T) {
 		{name: "rate limited", err: statusError(http.StatusTooManyRequests, ""), want: "rate limited"},
 		{name: "server error", err: statusError(http.StatusBadGateway, ""), want: "server error"},
 		{name: "not visible yet", err: statusError(http.StatusNotFound, ""), want: "not visible yet"},
+		{name: "branch not ready", err: errors.New(branchRefusedThroughTheServer), want: "branch not ready"},
 		{name: "taken", err: statusError(http.StatusBadRequest, "name has already been taken"), want: "name collision inside GitLab's own validation"},
 		{name: "other", err: statusError(http.StatusBadRequest, "already exists in source"), want: "retryable error"},
 	}

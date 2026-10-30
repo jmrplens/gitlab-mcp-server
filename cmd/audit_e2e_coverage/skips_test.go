@@ -7,9 +7,12 @@ import (
 	"bytes"
 	"errors"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
 // skipsFixture returns the path of one of the two recorded runs of issue
@@ -374,7 +377,7 @@ func TestJudgeSkips_RecordedRuns_DeclaredAndUndeclared(t *testing.T) {
 			if err != nil {
 				t.Fatalf("readSkips() error = %v", err)
 			}
-			verdict := judgeSkips(tc.runtime, skips, recordedRunDeclarations)
+			verdict := judgeSkips(tc.runtime, skips, recordedRunDeclarations, finalPass{})
 			if got := excusedTests(verdict.excused); !slices.Equal(got, tc.wantExcused) {
 				t.Errorf("excused = %v, want %v", got, tc.wantExcused)
 			}
@@ -442,7 +445,7 @@ func TestJudgeSkips_Declarations(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			verdict := judgeSkips(tc.runtime, tc.skips, tc.declarations)
+			verdict := judgeSkips(tc.runtime, tc.skips, tc.declarations, finalPass{})
 			if got := excusedTests(verdict.excused); !slices.Equal(got, nonNil(tc.wantExcused)) {
 				t.Errorf("excused = %v, want %v", got, tc.wantExcused)
 			}
@@ -481,6 +484,8 @@ func TestSkipVerdict_Failed_EitherListFailsTheRun(t *testing.T) {
 		{name: "only declared skips", verdict: skipVerdict{excused: []excusedSkip{{}}}, want: false},
 		{name: "an undeclared skip", verdict: skipVerdict{undeclared: []recordedSkip{{}}}, want: true},
 		{name: "a stale declaration", verdict: skipVerdict{stale: []skipDeclaration{{}}}, want: true},
+		{name: "a runs-last skip the final pass did not prove", verdict: skipVerdict{unproven: []unprovenSkip{{}}}, want: true},
+		{name: "a skip of the final pass", verdict: skipVerdict{finalSkips: []recordedSkip{{}}}, want: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -522,7 +527,7 @@ func TestRunCheckSkips_RecordedCERun_NamesEveryUndeclaredSkip(t *testing.T) {
 	wantStdout := "skips: declared (gitlab-defect): common " + savedViewLifecycle + "/dynamic: " + savedViewRefusal("155ms") + "\n" +
 		"skips: declared (gitlab-defect): common " + savedViewLifecycle + "/individual: " + savedViewRefusal("134ms") + "\n" +
 		"skips: declared (gitlab-defect): common " + savedViewLifecycle + "/meta: " + savedViewRefusal("122ms") + "\n" +
-		"skips: 11 skipped on ce, 3 declared, 8 undeclared, 0 stale declarations\n"
+		"skips: 11 skipped on ce, 3 declared, 8 undeclared, 0 stale declarations, 0 runs-last not passed, 0 skipped in the final pass\n"
 	if stdout != wantStdout {
 		t.Errorf("stdout =\n%s\nwant\n%s", stdout, wantStdout)
 	}
@@ -568,7 +573,7 @@ func TestRunCheckSkips_Outcomes(t *testing.T) {
 			name: "a run whose every skip is declared passes", results: covered, runtime: "ce",
 			declarations: recordedRunDeclarations, want: exitOK,
 			wantStdout: "skips: declared (gitlab-defect): common " + savedViewLifecycle + "/meta: " + savedViewRefusal("9ms") + "\n" +
-				"skips: 1 skipped on ce, 1 declared, 0 undeclared, 0 stale declarations\n",
+				"skips: 1 skipped on ce, 1 declared, 0 undeclared, 0 stale declarations, 0 runs-last not passed, 0 skipped in the final pass\n",
 		},
 		{
 			name: "a declaration no skip matches fails and is named", results: covered, runtime: "ee",
@@ -578,12 +583,12 @@ func TestRunCheckSkips_Outcomes(t *testing.T) {
 			}),
 			want: exitFindings,
 			wantStdout: "skips: declared (gitlab-defect): common " + savedViewLifecycle + "/meta: " + savedViewRefusal("9ms") + "\n" +
-				"skips: 1 skipped on ee, 1 declared, 0 undeclared, 1 stale declarations\n",
+				"skips: 1 skipped on ee, 1 declared, 0 undeclared, 1 stale declarations, 0 runs-last not passed, 0 skipped in the final pass\n",
 			wantStderr: "skips: stale declaration: ee common TestAdmin_ExternalImporters/BitbucketServerImport (because \"BITBUCKET_SERVER_URL is not set\"): no skip of this run matches it\n",
 		},
 		{
 			name: "a skip with no reason says it printed none", results: bare, runtime: "ee", want: exitFindings,
-			wantStdout: "skips: 1 skipped on ee, 0 declared, 1 undeclared, 0 stale declarations\n",
+			wantStdout: "skips: 1 skipped on ee, 0 declared, 1 undeclared, 0 stale declarations, 0 runs-last not passed, 0 skipped in the final pass\n",
 			wantStderr: "skips: undeclared: ee TestBare: (no reason printed)\n",
 		},
 		{
@@ -619,6 +624,294 @@ func TestRunCheckSkips_Outcomes(t *testing.T) {
 	}
 }
 
+// The runs-last scenario the tests below judge, declared the way the live
+// table declares the throttle probe.
+const (
+	runsLastTest    = "TestProbe_ChangesAnInstanceSetting"
+	runsLastBecause = "runs it last on the same stack"
+	runsLastReason  = "the probe changes an instance-wide setting, so a complete CE run runs it last on the same stack"
+)
+
+// runsLastDeclarations declares the runs-last scenario's skip on CE.
+var runsLastDeclarations = []skipDeclaration{
+	{Runtime: "ce", Package: "ce", Test: runsLastTest, Because: runsLastBecause, Category: skipCategoryRunsLast, Reason: "changes an instance setting"},
+}
+
+// runsLastSkip is the main pass's skip of the runs-last scenario.
+var runsLastSkip = recordedSkip{Package: "ce", Test: runsLastTest, Reason: runsLastReason}
+
+// finalPassOf builds a final pass that ended each test with the verdict
+// given, skipping those whose verdict is a skip with the reason given.
+func finalPassOf(verdicts map[string]string, skips ...recordedSkip) finalPass {
+	runs := map[resultKey]*testRun{}
+	for test, status := range verdicts {
+		runs[resultKey{pkg: "ce", test: test}] = &testRun{status: status}
+	}
+	return finalPass{runs: runs, skips: skips}
+}
+
+// unprovenTests names the skips a verdict found unproven, each with what the
+// final pass did instead.
+func unprovenTests(unproven []unprovenSkip) []string {
+	names := make([]string, 0, len(unproven))
+	for _, entry := range unproven {
+		names = append(names, entry.skip.Test+": "+entry.why)
+	}
+	return names
+}
+
+// TestJudgeSkips_RunsLast_StandsOnlyOnAFinalPassThatPassedTheTest verifies
+// what a runs-last declaration covers: the main pass's skip of its scenario
+// when the final pass passed that scenario, and nothing otherwise, each other
+// outcome of the final pass named; and that every skip of the final pass is a
+// finding, whatever the declarations say.
+func TestJudgeSkips_RunsLast_StandsOnlyOnAFinalPassThatPassedTheTest(t *testing.T) {
+	subtestSkip := recordedSkip{Package: "ce", Test: runsLastTest + "/meta", Reason: "no session"}
+	cases := []struct {
+		name           string
+		skips          []recordedSkip
+		final          finalPass
+		wantExcused    []string
+		wantUnproven   []string
+		wantFinalSkips []string
+		wantStale      []string
+	}{
+		{
+			name: "a final pass that passed the scenario proves its skip", skips: []recordedSkip{runsLastSkip},
+			final:       finalPassOf(map[string]string{runsLastTest: e2ecalls.StatusPassed}),
+			wantExcused: []string{"runs-last " + runsLastTest},
+		},
+		{
+			name: "a final pass that failed it proves nothing", skips: []recordedSkip{runsLastSkip},
+			final:        finalPassOf(map[string]string{runsLastTest: e2ecalls.StatusFailed}),
+			wantUnproven: []string{runsLastTest + ": the final pass ran it and it failed"},
+		},
+		{
+			name: "a final pass that skipped it proves nothing and its skip is a finding", skips: []recordedSkip{runsLastSkip},
+			final:          finalPassOf(map[string]string{runsLastTest: e2ecalls.StatusSkipped}, runsLastSkip),
+			wantUnproven:   []string{runsLastTest + ": the final pass skipped it too"},
+			wantFinalSkips: []string{runsLastTest},
+		},
+		{
+			name: "a final pass that ran something else did not run it", skips: []recordedSkip{runsLastSkip},
+			final:        finalPassOf(map[string]string{"TestOther": e2ecalls.StatusPassed}),
+			wantUnproven: []string{runsLastTest + ": the final pass did not run it"},
+		},
+		{
+			name: "a final pass that started it and never ended it proves nothing", skips: []recordedSkip{runsLastSkip},
+			final:        finalPassOf(map[string]string{runsLastTest: "", "TestOther": e2ecalls.StatusPassed}),
+			wantUnproven: []string{runsLastTest + ": the final pass started it and recorded no verdict for it"},
+		},
+		{
+			name: "a final pass that left nothing says why", skips: []recordedSkip{runsLastSkip},
+			final:        finalPass{missing: "the final pass left no stream at final.json, so it never ran"},
+			wantUnproven: []string{runsLastTest + ": the final pass left no stream at final.json, so it never ran"},
+		},
+		{
+			name: "no final pass named proves nothing", skips: []recordedSkip{runsLastSkip},
+			wantUnproven: []string{runsLastTest + ": no final pass was named (-final-results), and only it runs this test"},
+		},
+		{
+			name: "a subtest the final pass skipped is a finding though the scenario passed", skips: []recordedSkip{runsLastSkip},
+			final:          finalPassOf(map[string]string{runsLastTest: e2ecalls.StatusPassed}, subtestSkip),
+			wantExcused:    []string{"runs-last " + runsLastTest},
+			wantFinalSkips: []string{runsLastTest + "/meta"},
+		},
+		{
+			name:      "a main pass that did not skip the scenario leaves the declaration stale",
+			final:     finalPassOf(map[string]string{runsLastTest: e2ecalls.StatusPassed}),
+			wantStale: []string{"ce " + runsLastTest},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			verdict := judgeSkips("ce", tc.skips, runsLastDeclarations, tc.final)
+			if got := excusedTests(verdict.excused); !slices.Equal(got, nonNil(tc.wantExcused)) {
+				t.Errorf("excused = %v, want %v", got, tc.wantExcused)
+			}
+			if got := unprovenTests(verdict.unproven); !slices.Equal(got, nonNil(tc.wantUnproven)) {
+				t.Errorf("unproven = %v, want %v", got, tc.wantUnproven)
+			}
+			if got := skipTests(verdict.finalSkips); !slices.Equal(got, nonNil(tc.wantFinalSkips)) {
+				t.Errorf("final pass skips = %v, want %v", got, tc.wantFinalSkips)
+			}
+			if got := staleTests(verdict.stale); !slices.Equal(got, nonNil(tc.wantStale)) {
+				t.Errorf("stale = %v, want %v", got, tc.wantStale)
+			}
+			if len(verdict.undeclared) != 0 {
+				t.Errorf("undeclared = %v, want none: the declaration matched the skip", verdict.undeclared)
+			}
+			wantFailed := len(tc.wantUnproven) > 0 || len(tc.wantFinalSkips) > 0 || len(tc.wantStale) > 0
+			if verdict.failed() != wantFailed {
+				t.Errorf("failed() = %t, want %t", verdict.failed(), wantFailed)
+			}
+		})
+	}
+}
+
+// TestJudgeSkips_RunsLast_OnlyThatCategoryAsksTheFinalPass verifies that a
+// declaration of another category covers its skip whatever the final pass
+// did, so a run with no final pass is judged as it always was.
+func TestJudgeSkips_RunsLast_OnlyThatCategoryAsksTheFinalPass(t *testing.T) {
+	declared := recordedSkip{Package: "common", Test: savedViewLifecycle + "/meta", Reason: savedViewRefusal("1ms")}
+	verdict := judgeSkips("ce", []recordedSkip{declared}, recordedRunDeclarations, finalPass{missing: "never ran"})
+	if got := excusedTests(verdict.excused); !slices.Equal(got, []string{"gitlab-defect " + savedViewLifecycle + "/meta"}) {
+		t.Errorf("excused = %v, want the saved view skip under its own category", got)
+	}
+	if verdict.failed() {
+		t.Errorf("failed() = true for a run whose one skip a gitlab-defect declaration covers")
+	}
+}
+
+// streamLines writes a go test -json stream of the lines given under dir and
+// returns its path.
+func streamLines(t *testing.T, dir, name string, lines ...string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	writeFile(t, path, strings.Join(lines, "\n")+"\n")
+	return path
+}
+
+// TestReadFinalPass_EveryKindOfStream verifies what the final pass's stream
+// reads as: none named is the zero pass, a path with nothing there is a pass
+// that never ran and one holding no verdict a pass that ran no test, both said
+// rather than refused, a stream with verdicts holds each test's last one and
+// its skips, and a stream that is not JSON is refused as -results is.
+func TestReadFinalPass_EveryKindOfStream(t *testing.T) {
+	dir := t.TempDir()
+	ran := streamLines(t, dir, "ran.json",
+		`{"Action":"run","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`"}`,
+		`{"Action":"output","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`/meta","Output":"    probe_test.go:9: no session\n"}`,
+		`{"Action":"skip","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`/meta"}`,
+		`{"Action":"pass","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`"}`)
+	noVerdict := streamLines(t, dir, "built-nothing.json",
+		`{"Action":"output","Package":"m/test/e2e/gitlab/ce","Output":"# m/test/e2e/gitlab/ce\n"}`,
+		`{"Action":"fail","Package":"m/test/e2e/gitlab/ce"}`)
+	notJSON := streamLines(t, dir, "not.json", "PASS")
+	missing := filepath.Join(dir, "never-written.json")
+
+	t.Run("none named", func(t *testing.T) {
+		final, err := readFinalPass("")
+		if err != nil || final.runs != nil || final.missing != "" {
+			t.Errorf("readFinalPass(\"\") = %+v, %v; want the zero pass", final, err)
+		}
+	})
+	t.Run("a path that cannot be opened", func(t *testing.T) {
+		// A file where a directory should be is not a pass that never ran:
+		// the run named a path nothing could ever have written to.
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows reports a path under a file as one that does not exist")
+		}
+		if _, err := readFinalPass(filepath.Join(notJSON, "final.json")); err == nil || !strings.Contains(err.Error(), "open results:") {
+			t.Errorf("readFinalPass(under a file) error = %v, want the open refused", err)
+		}
+	})
+	t.Run("nothing at the path", func(t *testing.T) {
+		final, err := readFinalPass(missing)
+		if err != nil || final.missing != "the final pass left no stream at "+missing+", so it never ran" {
+			t.Errorf("readFinalPass(missing) = %+v, %v; want a pass that never ran", final, err)
+		}
+	})
+	t.Run("no verdict", func(t *testing.T) {
+		final, err := readFinalPass(noVerdict)
+		if err != nil || final.missing != "the final pass's stream "+noVerdict+" holds no test verdict, so it ran no test" {
+			t.Errorf("readFinalPass(no verdict) = %+v, %v; want a pass that ran no test", final, err)
+		}
+	})
+	t.Run("verdicts", func(t *testing.T) {
+		final, err := readFinalPass(ran)
+		if err != nil {
+			t.Fatalf("readFinalPass() error = %v", err)
+		}
+		if run := final.runs[resultKey{pkg: "ce", test: runsLastTest}]; run == nil || run.status != e2ecalls.StatusPassed {
+			t.Errorf("the scenario's run = %+v, want one that %s", run, e2ecalls.StatusPassed)
+		}
+		if !slices.Equal(final.skips, []recordedSkip{{Package: "ce", Test: runsLastTest + "/meta", Reason: "no session"}}) {
+			t.Errorf("skips = %+v, want the subtest's with its reason", final.skips)
+		}
+	})
+	t.Run("not JSON", func(t *testing.T) {
+		if _, err := readFinalPass(notJSON); err == nil || !strings.Contains(err.Error(), "results line 1") {
+			t.Errorf("readFinalPass(not JSON) error = %v, want the line refused", err)
+		}
+	})
+}
+
+// TestRunCheckSkips_FinalPass_Outcomes verifies what a complete CE run prints
+// and ends with once its final pass is named: the runs-last skip declared when
+// the pass passed its scenario, named on stderr beside what the pass did
+// otherwise, a skip of the pass itself named too, and a stream of the pass
+// that cannot be read a usage error.
+func TestRunCheckSkips_FinalPass_Outcomes(t *testing.T) {
+	dir := t.TempDir()
+	mainPass := streamLines(t, dir, "main.json",
+		`{"Action":"output","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`","Output":"    probe_test.go:4: `+runsLastReason+`\n"}`,
+		`{"Action":"skip","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`"}`,
+		`{"Action":"pass","Package":"m/test/e2e/gitlab/ce","Test":"TestOther"}`)
+	passed := streamLines(t, dir, "passed.json", `{"Action":"pass","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`"}`)
+	failed := streamLines(t, dir, "failed.json", `{"Action":"fail","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`"}`)
+	skippedSubtest := streamLines(t, dir, "skipped-subtest.json",
+		`{"Action":"output","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`/meta","Output":"    probe_test.go:9: no session\n"}`,
+		`{"Action":"skip","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`/meta"}`,
+		`{"Action":"pass","Package":"m/test/e2e/gitlab/ce","Test":"`+runsLastTest+`"}`)
+	notJSON := streamLines(t, dir, "not.json", "PASS")
+	missing := filepath.Join(dir, "never-written.json")
+
+	cases := []struct {
+		name       string
+		final      string
+		want       int
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name: "a final pass that passed the scenario passes the run", final: passed, want: exitOK,
+			wantStdout: "skips: declared (runs-last, passed in the final pass): ce " + runsLastTest + ": " + runsLastReason + "\n" +
+				"skips: 1 skipped on ce, 1 declared, 0 undeclared, 0 stale declarations, 0 runs-last not passed, 0 skipped in the final pass\n",
+		},
+		{
+			name: "a final pass that failed it fails the run", final: failed, want: exitFindings,
+			wantStdout: "skips: 1 skipped on ce, 0 declared, 0 undeclared, 0 stale declarations, 1 runs-last not passed, 0 skipped in the final pass\n",
+			wantStderr: "skips: runs last, not passed in the final pass: ce " + runsLastTest + ": the final pass ran it and it failed\n",
+		},
+		{
+			name: "a final pass that never ran fails the run", final: missing, want: exitFindings,
+			wantStdout: "skips: 1 skipped on ce, 0 declared, 0 undeclared, 0 stale declarations, 1 runs-last not passed, 0 skipped in the final pass\n",
+			wantStderr: "skips: runs last, not passed in the final pass: ce " + runsLastTest + ": the final pass left no stream at " + missing + ", so it never ran\n",
+		},
+		{
+			name: "no final pass named fails the run", want: exitFindings,
+			wantStdout: "skips: 1 skipped on ce, 0 declared, 0 undeclared, 0 stale declarations, 1 runs-last not passed, 0 skipped in the final pass\n",
+			wantStderr: "skips: runs last, not passed in the final pass: ce " + runsLastTest + ": no final pass was named (-final-results), and only it runs this test\n",
+		},
+		{
+			name: "a skip of the final pass fails the run", final: skippedSubtest, want: exitFindings,
+			wantStdout: "skips: declared (runs-last, passed in the final pass): ce " + runsLastTest + ": " + runsLastReason + "\n" +
+				"skips: 1 skipped on ce, 1 declared, 0 undeclared, 0 stale declarations, 0 runs-last not passed, 1 skipped in the final pass\n",
+			wantStderr: "skips: skipped in the final pass: ce " + runsLastTest + "/meta: no session\n",
+		},
+		{
+			name: "a final pass stream that cannot be read is a usage error", final: notJSON, want: exitUsage,
+			wantStderr: "audit_e2e_coverage: skips: final pass: results line 1: invalid character 'P' looking for beginning of value\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errOut bytes.Buffer
+			code := runCheckSkips(options{results: mainPass, finalResults: tc.final, runtime: "ce", skipDeclarations: runsLastDeclarations}, &out, &errOut)
+			if code != tc.want {
+				t.Errorf("runCheckSkips() = %d, want %d", code, tc.want)
+			}
+			if out.String() != tc.wantStdout {
+				t.Errorf("stdout =\n%q\nwant\n%q", out.String(), tc.wantStdout)
+			}
+			if errOut.String() != tc.wantStderr {
+				t.Errorf("stderr =\n%q\nwant\n%q", errOut.String(), tc.wantStderr)
+			}
+		})
+	}
+}
+
 // TestRun_CheckSkips_IsAModeOfItsOwn verifies that -check-skips passes the
 // "nothing to do" guard with no -calls, since the stream is all it reads, and
 // that its status is the run's.
@@ -630,7 +923,7 @@ func TestRun_CheckSkips_IsAModeOfItsOwn(t *testing.T) {
 	if code != exitFindings || strings.Contains(stderr, "nothing to do") {
 		t.Errorf("run(-check-skips) = %d, stderr %q; want %d from the gate itself", code, stderr, exitFindings)
 	}
-	if !strings.Contains(stdout, "skips: 11 skipped on ce, 3 declared, 8 undeclared, 0 stale declarations\n") {
+	if !strings.Contains(stdout, "skips: 11 skipped on ce, 3 declared, 8 undeclared, 0 stale declarations, 0 runs-last not passed, 0 skipped in the final pass\n") {
 		t.Errorf("stdout = %q, want the gate's summary", stdout)
 	}
 }

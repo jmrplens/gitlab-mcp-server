@@ -152,6 +152,34 @@ func TestRetry_RetryableFailure_ReturnsTheLaterSuccess(t *testing.T) {
 	}
 }
 
+// TestRetry_RetryableFailureEveryTime_StopsAtTheLimit checks that a failure
+// the operation calls retryable on every attempt ends after maxRetries
+// attempts, with the last error and the count in the message.
+//
+// Every caller's bound rests on this: a fixture commit to a branch GitLab
+// cannot see yet, and a scenario's write through the server to one, are tried
+// commitRetries times and no more, so a branch that never appears fails the
+// test after the waits rather than holding it until the package times out.
+func TestRetry_RetryableFailureEveryTime_StopsAtTheLimit(t *testing.T) {
+	failure := errors.New("branch not ready")
+	attempts := 0
+	_, err := Retry(context.Background(), t, "retry test", 4, time.Millisecond,
+		func(int) (int, bool, string, error) {
+			attempts++
+			return 0, true, "transient", failure
+		})
+
+	if !errors.Is(err, failure) {
+		t.Fatalf("Retry() error = %v, want the last retryable failure", err)
+	}
+	if !strings.Contains(err.Error(), "after 4 attempt(s)") {
+		t.Errorf("Retry() error = %q, want it to count the 4 attempts", err)
+	}
+	if attempts != 4 {
+		t.Fatalf("attempts = %d, want 4", attempts)
+	}
+}
+
 // TestRetry_PermanentFailure_StopsAtOnce checks that a failure the operation
 // calls permanent is not retried.
 //

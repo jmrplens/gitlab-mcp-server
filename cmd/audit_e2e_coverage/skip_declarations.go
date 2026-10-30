@@ -43,20 +43,23 @@ const (
 	// run tested, where the scenario names the answer and skips. It goes on
 	// the first release that answers, when the gate reports it stale.
 	skipCategoryGitLabDefect = "gitlab-defect"
-	// skipCategoryOptInProbe is a probe that changes an instance-wide setting,
-	// which runs only when a person sets its switch and which a complete run
-	// must therefore never run: a complete run refuses to start with the switch
-	// set, so it skips the probe every time. It is not a setting the run left
-	// out: the switch exists so that no run turns the change on by being
-	// complete. It goes with the probe.
-	skipCategoryOptInProbe = "opt-in-probe"
+	// skipCategoryRunsLast is a scenario that changes an instance-wide
+	// setting, and so runs alone and after every other test of the run: the
+	// main pass skips it with its switch off, and run-docker-e2e.sh runs it in
+	// a final pass on the same stack before the one teardown, with the switch
+	// on and nothing after it but the teardown. Such a declaration excuses the
+	// main pass's skip only when the final pass's stream (-final-results)
+	// records the test passed, so a final pass that failed it, skipped it or
+	// never ran fails the run. It is not a setting the run left out: the skip
+	// is where the scenario waits for its turn. It goes with the scenario.
+	skipCategoryRunsLast = "runs-last"
 )
 
 // declaredSkipCategories is the set a category must belong to, so a typo
 // does not invent a kind of skip.
 var declaredSkipCategories = map[string]bool{
 	skipCategoryGitLabDefect: true,
-	skipCategoryOptInProbe:   true,
+	skipCategoryRunsLast:     true,
 }
 
 // skipRuntimes are the runs -check-skips judges, one per Docker target.
@@ -73,8 +76,10 @@ var skipRuntimes = map[string]bool{
 //
 // It holds one entry, the throttle probe of issue 954, which turns GitLab's
 // unauthenticated API throttle on for the whole instance and so runs only when
-// E2E_AUTH_THROTTLE_PROBE is set; a complete run refuses to start with it set,
-// and skips the probe on every one of them.
+// E2E_AUTH_THROTTLE_PROBE is set. A complete CE run starts its main pass with
+// the switch off, so the probe skips there, and then runs it last, alone, with
+// the switch on, on the stack the main pass ran on; the declaration holds that
+// final pass to having passed it.
 //
 // No skip of a scenario that a complete run means to run is declared, which is
 // the state the table exists to keep. The two complete
@@ -99,11 +104,11 @@ var declaredSkips = []skipDeclaration{
 	{
 		Runtime: "ce", Package: "ce",
 		Test:     "TestAuthThrottle_InvalidTokens_SpendTheAddressUnauthenticatedAllowance",
-		Because:  "set E2E_AUTH_THROTTLE_PROBE=true to run it alone",
-		Category: skipCategoryOptInProbe,
+		Because:  "a complete CE run runs it last on the same stack",
+		Category: skipCategoryRunsLast,
 		// One literal rather than a concatenation: a package-level
 		// initializer has no statement the coverage profile counts, so the
 		// mutation gate would report each + in it as not covered.
-		Reason: "The probe changes an instance-wide setting, GitLab's unauthenticated API throttle, which issue 954 decided no complete run may do: a run cut short before the probe's cleanup would leave the throttle on for every package that runs after it, and the probe spends minutes waiting for settings and windows. It runs when a person sets its switch, which a complete run refuses to start with.",
+		Reason: "The probe changes an instance-wide setting, GitLab's unauthenticated API throttle, so it cannot run beside the other packages: a probe cut short before its cleanup would leave the throttle on for every package that runs after it. A complete CE run therefore skips it in the main pass and runs it in a final pass of its own, with E2E_AUTH_THROTTLE_PROBE=true, on the same stack and before the one teardown, so nothing runs after it on the instance it changed and no second stack is booted for it. The skip stands only when that final pass passed the probe.",
 	},
 }

@@ -85,12 +85,13 @@ def drive(*command, go_status=0, audit_status=0, repo_root=None, tmp=None, go_lo
 
 
 class GateSkipsTest(unittest.TestCase):
-    def gate(self, go_status=0, audit_status=0, repo_root=None):
+    def gate(self, go_status=0, audit_status=0, repo_root=None, final=()):
         """Runs the gate over a saved output holding the tests' own line and
         returns the repository root, the stdout lines, the saved output, what
         the stand-in go was asked with the directory the gate built into
         written as $BIN_DIR, and what the gate left in its temporary
-        directory."""
+        directory. final is the final pass's stream, given as the fourth
+        argument when there is one."""
         with tempfile.TemporaryDirectory() as scratch:
             root = repo_root or scratch
             output = os.path.join(scratch, "e2e-ce-output.txt")
@@ -100,7 +101,7 @@ class GateSkipsTest(unittest.TestCase):
             os.mkdir(tmp)
             log = os.path.join(scratch, "go.log")
             lines = drive(
-                "gate_skips", "ce", "/reports/e2e-ce-log.json", output,
+                "gate_skips", "ce", "/reports/e2e-ce-log.json", output, *final,
                 go_status=go_status, audit_status=audit_status, repo_root=root, tmp=tmp, go_log=log,
             )
             with open(output, encoding="utf-8") as handle:
@@ -129,6 +130,24 @@ class GateSkipsTest(unittest.TestCase):
                 "status=0",
             ],
         )
+
+    def test_a_final_pass_stream_is_handed_to_the_command_as_final_results(self):
+        root, lines, _, _, _ = self.gate(final=("/reports/e2e-ce-final-log.json",))
+        self.assertEqual(
+            lines,
+            [
+                f"audit ran in {root}",
+                "audit -check-skips -runtime ce -results /reports/e2e-ce-log.json -final-results /reports/e2e-ce-final-log.json",
+                "a finding on stderr",
+                "status=0",
+            ],
+        )
+
+    def test_an_empty_final_pass_stream_adds_nothing(self):
+        # run-docker-e2e.sh passes the fourth argument only when the runtime
+        # has a final pass; an empty one is the same as none.
+        _, lines, _, _, _ = self.gate(final=("",))
+        self.assertEqual(lines[1], "audit -check-skips -runtime ce -results /reports/e2e-ce-log.json")
 
     def test_the_verdict_is_appended_to_the_saved_output(self):
         root, _, saved, _, _ = self.gate(audit_status=1)
@@ -169,6 +188,29 @@ class RunStatusAfterGateTest(unittest.TestCase):
             with self.subTest(run=run, gate=gate):
                 lines = drive("run_status_after_gate", run, gate)
                 self.assertEqual(lines, [want, "status=0"])
+
+
+class RunStatusAfterFinalPassTest(unittest.TestCase):
+    def test_the_main_pass_status_wins_when_it_failed(self):
+        # A final pass that could not run leaves its status at 0, so a main
+        # pass that passed keeps 0 and the gate decides the run.
+        for main, final, want in (("0", "0", "0"), ("0", "1", "1"), ("0", "2", "2"), ("1", "0", "1"), ("1", "1", "1"), ("2", "1", "2")):
+            with self.subTest(main=main, final=final):
+                lines = drive("run_status_after_final_pass", main, final)
+                self.assertEqual(lines, [want, "status=0"])
+
+
+class FinalPassTestTest(unittest.TestCase):
+    """The scenario a complete run of each runtime runs last."""
+
+    def test_ce_runs_the_throttle_probe_last_with_its_switch(self):
+        self.assertEqual(
+            drive("final_pass_test", "ce"),
+            ["ce TestAuthThrottle_InvalidTokens_SpendTheAddressUnauthenticatedAllowance E2E_AUTH_THROTTLE_PROBE", "status=0"],
+        )
+
+    def test_ee_runs_nothing_last(self):
+        self.assertEqual(drive("final_pass_test", "ee"), ["status=0"])
 
 
 def write_env_file(directory, name, text):
@@ -301,9 +343,10 @@ class CompleteRunRefusalTest(unittest.TestCase):
                 self.assertEqual(
                     self.refusal("true", "true", throttle_probe),
                     [
-                        f"E2E_AUTH_THROTTLE_PROBE is '{throttle_probe}', so the throttle probe would turn GitLab's "
-                        "unauthenticated API throttle on for the whole instance, which no complete run may do; "
-                        "run the probe on its own"
+                        f"E2E_AUTH_THROTTLE_PROBE is '{throttle_probe}', so the main pass would run the throttle probe "
+                        "beside the other packages, where a probe cut short would leave GitLab's unauthenticated API "
+                        "throttle on for the ones after it; a complete run turns the switch on for its final pass "
+                        "alone, so leave it unset"
                     ],
                 )
         for throttle_probe in ("false", "", "1", "yes"):
@@ -353,12 +396,49 @@ class RunnerWiringTest(unittest.TestCase):
             text = handle.read()
         self.assertIn('. "${SCRIPT_DIR}/skip-gate.sh"', text)
         tests = text.index('RUN_STATUS="${PIPESTATUS[0]}"')
-        asked = text.index('if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then', tests)
-        gate = text.index("gate_skips \"${RUNTIME}\"")
-        folded = text.index('RUN_STATUS="$(run_status_after_gate "${RUN_STATUS}" "${GATE_STATUS}")"')
-        self.assertLess(tests, asked)
+        final = text.index('RUN_STATUS="$(run_status_after_final_pass "${RUN_STATUS}" "${FINAL_STATUS}")"', tests)
+        asked = text.index('if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then', final)
+        gate = text.index("gate_skips \"${RUNTIME}\"", asked)
+        folded = text.index('RUN_STATUS="$(run_status_after_gate "${RUN_STATUS}" "${GATE_STATUS}")"', gate)
+        self.assertLess(tests, final)
+        self.assertLess(final, asked)
         self.assertLess(asked, gate)
         self.assertLess(gate, folded)
+        # The gate reads the final pass's stream only on a run that made one.
+        self.assertIn('${FINAL_TEST:+"${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-log.json"} || GATE_STATUS=$?', text[gate:folded])
+
+    def test_the_final_pass_runs_the_scenario_alone_on_the_same_stack_before_the_teardown(self):
+        with open(RUNNER, encoding="utf-8") as handle:
+            text = handle.read()
+        # Asked of skip-gate.sh for a complete run only, before anything
+        # starts, and its reports cleared before the main pass writes its own.
+        asked = text.index('read -r FINAL_PACKAGE FINAL_TEST FINAL_SWITCH <<<"$(final_pass_test "${RUNTIME}")" || true')
+        self.assertLess(text.index('if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then', text.index("export E2E_AUTH_THROTTLE_PROBE=false")), asked)
+        self.assertLess(asked, text.index("trap teardown EXIT"))
+        cleared = text.index('rm -f "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-junit.xml"')
+        main_pass = text.index('--jsonfile "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-log.json"')
+        self.assertLess(cleared, main_pass)
+        # After the main pass, whatever it ended with, and only for a runtime
+        # that has a scenario to run last, once GitLab still answers.
+        tests = text.index('RUN_STATUS="${PIPESTATUS[0]}"')
+        started = text.index('if [ -n "${FINAL_TEST}" ]; then', tests)
+        ready = text.index('if "${SCRIPT_DIR}/wait-for-gitlab.sh" "${E2E_DOCKER_GITLAB_URL}" 120; then', started)
+        recorded = text.index('FINAL_STATUS="${PIPESTATUS[0]}"', ready)
+        final_pass = text[ready:recorded]
+        # Its switch on in its own subshell alone, after the file it sources,
+        # no calls recorded, and its own reports.
+        self.assertLess(final_pass.index(". \"${REPO_ROOT}/test/e2e/.env.docker\""), final_pass.index('export "${FINAL_SWITCH}=true"'))
+        self.assertLess(final_pass.index(". \"${REPO_ROOT}/test/e2e/.env.docker\""), final_pass.index("unset GITLAB_MCP_TEST_E2E_CALLS_DIR"))
+        self.assertIn('--junitfile "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-junit.xml"', final_pass)
+        self.assertIn('--jsonfile "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-log.json"', final_pass)
+        self.assertIn('-run "^${FINAL_TEST}\\$" "./test/e2e/gitlab/${FINAL_PACKAGE}/"', final_pass)
+        self.assertIn('tee "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-output.txt"', final_pass)
+        self.assertNotIn("${@}", final_pass)
+        self.assertNotIn('"$@"', final_pass)
+        # The one teardown is the trap's: the final pass starts no stack and
+        # downs none.
+        self.assertNotIn('"${DOWN[@]}"', final_pass)
+        self.assertNotIn('"${UP[@]}"', final_pass)
 
     def test_the_complete_run_is_settled_before_anything_starts(self):
         with open(RUNNER, encoding="utf-8") as handle:
@@ -422,9 +502,10 @@ class RunnerWiringTest(unittest.TestCase):
         self.assertNotIn("E2E_EXTERNAL_NETWORK is", result.stderr)
 
     def test_a_complete_run_with_the_throttle_probe_switch_is_refused_before_docker(self):
-        # Issue 954: the probe changes an instance-wide setting, which no
-        # complete run may do, whether the switch was given on the command
-        # line or left in the file a person ran the probe with.
+        # Issue 954: the probe changes an instance-wide setting, so a complete
+        # run turns its switch on for the final pass alone, and a switch a
+        # person set, on the command line or left in the file they ran the
+        # probe with, would have the main pass run it beside the others.
         with tempfile.TemporaryDirectory() as root:
             named = write_env_file(root, "named.env", "E2E_AUTH_THROTTLE_PROBE=true\n")
             for settings in ({"E2E_AUTH_THROTTLE_PROBE": "true"}, {"E2E_ENV_FILE": named}):
@@ -432,7 +513,7 @@ class RunnerWiringTest(unittest.TestCase):
                     result, docker_called = self.refused_run(E2E_EXTERNAL_NETWORK="true", **settings)
                     self.assertEqual(result.returncode, 2, result.stderr)
                     self.assertFalse(docker_called)
-                    self.assertIn("  E2E_AUTH_THROTTLE_PROBE is 'true', so the throttle probe would turn", result.stderr)
+                    self.assertIn("  E2E_AUTH_THROTTLE_PROBE is 'true', so the main pass would run the throttle probe", result.stderr)
                     self.assertNotIn("E2E_EXTERNAL_NETWORK is", result.stderr)
                     self.assertNotIn("E2E_BITBUCKET is", result.stderr)
 

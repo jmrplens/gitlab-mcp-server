@@ -437,7 +437,10 @@ E2E_GITLAB_TIMEOUT ?= 3600s
 # its runtime, so a run whose tests all passed still fails on a scenario that
 # skipped for a reason nobody declared, and on a declaration no skip of it
 # matched; a green run used to read as full coverage whatever it had skipped
-# (issue 1014). It also starts the run with E2E_EXTERNAL_NETWORK=true, so the
+# (issue 1014). On CE it runs the throttle probe of test/e2e/gitlab/ce, which
+# changes an instance-wide setting, last and alone, in a final pass on the same
+# stack before the one teardown, and the gate holds that pass to having passed
+# it. It also starts the run with E2E_EXTERNAL_NETWORK=true, so the
 # GitHub, Gists and Bitbucket Cloud importers, which call a public URL, run:
 # the harness keeps that opt-in, since such a test fails for reasons that have
 # nothing to do with this server, but the host running a complete run has
@@ -459,7 +462,7 @@ e2e-server-binary:
 	$(call MKDIR_P,dist/e2e)
 	go build $(e2e_cover_build) -o $(E2E_SERVER_BINARY) $(CMD_PATH)
 
-## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, tear down.
+## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, then the throttle probe alone on the same stack, tear down.
 test-e2e-ce: ensure-gotestsum e2e-server-binary
 	$(e2e_complete_run_env) \
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \

@@ -7,8 +7,10 @@ import (
 	"bufio"
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -91,13 +93,23 @@ func readSkips(name string) ([]recordedSkip, error) {
 }
 
 // parseSkips is [readSkips] over any reader, sorted by package and test.
+func parseSkips(reader io.Reader) ([]recordedSkip, error) {
+	runs, err := parseRuns(reader)
+	if err != nil {
+		return nil, err
+	}
+	return skipsOf(runs), nil
+}
+
+// parseRuns reads a go test -json stream into the last run of every test it
+// names: the lines the test printed and the verdict it ended with.
 //
 // A test's output is kept per run: a test run again, by gotestsum's
 // --rerun-fails into the same file, starts afresh, so the verdict and the
 // reason are both the last run's. A line that is not JSON is refused, as
 // [parseResults] refuses it, and so is a stream holding no verdict at all,
 // which is not the file -results was meant to name.
-func parseSkips(reader io.Reader) ([]recordedSkip, error) {
+func parseRuns(reader io.Reader) (map[resultKey]*testRun, error) {
 	runs := map[resultKey]*testRun{}
 	sawVerdict := false
 	scanner := bufio.NewScanner(reader)
@@ -137,6 +149,12 @@ func parseSkips(reader io.Reader) ([]recordedSkip, error) {
 	if !sawVerdict {
 		return nil, errNoVerdict
 	}
+	return runs, nil
+}
+
+// skipsOf returns the runs that ended skipped, each with the reason it
+// printed, sorted by package and test.
+func skipsOf(runs map[resultKey]*testRun) []recordedSkip {
 	skips := []recordedSkip{}
 	for key, current := range runs {
 		if current.status == e2ecalls.StatusSkipped {
@@ -148,7 +166,7 @@ func parseSkips(reader io.Reader) ([]recordedSkip, error) {
 	slices.SortFunc(skips, func(a, b recordedSkip) int {
 		return cmp.Or(cmp.Compare(a.Package, b.Package), cmp.Compare(a.Test, b.Test))
 	})
-	return skips, nil
+	return skips
 }
 
 // skipReason reads the reason a skipped test printed out of its output: the
@@ -209,6 +227,81 @@ type excusedSkip struct {
 	by   skipDeclaration
 }
 
+// unprovenSkip is a skip a runs-last declaration matched whose test the final
+// pass did not pass, with the declaration and what the pass did instead.
+type unprovenSkip struct {
+	skip recordedSkip
+	by   skipDeclaration
+	why  string
+}
+
+// finalPass is what the final pass of a complete run did, read from the go
+// test -json stream run-docker-e2e.sh writes for it: the pass that runs the
+// runs-last scenarios alone, on the stack the main pass ran on, before the one
+// teardown. The zero value is a run whose final pass was never named.
+type finalPass struct {
+	// runs is the last run of every test the pass named, nil when there was
+	// nothing to read.
+	runs map[resultKey]*testRun
+	// skips are the tests the pass ended skipped, with their reasons.
+	skips []recordedSkip
+	// missing says why there was nothing to read at the path named.
+	missing string
+}
+
+// readFinalPass reads the final pass's stream, if one was named.
+//
+// A stream that is not there is a final pass that never ran, which
+// run-docker-e2e.sh makes sure of by removing the files an earlier run left
+// before the main pass starts, and a stream holding no verdict is a pass that
+// ran no test, as one whose package did not build. Each is a finding for every
+// skip a runs-last declaration matched rather than a usage error, since the
+// run did ask for the pass. A stream that cannot be opened for another reason,
+// or is not JSON, is refused, as -results is.
+func readFinalPass(name string) (finalPass, error) {
+	if name == "" {
+		return finalPass{}, nil
+	}
+	// #nosec G304 -- the path is the one the caller named on the command line.
+	file, err := os.Open(filepath.Clean(name))
+	if errors.Is(err, fs.ErrNotExist) {
+		return finalPass{missing: "the final pass left no stream at " + name + ", so it never ran"}, nil
+	}
+	if err != nil {
+		return finalPass{}, fmt.Errorf("open results: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+	runs, err := parseRuns(file)
+	if errors.Is(err, errNoVerdict) {
+		return finalPass{missing: "the final pass's stream " + name + " holds no test verdict, so it ran no test"}, nil
+	}
+	if err != nil {
+		return finalPass{}, err
+	}
+	return finalPass{runs: runs, skips: skipsOf(runs)}, nil
+}
+
+// unproven says why the final pass does not prove a runs-last declaration's
+// skip, and nothing when it passed the declared test.
+func (p finalPass) unproven(d skipDeclaration) string {
+	if p.runs == nil {
+		return cmp.Or(p.missing, "no final pass was named (-final-results), and only it runs this test")
+	}
+	run, named := p.runs[resultKey{pkg: d.Package, test: d.Test}]
+	switch {
+	case !named:
+		return "the final pass did not run it"
+	case run.status == "":
+		return "the final pass started it and recorded no verdict for it"
+	case run.status == e2ecalls.StatusPassed:
+		return ""
+	case run.status == e2ecalls.StatusSkipped:
+		return "the final pass skipped it too"
+	default:
+		return "the final pass ran it and it " + run.status
+	}
+}
+
 // skipVerdict is what the skip gate found in one run.
 type skipVerdict struct {
 	// excused are the skips a declaration covered.
@@ -218,11 +311,16 @@ type skipVerdict struct {
 	// stale are the declarations for the run's runtime that covered no skip
 	// of it.
 	stale []skipDeclaration
+	// unproven are the skips a runs-last declaration matched whose test the
+	// final pass did not pass.
+	unproven []unprovenSkip
+	// finalSkips are the skips of the final pass itself.
+	finalSkips []recordedSkip
 }
 
 // failed reports whether the verdict fails the run.
 func (v skipVerdict) failed() bool {
-	return len(v.undeclared) > 0 || len(v.stale) > 0
+	return len(v.undeclared) > 0 || len(v.stale) > 0 || len(v.unproven) > 0 || len(v.finalSkips) > 0
 }
 
 // judgeSkips holds every skip of a run to the declarations for its runtime.
@@ -231,7 +329,12 @@ func (v skipVerdict) failed() bool {
 // declaration of the same skip covers nothing and is reported stale, which is
 // how a duplicate entry is found. A declaration for the other runtime is not
 // judged here: that run judges it.
-func judgeSkips(runtime string, skips []recordedSkip, declarations []skipDeclaration) skipVerdict {
+//
+// A runs-last declaration covers its skip only when the final pass passed the
+// declared test; otherwise the skip is reported unproven, beside what the pass
+// did instead. Every skip of the final pass itself is a finding: the pass
+// exists to run its tests whole, and no declaration excuses a skip there.
+func judgeSkips(runtime string, skips []recordedSkip, declarations []skipDeclaration, final finalPass) skipVerdict {
 	var verdict skipVerdict
 	used := make([]bool, len(declarations))
 	for _, skip := range skips {
@@ -241,19 +344,29 @@ func judgeSkips(runtime string, skips []recordedSkip, declarations []skipDeclara
 			continue
 		}
 		used[index] = true
-		verdict.excused = append(verdict.excused, excusedSkip{skip: skip, by: declarations[index]})
+		declaration := declarations[index]
+		if declaration.Category == skipCategoryRunsLast {
+			if why := final.unproven(declaration); why != "" {
+				verdict.unproven = append(verdict.unproven, unprovenSkip{skip: skip, by: declaration, why: why})
+				continue
+			}
+		}
+		verdict.excused = append(verdict.excused, excusedSkip{skip: skip, by: declaration})
 	}
 	for index, declaration := range declarations {
 		if declaration.Runtime == runtime && !used[index] {
 			verdict.stale = append(verdict.stale, declaration)
 		}
 	}
+	verdict.finalSkips = final.skips
 	return verdict
 }
 
 // runCheckSkips runs -check-skips over the -results stream of the -runtime
-// run and prints what it found: each declared skip with its category, each
-// undeclared one and each stale declaration, and a summary line.
+// run, and the -final-results stream of its final pass when one is named, and
+// prints what it found: each declared skip with its category, each undeclared
+// one, each stale declaration, each runs-last skip the final pass did not
+// prove and each skip of the final pass, and a summary line.
 func runCheckSkips(opts options, stdout, stderr io.Writer) int {
 	if !skipRuntimes[opts.runtime] {
 		fmt.Fprintf(stderr, "audit_e2e_coverage: -check-skips needs -runtime ce or ee, the run whose skips it judges, and was given %q\n", opts.runtime)
@@ -268,10 +381,19 @@ func runCheckSkips(opts options, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "audit_e2e_coverage: skips:", err)
 		return exitUsage
 	}
-	verdict := judgeSkips(opts.runtime, skips, opts.skipDeclarations)
+	final, err := readFinalPass(opts.finalResults)
+	if err != nil {
+		fmt.Fprintln(stderr, "audit_e2e_coverage: skips: final pass:", err)
+		return exitUsage
+	}
+	verdict := judgeSkips(opts.runtime, skips, opts.skipDeclarations, final)
 	for _, excused := range verdict.excused {
+		category := excused.by.Category
+		if category == skipCategoryRunsLast {
+			category += ", passed in the final pass"
+		}
 		fmt.Fprintf(stdout, "skips: declared (%s): %s %s: %s\n",
-			excused.by.Category, excused.skip.Package, excused.skip.Test, excused.skip.reasonText())
+			category, excused.skip.Package, excused.skip.Test, excused.skip.reasonText())
 	}
 	for _, skip := range verdict.undeclared {
 		fmt.Fprintf(stderr, "skips: undeclared: %s %s: %s\n", skip.Package, skip.Test, skip.reasonText())
@@ -280,8 +402,15 @@ func runCheckSkips(opts options, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "skips: stale declaration: %s %s %s (because %q): no skip of this run matches it\n",
 			declaration.Runtime, declaration.Package, declaration.Test, declaration.Because)
 	}
-	fmt.Fprintf(stdout, "skips: %d skipped on %s, %d declared, %d undeclared, %d stale declarations\n",
-		len(skips), opts.runtime, len(verdict.excused), len(verdict.undeclared), len(verdict.stale))
+	for _, unproven := range verdict.unproven {
+		fmt.Fprintf(stderr, "skips: runs last, not passed in the final pass: %s %s: %s\n",
+			unproven.skip.Package, unproven.skip.Test, unproven.why)
+	}
+	for _, skip := range verdict.finalSkips {
+		fmt.Fprintf(stderr, "skips: skipped in the final pass: %s %s: %s\n", skip.Package, skip.Test, skip.reasonText())
+	}
+	fmt.Fprintf(stdout, "skips: %d skipped on %s, %d declared, %d undeclared, %d stale declarations, %d runs-last not passed, %d skipped in the final pass\n",
+		len(skips), opts.runtime, len(verdict.excused), len(verdict.undeclared), len(verdict.stale), len(verdict.unproven), len(verdict.finalSkips))
 	if verdict.failed() {
 		return exitFindings
 	}

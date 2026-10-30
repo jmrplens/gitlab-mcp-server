@@ -172,14 +172,21 @@ func openMergeRequestClosing(e *harness.Env, s *harness.Session, f issueFixture,
 		e.T.Fatalf("branch create answered %+v, want the branch %q", created, branch)
 	}
 
+	// The commit goes to the branch just created, which GitLab's commits API
+	// refuses to write to until it can see it.
 	message := "docs: add the file the merge request carries"
-	commit := harness.Do[commits.Output](s, actionRepositoryCommitCreate, withParams(params, map[string]any{
-		"branch": branch, "commit_message": message,
-		"actions": []map[string]any{{
-			"action": "create", "file_path": "docs/closes-" + string(surface) + ".md",
-			"content": "# " + string(surface) + "\n",
-		}},
-	}))
+	commit, err := fixture.RetryWhileBranchSettles(e, "commit create on "+branch, func() (commits.Output, error) {
+		return harness.Try[commits.Output](s, actionRepositoryCommitCreate, withParams(params, map[string]any{
+			"branch": branch, "commit_message": message,
+			"actions": []map[string]any{{
+				"action": "create", "file_path": "docs/closes-" + string(surface) + ".md",
+				"content": "# " + string(surface) + "\n",
+			}},
+		}))
+	})
+	if err != nil {
+		e.T.Fatalf("commit create on the branch it just created: %v", err)
+	}
 	if commit.ID == "" || commit.Title != message {
 		e.T.Fatalf("commit create answered %+v, want a commit carrying %q", commit, message)
 	}

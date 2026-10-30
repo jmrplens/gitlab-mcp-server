@@ -775,9 +775,10 @@ answered by a probe against GitLab 19.5.0 CE,
 `TestAuthThrottle_InvalidTokens_SpendTheAddressUnauthenticatedAllowance` in
 `test/e2e/gitlab/ce`, which turns the unauthenticated API throttle on (four requests in
 two minutes) and runs only when `E2E_AUTH_THROTTLE_PROBE=true`, since it changes an
-instance-wide setting, which issue 954 decided no complete run may do; a complete run
-refuses to start with the switch set and otherwise skips the probe, declared under
-`opt-in-probe`. With the throttle off, as a self-managed instance ships, nothing counted an
+instance-wide setting and so never runs beside the other packages; a complete CE run
+skips it in its main pass, declared under `runs-last`, and runs it alone in a final pass
+on the same stack, after every other test and before the one teardown. With the
+throttle off, as a self-managed instance ships, nothing counted an
 invalid token. With it on, every `GET /api/v4/user` carrying one in `PRIVATE-TOKEN` was
 counted once against the address, the server's own legacy verification of an invented
 token included, by the `throttle_unauthenticated_api` GitLab names in its `RateLimit-Name`
