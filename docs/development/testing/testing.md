@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,049 |
+| Total test functions                                  | 23,050 |
 | Unit test functions                                   | 21,374 |
-| E2E test functions                                    |  1,675 |
+| E2E test functions                                    |  1,676 |
 | cmd test functions                                    |  5,545 |
 | Test files (internal/)                                |    747 |
 | Test files (cmd/)                                     |    431 |
-| Test files (test/e2e/)                                |    435 |
+| Test files (test/e2e/)                                |    436 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     35 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,637 | 59.2% |
 | `TestFunc` (no underscore)             |    909 |  3.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,503 | 36.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,504 | 36.9% |
 
 ## Test Distribution
 
@@ -50,9 +50,9 @@
 | Core packages           |          4,197 |        256 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            433 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,199 |        475 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,675 |        435 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| E2E integration         |          1,676 |        436 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,545 |        431 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,049** |  **1,613** |                                                                                                 |
+| **Total**               |     **23,050** |  **1,614** |                                                                                                 |
 
 ### Core Packages
 

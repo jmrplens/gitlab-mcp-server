@@ -84,17 +84,6 @@ FIXTURE_BASE="$ROOT_DIR/test/fixtures/orbit"
 H_AUTH=(-H "PRIVATE-TOKEN: $GITLAB_COM_TOKEN")
 H_JSON=(-H "Content-Type: application/json")
 
-# Resolve namespace id
-echo ">>> resolving namespace '$NAMESPACE' on $GITLAB_URL"
-# URL-encode the namespace so nested subgroups (e.g. team/platform)
-# resolve correctly under /groups/<encoded-namespace>. Without this
-# the request would be interpreted as /groups/team/platform (a
-# 404) instead of /groups/team%2Fplatform.
-NAMESPACE_ENC=$(printf %s "$NAMESPACE" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
-NAMESPACE_ID=$(curl -sS "${H_AUTH[@]}" "$API/groups/$NAMESPACE_ENC" \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
-echo "    namespace id: $NAMESPACE_ID"
-
 # ─── Helpers ───────────────────────────────────────────────────────────
 
 # api_post PATH JSON  →  echoes the response body
@@ -145,6 +134,23 @@ except Exception: pass' 2>/dev/null)
   fi
   echo "$new_id"
 }
+
+# ─── Namespace ─────────────────────────────────────────────────────────
+
+echo ">>> resolving namespace '$NAMESPACE' on $GITLAB_URL"
+# URL-encode the namespace so nested subgroups (e.g. team/platform)
+# resolve correctly under /groups/<encoded-namespace>. Without this
+# the request would be interpreted as /groups/team/platform (a
+# 404) instead of /groups/team%2Fplatform.
+NAMESPACE_ENC=$(printf %s "$NAMESPACE" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
+# Read through api_get like every other API read here, never as curl piped
+# straight into python3: OpenSSF Scorecard's Pinned-Dependencies check reads
+# a download utility piped into an interpreter as a script fetched and run,
+# whatever the interpreter does with it, and the answer here is the group's
+# JSON, which no version, checksum or digest could pin.
+NAMESPACE_ID=$(api_get "/groups/$NAMESPACE_ENC" \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+echo "    namespace id: $NAMESPACE_ID"
 
 # ─── Project creation (pushes local source tree via git) ───────────────
 
