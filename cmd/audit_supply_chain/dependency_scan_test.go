@@ -9,6 +9,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,25 +26,35 @@ const scanJobs = "  dependency-vulns:\n    steps:\n      - run: make check-depen
 // pinnedScanner is an OSV-Scanner image named by a tag and a digest.
 const pinnedScanner = "ghcr.io/google/osv-scanner:v2.7.0@sha256:4f3b7e2c64b9d38a5febc5a7e4a3dfef1d1362f726dea7a2ef4762b46469fcd0"
 
+// scanRecipe is the smallest recipe the dependency scan rule passes: the
+// pinned scanner run twice, over the allow lists and under --config /dev/null.
+const scanRecipe = "\tdocker run --rm -v \"$(CURDIR):/src:ro\" \"$(OSV_SCANNER_IMAGE)\" scan source --recursive /src\n" +
+	"\tdocker run --rm -v \"$(CURDIR):/src:ro\" \"$(OSV_SCANNER_IMAGE)\" scan source --recursive --config /dev/null --format json /src\n"
+
 // scanMakefile is the smallest Makefile the dependency scan rule passes: the
 // scanner pinned by digest and a recipe that runs it.
-const scanMakefile = "OSV_SCANNER_IMAGE=" + pinnedScanner + "\n\ncheck-dependency-vulns:\n" +
-	"\tdocker run --rm -v \"$(CURDIR):/src:ro\" \"$(OSV_SCANNER_IMAGE)\" scan source --recursive /src\n"
+const scanMakefile = "OSV_SCANNER_IMAGE=" + pinnedScanner + "\n\ncheck-dependency-vulns:\n" + scanRecipe
 
 // reviewDay is the day the allow list tests measure the review bound from.
 var reviewDay = time.Date(2026, time.October, 31, 15, 4, 5, 0, time.UTC)
 
 // TestMakefileScanProblems_Recipe_RunsThePinnedScanner verifies that the
 // Makefile's scan is held to an image named by its digest, assigned once, and
-// run by a recipe that reads the allow list beside each lockfile.
+// run by a recipe that reads the allow list beside each lockfile and scans a
+// second time under --config /dev/null.
 //
 // A tag alone would let whoever moves it decide what the required check
-// accepts, an image the recipe does not run would make the pin decoration, and
-// a --config would put one file in place of every allow list this audit
-// judges.
+// accepts, an image the recipe does not run would make the pin decoration, a
+// --config naming a file would put one file in place of every allow list this
+// audit judges, and without the pass that honors no allow list a malicious
+// package an entry sets aside by its GHSA or CVE alias would pass.
 func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 	t.Parallel()
 
+	const noUnfilteredPass = "Makefile: the recipe of check-dependency-vulns has no pass under --config /dev/null, the one no allow list narrows, " +
+		"so a malicious package an entry sets aside by one of its aliases passes the scan"
+	const namedConfig = "Makefile: the recipe of check-dependency-vulns passes --config naming something other than /dev/null, which puts one file " +
+		"in place of the osv-scanner.toml beside each lockfile, the allow lists this audit judges"
 	cases := []struct {
 		name     string
 		makefile string
@@ -51,23 +62,23 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 	}{
 		{name: "pinned and run", makefile: scanMakefile},
 		{
-			name: "assigned with := behind a comment that names another",
+			name: "assigned with := behind a comment that names another, the empty config spelled with an equals sign",
 			makefile: "# OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:latest\nOSV_SCANNER_IMAGE := " + pinnedScanner +
-				"\ncheck-dependency-vulns:\n\tdocker run $(OSV_SCANNER_IMAGE)\n",
+				"\ncheck-dependency-vulns:\n\tdocker run $(OSV_SCANNER_IMAGE) scan source /src\n\tdocker run $(OSV_SCANNER_IMAGE) scan source --config=/dev/null /src\n",
 		},
 		{
 			name:     "never assigned",
-			makefile: "check-dependency-vulns:\n\tdocker run $(OSV_SCANNER_IMAGE)\n",
+			makefile: "check-dependency-vulns:\n" + scanRecipe,
 			want:     []string{"Makefile: OSV_SCANNER_IMAGE is not assigned, so make check-dependency-vulns names no scanner image this audit can hold to a digest"},
 		},
 		{
 			name:     "assigned twice",
-			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\nOSV_SCANNER_IMAGE?=" + pinnedScanner + "\ncheck-dependency-vulns:\n\tdocker run $(OSV_SCANNER_IMAGE)\n",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\nOSV_SCANNER_IMAGE?=" + pinnedScanner + "\ncheck-dependency-vulns:\n" + scanRecipe,
 			want:     []string{"Makefile: OSV_SCANNER_IMAGE is assigned 2 times, so which image make check-dependency-vulns runs depends on the order make reads them in"},
 		},
 		{
 			name:     "named by a tag",
-			makefile: "OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:v2.7.0\ncheck-dependency-vulns:\n\tdocker run $(OSV_SCANNER_IMAGE)\n",
+			makefile: "OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:v2.7.0\ncheck-dependency-vulns:\n" + scanRecipe,
 			want:     []string{"Makefile: OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:v2.7.0 is not pinned to a sha256 image digest, so the scanner that decides is whatever the tag names when the job runs"},
 		},
 		{
@@ -76,11 +87,22 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 			want:     []string{"Makefile: no rule makes check-dependency-vulns, so nothing holds the lockfiles to the dependency advisories"},
 		},
 		{
+			name:     "one pass, over the allow lists only",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\tdocker run $(OSV_SCANNER_IMAGE) scan source --recursive /src\n",
+			want:     []string{noUnfilteredPass},
+		},
+		{
+			name:     "an empty config beside a named one",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" + scanRecipe + "\tdocker run $(OSV_SCANNER_IMAGE) scan source --config=ci.toml /src\n",
+			want:     []string{namedConfig},
+		},
+		{
 			name:     "a recipe that runs another scanner and one allow list",
 			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\tosv-scanner scan source --config osv-scanner.toml -r .\n",
 			want: []string{
 				"Makefile: the recipe of check-dependency-vulns does not run $(OSV_SCANNER_IMAGE), so the image pinned above is not the scanner that decides",
-				"Makefile: the recipe of check-dependency-vulns passes --config, which puts one file in place of the osv-scanner.toml beside each lockfile, the allow lists this audit judges",
+				namedConfig,
+				noUnfilteredPass,
 			},
 		},
 	}
@@ -104,17 +126,70 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 //
 // The scan blocks a change only if the one check branch protection requires
 // cannot be green while the scan is red, so each way a workflow edit could
-// break that is a finding.
+// break that is a finding. That includes the ways the step itself can change
+// what make runs without naming another target: a variable assignment or an
+// option beside the target, a || or a pipe after it, a shell that never runs
+// the block, a variable make or bash reads from the environment, and a step
+// before the scan that rewrites the tree or $GITHUB_ENV.
 func TestWorkflowScanProblems_RequiredCheck_CountsTheScan(t *testing.T) {
 	t.Parallel()
 
 	const scanStep = "    steps:\n      - run: make check-dependency-vulns\n"
 	const where = ciWorkflow + ": job deps runs make check-dependency-vulns"
+	const notAlone = where + ` in a run block that is not "make check-dependency-vulns" alone (%q), so what is written beside it can change which scanner runs or let its failure pass`
+	const setInEnv = where + " with %s set in %s env, which make or the step's shell reads, so the scan that runs need not be the one the Makefile pins"
+	const afterStep = where + " after step %d, which is not actions/checkout: a step before the scan can rewrite the tree it reads, $GITHUB_ENV or $GITHUB_PATH"
 	cases := []struct {
 		name string
+		head string
 		jobs string
 		want []string
 	}{
+		{
+			name: "after a checkout, the target alone under a comment",
+			jobs: "  deps:\n    steps:\n      - uses: actions/checkout@" + testSHA + "\n        with:\n          persist-credentials: false\n" +
+				"      - run: |\n          # every lockfile\n          make check-dependency-vulns\n  ci:\n    needs: [deps]\n",
+		},
+		{
+			name: "beside an assignment, an option and an or",
+			jobs: "  deps:\n    steps:\n      - run: make check-dependency-vulns OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:latest\n" +
+				"      - run: make -e check-dependency-vulns\n      - run: make check-dependency-vulns || true\n  ci:\n    needs: [deps]\n",
+			want: []string{
+				fmt.Sprintf(notAlone, "make check-dependency-vulns OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:latest"),
+				fmt.Sprintf(notAlone, "make -e check-dependency-vulns"),
+				fmt.Sprintf(notAlone, "make check-dependency-vulns || true"),
+			},
+		},
+		{
+			name: "under a shell of its own at every level",
+			head: "defaults:\n  run:\n    shell: bash\n",
+			jobs: "  deps:\n    defaults:\n      run:\n        shell: sh\n    steps:\n      - run: make check-dependency-vulns\n        shell: \"true {0}\"\n" +
+				"  ci:\n    needs: [deps]\n",
+			want: []string{where + " under shell: and the job's defaults.run.shell and the workflow's defaults.run.shell, " +
+				"a shell of its own that decides what the run block does, where the runner's default fails the step with make"},
+		},
+		{
+			name: "with variables make or bash reads in every env",
+			head: "env:\n  COVERAGE_MIN: \"90\"\n  MAKEFLAGS: -e\n",
+			jobs: "  deps:\n    env:\n      OSV_SCANNER_IMAGE: ghcr.io/google/osv-scanner:latest\n      DEPENDENCY_VULNS_PIP_LOCKS: \"\"\n" +
+				"    steps:\n      - run: make check-dependency-vulns\n        env:\n          MAKEFILES: extra.mk\n          BASH_ENV: .env.sh\n          GNUMAKEFLAGS: -e\n" +
+				"  ci:\n    needs: [deps]\n",
+			want: []string{
+				fmt.Sprintf(setInEnv, "MAKEFLAGS", "the workflow's"),
+				fmt.Sprintf(setInEnv, "DEPENDENCY_VULNS_PIP_LOCKS", "the job's"),
+				fmt.Sprintf(setInEnv, "OSV_SCANNER_IMAGE", "the job's"),
+				fmt.Sprintf(setInEnv, "BASH_ENV", "the step's"),
+				fmt.Sprintf(setInEnv, "GNUMAKEFLAGS", "the step's"),
+				fmt.Sprintf(setInEnv, "MAKEFILES", "the step's"),
+			},
+		},
+		{
+			name: "after steps other than the checkout",
+			jobs: "  deps:\n    steps:\n      - uses: actions/checkout@" + testSHA + "\n      - run: echo MAKEFLAGS=-e >> \"$GITHUB_ENV\"\n" +
+				"      - uses: actions/setup-go@" + testSHA + "\n      - just a string\n      - uses: actions/checkout@" + testSHA + "\n        run: echo\n" +
+				"      - run: make check-dependency-vulns\n  ci:\n    needs: [deps]\n",
+			want: []string{fmt.Sprintf(afterStep, 2), fmt.Sprintf(afterStep, 3), fmt.Sprintf(afterStep, 4), fmt.Sprintf(afterStep, 5)},
+		},
 		{name: "needed directly", jobs: scanJobs},
 		{
 			name: "needed through a fan-in, beside an excused job and a step that is not a mapping",
@@ -168,7 +243,7 @@ func TestWorkflowScanProblems_RequiredCheck_CountsTheScan(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			text := "name: CI\njobs:\n" + testCase.jobs
+			text := "name: CI\n" + testCase.head + "jobs:\n" + testCase.jobs
 			doc, order, err := parseWorkflow(text)
 			if err != nil {
 				t.Fatalf("parseWorkflow: %v", err)
@@ -351,15 +426,23 @@ func TestOSVConfigProblems_UnreadLine_IsAFinding(t *testing.T) {
 }
 
 // TestOSVConfigsInTree_Walk_ReadsWhatTheScanReads verifies that the allow
-// lists judged are the ones the scan could honor: the root's, the site's and a
-// testdata directory's, which the scan walks into, and not those under what
-// .gitignore keeps out of the tree, the worktrees Claude Code checks out,
-// another checkout or a tool's state.
+// lists judged are the ones the scan could honor: the root's, the site's, a
+// testdata directory's and a dot-directory's, which the scan walks into, and
+// not those under git's own directory, what .gitignore keeps out of the tree,
+// the worktrees Claude Code checks out or another checkout.
+//
+// The dot-directory is the case that matters: OSV-Scanner reads a
+// .devcontainer/osv-scanner.toml beside a lockfile there and sets aside what
+// it names, so a walk that skipped it as the source rule skips a
+// dot-directory would leave an allow list nobody judged deciding the scan.
 func TestOSVConfigsInTree_Walk_ReadsWhatTheScanReads(t *testing.T) {
 	t.Parallel()
 
 	root := osvConfigTree(t)
-	want := []string{".github/requirements/osv-scanner.toml", "cmd/tool/testdata/osv-scanner.toml", "osv-scanner.toml", "site/osv-scanner.toml"}
+	want := []string{
+		".devcontainer/osv-scanner.toml", ".github/requirements/osv-scanner.toml", "cmd/tool/testdata/osv-scanner.toml",
+		"osv-scanner.toml", "site/.vitepress/osv-scanner.toml", "site/osv-scanner.toml",
+	}
 	if got := osvConfigsInTree(root); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("osvConfigsInTree() = %#v, want %#v", got, want)
 	}
@@ -375,13 +458,15 @@ func osvConfigTree(t *testing.T) string {
 	for _, relative := range []string{
 		"osv-scanner.toml",
 		"site/osv-scanner.toml",
+		"site/.vitepress/osv-scanner.toml",
 		".github/requirements/osv-scanner.toml",
+		".devcontainer/osv-scanner.toml",
 		"cmd/tool/testdata/osv-scanner.toml",
+		".git/osv-scanner.toml",
 		"site/node_modules/a/osv-scanner.toml",
 		"dist/osv-scanner.toml",
 		"plan/osv-scanner.toml",
 		".claude/worktrees/other/osv-scanner.toml",
-		".cache/osv-scanner.toml",
 		"scratch/osv-scanner.toml",
 		"site/osv-scanner.toml.bak",
 	} {

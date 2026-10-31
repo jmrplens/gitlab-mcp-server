@@ -1071,40 +1071,68 @@ check-image-vulns: image-vulns-images
 	go run ./cmd/audit_image_vulns/ -platforms "$(IMAGE_VULNS_PLATFORMS)" -db "$$dir/trivy-version.json" "$$@"
 
 # OSV-Scanner's own image, pinned by the digest of its multi-platform index,
-# which make check-supply-chain requires. The target below reads an entry that
-# sets nothing aside from the line "<file> has unused ignores:" this release
-# prints (on stdout beside the table, on stderr beside a JSON report), so a
-# bump checks that the line still reads that way.
+# which make check-supply-chain requires. The target below reads three things
+# off what this release prints, so a bump checks that each still reads that
+# way: an entry that sets nothing aside from the line "<file> has unused
+# ignores:" (on stdout beside the table, on stderr beside a JSON report), each
+# lockfile read from the line "Scanned /src/<path> file", and a malicious
+# package from the JSON report, where its MAL- id, or the CWE-506 GitHub
+# classifies embedded malware under, is a string of its own.
 OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:v2.7.0@sha256:4f3b7e2c64b9d38a5febc5a7e4a3dfef1d1362f726dea7a2ef4762b46469fcd0
 # The pip locks, which OSV-Scanner does not recognize by their names, handed to
 # it as requirements files; every other lockfile it finds by walking the tree.
 DEPENDENCY_VULNS_PIP_LOCKS=$(wildcard .github/requirements/*.txt)
+# The lockfile names OSV-Scanner finds by walking the tree, for the ecosystems
+# this repository could take a dependency from. Every file of one of these
+# names that git holds has to be one the scan reports reading, which is how an
+# --x-exclude, a narrower scan path or a lockfile the scanner stopped reading
+# shows; a name added here that the scanner does not read fails the same way
+# the day git holds such a file.
+DEPENDENCY_VULNS_LOCKFILES=go.mod package-lock.json npm-shrinkwrap.json pnpm-lock.yaml yarn.lock bun.lock \
+	requirements.txt poetry.lock Pipfile.lock pdm.lock uv.lock Cargo.lock Gemfile.lock composer.lock
 DEPENDENCY_VULNS_DIR=dist/dependency-vulns
 
-## check-dependency-vulns: hold every lockfile the tree holds (go.mod with go.sum, site/pnpm-lock.yaml, the pip locks under .github/requirements) to OSV.dev's advisories, the OpenSSF malicious-package (MAL-) entries included, with OSV-Scanner's image pinned by digest.
-## Fails on an advisory of any severity that the osv-scanner.toml beside its lockfile does not set aside, on an entry there that sets nothing aside, and on a scan that reached no verdict, an OSV.dev that did not answer included.
+## check-dependency-vulns: hold every lockfile the tree holds (every go.mod, site/pnpm-lock.yaml, the pip locks under .github/requirements) to OSV.dev's advisories, the OpenSSF malicious-package (MAL-) entries included, with OSV-Scanner's image pinned by digest.
+## Fails on an advisory of any severity that the osv-scanner.toml beside its lockfile does not set aside, on an entry there that sets nothing aside, and on a scan that reached no verdict, an OSV.dev that did not answer or a lockfile it could not read included.
+## Scans twice: over the allow lists, and under --config /dev/null, which honors none, failing on any MAL- advisory or one classified CWE-506 (embedded malware) whichever of its ids an entry names, since OSV-Scanner sets an advisory aside with all of its aliases.
+## Fails as well when either scan did not report reading a lockfile git holds (DEPENDENCY_VULNS_LOCKFILES).
 ## Module grain, as check-binary-vulns reads a binary: Go call analysis is off, so an advisory against a module counts whether or not our code calls it.
 ## The policy is SECURITY.md#dependencies, and make check-supply-chain holds every osv-scanner.toml entry to it.
-## Needs Docker and the network, so make analyze does not run it; the dependency-vulns job of ci.yml does, inside the required check.
+## Needs Docker, git and the network, so make analyze does not run it; the dependency-vulns job of ci.yml does, inside the required check.
 check-dependency-vulns:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required"; exit 1; }
-	@set -u; dir="$(CURDIR)/$(DEPENDENCY_VULNS_DIR)"; mkdir -p "$$dir"; status=0; \
-	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/src:ro" "$(OSV_SCANNER_IMAGE)" \
-		scan source --recursive --no-call-analysis=go --x-exclude /src/.claude/worktrees \
-		$(foreach lock,$(DEPENDENCY_VULNS_PIP_LOCKS),--lockfile requirements.txt:/src/$(lock)) /src \
+	@set -u; dir="$(CURDIR)/$(DEPENDENCY_VULNS_DIR)"; mkdir -p "$$dir"; failed=0; \
+	scan="scan source --recursive --no-call-analysis=go --x-exclude /src/.claude/worktrees $(foreach lock,$(DEPENDENCY_VULNS_PIP_LOCKS),--lockfile requirements.txt:/src/$(lock))"; \
+	status=0; docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/src:ro" "$(OSV_SCANNER_IMAGE)" $$scan /src \
 		> "$$dir/report.txt" 2> "$$dir/scan.log" || status=$$?; \
 	cat "$$dir/scan.log" "$$dir/report.txt"; \
-	unused=0; grep -q ' has unused ignores:' "$$dir/scan.log" "$$dir/report.txt" && unused=1; \
+	unfiltered=0; docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/src:ro" "$(OSV_SCANNER_IMAGE)" $$scan \
+		--config /dev/null --format json /src > "$$dir/unfiltered.json" 2> "$$dir/unfiltered.log" || unfiltered=$$?; \
 	case "$$status" in \
 		0) ;; \
-		1) echo "ERROR: an advisory no osv-scanner.toml sets aside affects a dependency (listed above): take the fixed version, remove a malicious package, or declare why it is not exploitable as SECURITY.md#dependencies says";; \
-		*) echo "ERROR: OSV-Scanner reached no verdict (exit $$status), so nothing vouches for the dependencies: run it again once OSV.dev answers";; \
+		1) failed=1; echo "ERROR: an advisory no osv-scanner.toml sets aside affects a dependency (listed above): take the fixed version, remove a malicious package, or declare why it is not exploitable as SECURITY.md#dependencies says";; \
+		*) failed=1; echo "ERROR: OSV-Scanner reached no verdict (exit $$status): OSV.dev did not answer or a lockfile could not be read (error above), so nothing vouches for the dependencies";; \
 	esac; \
-	if [ "$$unused" -eq 1 ]; then \
-		echo "ERROR: an osv-scanner.toml entry sets nothing aside (listed above): remove it, or renew it after a review if its ignoreUntil has passed"; \
+	if grep -q ' has unused ignores:' "$$dir/scan.log" "$$dir/report.txt"; then \
+		failed=1; echo "ERROR: an osv-scanner.toml entry sets nothing aside (listed above): remove it, or renew it after a review if its ignoreUntil has passed"; \
 	fi; \
-	if [ "$$status" -ne 0 ] || [ "$$unused" -ne 0 ]; then exit 1; fi; \
-	echo "dependency advisories: every lockfile scanned, and nothing found that an osv-scanner.toml does not set aside"
+	case "$$unfiltered" in \
+		0|1) malicious=$$(grep -oE '"(MAL-[^"]*|CWE-506)"' "$$dir/unfiltered.json" | tr -d '"' | sort -u | tr '\n' ' '); \
+			if [ -n "$$malicious" ]; then \
+				failed=1; echo "ERROR: a lockfile holds a malicious package ($${malicious% }), which no osv-scanner.toml entry sets aside whichever of its ids it names: remove it and regenerate the lockfile ($(DEPENDENCY_VULNS_DIR)/unfiltered.json names it)"; \
+			fi;; \
+		*) failed=1; cat "$$dir/unfiltered.log"; echo "ERROR: the scan without allow lists reached no verdict (exit $$unfiltered): OSV.dev did not answer or a lockfile could not be read (error above), so nothing shows the lockfiles hold no malicious package";; \
+	esac; \
+	locks=$$(git ls-files -- $(foreach name,$(DEPENDENCY_VULNS_LOCKFILES),':(glob)**/$(name)')) || locks=""; \
+	if [ -z "$$locks" ]; then failed=1; echo "ERROR: git listed no lockfile, so nothing shows the scans read every one it holds"; fi; \
+	unread=""; for lock in $$locks $(DEPENDENCY_VULNS_PIP_LOCKS); do \
+		{ grep -qF "Scanned /src/$$lock file" "$$dir/scan.log" "$$dir/report.txt" && grep -qF "Scanned /src/$$lock file" "$$dir/unfiltered.log"; } || unread="$$unread $$lock"; \
+	done; \
+	if [ -n "$$unread" ]; then \
+		failed=1; echo "ERROR: git holds lockfiles a scan did not report reading:$$unread: an --x-exclude or the scan path leaves them out, or OSV-Scanner no longer reads that name"; \
+	fi; \
+	if [ "$$failed" -ne 0 ]; then exit 1; fi; \
+	echo "dependency advisories: every lockfile git holds scanned, no malicious package, and nothing found that an osv-scanner.toml does not set aside"
 
 ## sonar: run the full SonarCloud pipeline like CI — unit tests with coverage,
 ## upload via sonar-scanner, poll the Compute Engine task, then print the quality

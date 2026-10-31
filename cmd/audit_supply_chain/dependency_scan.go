@@ -89,6 +89,20 @@ var osvImageAssignment = regexp.MustCompile(`(?m)^` + osvImageVariable + `[ \t]*
 // tag before the digest allowed, as rule 1 reads a docker:// image.
 var pinnedOSVImage = regexp.MustCompile(`^[^@\s]+@sha256:[0-9a-f]{64}$`)
 
+// unfilteredConfig is the one --config the recipe may pass: a file that sets
+// nothing aside, for the pass that asks about malicious packages with no allow
+// list in the way. OSV-Scanner groups an advisory with its aliases, and an
+// entry naming any id of the group sets the whole group aside, so a MAL- entry
+// is set aside by an entry naming its GHSA or CVE alias, and an advisory
+// GitHub classifies as embedded malware (CWE-506) need have no MAL- alias at
+// all. No rule over the allow lists can see either; a pass that honors none
+// does.
+const unfilteredConfig = "/dev/null"
+
+// osvConfigFlag finds each --config the recipe passes and the word it names,
+// spelled with a space or an equals sign.
+var osvConfigFlag = regexp.MustCompile(`--config(?:=|[ \t]+)(\S*)`)
+
 // readConfig is a seam over readTextFile for the osv-scanner.toml files, so a
 // test can drive the branch a file the tests own never produces as root: a
 // regular file that cannot be read.
@@ -122,8 +136,9 @@ func checkDependencyScan(root string) ([]string, error) {
 }
 
 // makefileScanProblems holds the Makefile's dependency scan to running the
-// scanner image it pins by digest, and to reading the allow list beside each
-// lockfile rather than one file a --config would put in all their places.
+// scanner image it pins by digest, to reading the allow list beside each
+// lockfile rather than one file a --config would put in all their places, and
+// to a second pass under --config /dev/null, which no allow list narrows.
 func makefileScanProblems(makefile string) []string {
 	var problems []string
 	assignments := osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1)
@@ -147,17 +162,48 @@ func makefileScanProblems(makefile string) []string {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s does not run $(%s), so the image pinned above is not the scanner that decides",
 			dependencyScanTarget, osvImageVariable))
 	}
-	if strings.Contains(recipe, "--config") {
-		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s passes --config, which puts one file in place of the %s beside each lockfile, the allow lists this audit judges",
-			dependencyScanTarget, osvConfigName))
+	unfiltered := 0
+	for _, flag := range osvConfigFlag.FindAllStringSubmatch(recipe, -1) {
+		if flag[1] == unfilteredConfig {
+			unfiltered++
+		}
+	}
+	if strings.Count(recipe, "--config") > unfiltered {
+		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s passes --config naming something other than %s, which puts one file in place of the %s beside each lockfile, the allow lists this audit judges",
+			dependencyScanTarget, unfilteredConfig, osvConfigName))
+	}
+	if unfiltered == 0 {
+		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s has no pass under --config %s, the one no allow list narrows, so a malicious package an entry sets aside by one of its aliases passes the scan",
+			dependencyScanTarget, unfilteredConfig))
 	}
 	return problems
 }
 
+// scanCommand is the whole run block of the step that makes the scan, its
+// comments aside: anything written beside it, a variable assignment, an
+// option, a || or a pipe, can change which scanner runs or let its failure
+// pass, and none of those is a make invocation this audit could refuse by its
+// targets alone.
+const scanCommand = "make " + dependencyScanTarget
+
+// scanEnvironment are the variables a workflow, the scan's job or its step may
+// not set, each read by make or by the step's shell before the recipe runs:
+// make takes options and assignments from MAKEFLAGS and GNUMAKEFLAGS and
+// extra makefiles from MAKEFILES, and bash sources BASH_ENV when it starts. A
+// variable named after one of the target's own (scanVariablePrefix) is
+// refused with them, since make -e would let it replace the Makefile's.
+var scanEnvironment = []string{"BASH_ENV", "GNUMAKEFLAGS", "MAKEFILES", "MAKEFLAGS", osvImageVariable}
+
+// scanVariablePrefix opens the name of every other Makefile variable the scan
+// target reads.
+const scanVariablePrefix = "DEPENDENCY_VULNS_"
+
 // workflowScanProblems holds ci.yml to running the dependency scan in a job
 // the required check counts: one that runs make check-dependency-vulns from
-// the root Makefile, under no condition and without continue-on-error, and
-// that the verdict job reaches through needs no verdict on the way excuses.
+// the root Makefile as the whole of a step, under no condition, no shell of
+// its own and no variable make or that shell reads, after no step but the
+// checkout, and that the verdict job reaches through needs no verdict on the
+// way excuses.
 func workflowScanProblems(workflows []workflow) []string {
 	index := slices.IndexFunc(workflows, func(file workflow) bool { return file.path == ciWorkflow && file.doc != nil })
 	if index < 0 {
@@ -170,15 +216,36 @@ func workflowScanProblems(workflows []workflow) []string {
 	scanners := 0
 	for _, id := range orderedKeys(jobs, file.jobOrder) {
 		job, _ := jobs[id].(map[string]any)
-		steps := scanSteps(file.doc, job)
-		if len(steps) == 0 {
+		positions := scanSteps(file.doc, job)
+		if len(positions) == 0 {
 			continue
 		}
 		scanners++
 		where := fmt.Sprintf("%s: job %s runs make %s", ciWorkflow, id, dependencyScanTarget)
+		all, _ := job["steps"].([]any)
+		steps := make([]map[string]any, 0, len(positions))
+		for _, position := range positions {
+			step, _ := all[position].(map[string]any)
+			steps = append(steps, step)
+			if run := strings.TrimSpace(stripComments(inputText(step["run"]))); run != scanCommand {
+				problems = append(problems, fmt.Sprintf("%s in a run block that is not %q alone (%q), so what is written beside it can change which scanner runs or let its failure pass",
+					where, scanCommand, run))
+			}
+		}
 		if conditional := conditionalKeys(job, steps); len(conditional) > 0 {
 			problems = append(problems, where+" under "+strings.Join(conditional, " and ")+
 				", so the required check can pass on a run where the scan did not")
+		}
+		if shells := shellKeys(file.doc, job, steps); len(shells) > 0 {
+			problems = append(problems, where+" under "+strings.Join(shells, " and ")+
+				", a shell of its own that decides what the run block does, where the runner's default fails the step with make")
+		}
+		problems = append(problems, scanEnvironmentProblems(where, file.doc, job, steps)...)
+		for position, raw := range all[:positions[0]] {
+			if step, _ := raw.(map[string]any); !isCheckoutStep(step) {
+				problems = append(problems, fmt.Sprintf("%s after step %d, which is not %s: a step before the scan can rewrite the tree it reads, $GITHUB_ENV or $GITHUB_PATH",
+					where, position+1, checkoutAction))
+			}
 		}
 		if excuse := verdictPath(jobs, requiredVerdictJob, id); excuse != "" {
 			problems = append(problems, where+", and "+excuse)
@@ -191,27 +258,88 @@ func workflowScanProblems(workflows []workflow) []string {
 	return problems
 }
 
-// scanSteps returns the steps of a job whose run block makes the dependency
-// scan target from the root Makefile.
-func scanSteps(doc, job map[string]any) []map[string]any {
+// scanSteps returns the positions, among a job's steps, of the steps whose run
+// block makes the dependency scan target from the root Makefile.
+func scanSteps(doc, job map[string]any) []int {
 	steps, _ := job["steps"].([]any)
-	var found []map[string]any
-	for _, raw := range steps {
+	var found []int
+	for position, raw := range steps {
 		step, ok := raw.(map[string]any)
 		if !ok {
 			continue
 		}
-		run, _ := step["run"].(string)
-		invocations, _ := scanMake(stripComments(run))
+		invocations, _ := scanMake(stripComments(inputText(step["run"])))
 		for _, invocation := range invocations {
 			if invocation.refusal == "" && slices.Contains(invocation.targets, dependencyScanTarget) &&
 				invocation.run(runDirectory(doc, job, step)).makefile == "Makefile" {
-				found = append(found, step)
+				found = append(found, position)
 				break
 			}
 		}
 	}
 	return found
+}
+
+// shellKeys names where a shell other than the runner's default is chosen for
+// the scan's steps: a shell: on a step, or a defaults.run.shell on the job or
+// the workflow. A shell is a command line the run block is handed to, so one
+// that never runs it passes the step.
+func shellKeys(doc, job map[string]any, steps []map[string]any) []string {
+	var keys []string
+	if slices.ContainsFunc(steps, func(step map[string]any) bool { _, set := step["shell"]; return set }) {
+		keys = append(keys, "shell:")
+	}
+	for _, holder := range []scanSetting{{"the job's", job}, {"the workflow's", doc}} {
+		defaults, _ := holder.fields["defaults"].(map[string]any)
+		run, _ := defaults["run"].(map[string]any)
+		if _, set := run["shell"]; set {
+			keys = append(keys, holder.name+" defaults.run.shell")
+		}
+	}
+	return keys
+}
+
+// scanSetting is one level of the workflow a setting of the scan's step can
+// come from, named as a finding names it: the workflow, the job or the step.
+type scanSetting struct {
+	name   string
+	fields map[string]any
+}
+
+// scanEnvironmentProblems reports every variable of scanEnvironment, or named
+// with scanVariablePrefix, that the workflow, the job or one of the scan's
+// steps sets in its env.
+func scanEnvironmentProblems(where string, doc, job map[string]any, steps []map[string]any) []string {
+	holders := []scanSetting{{"the workflow's", doc}, {"the job's", job}}
+	for _, step := range steps {
+		holders = append(holders, scanSetting{"the step's", step})
+	}
+	var problems []string
+	for _, holder := range holders {
+		env, _ := holder.fields["env"].(map[string]any)
+		names := make([]string, 0, len(env))
+		for name := range env {
+			if slices.Contains(scanEnvironment, name) || strings.HasPrefix(name, scanVariablePrefix) {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			problems = append(problems, fmt.Sprintf("%s with %s set in %s env, which make or the step's shell reads, so the scan that runs need not be the one the Makefile pins",
+				where, name, holder.name))
+		}
+	}
+	return problems
+}
+
+// isCheckoutStep reports whether a step only checks out the tree the scan
+// reads: it runs actions/checkout, at whatever pin rule 1 holds it to, and no
+// run block. Any other step before the scan could rewrite that tree,
+// $GITHUB_ENV or $GITHUB_PATH before make runs.
+func isCheckoutStep(step map[string]any) bool {
+	_, runs := step["run"]
+	name, _, _ := strings.Cut(inputText(step["uses"]), "@")
+	return !runs && name == checkoutAction
 }
 
 // conditionalKeys names the keys that let the scan's job or one of its steps
@@ -292,19 +420,22 @@ func verdictExempt(job map[string]any) map[string]bool {
 
 // configUnreadDirectories are the directories below the root the allow list
 // walk does not read, by their repository-relative path: the untracked plan/
-// working area and the worktrees Claude Code checks out under .claude, neither
-// of which the scan reads either.
+// working area, which .gitignore keeps out of the scan, and the worktrees
+// Claude Code checks out under .claude, which the recipe's --x-exclude does.
 var configUnreadDirectories = map[string]bool{"plan": true, ".claude/worktrees": true}
 
 // configUnreadNames are the directories the allow list walk does not read
-// wherever they sit, a package manager's install and a build's output, which
-// .gitignore keeps out of the tree and so out of the scan.
-var configUnreadNames = map[string]bool{"node_modules": true, "dist": true}
+// wherever they sit: git's own, which the scan skips, and a package manager's
+// install and a build's output, which .gitignore keeps out of it.
+var configUnreadNames = map[string]bool{".git": true, "node_modules": true, "dist": true}
 
 // osvConfigsInTree returns, sorted and repository-relative, every
-// osv-scanner.toml the scan could read: the walk reads the site and every
-// testdata directory, since the scan reads both, and skips what is not this
-// repository's source as the script rule does.
+// osv-scanner.toml the scan could read. The walk reads every directory but
+// the few it names and another checkout, a dot-directory's included: the
+// scan leaves a directory out only for .gitignore or an --x-exclude, never
+// for a leading dot, so a .devcontainer/osv-scanner.toml sets aside what it
+// names beside a lockfile there, and a walk that took the source rule's
+// view of dot-directories would never read it.
 func osvConfigsInTree(root string) []string {
 	var configs []string
 	osvConfigsBelow(root, "", &configs)
@@ -320,8 +451,7 @@ func osvConfigsBelow(root, dir string, configs *[]string) {
 		relative := path.Join(dir, entry.Name())
 		full := filepath.Join(root, filepath.FromSlash(relative))
 		if entry.IsDir() {
-			if trackedDotDirectories[relative] || (!configUnreadDirectories[relative] &&
-				!configUnreadNames[entry.Name()] && !sourcewalk.SkipDirBelowRoot(full)) {
+			if !configUnreadDirectories[relative] && !configUnreadNames[entry.Name()] && !sourcewalk.IsNestedCheckout(full) {
 				osvConfigsBelow(root, relative, configs)
 			}
 			continue
