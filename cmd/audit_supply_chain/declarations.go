@@ -209,7 +209,6 @@ type scriptDeclaration struct {
 // pending script names any longer has landed, and its line is reported until
 // it goes.
 var pendingPorts = map[int]string{
-	1:  "the shared release-assets package (checksums.txt, digests, ELF, Mach-O and PE identification) and the commands built on it: the release binaries' ELF interpreter check and the preflight's release order",
 	2:  "one packaging command that builds the .mcpb bundles as deterministically as zip -X -D does and checks the packages server.json declares",
 	3:  "a schema check of the plugin manifests against the schemas each declares",
 	4:  "one coverage command over cmd/internal/golist that stages the module copy and still drives gremlins and gobco",
@@ -266,8 +265,6 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/check-openplugin.sh":                      {category: scriptPortPending, item: 3},
 	"scripts/check-spec-conditions.sh":                 {category: scriptPortPending, item: 4},
 	"scripts/check_doc_links_test.py":                  {category: scriptPortPending, item: 12},
-	"scripts/check_elf_interp.py":                      {category: scriptPortPending, item: 1},
-	"scripts/check_elf_interp_test.py":                 {category: scriptPortPending, item: 1},
 	"scripts/check_em_dash_sh_test.py":                 {category: scriptPortPending, item: 11},
 	"scripts/check_spec_conditions_sh_test.py":         {category: scriptPortPending, item: 4},
 	"scripts/coverage-conditions.sh":                   {category: scriptPortPending, item: 4},
@@ -288,8 +285,6 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/packaging_checksums_test.py":              {category: scriptPortPending, item: 13},
 	"scripts/publish_npm_sh_test.py":                   {category: scriptPortPending, item: 15},
 	"scripts/publish_pypi_sh_test.py":                  {category: scriptPortPending, item: 15},
-	"scripts/release-order.sh":                         {category: scriptPortPending, item: 1},
-	"scripts/release_order_sh_test.py":                 {category: scriptPortPending, item: 1},
 	"scripts/setup-orbit-fixtures.sh":                  {category: scriptPortPending, item: 7},
 	"scripts/setup_orbit_fixtures_sh_test.py":          {category: scriptPortPending, item: 7},
 	"scripts/site_check_i18n_code_test.py":             {category: scriptPortPending, item: 15},
