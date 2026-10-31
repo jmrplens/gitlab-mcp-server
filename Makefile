@@ -14,7 +14,7 @@
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
 	audit-catalog-first \
 	audit-struct-completeness audit-action-coverage audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-report audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs gen-audit-1to1-baseline check-audit-1to1-baseline audit-1to1-issues audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage e2e-support-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
 	check-em-dash check-pr-description check-plan-untracked check-dco check-file-headers fix-file-headers \
@@ -136,6 +136,34 @@ E2E_COVER_PROFILE=$(E2E_REPORT_DIR)/e2e-go-coverage.out
 # would head every child's log for the whole run.
 e2e_cover_build = $(if $(COVER),-cover)
 e2e_cover_env = $(if $(COVER),E2E_COVER_DIR=$(CURDIR)/$(E2E_COVER_ROOT)/$(1))
+
+# The support packages of the e2e suite, test/e2e/internal/fixture and
+# test/e2e/modeleval, are measured where their code runs (issue 1461): most of
+# it is the part only a GitLab reaches, the fixture builders and the sessions
+# that start the real binary, so their offline tests alone say little about
+# it. The two complete runs, test-e2e-ce and test-e2e-ee, hand the list to
+# run-docker-e2e.sh as E2E_COVERPKG, which builds every test binary of the run
+# with -coverpkg naming them and writes the statements they reached to
+# <stem>-coverprofile.out in the report directory, and `make
+# e2e-support-coverage` merges those profiles with the one the packages'
+# offline tests write (cmd/merge_coverage).
+#
+# Unlike COVER this is always on for those two targets: it instruments the two
+# packages in the test binaries and nothing of the server, costs no build of
+# its own, and a complete run is the only measurement there is of the code only
+# a GitLab reaches. It is spelled once, comma-separated as -coverpkg takes it;
+# .github/workflows/e2e.yml hands the same list to the script it runs directly,
+# and cmd/merge_coverage's tests hold the two to each other. No package the
+# complete runs test imports test/e2e/modeleval, so go test warns that nothing
+# being tested depends on it and the run half reads absent for it: its online
+# code runs under the modeleval targets, which do not measure it.
+E2E_SUPPORT_COVERPKG = ./test/e2e/internal/fixture,./test/e2e/modeleval
+e2e_comma := ,
+E2E_SUPPORT_PACKAGES = $(subst $(e2e_comma), ,$(E2E_SUPPORT_COVERPKG))
+# What e2e-support-coverage writes beside the runs' profiles, named so its
+# pattern for those, *-coverprofile.out, never reads one of them back.
+E2E_SUPPORT_OFFLINE_PROFILE = $(E2E_REPORT_DIR)/e2e-support-offline.out
+E2E_SUPPORT_PROFILE = $(E2E_REPORT_DIR)/e2e-support-coverage.out
 
 # The revision the e2e run records on its run line, so a recorded baseline
 # says which tree produced it. Overridable for a run of a tree git cannot see.
@@ -469,6 +497,7 @@ test-e2e-ce: ensure-gotestsum e2e-server-binary
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
 	$(call e2e_cover_env,ce) \
+	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
@@ -479,6 +508,7 @@ test-e2e-ee: ensure-gotestsum e2e-server-binary
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
 	$(call e2e_cover_env,ee) \
+	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
@@ -2313,6 +2343,45 @@ e2e-go-coverage:
 	  go tool covdata textfmt -i="$$dirs" -o=$(E2E_COVER_PROFILE); \
 	  go tool covdata percent -i="$$dirs"; \
 	  go tool cover -func=$(E2E_COVER_PROFILE) | tail -n 1'
+
+## e2e-support-coverage: report which statements of the e2e support packages
+## (E2E_SUPPORT_COVERPKG) their offline tests and the complete runs reach
+## together: the offline half run here, merged with every run profile in
+## $(E2E_REPORT_DIR), the per-package table, and the merged profile in
+## $(E2E_SUPPORT_PROFILE). E2E_SUPPORT_SUMMARY names a Markdown file the table
+## is appended to as well.
+#
+# The offline half is run here rather than read from somewhere else, so both
+# halves are of one tree whenever the runs were: a profile of another version
+# of a file is refused by the merge, naming the file, rather than folded in.
+# It runs the two packages' own tests with no GitLab, as the harness tests run
+# in CI, with the model evaluation's two switches set empty in the
+# environment, which outranks every dotenv file the harness reads, so a .env
+# that names a model or asks for the provider probe cannot turn it into a
+# paid run. The on-demand sweep's two settings are set empty as well:
+# TestSweepOrphans_Leftovers_OnDemand is one of the fixture package's tests,
+# and with E2E_SWEEP_MIN_AGE or E2E_SWEEP_PREFIX exported in the shell, or
+# given on the command line, it would delete what it matches on the instance
+# GITLAB_URL names and add what that reaches to the offline half, which CI's
+# never reaches.
+#
+# The run half is every <stem>-coverprofile.out the report directory holds, so
+# a CE run, its final pass and a licensed run fold into one figure, as
+# e2e-go-coverage folds the server's; run-docker-e2e.sh removes its own before
+# it starts, so a stale one is only ever another stem's. With none there the
+# target refuses rather than reporting the offline half alone, which is the
+# figure issue 1461 says is not the measurement.
+e2e-support-coverage:
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	bash -o pipefail -c 'set -eu; shopt -s nullglob; \
+	  runs=($(E2E_REPORT_DIR)/*-coverprofile.out); \
+	  if [ "$${#runs[@]}" -eq 0 ]; then \
+	    echo "no run profile under $(E2E_REPORT_DIR): run make test-e2e-ce or make test-e2e-ee first, which write <stem>-coverprofile.out there" >&2; \
+	    exit 1; \
+	  fi; \
+	  online=(); for run in "$${runs[@]}"; do online+=(-online "$$run"); done; \
+	  MODELEVAL_MODELS= MODELEVAL_PROBE= E2E_SWEEP_MIN_AGE= E2E_SWEEP_PREFIX= go test -tags e2e -count=1 -coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile=$(E2E_SUPPORT_OFFLINE_PROFILE) $(E2E_SUPPORT_PACKAGES); \
+	  go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) "$${online[@]}" -o $(E2E_SUPPORT_PROFILE) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)")'
 
 ## check-e2e-static: the push-time gate over the new e2e suite, with no
 ## GitLab: every typed action id names a catalog action, sits in a package

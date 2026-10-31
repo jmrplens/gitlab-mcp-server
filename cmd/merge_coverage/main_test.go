@@ -1,0 +1,476 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
+// main_test.go covers the command end to end over profiles on disk: what it
+// prints, the merged profile and the summary it writes, the status it exits
+// with, the command lines it refuses, and the package spellings it reads;
+// and the places that hand it its profiles: the complete-run targets and the
+// report target of the Makefile, test/e2e/scripts/run-docker-e2e.sh, and the
+// suite's job in .github/workflows/e2e.yml.
+
+package main
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	yaml "go.yaml.in/yaml/v3"
+
+	_ "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/serialtypecheck" // serial type-checking under -race, golang/go#81122
+)
+
+// fixtureFiles writes the two fixture profiles under a fresh directory and
+// returns it with the arguments that read them for both packages.
+func fixtureFiles(t *testing.T) (dir string, args []string) {
+	t.Helper()
+
+	dir = t.TempDir()
+	args = []string{
+		"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
+		"-offline", writeProfile(t, dir, "offline.out", offlineProfile),
+		"-online", writeProfile(t, dir, "online.out", onlineProfile),
+	}
+	return dir, args
+}
+
+// TestRunMain_FixtureProfiles_ReportAndWriteTheMerge runs the command over
+// the fixture with every output asked for: the report on stdout, the merged
+// profile at -o, and the report appended to a summary that already holds an
+// earlier step's section, which stays.
+func TestRunMain_FixtureProfiles_ReportAndWriteTheMerge(t *testing.T) {
+	dir, args := fixtureFiles(t)
+	merged := filepath.Join(dir, "merged.out")
+	summary := writeProfile(t, dir, "summary.md", "### An earlier step\n\n")
+	args = append(args, "-o", merged, "-summary", summary)
+	var stdout, stderr bytes.Buffer
+
+	if code := runMain(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("runMain() = %d, want 0; stderr:\n%s", code, stderr.String())
+	}
+
+	if stdout.String() != fixtureReport {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout.String(), fixtureReport)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want nothing", stderr.String())
+	}
+	wantProfile := "mode: set\n" +
+		fixturePkg + "/a.go:3.10,5.2 2 1\n" +
+		fixturePkg + "/a.go:5.2,7.3 1 1\n" +
+		fixturePkg + "/b.go:1.1,2.1 3 0\n" +
+		modelevalPkg + "/c.go:1.1,1.9 4 1\n"
+	if got := readFile(t, merged); got != wantProfile {
+		t.Errorf("merged profile =\n%s\nwant\n%s", got, wantProfile)
+	}
+	if got, want := readFile(t, summary), "### An earlier step\n\n"+fixtureReport+"\n"; got != want {
+		t.Errorf("summary =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestRunMain_NoOutputsAsked_PrintsTheReportAlone holds -o and -summary to
+// being optional: without them the report is printed and nothing is written
+// beside the profiles.
+func TestRunMain_NoOutputsAsked_PrintsTheReportAlone(t *testing.T) {
+	dir, args := fixtureFiles(t)
+	var stdout, stderr bytes.Buffer
+
+	if code := runMain(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("runMain() = %d, want 0; stderr:\n%s", code, stderr.String())
+	}
+
+	if stdout.String() != fixtureReport {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout.String(), fixtureReport)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("the directory holds %d entries, want the two profiles alone", len(entries))
+	}
+}
+
+// readFile returns the contents of a file the test expects to be there.
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// TestRunMain_Arguments_RefuseWhatTheyCannotUse holds every command line the
+// command cannot use to the usage status and a reason on stderr, before any
+// profile is read.
+func TestRunMain_Arguments_RefuseWhatTheyCannotUse(t *testing.T) {
+	both := []string{"-offline", "a.out", "-online", "b.out"}
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "an unknown flag", args: []string{"-no-such-flag"}, want: "flag provided but not defined"},
+		{name: "an argument", args: append([]string{"-packages", "./x"}, append(both, "c.out")...), want: `takes no arguments, and was given ["c.out"]`},
+		{name: "no offline profile", args: []string{"-packages", "./x", "-online", "b.out"}, want: "needs at least one -offline profile"},
+		{name: "no run profile", args: []string{"-packages", "./x", "-offline", "a.out"}, want: "needs at least one -online profile"},
+		{name: "no package", args: both, want: "-packages names no package"},
+		{name: "an empty package", args: append([]string{"-packages", "./x,,./y"}, both...), want: `-packages "./x,,./y" names an empty package`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := runMain(tc.args, &stdout, &stderr); code != 2 {
+				t.Errorf("runMain(%q) = %d, want 2", tc.args, code)
+			}
+			if !strings.Contains(stderr.String(), tc.want) {
+				t.Errorf("stderr = %q, want it to hold %q", stderr.String(), tc.want)
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want nothing for a command line it cannot use", stdout.String())
+			}
+		})
+	}
+}
+
+// TestRunMain_Refusals_ExitOneWithTheReason holds every run that cannot
+// report to status 1 and a reason on stderr naming the command: a profile it
+// cannot read or merge, a package no profile carries, and an output it
+// cannot write. A refusal before the report prints no report.
+func TestRunMain_Refusals_ExitOneWithTheReason(t *testing.T) {
+	tests := []struct {
+		name       string
+		extra      func(t *testing.T, dir string) []string
+		want       string
+		wantReport bool
+	}{
+		{
+			name:  "a profile that is not there",
+			extra: func(_ *testing.T, dir string) []string { return []string{"-online", filepath.Join(dir, "missing.out")} },
+			want:  "missing.out: open ",
+		},
+		{
+			name: "a profile that disagrees",
+			extra: func(t *testing.T, dir string) []string {
+				t.Helper()
+				return []string{"-online", writeProfile(t, dir, "stale.out", "mode: set\n"+fixturePkg+"/a.go:3.10,5.2 5 1\n")}
+			},
+			want: "counts 2 statements in ",
+		},
+		{
+			name:  "a package no profile carries",
+			extra: func(*testing.T, string) []string { return []string{"-packages", "./test/e2e/internal/harness"} },
+			want:  "no profile carries github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness",
+		},
+		{
+			name: "a merged profile it cannot write",
+			extra: func(_ *testing.T, dir string) []string {
+				return []string{"-o", filepath.Join(dir, "no-such-dir", "merged.out")}
+			},
+			want: "writing the merged profile: ",
+		},
+		{
+			name: "a summary it cannot open",
+			extra: func(_ *testing.T, dir string) []string {
+				return []string{"-summary", filepath.Join(dir, "no-such-dir", "summary.md")}
+			},
+			want:       "appending the report to ",
+			wantReport: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, args := fixtureFiles(t)
+			args = append(args, tc.extra(t, dir)...)
+			var stdout, stderr bytes.Buffer
+
+			if code := runMain(args, &stdout, &stderr); code != 1 {
+				t.Errorf("runMain() = %d, want 1; stderr:\n%s", code, stderr.String())
+			}
+
+			if !strings.HasPrefix(stderr.String(), "merge_coverage: ") || !strings.Contains(stderr.String(), tc.want) {
+				t.Errorf("stderr = %q, want the command's name and %q", stderr.String(), tc.want)
+			}
+			if got := stdout.String() == fixtureReport; got != tc.wantReport {
+				t.Errorf("report printed = %v, want %v; stdout:\n%s", got, tc.wantReport, stdout.String())
+			}
+		})
+	}
+}
+
+// TestRunMain_SummaryThatRefusesTheWrite_ExitsOne drives the failure after the
+// summary opened: a write the device refuses is the error the run returns.
+// /dev/full is the one file every Linux gives a test that opens and then
+// refuses the write, which is a disk that filled between the two; the other
+// platforms have no such file and skip.
+func TestRunMain_SummaryThatRefusesTheWrite_ExitsOne(t *testing.T) {
+	const devFull = "/dev/full"
+	if _, err := os.Stat(devFull); err != nil {
+		t.Skipf("%s is not here to refuse a write: %v", devFull, err)
+	}
+	_, args := fixtureFiles(t)
+	var stdout, stderr bytes.Buffer
+
+	code := runMain(append(args, "-summary", devFull), &stdout, &stderr)
+
+	if code != 1 || !strings.Contains(stderr.String(), "appending the report to /dev/full: ") {
+		t.Errorf("runMain() = %d, stderr %q; want 1 and the refused write", code, stderr.String())
+	}
+}
+
+// TestParsePackages_Spellings holds -packages to the spellings go test's
+// -coverpkg takes for a package of this module: a directory below the module
+// root, with or without a trailing slash, the root itself, and an import
+// path, each read as the import path a profile names its files by.
+func TestParsePackages_Spellings(t *testing.T) {
+	tests := []struct {
+		name, list string
+		want       []string
+	}{
+		{name: "a directory", list: "./test/e2e/modeleval", want: []string{modelevalPkg}},
+		{name: "a directory with a trailing slash", list: "./test/e2e/modeleval/", want: []string{modelevalPkg}},
+		{name: "the module root", list: ".", want: []string{"github.com/jmrplens/gitlab-mcp-server/v3"}},
+		{name: "an import path", list: fixturePkg, want: []string{fixturePkg}},
+		{name: "an import path with a trailing slash", list: fixturePkg + "/", want: []string{fixturePkg}},
+		{name: "a list, in its order", list: "./test/e2e/modeleval," + fixturePkg, want: []string{modelevalPkg, fixturePkg}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parsePackages(tc.list)
+			if err != nil {
+				t.Fatalf("parsePackages(%q) error = %v", tc.list, err)
+			}
+			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
+				t.Errorf("parsePackages(%q) = %q, want %q", tc.list, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMain_UnknownFlag_ExitsWithTheUsageStatus holds main to handing the
+// process the status runMain returns.
+func TestMain_UnknownFlag_ExitsWithTheUsageStatus(t *testing.T) {
+	previousArgs, previousExit := os.Args, osExit
+	t.Cleanup(func() { os.Args, osExit = previousArgs, previousExit })
+	got := -1
+	os.Args = []string{toolName, "-no-such-flag"}
+	osExit = func(code int) { got = code }
+
+	main()
+
+	if got != 2 {
+		t.Errorf("main() exit = %d, want 2", got)
+	}
+}
+
+// repoFile returns a file of the repository, read from this package's
+// directory two levels below the root.
+func repoFile(t *testing.T, rel string) string {
+	t.Helper()
+
+	return readFile(t, filepath.Join("..", "..", filepath.FromSlash(rel)))
+}
+
+// recipe returns one target of the Makefile, from its rule line to the blank
+// line that ends it, failing the test when the Makefile has no such target.
+func recipe(t *testing.T, makefile, target string) string {
+	t.Helper()
+
+	start := strings.Index(makefile, "\n"+target+":")
+	if start < 0 {
+		t.Fatalf("the Makefile has no %s target", target)
+	}
+	rest := makefile[start+1:]
+	if end := strings.Index(rest, "\n\n"); end >= 0 {
+		rest = rest[:end]
+	}
+	return rest
+}
+
+// supportCoverPkg returns the list of measured packages the Makefile spells,
+// failing the test when it spells none.
+func supportCoverPkg(t *testing.T, makefile string) string {
+	t.Helper()
+
+	match := regexp.MustCompile(`(?m)^E2E_SUPPORT_COVERPKG = (\S+)$`).FindStringSubmatch(makefile)
+	if match == nil {
+		t.Fatal("the Makefile does not spell E2E_SUPPORT_COVERPKG")
+	}
+	return match[1]
+}
+
+// TestMakefile_SupportPackages_AreTheTwoThisCommandMeasures holds the
+// Makefile's list to the two support packages of the e2e suite, spelled the
+// way -coverpkg and -packages both read it.
+func TestMakefile_SupportPackages_AreTheTwoThisCommandMeasures(t *testing.T) {
+	got := supportCoverPkg(t, repoFile(t, "Makefile"))
+
+	if want := "./test/e2e/internal/fixture,./test/e2e/modeleval"; got != want {
+		t.Errorf("E2E_SUPPORT_COVERPKG = %q, want %q", got, want)
+	}
+	pkgs, err := parsePackages(got)
+	if err != nil || strings.Join(pkgs, " ") != fixturePkg+" "+modelevalPkg {
+		t.Errorf("parsePackages(%q) = %q, %v; want the two support packages", got, pkgs, err)
+	}
+}
+
+// TestMakefile_CompleteRunTargets_HandTheRunTheSupportPackages holds the two
+// complete runs to handing run-docker-e2e.sh the list, which is what makes
+// every test binary of the run measure the support packages.
+func TestMakefile_CompleteRunTargets_HandTheRunTheSupportPackages(t *testing.T) {
+	makefile := repoFile(t, "Makefile")
+	for _, target := range []string{"test-e2e-ce", "test-e2e-ee"} {
+		t.Run(target, func(t *testing.T) {
+			got := recipe(t, makefile, target)
+			if !strings.Contains(got, "\n\tE2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \\\n") {
+				t.Errorf("the %s recipe does not hand the run E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG):\n%s", target, got)
+			}
+			if !strings.Contains(got, "./test/e2e/scripts/run-docker-e2e.sh ") {
+				t.Errorf("the %s recipe no longer runs run-docker-e2e.sh:\n%s", target, got)
+			}
+		})
+	}
+}
+
+// TestMakefile_SupportCoverageTarget_MergesTheOfflineHalfWithTheRuns holds
+// the report target to its three steps: it refuses a report directory no run
+// left a profile in, runs the offline half on this tree with the model
+// evaluation's switches emptied so a .env cannot make it a paid run, and the
+// on-demand sweep's emptied so an exported one cannot make it delete anything,
+// and hands this command both halves under the names the runner writes.
+func TestMakefile_SupportCoverageTarget_MergesTheOfflineHalfWithTheRuns(t *testing.T) {
+	makefile := repoFile(t, "Makefile")
+	got := recipe(t, makefile, "e2e-support-coverage")
+	tests := []struct{ name, want string }{
+		{name: "the run profiles", want: "runs=($(E2E_REPORT_DIR)/*-coverprofile.out)"},
+		{name: "no run profile refused", want: `if [ "$${#runs[@]}" -eq 0 ]; then`},
+		{
+			name: "the offline half",
+			want: "MODELEVAL_MODELS= MODELEVAL_PROBE= E2E_SWEEP_MIN_AGE= E2E_SWEEP_PREFIX= go test -tags e2e -count=1 " +
+				"-coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile=$(E2E_SUPPORT_OFFLINE_PROFILE) $(E2E_SUPPORT_PACKAGES);",
+		},
+		{
+			name: "the merge",
+			want: `go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) "$${online[@]}" ` +
+				`-o $(E2E_SUPPORT_PROFILE) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)")`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("the e2e-support-coverage recipe does not hold %q:\n%s", tc.want, got)
+			}
+		})
+	}
+	if !strings.Contains(makefile, "\nE2E_SUPPORT_PACKAGES = $(subst $(e2e_comma), ,$(E2E_SUPPORT_COVERPKG))\n") {
+		t.Error("E2E_SUPPORT_PACKAGES is not the list E2E_SUPPORT_COVERPKG spells, one package per word")
+	}
+	if strings.HasSuffix(assignedFileName(t, makefile, "E2E_SUPPORT_OFFLINE_PROFILE"), "-coverprofile.out") ||
+		strings.HasSuffix(assignedFileName(t, makefile, "E2E_SUPPORT_PROFILE"), "-coverprofile.out") {
+		t.Error("an output of e2e-support-coverage is named like a run's profile, so the next merge would read it as one")
+	}
+}
+
+// assignedFileName returns the file name a Makefile variable assigns, failing the
+// test when the Makefile does not assign it.
+func assignedFileName(t *testing.T, makefile, variable string) string {
+	t.Helper()
+
+	match := regexp.MustCompile(`(?m)^` + variable + ` = (\S+)$`).FindStringSubmatch(makefile)
+	if match == nil {
+		t.Fatalf("the Makefile does not assign %s", variable)
+	}
+	return filepath.Base(match[1])
+}
+
+// TestRunner_CoverPkg_ReachesBothPassesUnderTheNamesTheMergeReads holds
+// run-docker-e2e.sh to handing go test -coverpkg and -coverprofile on the
+// main pass and on the final pass, each into a profile the report target's
+// pattern matches, and to removing both before anything starts, so a profile
+// an earlier run left under this run's names is never merged as this run's.
+func TestRunner_CoverPkg_ReachesBothPassesUnderTheNamesTheMergeReads(t *testing.T) {
+	runner := repoFile(t, "test/e2e/scripts/run-docker-e2e.sh")
+	mainPass := `-- -tags e2e -p 1 -count=1 ${E2E_COVERPKG:+"-coverpkg=${E2E_COVERPKG}" "-coverprofile=${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.out"} "$@"`
+	finalPass := `-- -tags e2e -p 1 -count=1 ${E2E_COVERPKG:+"-coverpkg=${E2E_COVERPKG}" "-coverprofile=${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.out"} -timeout 1800s -run`
+	cleared := `rm -f "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.out" \` + "\n" +
+		`    "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.out"`
+	lines := []struct{ name, text string }{
+		{name: "main pass", text: mainPass},
+		{name: "final pass", text: finalPass},
+		{name: "cleared", text: cleared},
+		{name: "trap", text: "trap teardown EXIT"},
+	}
+	positions := map[string]int{}
+	for _, line := range lines {
+		positions[line.name] = strings.Index(runner, line.text)
+	}
+	for _, line := range lines {
+		t.Run(line.name, func(t *testing.T) {
+			if positions[line.name] < 0 {
+				t.Errorf("run-docker-e2e.sh does not hold the %s line %q", line.name, line.text)
+			}
+		})
+	}
+	if positions["cleared"] > positions["trap"] {
+		t.Error("run-docker-e2e.sh removes the run's profiles after the stack starts, so a run that fails provisioning leaves an earlier run's standing")
+	}
+	if positions["main pass"] > positions["final pass"] {
+		t.Error("run-docker-e2e.sh writes the final pass's profile before the main pass's")
+	}
+}
+
+// e2eJob is the suite's job of .github/workflows/e2e.yml as the contract
+// below reads it.
+type e2eJob struct {
+	Steps []struct {
+		Name string            `yaml:"name"`
+		Uses string            `yaml:"uses"`
+		With map[string]string `yaml:"with"`
+		Run  string            `yaml:"run"`
+		Env  map[string]string `yaml:"env"`
+	} `yaml:"steps"`
+}
+
+// TestE2EWorkflow_SuiteJob_MeasuresTheSupportPackagesAndPublishesTheMerge
+// holds the job that runs the suite on every push to the same measurement the
+// complete-run targets make: the run handed the Makefile's list, the report
+// target run on its reports with the table appended to the run's summary,
+// and the profiles uploaded under a name of their own by an action pinned to
+// a commit.
+func TestE2EWorkflow_SuiteJob_MeasuresTheSupportPackagesAndPublishesTheMerge(t *testing.T) {
+	var workflow struct {
+		Jobs map[string]e2eJob `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(repoFile(t, ".github/workflows/e2e.yml")), &workflow); err != nil {
+		t.Fatal(err)
+	}
+	job, ok := workflow.Jobs["e2e-gitlab"]
+	if !ok {
+		t.Fatal("e2e.yml has no e2e-gitlab job")
+	}
+	want := supportCoverPkg(t, repoFile(t, "Makefile"))
+	pinned := regexp.MustCompile(`^actions/upload-artifact@[0-9a-f]{40}$`)
+	handed, merged, uploaded := false, false, false
+	for _, step := range job.Steps {
+		handed = handed || strings.Contains(step.Run, "run-docker-e2e.sh ce") && step.Env["E2E_COVERPKG"] == want
+		merged = merged || step.Run == `make -s e2e-support-coverage E2E_REPORT_DIR=test-results E2E_SUPPORT_SUMMARY="$GITHUB_STEP_SUMMARY"`
+		uploaded = uploaded || pinned.MatchString(step.Uses) && step.With["name"] == "e2e-support-coverage" &&
+			strings.Contains(step.With["path"], "test-results/*-coverprofile.out") &&
+			strings.Contains(step.With["path"], "test-results/e2e-support-offline.out") &&
+			strings.Contains(step.With["path"], "test-results/e2e-support-coverage.out")
+	}
+	if !handed {
+		t.Errorf("the step that runs the suite does not hand it E2E_COVERPKG=%s", want)
+	}
+	if !merged {
+		t.Error("no step runs make -s e2e-support-coverage on test-results with the run's summary")
+	}
+	if !uploaded {
+		t.Error("no step uploads the run, offline and merged profiles as e2e-support-coverage with upload-artifact pinned to a commit")
+	}
+}

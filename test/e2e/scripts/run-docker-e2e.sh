@@ -67,6 +67,16 @@
 # run leaves no stream, which the skip gate then reports. It records no calls:
 # the coverage record is the main pass's, joined with the main pass's stream.
 #
+# With E2E_COVERPKG naming packages, both passes build their test binaries
+# with -coverpkg naming them and write the statements of those packages the
+# tests reached to a profile beside their other reports, <stem>-coverprofile.out
+# and <stem>-final-coverprofile.out. What is measured this way is the suite's
+# own code, the support packages its tests import (issue 1461), and not the
+# server, whose statements E2E_COVER_DIR collects from the children. Both
+# profiles are removed before anything starts, and make e2e-support-coverage
+# merges every one the report directory holds with the profile the packages'
+# offline tests write.
+#
 # Before the teardown takes the volumes with it, GitLab's exceptions log is
 # copied into the reports, so a 500 a scenario met can be traced to the
 # exception behind it after the stack is gone.
@@ -91,6 +101,10 @@
 #   GITLAB_MCP_TEST_E2E_CALLS_DIR  where the suite records its calls; cleared first, must be absolute
 #   E2E_COVER_DIR                  where the children write Go coverage data; cleared first, must be
 #                                  absolute, and only useful when the binary was built with -cover
+#   E2E_COVERPKG                   packages, comma-separated as go test's -coverpkg takes them, whose
+#                                  statements the run's test binaries measure; the main pass writes
+#                                  them to <stem>-coverprofile.out and a final pass to
+#                                  <stem>-final-coverprofile.out, both removed first whether set or not
 #   GITLAB_IMAGE                   the image for the runtime; the defaults above. A tag
 #                                  pins a release and is held to the registry the
 #                                  same way; a digest pins an image and is never asked
@@ -203,6 +217,15 @@ case "${E2E_REPORT_DIR}" in
     *) E2E_REPORT_DIR="${REPO_ROOT}/${E2E_REPORT_DIR}" ;;
 esac
 FINAL_REPORT_NAME="${E2E_REPORT_NAME}-final"
+
+# The statement profiles the two passes write when E2E_COVERPKG names
+# packages, removed before anything starts whether or not this run writes
+# them: make e2e-support-coverage merges every one the report directory holds,
+# so a profile an earlier run left under this run's names would be folded in
+# as this run's, and a run that stopped before its tests would leave the
+# earlier run's standing for it.
+rm -f "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.out" \
+    "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.out"
 
 # What the compose file publishes follows the address the fixture is reached
 # from, so the web_url fields GitLab answers with are the ones the tests reach.
@@ -397,7 +420,7 @@ set +e
         --format testdox \
         --junitfile "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-junit.xml" \
         --jsonfile "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-log.json" \
-        -- -tags e2e -p 1 -count=1 "$@"
+        -- -tags e2e -p 1 -count=1 ${E2E_COVERPKG:+"-coverpkg=${E2E_COVERPKG}" "-coverprofile=${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.out"} "$@"
 ) 2>&1 | tee "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-output.txt"
 RUN_STATUS="${PIPESTATUS[0]}"
 set -e
@@ -417,7 +440,9 @@ set -e
 # recorded would be credited to a test that stream says skipped, and its
 # filtered run line would read as a partial run. The coverage directory is
 # kept, since a child's statement counters are the same measurement whichever
-# pass started it.
+# pass started it, and so is E2E_COVERPKG for the same reason: the statements
+# of the support packages this pass reaches are reached, and its profile goes
+# under its own report name.
 FINAL_STATUS=0
 if [ -n "${FINAL_TEST}" ]; then
     echo "=== Final pass: ${FINAL_TEST} alone, after every other test, on the same stack (${RUNTIME}) ==="
@@ -436,7 +461,7 @@ if [ -n "${FINAL_TEST}" ]; then
                 --format testdox \
                 --junitfile "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-junit.xml" \
                 --jsonfile "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-log.json" \
-                -- -tags e2e -p 1 -count=1 -timeout 1800s -run "^${FINAL_TEST}\$" "./test/e2e/gitlab/${FINAL_PACKAGE}/"
+                -- -tags e2e -p 1 -count=1 ${E2E_COVERPKG:+"-coverpkg=${E2E_COVERPKG}" "-coverprofile=${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.out"} -timeout 1800s -run "^${FINAL_TEST}\$" "./test/e2e/gitlab/${FINAL_PACKAGE}/"
         ) 2>&1 | tee "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-output.txt"
         FINAL_STATUS="${PIPESTATUS[0]}"
         set -e
