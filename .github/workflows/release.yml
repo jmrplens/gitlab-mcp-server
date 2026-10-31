@@ -1484,6 +1484,9 @@ jobs:
             echo "rehearsal: the statements are unsigned, so nothing was verified or uploaded"
             exit 0
           fi
+          # No rehearsal reaches what follows, so the gh that runs it is named
+          # for whoever reads a failure at the tag.
+          gh --version
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}"
           while read -r _ name; do
             gh attestation verify "dist/${name}" --bundle "$provenance" \
