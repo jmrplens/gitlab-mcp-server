@@ -17,12 +17,19 @@
 // request, refuse the keyset arguments before sending anything and page by
 // page number, in the named order their routes document.
 //
-// And it holds the lists GitLab pages by keyset in one order alone to that
+// It holds the lists GitLab pages by keyset in one order alone to that
 // order: the four project lists refuse a keyset request in any order but id,
 // which GitLab answers 405, before sending it, and the two job lists, which
 // GitLab orders by id whatever is sent, refuse order_by and sort as arguments
 // they do not take, as the project's job list does include_retried, which its
 // route never reads.
+//
+// And it holds lists whose routes GitLab pages by offset alone to that
+// pagination: a project's labels, a user's contributed projects, whose route
+// writes a keyset link its finder never reads, and a merge request's diff
+// files and diff versions, which GitLab orders itself, refuse pagination and
+// page_token, the diff lists order_by and sort too, before sending anything,
+// and are read on by page number.
 
 package common
 
@@ -37,6 +44,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupserviceaccounts"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/labels"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrchanges"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectserviceaccounts"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/repository"
@@ -98,13 +107,13 @@ func labelIssue(e *harness.Env, project fixture.Project, issue fixture.Issue, la
 	}
 }
 
-// assertSameRows fails the test unless got holds exactly the rows of want,
-// each once, whatever their order.
+// assertSameRows fails the test unless got, the rows following what to its
+// end read, holds exactly the rows of want, each once, whatever their order.
 func assertSameRows(e *harness.Env, what string, got, want []string) {
 	e.T.Helper()
 	got, want = slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values(want))
 	if !slices.Equal(got, want) {
-		e.T.Errorf("following %s by keyset read %q, want each of %q once", what, got, want)
+		e.T.Errorf("following %s to its end read %q, want each of %q once", what, got, want)
 	}
 }
 
@@ -494,5 +503,119 @@ func TestKeysetPagination_JobLists_RefuseTheOrderingGitLabIgnores(t *testing.T) 
 
 		jobNamed(e, harness.Do[jobs.ListOutput](s, actionJobListProject, byProject), "held")
 		jobNamed(e, harness.Do[jobs.ListOutput](s, actionJobList, withParams(byPipeline, map[string]any{"include_retried": true})), "held")
+	})
+}
+
+// offsetListKeysetArguments are the two keyset parameters a list whose routes
+// GitLab pages by offset alone does not take. Those routes page with
+// paginate, which reads neither, so a keyset request was answered with an
+// offset page and its page_token went nowhere (issue 1165).
+var offsetListKeysetArguments = []listArgument{
+	{name: "pagination", value: "keyset"},
+	{name: "page_token", value: "1"},
+}
+
+// mrDiffListArguments are the four list parameters the two merge request diff
+// lists do not take (issue 1530). GitLab pages a request's diff files and its
+// diff versions by offset, in an order of its own, and declares no order_by,
+// sort, pagination or page_token on either route.
+var mrDiffListArguments = append([]listArgument{
+	{name: "order_by", value: "id"},
+	{name: "sort", value: "asc"},
+}, offsetListKeysetArguments...)
+
+// TestKeysetPagination_ProjectLabelList_PagesByOffsetAlone holds a list GitLab
+// pages by offset alone, a project's labels, to the pagination it serves:
+// pagination and page_token are refused before any request, and the three
+// labels of a project created for the scenario are read one a page by page
+// number, none of the pages naming a next_page_token.
+func TestKeysetPagination_ProjectLabelList_PagesByOffsetAlone(t *testing.T) {
+	e := harness.New(t)
+
+	type world struct {
+		project fixture.Project
+		names   []string
+	}
+	harness.SurfacesWith(e, func(e *harness.Env) world {
+		project := fixture.NewProject(e, fixture.WithNamePrefix("offsetlabels"))
+		names := make([]string, 0, 3)
+		for range 3 {
+			names = append(names, fixture.NewLabel(e, project, "offset").Name)
+		}
+		return world{project: project, names: names}
+	}, func(e *harness.Env, surface harness.Surface, w world) {
+		s := e.On(surface)
+		params := map[string]any{"project_id": w.project.IDParam()}
+
+		refuseListArguments(e, s, surface, actionProjectLabelList, params, offsetListKeysetArguments)
+		got := followOffset(e, s, actionProjectLabelList, params, func(out labels.ListOutput) ([]string, toolutil.PaginationOutput) {
+			names := make([]string, 0, len(out.Labels))
+			for _, label := range out.Labels {
+				names = append(names, label.Name)
+			}
+			return names, out.Pagination
+		})
+		assertSameRows(e, "the project's labels by page", got, w.names)
+	})
+}
+
+// TestKeysetPagination_ContributedProjects_PageByOffsetAlone holds a user's
+// contributed projects to the offset pages GitLab serves them in. Their route
+// writes a keyset link naming an id_before its finder never reads, so every
+// keyset page was the first again (upstream-bugs row 112); the action takes
+// neither pagination nor page_token, refuses both before any request, and a
+// page of the run user's contributed projects names its successor, when it
+// has one, by page number and publishes no next_page_token.
+func TestKeysetPagination_ContributedProjects_PageByOffsetAlone(t *testing.T) {
+	e := harness.New(t)
+	rt := e.Runtime()
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		params := map[string]any{"user_id": rt.Username}
+
+		refuseListArguments(e, s, surface, actionProjectListUserContributed, params, offsetListKeysetArguments)
+		page := harness.Do[projects.ListOutput](s, actionProjectListUserContributed, withParams(params, map[string]any{"page": 1, "per_page": 1}))
+		if page.Pagination.NextPageToken != "" {
+			e.T.Errorf("the first page of %s's contributed projects publishes next_page_token %q, which an offset page never carries", rt.Username, page.Pagination.NextPageToken)
+		}
+		if page.Pagination.HasMore && page.Pagination.NextPage != 2 {
+			e.T.Errorf("the first page of %s's contributed projects says more follow and names page %d next, want 2", rt.Username, page.Pagination.NextPage)
+		}
+	})
+}
+
+// TestKeysetPagination_MRDiffLists_PageByOffsetAlone holds a merge request's
+// diff files and diff versions to the arguments their routes read. GitLab
+// pages both by offset, the files in the order of the latest diff and the
+// versions newest first, whatever is sent, so each list refuses order_by,
+// sort, pagination and page_token before sending anything (issue 1530), and
+// both still answer a first page of one row for a request created for the
+// scenario, with no next_page_token.
+func TestKeysetPagination_MRDiffLists_PageByOffsetAlone(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) mergeRequestFixture {
+		return newMergeRequestFixture(e, "offsetdiffs")
+	}, func(e *harness.Env, surface harness.Surface, f mergeRequestFixture) {
+		s := e.On(surface)
+		params := f.params()
+
+		refuseListArguments(e, s, surface, actionMRReviewChangesGet, params, mrDiffListArguments)
+		refuseListArguments(e, s, surface, actionMRReviewDiffVersionsList, params, mrDiffListArguments)
+
+		firstPage := withParams(params, map[string]any{"page": 1, "per_page": 1})
+		// GitLab reports no changes while it is still preparing the diff, so
+		// both reads wait for what the fixture's commit makes.
+		changes := harness.Eventually(s, actionMRReviewChangesGet, firstPage, mergeRequestReadInterval, mergeRequestReadWait,
+			func(out mrchanges.Output) bool { return fileChanged(out, f.commit.FilePath) })
+		if changes.Pagination.NextPageToken != "" {
+			e.T.Errorf("the first page of the request's changes publishes next_page_token %q, which an offset page never carries", changes.Pagination.NextPageToken)
+		}
+		versions := harness.Eventually(s, actionMRReviewDiffVersionsList, firstPage, mergeRequestReadInterval, mergeRequestReadWait,
+			func(out mrchanges.DiffVersionsListOutput) bool { return len(out.DiffVersions) == 1 })
+		if versions.Pagination.NextPageToken != "" {
+			e.T.Errorf("the first page of the request's diff versions publishes next_page_token %q, which an offset page never carries", versions.Pagination.NextPageToken)
+		}
 	})
 }
