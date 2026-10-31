@@ -288,7 +288,7 @@ A dependency is added in the pull request that needs it, which says why, and the
 - **Needed.** The standard library and the modules `go.mod` already requires come first; a module is added for what they do not do.
 - **The official client where one exists.** GitLab is reached through `gitlab.com/gitlab-org/api/client-go`, GitLab's own Go client, MCP through `github.com/modelcontextprotocol/go-sdk`, the protocol's official Go SDK, and telemetry through the OpenTelemetry Go SDK. An endpoint client-go has no method for is a request made through client-go's own request builder, not a second GitLab client.
 - **Maintained.** It publishes releases, answers its issues and its security reports, and is neither archived nor deprecated.
-- **A license the release can carry.** It is one of the licenses [SECURITY.md](SECURITY.md#dependencies) accepts in what a release binary links.
+- **A license the release can carry.** It is one of the licenses [SECURITY.md](SECURITY.md#licenses) accepts in what a release binary links.
 - **No known vulnerability.** `govulncheck` and `make check-binary-vulns` pass with it, which the required `✅ CI` check holds anyway.
 
 ### How each kind is obtained

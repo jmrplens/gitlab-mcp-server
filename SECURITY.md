@@ -325,12 +325,28 @@ from a model that may have read attacker-influenced content.
 
 ### Dependencies
 
-- Minimal dependency footprint.
-- Dependencies are tracked in `go.sum` with cryptographic checksums.
-- Regular dependency updates are performed to address known vulnerabilities (`govulncheck` runs in CI).
+How a dependency is chosen, obtained and kept current is in [CONTRIBUTING.md](CONTRIBUTING.md#dependencies). This section is what a finding against one sets off: a known vulnerability, or a license outside the ones accepted below.
+
+#### Vulnerabilities
+
+- `govulncheck` runs in the required `✅ CI` check on every pull request and every push to main, and fails when the project's code calls a vulnerable symbol. It accepts no advisory, so such a finding is fixed before anything else merges, by updating the module or by no longer calling the symbol.
 - The release binaries are also checked at module grain, the way scanners that read a binary or an image SBOM check them: every target the release configuration names is built from the tree and scanned, and an advisory against any module a binary links fails the check unless a reviewed declaration accepts it (`make check-binary-vulns`). CI runs it on every pull request and every push to main, and the release workflow runs it again on the tagged tree before anything is published.
-- The container image's Alpine packages are held to Trivy's vulnerability database before the image is pushed: the release workflow scans both platforms after the smoke test, and an advisory with a fixed package rated HIGH or CRITICAL stops the release unless a reviewed declaration accepts it (`make check-image-vulns`). A weekly run asks the same of the published `latest` image.
-- Automated dependency scanning via Dependabot.
+- The container image's Alpine packages are held to Trivy's vulnerability database before the image is pushed: the release workflow scans both platforms after the smoke test, and an advisory with a fixed package rated HIGH or CRITICAL stops the release unless a reviewed declaration accepts it (`make check-image-vulns`). A finding with no fix to take, or rated lower, is printed by the scan and does not stop it. A weekly run asks the same of the published `latest` image.
+- Dependabot security updates are on: an advisory against a dependency opens a pull request that waits for no cooldown.
+
+So the threshold is any severity for a Go module, fixed before the next merge and again checked before a release, and HIGH or CRITICAL with a fix for the image's Alpine packages, fixed before the release.
+
+#### Licenses
+
+The release binaries link the Go standard library and modules under these licenses, as the SPDX SBOMs of 3.4.0's seven binaries name them (read on 31 October 2026), and these are the licenses a module a release binary or the image's binary links may carry:
+
+- **MIT, MIT-0, BSD-3-Clause and Apache-2.0.** What they ask of a binary distribution, their license and notice texts, travels with every binary in `THIRD_PARTY_NOTICES`, which every package and the image carry.
+- **MPL-2.0**, for `github.com/hashicorp/go-cleanhttp` and `github.com/hashicorp/go-retryablehttp`. Its terms bind the files of those modules rather than the program that links them, and the modules are linked as published, unmodified, with their source public at the version `go.mod` requires. A module under MPL-2.0 is accepted on that condition: linked unmodified.
+- **CC-BY-4.0** is named in an SBOM for `github.com/modelcontextprotocol/go-sdk` because that module's `LICENSE` puts its documentation under it. The code a binary links from it is Apache-2.0 or MIT.
+
+An SBOM also names `LicenseRef-` entries for client-go, grpc-gateway and this repository's own module. They are source files whose names begin with `license` (client-go's `license.go`, its client of GitLab's license API, is one) that the scanner took for license texts, and they carry no license.
+
+A module under any other license, or under none, is not merged. The pull request that adds the module, or updates it to a version under another license, says so, and it is merged only once the module is replaced or the maintainer accepts the license by adding it to the list above in that pull request, with the reason. The threshold is the same for every license outside the list: before the merge. No check fails on a license today, so the review of each pull request that changes `go.mod` is where this is held; what does fail is `cmd/gen_third_party_notices`, which stops the release when a module a binary links publishes no license file at all. Modules only the tests and the repository's commands use reach no release, and are held to the list only when a release binary starts linking them.
 
 ### Release Integrity
 
