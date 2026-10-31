@@ -73,7 +73,7 @@ func outputs(t *testing.T, run orderRun) map[string]string {
 }
 
 // assertOutputs holds the three answers to want.
-func assertOutputs(t *testing.T, got map[string]string, want map[string]string) {
+func assertOutputs(t *testing.T, got, want map[string]string) {
 	t.Helper()
 
 	if len(got) != len(want) {

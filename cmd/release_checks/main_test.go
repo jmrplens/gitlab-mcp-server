@@ -54,6 +54,19 @@ func TestRunMain_RunsTheCheckItIsNamed(t *testing.T) {
 	}
 }
 
+// TestUsage_NamesEachCheckAsItPrintsItself holds the usage of the command to
+// the usage each check prints, both written out under the command's name.
+func TestUsage_NamesEachCheckAsItPrintsItself(t *testing.T) {
+	t.Parallel()
+
+	if !strings.HasPrefix(orderUsage, "usage: "+toolName+" order ") || !strings.HasPrefix(usage, orderUsage) {
+		t.Errorf("usage %q does not open with the order check's %q under %s", usage, orderUsage, toolName)
+	}
+	if elfInterp := strings.TrimPrefix(elfInterpUsage, "usage: "); !strings.HasPrefix(elfInterp, toolName+" elf-interp ") || !strings.HasSuffix(usage, "       "+elfInterp) {
+		t.Errorf("usage %q does not close with the elf-interp check's %q under %s", usage, elfInterpUsage, toolName)
+	}
+}
+
 // TestMain_HandsTheExitCodeToTheProcess covers main itself: the code runMain
 // decides is the one the process exits with. It replaces os.Args and the exit
 // seam, so it does not run in parallel.

@@ -37,27 +37,28 @@ const (
 func elfImage(machine elf.Machine, interpreters ...string) []byte {
 	const headerSize, entrySize = 64, 56
 	phnum := 1 + len(interpreters)
-	image := make([]byte, headerSize+entrySize*phnum)
-	copy(image, elf.ELFMAG)
-	image[elf.EI_CLASS] = byte(elf.ELFCLASS64)
-	image[elf.EI_DATA] = byte(elf.ELFDATA2LSB)
-	image[elf.EI_VERSION] = byte(elf.EV_CURRENT)
-	binary.LittleEndian.PutUint16(image[18:], uint16(machine))
-	binary.LittleEndian.PutUint32(image[20:], uint32(elf.EV_CURRENT))
-	binary.LittleEndian.PutUint64(image[32:], headerSize)
-	binary.LittleEndian.PutUint16(image[54:], entrySize)
-	binary.LittleEndian.PutUint16(image[56:], uint16(phnum)) //#nosec G115 -- a fixture's entry count, a handful
+	headers := make([]byte, headerSize+entrySize*phnum)
+	copy(headers, elf.ELFMAG)
+	headers[elf.EI_CLASS] = byte(elf.ELFCLASS64)
+	headers[elf.EI_DATA] = byte(elf.ELFDATA2LSB)
+	headers[elf.EI_VERSION] = byte(elf.EV_CURRENT)
+	binary.LittleEndian.PutUint16(headers[18:], uint16(machine))
+	binary.LittleEndian.PutUint32(headers[20:], uint32(elf.EV_CURRENT))
+	binary.LittleEndian.PutUint64(headers[32:], headerSize)
+	binary.LittleEndian.PutUint16(headers[54:], entrySize)
+	binary.LittleEndian.PutUint16(headers[56:], uint16(phnum)) //#nosec G115 -- a fixture's entry count, a handful
 
-	binary.LittleEndian.PutUint32(image[headerSize:], uint32(elf.PT_LOAD))
+	binary.LittleEndian.PutUint32(headers[headerSize:], uint32(elf.PT_LOAD))
+	var text []byte
 	for i, interp := range interpreters {
-		entry := image[headerSize+entrySize*(1+i):]
-		text := append([]byte(interp), 0)
+		entry := headers[headerSize+entrySize*(1+i):]
 		binary.LittleEndian.PutUint32(entry, uint32(elf.PT_INTERP))
-		binary.LittleEndian.PutUint64(entry[8:], uint64(len(image))) //#nosec G115 -- an offset inside a fixture of a few hundred bytes
-		binary.LittleEndian.PutUint64(entry[32:], uint64(len(text))) //#nosec G115 -- a fixture's string length
-		image = append(image, text...)
+		binary.LittleEndian.PutUint64(entry[8:], uint64(len(headers)+len(text))) //#nosec G115 -- an offset inside a fixture of a few hundred bytes
+		binary.LittleEndian.PutUint64(entry[32:], uint64(len(interp)+1))         //#nosec G115 -- a fixture's string length
+		text = append(text, interp...)
+		text = append(text, 0)
 	}
-	return image
+	return slices.Concat(headers, text)
 }
 
 // writeBinary writes data into dir under name and returns its path.
@@ -187,16 +188,19 @@ func TestRunELFInterp_ExitCodes(t *testing.T) {
 	}
 }
 
+// goreleaserOverride is one per-target override of a GoReleaser build.
+type goreleaserOverride struct {
+	Goos    string   `yaml:"goos"`
+	Goarch  string   `yaml:"goarch"`
+	Ldflags []string `yaml:"ldflags"`
+}
+
 // goreleaserConfig is the part of .goreleaser.yml the loaders are held to:
 // each build's ldflags and its per-target overrides.
 type goreleaserConfig struct {
 	Builds []struct {
-		Ldflags   []string `yaml:"ldflags"`
-		Overrides []struct {
-			Goos    string   `yaml:"goos"`
-			Goarch  string   `yaml:"goarch"`
-			Ldflags []string `yaml:"ldflags"`
-		} `yaml:"overrides"`
+		Ldflags   []string             `yaml:"ldflags"`
+		Overrides []goreleaserOverride `yaml:"overrides"`
 	} `yaml:"builds"`
 }
 
@@ -204,58 +208,69 @@ type goreleaserConfig struct {
 // builds for linux.
 var goarchMachines = map[string]elf.Machine{"amd64": elf.EM_X86_64, "arm64": elf.EM_AARCH64}
 
-// TestLoaders_AreTheInterpretersGoreleaserBuildsWith holds the table of
-// loaders to the overrides .goreleaser.yml builds with, which is what lets the
-// check carry the table rather than read the configuration in the credentialed
-// job: every -I the configuration passes is a loader of the table, and each
-// linux override passes the loader of its architecture's machine after the
-// build's own ldflags, which an override replaces whole.
-func TestLoaders_AreTheInterpretersGoreleaserBuildsWith(t *testing.T) {
-	t.Parallel()
+// readGoreleaserConfig decodes the repository's .goreleaser.yml.
+func readGoreleaserConfig(t *testing.T) goreleaserConfig {
+	t.Helper()
 
 	data, err := os.ReadFile(filepath.Join("..", "..", ".goreleaser.yml"))
 	if err != nil {
 		t.Fatalf("reading .goreleaser.yml: %v", err)
 	}
 	var config goreleaserConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	if err = yaml.Unmarshal(data, &config); err != nil {
 		t.Fatalf("decoding .goreleaser.yml: %v", err)
 	}
+	return config
+}
 
-	var named, want []string
-	for _, l := range loaders {
-		want = append(want, l.path)
-	}
-	interpreter := func(ldflags []string) string {
-		for _, flag := range ldflags {
-			if path, ok := strings.CutPrefix(flag, "-I "); ok {
-				named = append(named, path)
-				return path
-			}
+// interpreterFlag is the loader an ldflags list passes with -I, or "" when it
+// passes none.
+func interpreterFlag(ldflags []string) string {
+	for _, flag := range ldflags {
+		if path, ok := strings.CutPrefix(flag, "-I "); ok {
+			return path
 		}
-		return ""
 	}
+	return ""
+}
+
+// TestLoaders_AreTheInterpretersGoreleaserBuildsWith holds the table of
+// loaders to the overrides .goreleaser.yml builds with, which is what lets the
+// check carry the table rather than read the configuration in the credentialed
+// job: every -I the configuration passes is a loader of the table, each of the
+// table's machines has a linux override, and each linux override passes the
+// loader of its architecture's machine after the build's own ldflags, which
+// an override replaces whole.
+func TestLoaders_AreTheInterpretersGoreleaserBuildsWith(t *testing.T) {
+	t.Parallel()
+
+	config := readGoreleaserConfig(t)
+	var named, want []string
 	overridden := map[elf.Machine]bool{}
 	for _, build := range config.Builds {
-		interpreter(build.Ldflags)
+		if path := interpreterFlag(build.Ldflags); path != "" {
+			named = append(named, path)
+		}
 		for _, o := range build.Overrides {
-			path := interpreter(o.Ldflags)
-			if o.Goos != "linux" {
-				continue
+			path := interpreterFlag(o.Ldflags)
+			if path != "" {
+				named = append(named, path)
 			}
-			t.Run(o.Goarch, func(t *testing.T) {
-				machine, known := goarchMachines[o.Goarch]
-				if !known {
-					t.Fatalf("a linux/%s override, an architecture the release does not build", o.Goarch)
-				}
-				overridden[machine] = true
-				if path != loaders[machine].path {
-					t.Errorf("the linux/%s override passes -I %q, want %q, the loader the check holds a %s binary to", o.Goarch, path, loaders[machine].path, loaders[machine].name)
-				}
-				if len(o.Ldflags) == 0 || len(build.Ldflags) == 0 || o.Ldflags[0] != build.Ldflags[0] {
-					t.Errorf("the linux/%s override's ldflags %q do not open with the build's own %q", o.Goarch, o.Ldflags, build.Ldflags)
-				}
-			})
+			if o.Goos == "linux" {
+				overridden[goarchMachines[o.Goarch]] = true
+				t.Run(o.Goarch, func(t *testing.T) {
+					t.Parallel()
+
+					assertLinuxOverride(t, o, path, build.Ldflags)
+				})
+			}
+		}
+	}
+	var missing []string
+	for machine, l := range loaders {
+		want = append(want, l.path)
+		if !overridden[machine] {
+			missing = append(missing, l.name)
 		}
 	}
 	slices.Sort(named)
@@ -263,13 +278,25 @@ func TestLoaders_AreTheInterpretersGoreleaserBuildsWith(t *testing.T) {
 	if !slices.Equal(named, want) {
 		t.Errorf(".goreleaser.yml passes -I %q, want exactly the loaders of the table, %q", named, want)
 	}
-	var missing []string
-	for machine, l := range loaders {
-		if !overridden[machine] {
-			missing = append(missing, l.name)
-		}
-	}
 	if len(missing) != 0 {
 		t.Errorf("the table holds %q binaries to a loader no linux override in .goreleaser.yml passes", missing)
+	}
+}
+
+// assertLinuxOverride holds one linux override to passing path, the loader of
+// its architecture's machine, after buildLdflags' first entry, the build's
+// own flags.
+func assertLinuxOverride(t *testing.T, o goreleaserOverride, path string, buildLdflags []string) {
+	t.Helper()
+
+	machine, known := goarchMachines[o.Goarch]
+	if !known {
+		t.Fatalf("a linux/%s override, an architecture the release does not build", o.Goarch)
+	}
+	if want := loaders[machine]; path != want.path {
+		t.Errorf("the linux/%s override passes -I %q, want %q, the loader the check holds an %s binary to", o.Goarch, path, want.path, want.name)
+	}
+	if len(o.Ldflags) == 0 || len(buildLdflags) == 0 || o.Ldflags[0] != buildLdflags[0] {
+		t.Errorf("the linux/%s override's ldflags %q do not open with the build's own %q", o.Goarch, o.Ldflags, buildLdflags)
 	}
 }
