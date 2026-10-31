@@ -19,6 +19,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -794,11 +797,19 @@ var unformattedRoutes = map[string]string{
 	"branch.unprotect": "branches registers no formatter for UnprotectOutput, so the action renders as JSON; the migration adds the confirmation card",
 }
 
-// TestAllMarkdownFormattersRegistered verifies two things the registry used
-// to leave unproven: every sub-package that registers a formatter, in any of
-// its non-test files, has at least one type in the registry; and every
-// catalog route that names an output type has a formatter for it, held to the
-// baseline above.
+// TestAllMarkdownFormattersRegistered verifies what the registry used to
+// leave unproven: every sub-package that registers a formatter, in any of
+// its non-test files, has at least one type in the registry; every catalog
+// route that names an output type has a formatter for it, held to the
+// baseline above; and the figures CLAUDE.md states for the registry are the
+// ones it holds. Those figures stood at ~579 in 166 sub-packages while the
+// tree had moved on (issue 1448), because nothing read them.
+//
+// The figures count the distinct types in the registry, not the registration
+// calls, and leave out the fixtures this package's own tests register, so
+// they are what the server binary holds. The comparison is a freshness check
+// and defers to the harness ([freshness.SkipIfDeferred]); what the count
+// rests on is checked everywhere.
 func TestAllMarkdownFormattersRegistered(t *testing.T) {
 	typeNames := toolutil.RegisteredMarkdownTypeNames()
 	if len(typeNames) == 0 {
@@ -823,7 +834,321 @@ func TestAllMarkdownFormattersRegistered(t *testing.T) {
 		assertRoutesHaveFormatters(t)
 	})
 
-	t.Logf("verified %d registered formatter types across %d packages", len(typeNames), len(registeredPkgs))
+	figures := servedMarkdownFigures(toolutil.RegisteredMarkdownTypes(), reflect.TypeFor[ActionCatalogOptions]().PkgPath())
+	t.Run("the figures leave out only this package's test fixtures", func(t *testing.T) {
+		served, fixtures := markdownRegistrationArity(t, ".")
+		for _, problem := range fixtureAccountingProblems(served, fixtures, figures) {
+			t.Error(problem)
+		}
+	})
+	t.Run("CLAUDE.md states the registry's figures", func(t *testing.T) {
+		freshness.SkipIfDeferred(t)
+		doc, err := os.ReadFile(filepath.Join("..", "..", "CLAUDE.md"))
+		if err != nil {
+			t.Fatalf("ReadFile CLAUDE.md: %v", err)
+		}
+		if problem := markdownRegistryFigureProblem(string(doc), figures); problem != "" {
+			t.Error(problem)
+		}
+	})
+
+	t.Logf("verified %d registered formatter types across %d packages; %d served from %d packages, %d test fixtures",
+		len(typeNames), len(registeredPkgs), figures.types, figures.packages, figures.fixtures)
+}
+
+// markdownFigures is the registry as the server binary holds it: the
+// distinct types with a formatter and the packages that declare them, and
+// apart from both the fixtures this package's tests register, which a test
+// binary holds and the server does not.
+type markdownFigures struct {
+	types, packages, fixtures int
+}
+
+// servedMarkdownFigures counts the registered types once each, a type with a
+// string and a result formatter included, and takes a type declared in self,
+// the package under test, for a fixture: its non-test files register nothing,
+// which [fixtureAccountingProblems] holds.
+func servedMarkdownFigures(types []reflect.Type, self string) markdownFigures {
+	seen := make(map[reflect.Type]bool, len(types))
+	packages := make(map[string]bool)
+	var figures markdownFigures
+	for _, ty := range types {
+		if seen[ty] {
+			continue
+		}
+		seen[ty] = true
+		if ty.PkgPath() == self {
+			figures.fixtures++
+			continue
+		}
+		figures.types++
+		packages[ty.PkgPath()] = true
+	}
+	figures.packages = len(packages)
+	return figures
+}
+
+// fixtureAccountingProblems holds the assumption the figures rest on to what
+// the package's source registers, served from its non-test files and
+// fixtures from its test files: the non-test files register no formatter,
+// whose type the figures would take for a fixture and leave out, and the
+// test files register exactly the types the figures took for fixtures, so a
+// fixture for a type of another package is not counted as served.
+func fixtureAccountingProblems(served, fixtures int, figures markdownFigures) []string {
+	var problems []string
+	if served != 0 {
+		problems = append(problems, fmt.Sprintf("types registered from the non-test files of package tools: %d; the figures take a type of the package for a test fixture, so count these as served first", served))
+	}
+	if fixtures != figures.fixtures {
+		problems = append(problems, fmt.Sprintf("types registered from the test files of package tools: %d, types of the package in the registry: %d; a fixture for a type of another package would be counted as served", fixtures, figures.fixtures))
+	}
+	return problems
+}
+
+// markdownRegistrationArity sums the types the registration calls in the Go
+// files of dir register, the non-test files apart from the test files: a
+// RegisterMarkdownPair registers two and a RegisterMarkdownTriple three. It
+// reads the syntax tree rather than the text, so a call a comment names is
+// not one.
+func markdownRegistrationArity(t *testing.T, dir string) (served, fixtures int) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir %s: %v", dir, err)
+	}
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
+		if parseErr != nil {
+			t.Fatalf("ParseFile %s: %v", filepath.Join(dir, name), parseErr)
+		}
+		registered := 0
+		ast.Inspect(file, func(node ast.Node) bool {
+			if call, ok := node.(*ast.CallExpr); ok {
+				registered += registrationCallArity(call)
+			}
+			return true
+		})
+		if strings.HasSuffix(name, "_test.go") {
+			fixtures += registered
+		} else {
+			served += registered
+		}
+	}
+	return served, fixtures
+}
+
+// registrationTypes is how many types each registration helper of toolutil
+// registers.
+var registrationTypes = map[string]int{
+	"RegisterMarkdown":          1,
+	"RegisterMarkdownAnnotated": 1,
+	"RegisterMarkdownResult":    1,
+	"RegisterMarkdownPair":      2,
+	"RegisterMarkdownTriple":    3,
+}
+
+// registrationCallArity returns how many types call registers, 0 for a call
+// that is not to a registration helper, its type arguments written or not.
+func registrationCallArity(call *ast.CallExpr) int {
+	fun := call.Fun
+	switch f := fun.(type) {
+	case *ast.IndexExpr:
+		fun = f.X
+	case *ast.IndexListExpr:
+		fun = f.X
+	}
+	sel, ok := fun.(*ast.SelectorExpr)
+	if !ok {
+		return 0
+	}
+	if pkg, isIdent := sel.X.(*ast.Ident); !isIdent || pkg.Name != "toolutil" {
+		return 0
+	}
+	return registrationTypes[sel.Sel.Name]
+}
+
+// markdownRegistryFigure matches the sentence of CLAUDE.md's Markdown
+// registry section that states the registry's size.
+var markdownRegistryFigure = regexp.MustCompile(`(\d+) output types have a Markdown formatter, declared in (\d+) packages`)
+
+// markdownRegistryFigureProblem returns what is wrong with the registry
+// figures doc states, one line per sentence stating others than figures, or
+// "" when every one states them. A document stating none is wrong too: the
+// figure the section used to carry went stale because nothing read it.
+func markdownRegistryFigureProblem(doc string, figures markdownFigures) string {
+	want := fmt.Sprintf("%d output types have a Markdown formatter, declared in %d packages", figures.types, figures.packages)
+	stated := false
+	var problems []string
+	for i, line := range strings.Split(doc, "\n") {
+		for _, m := range markdownRegistryFigure.FindAllStringSubmatch(line, -1) {
+			stated = true
+			if m[0] != want {
+				problems = append(problems, fmt.Sprintf("CLAUDE.md:%d states %s output types in %s packages and the registry holds %d in %d: write %q",
+					i+1, m[1], m[2], figures.types, figures.packages, want))
+			}
+		}
+	}
+	if !stated {
+		return fmt.Sprintf("CLAUDE.md states no Markdown registry figure: its Markdown registry section should say %q", want)
+	}
+	return strings.Join(problems, "\n")
+}
+
+// TestMarkdownRegistryFigureProblem_PlantedDocuments_NameEachStaleOrMissingFigure
+// drives the CLAUDE.md comparison with planted documents, so the subtest
+// that reads the real one is known to fail on each way the sentence can go
+// wrong: a stale figure of either kind, the form the section carried before
+// it was held, and one stale sentence beside a current one.
+func TestMarkdownRegistryFigureProblem_PlantedDocuments_NameEachStaleOrMissingFigure(t *testing.T) {
+	figures := markdownFigures{types: 604, packages: 169}
+	const current = "- 604 output types have a Markdown formatter, declared in 169 packages (the sub-packages and `toolutil`)"
+	const write = `write "604 output types have a Markdown formatter, declared in 169 packages"`
+	tests := []struct {
+		name string
+		doc  string
+		want string
+	}{
+		{name: "current figures", doc: "# Claude\n\n" + current + "\n", want: ""},
+		{
+			name: "stale type count",
+			doc:  "# Claude\n\n- 603 output types have a Markdown formatter, declared in 169 packages\n",
+			want: "CLAUDE.md:3 states 603 output types in 169 packages and the registry holds 604 in 169: " + write,
+		},
+		{
+			name: "stale package count",
+			doc:  "# Claude\n\n- 604 output types have a Markdown formatter, declared in 168 packages\n",
+			want: "CLAUDE.md:3 states 604 output types in 168 packages and the registry holds 604 in 169: " + write,
+		},
+		{
+			name: "the form before the figures were held",
+			doc:  "# Claude\n\n- ~579 registrations across 166 sub-packages, validated by `TestAllMarkdownFormattersRegistered`\n",
+			want: `CLAUDE.md states no Markdown registry figure: its Markdown registry section should say "604 output types have a Markdown formatter, declared in 169 packages"`,
+		},
+		{
+			name: "one stale sentence beside a current one",
+			doc:  current + "\n\n- 590 output types have a Markdown formatter, declared in 168 packages\n",
+			want: "CLAUDE.md:3 states 590 output types in 168 packages and the registry holds 604 in 169: " + write,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := markdownRegistryFigureProblem(tt.doc, figures); got != tt.want {
+				t.Errorf("markdownRegistryFigureProblem() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestServedMarkdownFigures_RegistryWithFixtureAndDuplicate_CountsServedTypesOnce
+// verifies the count the figures are made of: a type listed twice, as one
+// with a string and a result formatter is, counts once, a type of the
+// package under test is a fixture and counts in neither figure, and the
+// packages are the distinct ones the served types are declared in.
+func TestServedMarkdownFigures_RegistryWithFixtureAndDuplicate_CountsServedTypesOnce(t *testing.T) {
+	branchesOutput := reflect.TypeFor[branches.Output]()
+	types := []reflect.Type{
+		branchesOutput,
+		branchesOutput,
+		reflect.TypeFor[branches.ListOutput](),
+		reflect.TypeFor[commits.Output](),
+		reflect.TypeFor[toolutil.DeleteOutput](),
+		reflect.TypeFor[pointerHintedOutput](),
+	}
+	got := servedMarkdownFigures(types, reflect.TypeFor[ActionCatalogOptions]().PkgPath())
+	want := markdownFigures{types: 4, packages: 3, fixtures: 1}
+	if got != want {
+		t.Errorf("servedMarkdownFigures() = %+v, want %+v", got, want)
+	}
+}
+
+// TestFixtureAccountingProblems_PlantedPackages_CountTypesNotMentions plants
+// a package's source and holds the fixture accounting to it: a registration
+// call counts the types it registers, a generic instantiation included, a
+// call a comment names or another package's function of the same name counts
+// nothing, and a planted non-test registration, or a fixture count the
+// registry does not hold, is reported.
+func TestFixtureAccountingProblems_PlantedPackages_CountTypesNotMentions(t *testing.T) {
+	const testFile = "package tools\n\n" +
+		"// toolutil.RegisterMarkdown(formatNothing) is named here and called nowhere.\n" +
+		"func init() {\n" +
+		"\ttoolutil.RegisterMarkdown(formatA)\n" +
+		"\ttoolutil.RegisterMarkdown[b](formatB)\n" +
+		"\ttoolutil.RegisterMarkdownPair[c, d](formatC, formatD)\n" +
+		"\ttoolutil.RegisterMarkdownTriple(formatE, formatF, formatG)\n" +
+		"\tother.RegisterMarkdown(formatH)\n" +
+		"\tvendored.toolutil.RegisterMarkdown(formatM)\n" +
+		"\ttoolutil.NotARegistration(formatI)\n" +
+		"\tregisterLocally(formatJ)\n" +
+		"}\n"
+	tests := []struct {
+		name         string
+		files        map[string]string
+		fixtures     int
+		wantServed   int
+		wantFixtures int
+		wantProblems []string
+	}{
+		{
+			name: "fixtures only, counted by type",
+			files: map[string]string{
+				"fixtures_test.go": testFile,
+				"register.go":      "package tools\n\nfunc register() {}\n",
+				"notes.txt":        "toolutil.RegisterMarkdown(formatL)\n",
+			},
+			fixtures:     7,
+			wantServed:   0,
+			wantFixtures: 7,
+		},
+		{
+			name: "a registration in a non-test file",
+			files: map[string]string{
+				"fixtures_test.go": testFile,
+				"markdown.go":      "package tools\n\nfunc init() {\n\ttoolutil.RegisterMarkdownResult(formatK)\n}\n",
+			},
+			fixtures:     7,
+			wantServed:   1,
+			wantFixtures: 7,
+			wantProblems: []string{
+				"types registered from the non-test files of package tools: 1; the figures take a type of the package for a test fixture, so count these as served first",
+			},
+		},
+		{
+			name:         "a fixture the registry holds under another package",
+			files:        map[string]string{"fixtures_test.go": testFile},
+			fixtures:     6,
+			wantServed:   0,
+			wantFixtures: 7,
+			wantProblems: []string{
+				"types registered from the test files of package tools: 7, types of the package in the registry: 6; a fixture for a type of another package would be counted as served",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, src := range tt.files {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
+					t.Fatalf("WriteFile %s: %v", name, err)
+				}
+			}
+			if err := os.Mkdir(filepath.Join(dir, "sub.go"), 0o700); err != nil {
+				t.Fatalf("Mkdir: %v", err)
+			}
+			served, fixtures := markdownRegistrationArity(t, dir)
+			if served != tt.wantServed || fixtures != tt.wantFixtures {
+				t.Errorf("markdownRegistrationArity() = (%d, %d), want (%d, %d)", served, fixtures, tt.wantServed, tt.wantFixtures)
+			}
+			got := fixtureAccountingProblems(served, fixtures, markdownFigures{fixtures: tt.fixtures})
+			if !slices.Equal(got, tt.wantProblems) {
+				t.Errorf("fixtureAccountingProblems() = %q, want %q", got, tt.wantProblems)
+			}
+		})
+	}
 }
 
 // assertRegisteringPackagesHaveTypes walks every sub-package's non-test
