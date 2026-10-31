@@ -977,7 +977,7 @@ func registrationCallArity(call *ast.CallExpr) int {
 var markdownRegistryFigure = regexp.MustCompile(`(\d+) output types have a Markdown formatter, declared in (\d+) packages`)
 
 // markdownRegistryFigureProblem returns what is wrong with the registry
-// figures doc states, one line per sentence stating others than figures, or
+// figures doc states, one line per sentence that states other figures, or
 // "" when every one states them. A document stating none is wrong too: the
 // figure the section used to carry went stale because nothing read it.
 func markdownRegistryFigureProblem(doc string, figures markdownFigures) string {
