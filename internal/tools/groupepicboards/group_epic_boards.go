@@ -123,13 +123,15 @@ func toOutput(b *groupEpicBoardAPI) Output {
 	return out
 }
 
-// rawListBoards issues a raw REST GET for a group's epic boards, decoding the
-// full documented response (including SDK-missing hide_*_list, label, and list
-// fields) into a slice of [groupEpicBoardAPI]. The supplied opts encode
-// pagination via their url struct tags, and the returned gl.Response preserves
-// pagination headers for [toolutil.PaginationFromResponse].
-func rawListBoards(ctx context.Context, client *gitlabclient.Client, groupID string, opts *gl.ListGroupEpicBoardsOptions) ([]*groupEpicBoardAPI, *gl.Response, error) {
-	path := fmt.Sprintf("groups/%s/epic_boards", gl.PathEscape(groupID))
+// rawListBoards issues a raw REST GET for a group's epic boards at path,
+// decoding the full documented response (including SDK-missing hide_*_list,
+// label, and list fields) into a slice of [groupEpicBoardAPI]. The supplied
+// opts encode pagination via their url struct tags, and the returned
+// gl.Response preserves pagination headers for
+// [toolutil.PaginationFromResponse]. The caller builds the path, as the
+// deployments helpers do, so a request that cannot be built is reachable in a
+// test.
+func rawListBoards(ctx context.Context, client *gitlabclient.Client, path string, opts *gl.ListGroupEpicBoardsOptions) ([]*groupEpicBoardAPI, *gl.Response, error) {
 	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
 		return nil, nil, err
@@ -139,10 +141,9 @@ func rawListBoards(ctx context.Context, client *gitlabclient.Client, groupID str
 	return boards, resp, err
 }
 
-// rawGetBoard issues a raw REST GET for a single group epic board, decoding the
-// full documented response into a [groupEpicBoardAPI].
-func rawGetBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64) (*groupEpicBoardAPI, *gl.Response, error) {
-	path := fmt.Sprintf("groups/%s/epic_boards/%d", gl.PathEscape(groupID), boardID)
+// rawGetBoard issues a raw REST GET for a single group epic board at path,
+// decoding the full documented response into a [groupEpicBoardAPI].
+func rawGetBoard(ctx context.Context, client *gitlabclient.Client, path string) (*groupEpicBoardAPI, *gl.Response, error) {
 	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
 		return nil, nil, err
@@ -168,7 +169,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	boards, resp, err := rawListBoards(ctx, client, string(input.GroupID), opts)
+	path := fmt.Sprintf("groups/%s/epic_boards", gl.PathEscape(string(input.GroupID)))
+	boards, resp, err := rawListBoards(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupEpicBoardList", err, http.StatusNotFound, groupEpicBoardHint)
 	}
@@ -190,7 +192,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.BoardID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("groupEpicBoardGet", "board_id")
 	}
-	b, _, err := rawGetBoard(ctx, client, string(input.GroupID), input.BoardID)
+	path := fmt.Sprintf("groups/%s/epic_boards/%d", gl.PathEscape(string(input.GroupID)), input.BoardID)
+	b, _, err := rawGetBoard(ctx, client, path)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupEpicBoardGet", err, http.StatusNotFound, "verify board_id with group.epic_board_list; if the list is empty, configure an epic board in GitLab first")
 	}

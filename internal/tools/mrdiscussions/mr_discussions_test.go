@@ -1144,6 +1144,28 @@ func TestValidatePosition_ValidFile(t *testing.T) {
 	}
 }
 
+// TestValidatePosition_FileWithEmptyDiff_SkipsTheLineCheck verifies that a
+// file GitLab lists with an empty diff, as it does for a binary file or one
+// whose diff is too large to show, passes whatever line the position names:
+// there are no lines to hold it to, so GitLab judges the write.
+func TestValidatePosition_FileWithEmptyDiff_SkipsTheLineCheck(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"logo.png","new_path":"logo.png","diff":""}]`)
+	}))
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
+		NewPath: "logo.png",
+		NewLine: 99,
+	})
+	if err != nil {
+		t.Errorf("validatePosition() error = %v, want nil for a file with no diff lines", err)
+	}
+}
+
 // TestValidatePosition_OldPathFallback verifies that validatePosition
 // uses OldPath when NewPath is empty.
 func TestValidatePosition_OldPathFallback(t *testing.T) {

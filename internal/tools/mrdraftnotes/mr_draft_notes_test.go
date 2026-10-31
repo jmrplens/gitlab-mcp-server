@@ -1163,6 +1163,28 @@ func TestValidatePosition_FileFoundInDiff(t *testing.T) {
 	}
 }
 
+// TestValidatePosition_FileWithEmptyDiff_SkipsTheLineCheck verifies that a
+// file GitLab lists with an empty diff, as it does for a binary file or one
+// whose diff is too large to show, passes whatever line the position names:
+// there are no lines to hold it to, so GitLab judges the write.
+func TestValidatePosition_FileWithEmptyDiff_SkipsTheLineCheck(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"logo.png","new_path":"logo.png","diff":""}]`)
+	}))
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
+		NewPath: "logo.png",
+		NewLine: 99,
+	})
+	if err != nil {
+		t.Errorf("validatePosition() error = %v, want nil for a file with no diff lines", err)
+	}
+}
+
 // TestValidatePosition_DiffFetchError verifies that validatePosition silently
 // skips validation when the diff API returns an error (best-effort behavior).
 func TestValidatePosition_DiffFetchError(t *testing.T) {

@@ -537,6 +537,21 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestRawBoardFetch_RequestThatCannotBeBuilt_IsRefusedBeforeAnyRequest covers
+// the request-building error of both raw helpers. The handlers escape the
+// group into the path, so only a path built by hand reaches it: an invalid
+// percent-escape ("%zz") makes NewRequest fail, and the helper returns that
+// error without sending anything.
+func TestRawBoardFetch_RequestThatCannotBeBuilt_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	if boards, resp, err := rawListBoards(t.Context(), client, "groups/%zz/epic_boards", nil); err == nil || boards != nil || resp != nil {
+		t.Errorf("rawListBoards() = %v, %v, %v; want nil, nil and a request error", boards, resp, err)
+	}
+	if board, resp, err := rawGetBoard(t.Context(), client, "groups/%zz/epic_boards/1"); err == nil || board != nil || resp != nil {
+		t.Errorf("rawGetBoard() = %v, %v, %v; want nil, nil and a request error", board, resp, err)
+	}
+}
+
 // TestGet_NotFoundIncludesActionableHint verifies that Get_NotFoundIncludesActionableHint returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
