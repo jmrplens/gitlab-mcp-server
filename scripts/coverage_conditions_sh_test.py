@@ -46,6 +46,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 SCRIPT = os.path.join(ROOT, "scripts", "coverage-conditions.sh")
 MAKEFILE = os.path.join(ROOT, "Makefile")
 CI_WORKFLOW = os.path.join(ROOT, ".github", "workflows", "ci.yml")
+CONDITIONS_WORKFLOW = os.path.join(ROOT, ".github", "workflows", "conditions.yml")
 SPEC_CONDITIONS = os.path.join(ROOT, "scripts", "check-spec-conditions.sh")
 GOBCO = "github.com/rillig/gobco@v1.3.4"
 
@@ -54,15 +55,30 @@ GOBCO = "github.com/rillig/gobco@v1.3.4"
 # line per call to STUB_LOG. Its interpreter line is written in setUp,
 # naming the interpreter running these tests with -S, so that no site
 # initialisation slows every call down.
+#
+# It is gobco when it is run under that name, which is how `go install`
+# leaves it on PATH, and gobco reached through `go run` otherwise. With
+# STUB_NETWORK=unreachable the two calls that fetch gobco, `go run` and
+# `go install` of it, fail the way they failed on a macOS runner that lost
+# name resolution (issue 1515); go env, go list and go tool, which read only
+# the toolchain and the module, answer as before, and so does gobco run
+# under its own name, which needs nothing from the network.
 STUB_GO = r'''import json
 import os
 import re
+import shutil
 import sys
 import time
 
 args = sys.argv[1:]
 env = os.environ
+TOOL = os.path.basename(sys.argv[0])
 GOBCO = "github.com/rillig/gobco@v1.3.4"
+# What go prints when it cannot ask the module proxy for gobco, as the
+# macOS runner of run 40253060518 printed it.
+UNREACHABLE = ('go: github.com/rillig/gobco@v1.3.4: loading deprecation for github.com/rillig/gobco: '
+               'module github.com/rillig/gobco: Get "https://proxy.golang.org/github.com/rillig/gobco/@v/list": '
+               'dial tcp: lookup proxy.golang.org: no such host')
 # The platform this call is for: GOOS and GOARCH as the go command reads them,
 # linux/amd64 when neither is set.
 GOOS = env.get("GOOS", "linux")
@@ -181,11 +197,40 @@ def render(template, fields):
     return template
 
 
-entry = {"argv": args, "cwd": os.getcwd(), "goos": GOOS, "goarch": GOARCH}
+entry = {"tool": TOOL, "argv": args, "cwd": os.getcwd(), "goos": GOOS, "goarch": GOARCH, "time": time.time()}
 status = 0
-if args == ["env", "GOOS", "GOARCH"]:
-    print(GOOS)
-    print(GOARCH)
+# gobco's own arguments, whichever way it was run, or None for a call that
+# does not run it.
+gobco_args = None
+if TOOL == "gobco":
+    if args == ["-version"]:
+        print(env.get("STUB_GOBCO_VERSION", "1.3.4"))
+    else:
+        gobco_args = args
+elif args[:2] in (["run", GOBCO], ["install", GOBCO]) and env.get("STUB_NETWORK") == "unreachable":
+    sys.stderr.write(UNREACHABLE + "\n")
+    status = 1
+elif args == ["install", GOBCO]:
+    # The attempts before this one, from the log, fail while
+    # STUB_INSTALL_FAILURES says so. One that succeeds leaves gobco in GOBIN,
+    # as go install does, when GOBIN is set.
+    with open(env["STUB_LOG"], encoding="utf-8") as fh:
+        earlier = sum(1 for line in fh if json.loads(line)["argv"] == ["install", GOBCO])
+    if earlier < int(env.get("STUB_INSTALL_FAILURES", "0")):
+        sys.stderr.write(UNREACHABLE.replace("no such host", "i/o timeout") + "\n")
+        status = 1
+    elif env.get("GOBIN"):
+        os.makedirs(env["GOBIN"], exist_ok=True)
+        shutil.copy(sys.argv[0], os.path.join(env["GOBIN"], "gobco"))
+elif args[:2] == ["run", GOBCO]:
+    gobco_args = args[2:]
+elif args[:1] == ["env"] and len(args) > 1 and set(args[1:]) <= {"GOOS", "GOARCH", "GOMODCACHE"}:
+    # One line per name asked for, in order. GOMODCACHE is the variable when
+    # it is set, and GOPATH's pkg/mod otherwise, as go derives it.
+    values = {"GOOS": GOOS, "GOARCH": GOARCH,
+              "GOMODCACHE": env.get("GOMODCACHE") or os.path.join(env.get("GOPATH", "/nonexistent/go"), "pkg", "mod")}
+    for name in args[1:]:
+        print(values[name])
 elif args == ["tool", "dist", "list"]:
     # A slice of what the toolchain prints, one os/arch pair per line.
     for pair in ("aix/ppc64", "android/arm64", "darwin/amd64", "darwin/arm64", "freebsd/amd64",
@@ -227,11 +272,20 @@ elif args[:2] == ["list", "-e"]:
         ('{{join .XTestImports " "}}', " ".join(xtest_imports)),
         ("{{with .Error}}{{.}}{{end}}", error),
     ]))
-elif args[:2] == ["run", GOBCO]:
+else:
+    sys.stderr.write("stub %s: unexpected call %r\n" % (TOOL, args))
+    status = 2
+
+if gobco_args is not None:
     here = os.getcwd()
-    tags = tags_of(args)
+    tags = tags_of(gobco_args)
+    # The module cache gobco's go test would use: gobco hands it its own
+    # environment without GOPATH, so only GOMODCACHE carries the one go uses
+    # where the script runs.
+    entry["gomodcache"] = env.get("GOMODCACHE")
     if env.get("STUB_STARTED"):
-        open(env["STUB_STARTED"], "w", encoding="utf-8").close()
+        with open(env["STUB_STARTED"], "w", encoding="utf-8") as fh:
+            fh.write(TOOL)
     files = go_files(here)
     entry["files"] = files
     entry["constrained"] = [n for n in files if header_constraint(os.path.join(here, n))]
@@ -300,7 +354,7 @@ elif args[:2] == ["run", GOBCO]:
         # gobco opens its figure with the mode it counted in: -branch counts
         # whole controlling conditions, and its default every atomic one. A
         # case sets STUB_GOBCO_KIND to have it answer in the other words.
-        kind = env.get("STUB_GOBCO_KIND", "Branch coverage" if "-branch" in args else "Condition coverage")
+        kind = env.get("STUB_GOBCO_KIND", "Branch coverage" if "-branch" in gobco_args else "Condition coverage")
         print("")
         if figure != "none":
             print(kind + ": " + figure)
@@ -314,9 +368,6 @@ elif args[:2] == ["run", GOBCO]:
             else:
                 print('%s:4:9: condition "c == 1" was once true but never false' % files[0])
         status = int(env.get("STUB_GOBCO_STATUS", "0"))
-else:
-    sys.stderr.write("stub go: unexpected call %r\n" % (args,))
-    status = 2
 
 entry["status"] = status
 with open(env["STUB_LOG"], "a", encoding="utf-8") as fh:
@@ -439,10 +490,15 @@ class CoverageConditionsTest(unittest.TestCase):
             fh.write("module example.com/m\n\ngo 1.27\n")
         self.bin = os.path.join(self.scratch, "bin")
         os.makedirs(self.bin)
-        stub = os.path.join(self.bin, "go")
-        with open(stub, "w", encoding="utf-8") as fh:
+        self.stub = os.path.join(self.bin, "go")
+        with open(self.stub, "w", encoding="utf-8") as fh:
             fh.write("#!" + sys.executable + " -S\n" + STUB_GO)
-        os.chmod(stub, 0o755)
+        os.chmod(self.stub, 0o755)
+        # Where go install leaves gobco, which is on PATH after the stand-in
+        # go as GOPATH/bin is on a runner after setup-go, and empty until a
+        # case installs or plants gobco there.
+        self.gobin = os.path.join(self.scratch, "gobin")
+        os.makedirs(self.gobin)
         self.log = os.path.join(self.scratch, "go.log")
         # The script's temporary directory, so that what it stages there and
         # whether it removed it can both be seen.
@@ -450,15 +506,28 @@ class CoverageConditionsTest(unittest.TestCase):
         os.makedirs(self.tmp)
 
     def environment(self, env=None):
-        run_env = {k: v for k, v in os.environ.items() if not k.startswith("STUB_")}
+        # A module cache this machine names is left out too, since the
+        # stand-in reports the one GOPATH implies when none is named.
+        run_env = {k: v for k, v in os.environ.items() if not k.startswith("STUB_") and k != "GOMODCACHE"}
+        # A gobco this machine has installed is kept off PATH, since the
+        # script runs the one PATH finds, and each case decides whether
+        # there is one.
+        machine = [d for d in os.environ.get("PATH", "").split(os.pathsep)
+                   if d and not os.path.exists(os.path.join(d, "gobco"))]
         run_env.update({
-            "PATH": self.bin + os.pathsep + os.environ.get("PATH", ""),
+            "PATH": os.pathsep.join([self.bin, self.gobin, *machine]),
+            "GOBIN": self.gobin,
             "STUB_LOG": self.log,
             "STUB_ROOT": self.root,
             "TMPDIR": self.tmp,
         })
         run_env.update(env or {})
         return run_env
+
+    def plant_gobco(self, directory=None):
+        """Leaves the stand-in, under the name gobco, where go install would
+        have left it, or in the directory given."""
+        shutil.copy(self.stub, os.path.join(directory or self.gobin, "gobco"))
 
     def calls(self):
         with open(self.log, encoding="utf-8") as fh:
@@ -474,7 +543,15 @@ class CoverageConditionsTest(unittest.TestCase):
 
     @staticmethod
     def gobco(calls):
-        return [c for c in calls if c["argv"][:1] == ["run"]]
+        """The calls that measured: gobco through go run, or gobco itself
+        asked for anything but its version."""
+        return [c for c in calls
+                if c["argv"][:1] == ["run"] or (c["tool"] == "gobco" and c["argv"] != ["-version"])]
+
+    @staticmethod
+    def fetches(calls):
+        """The calls that need the module proxy: go run and go install."""
+        return [c for c in calls if c["tool"] == "go" and c["argv"][:1] in (["run"], ["install"])]
 
     @staticmethod
     def lists(calls):
@@ -1043,6 +1120,211 @@ class CoverageConditionsTest(unittest.TestCase):
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 self.assertEqual(self.gobco(calls)[0]["argv"], argv)
 
+    def test_gobco_on_path_measures_with_the_network_unreachable(self):
+        # go run asks the module proxy for gobco's versions on every run, so a
+        # runner that lost name resolution failed the step without measuring
+        # anything (issue 1515). The pinned gobco on PATH needs no network:
+        # the script runs it in the directory and with the arguments go run
+        # would have handed it, and fetches nothing.
+        cases = [
+            ("where it is", ("./internal/plain",), {}, [], False, "Condition coverage: 3/4"),
+            ("staged", ("./cmd/tool",), {}, [], True, "Condition coverage: 3/4"),
+            ("tags, mode and test flags", ("./test/tagged", "e2e"),
+             {"GOBCO_MODE": "branch", "GOBCO_TEST_FLAGS": "-timeout=30m"},
+             ["-branch", "-test=-tags=e2e", "-test=-timeout=30m"], True, "Branch coverage: 3/4"),
+        ]
+        self.plant_gobco()
+        for name, args, env, argv, staged, figure in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script(*args, env={"STUB_NETWORK": "unreachable", **env})
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(self.fetches(calls), [])
+                runs = self.gobco(calls)
+                self.assertEqual(len(runs), 1, calls)
+                self.assertEqual(runs[0]["tool"], "gobco")
+                self.assertEqual(runs[0]["argv"], argv)
+                rel = args[0][len("./"):]
+                self.assertEqual(runs[0]["cwd"].startswith(self.tmp + os.sep), staged, runs[0]["cwd"])
+                self.assertTrue(runs[0]["cwd"].endswith(os.sep + rel.replace("/", os.sep)), runs[0]["cwd"])
+                self.assertIn(figure, proc.stdout)
+                self.assertEqual(self.staged_copies(), [])
+
+    def test_without_the_pinned_gobco_on_path_gobco_runs_through_go_run(self):
+        # A gobco of another release is not the one the figures are taken
+        # with, so it is not run, and a PATH without gobco has none to run.
+        # Either way go run fetches the pinned release, as before, and with
+        # the network unreachable the run fails as it failed on the macOS
+        # runner, saying its figures are not a measurement and what measures
+        # without the network.
+        gobco = os.path.join(self.gobin, "gobco")
+        cases = [
+            ("no gobco on PATH", False, {}, 0),
+            ("another release on PATH", True, {"STUB_GOBCO_VERSION": "1.3.3"}, 0),
+            ("no gobco and no network", False, {"STUB_NETWORK": "unreachable"}, 1),
+        ]
+        for name, planted, env, code in cases:
+            with self.subTest(name):
+                if os.path.exists(gobco):
+                    os.remove(gobco)
+                if planted:
+                    self.plant_gobco()
+                proc, calls = self.run_script("./internal/plain", env=env)
+                self.assertEqual(proc.returncode, code, proc.stdout + proc.stderr)
+                runs = self.gobco(calls)
+                self.assertEqual([run["argv"] for run in runs], [["run", GOBCO]])
+                self.assertEqual(runs[0]["tool"], "go")
+                self.assertEqual(runs[0]["cwd"], os.path.join(self.root, "internal", "plain"))
+                said = proc.stdout + proc.stderr
+                self.assertEqual("lookup proxy.golang.org: no such host" in said, code == 1, said)
+                self.assertEqual("gobco exited 1 on ./internal/plain, so any figure above is not a measurement" in said,
+                                 code == 1, said)
+                self.assertEqual("scripts/coverage-conditions.sh --install puts gobco v1.3.4 on PATH" in said,
+                                 code == 1, said)
+
+    def test_gobco_is_handed_the_module_cache_go_uses_here(self):
+        # gobco runs its go test with its own environment less GOPATH
+        # (goTest.env, v1.3.4), so where GOPATH names a directory other than
+        # the default its go test reads another module cache, downloads every
+        # dependency into it, and fails without the network even with gobco
+        # on PATH. The script hands it GOMODCACHE as go reports it here, so
+        # the cache stays the one go mod download filled, whichever way
+        # gobco runs.
+        gopath = os.path.join(self.scratch, "gopath")
+        cases = [
+            ("through go run", False),
+            ("from PATH", True),
+        ]
+        for name, planted in cases:
+            with self.subTest(name):
+                if planted:
+                    self.plant_gobco()
+                proc, calls = self.run_script("./cmd/tool", env={"GOPATH": gopath})
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                runs = self.gobco(calls)
+                self.assertEqual([run["tool"] for run in runs], ["gobco" if planted else "go"])
+                self.assertEqual(runs[0]["gomodcache"], os.path.join(gopath, "pkg", "mod"))
+
+    def test_failed_run_of_gobco_on_path_exits_1_as_go_run_reports_it(self):
+        # go run reports any non-zero exit of gobco as 1, which is how a
+        # failed run has always exited, and 3 is the gate's alone. gobco run
+        # itself exits with its own status (2 for a panic, go test's for a
+        # failing test), so the script reports each as go run would.
+        self.plant_gobco()
+        for status in (1, 2, 3):
+            with self.subTest(status=status):
+                proc, calls = self.run_script("./internal/plain", env={"STUB_GOBCO_STATUS": str(status)})
+                self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+                runs = self.gobco(calls)
+                self.assertEqual([(run["tool"], run["status"]) for run in runs], [("gobco", status)])
+                self.assertIn("gobco exited 1 on ./internal/plain, so any figure above is not a measurement",
+                              proc.stderr)
+                self.assertNotIn("--install", proc.stderr)
+
+    def test_install_puts_the_pinned_gobco_on_path_in_at_most_three_attempts(self):
+        # go install of the pinned release, tried again after a pause while
+        # the network is away and given up on after three attempts, then
+        # held to the gobco PATH finds, which is the one every measurement
+        # of the job runs.
+        gobco = os.path.join(self.gobin, "gobco")
+        cases = [
+            ("the first attempt", {}, 0, 1),
+            ("the third attempt", {"STUB_INSTALL_FAILURES": "2"}, 0, 3),
+            ("no attempt", {"STUB_INSTALL_FAILURES": "3"}, 1, 3),
+            ("no network", {"STUB_NETWORK": "unreachable"}, 1, 3),
+        ]
+        for name, env, code, attempts in cases:
+            with self.subTest(name):
+                if os.path.exists(gobco):
+                    os.remove(gobco)
+                proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "0", **env})
+                self.assertNotIn("nothing to install", proc.stdout)
+                self.assertEqual(proc.returncode, code, proc.stdout + proc.stderr)
+                self.assertEqual([c["argv"] for c in calls if c["tool"] == "go"], [["install", GOBCO]] * attempts)
+                self.assertEqual(self.gobco(calls), [])
+                for attempt in range(1, attempts):
+                    self.assertIn("gobco: go install %s failed (attempt %d of 3); trying again in 0s"
+                                  % (GOBCO, attempt), proc.stderr)
+                self.assertEqual(proc.stderr.count("trying again"), attempts - 1, proc.stderr)
+                self.assertEqual("gobco: go install %s failed 3 times; giving up" % GOBCO in proc.stderr,
+                                 code == 1, proc.stderr)
+                self.assertEqual(os.path.exists(gobco), code == 0)
+                self.assertEqual("gobco: installed %s" % GOBCO in proc.stdout, code == 0, proc.stdout)
+                self.assertEqual([c["argv"] for c in calls if c["tool"] == "gobco"], [["-version"]] if code == 0 else [])
+
+    def test_install_with_the_pinned_gobco_already_on_path_fetches_nothing(self):
+        # A second install in the same job, or on a machine that has gobco,
+        # asks the network for nothing; another release on PATH is no reason
+        # to skip.
+        cases = [
+            ("the pinned release, no network", {"STUB_NETWORK": "unreachable"}, 0, 0,
+             "gobco: PATH already finds %s at %s; nothing to install" % (GOBCO, os.path.join(self.gobin, "gobco"))),
+            ("another release", {"STUB_GOBCO_VERSION": "1.3.3"}, 1, 1, "gobco: go install %s succeeded" % GOBCO),
+        ]
+        for name, env, code, installs, said in cases:
+            with self.subTest(name):
+                self.plant_gobco()
+                proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "0", **env})
+                self.assertEqual(proc.returncode, code, proc.stdout + proc.stderr)
+                self.assertEqual([c["argv"] for c in calls if c["tool"] == "go"], [["install", GOBCO]] * installs)
+                self.assertIn(said, proc.stdout + proc.stderr)
+
+    def test_install_pauses_between_attempts(self):
+        proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "1", "STUB_INSTALL_FAILURES": "2"})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        started = [c["time"] for c in calls if c["argv"] == ["install", GOBCO]]
+        self.assertEqual(len(started), 3, calls)
+        self.assertGreaterEqual(started[1] - started[0], 1)
+        self.assertGreaterEqual(started[2] - started[1], 1)
+        self.assertIn("trying again in 1s", proc.stderr)
+
+    def test_install_fails_when_path_does_not_find_the_gobco_it_installed(self):
+        # A measurement runs the gobco PATH finds, so an install that leaves
+        # the pinned release where PATH does not look, or behind another
+        # release, leaves every measurement of the job to go run and the
+        # network again.
+        cases = [
+            ("GOBIN off PATH", {"GOBIN": os.path.join(self.scratch, "elsewhere")}, "no gobco"),
+            ("another release found first", {"STUB_GOBCO_VERSION": "1.3.3"},
+             "%s, which reports 1.3.3" % os.path.join(self.gobin, "gobco")),
+        ]
+        for name, env, found in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "0", **env})
+                self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+                self.assertEqual([c["argv"] for c in calls if c["tool"] == "go"], [["install", GOBCO]])
+                self.assertIn("gobco: go install %s succeeded, but PATH finds %s" % (GOBCO, found), proc.stderr)
+                self.assertNotIn("gobco: installed", proc.stdout)
+
+    def test_install_refuses_what_it_cannot_read_before_anything_runs(self):
+        cases = [
+            ("a pause that is a word", ("--install",), {"GOBCO_INSTALL_PAUSE": "soon"},
+             "GOBCO_INSTALL_PAUSE=soon is not a whole number of seconds"),
+            ("a negative pause", ("--install",), {"GOBCO_INSTALL_PAUSE": "-1"},
+             "GOBCO_INSTALL_PAUSE=-1 is not a whole number of seconds"),
+            ("a fractional pause", ("--install",), {"GOBCO_INSTALL_PAUSE": "1.5"},
+             "GOBCO_INSTALL_PAUSE=1.5 is not a whole number of seconds"),
+            ("a package beside it", ("--install", "./internal/plain"), {}, "--install takes no other argument"),
+        ]
+        for name, args, env, said in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script(*args, env=env)
+                self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+                self.assertEqual(calls, [])
+                self.assertIn(said, proc.stderr)
+
+    def test_one_install_lets_every_later_run_of_the_job_measure_without_the_network(self):
+        # What the cross-platform legs do: install once while the network
+        # comes and goes, then measure both packages after it has gone.
+        proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "0", "STUB_INSTALL_FAILURES": "1"})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        for pkg in ("./cmd/tool", "./internal/plain"):
+            with self.subTest(pkg):
+                proc, calls = self.run_script(pkg, env={"STUB_NETWORK": "unreachable",
+                                                        "GOBCO_GATE": "beyond:linux/amd64"})
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(self.fetches(calls), [])
+                self.assertEqual([run["tool"] for run in self.gobco(calls)], ["gobco"])
+
     def test_cross_platform_legs_run_the_gate_through_bash(self):
         # The Windows and macOS legs run the script itself through bash, not
         # make, which windows-latest does not promise, on the two packages
@@ -1063,24 +1345,73 @@ class CoverageConditionsTest(unittest.TestCase):
         self.assertIn("bash scripts/coverage-conditions.sh", body)
         self.assertNotIn("make ", body)
 
+    def workflow_steps(self, path, job):
+        """Every step of one job of a workflow, by name and in order, with
+        its body: the lines below its name, up to the next step."""
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        found = re.search(r"^  %s:\n((?:    .*\n|\n)+)" % re.escape(job), text, re.MULTILINE)
+        self.assertIsNotNone(found, "job %s is missing from %s" % (job, path))
+        return re.findall(r"^      - name: (.+)\n((?:        .*\n|\n)*)", found.group(1), re.MULTILINE)
+
+    def test_workflows_install_gobco_once_before_they_measure(self):
+        # Every job that runs the script installs gobco first, through the
+        # script, so a measurement needs no network and the release stays
+        # pinned in one place (issue 1515): the cross-platform legs of CI and
+        # each job of the on-demand measurement. The install is bounded by
+        # the script's three attempts and by a timeout of its own, and runs
+        # where the measurement does.
+        cases = [
+            ("CI's cross-platform legs", CI_WORKFLOW, "cross_platform", "Condition coverage of the platform halves",
+             "if: matrix.os != 'ubuntu-latest'"),
+            ("the on-demand measurement", CONDITIONS_WORKFLOW, "measure", "Measure", None),
+        ]
+        for name, path, job, measuring, condition in cases:
+            with self.subTest(name):
+                steps = self.workflow_steps(path, job)
+                names = [step for step, _ in steps]
+                self.assertIn("Install gobco", names)
+                self.assertIn(measuring, names)
+                self.assertEqual(names.index("Install gobco") + 1, names.index(measuring), names)
+                body = dict(steps)["Install gobco"]
+                self.assertIn("shell: bash", body)
+                self.assertRegex(body, r"(?m)^        timeout-minutes: [1-9]$")
+                self.assertRegex(body, r"(?m)^        run: bash scripts/coverage-conditions\.sh --install$")
+                self.assertNotIn("rillig/gobco", body)
+                if condition is None:
+                    self.assertNotIn("if:", body)
+                else:
+                    self.assertIn(condition, body)
+                    self.assertIn(condition, dict(steps)[measuring])
+
     def test_an_interrupt_ends_the_run_and_removes_the_copy(self):
         # A handler that only cleaned up would return to the script, which
         # would carry on against the copy it had just removed. A signal sent
         # to the script alone is the case that tells the two apart: gobco
         # finishes normally, and a returning handler would let the script pass
         # its report on and exit 0. SIGINT to the whole process group, as a
-        # terminal sends it, is held too.
+        # terminal sends it, is held too. Each is held with gobco run through
+        # go run and with gobco run from PATH, which the script calls through
+        # a function of its own.
+        gobco = os.path.join(self.gobin, "gobco")
         cases = [
-            ("SIGTERM to the script", signal.SIGTERM, False, 143),
-            ("SIGINT to the script", signal.SIGINT, False, 130),
-            ("SIGINT to the process group", signal.SIGINT, True, 130),
+            ("SIGTERM to the script", signal.SIGTERM, False, 143, "go"),
+            ("SIGINT to the script", signal.SIGINT, False, 130, "go"),
+            ("SIGINT to the process group", signal.SIGINT, True, 130, "go"),
+            ("SIGTERM to the script, gobco on PATH", signal.SIGTERM, False, 143, "gobco"),
+            ("SIGINT to the script, gobco on PATH", signal.SIGINT, False, 130, "gobco"),
+            ("SIGINT to the process group, gobco on PATH", signal.SIGINT, True, 130, "gobco"),
         ]
-        for name, signum, group, status in cases:
+        for name, signum, group, status, tool in cases:
             with self.subTest(name):
                 open(self.log, "w", encoding="utf-8").close()
                 started = os.path.join(self.scratch, "started")
                 if os.path.exists(started):
                     os.remove(started)
+                if os.path.exists(gobco):
+                    os.remove(gobco)
+                if tool == "gobco":
+                    self.plant_gobco()
                 proc = subprocess.Popen(
                     [SCRIPT, "./cmd/tool"], cwd=self.root, start_new_session=True,
                     env=self.environment({"STUB_GOBCO_SLEEP": "1", "STUB_STARTED": started}),
@@ -1089,6 +1420,8 @@ class CoverageConditionsTest(unittest.TestCase):
                 while not os.path.exists(started) and time.monotonic() < deadline:
                     time.sleep(0.02)
                 self.assertTrue(os.path.exists(started), "gobco never started")
+                with open(started, encoding="utf-8") as fh:
+                    self.assertEqual(fh.read(), tool)
                 staged = [entry for entry in self.staged_copies()
                           if os.path.isdir(os.path.join(self.tmp, entry, "module", "cmd", "tool"))]
                 self.assertEqual(len(staged), 1, self.staged_copies())
@@ -1118,6 +1451,12 @@ class CoverageConditionsTest(unittest.TestCase):
         self.assertNotIn("rillig/gobco", spec)
         with open(SCRIPT, encoding="utf-8") as fh:
             self.assertIn(GOBCO, fh.read())
+        # The workflows install it through the script too, so the release
+        # they install is the one the script runs.
+        for path in (CI_WORKFLOW, CONDITIONS_WORKFLOW):
+            with self.subTest(os.path.basename(path)):
+                with open(path, encoding="utf-8") as fh:
+                    self.assertNotIn("rillig/gobco@", fh.read())
 
     def test_script_passes_shellcheck(self):
         shellcheck = shutil.which("shellcheck")

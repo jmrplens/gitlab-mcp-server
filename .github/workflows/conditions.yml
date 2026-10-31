@@ -146,6 +146,15 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go mod download
+      # gobco once for every package of the job, through the script, as
+      # ci.yml's legs install it: the script then runs it from PATH rather
+      # than through `go run`, which asks the module proxy on every run, and a
+      # shard of the tree runs it fifteen times or so, each of which a runner
+      # that lost name resolution would fail (issue 1515).
+      - name: Install gobco
+        shell: bash
+        timeout-minutes: 5
+        run: bash scripts/coverage-conditions.sh --install
       # The script, through bash, exactly as ci.yml's legs run it and as
       # `make coverage-conditions` runs it, with the gate and the mode the
       # dispatch chose, over each package of the job one after another. The

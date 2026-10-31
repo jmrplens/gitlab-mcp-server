@@ -138,7 +138,8 @@
 # (GOBCO_MODE, below) it cannot read; 1 for a package go cannot load, a 0/0
 # report, a report without the figure of its mode, and a gobco or
 # test failure, since `go run` reports any non-zero exit of the program it
-# ran as 1; and 1 or 2 for a command of its own that fails under set -e
+# ran as 1 and the script reports one of gobco run from PATH (below) the
+# same way; and 1 or 2 for a command of its own that fails under set -e
 # (GNU tar and awk exit 2 on a fatal error, as the go command does when it
 # crashes). An interrupt ends a run with 130 or 143. Every caller that only
 # asks whether the run passed reads any non-zero status as a failure, as
@@ -170,6 +171,26 @@
 # it uses for a condition. A report whose figure is in the other mode's words
 # is refused like a 0/0, and any other value of the mode is refused before
 # gobco runs.
+#
+# gobco is run from PATH when the gobco PATH finds reports the release pinned
+# below (gobco -version), and through `go run` of that release otherwise. go
+# run asks the module proxy for the module's versions on every run, to report
+# a deprecation, even with the module in the cache, so a run through it needs
+# the network at that moment: a macOS runner that lost name resolution failed
+# CI's condition step twice in two days without measuring anything (issue
+# 1515). gobco run from PATH needs no network. A gobco of another release is
+# not run, since every figure is taken with the pinned one.
+#
+# `coverage-conditions.sh --install` puts it there, and measures nothing: go
+# install of the pinned release, in at most three attempts with
+# GOBCO_INSTALL_PAUSE seconds between them (10 unless set; anything but a
+# whole number is refused before anything runs), skipped when PATH already
+# finds the pinned release. The gobco PATH finds is then held to that release,
+# so an install that left it where PATH does not look, or behind another
+# release, fails there rather than leaving every measurement after it to go
+# run. It exits 0 once PATH finds the pinned release, 1 when it does not, and 2
+# for a pause or an argument it cannot read. Every workflow job that runs this
+# script runs it once first, so each measurement of the job needs no network.
 set -euo pipefail
 
 # The files a run leaves out are listed in the order a glob returns them,
@@ -179,7 +200,49 @@ export LC_ALL=C
 
 readonly GOBCO="github.com/rillig/gobco@v1.3.4"
 
-PKG=${1:?usage: coverage-conditions.sh <package> [tags]}
+# pinned_on_path reports whether the gobco PATH finds is the release pinned
+# above, by the version it prints, which is the release's without its v.
+pinned_on_path() {
+  command -v gobco >/dev/null 2>&1 && [ "$(gobco -version </dev/null 2>/dev/null)" = "${GOBCO##*@v}" ]
+}
+
+if [ "${1:-}" = --install ]; then
+  if [ "$#" -ne 1 ]; then
+    echo "usage: coverage-conditions.sh --install, and --install takes no other argument" >&2
+    exit 2
+  fi
+  pause=${GOBCO_INSTALL_PAUSE:-10}
+  if ! [[ $pause =~ ^[0-9]+$ ]]; then
+    echo "gobco: GOBCO_INSTALL_PAUSE=$pause is not a whole number of seconds; refusing to install" >&2
+    exit 2
+  fi
+  if pinned_on_path; then
+    echo "gobco: PATH already finds $GOBCO at $(command -v gobco); nothing to install"
+    exit 0
+  fi
+  attempt=1
+  until go install "$GOBCO"; do
+    if [ "$attempt" -eq 3 ]; then
+      echo "gobco: go install $GOBCO failed 3 times; giving up" >&2
+      exit 1
+    fi
+    echo "gobco: go install $GOBCO failed (attempt $attempt of 3); trying again in ${pause}s" >&2
+    sleep "$pause"
+    attempt=$((attempt + 1))
+  done
+  if ! pinned_on_path; then
+    found="no gobco"
+    if command -v gobco >/dev/null 2>&1; then
+      found="$(command -v gobco), which reports $(gobco -version </dev/null 2>/dev/null || true)"
+    fi
+    echo "gobco: go install $GOBCO succeeded, but PATH finds $found: put GOBIN, or GOPATH/bin when GOBIN is unset, on PATH ahead of any other gobco, or every measurement runs gobco through go run and needs the network again" >&2
+    exit 1
+  fi
+  echo "gobco: installed $GOBCO at $(command -v gobco), which every measurement runs without the network"
+  exit 0
+fi
+
+PKG=${1:?usage: coverage-conditions.sh <package> [tags], or coverage-conditions.sh --install}
 TAGS=${2:-}
 tag_args=()
 gobco_args=()
@@ -268,7 +331,8 @@ moddir=${moddir//\\//}
 {
   read -r goos
   read -r goarch
-} < <(go env GOOS GOARCH)
+  IFS= read -r modcache
+} < <(go env GOOS GOARCH GOMODCACHE)
 context="$goos/$goarch under build tags ${TAGS:-(none)}"
 
 # listed reports whether its first argument is among the rest.
@@ -480,17 +544,45 @@ fi
 # reader of the report may not see, in one line a caller can pick out
 # (scripts/check-spec-conditions.sh reports it as the reason). A staged run
 # then names what the staging itself changed, most likely first.
-(cd "$target" && go run "$GOBCO" ${gobco_args[@]+"${gobco_args[@]}"}) | tee "$report" || {
+#
+# gobco runs from PATH or through go run, as the header says, and a non-zero
+# exit of gobco run from PATH is reported as 1, which is what go run reports
+# for any non-zero exit of the program it ran, so a failed run exits as it
+# always has whichever way gobco ran, and never with the gate's 3.
+#
+# gobco runs its go test with its own environment less GOPATH (goTest.env in
+# main.go, v1.3.4), so where GOPATH names a directory other than the default
+# that go test reads another module cache and downloads every dependency into
+# it, which needs the network as much as go run does. GOMODCACHE, which gobco
+# passes on, names the cache go uses here, so its go test reads the one go mod
+# download filled.
+from_path=""
+if pinned_on_path; then
+  from_path=yes
+fi
+run_gobco() {
+  if [ -n "$from_path" ]; then
+    gobco "$@" || return 1
+  else
+    go run "$GOBCO" "$@"
+  fi
+}
+(cd "$target" && export GOMODCACHE="$modcache" && run_gobco ${gobco_args[@]+"${gobco_args[@]}"}) | tee "$report" || {
   status=$?
   if [ -z "$staged" ]; then
     echo "gobco: gobco exited $status on $PKG, so any figure above is not a measurement: its go test failed, or it could not instrument the package" >&2
-    exit "$status"
+  else
+    echo "gobco: gobco exited $status on the staged copy of $PKG, so any figure above is not a measurement: its go test failed there, or it could not instrument the copy" >&2
+    if [ "${#constrained[@]}" -gt 0 ]; then
+      echo "gobco: the copy blanked the build constraint lines of ${constrained[*]}, so a test that reads its own files' headers finds them blank there and fails; that is the likeliest cause (the e2e harness's source checks fail this way), and a package whose tests do that cannot be measured this way until gobco honours build tags (issue 1017)" >&2
+    fi
+    echo "gobco: a test that reads something the copy leaves out (.git, .claude/worktrees, node_modules, dist) fails there too, and the package's own tests run where it is are what to compare against" >&2
   fi
-  echo "gobco: gobco exited $status on the staged copy of $PKG, so any figure above is not a measurement: its go test failed there, or it could not instrument the copy" >&2
-  if [ "${#constrained[@]}" -gt 0 ]; then
-    echo "gobco: the copy blanked the build constraint lines of ${constrained[*]}, so a test that reads its own files' headers finds them blank there and fails; that is the likeliest cause (the e2e harness's source checks fail this way), and a package whose tests do that cannot be measured this way until gobco honours build tags (issue 1017)" >&2
+  # The cause a run from PATH cannot have, said last since the run cannot
+  # tell it from the others: go's own message above names it when it is.
+  if [ -z "$from_path" ]; then
+    echo "gobco: it ran through go run, which asks the module proxy on every run and fails without the network (issue 1515); scripts/coverage-conditions.sh --install puts gobco ${GOBCO##*@} on PATH, and a run from there needs none" >&2
   fi
-  echo "gobco: a test that reads something the copy leaves out (.git, .claude/worktrees, node_modules, dist) fails there too, and the package's own tests run where it is are what to compare against" >&2
   exit "$status"
 }
 
