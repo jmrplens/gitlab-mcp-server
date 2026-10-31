@@ -125,12 +125,12 @@ La latencia está acotada por la cadencia por diseño. Los canales de eventos qu
 
 ### ¿Cuáles son los límites?
 
-| Límite                    | Valor                         | Por qué                                                                                                                                                |
-| ------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Vigilantes por credencial | 10                            | Un vigilante sondea con el propio token del suscriptor, así que este es el techo del sondeo de una credencial                                          |
-| Vigilantes por proceso    | 512                           | Crear una credencial es una llamada a la API, así que un número por credencial se multiplica por cuantas tenga quien llama; solo este acota el proceso |
-| Intervalo mínimo          | 5s                            | Diez vigilantes al mínimo ya hacen 120 peticiones por minuto                                                                                           |
-| Pausa por límite de tasa  | 30s, doblando hasta 5 minutos | GitLab aplica sus límites por usuario, así que un 429 pausa todos los vigilantes de esa credencial                                                     |
+| Límite                    | Valor                         | Por qué                                                                                                                                                    |
+| ------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vigilantes por credencial | 10                            | Un vigilante sondea con el propio token del suscriptor, así que este es el techo del sondeo de una credencial                                              |
+| Vigilantes por proceso    | 512                           | Crear una credencial cuesta poco (ver más abajo), así que un número por credencial se multiplica por cuantas tenga quien llama; solo este acota el proceso |
+| Intervalo mínimo          | 5s                            | Diez vigilantes al mínimo ya hacen 120 peticiones por minuto                                                                                               |
+| Pausa por límite de tasa  | 30s, doblando hasta 5 minutos | GitLab aplica sus límites por usuario, así que un 429 pausa todos los vigilantes de esa credencial                                                         |
 
 Una credencial es una entrada del pool, un par de token y URL de GitLab, en modo HTTP. En stdio el proceso atiende a una sola credencial, así que sus diez vigilantes son el límite y el techo del proceso nunca llega a aplicarse.
 
@@ -142,7 +142,7 @@ Una credencial es una entrada del pool, un par de token y URL de GitLab, en modo
 
 Ninguno de los dos techos es configurable, y ambos rechazos dicen cuál se alcanzó: el del proceso dice `server-wide` con todas las letras, y el de la credencial lleva su propio recuento y su límite, para que un operador que lea el error sepa si mirar al que llama o al despliegue. La palanca que sí tiene un operador es `--max-http-clients`, que decide cuántas credenciales atiende el pool a la vez ([La palanca y lo que cuesta](/gitlab-mcp-server/es/operations/http-server/#la-palanca-y-lo-que-cuesta)).
 
-Conviene saber lo que cuesta el techo del proceso antes de toparse con él. Cincuenta y una credenciales en su tope ocupan 510 de los 512 huecos, y los conservan mientras vivan sus vigilantes, hasta 24 horas cada uno, mientras cualquier otra suscripción se rechaza. Se acepta a propósito: la alternativa es un sondeo sin límite desde un solo proceso, y un reparto por credencial no acotaría nada, porque acuñar una credencial es una llamada a la API. Un despliegue saturado lo dice en su propio log, con una línea WARN por rechazo.
+Conviene saber lo que cuesta el techo del proceso antes de toparse con él. Cincuenta y una credenciales en su tope ocupan 510 de los 512 huecos, y los conservan mientras vivan sus vigilantes, hasta 24 horas cada uno, mientras cualquier otra suscripción se rechaza. Se acepta a propósito: la alternativa es un sondeo sin límite desde un solo proceso, y un reparto por credencial no acotaría nada, porque acuñar una credencial cuesta poco. Desde GitLab 19.2 un token de acceso personal de grano fino es una llamada a la API (`POST /user/personal_access_tokens`, tras un feature flag activado por defecto), uno clásico es un formulario de la interfaz sin tope, y cualquiera con el rol Maintainer en un proyecto puede crear tokens de acceso de proyecto para él con una llamada, lo que en GitLab.com requiere una suscripción Premium o Ultimate. Un despliegue saturado lo dice en su propio log, con una línea WARN por rechazo.
 
 ## Ciclo de vida y renovación
 

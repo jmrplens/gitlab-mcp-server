@@ -369,7 +369,7 @@ type ServerPool struct {
 	// must not call back into the pool.
 	onEvict func(*Entry, EvictionCause)
 	// inUse answers whether an entry is doing work the pool cannot see, for
-	// idle eviction alone. See [WithInUse].
+	// the idle sweep and for size pressure both. See [WithInUse].
 	inUse func(*Entry) bool
 	// belowMinimum records that GitLab accepted a credential the pool serves
 	// and that it is below the admission minimum, nil until

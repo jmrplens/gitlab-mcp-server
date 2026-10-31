@@ -1356,8 +1356,8 @@ func (b *sessionBridge) subscribeUnlessStateless(ctx context.Context, req *mcp.S
 // completion result either. Since [shutdownHTTPServer] the same bug would end
 // in a forced close rather than that error, so what gives it away is the delay
 // and the missing completion results, which is what the tests assert on. The
-// per-server and per-process ceilings on open streams reduce how many can pile
-// up and do not change that outcome for the ones that do.
+// per-credential and per-process ceilings on open streams reduce how many can
+// pile up and do not change that outcome for the ones that do.
 func (s *subscriptionShape) streamRegistry() *listenStreams {
 	if s == nil {
 		return newListenStreams()
@@ -1568,17 +1568,17 @@ func withSubscriptionOptions(opts subscriptions.Options) serverOption {
 // idle connection underneath already costs. With a container RLIMIT_NOFILE of
 // 1024, about a thousand held streams stop the process accepting anything.
 //
-// Two ceilings, because one is not enough in either direction. Per server is
-// per pool entry, which is per token and instance, and bounds fairness; it
-// multiplies by however many tokens an attacker holds, so the process-wide one
-// is what bounds the process. Both are generous next to any real client, which
-// opens a handful.
+// Two ceilings, because one is not enough in either direction. Per credential
+// is per pool entry, which is per token and instance, and bounds what one
+// credential holds open; it multiplies by however many tokens a caller holds,
+// so the process-wide one is what bounds the process. Both are generous next
+// to any real client, which opens a handful.
 const (
-	maxListenStreamsPerServer  = tenancy.ListenStreamsPerCredential // register row HLD-001
-	maxListenStreamsPerProcess = tenancy.ListenStreamsPerProcess    // register row HLD-002
+	maxListenStreamsPerCredential = tenancy.ListenStreamsPerCredential // register row HLD-001
+	maxListenStreamsPerProcess    = tenancy.ListenStreamsPerProcess    // register row HLD-002
 )
 
-// maxListenStreamsEnv overrides the per-server ceiling. Zero disables it,
+// maxListenStreamsEnv overrides the per-credential ceiling. Zero disables it,
 // which leaves the process-wide one in place. --max-listen-streams writes it
 // on either transport (envBackedFlags), so a flag and the variable are one
 // setting with one reader.
@@ -1648,9 +1648,9 @@ type listenLimits struct {
 }
 
 // processListenStreams is the ceiling shared by every server this process
-// builds. In HTTP mode the pool builds one MCP server per token and instance,
-// so a per-server counter alone would be per-token and multiply by however
-// many tokens the caller holds.
+// builds. In HTTP mode one server serves each configuration shape and every
+// credential keeps its own counter on its pool entry, so that counter alone
+// would multiply by however many tokens the caller holds.
 var processListenStreams = &listenCounter{}
 
 // maxWatchersPerProcess bounds concurrent resource watchers across every
@@ -1687,14 +1687,14 @@ const maxWatchersPerProcess = tenancy.WatchersPerProcess // register row HLD-004
 var processWatchers = subscriptions.NewWatcherGate(maxWatchersPerProcess)
 
 // listenLimitsFromEnv builds the ceilings for one server, reading the
-// per-server override and sharing the process-wide counter.
+// per-credential override and sharing the process-wide counter.
 //
 // A bad value warns rather than refusing startup, for the same reason the
 // stdio line limit does: a mistyped number should not take the client down
 // with it.
 func listenLimitsFromEnv() listenLimits {
 	limits := listenLimits{
-		perCredential: maxListenStreamsPerServer,
+		perCredential: maxListenStreamsPerCredential,
 		perProcess:    maxListenStreamsPerProcess,
 		processOpen:   processListenStreams,
 	}
@@ -1705,7 +1705,7 @@ func listenLimitsFromEnv() listenLimits {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value < 0 {
 		slog.Warn("listen stream limit could not be parsed; using the default",
-			"variable", maxListenStreamsEnv, "value", raw, "default", maxListenStreamsPerServer)
+			"variable", maxListenStreamsEnv, "value", raw, "default", maxListenStreamsPerCredential)
 		return limits
 	}
 	limits.perCredential = value

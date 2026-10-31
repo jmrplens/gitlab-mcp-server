@@ -2016,9 +2016,9 @@ func TestPrintHelp_EachDefaultIsPrintedInItsOwnEntry(t *testing.T) {
 		// The listen ceiling's flag, which issue 957 added, and its variable
 		// state the register's two ceilings, the configurable one and the
 		// process's beside it.
-		{entry: "-max-listen-streams int", want: fmt.Sprintf("(default %d; 0 removes this ceiling", maxListenStreamsPerServer)},
+		{entry: "-max-listen-streams int", want: fmt.Sprintf("(default %d; 0 removes this ceiling", maxListenStreamsPerCredential)},
 		{entry: "-max-listen-streams int", want: fmt.Sprintf("the process-wide one of %d stays", maxListenStreamsPerProcess)},
-		{entry: "GITLAB_MCP_MAX_LISTEN_STREAMS", want: fmt.Sprintf("(default %d; 0 disables the per-credential ceiling)", maxListenStreamsPerServer)},
+		{entry: "GITLAB_MCP_MAX_LISTEN_STREAMS", want: fmt.Sprintf("(default %d; 0 disables the per-credential ceiling)", maxListenStreamsPerCredential)},
 		// The tier entry said "omit to detect from license", the one step
 		// that answers nobody on GitLab.com, and named neither the namespace
 		// plans nor the groups a member of a paid group is detected by.

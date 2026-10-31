@@ -250,7 +250,7 @@ func TestEnvBackedFlags_ListenStreamsUsage_NamesBothCeilings(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		fmt.Sprintf("(default %d; 0 removes this ceiling", maxListenStreamsPerServer),
+		fmt.Sprintf("(default %d; 0 removes this ceiling", maxListenStreamsPerCredential),
 		fmt.Sprintf("the process-wide one of %d stays", maxListenStreamsPerProcess),
 		"warns and keeps the default",
 	} {
@@ -395,7 +395,7 @@ func ceilingSettings() []settingCase {
 				t.Helper()
 				warned := captureLogMessages(t)
 				got := listenLimitsFromEnv().perCredential
-				return numberOutcome(got, value, maxListenStreamsPerServer, warned("listen stream limit could not be parsed"))
+				return numberOutcome(got, value, maxListenStreamsPerCredential, warned("listen stream limit could not be parsed"))
 			},
 		},
 		{

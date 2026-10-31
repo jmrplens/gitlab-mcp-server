@@ -292,13 +292,24 @@ away from its sessions.
 
 ## What in the go-sdk this rests on
 
-Verified against v1.7.0 (`$(go env GOMODCACHE)/github.com/modelcontextprotocol/go-sdk@v1.7.0/mcp/`),
-which is the latest tag, and unchanged on the SDK's main branch at the time of
-writing.
+Verified against v1.8.0, the version `go.mod` pins
+(`$(go env GOMODCACHE)/github.com/modelcontextprotocol/go-sdk@v1.8.0/mcp/`). The
+section was first written against v1.7.0, and none of the facts below changed
+between the two: `ResourceUpdated`, `notifySubscribedSessions`,
+`injectMetaSubscriptionID`, `notifySessions`, `newRequest`, `handleNotify` and
+`defaultSendingMethodHandler` are the same code in both tags, and so are the
+subscription table's type and `GetSessionID`'s signature. go-sdk's main after
+v1.8.0 sends to each session on a goroutine of its own (row 23 of
+`docs/development/upstream-bugs.md`), which the sending middleware below
+already allows for; the section is verified again when the dependency is next
+bumped (issue 961).
 
-- `Server.resourceSubscriptions` is keyed by resource URI, then by session,
-  then by the listen request id, and `Server.ResourceUpdated` (`server.go`)
-  notifies only the sessions subscribed to that exact URI. The only
+- `Server.resourceSubscriptions` is keyed by resource URI and then by session,
+  and holds for each session the id of the request that subscribed it, the
+  `subscriptions/listen` of a 2026-07-28 session or the `resources/subscribe`
+  of a legacy one. `Server.ResourceUpdated` (`server.go`) notifies only the
+  sessions subscribed to that exact URI, splitting them into legacy sessions
+  and 2026-07-28 ones by the protocol version each negotiated. The only
   cross-credential exposure on a shared server is therefore two credentials
   listening to the same URI.
 - Both delivery paths build the notification per session and run it through the
@@ -307,7 +318,9 @@ writing.
   each call `newRequest(sess, params)` and then `handleNotify`, which calls
   `req.GetSession().sendingMethodHandler()`, which is the handler
   `Server.AddSendingMiddleware` wraps. The concrete request type is
-  `*mcp.ServerRequest[P]` with exported `Session` and `Params` fields, and
+  `*mcp.ServerRequest[P]` with exported `Session` and `Params` fields, `P`
+  being the concrete params pointer on the legacy path and the `Params`
+  interface on the 2026-07-28 one, and
   `defaultSendingMethodHandler` reads `req.GetParams()` at send time. A sending
   middleware can therefore inspect the session and the params, decline to send
   by returning without calling the next handler, and substitute the params.
@@ -315,10 +328,11 @@ writing.
   ten second timeout, created inside those two functions. Nothing the caller of
   `ResourceUpdated` puts on its own context reaches it, which is why the owner
   travels in the params.
-- On v1.8.0, `notifySubscribedSessions` shallow-copies the params per session
-  (`p := *params`) and `injectMetaSubscriptionID` writes into the `Meta` map
-  those copies share, so a middleware must never mutate that map. The legacy
-  `notifySessions` does not copy them at all.
+- `notifySubscribedSessions` shallow-copies the params per session (the
+  `makeParams` closure `ResourceUpdated` passes it returns `p := *params`) and
+  `injectMetaSubscriptionID` writes into the `Meta` map those copies share, so
+  a middleware must never mutate that map. The legacy `notifySessions` does
+  not copy them at all.
 - `ServerOptions.GetSessionID` takes no request, so a shared server cannot mint
   per-credential session ids.
 
@@ -426,8 +440,12 @@ writing.
   newcomer instead of letting the oldest subscriber re-listen. **A per-credential
   or per-busy-entry share** of the pool fails for the reason that split
   [issue 540](https://github.com/jmrplens/gitlab-mcp-server/issues/540): the
-  share key is mintable one API call at a time, so the share is the appearance
-  of fairness rather than the fact of it. Both are set out in
+  share key is cheap to mint (since GitLab 19.2 a fine-grained personal access
+  token is one API call, behind the `granular_personal_access_tokens` flag, on
+  by default; a classic one is a form in the UI with no cap; and a project
+  access token is one call for a Maintainer of the project, which on GitLab.com
+  needs a Premium or Ultimate subscription), so the share is the appearance of
+  fairness rather than the fact of it. Both are set out in
   [issue 561](https://github.com/jmrplens/gitlab-mcp-server/issues/561).
 
   **The ending now says which ending it was.** Telling a client its

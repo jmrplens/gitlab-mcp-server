@@ -332,12 +332,12 @@ func TestNamedPackages_AreDerivedFromTheRegisterOnce(t *testing.T) {
 // step.
 func TestCamelWords_SplitsAnIdentifierIntoItsWords(t *testing.T) {
 	for name, want := range map[string][]string{
-		"baseHTTPMaxHeaderBytes":    {"base", "HTTP", "Max", "Header", "Bytes"},
-		"maxListenStreamsPerServer": {"max", "Listen", "Streams", "Per", "Server"},
-		"staticListTTLMs":           {"static", "List", "TTL", "Ms"},
-		"base64Size":                {"base64", "Size"},
-		"ID":                        {"ID"},
-		"x":                         {"x"},
+		"baseHTTPMaxHeaderBytes":        {"base", "HTTP", "Max", "Header", "Bytes"},
+		"maxListenStreamsPerCredential": {"max", "Listen", "Streams", "Per", "Credential"},
+		"staticListTTLMs":               {"static", "List", "TTL", "Ms"},
+		"base64Size":                    {"base64", "Size"},
+		"ID":                            {"ID"},
+		"x":                             {"x"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := camelWords(name); !slices.Equal(got, want) {

@@ -2261,8 +2261,8 @@ func newServerShell(
 		// one, and a client would be refused partway through rather than
 		// merely slowed. See toolutil's catalogDivisor.
 		PageSize: 2000,
-		// Shared across every server this process creates: in HTTP mode the
-		// pool builds one MCP server per token+URL, and with the compiled
+		// Shared across every server this process creates: in HTTP mode one
+		// MCP server is built per configuration shape, and with the compiled
 		// schema pointers from toolutil.CompileToolSchemas this cache skips
 		// schema resolution on every registration after the first.
 		SchemaCache: sharedSchemaCache,

@@ -597,7 +597,7 @@ ADRs document key decisions in `docs/development/adr`:
 | ADR-0005 | Meta-tool consolidation into a compact domain catalog          | Accepted (refines ADR-0004; its runtime mechanics are superseded by the catalog-first architecture of ADR-0014) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
-| ADR-0008 | Universal user identity across transport modes                 | Accepted, partially unimplemented (stdio and HTTP OAuth populate it; HTTP legacy does not) |
+| ADR-0008 | Universal user identity across transport modes                 | Accepted (stdio, HTTP legacy and HTTP OAuth populate it; an OAuth tool call loses the instance, issue 953) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
 | ADR-0010 | No resource subscribe capability                               | Superseded by ADR-0015                        |
 | ADR-0011 | Low-token dynamic toolset mode                                 | Accepted (`gitlab_find_action` + `gitlab_execute_action`, the default surface) |

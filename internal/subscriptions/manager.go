@@ -252,11 +252,11 @@ func (o Options) withDefaults() Options {
 // WatcherGate is a ceiling on concurrent watchers that several managers share.
 //
 // [Options.MaxWatchers] bounds one manager, which in HTTP mode is one
-// credential, and a credential is one API call to mint: the per-credential
-// number therefore multiplies by however many a caller holds, and only a shared
-// one bounds the process. That is the same reasoning that keeps the listen
-// stream ceiling process-wide, and the reason neither is configurable: an
-// operator who can raise the shared number can undo the bound.
+// credential, and since GitLab 19.2 a fine-grained token is one API call to
+// mint, as is a project access token for its Maintainer (on GitLab.com, with
+// a paid plan): the per-credential number multiplies by however many a caller
+// holds and only a shared one bounds the process. Like the listen ceiling it
+// is not configurable: an operator who could raise it could undo the bound.
 //
 // The gate is injected rather than declared here because this package owns no
 // process-wide state and knows nothing about the server that runs it. A nil

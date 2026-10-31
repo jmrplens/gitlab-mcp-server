@@ -2439,9 +2439,9 @@ func TestSessionBridge_ReleaseSession_DropsOnlyThatSessionsHolds(t *testing.T) {
 }
 
 // TestListenLimit_CapsConcurrentStreams verifies that concurrent
-// subscriptions/listen requests are bounded per server and process-wide, that
-// the refusal is the busy code rather than a closed stream, and that streams
-// under the cap stay open.
+// subscriptions/listen requests are bounded per credential and process-wide,
+// that the refusal is the busy code rather than a closed stream, and that
+// streams under the cap stay open.
 //
 // Each listen blocks server-side until its context ends, holding a goroutine,
 // an ephemeral session and transport, and a file descriptor. The documented
@@ -2783,9 +2783,11 @@ func TestWatcherCeiling_IsTheSameNumberAsTheStreamCeiling(t *testing.T) {
 // newcomer instead of taking somebody else's watch.
 //
 // One credential per manager is the shape ADR-0020 builds, and a credential is
-// one API call to mint, so this is the ceiling that actually bounds the
-// process. The refusal is checked as the client would see it, since a sentinel
-// the wire renders as code 0 would reach a client as "unknown error".
+// cheap to mint (since GitLab 19.2 a fine-grained personal access token is one
+// API call, and a project access token is one for a Maintainer of the project),
+// so this is the ceiling that actually bounds the process. The refusal is
+// checked as the client would see it, since a sentinel the wire renders as
+// code 0 would reach a client as "unknown error".
 func TestSubscriptionShape_TheWatcherCeilingBindsAcrossCredentials(t *testing.T) {
 	_, gitlab := newPipelineBackend(t, "running")
 	client := subscriptionGitLabClient(t, gitlab.URL)
@@ -2834,11 +2836,11 @@ func TestListenLimitsFromEnv(t *testing.T) {
 		wantPerCredential int
 		wantPerProcess    int
 	}{
-		{"unset", "", maxListenStreamsPerServer, maxListenStreamsPerProcess},
+		{"unset", "", maxListenStreamsPerCredential, maxListenStreamsPerProcess},
 		{"explicit", "8", 8, maxListenStreamsPerProcess},
 		{"zero_disables", "0", 0, maxListenStreamsPerProcess},
-		{"garbage_keeps_the_default", "many", maxListenStreamsPerServer, maxListenStreamsPerProcess},
-		{"negative_keeps_the_default", "-1", maxListenStreamsPerServer, maxListenStreamsPerProcess},
+		{"garbage_keeps_the_default", "many", maxListenStreamsPerCredential, maxListenStreamsPerProcess},
+		{"negative_keeps_the_default", "-1", maxListenStreamsPerCredential, maxListenStreamsPerProcess},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.configured != "" {
