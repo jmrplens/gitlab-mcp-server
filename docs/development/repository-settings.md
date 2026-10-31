@@ -526,22 +526,16 @@ curl -sI https://docs.jmrp.io/gitlab-mcp-server/ \
   | grep -i -E '^(content-security-policy|strict-transport-security|x-content-type-options|x-frame-options):'
 ```
 
-`make check-site-headers` reports each header as `ok`, `pending` with the value
-to set, or `FAIL`. Once the rule is in place it reports the two headers as
-`notice`, served while declared pending: remove their `pending` reason from
-`siteHeaders` in `cmd/audit_site_headers/headers.go` then, so that losing them
-fails the check from then on. The same change updates the tests that pin
-today's declarations (`TestSiteHeaders_Declarations_NameTheFourHeadersAndHoldTheirOwnValues`,
-and the cases of `TestRunMain_Arguments_JudgeEachPageOrRefuse` that expect the
-two as pending or as a notice), **Current state** above, and the sentence of
-[the command's reference](cmd-utilities.md#audit_site_headers) that names the
-two pending.
+`make check-site-headers` reports each header as `ok`, or as `FAIL` with the
+value to set. All four are declared required in `siteHeaders` in
+`cmd/audit_site_headers/headers.go`, so it fails while the rule is not in
+place, and whenever either of the two headers the rule sets is lost or turns
+permissive.
 
 **What tells you it drifted.** The `🛡️ Check the security headers` job of
-`pages.yml`, after every deploy: it fails when a header declared required is
-lost or turns permissive, and warns with the value to set while one is
-pending. A change in Cloudflare between deploys shows at the next deploy, or
-at once with `make check-site-headers`.
+`pages.yml`, after every deploy: it fails when any of the four headers is
+missing or permissive, with the value to set. A change in Cloudflare between
+deploys shows at the next deploy, or at once with `make check-site-headers`.
 
 ## Web commit sign-off
 

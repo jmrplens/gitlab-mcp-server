@@ -15,7 +15,9 @@ import (
 // Pagefind's WebAssembly, data: images, and the four hosts of the install
 // badges on the getting started page. Loaded with this policy in Chromium,
 // every page rendered with no violation, and the theme switch and the search
-// worked. It is one literal for the reason [cloudflareRule] is.
+// worked. It is one literal rather than a concatenation, because a constant
+// expression lies outside every block the coverage profile records, and a
+// mutation of it would be reported as not covered.
 const recommendedPolicy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.shields.io https://cursor.com https://kiro.dev https://files.lmstudio.ai; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 // policy is one serialized policy: each directive, its name lower-cased, with

@@ -1021,7 +1021,7 @@ check-reproducible:
 	go run ./cmd/reproduce_release/ -published "$$published" -tag "$(TAG)" -ref "$(or $(REF),$(TAG))" $(if $(SHORT_COMMIT),-short-commit "$(SHORT_COMMIT)")
 
 ## check-site-headers: fetch the documentation site (SITE_URL overrides its root) and judge the four security headers the OpenSSF Best Practices criterion hardened_site names.
-## Fails when a header the site serves, declared required in cmd/audit_site_headers/headers.go, is lost or permissive; one still waiting for the maintainer's Cloudflare rule is reported with the value to set.
+## Fails, with the value to set, when one of them, each declared required in cmd/audit_site_headers/headers.go, is missing or permissive.
 ## Needs the network, so make analyze does not run it; the headers job of pages.yml runs it after every deploy.
 check-site-headers:
 	go run ./cmd/audit_site_headers/ $(if $(SITE_URL),-url "$(SITE_URL)")

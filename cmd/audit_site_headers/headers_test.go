@@ -6,7 +6,6 @@ package main
 import (
 	"net/http"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -110,18 +109,13 @@ func TestJudgeFrameOptions_Values_HoldWhenABrowserRefusesTheFrame(t *testing.T) 
 
 // TestSiteHeaders_Declarations_NameTheFourHeadersAndHoldTheirOwnValues holds
 // the declarations to the criterion: the four headers it names, in its order,
-// each recommended value judged nonpermissive by its own judge, the two the
-// site serves today required, and the two only the Cloudflare rule can add
-// declared pending with the reason that names it.
+// each recommended value judged nonpermissive by its own judge, and every one
+// of them required, so that a response missing any of them fails the check.
 func TestSiteHeaders_Declarations_NameTheFourHeadersAndHoldTheirOwnValues(t *testing.T) {
 	t.Parallel()
 	names := make([]string, 0, len(siteHeaders))
-	pending := map[string]string{}
 	for _, each := range siteHeaders {
 		names = append(names, each.name)
-		if each.pending != "" {
-			pending[each.name] = each.pending
-		}
 		t.Run(each.name, func(t *testing.T) {
 			t.Parallel()
 			if each.name != http.CanonicalHeaderKey(each.name) {
@@ -130,18 +124,14 @@ func TestSiteHeaders_Declarations_NameTheFourHeadersAndHoldTheirOwnValues(t *tes
 			if reason := each.judge([]string{each.recommended}); reason != "" {
 				t.Errorf("the recommended %s %q is judged permissive: %s", each.name, each.recommended, reason)
 			}
+			if each.pending != "" {
+				t.Errorf("%s is declared pending, waiting for %q, and every header hardened_site names is required", each.name, each.pending)
+			}
 		})
 	}
 	want := []string{"Content-Security-Policy", "Strict-Transport-Security", "X-Content-Type-Options", "X-Frame-Options"}
 	if !reflect.DeepEqual(names, want) {
 		t.Errorf("the declared headers are %v, want %v", names, want)
-	}
-	wantPending := map[string]string{"Content-Security-Policy": cloudflareRule, "X-Frame-Options": cloudflareRule}
-	if !reflect.DeepEqual(pending, wantPending) {
-		t.Errorf("the pending headers are %v, want %v", pending, wantPending)
-	}
-	if !strings.Contains(cloudflareRule, "docs/development/repository-settings.md#documentation-site-response-headers") {
-		t.Errorf("the pending reason %q does not name the page that says what to set", cloudflareRule)
 	}
 }
 

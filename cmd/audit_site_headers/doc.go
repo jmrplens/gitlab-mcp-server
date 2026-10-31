@@ -17,16 +17,17 @@
 // reads the live responses rather than anything in the tree.
 //
 // Each header is declared in headers.go with the value to set and a judge of
-// what is sent. A header the site serves today is declared required, and its
-// absence or a permissive value fails the run, since losing it is a
-// regression. A header the site does not serve yet is declared pending with
-// the reason, which names the Cloudflare response header rule and the page
-// that says what it sets (docs/development/repository-settings.md, the
-// documentation site response headers). A pending header is reported with the
-// value to set and never fails the run, because what decides it is a setting
-// only the maintainer can change; once it is served, the report asks for it to
-// be declared required, in headers.go and in the tests that pin the
-// declarations, so that losing it fails the check from then on.
+// what is sent, and all four are declared required: the absence of one, or a
+// permissive value, fails the run, since losing it is a regression.
+// Content-Security-Policy and X-Frame-Options come from the Cloudflare
+// response header rule, and the page that says what it sets is
+// docs/development/repository-settings.md, the documentation site response
+// headers. A header the site does not serve yet can instead be declared
+// pending, with the setting only the maintainer can change that it waits for.
+// A pending header is reported with the value to set and never fails the run;
+// once it is served, the report asks for it to be declared required, in
+// headers.go and in the tests that pin the declarations, so that losing it
+// fails the check from then on. None is declared pending.
 //
 // What a judge refuses:
 //

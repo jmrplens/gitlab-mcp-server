@@ -142,11 +142,10 @@ jobs:
   # permissive. GitHub Pages lets a site set none of its own headers, so all
   # four come from Cloudflare in front of it, and only the live responses can
   # show them. cmd/audit_site_headers fetches the page the deploy published and
-  # judges each one: losing one the site serves fails this job, and one still
-  # waiting for the maintainer's Cloudflare rule is reported with the value to
-  # set, as a warning on the run, without failing it. The site is already
-  # deployed when this runs, so a failure here is a regression to fix in
-  # Cloudflare, not a deploy to roll back.
+  # judges each one: any of the four missing or permissive fails this job, with
+  # the value to set as an error on the run. The site is already deployed when
+  # this runs, so a failure here is a regression to fix in Cloudflare, not a
+  # deploy to roll back.
   headers:
     name: "🛡️ Check the security headers"
     needs: deploy
