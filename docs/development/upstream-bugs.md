@@ -8705,9 +8705,8 @@ mean false, and the parameter in the page's table.
   `handleAuditProjectFull` (`internal/prompts/prompt_audit.go`), names a
   custom role as the tools do, and reports the section unread when a name
   does not decode
-  (`TestAuditProjectFull_UnreadableCapturedMemberRoleName_LeavesTheSectionUnread`);
-  `handleAuditBranchProtection` in the same file, which no prompt registers,
-  reads it too. The capture retires when both structs carry the field.
+  (`TestAuditProjectFull_UnreadableCapturedMemberRoleName_LeavesTheSectionUnread`).
+  The capture retires when both structs carry the field.
 
 **Where**: `protected_branches.go`, `BranchAccessDescription`, and
 `group_protected_branches.go`, `GroupBranchAccessDescription`, which decode

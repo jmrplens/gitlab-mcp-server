@@ -11,10 +11,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -4481,5 +4487,298 @@ func assertSaysWhatWasRead(t *testing.T, text, count string) {
 				t.Errorf("the message does not say %q:\n%s", want, text)
 			}
 		})
+	}
+}
+
+// TestChangedFilesCount_EachShapeOfTheAnswer_IsSaidAsChangesGetSaysIt pins
+// the count every merge request prompt gives for the changed files it read.
+//
+// A total equal to the files read is the whole diff and reads as the bare
+// number: the prompt tests above only check that a lone page says nothing of
+// a rest, so read as `>=` the comparison would have written "2 of 2" there
+// unnoticed.
+func TestChangedFilesCount_EachShapeOfTheAnswer_IsSaidAsChangesGetSaysIt(t *testing.T) {
+	two := []*gl.MergeRequestDiff{{NewPath: "a.go"}, {NewPath: "b.go"}}
+	for _, tc := range []struct {
+		name string
+		page toolutil.PaginationOutput
+		want string
+	}{
+		{name: "the whole diff, counted", page: toolutil.PaginationOutput{TotalItems: 2}, want: "2"},
+		{name: "the whole diff, uncounted", want: "2"},
+		{name: "more counted than read", page: toolutil.PaginationOutput{TotalItems: 5, HasMore: true}, want: "2 of 5"},
+		{name: "a next page announced alone", page: toolutil.PaginationOutput{HasMore: true}, want: "2 shown, more available"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := (changedFiles{diffs: two, page: tc.page}).count(); got != tc.want {
+				t.Errorf("count() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// promptRoot is the one function of this package the server calls, so what
+// it reaches is every prompt a client can ask for.
+const promptRoot = "Register"
+
+// promptDecl is a package-level function, method or variable as the
+// reachability walk of [unregisteredPromptHandlers] sees it.
+type promptDecl struct {
+	// ident is the declared name, and name the one a report gives: the
+	// method's receiver type joins it for a method.
+	ident, name string
+	// refs is every name the body or initializer refers to, in the form
+	// [promptReferences] gives it.
+	refs []string
+}
+
+// unregisteredPromptHandlers walks the production files of the package in
+// dir from [promptRoot] and returns how many handle* functions, methods and
+// variables it declares, and, sorted, the ones the walk does not reach.
+//
+// The test files are left out because a handler that only a test calls is
+// what the walk exists to find: the three audit handlers of issue 1459 were
+// called by their tests alone for five months. Without type information a
+// name stands for every declaration that bears it, and a local name that
+// shadows a package-level one counts as a reference to it, so the walk can
+// miss an unreached handler but never reports a reached one.
+func unregisteredPromptHandlers(t *testing.T, dir string) (handlers int, unreached []string) {
+	t.Helper()
+	decls := promptDecls(productionPromptFiles(t, dir))
+	if len(decls[promptRoot]) == 0 {
+		t.Fatalf("%s declares no %s for the walk to start from", dir, promptRoot)
+	}
+	reached := promptReach(decls)
+	for key, list := range decls {
+		for _, d := range list {
+			if !strings.HasPrefix(d.ident, "handle") {
+				continue
+			}
+			handlers++
+			if !reached[key] {
+				unreached = append(unreached, d.name)
+			}
+		}
+	}
+	slices.Sort(unreached)
+	return handlers, unreached
+}
+
+// promptDecls collects the package-level functions, methods and variables of
+// files, keyed by the name a reference uses: a function or a variable by its
+// own, a method by "." and its own, which every type's method of that name
+// shares.
+func promptDecls(files []*ast.File) map[string][]promptDecl {
+	decls := map[string][]promptDecl{}
+	for _, f := range files {
+		for _, d := range f.Decls {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				key, decl := promptFuncDecl(d)
+				decls[key] = append(decls[key], decl)
+			case *ast.GenDecl:
+				for _, decl := range promptValueDecls(d) {
+					decls[decl.ident] = append(decls[decl.ident], decl)
+				}
+			}
+		}
+	}
+	return decls
+}
+
+// promptFuncDecl describes a function or method declaration, with the key
+// [promptDecls] files it under.
+func promptFuncDecl(d *ast.FuncDecl) (string, promptDecl) {
+	decl := promptDecl{ident: d.Name.Name, name: d.Name.Name}
+	key := d.Name.Name
+	if d.Recv != nil {
+		key = "." + key
+		decl.name = strings.TrimPrefix(types.ExprString(d.Recv.List[0].Type), "*") + "." + decl.name
+	}
+	if d.Body != nil {
+		decl.refs = promptReferences(d.Body)
+	}
+	return key, decl
+}
+
+// promptValueDecls describes each variable or constant d declares, every
+// name of a spec referring to whatever its values refer to.
+func promptValueDecls(d *ast.GenDecl) []promptDecl {
+	var decls []promptDecl
+	for _, spec := range d.Specs {
+		vs, ok := spec.(*ast.ValueSpec)
+		if !ok {
+			continue
+		}
+		var refs []string
+		for _, v := range vs.Values {
+			refs = append(refs, promptReferences(v)...)
+		}
+		for _, n := range vs.Names {
+			decls = append(decls, promptDecl{ident: n.Name, name: n.Name, refs: refs})
+		}
+	}
+	return decls
+}
+
+// promptReach returns every key reachable from [promptRoot] by following the
+// references of the declarations filed under each key it reaches.
+func promptReach(decls map[string][]promptDecl) map[string]bool {
+	reached := map[string]bool{}
+	for queue := []string{promptRoot}; len(queue) > 0; queue = queue[1:] {
+		if reached[queue[0]] {
+			continue
+		}
+		reached[queue[0]] = true
+		for _, d := range decls[queue[0]] {
+			queue = append(queue, d.refs...)
+		}
+	}
+	return reached
+}
+
+// promptReferences lists the names node refers to: each identifier as it is
+// written, and each selector as "." and its name, since a method is known by
+// the name it is selected by and by nothing else without type information.
+func promptReferences(node ast.Node) []string {
+	var refs []string
+	var visit func(ast.Node) bool
+	visit = func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.SelectorExpr:
+			refs = append(refs, "."+n.Sel.Name)
+			ast.Inspect(n.X, visit)
+			return false
+		case *ast.Ident:
+			refs = append(refs, n.Name)
+		}
+		return true
+	}
+	ast.Inspect(node, visit)
+	return refs
+}
+
+// productionPromptFiles parses every Go file in dir that is not a test file.
+func productionPromptFiles(t *testing.T, dir string) []*ast.File {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, parseErr := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", name, parseErr)
+		}
+		files = append(files, f)
+	}
+	return files
+}
+
+// TestRegister_EveryPromptHandler_IsReachedByARegistration holds every
+// handle* function of the package to a path from [Register].
+//
+// Three audit handlers lost their registrations in 651f225a0 and stayed,
+// called by their tests alone, so their coverage read as served code while no
+// client could ask for them (issue 1459). Nothing else notices: the unused
+// linter reads the test files too, so a call from a test is a use to it.
+func TestRegister_EveryPromptHandler_IsReachedByARegistration(t *testing.T) {
+	handlers, unreached := unregisteredPromptHandlers(t, ".")
+	if handlers == 0 {
+		t.Fatal("the package declares no handle* function, so the walk read nothing")
+	}
+	for _, name := range unreached {
+		t.Errorf("%s is a prompt handler no registration reaches from %s: register it, or delete it with its tests", name, promptRoot)
+	}
+}
+
+// plantedPromptPackage is a package with a handler on each path a
+// registration reaches one by, and four that none reaches.
+const plantedPromptPackage = `package planted
+
+type adder interface{ AddPrompt(handler func()) }
+
+type registrar struct{}
+
+func (registrar) AddPrompt(handler func()) {
+	handleFromAMethod()
+	handler()
+}
+
+func (registrar) handleNeverSelected() {}
+
+var table = map[string]func(){"served": handleFromATable}
+
+var unreadTable = map[string]func(){"unread": handleFromAnUnreadTable}
+
+func Register(s adder) {
+	registerServed(s)
+	s.AddPrompt(table["served"])
+}
+
+func registerServed(s adder) {
+	s.AddPrompt(func() { handleServed() })
+	s.AddPrompt(helper)
+}
+
+func helper() { handleThroughAHelper() }
+
+func registerUncalled(s adder) {
+	s.AddPrompt(func() { handleBehindAnUncalledRegistration() })
+}
+
+func handleServed()                       {}
+func handleThroughAHelper()               {}
+func handleFromATable()                   {}
+func handleFromAMethod()                  {}
+func handleBehindAnUncalledRegistration() {}
+func handleFromAnUnreadTable()            {}
+func handleOnlyItsTestCalls()             {}
+`
+
+// plantedPromptTest calls the one handler of [plantedPromptPackage] that
+// only a test reaches, the shape of issue 1459.
+const plantedPromptTest = `package planted
+
+func TestOnlyItsTestCalls() { handleOnlyItsTestCalls() }
+`
+
+// plantPromptFile writes src to the file name in dir.
+func plantPromptFile(t *testing.T, dir, name, src string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
+		t.Fatalf("plant %s: %v", name, err)
+	}
+}
+
+// TestUnregisteredPromptHandlers_PlantedPackage_ReportsWhatNoRegistrationReaches
+// runs the walk over [plantedPromptPackage]. A handler is reached through a
+// closure, a helper, a table and a method a registration selects; one called
+// only by its test, one behind a register function nothing calls, one in a
+// table nothing reads and a method nothing selects are reported, and nothing
+// else is.
+func TestUnregisteredPromptHandlers_PlantedPackage_ReportsWhatNoRegistrationReaches(t *testing.T) {
+	dir := t.TempDir()
+	plantPromptFile(t, dir, "planted.go", plantedPromptPackage)
+	plantPromptFile(t, dir, "planted_test.go", plantedPromptTest)
+
+	handlers, unreached := unregisteredPromptHandlers(t, dir)
+	if handlers != 8 {
+		t.Errorf("the walk counted %d handlers, want the 8 the planted package declares", handlers)
+	}
+	want := []string{
+		"handleBehindAnUncalledRegistration",
+		"handleFromAnUnreadTable",
+		"handleOnlyItsTestCalls",
+		"registrar.handleNeverSelected",
+	}
+	if !slices.Equal(unreached, want) {
+		t.Errorf("unreached = %q, want %q", unreached, want)
 	}
 }
