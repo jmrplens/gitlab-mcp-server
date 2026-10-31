@@ -12,8 +12,8 @@
 // a release binary does it here, so that the rules are written once: what a
 // line of the checksum file has to be, and what makes a file a linux, darwin
 // or windows binary of amd64 or arm64. cmd/reproduce_release reads the
-// checksum file and the universal darwin binary through it, and the release
-// checks that replace the scripts of issue 1114 are built on it. The two
+// checksum file and the universal darwin binary through it, and each release
+// check that issue 1114 ports from a script into Go is built on it. The two
 // installers keep their own parse, since they run where no binary of ours
 // exists yet, and so does scripts/fetch-release-assets.sh, the step that
 // verifies what its job then runs.
