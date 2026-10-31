@@ -304,8 +304,8 @@ readable without opening the tracker:
 | 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | Partly, by [gitlab-org/api/client-go!3113](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3113), not ours, **v3.18.0**: `Skype` deprecated on the two user option structs | No | Not needed |
 | 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), both closed on 2026-10-21 | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
 | 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), both closed on 2026-10-21 | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
-| 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), both closed on 2026-10-21 | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
-| 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), both closed on 2026-10-21 | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | Partly, by [gitlab-org/api/client-go!3141](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3141), not ours, **v3.27.0**: `Project.MergeTrainEnforcement` | No | Yes, for the rest; retired for `merge_train_enforcement` at the v3.29.0 pin |
+| 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | Yes, in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300) and [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), both closed on 2026-10-21 | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No; `archived`, the one key of the twelve `Pipeline` lacked, is on it since **v3.36.0** ([gitlab-org/api/client-go!3125](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3125), not ours) | No | Yes |
+| 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | In part in [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300), whole in [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), both closed on 2026-10-21 | Yes, in part, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | Partly, not ours: [gitlab-org/api/client-go!3141](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3141), **v3.27.0**, `Project.MergeTrainEnforcement`; [gitlab-org/api/client-go!3157](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3157), **v3.36.0**, three Duo flags on `Project` | No | Yes, for the rest; retired for `merge_train_enforcement` at the v3.29.0 pin |
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | Yes, on Community Edition | None possible |
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), both merged; [gitlab-org/gitlab!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | **Yes, 19.5.0**: both halves | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user, [gitlab-org/gitlab#24572](https://gitlab.com/gitlab-org/gitlab/-/work_items/24572), closed as completed on 2026-10-12 | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), merged | **Yes, 19.5.0** | No | None possible |
@@ -313,14 +313,14 @@ readable without opening the tracker:
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [modelcontextprotocol/go-sdk#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [modelcontextprotocol/go-sdk#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [modelcontextprotocol/go-sdk#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065), open; our request of 2026-10-21 for the reviewer to look at it again has had no answer | No | No | Yes |
-| 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | Partly | Partial |
+| 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | Yes | Yes, [gitlab-org/api/client-go!3153](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3153), merged on 2026-10-26, after [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) closed unmerged on 2026-10-21 | **Yes, v3.38.0**: merged at 23:13 UTC on 2026-10-26 and tagged at 23:27; this server pins v3.30.0 | Partly, until the pin carries v3.38.0 | Partial, until the pin carries v3.38.0: the bump to v3.40.0 retires the 422 hint and lets the e2e lifecycle update a single field |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), merged, after a product decision given on the issue on 2026-10-09 and the approvals of the backend maintainer and the technical writer; it adds `plan` to `GET /api/v4/metadata`, its `/version` alias and the `Metadata` GraphQL type, for every caller who can read them; the issue is still open, since GitLab's project does not close an issue when the merge request naming it merges | **Yes, unreleased**: merged on 2026-10-22 in milestone 19.6, so 19.6 is its first release; deployed to GitLab.com at 15:56 UTC that day, where it answers `null`, since GitLab.com holds subscriptions per namespace | No | Yes; a step reading `plan` from `GET /metadata` on 19.6 or later is not taken yet, and the cascade stays for GitLab.com and older instances |
-| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No; one latent, one narrows an action | Not needed for five; two handlers require the field, one of them until the tag changes |
+| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; `label_id`'s tag went out instead in [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), merged, with row 96's three list types; the other six to go out again in a small merge request, not opened yet | In part, **v3.39.0**: `label_id`, by [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085); the other six, no | No; one latent until the pin carries v3.39.0, one narrows an action | Not needed for five; two handlers require the field, `label_id` until the bump to v3.39.0 or later with row 96, `value` until its tag changes |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | In part, by another user, [gitlab-org/gitlab#383531](https://gitlab.com/gitlab-org/gitlab/-/issues/383531), for one of its sites | The documentation half, [gitlab-org/gitlab!260774](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260774), merged; the behaviour, no; the SAML group link routes' 401 for a missing group, [gitlab-org/gitlab!261348](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261348), merged, keeping the permission 401, after a GitLab team member ran the new pipeline our `@gitlab-bot help` of 2026-10-21 asked for and a backend maintainer approved it; the issue it names to close is still open, since GitLab's project does not close an issue when the merge request naming it merges | **The documentation half, 19.5.0**. The missing group's 404, unreleased: merged on 2026-10-22 in milestone 19.6, so 19.6 is its first release, and deployed to GitLab.com at 08:56 UTC on 2026-10-23. The permission refusal itself, no | No | Yes |
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 57 | **Yes, 19.5.0**: merged on 2026-10-09 before the 19.5 cut, although its milestone says 19.6 | No | Partial, for releases before 19.5, whose silent `204` the usage asks the caller to check; from 19.5 the `403` is hinted with the role |
 | 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 56 | **Yes, 19.5.0**: with row 56, merged before the 19.5 cut although its milestone says 19.6 | No | Yes, for releases before 19.5, whose `500` is read as the role refusal; from 19.5 the `403` is hinted with the role |
 | 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Partial |
-| 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Partial |
+| 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | Yes | Yes, [gitlab-org/api/client-go!3154](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3154), merged on 2026-10-25, after [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) closed unmerged on 2026-10-21 | **Yes, v3.35.0**: merged at 21:59 UTC on 2026-10-25 and tagged at 22:14; this server pins v3.30.0 | No | Partial; at the bump to v3.35.0 or later the twenty-one parameters can be offered, and the response capture stays while absent and zero are told apart |
 | 60 | client-go | [JobPipeline models five of the ten keys a job's pipeline carries](#jobpipeline-models-five-of-the-ten-keys-a-jobs-pipeline-carries) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
 | 61 | client-go | [`AwardEmoji` does not model the image URL of a custom emoji](#awardemoji-does-not-model-the-image-url-of-a-custom-emoji) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
 | 62 | client-go | [`Diff` does not model why a file diff arrives without its text](#diff-does-not-model-why-a-file-diff-arrives-without-its-text) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
@@ -330,7 +330,7 @@ readable without opening the tracker:
 | 66 | go-sdk | [A tool, prompt or resource result a middleware makes carries no `resultType`](#a-tool-prompt-or-resource-result-a-middleware-makes-carries-no-resulttype) | Yes, by another user, [modelcontextprotocol/go-sdk#1225](https://github.com/modelcontextprotocol/go-sdk/issues/1225) | Yes, theirs, [modelcontextprotocol/go-sdk#1226](https://github.com/modelcontextprotocol/go-sdk/pull/1226), merged | **Yes, unreleased** | No; without the workaround it breaks a MUST | Yes, until the bump that carries it |
 | 67 | go-sdk | [A Go SDK client never sees a listen refusal](#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal) | Yes, by another user, [modelcontextprotocol/go-sdk#1169](https://github.com/modelcontextprotocol/go-sdk/issues/1169), closed as working as intended; the rest is the proposal [modelcontextprotocol/go-sdk#1284](https://github.com/modelcontextprotocol/go-sdk/issues/1284) | Yes, theirs, [modelcontextprotocol/go-sdk#1170](https://github.com/modelcontextprotocol/go-sdk/pull/1170), closed unmerged; and, for the second `Subscribe`, [modelcontextprotocol/go-sdk#1283](https://github.com/modelcontextprotocol/go-sdk/pull/1283), merged | Partly, by [modelcontextprotocol/go-sdk#1283](https://github.com/modelcontextprotocol/go-sdk/pull/1283), not ours, unreleased: the second `Subscribe` asks again; `Subscribe` still returns nil on a refusal | No | None possible |
 | 68 | go-sdk | [The client starts no new session after a 404](#the-go-sdk-client-starts-no-new-session-after-a-404) | Yes, [modelcontextprotocol/go-sdk#1299](https://github.com/modelcontextprotocol/go-sdk/issues/1299) | Yes, theirs, [modelcontextprotocol/go-sdk#1300](https://github.com/modelcontextprotocol/go-sdk/pull/1300), open | No | No | None taken |
-| 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | Yes | Yes, [gitlab-org/api/client-go!3082](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3082), open; on 2026-10-17 a client-go code owner asked for the bug recreated in an integration test, which we pushed on 2026-10-19, and it has had no review or approval since | No | Was yes, for `repository.commit_list` with `trailers` | Yes for every action that publishes `extended_trailers`; not for the readers of an embedded commit, resources, prompts and completions included |
+| 69 | client-go | [Commit declares `extended_trailers` a map of strings, and GitLab sends lists](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists) | Yes | Yes, [gitlab-org/api/client-go!3082](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3082), open; on 2026-10-17 a client-go code owner asked for the bug recreated in an integration test, which we pushed on 2026-10-19; she ran its pipeline in the parent project on 2026-10-28, where `tests:integration` passed, and we readied it to her on 2026-10-29; no review or approval yet | No | Was yes, for `repository.commit_list` with `trailers` | Yes for every action that publishes `extended_trailers`; not for the readers of an embedded commit, resources, prompts and completions included |
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Was yes; the handler reads GraphQL and the MCP endpoint since GitLab.com removed the route (row 145) |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260143](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260143), merged | **Yes, 19.5.0** | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), merged | **Yes, 19.5.0** | Yes | Partial |
@@ -405,7 +405,7 @@ readable without opening the tracker:
 | 141 | gitlab-org/gitlab | [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses) | No | No | No | No; GitLab answers both with `400` | Yes, the two custom role creates offer Guest to Maintainer and the two broadcast message writes every target but Security Manager |
 | 142 | gitlab-org/gitlab | [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does) | No; a documentation merge request is drafted, not sent | No | No | No; the schemas followed the pages | Yes ([issue 1240](https://github.com/jmrplens/gitlab-mcp-server/issues/1240)): each row is declared with the source that settles it, and a parameter no tier honors is no longer offered |
 | 143 | gitlab-org/gitlab | [The service account token list examples sort by a value their pages do not list](#the-service-account-token-list-examples-sort-by-a-value-their-pages-do-not-list) | No | No | No | No | None; `group.service_account_pat_list` and `project.service_account_pat_list` publish the eight documented orders and not the example's `id_desc` |
-| 144 | client-go | [`Orbit.GetStatus` sends a route GitLab.com removed](#orbitgetstatus-sends-get-orbitstatus-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.Status` reads GraphQL `Query.orbit.serviceStatus` |
+| 144 | client-go | [`Orbit.GetStatus` sends a route GitLab.com removed](#orbitgetstatus-sends-get-orbitstatus-which-gitlabcom-removed) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3161](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3161), merged | **Yes, unreleased**: merged on 2026-10-29, after v3.40.0; it deprecates the method for removal in v4.0 | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.Status` reads GraphQL `Query.orbit.serviceStatus` |
 | 145 | client-go | [`Orbit.GetSchema` sends a route GitLab.com removed](#orbitgetschema-sends-get-orbitschema-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.Schema` reads GraphQL `Query.orbit.schema`, and `get_graph_schema` of the Orbit MCP endpoint for its llm text |
 | 146 | client-go | [`Orbit.GetTools` sends a route GitLab.com removed](#orbitgettools-sends-get-orbittools-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.Tools` sends `tools/list` to the Orbit MCP endpoint |
 | 147 | client-go | [`Orbit.GetDsl` sends a route GitLab.com removed](#orbitgetdsl-sends-get-orbitschemadsl-which-gitlabcom-removed) | No | No | No | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.DSL` sends `list_commands` to the Orbit MCP endpoint |
@@ -1549,6 +1549,23 @@ entries, and row 3 named v3.15.0 as the pin. Rows 4, 5, 7, 20, 22, 27 to 30,
 32 and 33 are unchanged. The other client-go rows were not read in this
 pass; rows 52, 59, 96, 98 and 101 among them carry merges of ours that row
 34's section now names and their own sections do not yet record.
+
+Re-verified on 2026-10-31 for client-go rows 35 to 37, 40 to 45, 51, 52, 54,
+58 to 65, 69 and 144, through GET requests only, against gitlab.com and the
+client-go source at v3.30.0 and v3.40.0. Rows 52 and 59 merged in merge
+requests of ours, first in v3.38.0 and v3.35.0, and row 54's `label_id` in
+[gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085),
+first in v3.39.0. The bump to v3.40.0 retires row 52's 422 hint, and row
+54's `label_id` requirement with row 96; it leaves row 59's capture to a
+decision, since v3.35.0 reads a limit an instance does not send as 0, and
+it lets `admin.plan_limits_change` offer the other twenty-one limits. Rows 43
+and 44 gained fields from other contributors' merge requests in v3.36.0,
+`Pipeline.Archived` and three Duo flags on `Project`, which retire none of
+their captures. Row 144's deprecation merged on 2026-10-29, after v3.40.0,
+and no release carries it. Row 69's merge request had its pipeline run in
+the parent project and was readied to a code owner, and rows 35 to 37 and 41
+now date the live record's re-pin to 19.5.0-ee, on 2026-10-17. Rows 40, 42,
+45, 51, 58 and 60 to 65 are unchanged.
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
@@ -4131,7 +4148,9 @@ all nine, and the R-INPUT diff's report of the create input is answered in
 
 **What**: four gaps in client-go v3.0.0's `geo_sites.go`, measured against the
 `v19.3.1-ee` entities the live record was taken from when this entry was
-written; the record has been re-pinned to 19.4.1-ee since.
+written; the record has been re-pinned since, to 19.4.1-ee and then, on
+2026-10-17, to 19.5.0-ee, and read on 2026-10-31 at client-go v3.40.0 none of
+the four gaps is closed.
 
 - `GeoSite` carries 19 of the 23 keys
   [ee/lib/api/entities/geo_site.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/geo_site.rb)
@@ -4221,7 +4240,8 @@ they belong to a major version or to a new method beside the old one.
 **What**: three gaps in client-go v3.0.0's `merge_requests.go` and
 `merge_request_approvals.go`, measured against the `v19.3.1-ee` entities the
 live record was taken from when this entry was written; the record has been
-re-pinned to 19.4.1-ee since.
+re-pinned since, to 19.4.1-ee and then, on 2026-10-17, to 19.5.0-ee, and read
+on 2026-10-31 at client-go v3.40.0 no gap below is closed.
 
 - `BasicMergeRequest` carries 50 of the 55 keys
   [lib/api/entities/merge_request_basic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/merge_request_basic.rb)
@@ -4294,7 +4314,9 @@ beside the old one.
   2026-10-10), which read at 22:13 UTC on 2026-10-20 has no approval and
   spells the second `Github` where the commit spells it `GitHub`; the
   triage bot labelled it `idle` at 00:19 UTC on 2026-10-23, and read at
-  about 14:20 UTC that day it still has no approval.
+  about 14:20 UTC that day it still has no approval. Read on 2026-10-31 it is
+  still open on `4ffbdcf8`, labelled `workflow::in dev` and `idle`, with no
+  approval, and v3.40.0's `User` carries none of the fifteen keys.
   The commit adds fourteen fields to `User`, the
   conditional ones as plain values like the conditional fields `User` already
   has, and the fifteenth, `unconfirmed_email`, through
@@ -4311,7 +4333,8 @@ beside the old one.
 **What**: `User` in client-go v3.0.0's `users.go` carries 48 keys and is the
 one struct every user-returning method decodes into, measured against the
 `v19.3.1-ee` entities the live record was taken from when this entry was
-written (it has been re-pinned to 19.4.1-ee since). GitLab serves
+written (it has been re-pinned since, to 19.4.1-ee and then, on 2026-10-17,
+to 19.5.0-ee). GitLab serves
 six different user entities through those methods, and the struct models the
 union of none of them.
 
@@ -4407,7 +4430,8 @@ keys and is what `ListIssueRelations` decodes
 which is `API::Entities::Issue` plus four link keys, and the struct models
 roughly the shape of `IssueBasic` instead. Measured against the `v19.3.1-ee`
 entities the live record was taken from when this entry was written (it has
-been re-pinned to 19.4.1-ee since), twenty-four keys are
+been re-pinned since, to 19.4.1-ee and then, on 2026-10-17, to 19.5.0-ee),
+twenty-four keys are
 missing and only one key of the entity is genuinely absent from that response.
 
 - Nineteen are exposed with no condition, so every relation of every response
@@ -4558,11 +4582,17 @@ it denies, and a struct field decoding a body is under no such obligation.
   with the basic entity. The nested `DetailedStatus` gap below stays out,
   because it needs a type of its own, and the merge request says so, so no
   upstream change carries it yet.
-- **Merged**: no.
+- **Merged**: no. Read on 2026-10-31, `PipelineInfo` and
+  `CreateMergeRequestPipeline` are unchanged at v3.40.0. Not by us,
+  [gitlab-org/api/client-go!3125](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3125)
+  ("feat(pipelines): add archived field to Pipeline"), another contributor's,
+  merged at 19:35 UTC on 2026-10-26 and first in **v3.36.0**, adds `Archived`
+  to `Pipeline`, the type the commit's `CreateMergeRequestPipelineV2` returns.
 - **Blocking**: no. Every gap is worked around.
 - **Workaround**: yes. The twelve keys are read from the captured response
   beside the SDK's decode (ADR-0021), through `pipelines.CapturedOutput` on
-  the one route that sends them.
+  the one route that sends them. They stay captured after the bump, since
+  `PipelineInfo` still lacks them.
 
 **What**: `PipelineInfo` in client-go v3.0.0's `pipelines.go` carries 11 keys
 and is the return type of three methods that do not answer with the same
@@ -4580,8 +4610,12 @@ condition. So a created merge request pipeline always carries `before_sha`,
 and the struct decoding it drops all twelve.
 
 The SDK already models eleven of them, on `Pipeline`, which is what the
-single-pipeline endpoints decode into. Only `archived` is on neither, and this
-register's
+single-pipeline endpoints decode into. Only `archived` was on neither until
+v3.36.0, which adds it to `Pipeline` through another contributor's
+[gitlab-org/api/client-go!3125](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3125);
+this register's
+[entry 31](#six-response-structs-miss-a-field-gitlab-sends-on-every-object)
+records that field, and
 [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
 is the wider statement of that half. So the fix is not new modelling: it is
 either widening `PipelineInfo` or giving `CreateMergeRequestPipeline` the
@@ -4667,8 +4701,8 @@ want the shapes above rather than the nearest existing struct, and the nested
   left for 4.0.
 - **In review**: yes, in part, until 2026-10-21, when the joint merge request
   was closed unmerged; the commit goes out again, without
-  `merge_train_enforcement`, in a small merge request on its topic, which this
-  entry will name once it is opened.
+  `merge_train_enforcement` or, since v3.36.0, the three Duo flags, in a small
+  merge request on its topic, which this entry will name once it is opened.
   The commit adds the keys of all six
   structs as plain values, each conditional one with a comment saying when
   GitLab sends it, and the two objects under `ai_settings` and the Duo
@@ -4683,9 +4717,17 @@ want the shapes above rather than the nearest existing struct, and the nested
   [gitlab-org/api/client-go!3141](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3141)
   ("feat(projects): add merge_train_enforcement to project structs"),
   another contributor's, merged at 23:32 UTC on 2026-10-17 and first in
-  **v3.27.0**, which models it as a `MergeTrainEnforcementValue`. For the
-  rest, no: read on 2026-10-19 at v3.29.0 and on 2026-10-21 at v3.30.0, the
-  version `go.mod` pins, no other key this entry names is modeled.
+  **v3.27.0**, which models it as a `MergeTrainEnforcementValue`. For three
+  more, yes, not by us either:
+  [gitlab-org/api/client-go!3157](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3157)
+  ("Add Duo False Detection flows"), by @heidi.berry, merged by @PatrickRice
+  at 19:35 UTC on 2026-10-26 and first in **v3.36.0**, adds
+  `duo_sast_fp_detection_enabled`, `duo_sast_vr_workflow_enabled` and
+  `duo_secret_detection_fp_enabled` to `Project` as plain `bool` with
+  `omitempty`, and to `EditProjectOptions` as `*bool`, though not to
+  `CreateProjectOptions`. For the rest, no: read on 2026-10-19 at v3.29.0 and
+  on 2026-10-21 at v3.30.0, the version `go.mod` pins, no other key this entry
+  names is modeled, and read on 2026-10-31 at v3.40.0 still none is.
 - **Blocking**: no. Every key is worked around.
 - **Workaround**: yes, for every key but `merge_train_enforcement`. They are
   read from the captured response beside the SDK's decode (ADR-0021),
@@ -4694,6 +4736,14 @@ want the shapes above rather than the nearest existing struct, and the nested
   `merge_train_enforcement` retired when the pin moved to v3.29.0: the
   project converter (`ToOutput` in `internal/tools/projects/projects.go`)
   reads it off the SDK's `Project`, and `ProjectExtra` no longer captures it.
+  The three Duo flags stay captured after a bump to v3.36.0 or later unless
+  the output stops telling an absent key from `false`: `ProjectExtra`
+  captures them as `*bool`, and the project output publishes them as `*bool`
+  with `tier:"ultimate"`, where client-go's plain `bool` reads an absent key
+  as `false`. GitLab exposes all three only under
+  `licensed_feature_available?(:ai_features)`, and
+  `duo_secret_detection_fp_enabled` behind a feature flag as well, so an
+  absent key is an ordinary answer.
 
 **What**: three of the structs this server uses most model fewer keys than the
 Grape entity their routes render, and in each case the gap is bigger than a
@@ -4727,7 +4777,9 @@ tell from the type which of the two it is holding.
 Four are unconditional on the entity; the rest are gated on a licensed feature,
 on the `read_secret_push_protection_info` ability, or on GitLab.com. There
 were seventeen until v3.27.0, which models the seventeenth,
-`merge_train_enforcement`, gated on licensed merge trains.
+`merge_train_enforcement`, gated on licensed merge trains. v3.36.0 models
+three more, `duo_sast_fp_detection_enabled`, `duo_sast_vr_workflow_enabled`
+and `duo_secret_detection_fp_enabled`, so thirteen remain unmodeled.
 `secret_push_protection_enabled` is not new data: it is the newer spelling of
 `pre_receive_secret_detection_enabled`, which the SDK does model, exposed twice
 from `project.security_setting`.
@@ -5087,8 +5139,12 @@ option, and 4.0 makes it the default.
   request [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes.
 - **In review**: yes, until 2026-10-21, when the joint merge request was
-  closed unmerged; the commit goes out again in a small merge request on its
-  topic, which this entry will name once it is opened.
+  closed unmerged; the commit went out again in a small merge request on its
+  topic,
+  [gitlab-org/api/client-go!3153](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3153)
+  ("fix(protected_packages): omit unset fields from a rule update"), opened
+  from the community fork at 20:35 UTC on 2026-10-24 with an integration test
+  and readied to @PatrickRice.
   The commit (`707ff4be` until the merge request
   was rebased onto v3.17.0 on 2026-10-09, `74aabe53` after that rebase,
   `1eaa7470` since its rebase of 2026-10-19) gives both fields
@@ -5099,8 +5155,12 @@ option, and 4.0 makes it the default.
   request open. Read on 2026-10-19 it is the 33rd of 41, as `a7b57ca1` after
   the merge request's rebase and force push of 2026-10-17 and `1eaa7470`
   since its rebase of 2026-10-19, and the merge request is open.
-- **Merged**: no.
-- **Blocking**: partly. An update that names the pattern and the type works;
+- **Merged**: yes: @PatrickRice approved it at 22:52 UTC and merged it at
+  23:13 UTC on 2026-10-26, and it is first in **v3.38.0**, tagged at 23:27 UTC
+  that day, where both fields carry `omitempty` on both halves of the tag.
+  `go.mod` pins v3.30.0, which predates it.
+- **Blocking**: partly, until the pin carries v3.38.0. An update that names
+  the pattern and the type works;
   an update that leaves out either of them is refused by GitLab (measured for
   one naming only the pattern, read from the source below for the rest, an
   update that changes only an access level among them), and no spelling of
@@ -5122,10 +5182,10 @@ option, and 4.0 makes it the default.
   pointer only when the caller named a value, which is the safe side of that
   choice, and answers the refusal with a hint telling the caller to name
   `package_name_pattern` and `package_type` on every update
-  (`protected_packages.go:165-175`). The protection rule lifecycle in
+  (`protected_packages.go:168-178`). The protection rule lifecycle in
   `test/e2e/gitlab/common` (`TestPackage_ProtectionRules_Lifecycle`) sends the
   type with every update for the same reason. All of it retires at the bump
-  to the client-go release that carries the commit:
+  to v3.38.0 or later, which the pending move to v3.40.0 is:
   `TestUpdate_LeavesAnUnnamedPatternNullRatherThanEmpty` is written to go red
   the day the tag changes, which is the signal to drop the 422 hint and its
   comment and let the e2e lifecycle update a single field. Issue 966 tracked
@@ -5185,7 +5245,7 @@ which had recorded the 422 without connecting it to the tag. Verified identical
 in v3.0.0, v3.10.0, v3.12.0 and v3.14.0, on 2026-10-07 in v3.15.0 and
 v3.16.0, tagged that day (`protected_packages.go:86-87`), on 2026-10-19 in
 v3.29.0 and on 2026-10-21 in v3.30.0, the version `go.mod` pins, on the same
-lines, so a dependency bump does not retire it.
+lines; v3.38.0 is the first release that changes them.
 
 **Effort**: small, two struct tags and a test, like
 [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
@@ -5211,16 +5271,30 @@ lines, so a dependency bump does not retire it.
   diff adds `omitempty` to each of the seven fields in the first table below,
   and the merge request adds no field to `CreateGroupIssueBoardListOptions`.
   The rebase onto v3.17.0 on 2026-10-09 changed its hash to `64d142c8`, and
-  read on 2026-10-10 it is still the 34th of 35.
-- **Merged**: no. Issue 966 confirmed each of the seven tags at v3.14.0, and
+  read on 2026-10-10 it is still the 34th of 35. `label_id` did not wait for
+  it:
+  [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085),
+  ours, merged at 02:31 UTC on 2026-10-27 and first in **v3.39.0**, gives
+  `CreateGroupIssueBoardListOptions.LabelID` `omitempty` on both halves of its
+  tag in the change that adds the assignee, milestone and iteration lists, so
+  the order the **Blocking** bullet asks for holds. Commit 34 therefore goes
+  out with six fields; it has not been opened.
+- **Merged**: in part: `label_id`, yes, in v3.39.0, by the merge request
+  above. The other six, no: read on 2026-10-31 at v3.40.0 each tag is
+  unchanged (`dependency_list_export.go:70`, `group_members.go:198`,
+  `project_members.go:167`, `projects.go:1365`, `issue_links.go:121`,
+  `pipeline_schedules.go:267`). Issue 966 confirmed each of the seven tags at
+  v3.14.0, and
   read on 2026-10-07 each is unchanged, on the same line, at v3.15.0 and
   v3.16.0, tagged that day:
   `dependency_list_export.go:70`,
   `group_boards.go:216`, `group_members.go:198`, `project_members.go:152`,
   `projects.go:1361`, `issue_links.go:121` and `pipeline_schedules.go:267`.
-  Read on 2026-10-19 at v3.29.0, each tag is unchanged and six are on the
+  Read on 2026-10-19 at v3.29.0, each tag is unchanged and five are on the
   same line; the `project_members.go` one is at line 167, moved by the
-  documentation comments v3.28.0 added above it. v3.30.0, the version
+  documentation comments v3.28.0 added above it, and the `projects.go` one at
+  line 1359 (this bullet said six on the same line until 2026-10-31, when a
+  reading of v3.29.0 found `projects.go` moved too). v3.30.0, the version
   `go.mod` pins, leaves the seven files unchanged.
 - **Blocking**: no, field by field in the second table below. For five of the
   seven, GitLab reads a null exactly as it reads the key left out, or never
@@ -5243,12 +5317,14 @@ lines, so a dependency bump does not retire it.
   list type the struct models, so that requirement is not a workaround and
   stays until client-go models the milestone, iteration and assignee lists,
   which is
-  [entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types). `pipelineschedules.EditVariable` has required `value` since
+  [entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types);
+  v3.39.0 models them, so the requirement goes with entry 96 at the bump.
+  `pipelineschedules.EditVariable` has required `value` since
   the domain was written, and the requirement is what keeps the null from
   reaching GitLab and what costs the action an edit of the type alone. It
   retires with the tag: `value` then becomes optional in the handler, in its
-  check (`pipeline_schedules.go:522`) and in the `required` of its input
-  schema (the `jsonschema` tag at `:507`, and the golden snapshots that carry
+  check (`pipeline_schedules.go:528`) and in the `required` of its input
+  schema (the `jsonschema` tag at `:510`, and the golden snapshots that carry
   it), as GitLab declares it, and its `sdk-sends-null` declaration in
   `cmd/audit_1to1/internal/required/declarations.go` goes with them, since
   `make audit-1to1-required` reports a declaration that answers nothing. A
@@ -5306,7 +5382,8 @@ check no longer reports it (below).
 pins that a share without an expiry carries no `expires_at` key.
 
 **What GitLab does with the null**, read from the GitLab 19.4.1-ee source (the
-release the live record was taken from) and, for `expires_at`, from the
+release the live record was taken from when this table was written; it is
+19.5.0-ee since 2026-10-17) and, for `expires_at`, from the
 end-to-end suite as well. The sources the table cites are linked below it,
 each pinned to that tag.
 
@@ -5411,8 +5488,14 @@ and 52, replaces
 [issue 966](https://github.com/jmrplens/gitlab-mcp-server/issues/966), closed
 on 2026-10-07: what was left of it was a client-go bump once a release carries
 commits 32 to 34 of the joint merge request, and the workarounds retiring
-with it. That merge request was closed unmerged on 2026-10-21, so the bump
-now waits on the small merge requests that send the three commits again.
+with it. That merge request was closed unmerged on 2026-10-21. Commit 32
+went out again as
+[gitlab-org/api/client-go!3150](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3150)
+(v3.34.0), commit 33 as
+[gitlab-org/api/client-go!3153](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3153)
+(v3.38.0) and `label_id` in
+[gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085)
+(v3.39.0), so what the bump still waits on is commit 34's other six fields.
 The measure is R-PATH's always-sent check,
 `go run ./cmd/audit_1to1/ -scope=paths -gaps-only`, whose
 `always_sent.optional_but_always_sent` listed 11 rows over nine fields in
@@ -5429,7 +5512,7 @@ moves with it. The bump layer does, beside what entries 6 and 52 list:
   goes red on the bump, so this entry is what triggers it.
 - Three tests that pin the null today go red and are rewritten to pin its
   absence: `TestMemberAdd_SendsTheIdentityAndOptionsItWasGiven`
-  (`internal/tools/members/members_test.go:1500`, `fieldExpiresAt: nil`),
+  (`internal/tools/members/members_test.go:1566`, `fieldExpiresAt: nil`),
   `TestShareProjectWithGroup_SendsExactlyWhatTheCallerSet` and
   `TestIssueLinkCreate_SendsNoLinkTypeWhenUnset`.
 - `groupboards.CreateGroupBoardList` keeps requiring `label_id` until
@@ -5512,24 +5595,41 @@ integers for the usage, and three option fields with `url` and `json` tags.
   request [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
   describes.
 - **In review**: yes, until 2026-10-21, when the joint merge request was
-  closed unmerged; the commit goes out again in a small merge request on its
-  topic, which this entry will name once it is opened.
+  closed unmerged; the commit went out again on its own as
+  [gitlab-org/api/client-go!3154](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3154)
+  ("feat(plan_limits): add the limits and history GitLab sends and
+  accepts"), opened from the community fork at 21:02 UTC on 2026-10-24,
+  ahead of the split's order, answering @heidi.berry's request on our
+  [gitlab-org/terraform-provider-gitlab!3364](https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/merge_requests/3364),
+  whose acceptance test raises `ci_pipeline_schedules`; it carries an
+  integration test and was readied to @heidi.berry.
   The commit adds the twenty-one limits and
   `LimitsHistory` to `PlanLimit`, and the twenty-one limits to
   `ChangePlanLimitOptions` as pointers, so a limit set to 0 is still sent.
   `PlanLimit` gaining a map stops it being comparable with `==`, one of the
   four decisions the merge request asked the maintainers for. On 2026-09-29
   the maintainer answered that the library does not count comparability as
-  part of its compatibility, so the fields stay.
-- **Merged**: no.
+  part of its compatibility, so the fields stay. As merged, `LimitsHistory`
+  decodes into `PlanLimitsHistory`, a struct of the four lists GitLab's
+  history schema allows, rather than a map, and each limit is an `int64` with
+  `omitempty` on `PlanLimit` and an `*int64` on `ChangePlanLimitOptions`.
+- **Merged**: yes: @heidi.berry approved it at 21:30 UTC and merged it at
+  21:59 UTC on 2026-10-25, and it is first in **v3.35.0**, tagged at 22:14 UTC
+  that day. `go.mod` pins v3.30.0, which predates it.
 - **Blocking**: no.
 - **Workaround**: yes for the response, whose twenty-one other limits and
   change history are read from the captured response beside the SDK's decode
   ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
-  through `planlimits.capturedLimits`; it retires when the struct carries them.
-  None for the parameters: `admin.plan_limits_change` offers the eight the
-  options struct can send, and taking the other twenty-one would mean building
-  the request outside the SDK.
+  through `planlimits.capturedLimits`. v3.35.0 carries them, but as plain
+  `int64`, so a limit an older instance does not send reads 0, while
+  `limitExtra` keeps each a pointer because absent and zero are different
+  answers here; at the bump the capture either stays for that difference or
+  the output gives it up. None for the parameters: `admin.plan_limits_change`
+  offers the eight the options struct at the v3.30.0 pin can send, and taking
+  the other twenty-one would mean building the request outside the SDK;
+  v3.35.0's `ChangePlanLimitOptions` takes all twenty-nine, so the action can
+  offer the other twenty-one after the bump, which is new capability rather
+  than a workaround retiring.
 
 **What**: `PlanLimit` in client-go v3.14.0's `plan_limits.go` carries the eight
 package file sizes (`conan`, `generic_packages`, `helm`, `maven`, `npm`,
@@ -5859,8 +5959,18 @@ options or documented as answering an object.
   with no approval and no answer from a code owner since the push. At 14:48
   UTC on 2026-10-23 we asked @heidi.berry to take its review, saying the
   integration test she asked for is in `18eec595` and passes against
-  19.5.0-ee.
-- **Merged**: no.
+  19.5.0-ee. At 22:25 UTC on 2026-10-28 @heidi.berry started a pipeline in
+  the parent project on the merged result, where `tests:integration` passed
+  at 22:40 UTC and `verify-generated-code` failed in its `before_script`,
+  installing mise, before `make generate` ran. At 18:11 UTC on 2026-10-29 we
+  readied it to her
+  ([note 4119159986](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3082#note_4119159986))
+  and asked for that job to be retried; it passed on the retry at 21:59 UTC
+  that day, and both unit test jobs at 22:02 UTC. Read on 2026-10-31 it is
+  open on `18eec595`, in milestone 19.6, with no approval of the one it
+  needs.
+- **Merged**: no; v3.40.0 still declares
+  `ExtendedTrailers map[string]string`.
 - **Blocking**: was yes, for `repository.commit_list` with `trailers` set: a
   page holding one commit with a trailer failed as a whole, with client-go's
   decode error in place of the page. It returns the page since
@@ -6104,16 +6214,27 @@ route, and retires with the struct or with the method.
 
 ### Orbit.GetStatus sends GET /orbit/status, which GitLab.com removed
 
-- **Reported**: no.
-- **In review**: no.
-- **Merged**: no.
+- **Reported**: yes, by the merge request below, which also covers rows 145
+  to 148. Until 2026-10-31 this bullet read no.
+- **In review**: yes,
+  [gitlab-org/api/client-go!3161](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3161)
+  ("fix(orbit): deprecate the methods whose endpoints GitLab removed"), ours,
+  opened from the community fork at 17:57 UTC on 2026-10-29. It marks
+  `GetStatus` deprecated, naming `Query.orbit.serviceStatus` and removal in
+  client-go v4.0, and the six types only it uses (`GetOrbitStatusOptions`,
+  `OrbitStatus`, `OrbitStatusUser`, `OrbitStatusSystem`,
+  `OrbitStatusComponent`, `OrbitStatusReplicas`); it removes nothing.
+- **Merged**: yes, unreleased: @PatrickRice merged it at 18:49 UTC on
+  2026-10-29, about four hours after v3.40.0 was tagged at 14:39 UTC, and
+  read on 2026-10-31 no release carries it yet.
 - **Blocking**: no here; yes for the SDK's own callers, whom GitLab.com
   answers `404` since 2026-10-27.
 - **Workaround**: yes. `orbit.Status` (`internal/tools/orbit/graphql.go`)
   asks GitLab's GraphQL API for `Query.orbit.serviceStatus` instead, which
   `TestStatus_ServiceStatus_MirrorsEveryField` holds. It retires if client-go
   gains a method for the GraphQL field, which would be the SDK's way to the
-  status again.
+  status again. The deprecation retires nothing here, since `orbit.Status` no
+  longer calls the method.
 
 **Where**: `OrbitService.GetStatus` and `routeOrbitStatus` in client-go
 v3.30.0's `orbit.go`.
@@ -6130,7 +6251,8 @@ route `404`, and every Orbit action but `orbit.query` with it.
 
 **Effort**: small. Deprecate `GetStatus`, `GetOrbitStatusOptions` and the
 `OrbitStatus` types with a note naming the GraphQL field, and remove them in
-the next major; or retarget the method at the GraphQL field.
+the next major; or retarget the method at the GraphQL field. The first is
+what the merge request above did; the method was not retargeted.
 
 ### Orbit.GetSchema sends GET /orbit/schema, which GitLab.com removed
 
