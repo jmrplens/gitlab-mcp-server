@@ -4527,21 +4527,28 @@ type promptDecl struct {
 	// ident is the declared name, and name the one a report gives: the
 	// method's receiver type joins it for a method.
 	ident, name string
+	// handler is whether [promptHandler] counts the declaration as a prompt
+	// handler.
+	handler bool
 	// refs is every name the body or initializer refers to, in the form
 	// [promptReferences] gives it.
 	refs []string
 }
 
 // unregisteredPromptHandlers walks the production files of the package in
-// dir from [promptRoot] and returns how many handle* functions, methods and
-// variables it declares, and, sorted, the ones the walk does not reach.
+// dir from [promptRoot] and the init functions, and returns how many prompt
+// handlers it declares, by the rule of [promptHandler], and, sorted, the ones
+// the walk does not reach.
 //
 // The test files are left out because a handler that only a test calls is
 // what the walk exists to find: the three audit handlers of issue 1459 were
 // called by their tests alone for five months. Without type information a
 // name stands for every declaration that bears it, and a local name that
 // shadows a package-level one counts as a reference to it, so the walk can
-// miss an unreached handler but never reports a reached one.
+// miss an unreached handler. The other way it can be wrong fails the test
+// rather than passing it: a handler the server reaches through nothing but
+// the side effect of a variable's initializer is reported although it is
+// served, since a variable is followed only once something refers to it.
 func unregisteredPromptHandlers(t *testing.T, dir string) (handlers int, unreached []string) {
 	t.Helper()
 	decls := promptDecls(productionPromptFiles(t, dir))
@@ -4551,7 +4558,7 @@ func unregisteredPromptHandlers(t *testing.T, dir string) (handlers int, unreach
 	reached := promptReach(decls)
 	for key, list := range decls {
 		for _, d := range list {
-			if !strings.HasPrefix(d.ident, "handle") {
+			if !d.handler {
 				continue
 			}
 			handlers++
@@ -4589,7 +4596,7 @@ func promptDecls(files []*ast.File) map[string][]promptDecl {
 // promptFuncDecl describes a function or method declaration, with the key
 // [promptDecls] files it under.
 func promptFuncDecl(d *ast.FuncDecl) (string, promptDecl) {
-	decl := promptDecl{ident: d.Name.Name, name: d.Name.Name}
+	decl := promptDecl{ident: d.Name.Name, name: d.Name.Name, handler: promptHandler(d.Name.Name, d.Type.Results)}
 	key := d.Name.Name
 	if d.Recv != nil {
 		key = "." + key
@@ -4615,17 +4622,38 @@ func promptValueDecls(d *ast.GenDecl) []promptDecl {
 			refs = append(refs, promptReferences(v)...)
 		}
 		for _, n := range vs.Names {
-			decls = append(decls, promptDecl{ident: n.Name, name: n.Name, refs: refs})
+			decls = append(decls, promptDecl{ident: n.Name, name: n.Name, handler: promptHandler(n.Name, nil), refs: refs})
 		}
 	}
 	return decls
 }
 
-// promptReach returns every key reachable from [promptRoot] by following the
-// references of the declarations filed under each key it reaches.
+// promptHandler reports whether a declaration named ident, whose function
+// results are results, is a prompt handler: one named handle*, as every
+// handler of the package is, or a function that answers with a prompt result
+// whatever it is named.
+func promptHandler(ident string, results *ast.FieldList) bool {
+	if strings.HasPrefix(ident, "handle") {
+		return true
+	}
+	if results == nil {
+		return false
+	}
+	for _, r := range results.List {
+		if types.ExprString(r.Type) == "*mcp.GetPromptResult" {
+			return true
+		}
+	}
+	return false
+}
+
+// promptReach returns every key reachable from [promptRoot] and from the init
+// functions by following the references of the declarations filed under each
+// key it reaches. The init functions are roots because the runtime calls them
+// before the server calls [promptRoot], and one can fill a table it reads.
 func promptReach(decls map[string][]promptDecl) map[string]bool {
 	reached := map[string]bool{}
-	for queue := []string{promptRoot}; len(queue) > 0; queue = queue[1:] {
+	for queue := []string{promptRoot, "init"}; len(queue) > 0; queue = queue[1:] {
 		if reached[queue[0]] {
 			continue
 		}
@@ -4682,7 +4710,8 @@ func productionPromptFiles(t *testing.T, dir string) []*ast.File {
 }
 
 // TestRegister_EveryPromptHandler_IsReachedByARegistration holds every
-// handle* function of the package to a path from [Register].
+// prompt handler of the package, as [promptHandler] counts them, to a path
+// from [Register].
 //
 // Three audit handlers lost their registrations in 651f225a0 and stayed,
 // called by their tests alone, so their coverage read as served code while no
@@ -4691,7 +4720,7 @@ func productionPromptFiles(t *testing.T, dir string) []*ast.File {
 func TestRegister_EveryPromptHandler_IsReachedByARegistration(t *testing.T) {
 	handlers, unreached := unregisteredPromptHandlers(t, ".")
 	if handlers == 0 {
-		t.Fatal("the package declares no handle* function, so the walk read nothing")
+		t.Fatal("the package declares no prompt handler, so the walk read nothing")
 	}
 	for _, name := range unreached {
 		t.Errorf("%s is a prompt handler no registration reaches from %s: register it, or delete it with its tests", name, promptRoot)
@@ -4699,8 +4728,12 @@ func TestRegister_EveryPromptHandler_IsReachedByARegistration(t *testing.T) {
 }
 
 // plantedPromptPackage is a package with a handler on each path a
-// registration reaches one by, and four that none reaches.
+// registration reaches one by, and five that none reaches. Two of the
+// handlers are known by what they answer with rather than by their name, and
+// a function that answers with something else is no handler at all.
 const plantedPromptPackage = `package planted
+
+import "github.com/modelcontextprotocol/go-sdk/mcp"
 
 type adder interface{ AddPrompt(handler func()) }
 
@@ -4717,10 +4750,21 @@ var table = map[string]func(){"served": handleFromATable}
 
 var unreadTable = map[string]func(){"unread": handleFromAnUnreadTable}
 
+var initTable = map[string]func(){}
+
+func init() { initTable["served"] = handleFromAnInitTable }
+
 func Register(s adder) {
 	registerServed(s)
 	s.AddPrompt(table["served"])
+	s.AddPrompt(initTable["served"])
+	s.AddPrompt(func() { answerServed() })
 }
+
+func answerServed() (*mcp.GetPromptResult, error) { return nil, nil }
+func answerNothingCalls() *mcp.GetPromptResult    { return nil }
+func textNothingCalls() string                    { return "" }
+func handleFromAnInitTable()                      {}
 
 func registerServed(s adder) {
 	s.AddPrompt(func() { handleServed() })
@@ -4759,20 +4803,22 @@ func plantPromptFile(t *testing.T, dir, name, src string) {
 
 // TestUnregisteredPromptHandlers_PlantedPackage_ReportsWhatNoRegistrationReaches
 // runs the walk over [plantedPromptPackage]. A handler is reached through a
-// closure, a helper, a table and a method a registration selects; one called
-// only by its test, one behind a register function nothing calls, one in a
-// table nothing reads and a method nothing selects are reported, and nothing
-// else is.
+// closure, a helper, a table, a table an init function fills and a method a
+// registration selects; one called only by its test, one behind a register
+// function nothing calls, one in a table nothing reads, a method nothing
+// selects and a function answering with a prompt result that nothing calls
+// are reported, and nothing else is.
 func TestUnregisteredPromptHandlers_PlantedPackage_ReportsWhatNoRegistrationReaches(t *testing.T) {
 	dir := t.TempDir()
 	plantPromptFile(t, dir, "planted.go", plantedPromptPackage)
 	plantPromptFile(t, dir, "planted_test.go", plantedPromptTest)
 
 	handlers, unreached := unregisteredPromptHandlers(t, dir)
-	if handlers != 8 {
-		t.Errorf("the walk counted %d handlers, want the 8 the planted package declares", handlers)
+	if handlers != 11 {
+		t.Errorf("the walk counted %d handlers, want the 11 the planted package declares", handlers)
 	}
 	want := []string{
+		"answerNothingCalls",
 		"handleBehindAnUncalledRegistration",
 		"handleFromAnUnreadTable",
 		"handleOnlyItsTestCalls",

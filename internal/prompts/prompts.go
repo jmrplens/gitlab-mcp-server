@@ -316,9 +316,8 @@ func (f changedFiles) partial() bool {
 // says it: "N" for the whole diff, "N of total" when GitLab counted more, and
 // "N shown, more available" when it only announced a next page.
 //
-// It is a chain of early returns rather than a tagless switch because gremlins
-// maps a case expression to no coverage block and reports its mutants as not
-// covered, so it could not say whether a test holds the comparison.
+// It is a chain of early returns rather than a tagless switch for the reason
+// [writeMermaidRune] gives.
 func (f changedFiles) count() string {
 	if f.page.TotalItems > int64(len(f.diffs)) {
 		return fmt.Sprintf("%d of %d", len(f.diffs), f.page.TotalItems)
