@@ -22,7 +22,7 @@ func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 					"current group iteration",
 				},
 				Tags:           []string{"issue", "iteration"},
-				Usage:          "List a group's iterations (sprints) with optional state, search, and ancestor filters, sorted via keyset pagination. Use state='current' to find the active sprint.",
+				Usage:          "List a group's iterations (sprints) with optional state, search, and ancestor filters, ordered by due date and paged with page and per_page. Use state='current' to find the active sprint.",
 				RelatedActions: []string{"group.get", "group.list", "issue.list"},
 				ParameterGuidance: map[string]toolutil.ParameterGuidance{
 					"group_id": {

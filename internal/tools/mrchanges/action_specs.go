@@ -121,11 +121,6 @@ var mrChangeActionMeta = map[string]mrChangeActionMetaEntry{
 		params: map[string]toolutil.ParameterGuidance{
 			"project_id":        scopeProjectGuidance,
 			"merge_request_iid": mrIIDGuidance,
-			"order_by": {
-				ValueSource:      "Column to order keyset-paginated results by.",
-				ExampleBinding:   `params.order_by:"id"`,
-				CommonConfusions: []string{"Combine order_by with sort and pagination='keyset'. Not a free-text phrase."},
-			},
 		},
 	},
 	"gitlab_mr_diff_version_get": {

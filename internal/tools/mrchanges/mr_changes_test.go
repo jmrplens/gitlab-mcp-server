@@ -102,6 +102,74 @@ func TestMRChangesGet_Pagination(t *testing.T) {
 	}
 }
 
+// changesRoutes are the two merge request diff lists as the catalog routes
+// them, so a case reads the schema a caller is served and calls the handler
+// the way every surface does.
+func changesRoutes(client *gitlabclient.Client) map[string]toolutil.ActionRoute {
+	return map[string]toolutil.ActionRoute{
+		"changes_get":        toolutil.RouteAction(client, Get),
+		"diff_versions_list": toolutil.RouteAction(client, ListDiffVersions),
+	}
+}
+
+// TestDiffLists_OrderingAndKeysetArguments_AreNotOffered verifies that neither
+// merge request diff list publishes order_by, sort, pagination or page_token
+// (issue 1530). GET /projects/:id/merge_requests/:merge_request_iid/diffs
+// declares page, per_page and unidiff, and pages the latest diff's files with
+// paginated_diffs(params[:page], params[:per_page]) (lib/api/merge_requests.rb
+// :716-722 at v19.5.0-ee); GET .../versions declares page and per_page and
+// presents paginate(merge_request.merge_request_diffs.order_id_desc)
+// (lib/api/merge_request_diffs.rb:32-35). Neither reads an order, and both
+// page by offset alone (gitlab-api-live.json, 19.5.0-ee).
+func TestDiffLists_OrderingAndKeysetArguments_AreNotOffered(t *testing.T) {
+	routes := changesRoutes(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+	for _, action := range []string{"changes_get", "diff_versions_list"} {
+		for _, param := range []string{"order_by", "sort", "pagination", "page_token"} {
+			t.Run(action+"/"+param, func(t *testing.T) {
+				props, _ := routes[action].InputSchema["properties"].(map[string]any)
+				if _, offered := props[param]; offered {
+					t.Errorf("%s schema offers %s, which its route never reads", action, param)
+				}
+			})
+		}
+		for _, param := range []string{"page", "per_page"} {
+			t.Run(action+"/"+param+" offered", func(t *testing.T) {
+				props, _ := routes[action].InputSchema["properties"].(map[string]any)
+				if _, offered := props[param]; !offered {
+					t.Errorf("%s schema does not offer %s", action, param)
+				}
+			})
+		}
+	}
+}
+
+// TestDiffLists_OrderingAndKeysetArguments_AreRefusedBeforeAnyRequest verifies
+// that each of the four fields [TestDiffLists_OrderingAndKeysetArguments_AreNotOffered]
+// holds out of the schemas is refused as a field the input does not have,
+// before the request the mock forbids.
+func TestDiffLists_OrderingAndKeysetArguments_AreRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		param string
+		value any
+	}{
+		{param: "order_by", value: "id"},
+		{param: "sort", value: "asc"},
+		{param: "pagination", value: "keyset"},
+		{param: "page_token", value: "abc"},
+	}
+	for _, action := range []string{"changes_get", "diff_versions_list"} {
+		for _, tc := range cases {
+			t.Run(action+"/"+tc.param, func(t *testing.T) {
+				route := changesRoutes(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))[action]
+				_, err := route.Handler(t.Context(), map[string]any{"project_id": "42", "merge_request_iid": 1, tc.param: tc.value})
+				if err == nil || !strings.Contains(err.Error(), `unknown field "`+tc.param+`"`) {
+					t.Errorf("%s Handler() error = %v, want %s refused as an unknown field", action, err, tc.param)
+				}
+			})
+		}
+	}
+}
+
 // TestFormatOutputMarkdown_Pagination keeps page state visible in both empty
 // and populated results, including instances that send no total counts.
 func TestFormatOutputMarkdown_Pagination(t *testing.T) {
@@ -924,8 +992,8 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 }
 
 // TestMRChangesGet_PaginationAndOptions verifies that Get forwards offset
-// pagination, keyset pagination, order_by, sort, and unidiff as query
-// parameters to the GitLab Merge Request Diffs API, and that the new
+// pagination and unidiff as query parameters to the GitLab Merge Request
+// Diffs API, sends no ordering or keyset parameter, and that the
 // collapsed/too_large diff flags are surfaced in the output.
 func TestMRChangesGet_PaginationAndOptions(t *testing.T) {
 	var gotQuery string
@@ -942,18 +1010,22 @@ func TestMRChangesGet_PaginationAndOptions(t *testing.T) {
 		ProjectID: "42",
 		MRIID:     1,
 		Unidiff:   true,
-		OrderBy:   "id",
-		Sort:      "desc",
 		Page:      2, PerPage: 50,
-		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
-	for _, want := range []string{"unidiff=true", "order_by=id", "sort=desc", "page=2", "per_page=50", "pagination=keyset", "page_token=tok123"} {
+	for _, want := range []string{"unidiff=true", "page=2", "per_page=50"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
+	}
+	for _, absent := range []string{"order_by", "sort", "pagination", "page_token"} {
+		t.Run("no "+absent, func(t *testing.T) {
+			if strings.Contains(gotQuery, absent+"=") {
+				t.Errorf("query %q carries %s", gotQuery, absent)
 			}
 		})
 	}
@@ -966,7 +1038,8 @@ func TestMRChangesGet_PaginationAndOptions(t *testing.T) {
 }
 
 // TestListDiffVersions_PaginationAndOptions verifies ListDiffVersions forwards
-// offset, keyset, order_by, and sort parameters to the diff versions endpoint.
+// the offset parameters to the diff versions endpoint and no ordering or keyset
+// parameter.
 func TestListDiffVersions_PaginationAndOptions(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -981,18 +1054,22 @@ func TestListDiffVersions_PaginationAndOptions(t *testing.T) {
 	_, err := ListDiffVersions(context.Background(), client, DiffVersionsListInput{
 		ProjectID: "42",
 		MRIID:     1,
-		OrderBy:   "id",
-		Sort:      "asc",
 		Page:      3, PerPage: 25,
-		Pagination: "keyset", PageToken: "cur9",
 	})
 	if err != nil {
 		t.Fatalf("ListDiffVersions() unexpected error: %v", err)
 	}
-	for _, want := range []string{"order_by=id", "sort=asc", "page=3", "per_page=25", "pagination=keyset", "page_token=cur9"} {
+	for _, want := range []string{"page=3", "per_page=25"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
+	}
+	for _, absent := range []string{"order_by", "sort", "pagination", "page_token"} {
+		t.Run("no "+absent, func(t *testing.T) {
+			if strings.Contains(gotQuery, absent+"=") {
+				t.Errorf("query %q carries %s", gotQuery, absent)
 			}
 		})
 	}

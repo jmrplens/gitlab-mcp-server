@@ -223,6 +223,15 @@ const (
 	// projectIterationsOffsetOnly is the reason the project iteration list
 	// offers no ordering or keyset field of the gl.ListOptions it embeds.
 	projectIterationsOffsetOnly = "GET /projects/:id/iterations declares state, search, in, include_ancestors, include_descendants, updated_before, updated_after, page and per_page (gitlab-api-live.json, 19.5.0-ee); gl.ListOptions ordering and keyset fields reach nothing there"
+	// mrChangesUnordered is the reason the merge request diff list offers no
+	// ordering field of the gl.ListOptions its options struct embeds.
+	mrChangesUnordered = "GET /projects/:id/merge_requests/:merge_request_iid/diffs declares page, per_page and unidiff (gitlab-api-live.json, 19.5.0-ee) and pages the latest diff's files with paginated_diffs(params[:page], params[:per_page]) (lib/api/merge_requests.rb:716-722 at v19.5.0-ee), which reads no order, so gl.ListOptions ordering fields reach nothing there (issue 1530)"
+	// mrDiffVersionsOrderedByID is the reason the merge request diff version
+	// list offers no ordering field of the gl.ListOptions it embeds.
+	mrDiffVersionsOrderedByID = "GET /projects/:id/merge_requests/:merge_request_iid/versions declares page and per_page (gitlab-api-live.json, 19.5.0-ee) and presents paginate(merge_request.merge_request_diffs.order_id_desc) (lib/api/merge_request_diffs.rb:32-35 at v19.5.0-ee), newest first whatever is sent, so gl.ListOptions ordering fields reach nothing there (issue 1530)"
+	// groupIterationsUnordered is the reason the group iteration list offers
+	// no ordering field of the gl.ListOptions it embeds.
+	groupIterationsUnordered = "GET /groups/:id/iterations declares state, search, in, include_ancestors, include_descendants, updated_before, updated_after, page and per_page (gitlab-api-live.json, 19.5.0-ee), and iterations_finder_params hands IterationsFinder no sort, so it orders by due date, title and id whatever is sent (ee/lib/api/iterations.rb:53-73 and ee/app/finders/iterations_finder.rb:116-123 at v19.5.0-ee); gl.ListOptions ordering fields reach nothing there (issue 1600)"
 	// searchOffsetOnly is the reason the searches offer no ordering or keyset
 	// field of the gl.ListOptions gl.SearchOptions embeds.
 	searchOffsetOnly = "GET /search, GET /groups/:id/search and GET /projects/:id/search declare page and per_page and no order_by, sort, pagination or page_token (gitlab-api-live.json, 19.5.0-ee); gl.ListOptions ordering and keyset fields reach nothing there"
@@ -1139,6 +1148,16 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// iterationdata, and GitLab pages that route by offset alone.
 	"projectiterations.ListInput.order_by": projectIterationsOffsetOnly,
 	"projectiterations.ListInput.sort":     projectIterationsOffsetOnly,
+	// The group iteration list builds its options in the same helper, and
+	// GitLab orders that route by due date whatever is sent.
+	"groupiterations.ListInput.order_by": groupIterationsUnordered,
+	"groupiterations.ListInput.sort":     groupIterationsUnordered,
+	// The two merge request diff lists page by offset and order by GitLab's
+	// own choice.
+	"mrchanges.GetInput.order_by":              mrChangesUnordered,
+	"mrchanges.GetInput.sort":                  mrChangesUnordered,
+	"mrchanges.DiffVersionsListInput.order_by": mrDiffVersionsOrderedByID,
+	"mrchanges.DiffVersionsListInput.sort":     mrDiffVersionsOrderedByID,
 	// Every search builds its options in search.searchOpts, directly or
 	// through runScopedSearch, and GitLab pages every search by offset alone.
 	// The code, commit and wiki searches offer ref, since their scopes read a

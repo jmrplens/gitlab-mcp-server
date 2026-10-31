@@ -14,18 +14,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// ListInput defines parameters for listing group iterations.
-// It mirrors gl.ListGroupIterationsOptions and supports offset and keyset
-// pagination via order_by/sort/page_token.
+// ListInput defines parameters for listing group iterations. It mirrors
+// gl.ListGroupIterationsOptions but for its ordering and keyset fields (issue
+// 1600): GET /groups/:id/iterations declares state, search, in,
+// include_ancestors, include_descendants, updated_before, updated_after, page
+// and per_page (gitlab-api-live.json, 19.5.0-ee); list_iterations_for pages
+// the finder's result by offset, and iterations_finder_params hands
+// IterationsFinder no sort, so it orders by due date, title and id whatever is
+// sent (ee/lib/api/iterations.rb:53-73 and ee/app/finders/iterations_finder.rb
+// :116-123 at v19.5.0-ee).
 type ListInput struct {
 	GroupID          toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	State            string               `json:"state,omitempty" jsonschema:"Filter by state: opened, upcoming, current, closed, all"`
 	Search           string               `json:"search,omitempty" jsonschema:"Search by title"`
 	IncludeAncestors bool                 `json:"include_ancestors,omitempty" jsonschema:"Include ancestor iterations"`
-	OrderBy          string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort             string               `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output represents a group iteration.
@@ -48,13 +51,6 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := iterationdata.NewGroupListOptions(input.Page, input.PerPage, input.State, input.Search, input.IncludeAncestors)
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	if input.OrderBy != "" {
-		opts.OrderBy = input.OrderBy
-	}
-	if input.Sort != "" {
-		opts.Sort = input.Sort
-	}
 	items, resp, err := client.GL().GroupIterations.ListGroupIterations(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_group_iterations", err, http.StatusNotFound, "verify group_id with group.get. Iterations require Premium license")
