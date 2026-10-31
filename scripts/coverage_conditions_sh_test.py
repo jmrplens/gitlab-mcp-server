@@ -57,7 +57,11 @@ GOBCO = "github.com/rillig/gobco@v1.3.4"
 # initialisation slows every call down.
 #
 # It is gobco when it is run under that name, which is how `go install`
-# leaves it on PATH, and gobco reached through `go run` otherwise. With
+# leaves it on PATH, and gobco reached through `go run` otherwise. Each gobco
+# reports the release written beside it, in a file of its name with .version
+# added, which plant_gobco writes and `go install` overwrites with the pinned
+# release, as it overwrites the binary, so two gobco on PATH can be two
+# releases and an install replaces the release of the one it overwrites. With
 # STUB_NETWORK=unreachable the two calls that fetch gobco, `go run` and
 # `go install` of it, fail the way they failed on a macOS runner that lost
 # name resolution (issue 1515); go env, go list and go tool, which read only
@@ -204,7 +208,10 @@ status = 0
 gobco_args = None
 if TOOL == "gobco":
     if args == ["-version"]:
-        print(env.get("STUB_GOBCO_VERSION", "1.3.4"))
+        # The release of this gobco, which no other gobco shares: gobco
+        # prints its version and a newline.
+        with open(sys.argv[0] + ".version", encoding="utf-8") as fh:
+            print(fh.read().strip())
     else:
         gobco_args = args
 elif args[:2] in (["run", GOBCO], ["install", GOBCO]) and env.get("STUB_NETWORK") == "unreachable":
@@ -212,8 +219,9 @@ elif args[:2] in (["run", GOBCO], ["install", GOBCO]) and env.get("STUB_NETWORK"
     status = 1
 elif args == ["install", GOBCO]:
     # The attempts before this one, from the log, fail while
-    # STUB_INSTALL_FAILURES says so. One that succeeds leaves gobco in GOBIN,
-    # as go install does, when GOBIN is set.
+    # STUB_INSTALL_FAILURES says so. One that succeeds leaves the pinned
+    # release of gobco in GOBIN, as go install does, when GOBIN is set, over
+    # any gobco already there.
     with open(env["STUB_LOG"], encoding="utf-8") as fh:
         earlier = sum(1 for line in fh if json.loads(line)["argv"] == ["install", GOBCO])
     if earlier < int(env.get("STUB_INSTALL_FAILURES", "0")):
@@ -221,7 +229,10 @@ elif args == ["install", GOBCO]:
         status = 1
     elif env.get("GOBIN"):
         os.makedirs(env["GOBIN"], exist_ok=True)
-        shutil.copy(sys.argv[0], os.path.join(env["GOBIN"], "gobco"))
+        installed = os.path.join(env["GOBIN"], "gobco")
+        shutil.copy(sys.argv[0], installed)
+        with open(installed + ".version", "w", encoding="utf-8") as fh:
+            fh.write(GOBCO.rsplit("@v", 1)[1] + "\n")
 elif args[:2] == ["run", GOBCO]:
     gobco_args = args[2:]
 elif args[:1] == ["env"] and len(args) > 1 and set(args[1:]) <= {"GOOS", "GOARCH", "GOMODCACHE"}:
@@ -524,10 +535,14 @@ class CoverageConditionsTest(unittest.TestCase):
         run_env.update(env or {})
         return run_env
 
-    def plant_gobco(self, directory=None):
+    def plant_gobco(self, directory=None, version="1.3.4"):
         """Leaves the stand-in, under the name gobco, where go install would
-        have left it, or in the directory given."""
-        shutil.copy(self.stub, os.path.join(directory or self.gobin, "gobco"))
+        have left it, or in the directory given, reporting the release
+        given, which is the pinned one unless a case names another."""
+        path = os.path.join(directory or self.gobin, "gobco")
+        shutil.copy(self.stub, path)
+        with open(path + ".version", "w", encoding="utf-8") as fh:
+            fh.write(version + "\n")
 
     def calls(self):
         with open(self.log, encoding="utf-8") as fh:
@@ -1158,16 +1173,16 @@ class CoverageConditionsTest(unittest.TestCase):
         # without the network.
         gobco = os.path.join(self.gobin, "gobco")
         cases = [
-            ("no gobco on PATH", False, {}, 0),
-            ("another release on PATH", True, {"STUB_GOBCO_VERSION": "1.3.3"}, 0),
-            ("no gobco and no network", False, {"STUB_NETWORK": "unreachable"}, 1),
+            ("no gobco on PATH", None, {}, 0),
+            ("another release on PATH", "1.3.3", {}, 0),
+            ("no gobco and no network", None, {"STUB_NETWORK": "unreachable"}, 1),
         ]
         for name, planted, env, code in cases:
             with self.subTest(name):
                 if os.path.exists(gobco):
                     os.remove(gobco)
                 if planted:
-                    self.plant_gobco()
+                    self.plant_gobco(version=planted)
                 proc, calls = self.run_script("./internal/plain", env=env)
                 self.assertEqual(proc.returncode, code, proc.stdout + proc.stderr)
                 runs = self.gobco(calls)
@@ -1251,22 +1266,27 @@ class CoverageConditionsTest(unittest.TestCase):
                 self.assertEqual("gobco: installed %s" % GOBCO in proc.stdout, code == 0, proc.stdout)
                 self.assertEqual([c["argv"] for c in calls if c["tool"] == "gobco"], [["-version"]] if code == 0 else [])
 
-    def test_install_with_the_pinned_gobco_already_on_path_fetches_nothing(self):
+    def test_install_fetches_nothing_only_when_path_already_finds_the_pinned_release(self):
         # A second install in the same job, or on a machine that has gobco,
-        # asks the network for nothing; another release on PATH is no reason
-        # to skip.
+        # asks the network for nothing. Another release where go install
+        # leaves gobco is no reason to skip: the install overwrites it with
+        # the pinned release, which PATH then finds.
+        gobco = os.path.join(self.gobin, "gobco")
         cases = [
-            ("the pinned release, no network", {"STUB_NETWORK": "unreachable"}, 0, 0,
-             "gobco: PATH already finds %s at %s; nothing to install" % (GOBCO, os.path.join(self.gobin, "gobco"))),
-            ("another release", {"STUB_GOBCO_VERSION": "1.3.3"}, 1, 1, "gobco: go install %s succeeded" % GOBCO),
+            ("the pinned release, no network", "1.3.4", {"STUB_NETWORK": "unreachable"}, 0,
+             "gobco: PATH already finds %s at %s; nothing to install" % (GOBCO, gobco)),
+            ("another release", "1.3.3", {}, 1,
+             "gobco: installed %s at %s, which every measurement runs without the network" % (GOBCO, gobco)),
         ]
-        for name, env, code, installs, said in cases:
+        for name, planted, env, installs, said in cases:
             with self.subTest(name):
-                self.plant_gobco()
+                self.plant_gobco(version=planted)
                 proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "0", **env})
-                self.assertEqual(proc.returncode, code, proc.stdout + proc.stderr)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 self.assertEqual([c["argv"] for c in calls if c["tool"] == "go"], [["install", GOBCO]] * installs)
-                self.assertIn(said, proc.stdout + proc.stderr)
+                self.assertIn(said, proc.stdout)
+                with open(gobco + ".version", encoding="utf-8") as fh:
+                    self.assertEqual(fh.read().strip(), "1.3.4")
 
     def test_install_pauses_between_attempts(self):
         proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "1", "STUB_INSTALL_FAILURES": "2"})
@@ -1282,16 +1302,25 @@ class CoverageConditionsTest(unittest.TestCase):
         # the pinned release where PATH does not look, or behind another
         # release, leaves every measurement of the job to go run and the
         # network again.
+        # The release found first is another gobco, in a directory PATH reads
+        # before GOBIN, which the install leaves where it is.
+        elsewhere = os.path.join(self.scratch, "elsewhere")
+        ahead = os.path.join(self.bin, "gobco")
         cases = [
-            ("GOBIN off PATH", {"GOBIN": os.path.join(self.scratch, "elsewhere")}, "no gobco"),
-            ("another release found first", {"STUB_GOBCO_VERSION": "1.3.3"},
-             "%s, which reports 1.3.3" % os.path.join(self.gobin, "gobco")),
+            ("GOBIN off PATH", elsewhere, False, "no gobco"),
+            ("another release found first", self.gobin, True, "%s, which reports 1.3.3" % ahead),
         ]
-        for name, env, found in cases:
+        for name, gobin, planted, found in cases:
             with self.subTest(name):
-                proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "0", **env})
+                for stale in (ahead, os.path.join(self.gobin, "gobco")):
+                    if os.path.exists(stale):
+                        os.remove(stale)
+                if planted:
+                    self.plant_gobco(self.bin, version="1.3.3")
+                proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "0", "GOBIN": gobin})
                 self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
                 self.assertEqual([c["argv"] for c in calls if c["tool"] == "go"], [["install", GOBCO]])
+                self.assertTrue(os.path.exists(os.path.join(gobin, "gobco")), "the install left no gobco in GOBIN")
                 self.assertIn("gobco: go install %s succeeded, but PATH finds %s" % (GOBCO, found), proc.stderr)
                 self.assertNotIn("gobco: installed", proc.stdout)
 
@@ -1345,44 +1374,77 @@ class CoverageConditionsTest(unittest.TestCase):
         self.assertIn("bash scripts/coverage-conditions.sh", body)
         self.assertNotIn("make ", body)
 
-    def workflow_steps(self, path, job):
-        """Every step of one job of a workflow, by name and in order, with
-        its body: the lines below its name, up to the next step."""
+    @staticmethod
+    def workflow_jobs(path):
+        """Every job of a workflow, by id, with its steps in order, named or
+        not. A step is its dash line and every line below it indented
+        further, written as from its own level (`name:`, `run:` and its other
+        keys at the start of a line) and without comment lines, so that a
+        comment above a step or inside its script runs nothing."""
         with open(path, encoding="utf-8") as fh:
-            text = fh.read()
-        found = re.search(r"^  %s:\n((?:    .*\n|\n)+)" % re.escape(job), text, re.MULTILINE)
-        self.assertIsNotNone(found, "job %s is missing from %s" % (job, path))
-        return re.findall(r"^      - name: (.+)\n((?:        .*\n|\n)*)", found.group(1), re.MULTILINE)
+            lines = fh.read().split("\n")
+        jobs = {}
+        steps = None
+        in_jobs = False
+        for line in lines:
+            if line.strip().startswith("#") or not line.strip():
+                continue
+            if not line.startswith(" "):
+                in_jobs = line.rstrip() == "jobs:"
+                steps = None
+                continue
+            if not in_jobs:
+                continue
+            header = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+            if header:
+                jobs[header.group(1)] = []
+                steps = None
+            elif re.match(r"^    steps:\s*$", line):
+                steps = jobs[next(reversed(jobs))]
+            elif steps is not None and line.startswith("      - "):
+                steps.append(line[len("      - "):] + "\n")
+            elif steps is not None and line.startswith("        ") and steps:
+                steps[-1] += line[len("        "):] + "\n"
+            elif not line.startswith("      "):
+                steps = None
+        return jobs
 
     def test_workflows_install_gobco_once_before_they_measure(self):
-        # Every job that runs the script installs gobco first, through the
-        # script, so a measurement needs no network and the release stays
-        # pinned in one place (issue 1515): the cross-platform legs of CI and
-        # each job of the on-demand measurement. The install is bounded by
-        # the script's three attempts and by a timeout of its own, and runs
-        # where the measurement does.
-        cases = [
-            ("CI's cross-platform legs", CI_WORKFLOW, "cross_platform", "Condition coverage of the platform halves",
-             "if: matrix.os != 'ubuntu-latest'"),
-            ("the on-demand measurement", CONDITIONS_WORKFLOW, "measure", "Measure", None),
-        ]
-        for name, path, job, measuring, condition in cases:
-            with self.subTest(name):
-                steps = self.workflow_steps(path, job)
-                names = [step for step, _ in steps]
-                self.assertIn("Install gobco", names)
-                self.assertIn(measuring, names)
-                self.assertEqual(names.index("Install gobco") + 1, names.index(measuring), names)
-                body = dict(steps)["Install gobco"]
-                self.assertIn("shell: bash", body)
-                self.assertRegex(body, r"(?m)^        timeout-minutes: [1-9]$")
-                self.assertRegex(body, r"(?m)^        run: bash scripts/coverage-conditions\.sh --install$")
-                self.assertNotIn("rillig/gobco", body)
-                if condition is None:
-                    self.assertNotIn("if:", body)
-                else:
-                    self.assertIn(condition, body)
-                    self.assertIn(condition, dict(steps)[measuring])
+        # Every job of every workflow that runs the script, itself, through
+        # measure_conditions or through make, installs gobco once, through the
+        # script, in the step just before the first that measures, so a
+        # measurement needs no network and the release stays pinned in one
+        # place (issue 1515). Every step counts, named or not, so a job that
+        # measures is found whatever its steps are called, and nothing runs
+        # between the install and the measurement it serves. The install is
+        # bounded by the script's three attempts and by a timeout of its own,
+        # and runs on the legs the measurement runs on.
+        measures = re.compile(r"coverage-conditions\.sh(?!\s+--install)|measure_conditions\s+measure\b"
+                              r"|make\s+coverage-conditions\b|check-spec-conditions")
+        installs = re.compile(r"(?m)^run: bash scripts/coverage-conditions\.sh --install$")
+        workflows = os.path.dirname(CI_WORKFLOW)
+        found = {}
+        for workflow in sorted(os.listdir(workflows)):
+            if not workflow.endswith((".yml", ".yaml")):
+                continue
+            for job, steps in self.workflow_jobs(os.path.join(workflows, workflow)).items():
+                first = next((i for i, step in enumerate(steps) if measures.search(step)), None)
+                if first is not None:
+                    found[(workflow, job)] = (steps, first)
+        # The two jobs known to measure, so that a reader that found nothing
+        # fails rather than holding nothing to anything.
+        self.assertTrue({("ci.yml", "cross_platform"), ("conditions.yml", "measure")} <= set(found), sorted(found))
+        for (workflow, job), (steps, first) in sorted(found.items()):
+            with self.subTest("%s %s" % (workflow, job)):
+                at = [i for i, step in enumerate(steps) if installs.search(step)]
+                self.assertEqual(len(at), 1, steps)
+                self.assertEqual(at[0] + 1, first, steps)
+                install = steps[at[0]]
+                self.assertRegex(install, r"(?m)^name: Install gobco$")
+                self.assertRegex(install, r"(?m)^shell: bash$")
+                self.assertRegex(install, r"(?m)^timeout-minutes: [1-9]$")
+                self.assertNotIn("rillig/gobco", install)
+                self.assertEqual(re.findall(r"(?m)^if: .*$", install), re.findall(r"(?m)^if: .*$", steps[first]))
 
     def test_an_interrupt_ends_the_run_and_removes_the_copy(self):
         # A handler that only cleaned up would return to the script, which
