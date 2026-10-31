@@ -278,7 +278,7 @@ readable without opening the tracker:
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Yes, by another user, [modelcontextprotocol/go-sdk#1234](https://github.com/modelcontextprotocol/go-sdk/issues/1234) | Yes, theirs, [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242), merged | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [modelcontextprotocol/go-sdk#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [modelcontextprotocol/go-sdk#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, [creativeprojects/go-selfupdate#58](https://github.com/creativeprojects/go-selfupdate/pull/58), merged | **Yes, v1.7.0** | No | Retired |
-| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, rmcp 3.5.0**; Codex 0.163.0, released on 2026-10-15, is the first Codex built on it (rmcp 3.5.1); 0.162.1 and earlier pin 3.3.0 | Was yes | Yes, until a Codex built on the fix is widely deployed, not merely released: retired once ChatGPT.app ships Codex 0.163 or later |
+| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes, [openai/codex#38979](https://github.com/openai/codex/issues/38979), and the cause in rmcp, [modelcontextprotocol/rust-sdk#1299](https://github.com/modelcontextprotocol/rust-sdk/issues/1299) | Yes, [modelcontextprotocol/rust-sdk#1300](https://github.com/modelcontextprotocol/rust-sdk/pull/1300), merged | **Yes, rmcp 3.5.0**; Codex 0.163.0, released on 2026-10-15, is the first Codex built on it (rmcp 3.5.1), and every stable release since, through 0.166.0 (2026-10-29), is built on it too; 0.162.1 and earlier pin 3.3.0 | Was yes | Yes, until a Codex built on the fix is widely deployed, not merely released: retired once ChatGPT.app ships Codex 0.163 or later |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [modelcontextprotocol/go-sdk#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264), closed on 2026-10-28 as fixed by the merge | Yes, theirs, [modelcontextprotocol/go-sdk#1464](https://github.com/modelcontextprotocol/go-sdk/pull/1464), merged, on the shape a maintainer chose on the issue on 2026-10-20 | **Yes, unreleased**, by [modelcontextprotocol/go-sdk#1464](https://github.com/modelcontextprotocol/go-sdk/pull/1464), not ours | No | None possible on v1.8.0; `Request.GetID` on the release that carries the merge |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | Yes | Yes, [gitlab-org/api/client-go!3066](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3066), open | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | None |
@@ -334,15 +334,15 @@ readable without opening the tracker:
 | 70 | client-go | [The Orbit schema format is sent as `format`, and its llm answer is not modelled](#the-orbit-schema-format-is-sent-as-format-and-its-llm-answer-is-not-modelled) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Was yes; the handler reads GraphQL and the MCP endpoint since GitLab.com removed the route (row 145) |
 | 71 | gitlab-org/gitlab | [The transfer API pages do not say the answer precedes the move, or how a failure is reported](#the-transfer-api-pages-do-not-say-the-answer-precedes-the-move-or-how-a-failure-is-reported) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260143](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260143), merged | **Yes, 19.5.0** | No | Yes |
 | 72 | gitlab-org/gitlab | [A saved view create or subscribe from a token answers 500, and the create has already saved the view](#a-saved-view-create-or-subscribe-from-a-token-answers-500-and-the-create-has-already-saved-the-view) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258074](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258074), merged | **Yes, 19.5.0** | Yes | Partial |
-| 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open | No | No; it keeps the condition gate from measuring the e2e harness | Partial |
+| 73 | gobco | [gobco type-checks every file of a package directory](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say) | Yes, [rillig/gobco#40](https://github.com/rillig/gobco/issues/40) | Yes, [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), open and unreviewed; its CI run ended unapproved on 2026-10-28, and a reminder of 2026-10-19 had no answer by 2026-10-31 | No | No; it keeps the condition gate from measuring the e2e harness | Partial |
 | 74 | gitlab-org/gitlab | [The Orbit API page's query examples predate version 12 of the query DSL](#the-orbit-api-pages-query-examples-predate-version-12-of-the-query-dsl) | Yes, by the merge request | Yes, [gitlab-org/gitlab!258241](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258241), merged | **Yes, 19.5.0** | No | Yes, `orbit.query`'s own guidance and the site's Orbit page teach the language GitLab.com reads: version 12 with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031), GQL since GitLab.com read every query as GQL from 2026-10-15 and refused the page's corrected examples, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414) |
-| 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), merged; the follow-up making the schema require it, [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No | Not needed: GitLab.com served the corrected schema, and `orbit.query`'s guidance stated the rule too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031); since 2026-10-15 GitLab.com reads every query as GQL, whose path names its relationship type in the pattern, and `orbit.query` teaches that, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414) |
+| 75 | gitlab-org/orbit/knowledge-graph | [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types) | Yes, [gitlab-org/orbit/knowledge-graph#1329](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1329), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2650](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2650), merged; the follow-up making the schema require it, [gitlab-org/orbit/knowledge-graph!2691](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2691), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No | Not needed: GitLab.com served the corrected schema, and `orbit.query`'s guidance stated the rule too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031); since 2026-10-15 GitLab.com reads every query as GQL, whose path names its relationship type in the pattern, and `orbit.query` teaches that, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414); since [gitlab-org/orbit/knowledge-graph!3075](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/3075) (Orbit v0.159.0) the rule is stricter, refusing a wildcard as it refused a missing `rel_types`, so GitLab.com refuses a shortest path that names no relationship type, and `orbit.query` says so, with [issue 1528](https://github.com/jmrplens/gitlab-mcp-server/issues/1528) |
 | 76 | gitlab-org/orbit/knowledge-graph | [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both) | Yes, [gitlab-org/orbit/knowledge-graph#1330](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/work_items/1330), closed by the merge | Yes, [gitlab-org/orbit/knowledge-graph!2651](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/2651), merged | **Yes, Orbit v0.137.0**, which GitLab.com served on 2026-10-05; it serves 0.145.0 on 2026-10-16 | No; a result could be silently incomplete until then | Not needed: GitLab.com served the corrected schema, and `orbit.query`'s guidance said the default is `outgoing` too, with [issue 1031](https://github.com/jmrplens/gitlab-mcp-server/issues/1031); since 2026-10-15 GitLab.com reads every query as GQL, where the undirected `--` takes both directions and `->` or `<-` one, and `orbit.query` teaches that, with [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414) |
 | 77 | gitlab-org/gitlab | [The context commit list is annotated with `Commit` and presents `CommitWithLink`](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260487](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260487), merged | **Yes, 19.5.0** | No | Audit half retired: the live record is taken from 19.5.0-ee; the captured read stays for client-go |
 | 78 | gitlab-org/gitlab | [An unknown severity on a pipeline's findings list answers 500](#an-unknown-severity-on-a-pipelines-findings-list-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), open, for this row alone since 2026-10-22, when row 79's report type check came out after its backend reviewer chose on 2026-10-21 to keep it to severities; that push reset the GraphQL reference's approval; we rebased it that day onto the split GraphQL reference, and on 2026-10-23 asked its backend and documentation reviewers to review it again; the backend reviewer approved it at 14:41 UTC that day and set it to join the merge train | No | No | Yes |
 | 79 | gitlab-org/gitlab | [An unknown report type on a pipeline's findings list is dropped and filters out every finding](#an-unknown-report-type-on-a-pipelines-findings-list-is-dropped-and-filters-out-every-finding) | Yes, by the merge request of row 78, whose description still names it | Yes, until 2026-10-22, in [gitlab-org/gitlab!260459](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260459), whose backend reviewer chose on 2026-10-21 to keep it to row 78, since refusing a report type GitLab answers today is a breaking change, and whose report type check came out on 2026-10-22; nothing open fixes it, and it is left to [gitlab-org/gitlab#355840](https://gitlab.com/gitlab-org/gitlab/-/issues/355840), open since 2022 with no commitment, which asks for the argument to be typed with an enum | No | No | Yes |
 | 80 | gitlab-org/gitlab | [The scan profile attach mutation drops the reason it refused a name](#the-scan-profile-attach-mutation-drops-the-reason-it-refused-a-name) | No | No | No | No | Yes |
-| 81 | golang/go | [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding) | Yes, by another user, [golang/go#81122](https://github.com/golang/go/issues/81122) | Yes, [golang/go#81871](https://github.com/golang/go/pull/81871), imported as [go.dev/cl/841585](https://go.dev/cl/841585), open; a reminder of 2026-10-14 had no answer by 2026-10-16 | No | No; without the workaround it fails race runs of the tooling tests at random | Yes |
+| 81 | golang/go | [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding) | Yes, by another user, [golang/go#81122](https://github.com/golang/go/issues/81122) | Yes, [golang/go#81871](https://github.com/golang/go/pull/81871), imported as [go.dev/cl/841585](https://go.dev/cl/841585), open; a reminder of 2026-10-14 had no answer by 2026-10-31, and since [go.dev/cl/847765](https://go.dev/cl/847765) merged on 2026-10-19 Gerrit reports the change no longer mergeable into `master`, the conflict being in its two `issues_test.go` files alone | No | No; without the workaround it fails race runs of the tooling tests at random | Yes |
 | 82 | gitlab-org/gitlab, then client-go | [The admin token route takes no granular scopes, and no client-go create option carries them](#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them) | GitLab half yes, by GitLab, [gitlab-org/gitlab#630541](https://gitlab.com/gitlab-org/gitlab/-/issues/630541), assigned to this project's maintainer since 2026-10-08 and closed as fixed on 2026-10-14; client-go half yes, by the merge request | GitLab half yes, [gitlab-org/gitlab!260958](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260958), merged, closing that issue, and a correction of its history line from 19.5 to 19.6, [gitlab-org/gitlab!263024](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/263024), merged; client-go half yes, as commits 40 and 41 of [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) from 2026-10-17, closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet; earlier attempts by other users, [gitlab-org/gitlab!245585](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/245585) and [gitlab-org/api/client-go!2978](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2978), closed unmerged | **The GitLab half, unreleased**: merged on 2026-10-13 in milestone 19.5, after the 19.5 cut, so 19.6 is its first release; deployed to GitLab.com at 09:06 UTC on 2026-10-14. The correction merged on 2026-10-19 in milestone 19.6 and was deployed at 04:59 UTC on 2026-10-20. The client-go half, no | No | None taken; the five token create actions send classic scopes only, tracked in [issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115) |
 | 83 | gitlab-org/gitlab | [The fine-grained refusal names the missing permissions only as display labels in prose](#the-fine-grained-refusal-names-the-missing-permissions-only-as-display-labels-in-prose) | No, drafted in its section; goes before row 84 | No | No | No | None taken; the labels are not parsed, on purpose |
 | 84 | client-go | [No client-go helper returns the RFC 6750 fields of a token refusal](#no-client-go-helper-returns-the-rfc-6750-fields-of-a-token-refusal) | No, drafted in its section; waits on this project deciding to adopt the helper | No | No | No | Not needed; this server decodes the body itself |
@@ -358,7 +358,7 @@ readable without opening the tracker:
 | 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260458](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260458), merged | **Yes, 19.5.0** | No | None taken |
 | 95 | client-go | [`ListGroupMilestonesOptions` misspells `include_descendants` and `GroupMilestone` drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project) | `web_url`: yes, by another contributor; the rest: no | `web_url`: [gitlab-org/api/client-go!3126](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3126), merged | **`web_url`: v3.26.0**, not ours | No | Retired for `web_url` at the v3.29.0 pin; yes for `include_descendants` and `project_id` |
 | 96 | client-go | [`CreateGroupIssueBoardListOptions` models only `label_id` where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), merged, commit 8 | **Yes, v3.39.0**; this server pins v3.30.0 | No; until the pin reaches v3.39.0 it narrows `group.group_board_create_list` to label lists | None, by decision; a pin at v3.39.0 or later lets the action widen to the four list types, as the entry says |
-| 97 | gobco | [gobco cannot instrument a package whose `export_test.go` feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package) | Yes, [rillig/gobco#42](https://github.com/rillig/gobco/issues/42) | Yes, [rillig/gobco#43](https://github.com/rillig/gobco/pull/43), open | No | No; the condition gate could not measure a package it reaches | Yes, temporarily: the staged copy of `scripts/coverage-conditions.sh` since 2026-10-27, kept by the maintainer's decision of that day, which supersedes that of 2026-10-06, until a gobco release carries the fix |
+| 97 | gobco | [gobco cannot instrument a package whose `export_test.go` feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package) | Yes, [rillig/gobco#42](https://github.com/rillig/gobco/issues/42) | Yes, [rillig/gobco#43](https://github.com/rillig/gobco/pull/43), open and unreviewed; its CI run still waits on the maintainer's approval, and a reminder of 2026-10-19 on [rillig/gobco#41](https://github.com/rillig/gobco/pull/41#issuecomment-6273951341) that names it had no answer by 2026-10-31 | No | No; the condition gate could not measure a package it reaches | Yes, temporarily: the staged copy of `scripts/coverage-conditions.sh` since 2026-10-27, kept by the maintainer's decision of that day, which supersedes that of 2026-10-06, until a gobco release carries the fix |
 | 98 | client-go | [`UpdateGroupIssueBoardOptions` models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), merged, commit 7, beside row 96 | **Yes, v3.39.0**; this server pins v3.30.0 | No; the switches go out in a body of this server's own | Yes, since [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241); `group.group_board_update` sends both in a body that embeds `UpdateGroupIssueBoardOptions`, which the bump to v3.40.0 retires |
 | 99 | gitlab-org/gitlab | [The roles and permissions page does not say when a Guest or a Planner can view pipelines and merge requests](#the-roles-and-permissions-page-does-not-say-when-a-guest-or-a-planner-can-view-pipelines-and-merge-requests) | Yes, by another user, [gitlab-org/gitlab#632031](https://gitlab.com/gitlab-org/gitlab/-/issues/632031), which the merge request closes, closed by its author on 2026-10-11 | Yes, [gitlab-org/gitlab!260353](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260353), merged | **Yes, 19.5.0** | No | Not needed; `pipeline.latest`'s refusal names the role the policy names |
 | 100 | gitlab-org/gitlab | [The roles and permissions page gives Guest, Planner and Reporter the pipeline security report](#the-roles-and-permissions-page-gives-guest-planner-and-reporter-the-pipeline-security-report) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260471](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260471), merged | **Yes, 19.5.0** | No | Not needed; no hint of this server names who can view a pipeline's findings |
@@ -10779,7 +10779,15 @@ three paths that was not kept.
   that day I said so on the issue
   ([comment 6219744978](https://github.com/openai/codex/issues/38979#issuecomment-6219744978)),
   with the pin and the releases on each side of it, and that it can be
-  closed once a ChatGPT.app build ships Codex 0.163.0 or later.
+  closed once a ChatGPT.app build ships Codex 0.163.0 or later. Read on
+  2026-10-31, Codex has released 0.164.0 (2026-10-23), 0.165.0 (2026-10-27)
+  and 0.166.0 (2026-10-29), its newest stable release, each pinning
+  `rmcp = "=3.5.1"` from git at `98a54789` (2026-10-16), 25 commits past the
+  fix's merge commit, as `main` does. rmcp has tagged `rmcp-v3.6.0`,
+  `rmcp-v3.7.0` and `rmcp-v3.8.0` (2026-10-26) since; 3.5.0 is still the
+  first release carrying the fix. No Codex maintainer has commented on the
+  issue, and no public source read that day names the Codex build a
+  ChatGPT.app release bundles, so the third step is read from the app itself.
 - **Blocking**: it was. Every tool call failed with "Unexpected response type",
   so the server was unusable from Codex rather than degraded.
 - **Workaround**: yes, and it is load-bearing. `internal/clientcompat` detects
@@ -16883,9 +16891,21 @@ stopped those tests hardcoding the version, so a bump no longer edits them.
   `GET /orbit/schema/dsl` answers 404, so the JSON schema this row is about
   is no longer what a GitLab.com caller writes against. In GQL a shortest
   path names its relationship type in the pattern,
-  `-[:IN_PROJECT*1..2]->`, or any type with `-[*1..3]->`, which is what
-  `orbit.query` teaches and the live suite asks since
+  `-[:IN_PROJECT*1..2]->`, which is what `orbit.query` teaches and the live
+  suite asks since
   [issue 1414](https://github.com/jmrplens/gitlab-mcp-server/issues/1414).
+  That issue also taught any type, `-[*1..3]->`, for a shortest path, which
+  lowers to `rel_types` `["*"]` and so met this row's rule. Since
+  [gitlab-org/orbit/knowledge-graph!3075](https://gitlab.com/gitlab-org/orbit/knowledge-graph/-/merge_requests/3075)
+  ("fix(compiler): tighten query validation", merged on 2026-10-26, first in
+  Orbit v0.159.0) the rule is stricter: the compiler refuses a wildcard,
+  `["*"]` or no type at all, where it refused only a missing `rel_types`
+  before, and GitLab.com answered such a shortest path with "shortest paths
+  require named relationship types" on 2026-10-26 and again on 2026-10-29.
+  `orbit.query` says a shortest path names its types, and the live suite asks
+  one that does, since
+  [issue 1528](https://github.com/jmrplens/gitlab-mcp-server/issues/1528),
+  closed by pull request 1585 on 2026-10-29.
 
 **Where**: `PathConfig.rel_types.description` in
 `config/schemas/graph_query.schema.json` (main `1c43d9f0`, line 636), served
@@ -17041,7 +17061,9 @@ choice, and the merge closed the issue without taking it.
 - **Merged**: yes, at 17:23 UTC on 2026-10-09, by @dgruzd (merge commit
   `b7966dcf`), on `main` and in milestone 19.6. It changes the CI only, so no
   release has to carry it; it came after v0.139.0, and read on 2026-10-16 it
-  is in every tag from v0.140.0 to v0.145.0, the newest.
+  is in every tag from v0.140.0 to v0.145.0, the newest. Read on 2026-10-31
+  it is in every tag through v1.0.0 (2026-10-29), the newest, and the job on
+  `main` still compares against the two SHAs it introduced.
 - **Blocking**: no. It costs this server nothing; it fails the fork pipelines
   of a contribution such as rows 75 and 76 before the check has looked at
   anything.
@@ -17050,7 +17072,9 @@ choice, and the merge closed the issue without taking it.
   gives the real answer.
 
 **Where**: the `pinned-version-check` lint job of the project's CI and
-`scripts/check-pinned-version.sh` on `main`, the sibling of the
+`scripts/checks/check-pinned-version.sh` on `main`, where `5aeca777`
+("refactor(ci): group scripts by role and remove dead files", 2026-10-10)
+moved it from `scripts/`, the sibling of the
 `skill-version-bump-check` job the section's introduction describes.
 
 **What**: the runner clones a merge request pipeline at depth 20; the job
@@ -17067,7 +17091,7 @@ of them on "no merge base" across 18 merge requests.
 **How we found it**: the fork pipelines of the merge requests of rows 75 and
 76, which failed this job that way.
 
-**Fix in review**: the job compares against `CI_MERGE_REQUEST_TARGET_BRANCH_SHA`
+**Fix merged**: the job compares against `CI_MERGE_REQUEST_TARGET_BRANCH_SHA`
 in a merged results pipeline and `CI_MERGE_REQUEST_DIFF_BASE_SHA` otherwise,
 commits the pipeline's commit descends from, and fetches the rest of the
 branch's history by its SHA only when the base is outside the clone; the
@@ -17115,9 +17139,15 @@ branch nor a merged results pipeline.
 - **In review**: yes,
   [rillig/gobco#41](https://github.com/rillig/gobco/pull/41), opened the same
   day from a fork: two commits, one per half of the fix, each with its tests.
-  The project's CI has not run on it: its Go workflow run (36452317634,
-  2026-09-28) still reads `action_required` on 2026-10-13, waiting on the
-  maintainer's approval, as a first contribution's does.
+  The project's CI never ran on it: its Go workflow run (36452317634,
+  2026-09-28) waited on the maintainer's approval, as a first contribution's
+  does, still read `action_required` on 2026-10-13, and ended without it at
+  16:43 UTC on 2026-10-28, thirty days after it was created, with conclusion
+  `failure` and no job. A reminder at 18:08 UTC on 2026-10-19
+  ([comment 6273951341](https://github.com/rillig/gobco/pull/41#issuecomment-6273951341)),
+  which also names [rillig/gobco#43](https://github.com/rillig/gobco/pull/43),
+  said both still merge cleanly and offered the maintainer's own commits
+  instead; read on 2026-10-31 it has no answer.
 - **Merged**: no. Up to 2024 the maintainer fixed an issue that carried a
   reproduction directly, within days, with a commit of his own, and one pull
   request has ever been merged as sent, in 2019, so the fix may well arrive
@@ -17135,7 +17165,10 @@ branch nor a merged results pipeline.
   entry's issue and pull request still had no response. Read again on
   2026-10-07 and on 2026-10-13, nothing has moved: v1.3.4 is still the newest
   tag, `master` is still 9 commits ahead at `7a099954`, and the issue and the
-  pull request are open with no comment, review, label or assignee. Either way the entry retires on the release that
+  pull request are open with no comment, review, label or assignee. Read on
+  2026-10-31, v1.3.4 is still the newest tag and `master` is still 9 commits
+  ahead at `7a099954`; the issue has no comment, and the pull request none
+  but the reminder above. Either way the entry retires on the release that
   carries the fix, and it is re-read at each gobco tag.
 - **Blocking**: no for the server. It blocked the condition gate on three
   packages: `cmd/server` and `internal/toolutil` panicked before anything was
@@ -17159,14 +17192,14 @@ branch nor a merged results pipeline.
   both packages and fail on a condition left one-way in a file Linux does not
   build. It retires when a gobco release carries the fix and the pin,
   `github.com/rillig/gobco@v1.3.4` in `scripts/coverage-conditions.sh`
-  (line 124), moves to it. That change, once the release exists, does four
+  (line 180), moves to it. That change, once the release exists, does four
   things. It moves the pin and measures `test/e2e/internal/harness` directly
   with `TAGS=e2e`, which under the pull request's build gave 863 of 1162
   conditions; once measurable, the harness is held to the gate like any
   package a change touches, which means closing its one-way conditions. It
   retires the staged module copy and its constraint blanking from
   `scripts/coverage-conditions.sh`, with the text that describes them: the
-  script's header (line 73 says the harness waits for gobco to honour build
+  script's header (line 108 says the harness waits for gobco to honour build
   tags), the staging note of `scripts/check-spec-conditions.sh`, and the two
   paragraphs of `docs/development/testing/README.md` that begin "gobco reads
   a package as every `.go` file" and "The e2e harness stays unmeasured until
@@ -17259,7 +17292,12 @@ which had no entry until then and is
   2026-10-13, its Go workflow run (37855282392) waits on a maintainer's
   approval to run, as entry 73's (36452317634) has since 2026-09-28, it has
   no review, and both pull requests still merge onto `master` without a
-  conflict. The decision of 2026-10-06 against a workaround in the staging
+  conflict. Read on 2026-10-31, its run still reads `action_required`, while
+  entry 73's ended unapproved on 2026-10-28, thirty days after it was created
+  (entry 73, In review); the reminder of 2026-10-19 on
+  [rillig/gobco#41](https://github.com/rillig/gobco/pull/41#issuecomment-6273951341)
+  names this pull request too, and has no answer, and GitHub still reports
+  both pull requests mergeable. The decision of 2026-10-06 against a workaround in the staging
   script is superseded by the maintainer's decision of 2026-10-27 to carry
   one until gobco releases the fix (Workaround, below); the fix and its pull
   request stand.
@@ -17417,12 +17455,29 @@ reported the three packages as not measured, and reading
   is planned for no earlier than 2026-10-14, for the maintainer to post
   himself. It was posted at 09:29 UTC on 2026-10-14, noting that patch set 3
   only shortens the message and still merges cleanly; read on 2026-10-16 no
-  reviewer has answered, and there is still no vote.
+  reviewer has answered, and there is still no vote. Read on 2026-10-31
+  through Gerrit's REST API, nobody has answered, no label carries a vote and
+  no TryBot has run, and two things have moved. The reminder went up as a
+  patch set level comment left unresolved, so `No-Unresolved-Comments` is
+  unmet now, a fourth unmet submit requirement. And Gerrit reports the change
+  no longer mergeable into `master`:
+  [go.dev/cl/847765](https://go.dev/cl/847765) ("go/types, types2: report
+  error for oversized non-constant shift counts", `c8abe73e`, merged on
+  2026-10-19) appended a test to the end of both `issues_test.go` files,
+  where patch set 3 appends its own, so the patch no longer applies to
+  either, while both `cycles.go` hunks still do;
+  [go.dev/cl/854986](https://go.dev/cl/854986) ("go/types, types2: run some
+  tests in parallel", `eeaa0945`, 2026-10-27) edited both test files again.
+  Marking the reminder resolved in Gerrit clears the first, and a rebase of
+  the pull request's branch onto `master`, force-pushed for GerritBot to
+  import as patch set 4, the second; both are the maintainer's to post.
 - **Merged**: no. No Go release carries a fix: go1.27.2 and go1.26.9,
   released on 2026-10-08, change nothing in either `cycles.go` (from go1.27.1
   to go1.27.2, go/types and types2 differ only in `named_test.go`, one line
   each), go1.27.3, released on 2026-10-19, changes nothing outside
-  `crypto/x509`, and `master` still reads the field the same way.
+  `crypto/x509`, and `master` still reads the field the same way. Read on
+  2026-10-31, go1.27.3 is still the newest release, and neither `cycles.go`
+  has changed on `master` since the change was uploaded.
 - **Blocking**: no for the server, which type-checks nothing. It failed the
   race gate of a release rehearsal, in
   `TestAccess_OnlyTheSanctionedPackagesReadTheKey` of
@@ -17448,7 +17503,10 @@ reported the three packages as not measured, and reading
   and `cmd/internal/sdkroutes`; 31 on 2026-10-13, the two since being
   `cmd/audit_edition_tier` and `cmd/audit_1to1/internal/required`, which reach
   go/packages through `cmd/internal/actionrequests` to read its committed
-  record and load no program). In a race build its initializer sets
+  record and load no program; 36 on 2026-10-31, the five since being
+  `cmd/audit_1to1/internal/params`, `cmd/audit_1to1/internal/routes`,
+  `cmd/audit_1to1/internal/sdkoptions`, `cmd/audit_i18n` and
+  `cmd/audit_test_closed_servers`). In a race build its initializer sets
   GOMAXPROCS to one before go/packages sizes the semaphore it type-checks
   under, so the checkers run one after another; in any other build it changes
   nothing. Its tests hold
@@ -17461,7 +17519,7 @@ reported the three packages as not measured, and reading
   type-check in parallel, and the read still races, with no effect on this
   tree. An instance expands from its origin's RHS, which for a type read from
   export data is its underlying type, and for every generic type this module
-  and client-go v3.14.0 declare is a type literal. So `isComplete` returns
+  and client-go v3.30.0, read on 2026-10-31, declare is a type literal. So `isComplete` returns
   true whichever value it reads (nil, the new type, or a torn pair of the
   two), which is its answer for any type no checker owns. What would change
   that is a generic type loaded from source whose RHS is another defined
