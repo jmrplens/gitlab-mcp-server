@@ -1547,7 +1547,7 @@ jobs:
 
       # npm >= 11.5.1 performs the OIDC exchange that trusted publishing needs.
       # setup-node's Node 24 ships npm 11, which validates the packages; the
-      # publish step upgrades it to the npm release pinned there.
+      # publish step runs the npm release pinned there instead.
       # Provenance is attached automatically under trusted publishing (no
       # --provenance flag), and publish-npm.sh skips any version already on the
       # registry, so re-running this job is safe.
@@ -1574,12 +1574,29 @@ jobs:
       # the flag cannot turn a skipped build into a stale publish. The
       # dist-tag is preflight's: latest for the newest release, release-X.Y
       # for a backport, so npm's latest keeps resolving the newest release.
+      #
+      # The npm that publishes is pinned by the SHA-256 of its registry tarball
+      # rather than by a version the registry resolves, since this job holds
+      # the identity every package is published under. The tarball bundles all
+      # of npm's dependencies, so it runs where it is unpacked, through a shim
+      # on PATH, and nothing else is fetched or installed into the runner's
+      # Node. A bump changes NPM_VERSION and NPM_SHA256 together.
       - name: Publish to npm
         env:
           NPM_DIST_TAG: ${{ needs.preflight.outputs.npm_dist_tag }}
+          NPM_VERSION: "12.2.1"
+          NPM_SHA256: "228bd64aaef23270dbdbd2cf3d5ef5c467602ef38c4066246cef1984adab9a67"
         run: |
           set -euo pipefail
-          npm install -g npm@12.2.1
+          TARBALL="${RUNNER_TEMP}/npm-${NPM_VERSION}.tgz"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz"
+          echo "${NPM_SHA256}  ${TARBALL}" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/npm" "${RUNNER_TEMP}/npm-bin"
+          tar -xzf "${TARBALL}" -C "${RUNNER_TEMP}/npm" --strip-components=1
+          printf '#!/bin/sh\nexec node "%s/bin/npm-cli.js" "$@"\n' "${RUNNER_TEMP}/npm" > "${RUNNER_TEMP}/npm-bin/npm"
+          chmod 0755 "${RUNNER_TEMP}/npm-bin/npm"
+          export PATH="${RUNNER_TEMP}/npm-bin:${PATH}"
+          test "$(npm --version)" = "${NPM_VERSION}"
           if [ "$REHEARSAL" = "true" ]; then
             # npm publish --dry-run packs every tarball and validates it
             # against the registry without uploading, so the rehearsal runs

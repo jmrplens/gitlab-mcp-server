@@ -6,14 +6,17 @@ on:
   pull_request:
     types: [opened]
 
+# The default is nothing; the job asks for what an assignment needs.
+permissions: {}
+
 jobs:
   assign:
     name: "🙋 Assign to the maintainer"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      issues: write
-      pull-requests: write
+      issues: write # assign an issue
+      pull-requests: write # assign a pull request
     if: >-
       (github.event_name == 'issues' && github.event.issue.user.login != 'jmrplens' && github.event.issue.user.login != 'dependabot[bot]') ||
       (github.event_name == 'pull_request' && github.event.pull_request.user.login != 'jmrplens' && github.event.pull_request.user.login != 'dependabot[bot]')
@@ -27,5 +30,5 @@ jobs:
           gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
-            /repos/$REPO/issues/$NUMBER/assignees \
+            "/repos/$REPO/issues/$NUMBER/assignees" \
             -f assignees[]=jmrplens

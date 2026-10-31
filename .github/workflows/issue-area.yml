@@ -14,8 +14,8 @@ on:
   issues:
     types: [opened, edited]
 
-permissions:
-  issues: write
+# The default is nothing; the job asks for what it edits.
+permissions: {}
 
 concurrency:
   group: issue-area-${{ github.event.issue.number }}
@@ -26,6 +26,8 @@ jobs:
     name: "🏷️ Area from the form"
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      issues: write # add the area label
     # Pull requests reach the issues event too, and have no form.
     if: ${{ !github.event.issue.pull_request }}
     steps:

@@ -84,8 +84,16 @@ internal/tools/testdata/*.json linguist-generated=true
 go.sum linguist-generated=true
 site/pnpm-lock.yaml linguist-generated=true
 
-# Files excluded from `git archive` (release tarballs)
-.github/ export-ignore
+# Files excluded from `git archive` and from the source archives GitHub serves
+# for a ref. A release publishes no source archive of its own, and the Go
+# module zip is not affected, since cmd/go turns export-ignore off before it
+# builds one.
+#
+# .github/, test/ and CODEOWNERS are not excluded: OpenSSF Scorecard reads the
+# repository from GitHub's archive, and looks there for the workflows and
+# dependabot.yml (.github/), the shell scripts and Go tests (test/) and
+# CODEOWNERS. With them excluded, Dangerous-Workflow, Token-Permissions and
+# Packaging found no workflow to judge and answered -1.
 .gitattributes export-ignore
 .gitignore export-ignore
 .editorconfig export-ignore
@@ -93,8 +101,6 @@ site/pnpm-lock.yaml linguist-generated=true
 .markdownlint-cli2.jsonc export-ignore
 .goreleaser.yml export-ignore
 plan/ export-ignore
-test/ export-ignore
 docs/ export-ignore
 site/ export-ignore
 sonar-project.properties export-ignore
-CODEOWNERS export-ignore

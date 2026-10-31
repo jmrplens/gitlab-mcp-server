@@ -82,6 +82,9 @@ jobs:
           go-version-file: go.mod
 
       - name: Install gotestsum
+        # The version go.mod's tool directive names, which go.sum pins by hash.
+        # Scorecard's Pinned-Dependencies reads a go install without @version
+        # as unpinned, since it reads neither file.
         run: go install gotest.tools/gotestsum
 
       # Built once and handed to every package through E2E_SERVER_BINARY, so
