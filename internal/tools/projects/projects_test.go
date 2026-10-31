@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"maps"
 	"net/http"
@@ -10484,6 +10485,175 @@ func TestListUserContributedProjects_Keyset_IsRefusedBeforeGitLab(t *testing.T) 
 			t.Errorf("pagination = %+v with %d projects, want next_page 2 and no token", out.Pagination, len(out.Projects))
 		}
 	})
+}
+
+// projectKeysetList is one of the four project lists GitLab pages by keyset
+// in id order alone, with the operation its errors are prefixed with, the
+// path it sends and a call that asks it in an order with keyset arguments.
+type projectKeysetList struct {
+	name      string
+	operation string
+	path      string
+	call      func(ctx context.Context, client *gitlabclient.Client, orderBy string, keyset toolutil.KeysetPaginationInput) error
+}
+
+// projectKeysetLists returns the four project lists that share
+// buildUserProjectOpts and take keyset pagination: all projects, a project's
+// forks, a user's projects and a user's starred projects.
+func projectKeysetLists() []projectKeysetList {
+	filter := func(orderBy string, keyset toolutil.KeysetPaginationInput) userProjectFilterInput {
+		return userProjectFilterInput{OrderBy: orderBy, KeysetPaginationInput: keyset}
+	}
+	return []projectKeysetList{
+		{
+			name: "all projects", operation: "projectList", path: "/api/v4/projects",
+			call: func(ctx context.Context, client *gitlabclient.Client, orderBy string, keyset toolutil.KeysetPaginationInput) error {
+				_, err := List(ctx, client, ListInput{OrderBy: orderBy, KeysetPaginationInput: keyset})
+				return err
+			},
+		},
+		{
+			name: "forks", operation: "projectListForks", path: "/api/v4/projects/42/forks",
+			call: func(ctx context.Context, client *gitlabclient.Client, orderBy string, keyset toolutil.KeysetPaginationInput) error {
+				_, err := ListForks(ctx, client, ListForksInput{ProjectID: "42", OrderBy: orderBy, KeysetPaginationInput: keyset})
+				return err
+			},
+		},
+		{
+			name: "a user's projects", operation: "projectListUserProjects", path: "/api/v4/users/7/projects",
+			call: func(ctx context.Context, client *gitlabclient.Client, orderBy string, keyset toolutil.KeysetPaginationInput) error {
+				_, err := ListUserProjects(ctx, client, ListUserProjectsInput{UserID: "7", userProjectFilterInput: filter(orderBy, keyset)})
+				return err
+			},
+		},
+		{
+			name: "a user's starred projects", operation: "projectListUserStarred", path: "/api/v4/users/7/starred_projects",
+			call: func(ctx context.Context, client *gitlabclient.Client, orderBy string, keyset toolutil.KeysetPaginationInput) error {
+				_, err := ListUserStarredProjects(ctx, client, ListUserStarredProjectsInput{UserID: "7", userProjectFilterInput: filter(orderBy, keyset)})
+				return err
+			},
+		},
+	}
+}
+
+// TestProjectLists_KeysetOutsideIDOrder_IsRefusedBeforeAnyRequest verifies
+// that the four project lists refuse pagination=keyset with no order_by, or
+// with an order_by other than id, before any request, naming order_by=id and
+// the offset pages that read on in any order. GitLab's keyset pager admits a
+// Project relation only ordered by id alone (Gitlab::Pagination::Keyset.available?,
+// lib/gitlab/pagination/keyset.rb at v19.5.0-ee), and the four routes default
+// order_by to created_at (sort_params, lib/api/projects.rb:168-173), so such a
+// request was sent and answered with 405 "Keyset pagination is not yet
+// available for this type of request" (issue 1165). The order is compared as
+// GitLab compares it, so ID is refused too: Grape answers 400 to a value
+// outside the declared set.
+func TestProjectLists_KeysetOutsideIDOrder_IsRefusedBeforeAnyRequest(t *testing.T) {
+	type refusedCase struct {
+		list    projectKeysetList
+		orderBy string
+	}
+	var cases []refusedCase
+	for _, list := range projectKeysetLists() {
+		for _, orderBy := range []string{"", "created_at", "name", "last_activity_at", "ID"} {
+			cases = append(cases, refusedCase{list: list, orderBy: orderBy})
+		}
+	}
+	for _, tc := range cases {
+		t.Run(tc.list.name+"/order_by="+tc.orderBy, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			err := tc.list.call(t.Context(), client, tc.orderBy, toolutil.KeysetPaginationInput{Pagination: "keyset"})
+			if err == nil {
+				t.Fatalf("%s with pagination=keyset and order_by %q answered no error, want the refusal", tc.list.operation, tc.orderBy)
+			}
+			if !strings.HasPrefix(err.Error(), tc.list.operation+": ") || !errors.Is(err, errKeysetOrderNotID) {
+				t.Errorf("%s error = %q, want the keyset order refusal under its operation", tc.list.operation, err)
+			}
+			if text := errKeysetOrderNotID.Error(); !strings.Contains(text, "order_by=id") || !strings.Contains(text, "page and per_page") {
+				t.Errorf("refusal = %q, want it to name order_by=id and the page and per_page that read on", text)
+			}
+		})
+	}
+}
+
+// TestProjectLists_KeysetInIDOrderOrByToken_IsSent verifies that the keyset
+// requests GitLab can serve reach it unchanged: pagination=keyset with
+// order_by=id in either direction, which GitLab pages by id_after or
+// id_before, and the next_page_token of a keyset page, whose link carries the
+// order its listing was asked in, so the refusal does not look at the
+// order_by sent beside it. An offset listing in any order is sent as well.
+func TestProjectLists_KeysetInIDOrderOrByToken_IsSent(t *testing.T) {
+	type sentCase struct {
+		name    string
+		orderBy string
+		keyset  toolutil.KeysetPaginationInput
+		want    url.Values
+	}
+	sent := func(path string) []sentCase {
+		next := "https://gitlab.example.com" + path + "?id_after=2&order_by=id&pagination=keyset&per_page=2&sort=asc"
+		return []sentCase{
+			{
+				name: "keyset by id ascending", orderBy: "id", keyset: toolutil.KeysetPaginationInput{Pagination: "keyset"},
+				want: url.Values{"order_by": {"id"}, "pagination": {"keyset"}},
+			},
+			{
+				name: "keyset by id with a raw page_token", orderBy: "id", keyset: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "8"},
+				want: url.Values{"order_by": {"id"}, "pagination": {"keyset"}, "page_token": {"8"}},
+			},
+			{
+				name: "a next_page_token beside no order_by", keyset: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: next},
+				want: url.Values{"id_after": {"2"}, "order_by": {"id"}, "pagination": {"keyset"}, "per_page": {"2"}, "sort": {"asc"}},
+			},
+			{
+				name: "a next_page_token beside another order_by", orderBy: "name", keyset: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: next},
+				want: url.Values{"id_after": {"2"}, "order_by": {"id"}, "pagination": {"keyset"}, "per_page": {"2"}, "sort": {"asc"}},
+			},
+			{
+				name: "offset by name", orderBy: "name",
+				want: url.Values{"order_by": {"name"}},
+			},
+			{
+				name: "explicit offset by created_at", orderBy: "created_at", keyset: toolutil.KeysetPaginationInput{Pagination: "offset"},
+				want: url.Values{"order_by": {"created_at"}, "pagination": {"offset"}},
+			},
+		}
+	}
+	type listCase struct {
+		list projectKeysetList
+		sentCase
+	}
+	var cases []listCase
+	for _, list := range projectKeysetLists() {
+		for _, tc := range sent(list.path) {
+			cases = append(cases, listCase{list: list, sentCase: tc})
+		}
+	}
+	for _, tc := range cases {
+		t.Run(tc.list.name+"/"+tc.name, func(t *testing.T) {
+			var (
+				mu    sync.Mutex
+				paths []string
+				query url.Values
+			)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				paths = append(paths, r.URL.Path)
+				query = r.URL.Query()
+				mu.Unlock()
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			if err := tc.list.call(t.Context(), client, tc.orderBy, tc.keyset); err != nil {
+				t.Fatalf("%s error = %v, want the request sent", tc.list.operation, err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if !slices.Equal(paths, []string{tc.list.path}) {
+				t.Fatalf("requests = %q, want one to %s", paths, tc.list.path)
+			}
+			if !reflect.DeepEqual(query, tc.want) {
+				t.Errorf("query = %v, want %v", query, tc.want)
+			}
+		})
+	}
 }
 
 // avatarForm is what a mock reads off a create sent with an avatar: the

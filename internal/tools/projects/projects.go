@@ -3301,9 +3301,24 @@ type userProjectFilter struct {
 	toolutil.KeysetPaginationInput
 }
 
+// errKeysetOrderNotID is what a project list asked for a keyset page in an
+// order other than id is answered with, before any request is made. GitLab's
+// keyset pager admits a Project relation ordered by id alone
+// (Gitlab::Pagination::Keyset.available?, lib/gitlab/pagination/keyset.rb at
+// v19.5.0-ee), and these routes default order_by to created_at (sort_params,
+// lib/api/projects.rb:168-173), so any other order, the one sent when order_by
+// is left out included, is answered with 405 "Keyset pagination is not yet
+// available for this type of request" (issue 1165). A page_token is not
+// judged: the next link it carries names the order its listing was asked in.
+var errKeysetOrderNotID = errors.New("GitLab pages projects by keyset only in id order, and answers any other order_by, its default created_at included, with 405: send order_by=id (sort asc or desc) with pagination=keyset, or leave pagination out and read on in any order with page and per_page")
+
 // buildUserProjectOpts centralizes option building for user-scoped project
-// listings, refusing a last-activity bound that does not parse.
+// listings, refusing a keyset request in any order but id
+// ([errKeysetOrderNotID]) and a last-activity bound that does not parse.
 func buildUserProjectOpts(f userProjectFilter) (*gl.ListProjectsOptions, error) {
+	if f.Pagination == "keyset" && f.PageToken == "" && f.OrderBy != "id" {
+		return nil, errKeysetOrderNotID
+	}
 	opts := &gl.ListProjectsOptions{}
 	if f.Search != "" {
 		opts.Search = new(f.Search)
