@@ -243,7 +243,6 @@ type ListBillableMembersInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order billable members by (e.g. id, name, username, last_activity_on)"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order (e.g. name_asc, name_desc, last_activity_on_asc, last_activity_on_desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListBillableMemberMembershipsInput contains parameters for listing the
@@ -254,7 +253,6 @@ type ListBillableMemberMembershipsInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order memberships by (e.g. id, name)"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // RemoveBillableMemberInput contains parameters for removing a billable member
@@ -575,7 +573,7 @@ func ListBillableMembers(ctx context.Context, client *gitlabclient.Client, input
 		return BillableMembersOutput{}, toolutil.WrapErrWithMessage("group_billable_members_list", toolutil.ErrFieldRequired("group_id"))
 	}
 	opts := &gl.ListBillableGroupMembersOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -617,7 +615,7 @@ func ListBillableMemberMemberships(ctx context.Context, client *gitlabclient.Cli
 		return BillableMembershipsOutput{}, toolutil.WrapErrWithMessage("group_billable_member_memberships_list", toolutil.ErrFieldRequired("user_id"))
 	}
 	opts := &gl.ListMembershipsForBillableGroupMemberOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

@@ -988,12 +988,11 @@ func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	}
 }
 
-// ---------- Keyset pagination + filter object (1:1 audit) ----------.
+// ---------- Ordering + filter object (1:1 audit) ----------.
 
-// TestList_OrderBySortPageToken verifies List forwards order_by, sort, and
-// page_token to the GitLab API, mirroring the embedded ListOptions of
-// gitlab.ListGroupVariablesOptions.
-func TestList_OrderBySortPageToken(t *testing.T) {
+// TestList_OrderBySort verifies List forwards order_by and sort to the GitLab
+// API, mirroring the embedded ListOptions of gitlab.ListGroupVariablesOptions.
+func TestList_OrderBySort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupVars {
 			q := r.URL.Query()
@@ -1003,9 +1002,6 @@ func TestList_OrderBySortPageToken(t *testing.T) {
 			if q.Get("sort") != "desc" {
 				t.Errorf("sort = %q, want desc", q.Get("sort"))
 			}
-			if q.Get("page_token") != "next-page" {
-				t.Errorf("page_token = %q, want next-page", q.Get("page_token"))
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[`+varJSON+`]`)
 			return
 		}
@@ -1014,7 +1010,6 @@ func TestList_OrderBySortPageToken(t *testing.T) {
 
 	in := ListInput{
 		GroupID: "10", OrderBy: "key", Sort: "desc",
-		PageToken: "next-page",
 	}
 	if _, err := List(context.Background(), client, in); err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

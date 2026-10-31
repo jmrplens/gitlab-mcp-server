@@ -1851,9 +1851,9 @@ func TestList_IncludeParentMilestones(t *testing.T) {
 	}
 }
 
-// TestList_OrderBySortAndKeyset verifies List forwards order_by, sort, and
-// keyset pagination parameters (1:1 SDK field coverage).
-func TestList_OrderBySortAndKeyset(t *testing.T) {
+// TestList_OrderBySort verifies List forwards order_by and sort (1:1 SDK field
+// coverage).
+func TestList_OrderBySort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if q.Get("order_by") != "due_date" {
@@ -1862,28 +1862,21 @@ func TestList_OrderBySortAndKeyset(t *testing.T) {
 		if q.Get("sort") != "asc" {
 			t.Errorf("expected sort=asc, got %q", q.Get("sort"))
 		}
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "tok123" {
-			t.Errorf("expected page_token=tok123, got %q", q.Get("page_token"))
-		}
 		testutil.RespondJSON(w, http.StatusOK, covMilestoneListJSON)
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  "42",
-		OrderBy:    "due_date",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "tok123",
+		ProjectID: "42",
+		OrderBy:   "due_date",
+		Sort:      "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGetIssues_OrderBySortAndKeyset verifies GetIssues forwards order_by,
-// sort, and keyset pagination parameters (1:1 SDK field coverage).
-func TestGetIssues_OrderBySortAndKeyset(t *testing.T) {
+// TestGetIssues_OrderBySort verifies GetIssues forwards order_by and sort (1:1
+// SDK field coverage).
+func TestGetIssues_OrderBySort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
 			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"project_id":42,"title":"v1.0"}]`)
@@ -1897,12 +1890,6 @@ func TestGetIssues_OrderBySortAndKeyset(t *testing.T) {
 			if q.Get("sort") != "desc" {
 				t.Errorf("expected sort=desc, got %q", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "tok9" {
-				t.Errorf("expected page_token=tok9, got %q", q.Get("page_token"))
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
@@ -1913,16 +1900,15 @@ func TestGetIssues_OrderBySortAndKeyset(t *testing.T) {
 		MilestoneIID: 1,
 		OrderBy:      "created_at",
 		Sort:         "desc",
-		Pagination:   "keyset", PageToken: "tok9",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGetMergeRequests_OrderBySortAndKeyset verifies GetMergeRequests forwards
-// order_by, sort, and keyset pagination parameters (1:1 SDK field coverage).
-func TestGetMergeRequests_OrderBySortAndKeyset(t *testing.T) {
+// TestGetMergeRequests_OrderBySort verifies GetMergeRequests forwards order_by
+// and sort (1:1 SDK field coverage).
+func TestGetMergeRequests_OrderBySort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
 			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"project_id":42,"title":"v1.0"}]`)
@@ -1936,12 +1922,6 @@ func TestGetMergeRequests_OrderBySortAndKeyset(t *testing.T) {
 			if q.Get("sort") != "asc" {
 				t.Errorf("expected sort=asc, got %q", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "tok42" {
-				t.Errorf("expected page_token=tok42, got %q", q.Get("page_token"))
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
@@ -1952,7 +1932,6 @@ func TestGetMergeRequests_OrderBySortAndKeyset(t *testing.T) {
 		MilestoneIID: 1,
 		OrderBy:      "updated_at",
 		Sort:         "asc",
-		Pagination:   "keyset", PageToken: "tok42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

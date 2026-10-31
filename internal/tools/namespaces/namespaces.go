@@ -25,7 +25,6 @@ type ListInput struct {
 	OrderBy      string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort         string `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for getting a namespace by ID.
@@ -103,7 +102,7 @@ type ExistsOutput struct {
 // List returns a paginated list of namespaces visible to the user.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListNamespacesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

@@ -554,28 +554,24 @@ func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
 	}
 }
 
-// TestList_KeysetAndSortParams verifies that List forwards keyset pagination
-// (pagination, page_token) and ordering (order_by, sort) query parameters to
-// the GitLab API.
+// TestList_SortParams verifies that List forwards the ordering (order_by,
+// sort) query parameters to the GitLab API.
 //
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts each keyset and ordering parameter reaches the request query.
-func TestList_KeysetAndSortParams(t *testing.T) {
+// It asserts each ordering parameter reaches the request query.
+func TestList_SortParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.AssertRequestPath(t, r, pathListTokens)
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "cursor-123")
 		testutil.AssertQueryParam(t, r, "order_by", "created_at")
 		testutil.AssertQueryParam(t, r, "sort", "desc")
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		UserID:     42,
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "cursor-123",
+		UserID:  42,
+		OrderBy: "created_at",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

@@ -650,15 +650,14 @@ func TestListTriggers_OrderBySort(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"description":"t","token":"a"}]`)
 	}))
 	_, err := ListTriggers(context.Background(), client, ListInput{
-		ProjectID:  "1",
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "5",
+		ProjectID: "1",
+		OrderBy:   "id",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=5"} {
+	for _, want := range []string{"order_by=id", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query = %q, want to contain %q", gotQuery, want)

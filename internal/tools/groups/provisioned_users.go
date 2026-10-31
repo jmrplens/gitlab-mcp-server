@@ -30,7 +30,6 @@ type ListProvisionedUsersInput struct {
 	OrderBy       string               `json:"order_by,omitempty" jsonschema:"Column to order provisioned users by (e.g. id, name, username, created_at, updated_at)"`
 	Sort          string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ProvisionedUserOutput is a user provisioned through SAML or SCIM as
@@ -312,7 +311,7 @@ func ListProvisionedUsers(ctx context.Context, client *gitlabclient.Client, inpu
 // the handler's cyclomatic complexity flat.
 func provisionedUsersOptions(input ListProvisionedUsersInput) (*gl.ListProvisionedUsersOptions, error) {
 	opts := &gl.ListProvisionedUsersOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Username != "" {
 		opts.Username = new(input.Username)
 	}

@@ -263,17 +263,11 @@ func TestListDomains_Success(t *testing.T) {
 	}
 }
 
-// TestListDomains_KeysetAndOrdering verifies ListDomains forwards keyset
-// pagination plus order_by/sort query parameters to the GitLab API.
-func TestListDomains_KeysetAndOrdering(t *testing.T) {
+// TestListDomains_Ordering verifies ListDomains forwards the order_by/sort
+// query parameters to the GitLab API.
+func TestListDomains_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "tok42" {
-			t.Errorf("page_token = %q, want tok42", q.Get("page_token"))
-		}
 		if q.Get("order_by") != "domain" {
 			t.Errorf("order_by = %q, want domain", q.Get("order_by"))
 		}
@@ -287,11 +281,10 @@ func TestListDomains_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := ListDomains(context.Background(), client, ListDomainsInput{
-		ProjectID:  "42",
-		OrderBy:    "domain",
-		Sort:       "asc",
-		PerPage:    50,
-		Pagination: "keyset", PageToken: "tok42",
+		ProjectID: "42",
+		OrderBy:   "domain",
+		Sort:      "asc",
+		PerPage:   50,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

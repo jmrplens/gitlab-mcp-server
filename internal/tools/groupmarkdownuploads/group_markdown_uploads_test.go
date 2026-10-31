@@ -503,9 +503,9 @@ func TestList_UploadedByAbsent(t *testing.T) {
 	}
 }
 
-// TestList_KeysetAndOrdering verifies that order_by, sort, and keyset
-// pagination parameters are forwarded to the GitLab API query string.
-func TestList_KeysetAndOrdering(t *testing.T) {
+// TestList_Ordering verifies that the order_by and sort parameters are
+// forwarded to the GitLab API query string.
+func TestList_Ordering(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -516,15 +516,14 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := List(t.Context(), client, ListInput{
-		GroupID:    "5",
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok123",
+		GroupID: "5",
+		OrderBy: "created_at",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok123"} {
+	for _, want := range []string{"order_by=created_at", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)

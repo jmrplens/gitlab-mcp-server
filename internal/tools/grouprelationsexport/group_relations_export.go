@@ -49,7 +49,6 @@ type ListExportStatusInput struct {
 	OrderBy  string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
 	Sort     string               `json:"sort,omitempty" jsonschema:"Sort order for results: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ExportBatchItem represents a single batch within a relation export.
@@ -110,7 +109,7 @@ func ListExportStatus(ctx context.Context, client *gitlabclient.Client, input Li
 		return nil, toolutil.ErrRequiredString("gitlab_list_group_relations_export_status", "group_id")
 	}
 	opts := &gl.ListGroupRelationsStatusOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

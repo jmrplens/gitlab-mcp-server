@@ -288,8 +288,8 @@ func assertQueryParam(t *testing.T, q url.Values, key, want string) {
 }
 
 // TestProjectMembersList_AllListOptions verifies that projectMembersList
-// forwards order_by, sort, show_seat_info, user_ids[], and keyset pagination
-// (pagination + page_token) query parameters to the GitLab API.
+// forwards order_by, sort, show_seat_info and user_ids[] query parameters to
+// the GitLab API.
 func TestProjectMembersList_AllListOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathProjectMembers {
@@ -300,8 +300,6 @@ func TestProjectMembersList_AllListOptions(t *testing.T) {
 		assertQueryParam(t, q, "order_by", "access_level")
 		assertQueryParam(t, q, "sort", "desc")
 		assertQueryParam(t, q, "show_seat_info", "true")
-		assertQueryParam(t, q, "pagination", "keyset")
-		assertQueryParam(t, q, "page_token", "tok42")
 		if got := q["user_ids[]"]; len(got) != 2 || got[0] != "10" || got[1] != "20" {
 			t.Errorf("query user_ids[] = %v, want [10 20]", got)
 		}
@@ -317,7 +315,6 @@ func TestProjectMembersList_AllListOptions(t *testing.T) {
 		Sort:         "desc",
 		ShowSeatInfo: true,
 		UserIDs:      []int{10, 20},
-		Pagination:   "keyset", PageToken: "tok42",
 	})
 	if err != nil {
 		t.Fatalf(fmtMembersListErr, err)

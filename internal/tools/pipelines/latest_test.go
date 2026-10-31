@@ -341,16 +341,15 @@ func TestGetLatest_FallbackKeepsTheCallersOrdering(t *testing.T) {
 	}
 }
 
-// TestGetLatest_FallbackKeysetAndFilters verifies that the list fallback honors
-// keyset pagination and the additional ListProjectPipelinesOptions filters that
-// GetLatestInput mirrors, beside the ref it lists.
-func TestGetLatest_FallbackKeysetAndFilters(t *testing.T) {
+// TestGetLatest_FallbackFilters verifies that the list fallback honors the
+// additional ListProjectPipelinesOptions filters that GetLatestInput mirrors,
+// beside the ref it lists.
+func TestGetLatest_FallbackFilters(t *testing.T) {
 	query := fallbackListQuery(t, GetLatestInput{
 		Status: "success", Source: "push",
-		Pagination: "keyset", PageToken: "cur-9",
 	})
 
-	supplied := map[string]string{"pagination": "keyset", "page_token": "cur-9", "status": "success", "source": "push", "ref": "main"}
+	supplied := map[string]string{"status": "success", "source": "push", "ref": "main"}
 	for param, want := range supplied {
 		t.Run(param, func(t *testing.T) {
 			if got := query.Get(param); got != want {
@@ -629,9 +628,8 @@ func TestGetLatest_NoPipelineUnderTheFilters_SaysToDropThem(t *testing.T) {
 		{name: "status", input: GetLatestInput{Status: "success"}, filtered: true},
 		{name: "created after", input: GetLatestInput{CreatedAfter: "2026-01-01T00:00:00Z"}, filtered: true},
 		{name: "a later page", input: GetLatestInput{PaginationInput: toolutil.PaginationInput{Page: 2}}, filtered: true},
-		{name: "a keyset cursor", input: GetLatestInput{KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cur-9"}}, filtered: true},
 		{name: "the first page", input: GetLatestInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 50}}, filtered: false},
-		{name: "an ordering", input: GetLatestInput{OrderBy: "updated_at", Sort: "asc", KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset"}}, filtered: false},
+		{name: "an ordering", input: GetLatestInput{OrderBy: "updated_at", Sort: "asc"}, filtered: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

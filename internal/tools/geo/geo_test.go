@@ -972,9 +972,9 @@ func TestFormatListStatusMarkdown_WithPagination(t *testing.T) {
 // Keyset pagination + order_by/sort forwarding (1:1 audit P3)
 // ---------------------------------------------------------------------------
 
-// TestList_KeysetAndOrdering verifies that List forwards order_by, sort,
-// pagination=keyset, and page_token to the GitLab Geo sites endpoint.
-func TestList_KeysetAndOrdering(t *testing.T) {
+// TestList_Ordering verifies that List forwards order_by and sort to the
+// GitLab Geo sites endpoint.
+func TestList_Ordering(t *testing.T) {
 	var query url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites" {
@@ -986,9 +986,8 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "42",
+		OrderBy: "id",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -999,17 +998,11 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	if got := query.Get("sort"); got != "desc" {
 		t.Errorf("sort = %q, want desc", got)
 	}
-	if got := query.Get("pagination"); got != "keyset" {
-		t.Errorf("pagination = %q, want keyset", got)
-	}
-	if got := query.Get("page_token"); got != "42" {
-		t.Errorf("page_token = %q, want 42", got)
-	}
 }
 
-// TestListStatus_KeysetAndOrdering verifies that ListStatus forwards order_by,
-// sort, pagination=keyset, and page_token to the Geo statuses endpoint.
-func TestListStatus_KeysetAndOrdering(t *testing.T) {
+// TestListStatus_Ordering verifies that ListStatus forwards order_by and sort
+// to the Geo statuses endpoint.
+func TestListStatus_Ordering(t *testing.T) {
 	var query url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/status" {
@@ -1021,9 +1014,8 @@ func TestListStatus_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := ListStatus(context.Background(), client, ListStatusInput{
-		OrderBy:    "geo_node_id",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "7",
+		OrderBy: "geo_node_id",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf("ListStatus() error: %v", err)
@@ -1033,12 +1025,6 @@ func TestListStatus_KeysetAndOrdering(t *testing.T) {
 	}
 	if got := query.Get("sort"); got != "asc" {
 		t.Errorf("sort = %q, want asc", got)
-	}
-	if got := query.Get("pagination"); got != "keyset" {
-		t.Errorf("pagination = %q, want keyset", got)
-	}
-	if got := query.Get("page_token"); got != "7" {
-		t.Errorf("page_token = %q, want 7", got)
 	}
 }
 

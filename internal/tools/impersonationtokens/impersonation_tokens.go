@@ -78,7 +78,6 @@ type ListInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput identifies a specific impersonation token.
@@ -154,7 +153,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.State != "" {
 		opts.State = new(input.State)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

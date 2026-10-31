@@ -1524,17 +1524,15 @@ func TestReleaseCreate_EmptyAssetsLinks(t *testing.T) {
 	}
 }
 
-// TestReleaseList_IncludeHTMLDescriptionAndKeyset verifies that List forwards
-// include_html_description and keyset pagination (pagination, page_token)
-// query parameters to the GitLab API.
-func TestReleaseList_IncludeHTMLDescriptionAndKeyset(t *testing.T) {
+// TestReleaseList_IncludeHTMLDescription verifies that List forwards
+// include_html_description and the other list query parameters to the GitLab
+// API.
+func TestReleaseList_IncludeHTMLDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectReleases {
 			q := r.URL.Query()
 			for k, want := range map[string]string{
 				"include_html_description": "true",
-				"pagination":               "keyset",
-				"page_token":               "99",
 				"order_by":                 "created_at",
 				"sort":                     "asc",
 			} {
@@ -1555,7 +1553,6 @@ func TestReleaseList_IncludeHTMLDescriptionAndKeyset(t *testing.T) {
 		OrderBy:                "created_at",
 		Sort:                   "asc",
 		IncludeHTMLDescription: true,
-		Pagination:             "keyset", PageToken: "99",
 	}); err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}

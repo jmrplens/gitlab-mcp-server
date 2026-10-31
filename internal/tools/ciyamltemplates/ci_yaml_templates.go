@@ -27,7 +27,6 @@ type ListInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name, created_at, updated_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // applyOrderSort copies the order_by and sort fields onto a gl.ListOptions,
@@ -57,7 +56,7 @@ type ListOutput struct {
 // List lists all available CI YAML templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListCIYMLTemplatesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	items, resp, err := client.GL().CIYMLTemplate.ListAllTemplates(opts, gl.WithContext(ctx))
 	if err != nil {

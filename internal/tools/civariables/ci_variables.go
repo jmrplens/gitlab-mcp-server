@@ -34,7 +34,6 @@ type ListInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Filter mirrors gitlab.VariableFilter: the available filter on project
@@ -161,7 +160,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gitlab.ListProjectVariablesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

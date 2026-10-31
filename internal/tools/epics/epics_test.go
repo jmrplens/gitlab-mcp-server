@@ -180,7 +180,6 @@ func TestList_RESTFilterOptions(t *testing.T) {
 			"my_reaction_emoji", "created_after", "created_before",
 			"updated_after", "updated_before", "with_labels_details",
 			"include_ancestor_groups", "include_descendant_groups", "per_page",
-			"pagination", "page_token",
 		} {
 			t.Run(key, func(t *testing.T) {
 				if query.Get(key) == "" {
@@ -209,8 +208,7 @@ func TestList_RESTFilterOptions(t *testing.T) {
 		WithLabelsDetails:  &include,
 		IncludeAncestors:   &include,
 		IncludeDescendants: &include,
-		Pagination:         "keyset", PageToken: "123",
-		First: &first,
+		First:              &first,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1852,14 +1850,12 @@ func TestList_OffsetPageRequestWithAWorkItemsFilter_IsRefused(t *testing.T) {
 	}{
 		{"page", func(in *ListInput) { in.Page = 2 }, []string{"page"}},
 		{"per_page", func(in *ListInput) { in.PerPage = 50 }, []string{"per_page"}},
-		{"pagination", func(in *ListInput) { in.Pagination = "keyset" }, []string{"pagination"}},
-		{"page_token", func(in *ListInput) { in.PageToken = "1042" }, []string{"page_token"}},
 		{
-			"every one of them at once",
+			"both at once",
 			func(in *ListInput) {
-				in.Page, in.PerPage, in.Pagination, in.PageToken = 2, 50, "keyset", "1042"
+				in.Page, in.PerPage = 2, 50
 			},
-			[]string{"page", "per_page", "pagination", "page_token"},
+			[]string{"page", "per_page"},
 		},
 	}
 	for _, tc := range cases {
@@ -1891,7 +1887,6 @@ func TestList_OffsetPageRequestOnTheRESTPath_IsServed(t *testing.T) {
 	client := testutil.NewTestClient(t, epicListPathRouter())
 	input := ListInput{FullPath: testFullPath}
 	input.Page, input.PerPage = 2, 50
-	input.Pagination, input.PageToken = "keyset", "1042"
 	out, err := List(t.Context(), client, input)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

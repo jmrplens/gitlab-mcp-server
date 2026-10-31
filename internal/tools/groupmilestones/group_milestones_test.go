@@ -825,8 +825,6 @@ func TestList_AllFilterParams(t *testing.T) {
 				"end_date":                  "2026-12-31",
 				"order_by":                  "due_date",
 				"sort":                      "asc",
-				"pagination":                "keyset",
-				"page_token":                "99",
 			})
 			testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
 			return
@@ -848,7 +846,6 @@ func TestList_AllFilterParams(t *testing.T) {
 		EndDate:                 "2026-12-31",
 		OrderBy:                 "due_date",
 		Sort:                    "asc",
-		Pagination:              "keyset", PageToken: "99",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1151,12 +1148,6 @@ func TestGetIssues_WithPagination(t *testing.T) {
 			if q.Get("sort") != "desc" {
 				t.Errorf("expected sort=desc, got %q", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "50" {
-				t.Errorf("expected page_token=50, got %q", q.Get("page_token"))
-			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
 				`[{"id":100,"iid":5,"title":"Bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2026-01-10T00:00:00Z"},{"id":101,"iid":6,"title":"Feature","state":"closed","created_at":"2026-01-11T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
@@ -1170,7 +1161,6 @@ func TestGetIssues_WithPagination(t *testing.T) {
 		OrderBy:      "created_at",
 		Sort:         "desc",
 		Page:         1, PerPage: 20,
-		Pagination: "keyset", PageToken: "50",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1247,12 +1237,6 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 			if q.Get("sort") != "asc" {
 				t.Errorf("expected sort=asc, got %q", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "70" {
-				t.Errorf("expected page_token=70, got %q", q.Get("page_token"))
-			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
 				`[{"id":200,"iid":10,"title":"MR 1","state":"merged","source_branch":"feat","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2026-02-01T00:00:00Z"},{"id":201,"iid":11,"title":"MR 2","state":"opened","source_branch":"fix","target_branch":"main","created_at":"2026-02-02T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
@@ -1266,7 +1250,6 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 		OrderBy:      "updated_at",
 		Sort:         "asc",
 		Page:         1, PerPage: 20,
-		Pagination: "keyset", PageToken: "70",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

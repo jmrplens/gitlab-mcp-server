@@ -46,7 +46,6 @@ type ListInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'."`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput holds parameters for retrieving a single project mirror.
@@ -165,7 +164,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	opts := &gl.ListProjectMirrorOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}

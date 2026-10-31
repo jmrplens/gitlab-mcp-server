@@ -123,7 +123,6 @@ type ListInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds the paginated list of bulk import migrations.
@@ -136,7 +135,7 @@ type ListOutput struct {
 // List returns all bulk import migrations visible to the caller.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListBulkImportsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -261,7 +260,6 @@ type ListEntitiesInput struct {
 	OrderBy      string `json:"order_by,omitempty"        jsonschema:"Column to order results by (e.g. created_at)"`
 	Sort         string `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListEntitiesOutput holds the paginated list of bulk import entities.
@@ -277,7 +275,7 @@ func ListEntities(ctx context.Context, client *gitlabclient.Client, input ListEn
 		return ListEntitiesOutput{}, errors.New("bulk_import_entity_list: bulk_import_id must be >= 0 (omit or set to 0 to list across all imports)")
 	}
 	opts := &gl.ListBulkImportsEntitiesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

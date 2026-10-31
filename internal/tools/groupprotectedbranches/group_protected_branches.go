@@ -105,7 +105,6 @@ type ListInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. name)"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for the Get action which retrieves a single group-level protected branch.
@@ -181,7 +180,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

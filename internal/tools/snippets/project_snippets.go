@@ -25,7 +25,6 @@ type ProjectListInput struct {
 	OrderBy   string               `json:"order_by,omitempty"  jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"      jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ProjectList lists snippets for a project.
@@ -34,7 +33,7 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	opts := &gl.ListProjectSnippetsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	snippets, resp, err := client.GL().ProjectSnippets.ListSnippets(
 		string(input.ProjectID), opts, gl.WithContext(ctx),

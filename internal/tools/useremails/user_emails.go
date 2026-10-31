@@ -51,7 +51,6 @@ type DeleteOutput struct {
 type ListForUserInput struct {
 	UserID int64 `json:"user_id" jsonschema:"GitLab user ID,required"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for ordered results: asc or desc"`
 }
@@ -116,7 +115,7 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 		return ListOutput{}, errors.New(errUserIDPositive)
 	}
 	opts := &gl.ListEmailsForUserOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

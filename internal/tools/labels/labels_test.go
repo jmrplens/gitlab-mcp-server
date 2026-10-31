@@ -237,10 +237,9 @@ func TestLabelList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestLabelList_OrderBySortKeyset verifies that order_by, sort, and the
-// keyset pagination parameters (pagination, page_token) are forwarded as
+// TestLabelList_OrderBySort verifies that order_by and sort are forwarded as
 // query parameters to the GitLab Labels API.
-func TestLabelList_OrderBySortKeyset(t *testing.T) {
+func TestLabelList_OrderBySort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectLabels {
 			q := r.URL.Query()
@@ -250,12 +249,6 @@ func TestLabelList_OrderBySortKeyset(t *testing.T) {
 			if q.Get("sort") != "asc" {
 				t.Errorf("sort = %q, want asc", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "tok123" {
-				t.Errorf("page_token = %q, want tok123", q.Get("page_token"))
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"bug","color":"#d9534f","is_project_label":true}]`)
 			return
 		}
@@ -263,11 +256,9 @@ func TestLabelList_OrderBySortKeyset(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:  "42",
-		OrderBy:    "name",
-		Sort:       "asc",
-		Pagination: "keyset",
-		PageToken:  "tok123",
+		ProjectID: "42",
+		OrderBy:   "name",
+		Sort:      "asc",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

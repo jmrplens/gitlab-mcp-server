@@ -24,7 +24,6 @@ type ListInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"For keyset pagination: name of the column by which to order results"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"For keyset pagination: sort order (asc or desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ApplicationItem represents a single application.
@@ -48,7 +47,7 @@ type ListOutput struct {
 // List retrieves all applications (admin).
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListApplicationsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

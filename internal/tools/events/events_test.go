@@ -1055,51 +1055,37 @@ func TestToProjectEventOutput_EmptySubObjects(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_KeysetAndOrderBy verifies that keyset pagination and
-// order_by parameters are forwarded as query parameters.
-func TestListProjectEvents_KeysetAndOrderBy(t *testing.T) {
+// TestListProjectEvents_OrderBy verifies that the order_by parameter is
+// forwarded as a query parameter.
+func TestListProjectEvents_OrderBy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "99" {
-			t.Errorf("expected page_token=99, got %q", q.Get("page_token"))
-		}
 		if q.Get("order_by") != "id" {
 			t.Errorf("expected order_by=id, got %q", q.Get("order_by"))
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListProjectEvents(t.Context(), client, ListProjectEventsInput{
-		ProjectID:  "42",
-		OrderBy:    "id",
-		Pagination: "keyset", PageToken: "99",
+		ProjectID: "42",
+		OrderBy:   "id",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-// TestListCurrentUserContributionEvents_KeysetAndOrderBy verifies keyset and
-// order_by forwarding for the contribution-events endpoint.
-func TestListCurrentUserContributionEvents_KeysetAndOrderBy(t *testing.T) {
+// TestListCurrentUserContributionEvents_OrderBy verifies order_by forwarding
+// for the contribution-events endpoint.
+func TestListCurrentUserContributionEvents_OrderBy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "7" {
-			t.Errorf("expected page_token=7, got %q", q.Get("page_token"))
-		}
 		if q.Get("order_by") != "id" {
 			t.Errorf("expected order_by=id, got %q", q.Get("order_by"))
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListCurrentUserContributionEvents(t.Context(), client, ListContributionEventsInput{
-		OrderBy:    "id",
-		Pagination: "keyset", PageToken: "7",
+		OrderBy: "id",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

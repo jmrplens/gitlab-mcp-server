@@ -742,24 +742,20 @@ func TestFormatScheduleAllMarkdown(t *testing.T) {
 	}
 }
 
-// TestRetrieveAll_KeysetAndSort verifies that RetrieveAll forwards keyset
-// pagination (pagination, page_token) and ordering (order_by, sort) parameters
-// to the GitLab API.
+// TestRetrieveAll_Sort verifies that RetrieveAll forwards the ordering
+// (order_by, sort) parameters to the GitLab API.
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts that every keyset and ordering query parameter is sent.
-func TestRetrieveAll_KeysetAndSort(t *testing.T) {
+// It asserts that every ordering query parameter is sent.
+func TestRetrieveAll_Sort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.AssertRequestPath(t, r, "/api/v4/group_repository_storage_moves")
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "99")
 		testutil.AssertQueryParam(t, r, "order_by", "id")
 		testutil.AssertQueryParam(t, r, "sort", "desc")
 		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
 	}))
 
 	out, err := RetrieveAll(context.Background(), client, ListInput{
-		Pagination: "keyset", PageToken: "99",
 		OrderBy: "id",
 		Sort:    "desc",
 	})
@@ -814,24 +810,21 @@ func TestGroupStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
 	})
 }
 
-// TestRetrieveForGroup_KeysetAndSort verifies that RetrieveForGroup forwards
-// keyset pagination and ordering parameters to the GitLab API.
+// TestRetrieveForGroup_Sort verifies that RetrieveForGroup forwards the
+// ordering parameters to the GitLab API.
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts that every keyset and ordering query parameter is sent.
-func TestRetrieveForGroup_KeysetAndSort(t *testing.T) {
+// It asserts that every ordering query parameter is sent.
+func TestRetrieveForGroup_Sort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.AssertRequestPath(t, r, "/api/v4/groups/10/repository_storage_moves")
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "7")
 		testutil.AssertQueryParam(t, r, "order_by", "id")
 		testutil.AssertQueryParam(t, r, "sort", "asc")
 		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
 	}))
 
 	out, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{
-		GroupID:    10,
-		Pagination: "keyset", PageToken: "7",
+		GroupID: 10,
 		OrderBy: "id",
 		Sort:    "asc",
 	})

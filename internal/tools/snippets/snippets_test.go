@@ -790,9 +790,9 @@ func TestConvertSnippet_FullAuthorAndStorage(t *testing.T) {
 	}
 }
 
-// TestList_KeysetAndOrdering verifies List forwards order_by, sort, pagination,
-// and page_token onto the GitLab query, covering the keyset wiring.
-func TestList_KeysetAndOrdering(t *testing.T) {
+// TestList_Ordering verifies List forwards order_by, sort and per_page onto
+// the GitLab query.
+func TestList_Ordering(t *testing.T) {
 	var got url.Values
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/snippets", func(w http.ResponseWriter, r *http.Request) {
@@ -803,16 +803,15 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := List(context.Background(), client, ListInput{
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		PerPage:    50,
-		Pagination: "keyset", PageToken: "tok",
+		OrderBy: "created_at",
+		Sort:    "desc",
+		PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
 	for key, want := range map[string]string{
-		"order_by": "created_at", "sort": "desc", "pagination": "keyset", "page_token": "tok", "per_page": "50",
+		"order_by": "created_at", "sort": "desc", "per_page": "50",
 	} {
 		t.Run(key, func(t *testing.T) {
 			if got.Get(key) != want {

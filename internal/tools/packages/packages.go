@@ -259,7 +259,6 @@ type ListInput struct {
 	IncludeVersionless bool                 `json:"include_versionless,omitempty" jsonschema:"Include versionless packages"`
 	Status             string               `json:"status,omitempty" jsonschema:"Filter by status: default, hidden, processing, error"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListItem represents a single package as the project listing publishes it,
@@ -324,7 +323,7 @@ type ListOutput struct {
 // OrderBy/Sort/Status values to the GitLab Packages API fields.
 func buildListOptions(input ListInput) *gl.ListProjectPackagesOptions {
 	opts := &gl.ListProjectPackagesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.PackageName != "" {
 		opts.PackageName = &input.PackageName
 	}
@@ -478,7 +477,6 @@ type GroupListInput struct {
 	IncludeVersionless bool                 `json:"include_versionless,omitempty" jsonschema:"Include versionless packages"`
 	Status             string               `json:"status,omitempty" jsonschema:"Filter by status: default, hidden, processing, error"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GroupListItem represents a single package in the group list output.
@@ -504,7 +502,7 @@ type GroupListOutput struct {
 // GitLab group Packages API fields.
 func buildGroupListOptions(input GroupListInput) *gl.ListGroupPackagesOptions {
 	opts := &gl.ListGroupPackagesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.ExcludeSubgroups {
 		opts.ExcludeSubGroups = new(true)
 	}
@@ -724,7 +722,6 @@ type FileListInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order package files by: id (default), file_name, or created_at"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // FileListItem represents a single file within a package, under the keys
@@ -783,7 +780,7 @@ func FileList(ctx context.Context, client *gitlabclient.Client, input FileListIn
 	}
 
 	opts := &gl.ListPackageFilesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

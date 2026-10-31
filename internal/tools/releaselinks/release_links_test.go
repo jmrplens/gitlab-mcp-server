@@ -1285,12 +1285,6 @@ func TestReleaseLinkList_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathReleaseLinks {
 			q := r.URL.Query()
-			if got := q.Get("pagination"); got != "keyset" {
-				t.Errorf("pagination = %q, want keyset", got)
-			}
-			if got := q.Get("page_token"); got != "abc123" {
-				t.Errorf("page_token = %q, want abc123", got)
-			}
 			if got := q.Get("order_by"); got != "created_at" {
 				t.Errorf("order_by = %q, want created_at", got)
 			}
@@ -1304,11 +1298,10 @@ func TestReleaseLinkList_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:  "42",
-		TagName:    testTagV120,
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "abc123",
+		ProjectID: "42",
+		TagName:   testTagV120,
+		OrderBy:   "created_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

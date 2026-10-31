@@ -317,14 +317,12 @@ func TestToOutput_NilUser(t *testing.T) {
 	}
 }
 
-// TestList_KeysetPaginationAndSort verifies that List forwards keyset
-// pagination (pagination, page_token), ordering (order_by, sort), and offset
-// pagination (page, per_page) to the enterprise_users query string.
-func TestList_KeysetPaginationAndSort(t *testing.T) {
+// TestList_PaginationAndSort verifies that List forwards ordering (order_by,
+// sort) and offset pagination (page, per_page) to the enterprise_users query
+// string.
+func TestList_PaginationAndSort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "cursor-99")
 			testutil.AssertQueryParam(t, r, "order_by", "id")
 			testutil.AssertQueryParam(t, r, "sort", "desc")
 			testutil.AssertQueryParam(t, r, "per_page", "50")
@@ -335,11 +333,10 @@ func TestList_KeysetPaginationAndSort(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:    toolutil.StringOrInt("42"),
-		OrderBy:    "id",
-		Sort:       "desc",
-		PerPage:    50,
-		Pagination: "keyset", PageToken: "cursor-99",
+		GroupID: toolutil.StringOrInt("42"),
+		OrderBy: "id",
+		Sort:    "desc",
+		PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)

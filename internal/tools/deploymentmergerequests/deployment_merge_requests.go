@@ -63,7 +63,6 @@ type ListInput struct {
 	In                  string                     `json:"in,omitempty"              jsonschema:"Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description"`
 
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output is the canonical merge-request output shape shared with the
@@ -134,7 +133,7 @@ func buildListOptions(input ListInput) (*gl.ListMergeRequestsOptions, error) {
 		return nil, err
 	}
 
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	return opts, nil
 }
 

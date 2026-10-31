@@ -34,7 +34,6 @@ type ListInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for retrieving a single pipeline schedule.
@@ -180,7 +179,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gitlab.ListPipelineSchedulesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -599,7 +598,6 @@ type ListTriggeredPipelinesInput struct {
 	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
 	Sort       string               `json:"sort,omitempty"     jsonschema:"Sort direction for triggered pipelines: asc or desc (default asc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // TriggeredPipelineOutput is a documented reference subset per
@@ -637,7 +635,7 @@ func ListTriggeredPipelines(ctx context.Context, client *gitlabclient.Client, in
 	}
 
 	opts := &gitlab.ListPipelinesTriggeredByScheduleOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

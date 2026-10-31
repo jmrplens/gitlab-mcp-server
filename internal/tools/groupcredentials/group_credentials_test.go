@@ -639,10 +639,10 @@ func TestListPATs_WithRevokedFilter(t *testing.T) {
 	}
 }
 
-// TestListPATs_WithDateAndKeysetFilters verifies that ListPATs forwards the
-// created/last-used date filters, order_by, sort, and keyset pagination
-// (pagination + page_token) query parameters to the GitLab API.
-func TestListPATs_WithDateAndKeysetFilters(t *testing.T) {
+// TestListPATs_WithDateFiltersAndOrdering verifies that ListPATs forwards the
+// created/last-used date filters, order_by and sort query parameters to the
+// GitLab API.
+func TestListPATs_WithDateFiltersAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
 			testutil.AssertQueryParam(t, r, "created_after", "2026-01-01")
@@ -651,8 +651,6 @@ func TestListPATs_WithDateAndKeysetFilters(t *testing.T) {
 			testutil.AssertQueryParam(t, r, "last_used_before", "2026-11-30")
 			testutil.AssertQueryParam(t, r, "order_by", "created_at")
 			testutil.AssertQueryParam(t, r, "sort", "desc")
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "abc123")
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
@@ -667,8 +665,6 @@ func TestListPATs_WithDateAndKeysetFilters(t *testing.T) {
 		LastUsedBefore: "2026-11-30",
 		OrderBy:        "created_at",
 		Sort:           "desc",
-		Pagination:     "keyset",
-		PageToken:      "abc123",
 	})
 	if err != nil {
 		t.Fatalf("ListPATs() error: %v", err)
@@ -703,10 +699,10 @@ func TestListSSHKeys_InvalidDate_IsRefused(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_WithDateAndKeysetFilters verifies that ListSSHKeys forwards the
-// created/expires date filters, order_by, sort, and keyset pagination query
-// parameters to the GitLab API.
-func TestListSSHKeys_WithDateAndKeysetFilters(t *testing.T) {
+// TestListSSHKeys_WithDateFiltersAndOrdering verifies that ListSSHKeys forwards
+// the created/expires date filters, order_by and sort query parameters to the
+// GitLab API.
+func TestListSSHKeys_WithDateFiltersAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys" {
 			testutil.AssertQueryParam(t, r, "created_after", "2026-01-01")
@@ -715,8 +711,6 @@ func TestListSSHKeys_WithDateAndKeysetFilters(t *testing.T) {
 			testutil.AssertQueryParam(t, r, "expires_before", "2026-10-31")
 			testutil.AssertQueryParam(t, r, "order_by", "id")
 			testutil.AssertQueryParam(t, r, "sort", "asc")
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "xyz789")
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
@@ -731,8 +725,6 @@ func TestListSSHKeys_WithDateAndKeysetFilters(t *testing.T) {
 		ExpiresBefore: "2026-10-31",
 		OrderBy:       "id",
 		Sort:          "asc",
-		Pagination:    "keyset",
-		PageToken:     "xyz789",
 	})
 	if err != nil {
 		t.Fatalf("ListSSHKeys() error: %v", err)

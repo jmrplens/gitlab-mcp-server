@@ -163,7 +163,6 @@ type ListSharedProjectsInput struct {
 	WithIssuesEnabled        *bool                `json:"with_issues_enabled,omitempty"         jsonschema:"Limit to projects with issues enabled"`
 	WithMergeRequestsEnabled *bool                `json:"with_merge_requests_enabled,omitempty" jsonschema:"Limit to projects with merge requests enabled"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // SharedProjectsListOutput holds a paginated list of projects shared with a group.
@@ -219,7 +218,7 @@ func ListSharedProjects(ctx context.Context, client *gitlabclient.Client, input 
 		return SharedProjectsListOutput{}, errors.New("groupListSharedProjects: group_id is required")
 	}
 	opts := &gl.ListGroupSharedProjectsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyListSharedProjectsOptions(input, opts)
 
 	projects, resp, err := client.GL().Groups.ListGroupSharedProjects(string(input.GroupID), opts, gl.WithContext(ctx))

@@ -28,7 +28,6 @@ type ListInput struct {
 	OrderBy                 string               `json:"order_by,omitempty"                 jsonschema:"Order results by field (e.g. created_at, updated_at, due_date, title)"`
 	Sort                    string               `json:"sort,omitempty"                     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output represents a single project milestone.
@@ -88,7 +87,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	// No emptiness guard: the query encoder leaves an empty slice out of the
 	// request whatever pointer holds it, so a guard would decide nothing.
 	opts.IIDs = &input.IIDs
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -182,7 +181,6 @@ type GetIssuesInput struct {
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetMergeRequestsInput defines parameters for listing merge requests assigned to a milestone.
@@ -192,7 +190,6 @@ type GetMergeRequestsInput struct {
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ---------- Output types for related resources ----------.
@@ -441,7 +438,7 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	}
 
 	opts := &gl.GetMilestoneIssuesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -496,7 +493,7 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 	}
 
 	opts := &gl.GetMilestoneMergeRequestsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

@@ -135,7 +135,6 @@ type ListInput struct {
 	OrderBy                string                     `json:"order_by,omitempty"      jsonschema:"Order by field (created_at, updated_at, title)"`
 	Sort                   string                     `json:"sort,omitempty"          jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a paginated list of merge requests.
@@ -182,7 +181,6 @@ type mergeRequestListFilters struct {
 	Sort                string
 	Page                int
 	PerPage             int
-	Keyset              toolutil.KeysetPaginationInput
 }
 
 // mergeRequestListTarget is the set of setters one listing's options accept.
@@ -326,7 +324,7 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 			return err
 		}
 	}
-	toolutil.ApplyListOptions(target.listOptions, toolutil.PaginationInput{Page: input.Page, PerPage: input.PerPage}, input.Keyset)
+	toolutil.ApplyListOptions(target.listOptions, toolutil.PaginationInput{Page: input.Page, PerPage: input.PerPage}, toolutil.KeysetPaginationInput{})
 	return nil
 }
 
@@ -775,7 +773,7 @@ func projectMRListFilters(input ListInput) mergeRequestListFilters {
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter,
 		CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
 		DeployedAfter: input.DeployedAfter, DeployedBefore: input.DeployedBefore,
-		OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage, Keyset: input.KeysetPaginationInput,
+		OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
 	}
 }
 
@@ -1107,7 +1105,6 @@ type CommitsInput struct {
 	OrderBy   string               `json:"order_by,omitempty"    jsonschema:"Column to order results by (e.g. created_at)"`
 	Sort      string               `json:"sort,omitempty"        jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // CommitsOutput holds a paginated list of commits for a merge request.
@@ -1117,20 +1114,19 @@ type CommitsOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// mrItemListOptions captures the offset/keyset pagination and order_by/sort
+// mrItemListOptions captures the offset pagination and order_by/sort
 // parameters for the per-MR list helpers (commits, issues-closed,
-// related-issues). applyTo wires the values onto a [gl.ListOptions] via
-// ApplyListOptions, then sets OrderBy/Sort when supplied so an explicit
-// value always wins.
+// related-issues), which GitLab pages by offset alone. applyTo wires the
+// values onto a [gl.ListOptions] via ApplyListOptions, then sets OrderBy/Sort
+// when supplied so an explicit value always wins.
 type mrItemListOptions struct {
 	pagination toolutil.PaginationInput
-	keyset     toolutil.KeysetPaginationInput
 	orderBy    string
 	sort       string
 }
 
 func (o mrItemListOptions) applyTo(opts *gl.ListOptions) {
-	toolutil.ApplyListOptions(opts, o.pagination, o.keyset)
+	toolutil.ApplyListOptions(opts, o.pagination, toolutil.KeysetPaginationInput{})
 	if o.orderBy != "" {
 		opts.OrderBy = o.orderBy
 	}
@@ -1188,8 +1184,8 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 	return listMergeRequestItems(ctx, mergeRequestItemsListArgs{
 		projectID: input.ProjectID, mrIID: input.MRIID, operation: "mrCommits",
 		listOpts: mrItemListOptions{
-			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
-			orderBy: input.OrderBy, sort: input.Sort,
+			pagination: input.PaginationInput,
+			orderBy:    input.OrderBy, sort: input.Sort,
 		},
 		missingProjectMsg: "mrCommits: project_id is required. Use project.list to find the ID first, then pass it as project_id",
 		notFoundHint:      "verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with merge_request.get",
@@ -1363,7 +1359,6 @@ type ListGlobalInput struct {
 	OrderBy                string                     `json:"order_by,omitempty"        jsonschema:"Order by field (created_at, updated_at)"`
 	Sort                   string                     `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListGlobal returns a page of GitLab's global merge request list. The scope
@@ -1414,7 +1409,6 @@ func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
-		Keyset: input.KeysetPaginationInput,
 	}
 }
 
@@ -1575,7 +1569,6 @@ type ListGroupInput struct {
 	OrderBy                string                     `json:"order_by,omitempty"          jsonschema:"Order by field (created_at, updated_at)"`
 	Sort                   string                     `json:"sort,omitempty"              jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListGroup returns a paginated list of merge requests in a group.
@@ -1627,7 +1620,6 @@ func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
-		Keyset: input.KeysetPaginationInput,
 	}
 }
 
@@ -1848,7 +1840,6 @@ type IssuesClosedInput struct {
 	OrderBy   string               `json:"order_by,omitempty"    jsonschema:"Column to order results by (e.g. created_at)"`
 	Sort      string               `json:"sort,omitempty"        jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // IssuesClosedOutput holds the list of issues that would be closed by merging an MR.
@@ -1919,8 +1910,8 @@ func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input Issues
 	return listMergeRequestIssues(ctx, mergeRequestItemsListArgs{
 		projectID: input.ProjectID, mrIID: input.MRIID, operation: "mrIssuesClosed",
 		listOpts: mrItemListOptions{
-			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
-			orderBy: input.OrderBy, sort: input.Sort,
+			pagination: input.PaginationInput,
+			orderBy:    input.OrderBy, sort: input.Sort,
 		},
 		missingProjectMsg: "mrIssuesClosed: project_id is required",
 		notFoundHint:      "verify project_id and merge_request_iid with merge_request.get - only issues referenced via 'Closes #N' in MR description/commits are returned",
@@ -2303,7 +2294,6 @@ type RelatedIssuesInput struct {
 	OrderBy   string               `json:"order_by,omitempty"    jsonschema:"Column to order results by (e.g. created_at)"`
 	Sort      string               `json:"sort,omitempty"        jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // RelatedIssuesOutput holds the list of issues related to a merge request.
@@ -2324,8 +2314,8 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 	return listMergeRequestRelatedIssues(ctx, mergeRequestItemsListArgs{
 		projectID: input.ProjectID, mrIID: input.MRIID, operation: "mrRelatedIssues",
 		listOpts: mrItemListOptions{
-			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
-			orderBy: input.OrderBy, sort: input.Sort,
+			pagination: input.PaginationInput,
+			orderBy:    input.OrderBy, sort: input.Sort,
 		},
 		missingProjectMsg: "mrRelatedIssues: project_id is required. Use project.list to find the ID first, then pass it as project_id",
 		notFoundHint:      "verify project_id and merge_request_iid with merge_request.get - only issues referenced in MR description/commits/notes are returned",

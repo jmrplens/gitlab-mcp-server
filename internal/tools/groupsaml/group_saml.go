@@ -285,7 +285,6 @@ type SAMLUsersListInput struct {
 	OrderBy       string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id, name, username, created_at)"`
 	Sort          string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // SAMLUsersList retrieves the users provisioned via SAML SSO for a top-level group.
@@ -294,7 +293,7 @@ func SAMLUsersList(ctx context.Context, client *gitlabclient.Client, input SAMLU
 		return SAMLUsersListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := &gl.ListSAMLUsersOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

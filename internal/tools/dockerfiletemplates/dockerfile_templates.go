@@ -19,7 +19,6 @@ type ListInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Order results by a field supported by the templates endpoint (e.g. key, name)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // TemplateListItem represents a Dockerfile template in a list.
@@ -35,7 +34,7 @@ type ListOutput struct {
 // List lists all available Dockerfile templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListDockerfileTemplatesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

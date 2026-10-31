@@ -249,24 +249,21 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestListGroup_KeysetPagination verifies that ListGroup forwards keyset
-// pagination and ordering parameters (order_by, sort, pagination, page_token)
-// onto the GitLab query string.
+// TestListGroup_Ordering verifies that ListGroup forwards the ordering
+// parameters (order_by, sort) onto the GitLab query string.
 // It asserts every parameter reaches the API request unchanged.
-func TestListGroup_KeysetPagination(t *testing.T) {
+func TestListGroup_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("order_by") != "name" || q.Get("sort") != "asc" ||
-			q.Get("pagination") != "keyset" || q.Get("page_token") != "7" {
+		if q.Get("order_by") != "name" || q.Get("sort") != "asc" {
 			t.Errorf("unexpected query: %s", r.URL.RawQuery)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[`+badgeJSON+`]`)
 	}))
 	out, err := ListGroup(t.Context(), client, ListGroupInput{
-		GroupID:    "1",
-		OrderBy:    "name",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "7",
+		GroupID: "1",
+		OrderBy: "name",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -620,24 +617,21 @@ func TestListProject_WithNameFilter(t *testing.T) {
 	}
 }
 
-// TestListProject_KeysetPagination verifies that ListProject forwards keyset
-// pagination and ordering parameters (order_by, sort, pagination, page_token)
-// onto the GitLab query string.
+// TestListProject_Ordering verifies that ListProject forwards the ordering
+// parameters (order_by, sort) onto the GitLab query string.
 // It asserts every parameter reaches the API request unchanged.
-func TestListProject_KeysetPagination(t *testing.T) {
+func TestListProject_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("order_by") != "id" || q.Get("sort") != "desc" ||
-			q.Get("pagination") != "keyset" || q.Get("page_token") != "42" {
+		if q.Get("order_by") != "id" || q.Get("sort") != "desc" {
 			t.Errorf("unexpected query: %s", r.URL.RawQuery)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[`+badgeJSON+`]`)
 	}))
 	out, err := ListProject(t.Context(), client, ListProjectInput{
-		ProjectID:  "1",
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "42",
+		ProjectID: "1",
+		OrderBy:   "id",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

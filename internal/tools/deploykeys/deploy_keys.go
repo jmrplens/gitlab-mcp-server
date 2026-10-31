@@ -209,7 +209,6 @@ type ListProjectInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, title, created_at)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput represents parameters for getting a single deploy key.
@@ -253,7 +252,6 @@ type ListAllInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, title, created_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // AddInstanceInput represents parameters for creating an instance-level deploy key.
@@ -269,7 +267,6 @@ type ListUserProjectInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, title, created_at)"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +280,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	}
 
 	opts := &gl.ListProjectDeployKeysOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrdering(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
@@ -434,7 +431,7 @@ func Enable(ctx context.Context, client *gitlabclient.Client, input EnableInput)
 // ListAll lists all instance-level deploy keys.
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (InstanceListOutput, error) {
 	opts := &gl.ListInstanceDeployKeysOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrdering(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Public != nil {
 		opts.Public = input.Public
@@ -489,7 +486,7 @@ func ListUserProject(ctx context.Context, client *gitlabclient.Client, input Lis
 	}
 
 	opts := &gl.ListUserProjectDeployKeysOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrdering(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)

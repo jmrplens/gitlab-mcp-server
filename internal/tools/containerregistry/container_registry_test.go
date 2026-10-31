@@ -1459,19 +1459,13 @@ func TestFormatProtectionRuleListMarkdown_WithItems(t *testing.T) {
 // 1:1 audit additions: keyset pagination, order_by/sort, deprecated name_regex
 // ---------------------------------------------------------------------------.
 
-// TestListProject_KeysetAndOrdering verifies that ListProject forwards keyset
-// pagination (pagination, page_token), order_by, and sort query parameters to
-// the GitLab API. It asserts each parameter reaches the request unchanged.
-func TestListProject_KeysetAndOrdering(t *testing.T) {
+// TestListProject_Ordering verifies that ListProject forwards the order_by and
+// sort query parameters to the GitLab API. It asserts each parameter reaches
+// the request unchanged.
+func TestListProject_Ordering(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "tok99" {
-			t.Errorf("page_token = %q, want tok99", q.Get("page_token"))
-		}
 		if q.Get("order_by") != "name" {
 			t.Errorf("order_by = %q, want name", q.Get("order_by"))
 		}
@@ -1484,23 +1478,22 @@ func TestListProject_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:  toolutil.StringOrInt("10"),
-		OrderBy:    "name",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok99",
+		ProjectID: toolutil.StringOrInt("10"),
+		OrderBy:   "name",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestListGroup_KeysetAndOrdering verifies that ListGroup forwards keyset
-// pagination, order_by, and sort query parameters to the GitLab API.
-func TestListGroup_KeysetAndOrdering(t *testing.T) {
+// TestListGroup_Ordering verifies that ListGroup forwards the order_by and
+// sort query parameters to the GitLab API.
+func TestListGroup_Ordering(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("order_by") != "id" || q.Get("sort") != "asc" || q.Get("pagination") != "keyset" {
+		if q.Get("order_by") != "id" || q.Get("sort") != "asc" {
 			t.Errorf("unexpected query: %s", r.URL.RawQuery)
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
@@ -1509,10 +1502,9 @@ func TestListGroup_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID:    toolutil.StringOrInt("5"),
-		OrderBy:    "id",
-		Sort:       "asc",
-		Pagination: "keyset",
+		GroupID: toolutil.StringOrInt("5"),
+		OrderBy: "id",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

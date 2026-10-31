@@ -1019,38 +1019,6 @@ func TestCreate_CreatedAtBareDate_IsSentAsMidnightUTC(t *testing.T) {
 	}
 }
 
-// TestList_KeysetPagination verifies the keyset pagination inputs (pagination
-// and page_token) are forwarded to the GitLab API.
-func TestList_KeysetPagination(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathIssueNotes {
-			q := r.URL.Query()
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "cursor99" {
-				t.Errorf("page_token = %q, want cursor99", q.Get("page_token"))
-			}
-			testutil.RespondJSONWithPagination(w, http.StatusOK, "["+noteJSONSimple+"]",
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := List(context.Background(), client, ListInput{
-		ProjectID:  testProjectID,
-		IssueIID:   10,
-		Pagination: "keyset", PageToken: "cursor99",
-	})
-	if err != nil {
-		t.Fatalf(fmtIssueNoteListErr, err)
-	}
-	if len(out.Notes) != 1 {
-		t.Errorf("len(Notes) = %d, want 1", len(out.Notes))
-	}
-}
-
 // TestToOutput_NestedObjects verifies the additive author/resolved_by/position
 // sub-objects mirror the full gl.Note nested structs.
 func TestToOutput_NestedObjects(t *testing.T) {

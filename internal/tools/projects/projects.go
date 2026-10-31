@@ -539,8 +539,8 @@ type ListInput struct {
 	WithProgrammingLanguage  string `json:"with_programming_language,omitempty" jsonschema:"Filter by programming language name"`
 	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"    jsonschema:"Include projects that are marked/scheduled for deletion. Default false."`
 	IncludeHidden            *bool  `json:"include_hidden,omitempty"            jsonschema:"Include hidden projects in results (administrators only)"`
-	IDAfter                  int64  `json:"id_after,omitempty"                  jsonschema:"Return projects with ID greater than this value (keyset pagination)"`
-	IDBefore                 int64  `json:"id_before,omitempty"                 jsonschema:"Return projects with ID less than this value (keyset pagination)"`
+	IDAfter                  int64  `json:"id_after,omitempty"                  jsonschema:"Return projects with ID greater than this value"`
+	IDBefore                 int64  `json:"id_before,omitempty"                 jsonschema:"Return projects with ID less than this value"`
 
 	// Additional filters (additive 1:1 SDK parity with ListProjectsOptions)
 	Active               *bool             `json:"active,omitempty"                    jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
@@ -2061,8 +2061,8 @@ type ListForksInput struct {
 	WithProgrammingLanguage  string            `json:"with_programming_language,omitempty"   jsonschema:"Filter by programming language name"`
 	IncludePendingDelete     *bool             `json:"include_pending_delete,omitempty"      jsonschema:"Include forks marked/scheduled for deletion. Default false."`
 	IncludeHidden            *bool             `json:"include_hidden,omitempty"              jsonschema:"Include hidden forks in results"`
-	IDAfter                  int64             `json:"id_after,omitempty"                    jsonschema:"Return forks with ID greater than this value (keyset pagination)"`
-	IDBefore                 int64             `json:"id_before,omitempty"                   jsonschema:"Return forks with ID less than this value (keyset pagination)"`
+	IDAfter                  int64             `json:"id_after,omitempty"                    jsonschema:"Return forks with ID greater than this value"`
+	IDBefore                 int64             `json:"id_before,omitempty"                   jsonschema:"Return forks with ID less than this value"`
 	Active                   *bool             `json:"active,omitempty"                      jsonschema:"Limit to active (non-archived, non-pending-deletion) forks"`
 	Imported                 *bool             `json:"imported,omitempty"                    jsonschema:"Limit to forks imported from an external source by the current user"`
 	RepositoryStorage        string            `json:"repository_storage,omitempty"          jsonschema:"Limit to forks on the given repository storage shard (admin only)"`
@@ -2364,10 +2364,9 @@ func hookOutputFromAPI(h *projectHookAPI) HookOutput {
 // ListHooksInput defines parameters for listing project webhooks.
 type ListHooksInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListHooksOutput holds a paginated list of project webhooks.
@@ -2386,7 +2385,7 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 		return ListHooksOutput{}, errors.New("projectListHooks: project_id is required. Use project.list to find the ID, then pass it as project_id")
 	}
 	opts := &gl.ListProjectHooksOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	hooks, resp, err := doProjectRequest[[]projectHookAPI](ctx, client, http.MethodGet, projectHooksPath(string(input.ProjectID)), opts)
 	if err != nil {
@@ -2737,13 +2736,13 @@ func groupNames(groups []*ApprovalGroupOutput) []string {
 // ListUserProjectsInput defines parameters for listing projects owned by a specific user.
 type ListUserProjectsInput struct {
 	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
-	userProjectFilterInput
+	userProjectFilter
 }
 
 // ListUserProjects lists projects owned by the given user.
 func ListUserProjects(ctx context.Context, client *gitlabclient.Client, input ListUserProjectsInput) (ListOutput, error) {
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserProjects", "projectListUserProjects: user_id is required. Use user.get to find the user ID",
-		"user not found - use user.get to verify user_id (numeric ID or exact username)", input.toFilter(),
+		"user not found - use user.get to verify user_id (numeric ID or exact username)", input.userProjectFilter,
 		client.GL().Projects.ListUserProjects)
 }
 
@@ -2798,10 +2797,9 @@ func projectUserOutputFromGL(u *gl.ProjectUser, extra toolutil.UserBasicExtra) P
 type ListProjectUsersInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Search    string               `json:"search,omitempty"   jsonschema:"Search by name or username"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProjectUsersOutput holds a paginated list of project users.
@@ -2820,7 +2818,7 @@ func ListProjectUsers(ctx context.Context, client *gitlabclient.Client, input Li
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().Projects.ListProjectsUsers(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -2876,10 +2874,9 @@ type ListProjectGroupsInput struct {
 	SharedVisibleOnly    *bool                `json:"shared_visible_only,omitempty" jsonschema:"Only show shared groups visible to the current user"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"         jsonschema:"Array of group IDs to exclude"`
 	SharedMinAccessLevel int                  `json:"shared_min_access_level,omitempty" jsonschema:"Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
-	OrderBy              string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
-	Sort                 string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
+	OrderBy              string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort                 string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProjectGroupsOutput holds a paginated list of project groups.
@@ -2911,7 +2908,7 @@ func ListProjectGroups(ctx context.Context, client *gitlabclient.Client, input L
 	if input.SharedMinAccessLevel > 0 {
 		opts.SharedMinAccessLevel = new(gl.AccessLevelValue(input.SharedMinAccessLevel))
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	groups, resp, err := client.GL().Projects.ListProjectsGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -2942,10 +2939,9 @@ type StarrerOutput struct {
 type ListProjectStarrersInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Search    string               `json:"search,omitempty"   jsonschema:"Search by name or username"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProjectStarrersOutput holds a paginated list of project starrers.
@@ -2964,7 +2960,7 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	starrers, resp, err := client.GL().Projects.ListProjectStarrers(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -3116,10 +3112,9 @@ type ListInvitedGroupsInput struct {
 	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)"`
 	Relation             []string             `json:"relation,omitempty"            jsonschema:"Filter by group relation to the project (e.g. direct, inherited)"`
 	WithCustomAttributes *bool                `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response (admin only)"`
-	OrderBy              string               `json:"order_by,omitempty"            jsonschema:"Keyset ordering column (for keyset pagination)"`
-	Sort                 string               `json:"sort,omitempty"                jsonschema:"Keyset sort direction (asc, desc)"`
+	OrderBy              string               `json:"order_by,omitempty"            jsonschema:"Column to order results by"`
+	Sort                 string               `json:"sort,omitempty"                jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListInvitedGroups lists groups that have been invited to the given project.
@@ -3140,7 +3135,7 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 	if input.WithCustomAttributes != nil {
 		opts.WithCustomAttributes = input.WithCustomAttributes
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	groups, resp, err := client.GL().Projects.ListProjectsInvitedGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -3161,30 +3156,22 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 // ListUserContributedProjects — list projects a user has contributed to
 // ---------------------------------------------------------------------------.
 
-// ListUserContributedProjectsInput defines parameters for listing contributed projects.
+// ListUserContributedProjectsInput defines parameters for listing contributed
+// projects. It offers no pagination or page_token: GitLab serves the route a
+// keyset page and writes an id_before or id_after into its next link, but the
+// route builds ContributedProjectsFinder with no params, so the finder never
+// reads either and the link answers the first page again (upstream-bugs row
+// 112). The list is read on with page and per_page.
 type ListUserContributedProjectsInput struct {
 	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
 	userProjectFilterInput
 }
 
-// contributedKeysetRefusal is what a keyset request for a user's contributed
-// projects is answered with, before any request is made. GitLab serves the
-// route a keyset page and writes an id_before or id_after into its next link,
-// but the route builds ContributedProjectsFinder with no params, so the
-// finder never reads either and the link answers the first page again
-// (upstream-bugs row 112). Followed, it read the first page twice as two
-// pages and then reported the listing complete.
-const contributedKeysetRefusal = "projectListUserContributed: GitLab does not page a user's contributed projects by keyset: the route ignores the id_before and id_after its own next link names, so a second keyset page would repeat the first. Leave pagination and page_token empty and read on with page and per_page"
-
 // ListUserContributedProjects lists projects a specific user has contributed
-// to, by offset pages only, since GitLab cannot follow this list by keyset
-// (see [contributedKeysetRefusal]).
+// to, by offset pages.
 func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Client, input ListUserContributedProjectsInput) (ListOutput, error) {
-	if input.Pagination == "keyset" || input.PageToken != "" {
-		return ListOutput{}, errors.New(contributedKeysetRefusal)
-	}
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserContributed", "projectListUserContributed: user_id is required. Use user.get to find the user ID",
-		"user not found - use user.get to verify user_id", input.toFilter(),
+		"user not found - use user.get to verify user_id", userProjectFilter{userProjectFilterInput: input.userProjectFilterInput},
 		client.GL().Projects.ListUserContributedProjects)
 }
 
@@ -3195,13 +3182,13 @@ func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Clien
 // ListUserStarredProjectsInput defines parameters for listing starred projects.
 type ListUserStarredProjectsInput struct {
 	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
-	userProjectFilterInput
+	userProjectFilter
 }
 
 // ListUserStarredProjects lists projects starred by a specific user.
 func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, input ListUserStarredProjectsInput) (ListOutput, error) {
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserStarred", "projectListUserStarred: user_id is required. Use user.get to find the user ID",
-		"user not found - use user.get to verify user_id", input.toFilter(),
+		"user not found - use user.get to verify user_id", input.userProjectFilter,
 		client.GL().Projects.ListUserStarredProjects)
 }
 
@@ -3215,6 +3202,11 @@ func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, i
 // only order_by, sort and simple of them: it declares those, user_id and the
 // pagination alone (lib/api/projects.rb, at v19.5.0-ee), and Grape drops
 // the rest there.
+//
+// It carries offset pagination alone. The owned and starred lists, which
+// GitLab pages by keyset in id order, embed it through [userProjectFilter],
+// which adds pagination and page_token; the contributed list cannot be
+// followed by keyset (see [ListUserContributedProjectsInput]).
 type userProjectFilterInput struct {
 	Search                   string            `json:"search,omitempty"             jsonschema:"Search query for project name"`
 	Visibility               string            `json:"visibility,omitempty"         jsonschema:"Filter by visibility (private, internal, public)"`
@@ -3234,8 +3226,8 @@ type userProjectFilterInput struct {
 	WithProgrammingLanguage  string            `json:"with_programming_language,omitempty"   jsonschema:"Filter by programming language name"`
 	LastActivityAfter        string            `json:"last_activity_after,omitempty"         jsonschema:"Return projects with last activity after date (ISO 8601 format)"`
 	LastActivityBefore       string            `json:"last_activity_before,omitempty"        jsonschema:"Return projects with last activity before date (ISO 8601 format)"`
-	IDAfter                  int64             `json:"id_after,omitempty"           jsonschema:"Return projects with ID greater than this value (keyset pagination)"`
-	IDBefore                 int64             `json:"id_before,omitempty"          jsonschema:"Return projects with ID less than this value (keyset pagination)"`
+	IDAfter                  int64             `json:"id_after,omitempty"           jsonschema:"Return projects with ID greater than this value"`
+	IDBefore                 int64             `json:"id_before,omitempty"          jsonschema:"Return projects with ID less than this value"`
 	IncludePendingDelete     *bool             `json:"include_pending_delete,omitempty"      jsonschema:"Include projects marked/scheduled for deletion. Default false."`
 	IncludeHidden            *bool             `json:"include_hidden,omitempty"     jsonschema:"Include hidden projects in results"`
 	Active                   *bool             `json:"active,omitempty"             jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
@@ -3245,59 +3237,21 @@ type userProjectFilterInput struct {
 	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"     jsonschema:"Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
 
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
-}
-
-// toFilter converts the embeddable input into the internal userProjectFilter
-// consumed by buildUserProjectOpts. The two structs are field-identical (same
-// names, types, and json tags) so a direct conversion suffices.
-func (f userProjectFilterInput) toFilter() userProjectFilter {
-	return userProjectFilter(f)
 }
 
 // userProjectFilter holds the resolved filter parameters for user-scoped
-// project listings, mirroring the ListProjectsOptions filter set but for the
-// two checksum filters no GitLab finder reads (see [userProjectFilterInput]).
+// project listings: [userProjectFilterInput] with the keyset parameters,
+// mirroring the ListProjectsOptions filter set but for the two checksum
+// filters no GitLab finder reads. It is what buildUserProjectOpts reads, and
+// what the owned and starred lists embed, since GitLab pages both by keyset in
+// id order; the contributed list hands it its filters with the keyset half
+// left empty.
 //
-// The json tags mirror the SDK url tags on gl.ListProjectsOptions so the
-// struct-completeness auditor (R-INPUT) can confirm 1:1 parity against the SDK
-// options this struct is translated into by buildUserProjectOpts. This struct is
-// internal plumbing — the model-facing schema is carried by userProjectFilterInput
-// (and ListInput / ListForksInput) — so the tags are documentation/audit metadata
-// only and never affect serialization.
+// Both halves are embedded (not named) so their json tags are promoted,
+// matching the filters and the embedded ListOptions of gl.ListProjectsOptions
+// for the R-INPUT tag diff.
 type userProjectFilter struct {
-	Search                   string            `json:"search,omitempty"`
-	Visibility               string            `json:"visibility,omitempty"`
-	Archived                 *bool             `json:"archived,omitempty"`
-	OrderBy                  string            `json:"order_by,omitempty"`
-	Sort                     string            `json:"sort,omitempty"`
-	Simple                   bool              `json:"simple,omitempty"`
-	Owned                    bool              `json:"owned,omitempty"`
-	Topic                    string            `json:"topic,omitempty"`
-	MinAccessLevel           int               `json:"min_access_level,omitempty"`
-	Starred                  *bool             `json:"starred,omitempty"`
-	Membership               *bool             `json:"membership,omitempty"`
-	WithIssuesEnabled        *bool             `json:"with_issues_enabled,omitempty"`
-	WithMergeRequestsEnabled *bool             `json:"with_merge_requests_enabled,omitempty"`
-	SearchNamespaces         *bool             `json:"search_namespaces,omitempty"`
-	Statistics               *bool             `json:"statistics,omitempty"`
-	WithProgrammingLanguage  string            `json:"with_programming_language,omitempty"`
-	LastActivityAfter        string            `json:"last_activity_after,omitempty"`
-	LastActivityBefore       string            `json:"last_activity_before,omitempty"`
-	IDAfter                  int64             `json:"id_after,omitempty"`
-	IDBefore                 int64             `json:"id_before,omitempty"`
-	IncludePendingDelete     *bool             `json:"include_pending_delete,omitempty"`
-	IncludeHidden            *bool             `json:"include_hidden,omitempty"`
-	Active                   *bool             `json:"active,omitempty"`
-	Imported                 *bool             `json:"imported,omitempty"`
-	RepositoryStorage        string            `json:"repository_storage,omitempty"`
-	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"`
-	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"`
-
-	// Pagination and Keyset are embedded (not named) so their page/per_page/
-	// page_token/pagination json tags are promoted, matching the embedded
-	// ListOptions on gl.ListProjectsOptions for the R-INPUT tag diff.
-	toolutil.PaginationInput
+	userProjectFilterInput
 	toolutil.KeysetPaginationInput
 }
 

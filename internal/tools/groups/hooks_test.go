@@ -1004,7 +1004,7 @@ func TestHookToOutput_NilCustomHeaderElement(t *testing.T) {
 	}
 }
 
-// TestListHooks_AuditParams verifies order_by/sort/keyset reach the hooks list
+// TestListHooks_AuditParams verifies order_by/sort reach the hooks list
 // request.
 func TestListHooks_AuditParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1013,17 +1013,16 @@ func TestListHooks_AuditParams(t *testing.T) {
 			return
 		}
 		q := r.URL.Query()
-		if q.Get("order_by") != "id" || q.Get("sort") != "asc" || q.Get("pagination") != "keyset" {
-			t.Errorf("order_by/sort/pagination missing: %s", r.URL.RawQuery)
+		if q.Get("order_by") != "id" || q.Get("sort") != "asc" {
+			t.Errorf("order_by/sort missing: %s", r.URL.RawQuery)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
 	_, err := ListHooks(context.Background(), client, ListHooksInput{
-		GroupID:               "99",
-		OrderBy:               "id",
-		Sort:                  "asc",
-		KeysetPaginationInput: keysetKeyset(),
+		GroupID: "99",
+		OrderBy: "id",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf("ListHooks() unexpected error: %v", err)

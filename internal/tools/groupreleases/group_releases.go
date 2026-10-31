@@ -79,7 +79,6 @@ type ListInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Order releases by a column (e.g. released_at, created_at)"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // List retrieves all releases across projects in a group.
@@ -100,7 +99,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	releases, resp, err := client.GL().GroupReleases.ListGroupReleases(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupReleases", err, http.StatusNotFound, "verify group_id with group.get")

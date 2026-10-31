@@ -85,7 +85,6 @@ type ListClientKeysInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ClientKeyItem represents an error tracking client key.
@@ -107,7 +106,7 @@ type ListClientKeysOutput struct {
 // ListClientKeys retrieves error tracking client keys for a project.
 func ListClientKeys(ctx context.Context, client *gitlabclient.Client, input ListClientKeysInput) (ListClientKeysOutput, error) {
 	opts := &gl.ListClientKeysOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

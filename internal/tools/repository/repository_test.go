@@ -939,10 +939,8 @@ func TestRepositoryContributors_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/contributors" {
 			assertQueryParams(t, r.URL.Query(), map[string]string{
-				"order_by":   "name",
-				"sort":       "desc",
-				"pagination": "keyset",
-				"page_token": "next-cur",
+				"order_by": "name",
+				"sort":     "desc",
 			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
 				{"name":"Z","email":"z@test.com","commits":1,"additions":0,"deletions":0}
@@ -953,11 +951,10 @@ func TestRepositoryContributors_WithOptions(t *testing.T) {
 	}))
 
 	input := ContributorsInput{
-		ProjectID:  "42",
-		OrderBy:    "name",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "next-cur",
-		Page: 2, PerPage: 10,
+		ProjectID: "42",
+		OrderBy:   "name",
+		Sort:      "desc",
+		Page:      2, PerPage: 10,
 	}
 
 	out, err := Contributors(context.Background(), client, input)

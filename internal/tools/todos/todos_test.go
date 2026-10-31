@@ -650,15 +650,11 @@ func TestList_OrderBySort(t *testing.T) {
 		if q.Get("sort") != "desc" {
 			t.Errorf("expected sort=desc, got %q", q.Get("sort"))
 		}
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", Total: "0", TotalPages: "1", PerPage: "20"})
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok",
+		OrderBy: "created_at",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

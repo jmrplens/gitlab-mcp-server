@@ -402,12 +402,6 @@ func TestListProject_PaginationParams(t *testing.T) {
 		if q.Get("sort") != "desc" {
 			t.Errorf("expected sort=desc, got %s", q.Get("sort"))
 		}
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "100" {
-			t.Errorf("expected page_token=100, got %s", q.Get("page_token"))
-		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
 			`[{"id":10,"username":"u","name":"n","state":"pending","access_level":30}]`,
 			testutil.PaginationHeaders{TotalPages: "3", Total: "15", Page: "2", PerPage: "5"})
@@ -419,10 +413,8 @@ func TestListProject_PaginationParams(t *testing.T) {
 		OrderBy:   "id",
 		Sort:      "desc",
 
-		Page:       2,
-		PerPage:    5,
-		Pagination: "keyset",
-		PageToken:  "100",
+		Page:    2,
+		PerPage: 5,
 	}
 	out, err := ListProject(context.Background(), client, in)
 	if err != nil {
@@ -471,12 +463,6 @@ func TestListGroup_PaginationParams(t *testing.T) {
 		if q.Get("sort") != "asc" {
 			t.Errorf("expected sort=asc, got %s", q.Get("sort"))
 		}
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "200" {
-			t.Errorf("expected page_token=200, got %s", q.Get("page_token"))
-		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
 			`[{"id":20,"username":"x","name":"X","state":"pending","access_level":20}]`,
 			testutil.PaginationHeaders{TotalPages: "5", Total: "50", Page: "3", PerPage: "10"})
@@ -488,10 +474,8 @@ func TestListGroup_PaginationParams(t *testing.T) {
 		OrderBy: "id",
 		Sort:    "asc",
 
-		Page:       3,
-		PerPage:    10,
-		Pagination: "keyset",
-		PageToken:  "200",
+		Page:    3,
+		PerPage: 10,
 	}
 	out, err := ListGroup(context.Background(), client, in)
 	if err != nil {

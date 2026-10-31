@@ -24,7 +24,6 @@ type ListProjectInput struct {
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListBranchInput defines parameters for listing MRs in a merge train for a
@@ -38,7 +37,6 @@ type ListBranchInput struct {
 	Sort         string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a merge request on a merge train.
@@ -173,7 +171,7 @@ func ListProjectMergeTrains(ctx context.Context, client *gitlabclient.Client, in
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	opts := &gl.ListMergeTrainsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -202,7 +200,7 @@ func ListMergeRequestInMergeTrain(ctx context.Context, client *gitlabclient.Clie
 		return ListOutput{}, toolutil.ErrFieldRequired("target_branch")
 	}
 	opts := &gl.ListMergeTrainsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

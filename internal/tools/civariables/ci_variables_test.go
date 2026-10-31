@@ -1082,13 +1082,13 @@ func ciVariableSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string
 }
 
 // ---------------------------------------------------------------------------
-// List — keyset pagination, order_by, sort (1:1 audit)
+// List: order_by, sort (1:1 audit)
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableList_KeysetOrderBySort verifies that List forwards the order_by,
-// sort, pagination, and page_token query parameters to the GitLab API, mirroring
-// the embedded gitlab.ListOptions of ListProjectVariablesOptions.
-func TestCIVariableList_KeysetOrderBySort(t *testing.T) {
+// TestCIVariableList_OrderBySort verifies that List forwards the order_by and
+// sort query parameters to the GitLab API, mirroring the embedded
+// gitlab.ListOptions of ListProjectVariablesOptions.
+func TestCIVariableList_OrderBySort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/variables" && r.Method == http.MethodGet {
 			q := r.URL.Query()
@@ -1098,12 +1098,6 @@ func TestCIVariableList_KeysetOrderBySort(t *testing.T) {
 			if q.Get("sort") != "desc" {
 				t.Errorf("sort = %q, want desc", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "tok123" {
-				t.Errorf("page_token = %q, want tok123", q.Get("page_token"))
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[{"key":"VAR_A","value":"a","variable_type":"env_var","environment_scope":"*"}]`)
 			return
 		}
@@ -1111,10 +1105,9 @@ func TestCIVariableList_KeysetOrderBySort(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:  "42",
-		OrderBy:    "key",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok123",
+		ProjectID: "42",
+		OrderBy:   "key",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

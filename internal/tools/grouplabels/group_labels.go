@@ -27,7 +27,6 @@ type ListInput struct {
 	OrderBy                 string               `json:"order_by,omitempty"                jsonschema:"Column to order results by for keyset pagination (e.g. name, created_at, updated_at)"`
 	Sort                    string               `json:"sort,omitempty"                    jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for retrieving a single group label.
@@ -90,7 +89,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := labeldata.NewGroupListOptions(input.Page, input.PerPage, input.Search, input.WithCounts, input.IncludeAncestorGroups, input.IncludeDescendantGroups, input.OnlyGroupLabels)
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

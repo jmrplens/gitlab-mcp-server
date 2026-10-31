@@ -390,15 +390,12 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_WithKeysetAndSort verifies that List forwards keyset pagination
-// parameters (pagination, page_token) and order_by/sort to the GitLab API.
-// The mock GitLab API at /api/v4/applications (GET) asserts each query value
-// and responds with HTTP OK.
-func TestList_WithKeysetAndSort(t *testing.T) {
+// TestList_WithSort verifies that List forwards order_by/sort to the GitLab
+// API. The mock GitLab API at /api/v4/applications (GET) asserts each query
+// value and responds with HTTP OK.
+func TestList_WithSort(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodGet {
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "tok-9")
 			testutil.AssertQueryParam(t, r, "order_by", "id")
 			testutil.AssertQueryParam(t, r, "sort", "desc")
 			testutil.RespondJSON(w, http.StatusOK, `[
@@ -410,9 +407,8 @@ func TestList_WithKeysetAndSort(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok-9",
+		OrderBy: "id",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

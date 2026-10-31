@@ -235,11 +235,6 @@ var declaredKeysetRoutes = []keysetRouteDeclaration{
 		Category: categoryKeysetNotFollowable,
 		Reason:   "the handler pages PersonalAccessTokensFinder's relation with paginate_with_strategies (lib/api/project_service_accounts.rb:217), and PersonalAccessToken declares no supported_keyset_orderings, so keyset_paginator takes Keyset::Pager, whose availability check admits Project alone, and answers every keyset request with 405 (lib/api/helpers/pagination_strategies.rb:30-43). The record's cursor is CursorPager's, which GitLab never reaches here.",
 	},
-	{
-		Route:    "GET /users/:user_id/contributed_projects",
-		Category: categoryKeysetNotFollowable,
-		Reason:   "present_projects reaches Keyset::Pager as on the other project lists (lib/api/projects.rb:248), but the handler builds ContributedProjectsFinder with no params (lib/api/projects.rb:396) and Keyset::Pager#paginate only limits the relation (lib/gitlab/pagination/keyset/pager.rb:13), so the id_after or id_before of the next link GitLab writes is never applied and every keyset page is the first again (upstream-bugs row 112).",
-	},
 }
 
 // declaredKeysetRoute finds the declaration of one route.

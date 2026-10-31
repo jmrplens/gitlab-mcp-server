@@ -17,7 +17,6 @@ import (
 // ListInput holds pagination parameters for listing all group storage moves.
 type ListInput struct {
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only used when pagination='keyset'."`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only used when pagination='keyset'."`
 }
@@ -26,7 +25,6 @@ type ListInput struct {
 type ListForGroupInput struct {
 	GroupID int64 `json:"group_id" jsonschema:"Numeric ID of the group,required"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only used when pagination='keyset'."`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only used when pagination='keyset'."`
 }
@@ -93,7 +91,7 @@ func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput)
 	}
 
 	opts := gl.RetrieveAllGroupStorageMovesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}
@@ -129,7 +127,7 @@ func RetrieveForGroup(ctx context.Context, client *gitlabclient.Client, in ListF
 	}
 
 	opts := gl.RetrieveAllGroupStorageMovesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}

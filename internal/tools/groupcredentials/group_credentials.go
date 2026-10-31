@@ -33,7 +33,6 @@ type ListPATsInput struct {
 	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
 	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListSSHKeysInput holds parameters for listing group SSH keys.
@@ -46,7 +45,6 @@ type ListSSHKeysInput struct {
 	OrderBy       string               `json:"order_by,omitempty"       jsonschema:"Column to order keyset-paginated results by"`
 	Sort          string               `json:"sort,omitempty"           jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // RevokePATInput holds parameters for revoking a group personal access token.
@@ -146,7 +144,7 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, in ListPATsInput
 		return PATListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := &gl.ListGroupPersonalAccessTokensOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}
@@ -193,7 +191,7 @@ func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, in ListSSHKey
 		return SSHKeyListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := &gl.ListGroupSSHKeysOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}

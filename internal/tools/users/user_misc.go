@@ -105,7 +105,6 @@ type GetUserActivitiesInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetUserActivities retrieves user activity entries (admin only).
@@ -122,7 +121,7 @@ func GetUserActivities(ctx context.Context, client *gitlabclient.Client, input G
 		return UserActivitiesOutput{}, fmt.Errorf("get_user_activities: %w", err)
 	}
 	opts := &gl.GetUserActivitiesOptions{From: from}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	activities, resp, err := client.GL().Users.GetUserActivities(opts, gl.WithContext(ctx))
@@ -166,7 +165,6 @@ type GetUserMembershipsInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetUserMemberships retrieves a user's project and group memberships.
@@ -179,7 +177,7 @@ func GetUserMemberships(ctx context.Context, client *gitlabclient.Client, input 
 	}
 
 	opts := &gl.GetUserMembershipOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Type != "" {
 		opts.Type = new(input.Type)

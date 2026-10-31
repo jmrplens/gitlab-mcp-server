@@ -65,7 +65,6 @@ type ListHooksInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Order hooks by field (id)"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetHookInput defines parameters for retrieving a single group hook.
@@ -258,7 +257,7 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	}
 
 	opts := &gl.ListGroupHooksOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

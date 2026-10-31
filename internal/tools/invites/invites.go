@@ -25,7 +25,6 @@ type ListPendingProjectInvitationsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListPendingGroupInvitationsInput contains parameters for listing pending group invitations.
@@ -35,7 +34,6 @@ type ListPendingGroupInvitationsInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ProjectInvitesInput contains parameters for inviting a user to a project.
@@ -161,7 +159,7 @@ func runPendingInvitationsList(ctx context.Context, args pendingInvitationsListA
 // page/per_page/page_token/pagination) is mapped 1:1 from a public input field.
 func ListPendingProjectInvitations(ctx context.Context, client *gitlabclient.Client, input ListPendingProjectInvitationsInput) (ListPendingInvitationsOutput, error) {
 	opts := &gl.ListPendingInvitationsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -189,7 +187,7 @@ func ListPendingProjectInvitations(ctx context.Context, client *gitlabclient.Cli
 // page/per_page/page_token/pagination) is mapped 1:1 from a public input field.
 func ListPendingGroupInvitations(ctx context.Context, client *gitlabclient.Client, input ListPendingGroupInvitationsInput) (ListPendingInvitationsOutput, error) {
 	opts := &gl.ListPendingInvitationsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

@@ -79,7 +79,6 @@ type ListProjectInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProjectOutput is the output for listing project badges.
@@ -102,7 +101,7 @@ func mapBadges[T any](badges []T, conv func(T) BadgeItem) []BadgeItem {
 // ListProject returns all badges for a project.
 func ListProject(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListProjectOutput, error) {
 	opts := &gl.ListProjectBadgesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Name != "" {
 		opts.Name = new(input.Name)
@@ -284,7 +283,6 @@ type ListGroupInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name)"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListGroupOutput is the output for listing group badges.
@@ -297,7 +295,7 @@ type ListGroupOutput struct {
 // ListGroup returns all badges for a group.
 func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroupInput) (ListGroupOutput, error) {
 	opts := &gl.ListGroupBadgesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Name != "" {
 		opts.Name = new(input.Name)

@@ -680,17 +680,15 @@ func TestList_WithPaginationParams(t *testing.T) {
 	}
 }
 
-// TestList_WithKeysetAndSort verifies that keyset pagination parameters,
-// order_by, sort, and the archived filter are forwarded to the GitLab API.
-func TestList_WithKeysetAndSort(t *testing.T) {
+// TestList_WithSort verifies that order_by, sort, and the archived filter are
+// forwarded to the GitLab API.
+func TestList_WithSort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != pathGroupLabels {
 			http.NotFound(w, r)
 			return
 		}
 		q := r.URL.Query()
-		assertQueryParam(t, q, "pagination", "keyset")
-		assertQueryParam(t, q, "page_token", "cursor-42")
 		assertQueryParam(t, q, "order_by", "name")
 		assertQueryParam(t, q, "sort", "desc")
 		assertQueryParam(t, q, "archived", "true")
@@ -699,11 +697,10 @@ func TestList_WithKeysetAndSort(t *testing.T) {
 
 	archived := true
 	_, err := List(context.Background(), client, ListInput{
-		GroupID:    "10",
-		OrderBy:    "name",
-		Sort:       "desc",
-		Archived:   &archived,
-		Pagination: "keyset", PageToken: "cursor-42",
+		GroupID:  "10",
+		OrderBy:  "name",
+		Sort:     "desc",
+		Archived: &archived,
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

@@ -82,7 +82,6 @@ type ListInput struct {
 	// Sort selects the sort direction for ordered results.
 	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a list of release asset links.
@@ -328,7 +327,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts := &gl.ListReleaseLinksOptions{
 		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	links, resp, err := client.GL().ReleaseLinks.ListReleaseLinks(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("List", err, http.StatusNotFound,

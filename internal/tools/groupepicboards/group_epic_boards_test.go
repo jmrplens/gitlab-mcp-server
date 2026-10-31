@@ -94,18 +94,15 @@ func TestList(t *testing.T) {
 			},
 		},
 		{
-			name: "forwards order_by, sort, and keyset params",
+			name: "forwards order_by and sort params",
 			input: ListInput{
-				GroupID:               testGroupID,
-				OrderBy:               "name",
-				Sort:                  "desc",
-				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+				GroupID: testGroupID,
+				OrderBy: "name",
+				Sort:    "desc",
 			},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertQueryParam(t, r, "order_by", "name")
 				testutil.AssertQueryParam(t, r, "sort", "desc")
-				testutil.AssertQueryParam(t, r, "pagination", "keyset")
-				testutil.AssertQueryParam(t, r, "page_token", "tok")
 				testutil.RespondJSON(w, http.StatusOK, "[]")
 			}),
 			wantCount: 0,

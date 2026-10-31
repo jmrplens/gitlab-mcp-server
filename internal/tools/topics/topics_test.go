@@ -196,8 +196,7 @@ func TestList_KeysetPagination(t *testing.T) {
 	}))
 
 	out, err := List(t.Context(), client, ListInput{
-		PerPage:    50,
-		Pagination: "keyset", PageToken: "tok123",
+		PerPage: 50,
 		OrderBy: "name",
 		Sort:    "desc",
 		Search:  "gopher",
@@ -209,12 +208,10 @@ func TestList_KeysetPagination(t *testing.T) {
 		t.Fatalf("expected 1 topic, got %d", len(out.Topics))
 	}
 	checks := map[string]string{
-		"pagination": "keyset",
-		"page_token": "tok123",
-		"order_by":   "name",
-		"sort":       "desc",
-		"per_page":   "50",
-		"search":     "gopher",
+		"order_by": "name",
+		"sort":     "desc",
+		"per_page": "50",
+		"search":   "gopher",
 	}
 	for key, want := range checks {
 		t.Run(key, func(t *testing.T) {

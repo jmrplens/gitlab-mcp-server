@@ -98,15 +98,14 @@ type UnprotectInput struct {
 
 // ProtectedListInput defines parameters for listing protected branches. It
 // mirrors gl.ListProtectedBranchesOptions, including the search filter and
-// keyset pagination via the embedded gl.ListOptions (order_by, sort,
-// pagination, page_token).
+// the order_by and sort of the embedded gl.ListOptions. GitLab pages the
+// protected branch list by offset alone.
 type ProtectedListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Search    string               `json:"search,omitempty"   jsonschema:"Filter protected branches by name (substring match)"`
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. name)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ProtectedListOutput holds the list of protected branches.
@@ -258,7 +257,7 @@ func ProtectedList(ctx context.Context, client *gitlabclient.Client, input Prote
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

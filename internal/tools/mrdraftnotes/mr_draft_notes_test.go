@@ -1365,29 +1365,6 @@ func TestToOutput_LineCodeAndLineRange(t *testing.T) {
 	}
 }
 
-// TestDraftNoteList_Keyset verifies keyset pagination parameters are forwarded.
-func TestDraftNoteList_Keyset(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "tok99" {
-			t.Errorf("expected page_token=tok99, got %q", q.Get("page_token"))
-		}
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
-
-	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  "42",
-		MRIID:      1,
-		Pagination: "keyset", PageToken: "tok99",
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-}
-
 // TestFormatOutputMarkdown_PositionAndLineCode verifies the single-note
 // Markdown renders the line code and inline diff position.
 func TestFormatOutputMarkdown_PositionAndLineCode(t *testing.T) {

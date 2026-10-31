@@ -907,9 +907,9 @@ func TestActionSpecs_EachActionNameReachesTheEndpointItNames(t *testing.T) {
 // List — keyset pagination, order_by, sort propagation (1:1 audit)
 // ---------------------------------------------------------------------------.
 
-// TestListPendingProjectInvitations_KeysetAndSort verifies that order_by, sort,
-// pagination=keyset, and page_token reach the GitLab API as query parameters.
-func TestListPendingProjectInvitations_KeysetAndSort(t *testing.T) {
+// TestListPendingProjectInvitations_Sort verifies that order_by, sort and
+// per_page reach the GitLab API as query parameters.
+func TestListPendingProjectInvitations_Sort(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -920,16 +920,15 @@ func TestListPendingProjectInvitations_KeysetAndSort(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{
-		ProjectID:  "42",
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		PerPage:    50,
-		Pagination: "keyset", PageToken: "cursor-7",
+		ProjectID: "42",
+		OrderBy:   "created_at",
+		Sort:      "desc",
+		PerPage:   50,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=cursor-7", "per_page=50"} {
+	for _, want := range []string{"order_by=created_at", "sort=desc", "per_page=50"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)
@@ -938,9 +937,9 @@ func TestListPendingProjectInvitations_KeysetAndSort(t *testing.T) {
 	}
 }
 
-// TestListPendingGroupInvitations_KeysetAndSort verifies that order_by, sort,
-// and keyset pagination reach the group invitations endpoint.
-func TestListPendingGroupInvitations_KeysetAndSort(t *testing.T) {
+// TestListPendingGroupInvitations_Sort verifies that order_by and sort reach
+// the group invitations endpoint.
+func TestListPendingGroupInvitations_Sort(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/groups/10/invitations" {
@@ -951,15 +950,14 @@ func TestListPendingGroupInvitations_KeysetAndSort(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListPendingGroupInvitations(context.Background(), client, ListPendingGroupInvitationsInput{
-		GroupID:    "10",
-		OrderBy:    "id",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "cursor-3",
+		GroupID: "10",
+		OrderBy: "id",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=id", "sort=asc", "pagination=keyset", "page_token=cursor-3"} {
+	for _, want := range []string{"order_by=id", "sort=asc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)

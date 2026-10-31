@@ -817,40 +817,35 @@ func TestHandlers_RefusedInput_NamesTheFieldItRefusedFor(t *testing.T) {
 	}
 }
 
-// TestListProjectMergeTrains_KeysetAndOrdering verifies order_by, sort, and
-// keyset pagination (pagination/page_token) are forwarded as query parameters.
+// TestListProjectMergeTrains_Ordering verifies order_by and sort are forwarded
+// as query parameters.
 //
 // Each parameter is asserted on its own line rather than in a loop: the
 // assertions run inside the mock's handler, on the server's goroutine, where a
 // subtest cannot be opened.
-func TestListProjectMergeTrains_KeysetAndOrdering(t *testing.T) {
+func TestListProjectMergeTrains_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertQueryParam(t, r, "order_by", "id")
 		testutil.AssertQueryParam(t, r, "sort", "desc")
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "tok")
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 	}))
 	_, err := ListProjectMergeTrains(context.Background(), client, ListProjectInput{
-		ProjectID:  "42",
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok",
+		ProjectID: "42",
+		OrderBy:   "id",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-// TestListMergeRequestInMergeTrain_KeysetAndOrdering verifies order_by and
-// keyset pagination forwarding for the per-branch list handler, asserted one
-// parameter per line for the reason its project-wide sibling states.
-func TestListMergeRequestInMergeTrain_KeysetAndOrdering(t *testing.T) {
+// TestListMergeRequestInMergeTrain_Ordering verifies order_by forwarding for
+// the per-branch list handler, asserted one parameter per line for the reason
+// its project-wide sibling states.
+func TestListMergeRequestInMergeTrain_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertQueryParam(t, r, "order_by", "id")
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "tok")
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 	}))
@@ -858,7 +853,6 @@ func TestListMergeRequestInMergeTrain_KeysetAndOrdering(t *testing.T) {
 		ProjectID:    "42",
 		TargetBranch: "main",
 		OrderBy:      "id",
-		Pagination:   "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

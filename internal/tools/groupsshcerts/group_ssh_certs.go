@@ -15,13 +15,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// ListInput holds parameters for listing SSH certificates. It mirrors the
-// offset and keyset pagination supported by the GitLab group SSH certificates
-// list endpoint (page/per_page plus pagination/page_token for keyset traversal).
+// ListInput holds parameters for listing SSH certificates. GitLab pages the
+// group SSH certificates list by offset alone (page and per_page).
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // CreateInput holds parameters for creating an SSH certificate.
@@ -76,13 +74,13 @@ func toOutput(c *gl.GroupSSHCertificate, extra toolutil.SSHCertificateExtra) Out
 	return o
 }
 
-// listQueryParameters renders the offset and keyset pagination parameters as a
+// listQueryParameters renders the offset pagination parameters as a
 // gl.RequestOptionFunc. The ListGroupSSHCertificates SDK method has no options
 // struct, so pagination is applied via query parameters mirrored from a
 // gl.ListOptions wired with toolutil.ApplyListOptions.
 func listQueryParameters(in ListInput) gl.RequestOptionFunc {
 	opts := &gl.ListOptions{}
-	toolutil.ApplyListOptions(opts, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(opts, in.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	q := url.Values{}
 	if opts.Page > 0 {
@@ -90,12 +88,6 @@ func listQueryParameters(in ListInput) gl.RequestOptionFunc {
 	}
 	if opts.PerPage > 0 {
 		q.Set("per_page", strconv.FormatInt(opts.PerPage, 10))
-	}
-	if opts.Pagination != "" {
-		q.Set("pagination", opts.Pagination)
-	}
-	if opts.PageToken != "" {
-		q.Set("page_token", opts.PageToken)
 	}
 	return gl.WithKeysetPaginationParameters("?" + q.Encode())
 }
@@ -113,7 +105,6 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		in.GroupID.String(),
 		gl.WithContext(ctx),
 		listQueryParameters(in),
-		toolutil.KeysetContinuation(in.KeysetPaginationInput),
 	)
 	if err != nil {
 		return ListOutput{}, wrapSSHCertificateErr("list group SSH certificates", err, http.StatusNotFound, "verify group_id. Requires Owner role or admin access")

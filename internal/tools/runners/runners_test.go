@@ -1461,7 +1461,6 @@ func TestList_WithAllFilters(t *testing.T) {
 				"paused": "true", "tag_list": "docker,linux", "page": "2", "per_page": "5",
 				"scope": "shared", "order_by": "id", "sort": "desc",
 				"type": "project_type", "status": "online",
-				"pagination": "keyset", "page_token": "tok-1",
 			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 				testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "0", TotalPages: "0"})
@@ -1480,7 +1479,6 @@ func TestList_WithAllFilters(t *testing.T) {
 		OrderBy: "id",
 		Sort:    "desc",
 		Page:    2, PerPage: 5,
-		Pagination: "keyset", PageToken: "tok-1",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1755,7 +1753,6 @@ func TestListProject_AllFilters(t *testing.T) {
 		if r.URL.Path == "/api/v4/projects/42/runners" && r.Method == http.MethodGet {
 			assertRunnerQuery(t, r.URL.Query(), map[string]string{
 				"scope": "active", "paused": "false", "order_by": "id", "sort": "asc",
-				"pagination": "keyset", "page_token": "p-tok",
 				"type": "group_type", "status": "online", "tag_list": "docker,linux",
 			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
@@ -1776,7 +1773,6 @@ func TestListProject_AllFilters(t *testing.T) {
 		OrderBy:   "id",
 		Sort:      "asc",
 		Page:      1, PerPage: 5,
-		Pagination: "keyset", PageToken: "p-tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

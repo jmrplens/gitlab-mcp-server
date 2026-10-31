@@ -21,7 +21,6 @@ type ListInput struct {
 	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
 	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset-paginated results: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // CreateExportInput defines parameters for creating a dependency list export.
@@ -169,7 +168,7 @@ func ListDeps(ctx context.Context, client *gitlabclient.Client, input ListInput)
 		pm := gl.DependencyPackageManagerValue(input.PackageManager)
 		opts.PackageManager = []*gl.DependencyPackageManagerValue{&pm}
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

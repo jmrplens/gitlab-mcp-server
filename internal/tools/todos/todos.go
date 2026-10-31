@@ -18,7 +18,6 @@ import (
 // ListInput defines parameters for listing to-do items.
 type ListInput struct {
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 	Action    string `json:"action,omitempty"     jsonschema:"Filter by action, for example assigned, mentioned, review_requested, build_failed or transfer_failed (a project or group transfer GitLab failed in the background)"`
 	AuthorID  int64  `json:"author_id,omitempty"  jsonschema:"Filter by author user ID"`
 	ProjectID int64  `json:"project_id,omitempty" jsonschema:"Filter by project ID"`
@@ -124,7 +123,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListTodosOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

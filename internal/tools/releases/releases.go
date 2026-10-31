@@ -101,7 +101,6 @@ type ListInput struct {
 	Sort                   string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	IncludeHTMLDescription bool                 `json:"include_html_description,omitempty" jsonschema:"Include the description_html field rendered from the Markdown description"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a list of releases.
@@ -321,7 +320,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.IncludeHTMLDescription {
 		opts.IncludeHTMLDescription = new(true)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	releases, resp, err := client.GL().Releases.ListReleases(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("releaseList", err, http.StatusNotFound,

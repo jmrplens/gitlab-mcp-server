@@ -721,22 +721,18 @@ func TestList_OrderingAndPaging_ReachTheQueryAndThePageComesBack(t *testing.T) {
 		testutil.AssertQueryParam(t, r, "sort", "desc")
 		testutil.AssertQueryParam(t, r, "page", "3")
 		testutil.AssertQueryParam(t, r, "per_page", "7")
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "tok-9")
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{
 			Page: "3", PerPage: "7", Total: "45", TotalPages: "9", NextPage: "4", PrevPage: "2",
 		})
 	}))
 
 	out, err := List(t.Context(), client, ListInput{
-		ProjectID:  testProjectID,
-		CommitSHA:  testCommitSHA,
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Page:       3,
-		PerPage:    7,
-		Pagination: "keyset",
-		PageToken:  "tok-9",
+		ProjectID: testProjectID,
+		CommitSHA: testCommitSHA,
+		OrderBy:   "created_at",
+		Sort:      "desc",
+		Page:      3,
+		PerPage:   7,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

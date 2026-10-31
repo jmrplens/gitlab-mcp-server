@@ -25,7 +25,6 @@ type ListIssueLabelEventsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetIssueLabelEventInput defines parameters for getting a single issue label event.
@@ -42,7 +41,6 @@ type ListMRLabelEventsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetMRLabelEventInput defines parameters for getting a single MR label event.
@@ -59,7 +57,6 @@ type ListGroupEpicLabelEventsInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetGroupEpicLabelEventInput defines parameters for getting a single group epic label event.
@@ -76,7 +73,6 @@ type ListIssueMilestoneEventsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetIssueMilestoneEventInput defines parameters for getting a single issue milestone event.
@@ -93,7 +89,6 @@ type ListMRMilestoneEventsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetMRMilestoneEventInput defines parameters for getting a single MR milestone event.
@@ -110,7 +105,6 @@ type ListIssueStateEventsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetIssueStateEventInput defines parameters for getting a single issue state event.
@@ -127,7 +121,6 @@ type ListMRStateEventsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetMRStateEventInput defines parameters for getting a single MR state event.
@@ -218,7 +211,7 @@ func ListIssueLabelEvents(ctx context.Context, client *gitlabclient.Client, inpu
 		return ListLabelEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_label_event_list", "issue_iid")
 	}
 	opts := &gl.ListLabelEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	events, resp, err := client.GL().ResourceLabelEvents.ListIssueLabelEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_label_event_list", err, http.StatusNotFound,
@@ -255,7 +248,7 @@ func ListMRLabelEvents(ctx context.Context, client *gitlabclient.Client, input L
 		return ListLabelEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_label_event_list", "merge_request_iid")
 	}
 	opts := &gl.ListLabelEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	events, resp, err := client.GL().ResourceLabelEvents.ListMergeRequestsLabelEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_label_event_list", err, http.StatusNotFound,
@@ -292,7 +285,7 @@ func ListGroupEpicLabelEvents(ctx context.Context, client *gitlabclient.Client, 
 		return ListLabelEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_list_group_epic_label_events", "epic_iid")
 	}
 	opts := &gl.ListLabelEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	events, resp, err := client.GL().ResourceLabelEvents.ListGroupEpicLabelEvents(string(input.GroupID), input.EpicIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_group_epic_label_events", err, http.StatusNotFound,
@@ -335,7 +328,7 @@ func ListIssueMilestoneEvents(ctx context.Context, client *gitlabclient.Client, 
 		return ListMilestoneEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_milestone_event_list", "issue_iid")
 	}
 	opts := &gl.ListMilestoneEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListIssueMilestoneEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -384,7 +377,7 @@ func ListMRMilestoneEvents(ctx context.Context, client *gitlabclient.Client, inp
 		return ListMilestoneEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_milestone_event_list", "merge_request_iid")
 	}
 	opts := &gl.ListMilestoneEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListMergeMilestoneEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -437,7 +430,7 @@ func ListIssueStateEvents(ctx context.Context, client *gitlabclient.Client, inpu
 		return ListStateEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_state_event_list", "issue_iid")
 	}
 	opts := &gl.ListStateEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceStateEvents.ListIssueStateEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -486,7 +479,7 @@ func ListMRStateEvents(ctx context.Context, client *gitlabclient.Client, input L
 		return ListStateEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_state_event_list", "merge_request_iid")
 	}
 	opts := &gl.ListStateEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceStateEvents.ListMergeStateEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -528,11 +521,12 @@ func GetMRStateEvent(ctx context.Context, client *gitlabclient.Client, input Get
 // Converters
 // ---------------------------------------------------------------------------.
 
-// applyEventListOptions copies the order_by/sort plus offset and keyset
-// pagination parameters from a list input onto a gl.ListOptions. The resource
-// event endpoints expose only the shared ListOptions, so order_by and sort are
-// set directly on the embedded struct (gl.ListOptions.OrderBy / .Sort).
-func applyEventListOptions(opts *gl.ListOptions, orderBy, sort string, page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput) {
+// applyEventListOptions copies the order_by/sort plus offset pagination
+// parameters from a list input onto a gl.ListOptions. The resource event
+// endpoints expose only the shared ListOptions, so order_by and sort are set
+// directly on the embedded struct (gl.ListOptions.OrderBy / .Sort); GitLab
+// pages every one of them by offset alone.
+func applyEventListOptions(opts *gl.ListOptions, orderBy, sort string, page toolutil.PaginationInput) {
 	if opts == nil {
 		return
 	}
@@ -542,7 +536,7 @@ func applyEventListOptions(opts *gl.ListOptions, orderBy, sort string, page tool
 	if sort != "" {
 		opts.Sort = sort
 	}
-	toolutil.ApplyListOptions(opts, page, keyset)
+	toolutil.ApplyListOptions(opts, page, toolutil.KeysetPaginationInput{})
 }
 
 // toLabelEventOutput converts the GitLab API response to the tool output format.
@@ -645,7 +639,6 @@ type ListIssueIterationEventsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetIssueIterationEventInput defines parameters for getting a single issue iteration event.
@@ -666,7 +659,6 @@ type ListIssueWeightEventsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ---------------------------------------------------------------------------
@@ -731,7 +723,7 @@ func ListIssueIterationEvents(ctx context.Context, client *gitlabclient.Client, 
 		return ListIterationEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_iteration_event_list", "issue_iid")
 	}
 	opts := &gl.ListIterationEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	events, resp, err := client.GL().ResourceIterationEvents.ListIssueIterationEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListIterationEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_iteration_event_list", err, http.StatusNotFound,
@@ -772,7 +764,7 @@ func ListIssueWeightEvents(ctx context.Context, client *gitlabclient.Client, inp
 		return ListWeightEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_weight_event_list", "issue_iid")
 	}
 	opts := &gl.ListWeightEventsOptions{}
-	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceWeightEvents.ListIssueWeightEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {

@@ -98,11 +98,12 @@ type ListOutput struct {
 	Pagination     toolutil.PaginationOutput `json:"pagination"`
 }
 
-// buildListOptions assembles ListAccessRequestsOptions from offset, keyset, and
-// ordering inputs shared by the project and group access-request list handlers.
-func buildListOptions(page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput, orderBy, sort string) *gl.ListAccessRequestsOptions {
+// buildListOptions assembles ListAccessRequestsOptions from the offset and
+// ordering inputs shared by the project and group access-request list
+// handlers. Both routes page by offset alone.
+func buildListOptions(page toolutil.PaginationInput, orderBy, sort string) *gl.ListAccessRequestsOptions {
 	opts := &gl.ListAccessRequestsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, page, keyset)
+	toolutil.ApplyListOptions(&opts.ListOptions, page, toolutil.KeysetPaginationInput{})
 	if orderBy != "" {
 		opts.OrderBy = orderBy
 	}
@@ -217,7 +218,6 @@ type ListProjectInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset-paginated result sets (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProject lists access requests for a project.
@@ -225,7 +225,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
-	opts := buildListOptions(input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	opts := buildListOptions(input.PaginationInput, input.OrderBy, input.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	requests, resp, err := client.GL().AccessRequests.ListProjectAccessRequests(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
@@ -251,7 +251,6 @@ type ListGroupInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset-paginated result sets (e.g. id)"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListGroup lists access requests for a group.
@@ -259,7 +258,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	if input.GroupID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	opts := buildListOptions(input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	opts := buildListOptions(input.PaginationInput, input.OrderBy, input.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	requests, resp, err := client.GL().AccessRequests.ListGroupAccessRequests(
 		string(input.GroupID), opts, gl.WithContext(ctx),

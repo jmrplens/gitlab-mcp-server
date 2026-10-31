@@ -17,14 +17,13 @@ import (
 // List.
 
 // ListInput represents input for listing group markdown uploads. It mirrors
-// gl.ListMarkdownUploadsOptions (the embedded gl.ListOptions) including offset
-// and keyset pagination via order_by/sort/page_token.
+// gl.ListMarkdownUploadsOptions (the embedded gl.ListOptions); GitLab pages
+// the group uploads list by offset alone.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"The ID or URL-encoded path of the group,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // UploadedByOutput mirrors the short-user representation in a markdown
@@ -75,7 +74,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (*L
 		return nil, toolutil.ErrRequiredString("gitlab_list_group_markdown_uploads", "group_id")
 	}
 	opts := &gl.ListMarkdownUploadsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

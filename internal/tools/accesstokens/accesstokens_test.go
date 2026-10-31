@@ -2186,9 +2186,9 @@ func accessTokenSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 	return byTool
 }
 
-// TestProjectList_WithOrderingAndKeyset verifies that ProjectList forwards the
-// order_by, sort, and keyset pagination parameters to the GitLab API.
-func TestProjectList_WithOrderingAndKeyset(t *testing.T) {
+// TestProjectList_WithOrdering verifies that ProjectList forwards the order_by
+// and sort parameters to the GitLab API.
+func TestProjectList_WithOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens {
 			q := r.URL.Query()
@@ -2198,12 +2198,6 @@ func TestProjectList_WithOrderingAndKeyset(t *testing.T) {
 			if q.Get("sort") != "desc" {
 				t.Errorf("expected sort=desc, got %s", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "abc" {
-				t.Errorf("expected page_token=abc, got %s", q.Get("page_token"))
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
@@ -2211,10 +2205,9 @@ func TestProjectList_WithOrderingAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ProjectList(context.Background(), client, ProjectListInput{
-		ProjectID:  "42",
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "abc",
+		ProjectID: "42",
+		OrderBy:   "created_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2222,7 +2215,7 @@ func TestProjectList_WithOrderingAndKeyset(t *testing.T) {
 }
 
 // TestGroupList_WithAllFilters verifies that GroupList forwards every list
-// filter (search, revoked, date filters, sort, keyset) to the GitLab API.
+// filter (search, revoked, date filters, sort) to the GitLab API.
 func TestGroupList_WithAllFilters(t *testing.T) {
 	revoked := true
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2239,8 +2232,6 @@ func TestGroupList_WithAllFilters(t *testing.T) {
 				"last_used_before": "2024-06-30",
 				"order_by":         "created_at",
 				"sort":             "created_desc",
-				"pagination":       "keyset",
-				"page_token":       "xyz",
 			}
 			for key, want := range checks {
 				t.Run(key, func(t *testing.T) {
@@ -2267,7 +2258,6 @@ func TestGroupList_WithAllFilters(t *testing.T) {
 		LastUsedBefore: "2024-06-30",
 		OrderBy:        "created_at",
 		Sort:           "created_desc",
-		Pagination:     "keyset", PageToken: "xyz",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2291,7 +2281,7 @@ func TestGroupList_InvalidDateFilter(t *testing.T) {
 }
 
 // TestPersonalList_WithAllFilters verifies that PersonalList forwards every list
-// filter (revoked, date filters, sort, keyset) to the GitLab API.
+// filter (revoked, date filters, sort) to the GitLab API.
 func TestPersonalList_WithAllFilters(t *testing.T) {
 	revoked := false
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2307,8 +2297,6 @@ func TestPersonalList_WithAllFilters(t *testing.T) {
 				"last_used_before": "2024-06-30",
 				"order_by":         "created_at",
 				"sort":             "name_asc",
-				"pagination":       "keyset",
-				"page_token":       "pat-cursor",
 			}
 			for key, want := range checks {
 				t.Run(key, func(t *testing.T) {
@@ -2333,7 +2321,6 @@ func TestPersonalList_WithAllFilters(t *testing.T) {
 		LastUsedBefore: "2024-06-30",
 		OrderBy:        "created_at",
 		Sort:           "name_asc",
-		Pagination:     "keyset", PageToken: "pat-cursor",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
