@@ -833,8 +833,9 @@ on GitHub's runners in twenty shards on linux/amd64:
 [41178598744](https://github.com/jmrplens/gitlab-mcp-server/actions/runs/41178598744)
 in branch mode and
 [41178600207](https://github.com/jmrplens/gitlab-mcp-server/actions/runs/41178600207)
-in condition mode. Every package below `cmd/` and `internal/` was measured in
-the same tree, the 31 above included:
+in condition mode. Every package below `cmd/` and `internal/` but one,
+`cmd/internal/fileheader`, was measured in the same tree, the 31 above
+included:
 
 | Mode      | Packages below `cmd/` and `internal/` | Measured | Outcomes evaluated | Share |
 | --------- | ------------------------------------: | -------: | -----------------: | ----: |
