@@ -66,7 +66,8 @@ func TestIssueCreate_TwoAssignees_OnTheFreeTier_KeepsOnlyTheFirst(t *testing.T) 
 // run IssuableBaseService drops the first assignee as one who cannot read the
 // issue, which leaves the issue with none: on a GitLab 19.5.3 under the
 // suite's load the dynamic and meta surfaces created their issues so, and the
-// individual one, a second later, kept the first. The second user is waited
+// individual one, created half a second after the dynamic one, kept the
+// first. The second user is waited
 // for too, so that a second assignee GitLab drops is dropped for the license
 // and not for a membership it could not see yet.
 func buildAssigneePair(e *harness.Env) assigneePair {
