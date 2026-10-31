@@ -127,9 +127,16 @@ const formElicitation = `{"elicitation":{"form":{}}}`
 // tools are registered, which a fresh server's first POST is answered before.
 func postMessages(t *testing.T, srv *server, action, body string) []map[string]any {
 	t.Helper()
+	return postMessagesAs(t, srv, "glpat-language", action, body)
+}
+
+// postMessagesAs is postMessages for the credential token names, so a test can
+// put the rounds of one flow in front of two callers.
+func postMessagesAs(t *testing.T, srv *server, token, action, body string) []map[string]any {
+	t.Helper()
 	got := srv.do(t, request{
 		body:    body,
-		headers: map[string]string{"PRIVATE-TOKEN": "glpat-language", "Mcp-Param-Action": action},
+		headers: map[string]string{"PRIVATE-TOKEN": token, "Mcp-Param-Action": action},
 	})
 	if got.status != http.StatusOK {
 		t.Fatalf("the guided flow = %d: %s", got.status, truncate(got.body))

@@ -179,7 +179,7 @@ negotiated one, is on the site under
 once:
 
 ```go
-flow, err := elicitation.FlowFromRequest(req)
+flow, err := elicitation.FlowFromRequest(ctx, req) // ctx names the principal the state is bound to
 if err != nil { /* malformed client-echoed state */ }
 title, err := flow.PromptText(ctx, "title", i18n.T(ctx, i18n.InteractiveIssueCreatePromptTitle),
     elicitation.Field{Name: "title", Title: i18n.T(ctx, i18n.InteractiveFieldTitle)})
@@ -204,8 +204,17 @@ every round. The answers gathered so far travel in the opaque `requestState`
 the client echoes back, so a flow replays the prompts already answered from
 state instead of asking again. The state is signed with a key generated once
 per process and bound to the call it belongs to (a digest of the tool name and
-its canonicalized arguments), and it expires after `tenancy.RequestStateTTL`
-(register row `IDN-011`). A replica of the server that did not issue the state
+its canonicalized arguments) and to the principal the call ran as, and it
+expires after `tenancy.RequestStateTTL` (register row `IDN-011`). The principal
+is what `elicitation.WithPrincipal` put on the handler's context: on the HTTP
+server the credential binding (`withCredentialState` in `cmd/server`) sets it to
+the pool entry's owner token, and on stdio nothing sets it. It is never on the
+wire: the state carries a binding, a MAC of the payload under a key derived from
+the principal, and a seal over the payload and the binding under the process
+key, so state issued under one credential of a shared server yields no answers
+under another and the flow asks again, while state the server never issued is
+refused. A rebuilt pool entry has a new owner token, so a flow in progress across
+the rebuild asks again too. A replica of the server that did not issue the state
 refuses it, which is why a balanced deployment whose clients answer
 elicitations needs affinity. A handler that reports its outcome through an
 error return uses `flow.PendingError()` instead; the dispatchers unwrap the
@@ -216,13 +225,14 @@ and return the result it carries.
 
 `elicitation.FromRequest(req)` returns a `Client`, a zero-value-safe value
 type like `progress.Tracker`; a zero `Client` reports elicitation unsupported.
-`elicitation.FlowFromRequest(req)` returns a `*Flow`, the protocol-aware entry
-point the guided flows and the destructive confirmation
-(`toolutil.ConfirmDestructiveAction`) use. `Flow` mirrors each prompt method
-of `Client` with one extra leading argument, a stable exchange ID, unique per
-prompt within one tool call, which identifies the exchange across
-re-invocations; on a legacy session each method delegates to the synchronous
-`Client`.
+`elicitation.FlowFromRequest(ctx, req)` returns a `*Flow`, the protocol-aware
+entry point the guided flows and the destructive confirmation
+(`toolutil.ConfirmDestructiveAction`) use. Its `ctx` is the handler's own,
+since that is the context the credential binding put the principal on. `Flow`
+mirrors each prompt method of `Client` with one extra leading argument, a
+stable exchange ID, unique per prompt within one tool call, which identifies
+the exchange across re-invocations; on a legacy session each method delegates
+to the synchronous `Client`.
 
 | `Client` method                                 | Returns                   | Purpose                                                                                        |
 | ----------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |

@@ -585,7 +585,7 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 	var called atomic.Bool
 	spec := toolutil.NewActionSpec("confirm_thing", toolutil.RouteActionWithRequest(nil,
 		func(ctx context.Context, req *mcp.CallToolRequest, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
-			fl, err := elicitation.FlowFromRequest(req)
+			fl, err := elicitation.FlowFromRequest(ctx, req)
 			if err != nil {
 				return struct{}{}, err
 			}

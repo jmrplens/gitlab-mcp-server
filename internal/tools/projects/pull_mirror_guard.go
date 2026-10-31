@@ -89,7 +89,7 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 			i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
 	}
 
-	flow, flowErr := elicitation.FlowFromRequest(req)
+	flow, flowErr := elicitation.FlowFromRequest(ctx, req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
 			"projectConfigurePullMirror: %s Re-send the same call with confirm=true once the user has approved it",

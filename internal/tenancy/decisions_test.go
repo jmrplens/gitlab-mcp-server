@@ -841,6 +841,42 @@ func TestDecisions_TheTenantsInstance_IsAnsweredByIssue953(t *testing.T) {
 	}
 }
 
+// TestDecisions_TheRequestStatesPrincipal_IsAnsweredByIssue953 pins what issue
+// 953 changed in the row that bounds signed multi-round-trip request state
+// (IDN-011). The state was bound to its call and its expiry and to no
+// principal, so on a server the credentials of one configuration shape share,
+// state issued under one credential verified under any other for its whole
+// life (F-12). Its decision for F3 binds it to the pool entry's owner token,
+// which the credential binding puts on the request and the state's MACs cover
+// without carrying it, so the row records the issue and carries the finding no
+// longer, keeps its lifetime, and names the two places the principal is
+// decided: where the binding installs it and where the flow reads it. F-12
+// stays filed as issue 953's.
+func TestDecisions_TheRequestStatesPrincipal_IsAnsweredByIssue953(t *testing.T) {
+	state, _ := Lookup("IDN-011")
+	if !slices.Contains(state.Decided, "issue 953") || state.Carries("F-12") || len(state.Findings) != 0 {
+		t.Errorf("IDN-011: decided %v, findings %v; want issue 953 recorded and F-12 no longer carried", state.Decided, state.Findings)
+	}
+	if FindingIssue("F-12") != 953 {
+		t.Errorf("F-12 is filed as issue %d, want it kept as issue 953's", FindingIssue("F-12"))
+	}
+	if !slices.Equal(state.Values, []string{"RequestStateTTL"}) {
+		t.Errorf("IDN-011's values = %v, want the lifetime it already had", state.Values)
+	}
+	for _, site := range []Site{
+		alias(pkgElicitation, "stateTTL", "RequestStateTTL"),
+		enforce(pkgElicitation, "decodeState"),
+		enforce(pkgElicitation, "FlowFromRequest"),
+		enforce(pkgServer, "withCredentialState"),
+	} {
+		t.Run(site.Name, func(t *testing.T) {
+			if !slices.Contains(state.Sites, site) {
+				t.Errorf("IDN-011's sites %v do not name %s.%s", state.Sites, site.Pkg, site.Name)
+			}
+		})
+	}
+}
+
 // TestDecisions_UpstreamRetries_StateTheirCostUnderIssue955 pins what issue
 // 955 decided for the upstream retries (RTC-006): they keep their values, and
 // the row states what they cost, at most three upstream requests for each
@@ -980,7 +1016,8 @@ var findingsOfNoRow = []string{"F-23", "F-24", "F-27"}
 // counted where the transports meet and limited by nothing, which no row
 // records because it bounds nothing, and F-28 did when issue 953 put the
 // instance on the identity of an OAuth tool call and on what telemetry
-// records about a caller.
+// records about a caller, and F-12 did when issue 953 bound signed request
+// state to the pool entry it was issued under as well as to its call.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -1008,7 +1045,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-18,F-19,F-20,F-25,F-26,F-28,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-12,F-13,F-14,F-16,F-17,F-18,F-19,F-20,F-25,F-26,F-28,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }

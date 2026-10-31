@@ -66,7 +66,7 @@ func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input
 	question := i18n.New(i18n.ConfirmWorkItemClear,
 		i18n.L("losses", losses...), i18n.S("path", input.FullPath), i18n.N("iid", input.IID))
 
-	flow, flowErr := elicitation.FlowFromRequest(req)
+	flow, flowErr := elicitation.FlowFromRequest(ctx, req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
 			"update_work_item: %s Re-send the same call with confirm=true once the user has approved it",

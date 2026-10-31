@@ -27,6 +27,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
@@ -402,14 +403,17 @@ func TestCredentialState_Close_WithNothingToRelease_IsANoOp(t *testing.T) {
 	credentialTestState(t, "owner-mine").close(nil, endOfCredentialEviction)
 }
 
-// TestWithCredentialState_InstallsTheStateAndItsClientTogether covers the
-// context values every downstream reader resolves through.
+// TestWithCredentialState_InstallsTheStateItsClientAndItsPrincipalTogether
+// covers the context values every downstream reader resolves through.
 //
 // The client is installed in the same call rather than left to each reader
 // because those two facts must never disagree: a handler resolving its client
 // through Client.For and a middleware resolving the rate-limit bucket through
-// credentialStateFrom have to be talking about the same tenant.
-func TestWithCredentialState_InstallsTheStateAndItsClientTogether(t *testing.T) {
+// credentialStateFrom have to be talking about the same tenant. The principal
+// multi-round-trip request state is bound to is the third such fact (issue
+// 953): a flow binding its state to one entry while its handler ran with
+// another's client would hand one caller's answers to the other.
+func TestWithCredentialState_InstallsTheStateItsClientAndItsPrincipalTogether(t *testing.T) {
 	state := credentialTestState(t, "owner-mine")
 
 	t.Run("a bound request", func(t *testing.T) {
@@ -420,6 +424,9 @@ func TestWithCredentialState_InstallsTheStateAndItsClientTogether(t *testing.T) 
 		}
 		if got := ownerOfRequest(ctx); got != "owner-mine" {
 			t.Errorf("ownerOfRequest = %q, want %q", got, "owner-mine")
+		}
+		if got := elicitation.PrincipalFrom(ctx); got != "owner-mine" {
+			t.Errorf("the request state principal = %q, want the entry's owner token %q", got, "owner-mine")
 		}
 		bound, ok := gitlabclient.ClientFrom(ctx)
 		if !ok {
@@ -438,6 +445,9 @@ func TestWithCredentialState_InstallsTheStateAndItsClientTogether(t *testing.T) 
 		}
 		if got := ownerOfRequest(ctx); got != "" {
 			t.Errorf("ownerOfRequest = %q, want %q on a context nothing bound", got, "")
+		}
+		if got := elicitation.PrincipalFrom(ctx); got != "" {
+			t.Errorf("the request state principal = %q, want none on a context nothing bound", got)
 		}
 		if _, ok := gitlabclient.ClientFrom(ctx); ok {
 			t.Error("a client was bound by a nil state; stdio and the in-memory transport must stay unbound")
@@ -500,10 +510,11 @@ func TestCredentialStates_BindCredential_RunsEachRequestUnderItsOwnCredential(t 
 	t.Run("a request carrying a live carrier", func(t *testing.T) {
 		header := registerCarrier(t, withRequestCredential(t.Context(), state))
 
-		var boundOwner string
+		var boundOwner, boundPrincipal string
 		var boundClient *gitlabclient.Client
 		handler := states.bindCredential(func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
 			boundOwner = ownerOfRequest(ctx)
+			boundPrincipal = elicitation.PrincipalFrom(ctx)
 			boundClient, _ = gitlabclient.ClientFrom(ctx)
 			return &mcp.CallToolResult{}, nil
 		})
@@ -513,6 +524,9 @@ func TestCredentialStates_BindCredential_RunsEachRequestUnderItsOwnCredential(t 
 		}
 		if boundOwner != "owner-mine" {
 			t.Errorf("owner = %q, want %q installed on the handler's context", boundOwner, "owner-mine")
+		}
+		if boundPrincipal != "owner-mine" {
+			t.Errorf("the request state principal = %q, want the entry's owner token %q", boundPrincipal, "owner-mine")
 		}
 		if boundClient != state.client {
 			t.Error("the handler did not receive the credential's own client")
@@ -546,8 +560,10 @@ func TestCredentialStates_BindCredential_RunsEachRequestUnderItsOwnCredential(t 
 	for _, tt := range unbound {
 		t.Run(tt.name, func(t *testing.T) {
 			var bound bool
+			var principal string
 			handler := states.bindCredential(func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
 				bound = credentialStateFrom(ctx) != nil
+				principal = elicitation.PrincipalFrom(ctx)
 				return &mcp.CallToolResult{}, nil
 			})
 
@@ -556,6 +572,9 @@ func TestCredentialStates_BindCredential_RunsEachRequestUnderItsOwnCredential(t 
 			}
 			if bound {
 				t.Errorf("a credential was bound where none could be resolved: %s", tt.why)
+			}
+			if principal != "" {
+				t.Errorf("the request state principal = %q where no credential was bound: %s", principal, tt.why)
 			}
 		})
 	}

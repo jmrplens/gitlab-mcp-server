@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
@@ -142,18 +143,24 @@ func (s *credentialState) Watchers() int {
 type credentialStateKey struct{}
 
 // withCredentialState returns ctx carrying the credential a request runs under,
-// and the GitLab client that credential holds.
+// the GitLab client that credential holds, and the principal multi-round-trip
+// request state issued during the request is bound to.
 //
 // The client is installed in the same call rather than left to each reader,
-// because those two facts must never disagree: a handler resolving its client
+// because those facts must never disagree: a handler resolving its client
 // through [gitlabclient.Client.For] and a middleware resolving the rate-limit
 // bucket through [credentialStateFrom] have to be talking about the same
-// tenant.
+// tenant. The principal is the third (issue 953, register row IDN-011): it is
+// the entry's owner token, a random value that is never derived from the
+// credential and never leaves the process, since the state's MACs cover it
+// rather than carry it. A flow binding its state to one entry while its handler
+// ran with another's client would hand one caller's answers to the other.
 func withCredentialState(ctx context.Context, state *credentialState) context.Context {
 	if state == nil {
 		return ctx
 	}
-	return gitlabclient.WithClient(context.WithValue(ctx, credentialStateKey{}, state), state.client)
+	ctx = elicitation.WithPrincipal(context.WithValue(ctx, credentialStateKey{}, state), state.owner)
+	return gitlabclient.WithClient(ctx, state.client)
 }
 
 // credentialStateFrom returns the credential a request belongs to, or nil when
@@ -251,15 +258,17 @@ func (c *credentialStates) remove(owner string, orphaned []*mcp.ServerSession, e
 // mode, where the session is connected with the initialize POST's context.
 // [mcpServerGate] resolves the pool entry and puts its state on the HTTP
 // request context; the carrier registry maps the header's token back to that
-// context; this reads it out and installs it where handlers and middlewares
-// look.
+// context; this reads it out and installs it, with the client it holds and the
+// principal its request state is bound to, where handlers and middlewares look
+// (see [withCredentialState]).
 //
 // A request with no token, or one whose carrier is already gone, is left
 // unbound. That is stdio, an in-memory transport, and
 // every test that builds a server directly: there the server's own client is
 // the answer, and [gitlabclient.Client.For] returns it. On a shape server the
 // same absence means the request fails closed, because the client it falls back
-// to refuses everything.
+// to refuses everything. An unbound request runs as the empty principal, so
+// state issued to a bound one yields it no answers.
 //
 // It is added LAST of the receiving middlewares that need it, which makes it
 // run FIRST: the telemetry, rate-limit and subscription middlewares all read
