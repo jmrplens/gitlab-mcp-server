@@ -24,8 +24,8 @@ const (
 )
 
 // elfSpec describes a minimal ELF image the way scripts/check_elf_interp_test.py
-// described one before these cases and cmd/release_checks' replaced it: a
-// 64-byte file header, a program header table right after it
+// described one, before these cases and those of cmd/release_checks replaced
+// that suite: a 64-byte file header, a program header table right after it
 // holding leadingLoads PT_LOAD entries and then one PT_INTERP per entry of
 // interpreters, and the interpreter strings after the table, NUL-terminated as
 // the linker writes them. Every field a case does not set is what a correct
