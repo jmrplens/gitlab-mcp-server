@@ -28,18 +28,18 @@ import (
 // [AttachRateLimit] describes. A zero RPS disables the limiter (the
 // constructor returns nil and the resulting middleware is a no-op).
 //
-// Limits are advisory; the primary defense remains GitLab's own per-token
-// rate limits. The local limiter exists to soften bursts (typical LLM
-// retry-loop with a flaky tool can fire dozens of identical calls per
-// second) and to give operators a single knob they can tighten when they
-// see 429s in practice. HTTP mode enables it by default (10 rps, burst 40);
-// stdio leaves it off, since there the bucket would be global to one client.
+// The bucket bounds what one credential sends, counted in the MCP requests
+// that reach GitLab with it, and it is not GitLab's limit: GitLab throttles
+// the user, so a user holding several credentials holds a bucket for each,
+// all spending one budget, and it counts upstream requests, of which one
+// charged call may send several, each re-sent up to twice. The bucket softens
+// bursts (a retry loop with a flaky tool can fire dozens of identical calls a
+// second) and gives operators one knob to tighten when they see 429s. HTTP
+// mode enables it by default (10 rps, burst 40); stdio leaves it off.
 //
-// The limiter shares a single bucket across the server. In HTTP mode each
-// server instance from the pool gets its own RateLimiter, so the limit is
-// effectively per token and GitLab URL. In stdio mode the bucket is global to
-// the single process. The one exception is the listing bucket the whole
-// process shares beside every entry's (see [processCatalog]).
+// In HTTP mode each pool entry, one credential on one instance, holds its own
+// RateLimiter, and stdio's is global to the process. The one exception is the
+// listing bucket the process keeps beside every entry's ([processCatalog]).
 //
 // [rate.Limiter] is safe for concurrent use by design, so RateLimiter does
 // not need additional synchronization of its own for the requests it counts

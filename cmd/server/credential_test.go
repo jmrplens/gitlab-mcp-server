@@ -646,10 +646,11 @@ func TestServerShell_NewCredentialState_TakesWhatTheEntryDecides(t *testing.T) {
 // instance URL, GitLab user id), and many credentials map to one tenant
 // (tenant-policy-spec.md, The tenant). What a credential holds on a shared
 // server is keyed on its pool entry instead, and an entry is one per token, so
-// one user's two tokens hold two of everything (F-01, issue 955). This test
-// holds that on the server, beside the pool's own half in internal/serverpool,
-// and it pins the behavior as it is, not a target: a change that keys an
-// allowance on the tenant is the change that must break it, and say so.
+// one user's two tokens hold two of everything, which issue 955 decided to
+// keep, stating each allowance's reason as what one credential holds (F-01).
+// This test holds that on the server, beside the pool's own half in
+// internal/serverpool: a change that keys an allowance on the tenant is a
+// change of that decision, and is the change that must break it, and say so.
 func TestServerShell_TwoCredentialsOfOneUser_HoldTwoOfEverything(t *testing.T) {
 	// The stub answers every token as user 42, so the two below are one user's.
 	gitlab := gateStubGitLab(t, false)

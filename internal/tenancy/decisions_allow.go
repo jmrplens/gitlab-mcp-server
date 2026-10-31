@@ -11,13 +11,15 @@ package tenancy
 // the telemetry identity policy, the lifetime of multi-round-trip request
 // state and whether telemetry's metrics carry the tool name.
 //
-// Three of them are class D: keyed on the entry while their own reason is
-// about a GitLab user, so one tenant holding N credentials holds N units
-// (RTC-001, RTC-005, HLD-003). Each carries the finding that records it;
-// moving any of them to the tenant would be a change of policy, and would
-// still leave it dividable by bots (spec: Two axes). RTC-003 was the fourth,
-// its reason about the process, until RTC-007 gave it a process partner
-// (issue 951).
+// None of them is class D. Three were, keyed on the entry while their own
+// reason was about a GitLab user, so one tenant holding N credentials held N
+// units of what the reason called one (RTC-001, RTC-005, HLD-003). Issue 955
+// kept each on the entry, since moving it to the tenant would be a change of
+// policy and would still leave it dividable by bots (spec: Two axes), and
+// stated each reason as what the entry bounds, one credential's own requests
+// or watchers, so they are class R as HLD-001 is. RTC-003 was the fourth, its
+// reason about the process, until RTC-007 gave it a process partner (issue
+// 951).
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func allowDecisions() []Decision {
@@ -52,14 +54,21 @@ func allowDecisions() []Decision {
 
 	return []Decision{
 		{
-			ID: "RTC-001", Question: Allow, Kind: Rate, Class: ClassD, Disposition: Valued,
+			ID: "RTC-001", Question: Allow, Kind: Rate, Class: ClassR, Disposition: Valued,
 			Resource: "tools/call, resources/read, resources/subscribe, subscriptions/listen and prompts/get",
 			Key:      KeyEntry, StdioKey: KeyProcess,
-			// The reason names a per-token limit, and GitLab keeps the limit it
-			// cites per user: the unit is misstated as well as disagreeing
-			// with the key (F-02, issue 955).
-			StatedUnit: KeyCredential, ReasonUnit: KeyTenant,
-			Reason:   "the primary defense remains GitLab's own per-token rate limits",
+			// The reason names what the bucket bounds, one credential's own
+			// requests, which is the entry's unit, so the row is class R. It
+			// used to name GitLab's per-token limits, a unit GitLab does not
+			// keep, while what GitLab throttles is the user (F-02). Issue 955
+			// kept the bucket on the entry rather than the tenant (F-01), and
+			// the reason now says that a user holding several credentials
+			// holds a bucket for each, all spending one budget of GitLab's.
+			// What GitLab counts is upstream requests, which one charged call
+			// can send several of, each re-sent up to twice: RTC-006 states
+			// that cost (F-32).
+			StatedUnit: KeyCredential, ReasonUnit: KeyEntry,
+			Reason:   "The bucket bounds what one credential sends",
 			ReasonAt: reasonAt(pkgToolutil, "RateLimiter"),
 			Values: []string{
 				"ToolCallRateHTTP", "ToolCallRateEnvDefault", "ToolCallBurst", "ToolCallRateMax", "ToolCallBurstMax",
@@ -91,8 +100,8 @@ func allowDecisions() []Decision {
 			// (toolutil.LabelForRevision), which answers F-20 as part of
 			// issue 961's work while that issue stays open for F-21, F-22
 			// and F-24.
-			Decided:  []string{"issue 959", "issue 961", "issue 958"},
-			Findings: []string{"F-01", "F-02", "F-21", "F-32"},
+			Decided:  []string{"issue 959", "issue 961", "issue 958", "issue 955"},
+			Findings: []string{"F-21"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Prefix: "rate limit exceeded for ",
@@ -194,11 +203,19 @@ func allowDecisions() []Decision {
 			Sites:     []Site{enforce(pkgToolutil, "attachRateLimitFunc")},
 		},
 		{
-			ID: "RTC-005", Question: Allow, Kind: Rate, Class: ClassD, Disposition: Valued,
+			ID: "RTC-005", Question: Allow, Kind: Rate, Class: ClassR, Disposition: Valued,
 			Resource: "polling after GitLab answered a watcher's read with 429",
 			Key:      KeyEntry, StdioKey: KeyProcess,
-			StatedUnit: KeyTenant, ReasonUnit: KeyTenant,
-			Reason:   "the limit is enforced per user",
+			// The pause holds back one credential's watchers, which is the
+			// entry's unit, so the row is class R. Its reason used to be that
+			// GitLab enforces its limit per user (F-06), which is so, and is
+			// why the other watchers of the manager would be refused next;
+			// but another credential of the same user has a manager of its
+			// own, which the pause never reached. Issue 955 kept the pause on
+			// the entry and stated what it bounds, and the reason says that
+			// the user's other credentials keep polling.
+			StatedUnit: KeyCredential, ReasonUnit: KeyEntry,
+			Reason:   "the pause holds back what this credential's watchers send",
 			ReasonAt: reasonAt(pkgSubscriptions, "ErrRateLimited"),
 			Values:   []string{"WatchRateLimitPause", "WatchRateLimitPauseMax", "WatchRateLimitJitter"},
 			Source:   Constant, Zero: ZeroNotApplicable,
@@ -206,8 +223,7 @@ func allowDecisions() []Decision {
 				"deployment's: a shorter one would only spend the user's budget faster while GitLab refuses it",
 			// GitLab answered the first read 429, so the refusal says the
 			// caller made too many requests and carries 429's code (issue 956).
-			Decided:  []string{"issue 956"},
-			Findings: []string{"F-06", "F-32"},
+			Decided: []string{"issue 956", "issue 955"},
 			Refusals: []Refusal{
 				{
 					Methods: subscribeMethods(), Channel: RPC, Code: CodeTooManyRequests,
@@ -237,10 +253,17 @@ func allowDecisions() []Decision {
 			Values:   []string{"UpstreamRetries", "UpstreamRetryWaitMax", "UpstreamRetryStep"},
 			Source:   Constant, Zero: ZeroNotApplicable,
 			Fixed: "they bound what one failed request costs an instance that is already struggling, and the longest " +
-				"a tool call waits upstream, which nothing else bounds; more retries would multiply every caller " +
-				"against that instance, and the step is client-go's own floor",
-			Decided:  []string{"issue 958"},
-			Findings: []string{"F-32"},
+				"a tool call waits upstream, which nothing else bounds; two retries already make one request cost " +
+				"at most three upstream requests, more would multiply every caller against that instance, and the " +
+				"step is client-go's own floor",
+			// RTC-001 charges a tool call once, in the MCP requests that reach
+			// GitLab, while GitLab counts upstream requests against the user:
+			// a call may send several GitLab requests, and each costs up to
+			// three (F-32). Issue 955 kept the retries and stated that cost
+			// rather than charging the bucket for it, and a GitLab 429 is
+			// still answered two ways, a call's re-sent at most twice within
+			// this row's ceiling and a watcher's by RTC-005's pause.
+			Decided: []string{"issue 958", "issue 955"},
 			Sites: []Site{
 				alias(pkgGitLab, "maxRetries", "UpstreamRetries"),
 				alias(pkgGitLab, "maxRetryBackoff", "UpstreamRetryWaitMax"),
@@ -498,13 +521,19 @@ func allowDecisions() []Decision {
 			},
 		}),
 		{
-			ID: "HLD-003", Question: Allow, Kind: Ceiling, Class: ClassD, Disposition: Valued,
+			ID: "HLD-003", Question: Allow, Kind: Ceiling, Class: ClassR, Disposition: Valued,
 			Resource: "resource watchers one credential's manager holds",
 			Key:      KeyEntry, StdioKey: KeyProcess, Table: true, Partner: "HLD-004",
-			// Sized so one GitLab user stays inside that user's budget, and
-			// keyed per entry (F-05, issue 955).
-			StatedUnit: KeyTenant, ReasonUnit: KeyTenant,
-			Reason:   "ten watchers at a five-second interval would consume such a user's entire budget",
+			// The cap bounds one credential's watchers, which is the entry's
+			// unit, so the row is class R, with HLD-004 bounding the process.
+			// Its reason used to be that ten watchers would consume a user's
+			// whole budget, sized for one user and keyed per entry (F-05).
+			// Issue 955 kept it on the entry and stated what it bounds: ten
+			// watchers at the floor send the 120 requests a minute a throttled
+			// self-managed instance gives one user, and a user watching
+			// through several credentials holds ten for each.
+			StatedUnit: KeyCredential, ReasonUnit: KeyEntry,
+			Reason:   "The watcher cap bounds what one credential's watchers send",
 			ReasonAt: reasonAt(pkgSubscriptions, "DefaultMaxWatchers"),
 			Values:   []string{"WatchersPerCredential"}, Source: OptionOnly, Zero: ZeroSelectsDefault,
 			Fixed: "it is sized to GitLab's figure, the budget a throttled self-managed instance gives one user, " +
@@ -522,8 +551,8 @@ func allowDecisions() []Decision {
 			AtCapacity: ReclaimOwnThenRefuse,
 			// The refusal says the caller holds too many and carries 429's
 			// code (issue 956).
-			Decided:  []string{"issue 956", "issue 958"},
-			Findings: []string{"F-05", "F-21"},
+			Decided:  []string{"issue 956", "issue 958", "issue 955"},
+			Findings: []string{"F-21"},
 			// Reclaiming ends the longest-demoted watch of the same manager,
 			// whose listens are told so.
 			Refusals: []Refusal{

@@ -147,20 +147,23 @@ on stdio every per-caller key is the process.
 The class is computed rather than asserted: `Decision.Disagrees()` compares the unit of
 what a row's reason cites with the unit of its key, only for allowances (a ceiling, a
 rate, a budget or a share) on a requester key, and a reason about the process is met by a
-process partner beside it. `Validate` holds the declared class to that answer. The class
-D decisions are `RTC-001` on HTTP, `RTC-005` and `HLD-003`: each is keyed finer than the
-tenant, so a tenant with several credentials holds several units of it, and moving any
-of them to the tenant would still leave it dividable by bots. `RTC-003`, the listing
-bucket, was the fourth until `RTC-007` gave it a process partner (issue 951): its reason
-is still the processor, and a partner keyed on the process is what meets it, so it is
-class R, as `HLD-001` is.
+process partner beside it. `Validate` holds the declared class to that answer. No
+decision is class D. `RTC-001` on HTTP, `RTC-005` and `HLD-003` were: each is keyed
+finer than the tenant, so a tenant with several credentials holds several units of it,
+and each gave a reason about a GitLab user. Moving any of them to the tenant would
+still leave it dividable by bots, so issue 955 kept them on the entry and stated each
+reason as what the entry bounds, one credential's own requests or watchers, which
+makes them class R. `RTC-003`, the listing bucket, was the fourth until `RTC-007` gave
+it a process partner (issue 951): its reason is still the processor, and a partner
+keyed on the process is what meets it, so it is class R, as `HLD-001` is.
 
 A row carries two units for its reason: the unit the quoted reason names in its own
-words, and the unit of what it cites. They differ for `RTC-001` alone, whose comment
-names GitLab's per-token limits while GitLab keeps the limit it cites per user, and that
-misstatement is itself a finding. A ceiling a comment calls "fairness" is not class D on
-that account, since fairness names no unit; the defect is `INV-003`'s vocabulary rule,
-which `HLD-001` broke until issue 960 stated its reason in the entry's own unit.
+words, and the unit of what it cites. They differ for no row. They differed for
+`RTC-001`, whose comment named GitLab's per-token limits while GitLab keeps the limit
+it cited per user, a misstatement that was itself a finding until issue 955 restated
+the reason. A ceiling a comment calls "fairness" is not class D on that account, since
+fairness names no unit; the defect is `INV-003`'s vocabulary rule, which `HLD-001`
+broke until issue 960 stated its reason in the entry's own unit.
 
 ## Invariants any limit must satisfy
 
@@ -1150,7 +1153,23 @@ issue 960, which restated comments and changed no code: `HLD-001`'s reason calls
 listen ceiling per credential and bounding what one credential holds open, with no
 share word, and the pool's comments say that size pressure consults
 `serverpool.WithInUse` as the idle sweep does (`POL-002`); both rows record the issue
-and carry the finding no longer. Four
+and carry the finding no longer. F-01, F-02, F-05, F-06 and F-32 are answered by issue
+955, whose decision of 2026-09-27 kept on the entry the three allowances whose reasons
+were about a GitLab user (F-01) and corrected each reason to what the entry bounds,
+which restated comments and changed no code. The tool-call bucket (`RTC-001`) bounds
+what one credential sends, where its comment named GitLab's per-token limits (F-02);
+the watcher pause on a GitLab 429 (`RTC-005`) holds back what one credential's
+watchers send, where it gave GitLab's per-user limit as its reason while another
+credential of the same user kept polling (F-06); and the watcher cap (`HLD-003`)
+bounds what one credential's watchers send, where it was sized for one user's budget
+(F-05). A user holding N credentials holds N of each, all spending the one budget
+GitLab keeps for that user, and the comments and the site say so. The upstream
+retries (`RTC-006`) keep their values and state their cost: one GitLab request costs
+at most three upstream requests, and one tool call the bucket charges once may send
+several, which GitLab counts against the user while the bucket sees one (F-32). Those
+four rows and the two that resolve the entry and the tenant (`IDN-002`, `IDN-008`),
+where no allowance is keyed on the tenant, record the issue and carry none of the
+five. Four
 more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a

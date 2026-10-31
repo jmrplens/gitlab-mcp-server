@@ -922,8 +922,10 @@ exactly: the thing being cached is keyed on the token, so the routing key should
 be too. Neither of the others is wrong, and both are fine wherever one instance
 serves the whole caller population, which is most deployments. Reach for a
 second instance for availability, not for throughput: the ceiling that usually
-binds is GitLab's own rate limit against one token, which no number of instances
-raises.
+binds is GitLab's own rate limit on each user, whose every token spends it, and
+on GitLab.com its limit on the deployment's egress address, neither of which
+more instances behind that address raise
+([What GitLab counts](/gitlab-mcp-server/operations/http-server/#what-gitlab-counts)).
 
 ### Hashing the token without routing on it
 

@@ -184,8 +184,11 @@ referencia; añade una segunda instancia por margen, no por memoria.
 
 **Busca una segunda instancia por disponibilidad, antes que por capacidad.** Una
 sola instancia mantiene una población grande a bajo coste. El techo que suele
-limitar a un despliegue ocupado es el propio límite de peticiones de GitLab
-contra un token, que ningún número de instancias eleva.
+limitar a un despliegue ocupado es el propio límite de peticiones de GitLab por
+usuario, que gastan todos sus tokens, y en GitLab.com su límite sobre la
+dirección desde la que salen las peticiones del despliegue; más instancias tras
+una misma dirección de salida no elevan ninguno de los dos
+([Qué cuenta GitLab](/gitlab-mcp-server/es/operations/http-server/#qué-cuenta-gitlab)).
 
 ## Qué cuenta como cliente
 

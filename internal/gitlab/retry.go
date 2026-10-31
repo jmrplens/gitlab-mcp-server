@@ -15,14 +15,14 @@ import (
 )
 
 const (
-	// maxRetries is how many times a failed GitLab request is re-sent.
-	//
-	// client-go's own default is 5, which turns one tool call into six
-	// upstream requests and, with its 700-900 ms service-interruption wait,
-	// puts a floor of roughly twelve seconds under every call that meets a
-	// 500. Two retries keep the point of retrying — a single blipping
-	// request recovers — without letting one caller multiply itself sixfold
-	// against an instance that is already struggling.
+	// maxRetries is how many times a failed GitLab request is re-sent, so a
+	// request costs at most three upstream requests, and a tool call, which
+	// the tool-call bucket charges once, may send several requests. client-go's
+	// default of 5 makes that six, and with its 700-900 ms service-interruption
+	// wait puts a floor of roughly twelve seconds under every call that meets a
+	// 500. Two retries keep the point of retrying (a single blipping request
+	// recovers) without letting one caller multiply itself sixfold against an
+	// instance that is already struggling.
 	maxRetries = tenancy.UpstreamRetries // register row RTC-006
 
 	// maxRetryBackoff caps a single wait between attempts.

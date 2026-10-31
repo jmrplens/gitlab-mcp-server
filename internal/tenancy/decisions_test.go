@@ -744,6 +744,89 @@ func TestDecisions_StaleStatements_AreAnsweredByIssue960(t *testing.T) {
 	}
 }
 
+// TestDecisions_PerCredentialAllowances_AreAnsweredByIssue955 pins what issue
+// 955 decided for the three allowances whose reasons were about a GitLab user
+// while their key is the pool entry: the tool-call bucket (RTC-001), the
+// watcher pause on a GitLab 429 (RTC-005) and the watcher cap (HLD-003). Each
+// stays on the entry, and its quoted reason now says what the entry bounds,
+// one credential's own requests or watchers, in the entry's unit and with no
+// per-user, per-token or share word, so each is class R as HLD-001 is and
+// none disagrees. The two tenant rows record that no allowance is keyed on the
+// tenant (F-01). F-21 and F-28 stay where they were, since issues 961 and 953
+// answer them, and every finding issue 955 answered stays filed as its own.
+// TestDecisions_UpstreamRetries_StateTheirCostUnderIssue955 pins the retries.
+func TestDecisions_PerCredentialAllowances_AreAnsweredByIssue955(t *testing.T) {
+	for _, tc := range []struct {
+		id    string
+		kept  []string
+		entry bool
+	}{
+		{"RTC-001", []string{"F-21"}, true},
+		{"RTC-005", nil, true},
+		{"HLD-003", []string{"F-21"}, true},
+		{"RTC-006", nil, false},
+		{"IDN-002", nil, false},
+		{"IDN-008", []string{"F-28"}, false},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if !slices.Contains(d.Decided, "issue 955") || !slices.Equal(d.Findings, tc.kept) {
+				t.Errorf("%s: decided %v, findings %v; want issue 955 recorded and %v kept", tc.id, d.Decided, d.Findings, tc.kept)
+			}
+			if tc.entry {
+				assertReasonInEntryUnit(t, d)
+			}
+		})
+	}
+
+	for _, finding := range []string{"F-01", "F-02", "F-05", "F-06", "F-32"} {
+		t.Run(finding, func(t *testing.T) {
+			for _, d := range Decisions() {
+				if d.Carries(finding) {
+					t.Errorf("%s still carries %s, which issue 955 answered", d.ID, finding)
+				}
+			}
+			if FindingIssue(finding) != 955 {
+				t.Errorf("%s is filed as issue %d, want it kept as issue 955's", finding, FindingIssue(finding))
+			}
+		})
+	}
+}
+
+// assertReasonInEntryUnit holds a row whose reason issue 955 restated to class
+// R, with the unit it states and the unit of what it bounds both the entry's,
+// and to a quoted reason that names neither a GitLab user, nor GitLab's
+// per-token limits, nor a share.
+func assertReasonInEntryUnit(t *testing.T, d Decision) {
+	t.Helper()
+	if d.Class != ClassR || d.Disagrees() || d.StatedUnit.Unit() != UnitCredential || d.ReasonUnit.Unit() != UnitCredential {
+		t.Errorf("%s: class %d, disagrees %v, stated %s, reason %s; want class R with its reason in the entry's unit",
+			d.ID, d.Class, d.Disagrees(), d.StatedUnit, d.ReasonUnit)
+	}
+	for _, word := range []string{"user", "per-token", "per token", "fair", "quota", "entitlement"} {
+		t.Run(word, func(t *testing.T) {
+			if strings.Contains(strings.ToLower(d.Reason), word) {
+				t.Errorf("%s's reason %q says %q; a number on the entry states what the entry bounds", d.ID, d.Reason, word)
+			}
+		})
+	}
+}
+
+// TestDecisions_UpstreamRetries_StateTheirCostUnderIssue955 pins what issue
+// 955 decided for the upstream retries (RTC-006): they keep their values, and
+// the row states what they cost, at most three upstream requests for each
+// request a handler sends, which the tool-call bucket's one charge per call
+// does not see (F-32).
+func TestDecisions_UpstreamRetries_StateTheirCostUnderIssue955(t *testing.T) {
+	retries, _ := Lookup("RTC-006")
+	if want := []string{"UpstreamRetries", "UpstreamRetryWaitMax", "UpstreamRetryStep"}; !slices.Equal(retries.Values, want) {
+		t.Errorf("RTC-006 values = %v, want %v kept", retries.Values, want)
+	}
+	if !strings.Contains(retries.Fixed, "at most three upstream requests") {
+		t.Errorf("RTC-006's fixed reason %q does not state what one request costs upstream", retries.Fixed)
+	}
+}
+
 // TestDecisions_OAuthVerification_IsBoundedByIssue950 pins what issue 950
 // decided for the two things on the OAuth admission path that grew with what
 // callers send. The identity cache (ADM-005) has a constant capacity and takes
@@ -860,7 +943,10 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // names onto the configuration package's list, read through it, and gave
 // the listen ceiling its flag, and F-04 and F-26 did when issue 960 stated
 // the listen ceiling's reason in its own unit with no share word and said
-// that size pressure consults serverpool.WithInUse as the idle sweep does.
+// that size pressure consults serverpool.WithInUse as the idle sweep does,
+// and F-01, F-02, F-05, F-06 and F-32 did when issue 955 kept on the entry
+// the three allowances whose reasons were about a GitLab user, stated each
+// reason in the entry's unit, and stated what the upstream retries cost.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -888,7 +974,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-04,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-19,F-20,F-25,F-26,F-29,F-30,F-31,F-33,F-34,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-19,F-20,F-25,F-26,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -1573,7 +1659,7 @@ func rowPins() map[string]rowPin {
 		}},
 		"HLD-009": {Authorize, Rule, ClassP, Ruled, KeyDeployment, KeyDeployment, KeyNone, KeyNone, nil},
 
-		"RTC-001": {Allow, Rate, ClassD, Valued, KeyEntry, KeyProcess, KeyCredential, KeyTenant, []refusalPin{
+		"RTC-001": {Allow, Rate, ClassR, Valued, KeyEntry, KeyProcess, KeyCredential, KeyEntry, []refusalPin{
 			{methods: "tools/call", channel: ToolError, prefix: pinRate, answer: RetryLater},
 			{
 				methods: "resources/read,resources/subscribe,subscriptions/listen,prompts/get", channel: RPC,
@@ -1587,7 +1673,7 @@ func rowPins() map[string]rowPin {
 			{methods: "tools/list", channel: RPC, code: -42900, prefix: pinRate, answer: RetryLater},
 		}},
 		"RTC-004": {Allow, Rule, ClassP, Promoted, KeyRequest, KeyRequest, KeyNone, KeyNone, nil},
-		"RTC-005": {Allow, Rate, ClassD, Valued, KeyEntry, KeyProcess, KeyTenant, KeyTenant, []refusalPin{
+		"RTC-005": {Allow, Rate, ClassR, Valued, KeyEntry, KeyProcess, KeyCredential, KeyEntry, []refusalPin{
 			{methods: pinSubMeths, channel: RPC, code: -42900, prefix: "subscriptions: rate limited", answer: RetryLater},
 			{methods: "notifications/resources/updated", channel: Silent, answer: NoAnswer},
 		}},
@@ -1607,7 +1693,7 @@ func rowPins() map[string]rowPin {
 		"HLD-002": {Allow, Ceiling, ClassP, Valued, KeyProcess, KeyProcess, KeyProcess, KeyProcess, []refusalPin{
 			{methods: "subscriptions/listen", era: EraModern, channel: RPC, code: -50300, prefix: pinListenFull, answer: RetryLater},
 		}},
-		"HLD-003": {Allow, Ceiling, ClassD, Valued, KeyEntry, KeyProcess, KeyTenant, KeyTenant, []refusalPin{
+		"HLD-003": {Allow, Ceiling, ClassR, Valued, KeyEntry, KeyProcess, KeyCredential, KeyEntry, []refusalPin{
 			{methods: pinSubMeths, channel: RPC, code: -42900, prefix: pinWatchers, answer: RetryLater},
 			pinListenEnd("watcher_evicted", StartOver),
 		}},

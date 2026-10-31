@@ -1670,9 +1670,9 @@ var processListenStreams = &listenCounter{}
 // set, plus one request per interval: 512 of them at the five second floor is
 // about 102 outbound requests a second from this process, and about 34 at the
 // fifteen second base. Nothing changes per credential, where
-// [subscriptions.Options.MaxWatchers] still holds one GitLab user to ten
-// watchers and so to two requests a second at the floor, well inside the 120 a
-// minute an authenticated user gets from a throttled self-managed instance.
+// [subscriptions.Options.MaxWatchers] holds one credential to ten watchers, so
+// to two requests a second at the floor, all of the 120 a minute a throttled
+// self-managed instance gives one user, and a second credential doubles that.
 //
 // Like the stream ceiling it is deliberately not configurable, and for the same
 // reason: the per-credential number multiplies by however many credentials a

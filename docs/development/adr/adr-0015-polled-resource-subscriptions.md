@@ -153,7 +153,11 @@ make the worst case something an operator can predict.
   than saying plainly that the server closes less politely than the
   specification would like.
 - **Rate limiting pauses every watcher on the manager**, with exponential
-  back-off, because GitLab enforces its limits per user.
+  back-off. GitLab throttles the user, so the manager's other watchers would
+  be refused next, and a manager is one credential's: the pause holds back
+  what that credential's watchers send. Another credential of the same user
+  has a manager of its own and keeps polling, which issue 955 kept as it is
+  and documents rather than keying the pause on the user.
 - **A watch that ends for a reason the client did not ask for closes the
   client's subscription stream** on protocol 2026-07-28, rather than going
   quiet.
@@ -172,10 +176,13 @@ make the worst case something an operator can predict.
    and that default is off unless an administrator enables it. The floor of
    5s exists precisely so that "one urgent watch" cannot become "ten
    watchers at 5s eating the whole budget". That argument is about one
-   credential's budget, which is GitLab's unit of throttling; what bounds
-   **this process** with many credentials in it is the 512 across the
-   process, worth at most about 102 outbound requests a second at the floor
-   and 34 at the base.
+   credential's watchers, which is what the cap of ten bounds. GitLab's unit
+   of throttling is the user, so a user watching through two credentials
+   holds twenty watchers against one budget, which issue 955 kept and
+   documents rather than keying the cap on the user. What bounds **this
+   process** with many credentials in it is the 512 across the process,
+   worth at most about 102 outbound requests a second at the floor and 34 at
+   the base.
 
 3. **Slowing down is honest; stopping silently is not.** MCP defines no
    lease, no TTL and no expiry message, and its one notification means only

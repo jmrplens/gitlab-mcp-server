@@ -674,7 +674,7 @@ When server-side idle closure is disabled, the proxy/edge read or idle timeout b
 
 ## Rate limiting
 
-HTTP mode includes a **per-credential token-bucket rate limiter** that throttles every call that reaches GitLab: `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get` draw on one bucket. It is **on by default** in HTTP mode (`--rate-limit-rps=10`; set `0` to disable) because an HTTP deployment is shared: every call it forwards is charged to its own egress address, so one looping client's volume lands on every other tenant. Stdio leaves it off, having no co-tenant to protect. The bucket belongs to the pool entry, keyed by `(token + GitLab URL)`, and not to the MCP server, which credentials of the same configuration share: two tenants on one server are limited separately, and one tenant's two clients are limited together.
+HTTP mode includes a **per-credential token-bucket rate limiter** that throttles every call that reaches GitLab: `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen` and `prompts/get` draw on one bucket. It is **on by default** in HTTP mode (`--rate-limit-rps=10`; set `0` to disable) because an HTTP deployment is shared: every call it forwards is charged to its own egress address, so one looping client's volume lands on every other tenant. Stdio leaves it off, having no co-tenant to protect. The bucket belongs to the pool entry, keyed by `(token + GitLab URL)`, and not to the MCP server, which credentials of the same configuration share: two credentials on one server are limited separately, and two clients presenting one credential are limited together. It bounds what one credential sends, and it is not GitLab's limit: GitLab throttles the user, so a user holding several tokens holds a bucket for each, and all of them spend that user's one GitLab budget ([What GitLab counts](#what-gitlab-counts)).
 
 `completion/complete` is metered too, on a bucket of its own with ten times the rate and the burst, because an editor asks for completions as you type. A completion that bucket refuses comes back as an empty list, never as an error.
 
@@ -701,6 +701,17 @@ The other metered methods return a JSON-RPC error with code `-42900` and the sam
 
 The limiter never returns HTTP 429, in either shape, because the limit is enforced **after** JSON-RPC routing, inside the MCP layer.
 
+### What GitLab counts
+
+The bucket charges the MCP requests a credential sends; GitLab counts the requests it receives, and the two differ. One tool call can send several GitLab requests, as an action that gathers more than one resource does, and a request GitLab answers with a 429, or with a server error when it is safe to repeat, is sent again up to twice, each time after at most five seconds, so a request costs GitLab at most three and a call the bucket charged once can cost it several times that. A GitLab 429 on a tool call's request is retried the same way and then comes back as the tool's error; a watcher's 429 pauses that credential's watchers instead ([Resource Subscriptions](/gitlab-mcp-server/capabilities/subscriptions/#what-are-the-limits)).
+
+GitLab keeps its limit per user, and each of these budgets is spent by every credential of that user:
+
+- **Self-managed:** an administrator who enables the authenticated API rate limit gives each user 7,200 requests an hour by default, 120 a minute ([User and IP rate limits](https://docs.gitlab.com/administration/settings/user_and_ip_rate_limits/)).
+- **GitLab.com Free:** since 2026-10-19, the date GitLab [announced](https://about.gitlab.com/blog/rate-limit-change-2026/) for the Free plan, one user's API traffic is held to a burst of 100 requests a minute and 5,000 an hour ([rate limits](https://docs.gitlab.com/user/gitlab_com/rate_limits/)). That is below the 600 a minute this bucket allows one credential at its defaults, so on Free GitLab refuses first, with its own 429 rather than this server's `-42900`.
+
+GitLab.com also holds all traffic from one IP address to 2,000 requests a minute ([rate limits](https://docs.gitlab.com/user/gitlab_com/rate_limits/#current-rate-limits)). Every tenant of a deployment reaches GitLab from the deployment's egress address, so all of them spend that one budget, and this server does not count it: one tenant can use it up while staying inside its own per-user limit.
+
 ### The MCP clause it answers
 
 The MCP specification's one mandatory limit is "Rate limit tool invocations" ([server/tools, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)), with no unit, value or refusal shape. HTTP mode meets it out of the box with the bucket above: counted in requests, one per pool entry, 10 a second with 40 in hand. stdio leaves the same limiter off by default, since one process serving one person has no co-tenant to protect, and switches it on with `GITLAB_MCP_RATE_LIMIT_RPS`, since stdio ignores `--rate-limit-rps` and says so at startup, naming the variable instead. [Security](/gitlab-mcp-server/operations/security/#two-mcp-clauses-the-server-meets-in-part) sets out both halves of that position ([issue 959](https://github.com/jmrplens/gitlab-mcp-server/issues/959)).
@@ -708,12 +719,12 @@ The MCP specification's one mandatory limit is "Rate limit tool invocations" ([s
 ### Sizing guidance
 
 - **Single-user deployment** (typical local dev): `--rate-limit-rps=0` is a reasonable opt-out; stdio already defaults to it
-- **Shared instance behind a proxy** (Kubernetes, nginx, Cloudflare): start with `--rate-limit-rps=10 --rate-limit-burst=40`. Each token+URL pair gets its own quota, so this protects against a single noisy client without affecting others. Discovery on those figures is one listing a second with forty in hand
+- **Shared instance behind a proxy** (Kubernetes, nginx, Cloudflare): start with `--rate-limit-rps=10 --rate-limit-burst=40`. Each token+URL pair gets its own bucket, so this protects against a single noisy client without affecting others, and a user with several tokens holds one for each. Discovery on those figures is one listing a second with forty in hand
 - **A gateway or a fleet on one shared credential**: the whole population draws on one set of buckets, discovery included, so size `--rate-limit-burst` for the number of clients that reconnect together after a restart or a deploy. Each of them lists once as it connects
 - **Large multi-tenant deployment**: combine with infra-level rate limiting (Cloudflare, Caddy, nginx). The MCP-level limiter is a safety net, not a replacement for edge enforcement
 
 :::caution
-Because the limiter scopes by token+URL, a client that rotates tokens frequently can bypass it. Use infrastructure-level rate limiting on top for hard quotas. This limiter needs no client address; behind a proxy, `--trusted-proxy-header` and `--trusted-proxies` are what the [authentication budgets](/gitlab-mcp-server/operations/security/#authentication-budgets) and the [discovery documents' bucket](#rate-limiting-the-discovery-documents) need, since those are counted per address.
+Because the limiter scopes by token+URL, a client that rotates tokens frequently can bypass it. Use infrastructure-level rate limiting on top for a hard ceiling. This limiter needs no client address; behind a proxy, `--trusted-proxy-header` and `--trusted-proxies` are what the [authentication budgets](/gitlab-mcp-server/operations/security/#authentication-budgets) and the [discovery documents' bucket](#rate-limiting-the-discovery-documents) need, since those are counted per address.
 :::
 
 ## Rate limiting the discovery documents
