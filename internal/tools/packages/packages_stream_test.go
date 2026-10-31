@@ -528,6 +528,49 @@ func TestDownload_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
 	}
 }
 
+// TestDownload_DownloadMode_SentOnlyWhenAsked verifies the download asks
+// GitLab for the transfer mode the caller names, as the download_mode query
+// parameter its download route declares, and sends no such parameter when
+// none is named, which leaves the choice to the instance's object storage
+// configuration. The request is built by hand rather than by a client-go
+// method, so no option struct carried the parameter and it was never sent
+// (issue 1598). The call goes through the action's route, with the params a
+// caller sends, so the case asking for a mode is refused by a handler that
+// drops the parameter as well as by one that does not know it.
+func TestDownload_DownloadMode_SentOnlyWhenAsked(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		sent bool
+	}{
+		{name: "left out"},
+		{name: "proxy", mode: "proxy", sent: true},
+		{name: "direct", mode: "direct", sent: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, recorder := testutil.RecordQueries(t, `"package-bytes"`)
+			download := packageSpecsByTool(t, ActionSpecs(client))["gitlab_package_download"]
+			params := map[string]any{
+				"project_id": "42", "package_name": testPackageName, "package_version": testPkgVersion,
+				"file_name": testAppBin, "output_path": filepath.Join(t.TempDir(), testOutputBin),
+			}
+			if tt.mode != "" {
+				params["download_mode"] = tt.mode
+			}
+			if _, err := download.Route.Handler(t.Context(), params); err != nil {
+				t.Fatalf("Route.Handler(gitlab_package_download) error = %v", err)
+			}
+			if requests := recorder.Requests(); requests != 1 {
+				t.Fatalf("%d request(s) reached GitLab, want 1", requests)
+			}
+			if got, sent := recorder.Param("download_mode"); sent != tt.sent || got != tt.mode {
+				t.Errorf("download_mode = %q (sent %v), want %q (sent %v)", got, sent, tt.mode, tt.sent)
+			}
+		})
+	}
+}
+
 // previousRelease is what a destination held before a download that fails,
 // which it must still hold afterwards.
 const previousRelease = "the previous release, which a failed download must not touch\n"
@@ -733,7 +776,7 @@ func assertOnlyEntries(t *testing.T, dir string, existed bool) {
 // the construction is replaced for the test.
 func TestDownload_RequestCannotBeBuilt_NothingIsWritten(t *testing.T) {
 	original := newDownloadRequest
-	newDownloadRequest = func(context.Context, *gitlabclient.Client, string) (*retryablehttp.Request, error) {
+	newDownloadRequest = func(context.Context, *gitlabclient.Client, string, string) (*retryablehttp.Request, error) {
 		return nil, errors.New("malformed request path")
 	}
 	t.Cleanup(func() { newDownloadRequest = original })
