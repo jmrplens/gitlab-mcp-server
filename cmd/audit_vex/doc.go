@@ -31,40 +31,56 @@
 // pinned by the sha256 digest of an index with the repository_url it was
 // published to, and every product names the Go module the advisory is
 // against as a subcomponent, which is what ties the statement to the
-// dependency set.
+// dependency set. A subcomponent of an image names the version that image
+// carries, since a published image is one build.
 //
 // The dependency set is read the way make govulncheck reads it: govulncheck
 // runs in this process, through golang.org/x/vuln/scan at the version go.mod
 // pins, over the packages and build tags the command line names (the
-// Makefile passes the ones make govulncheck scans), and reports every
-// advisory against a module the loaded packages come from, at the deepest
-// level it reaches: the module, an imported vulnerable package, or a called
-// vulnerable function. Against that, three findings fail the run:
+// Makefile passes the ones make govulncheck scans), and reports the modules
+// the loaded packages come from and every advisory against one of them, at
+// the deepest level it reaches: the module, an imported vulnerable package,
+// or a called vulnerable function. go.mod's require directives are read
+// beside it, since they are what a scanner reading go.mod alone
+// (osv-scanner, OpenSSF Scorecard) reports advisories against. Against those
+// two, what a statement says of this module's own product is held, and three
+// findings fail the run:
 //
-//   - stale: a statement names an advisory and a module the scan does not
-//     report together, so it describes a dependency set that is gone;
-//   - contradicted: a not_affected statement whose justification the scan
-//     disproves, vulnerable_code_not_present or component_not_present for an
-//     advisory whose package is imported, and
-//     vulnerable_code_not_in_execute_path for one whose function is called;
+//   - stale: the scan loads the module and does not report the advisory
+//     against it, or go.mod no longer requires the module at all, so the
+//     statement describes a dependency set that is gone;
+//   - contradicted: the scan reports the advisory's function called, which
+//     make govulncheck fails on whatever a statement says, so no statement
+//     of any status names it; or a not_affected statement whose justification
+//     the scan disproves, vulnerable_code_not_present or
+//     component_not_present for an advisory whose package is imported;
 //   - unaccounted: the scan reports an advisory against a module and finds
 //     none of its functions called, which is a vulnerability in a component
 //     that does not affect the project, and no statement about this module
 //     names it. OpenSSF Baseline OSPS-VM-04.02 asks for exactly those to be
 //     in the document.
 //
-// An advisory whose function is called is not required here: make
-// govulncheck already fails on it, and a statement would not make it pass.
+// A module go.mod requires that no loaded package comes from, because only a
+// test or a file under another build tag imports it, is outside what the
+// scan can speak for, and a statement about it stands on go.mod's word: that
+// is the case a scanner reading go.mod reports and the scan never would.
+//
+// What a statement says of a published image is not held to the current
+// tree at all. The image is pinned by its digest and does not change, so the
+// day an advisory's module leaves go.mod, the module's own product leaves the
+// statement and the image products stay, for as long as those images are
+// published.
 //
 // # What it cannot see
 //
-// The scan reads the modules the loaded packages come from, so a requirement
-// of go.mod that no package under the scanned build tags imports is not in
-// the set, although a scanner reading go.mod alone (osv-scanner, OpenSSF
-// Scorecard) reports its advisories. Products pinned to a released image are
-// held to the current dependency set through their subcomponents, not to the
-// image itself, which the command never fetches: that a digest is the image
-// its statement describes is the reviewer's to check, and the impact
+// The scan reads the modules the loaded packages come from, so an advisory
+// against a module go.mod requires and no package under the scanned build
+// tags imports is never reported, and never unaccounted, although a scanner
+// reading go.mod alone reports it; a statement about such a module, or about
+// an image, is not checked against the database either, which nothing in the
+// scan describes. The command never fetches an image: that a digest is the
+// release its statement says, and that the version its subcomponent names is
+// the one that release carries, is the reviewer's to check, and the impact
 // statement says which release each one is.
 //
 // # Exit codes

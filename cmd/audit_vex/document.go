@@ -61,7 +61,9 @@ func (l level) String() string {
 // justifications are the five OpenVEX defines, each with the deepest level
 // the scan may report for a not_affected statement giving it. A justification
 // about reachability is disproved by the scan reaching further; one about who
-// controls the input or what mitigates it is not a claim the scan can judge.
+// controls the input or what mitigates it is not a claim the scan can judge,
+// although no statement of any kind may name an advisory whose function the
+// scan reports called, which [judge] refuses before it reads this table.
 var justifications = map[string]level{
 	"component_not_present":                             levelModule,
 	"vulnerable_code_not_present":                       levelModule,
@@ -242,6 +244,7 @@ func productProblems(subject string, product component, module string) []string 
 		return []string{fmt.Sprintf("%s: product: %v", subject, err)}
 	}
 	var problems []string
+	image := p.kind == "oci"
 	switch name := imageName(module); p.kind {
 	case "golang":
 		if p.path != module || p.version != "" || len(p.qualifiers) != 0 {
@@ -258,13 +261,17 @@ func productProblems(subject string, product component, module string) []string 
 		problems = append(problems, fmt.Sprintf("%s: the product %q names no subcomponent, so nothing says which module the advisory is against", subject, product.ID))
 	}
 	for _, sub := range product.Subcomponents {
-		problems = append(problems, subcomponentProblems(subject, product.ID, sub)...)
+		problems = append(problems, subcomponentProblems(subject, product.ID, sub, image)...)
 	}
 	return problems
 }
 
 // subcomponentProblems judges one subcomponent of the product named product.
-func subcomponentProblems(subject, product string, sub component) []string {
+// A subcomponent of an image has to name a version: a published image is
+// one build, carrying one version of each module, and that version is what
+// its statement is about, since the current dependency set says nothing of
+// it.
+func subcomponentProblems(subject, product string, sub component, image bool) []string {
 	p, err := parsePURL(sub.ID)
 	switch {
 	case err != nil:
@@ -273,6 +280,8 @@ func subcomponentProblems(subject, product string, sub component) []string {
 		return []string{fmt.Sprintf("%s: the subcomponent %q of %q is not a Go module, which is what the source scan reports advisories against", subject, sub.ID, product)}
 	case len(sub.Subcomponents) != 0:
 		return []string{fmt.Sprintf("%s: the subcomponent %q of %q has subcomponents of its own, which OpenVEX does not define", subject, sub.ID, product)}
+	case image && p.version == "":
+		return []string{fmt.Sprintf("%s: the subcomponent %q of the image %q names no version, and a published image carries one version of each module", subject, sub.ID, product)}
 	}
 	return nil
 }
@@ -306,11 +315,16 @@ func isIRI(s string) bool {
 	return err == nil && u.Scheme == "https" && u.Host != ""
 }
 
-// statedModules returns the modules a statement names as subcomponents of any
-// of its products, each once and sorted.
-func statedModules(st statement) []string {
+// ownModules returns the modules a statement names as subcomponents of this
+// module's own product, each once and sorted. Those are the claims the
+// current dependency set can hold, and the ones that account for an advisory
+// the scan of this module reports.
+func ownModules(st statement, module string) []string {
 	var modules []string
 	for _, product := range st.Products {
+		if p, err := parsePURL(product.ID); err != nil || p.kind != "golang" || p.path != module {
+			continue
+		}
 		for _, sub := range product.Subcomponents {
 			if p, err := parsePURL(sub.ID); err == nil && !slices.Contains(modules, p.path) {
 				modules = append(modules, p.path)
@@ -321,19 +335,30 @@ func statedModules(st statement) []string {
 	return modules
 }
 
-// statesForModule reports whether st names dependency as a subcomponent of
-// this module's own product, which is what accounts for an advisory the scan
-// of this module reports.
-func statesForModule(st statement, module, dependency string) bool {
+// imageModule is one module a statement names in one published image.
+type imageModule struct {
+	product, path, version string
+}
+
+// imageModules returns every module a statement names as a subcomponent of
+// an image product, in document order.
+//
+// A published image is pinned by its digest and never changes, so what the
+// statement says of it is about the version its subcomponent names, and the
+// current dependency set, which describes the next build and not that one,
+// does not judge it: the advisory and the module leaving go.mod does not
+// make a statement about an image that still carries them stale.
+func imageModules(st statement) []imageModule {
+	var modules []imageModule
 	for _, product := range st.Products {
-		if p, err := parsePURL(product.ID); err != nil || p.kind != "golang" || p.path != module {
+		if p, err := parsePURL(product.ID); err != nil || p.kind != "oci" {
 			continue
 		}
 		for _, sub := range product.Subcomponents {
-			if p, err := parsePURL(sub.ID); err == nil && p.path == dependency {
-				return true
+			if p, err := parsePURL(sub.ID); err == nil {
+				modules = append(modules, imageModule{product: product.ID, path: p.path, version: p.version})
 			}
 		}
 	}
-	return false
+	return modules
 }

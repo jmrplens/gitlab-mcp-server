@@ -33,6 +33,10 @@ type scanResult struct {
 	// summaries holds the one-line summary of every advisory the stream
 	// carried, by id.
 	summaries map[string]string
+	// modules holds the version of every module the loaded packages come
+	// from, by path, as the stream's SBOM names them: the modules the scan
+	// can speak for, whether or not it reports anything against them.
+	modules map[string]string
 }
 
 // scanMessage is one object of govulncheck's JSON stream, reduced to the
@@ -44,6 +48,12 @@ type scanMessage struct {
 		DBLastModified string `json:"db_last_modified"`
 		ScanMode       string `json:"scan_mode"`
 	} `json:"config"`
+	SBOM *struct {
+		Modules []struct {
+			Path    string `json:"path"`
+			Version string `json:"version"`
+		} `json:"modules"`
+	} `json:"SBOM"`
 	OSV *struct {
 		ID      string `json:"id"`
 		Summary string `json:"summary"`
@@ -84,7 +94,10 @@ func scanSource(ctx context.Context, cfg auditConfig) (scanResult, error) {
 // A stream without its configuration, or the configuration of another mode,
 // is refused rather than read as a clean scan: empty output and a scan that
 // found nothing would otherwise look the same, and only one of them is a
-// dependency set somebody checked.
+// dependency set somebody checked. A stream without its SBOM is refused for
+// the same reason: without it nothing says which modules the scan loaded,
+// and a statement about a module it did not load would read as stale or as
+// held depending on a message that was never sent.
 func parseScan(r io.Reader) (scanResult, error) {
 	result := scanResult{levels: map[findingKey]level{}, versions: map[findingKey]string{}, summaries: map[string]string{}}
 	mode := ""
@@ -100,6 +113,12 @@ func parseScan(r io.Reader) (scanResult, error) {
 		}
 		if msg.Config != nil {
 			result.db, result.dbModified, mode = msg.Config.DB, msg.Config.DBLastModified, msg.Config.ScanMode
+		}
+		if msg.SBOM != nil {
+			result.modules = map[string]string{}
+			for _, module := range msg.SBOM.Modules {
+				result.modules[module.Path] = module.Version
+			}
 		}
 		if msg.OSV != nil {
 			result.summaries[msg.OSV.ID] = msg.OSV.Summary
@@ -120,6 +139,9 @@ func parseScan(r io.Reader) (scanResult, error) {
 	}
 	if mode != "source" {
 		return scanResult{}, fmt.Errorf("govulncheck's output carries the configuration of a %q scan, and this command reads a source scan", mode)
+	}
+	if result.modules == nil {
+		return scanResult{}, errors.New("govulncheck's output carries no SBOM, so nothing says which modules the scan loaded")
 	}
 	return result, nil
 }

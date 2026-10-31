@@ -157,7 +157,23 @@ func TestScanSource_ReportsEachLevelTheScanReaches(t *testing.T) {
 			if v := result.versions[findingKey{osv: calledFunc.id, module: "stdlib"}]; !strings.HasPrefix(v, "v1.") {
 				t.Errorf("the standard library's version = %q, want the toolchain's", v)
 			}
+			checkLoadedModules(t, result.modules)
 		})
+	}
+}
+
+// checkLoadedModules holds the modules a scan of the fixture module read from
+// its SBOM to the ones it loads: the fixture module and the standard library
+// at the toolchain's version, and not the module of the advisory nothing
+// loads.
+func checkLoadedModules(t *testing.T, modules map[string]string) {
+	t.Helper()
+
+	if _, ok := modules[fixtureModule]; !ok || !strings.HasPrefix(modules["stdlib"], "v1.") {
+		t.Errorf("modules = %v, want the fixture module and the standard library at the toolchain's version", modules)
+	}
+	if _, ok := modules[neverRead.module]; ok {
+		t.Errorf("modules = %v names %s, which nothing loads", modules, neverRead.module)
 	}
 }
 
@@ -175,11 +191,13 @@ func TestScanSource_AScanThatCannotBeMade_IsAnError(t *testing.T) {
 
 // TestParseScan_KeepsTheDeepestLevelOfEachFinding covers the stream govulncheck
 // writes for one advisory reached at several levels, which is one finding per
-// level, and a finding with no trace, which names no module and is passed over.
+// level, a finding with no trace, which names no module and is passed over,
+// and the SBOM naming the modules the scan loaded.
 func TestParseScan_KeepsTheDeepestLevelOfEachFinding(t *testing.T) {
 	t.Parallel()
 
 	stream := `{"config": {"db": "file:///db", "db_last_modified": "2026-09-30T00:00:00Z", "scan_mode": "source"}}
+{"SBOM": {"go_version": "go1.27.3", "modules": [{"path": "example.com/fixture"}, {"path": "stdlib", "version": "v1.27.3"}], "roots": ["example.com/fixture"]}}
 {"osv": {"id": "GO-2099-0003", "summary": "called"}}
 {"finding": {"osv": "GO-2099-0003", "trace": [{"module": "stdlib", "version": "v1.27.3"}]}}
 {"finding": {"osv": "GO-2099-0003", "trace": [{"module": "stdlib", "version": "v1.27.3", "package": "fmt", "function": "Println"}, {"module": "example.com/fixture"}]}}
@@ -197,11 +215,15 @@ func TestParseScan_KeepsTheDeepestLevelOfEachFinding(t *testing.T) {
 	if result.db != "file:///db" || result.summaries["GO-2099-0003"] != "called" {
 		t.Errorf("result = %+v, want the database and the summary", result)
 	}
+	if v, ok := result.modules["example.com/fixture"]; len(result.modules) != 2 || !ok || v != "" || result.modules["stdlib"] != "v1.27.3" {
+		t.Errorf("modules = %v, want the fixture module with no version and the standard library at v1.27.3", result.modules)
+	}
 }
 
 // TestParseScan_RefusesAStreamThatIsNotASourceScan covers output with no
-// configuration, the configuration of a binary scan, and output that is not
-// JSON, none of which may read as a clean dependency set.
+// configuration, the configuration of a binary scan, a source scan whose
+// stream carries no SBOM, and output that is not JSON, none of which may read
+// as a dependency set somebody checked.
 func TestParseScan_RefusesAStreamThatIsNotASourceScan(t *testing.T) {
 	t.Parallel()
 
@@ -210,6 +232,7 @@ func TestParseScan_RefusesAStreamThatIsNotASourceScan(t *testing.T) {
 	}{
 		{name: "empty", stream: "", want: `a "" scan`},
 		{name: "a binary scan", stream: `{"config": {"scan_mode": "binary"}}`, want: `a "binary" scan`},
+		{name: "no SBOM", stream: `{"config": {"scan_mode": "source"}}`, want: "carries no SBOM"},
 		{name: "not JSON", stream: `{"config": `, want: "reading govulncheck's output"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

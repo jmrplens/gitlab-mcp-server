@@ -85,10 +85,11 @@ func run(ctx context.Context, cfg auditConfig, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// audit reads the module path and the document, validates the document, and
-// holds a document that validated to a scan of the dependency set.
+// audit reads go.mod and the document, validates the document, and holds a
+// document that validated to a scan of the dependency set and to the
+// requirements go.mod names.
 func audit(ctx context.Context, cfg auditConfig) (*report, error) {
-	module, err := readModulePath(filepath.Join(cfg.dir, "go.mod"))
+	mod, err := readGoMod(filepath.Join(cfg.dir, "go.mod"))
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +101,7 @@ func audit(ctx context.Context, cfg auditConfig) (*report, error) {
 	if err != nil {
 		return nil, err
 	}
-	rep := &report{document: cfg.document, statements: len(doc.Statements), patterns: cfg.patterns, tags: cfg.tags, invalid: validate(doc, module)}
+	rep := &report{document: cfg.document, statements: len(doc.Statements), patterns: cfg.patterns, tags: cfg.tags, invalid: validate(doc, mod.path)}
 	if len(rep.invalid) != 0 {
 		return rep, nil
 	}
@@ -108,6 +109,6 @@ func audit(ctx context.Context, cfg auditConfig) (*report, error) {
 	if err != nil {
 		return nil, err
 	}
-	judge(rep, doc, module, result)
+	judge(rep, doc, mod, result)
 	return rep, nil
 }

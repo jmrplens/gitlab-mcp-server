@@ -9,6 +9,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -74,7 +75,7 @@ func TestReadDocument_TheRepositoryDocumentValidates(t *testing.T) {
 	t.Parallel()
 
 	root := filepath.Join("..", "..")
-	module, err := readModulePath(filepath.Join(root, "go.mod"))
+	mod, err := readGoMod(filepath.Join(root, "go.mod"))
 	if err != nil {
 		t.Fatalf("reading go.mod: %v", err)
 	}
@@ -82,7 +83,7 @@ func TestReadDocument_TheRepositoryDocumentValidates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readDocument: %v", err)
 	}
-	if problems := validate(doc, module); len(problems) != 0 {
+	if problems := validate(doc, mod.path); len(problems) != 0 {
 		t.Errorf("the repository's document does not validate:\n%s", strings.Join(problems, "\n"))
 	}
 }
@@ -216,6 +217,9 @@ func TestValidate_EachRuleIsReported(t *testing.T) {
 		{name: "a subcomponent with subcomponents", change: func(d *document) {
 			d.Statements[0].Products[0].Subcomponents[0].Subcomponents = []component{{ID: "pkg:golang/stdlib"}}
 		}, want: "has subcomponents of its own"},
+		{name: "an image's subcomponent with no version", change: func(d *document) {
+			d.Statements[0].Products[1].Subcomponents[0].ID = "pkg:golang/stdlib"
+		}, want: "of the image \"" + fixtureImage + "\" names no version"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -230,25 +234,40 @@ func TestValidate_EachRuleIsReported(t *testing.T) {
 	}
 }
 
-// TestStatesForModule_AsksForThisModulesOwnProduct covers what accounts for
-// an advisory the scan of this module reports: the module's own product
-// naming the dependency, and not an image product naming it.
-func TestStatesForModule_AsksForThisModulesOwnProduct(t *testing.T) {
+// TestOwnModules_ReadsThisModulesOwnProductOnly covers which subcomponents
+// are held to the current tree: those of the module's own product, each
+// once and sorted, and none of an image product's or another module's.
+func TestOwnModules_ReadsThisModulesOwnProductOnly(t *testing.T) {
 	t.Parallel()
 
 	st := fixtureStatement("GO-2099-0001")
-	if !statesForModule(st, fixtureModule, "stdlib") {
-		t.Error("the module's own product naming the dependency does not account for it")
+	st.Products[0].Subcomponents = append(st.Products[0].Subcomponents, component{ID: "pkg:golang/example.com/dep"}, component{ID: "pkg:golang/stdlib@v1.27.3"})
+	st.Products = append(st.Products, component{ID: "pkg:golang/example.com/other", Subcomponents: []component{{ID: "pkg:golang/example.com/elsewhere"}}})
+	if got := ownModules(st, fixtureModule); len(got) != 2 || got[0] != "example.com/dep" || got[1] != "stdlib" {
+		t.Errorf("ownModules = %q, want example.com/dep and stdlib, once each", got)
 	}
-	if statesForModule(st, fixtureModule, "example.com/other") {
-		t.Error("a dependency no product names is accounted for")
+	st.Products = st.Products[1:2]
+	if got := ownModules(st, fixtureModule); len(got) != 0 {
+		t.Errorf("ownModules of a statement about an image alone = %q, want none", got)
 	}
-	st.Products = st.Products[1:]
-	if statesForModule(st, fixtureModule, "stdlib") {
-		t.Error("an image product alone accounts for the module's own advisory")
+}
+
+// TestImageModules_ReadsEveryImageProduct covers the subcomponents held to
+// the version a published image carries: every one of every image product,
+// in document order, and none of the module's own product.
+func TestImageModules_ReadsEveryImageProduct(t *testing.T) {
+	t.Parallel()
+
+	second := strings.Replace(fixtureImage, "ghcr.io", "docker.io", 1)
+	st := fixtureStatement("GO-2099-0001")
+	st.Products = append(st.Products, component{ID: second, Subcomponents: []component{{ID: "pkg:golang/stdlib@v1.27.0"}, {ID: "pkg:golang/example.com/dep@v0.1.0"}}})
+	want := []imageModule{
+		{product: fixtureImage, path: "stdlib", version: "v1.27.0"},
+		{product: second, path: "stdlib", version: "v1.27.0"},
+		{product: second, path: "example.com/dep", version: "v0.1.0"},
 	}
-	if got := statedModules(fixtureStatement("GO-2099-0001")); len(got) != 1 || got[0] != "stdlib" {
-		t.Errorf("statedModules = %q, want stdlib once", got)
+	if got := imageModules(st); !slices.Equal(got, want) {
+		t.Errorf("imageModules = %+v, want %+v", got, want)
 	}
 }
 

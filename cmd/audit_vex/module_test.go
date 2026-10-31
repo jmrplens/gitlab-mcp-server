@@ -1,21 +1,22 @@
 // Copyright (c) 2026 José M. Requena Plens
 // SPDX-License-Identifier: MIT
 
-// module_test.go covers reading the module path from go.mod and the image
-// name derived from it.
+// module_test.go covers reading the module path and the requirements from
+// go.mod, and the image name derived from the module path.
 package main
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// TestReadModulePath_ReadsTheModuleDirective covers the directive written
-// bare, quoted and with a comment after it, and this repository's own go.mod,
-// whose module path the document's module product has to name.
-func TestReadModulePath_ReadsTheModuleDirective(t *testing.T) {
+// TestReadGoMod_ReadsTheModuleDirective covers the directive written bare,
+// quoted and with a comment after it, and this repository's own go.mod, whose
+// module path the document's module product has to name.
+func TestReadGoMod_ReadsTheModuleDirective(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
@@ -31,9 +32,9 @@ func TestReadModulePath_ReadsTheModuleDirective(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
 				t.Fatalf("writing go.mod: %v", err)
 			}
-			got, err := readModulePath(path)
-			if err != nil || got != tc.want {
-				t.Errorf("readModulePath = %q, %v; want %q", got, err, tc.want)
+			got, err := readGoMod(path)
+			if err != nil || got.path != tc.want || len(got.requires) != 0 {
+				t.Errorf("readGoMod = %+v, %v; want the path %q and no requirement", got, err, tc.want)
 			}
 		})
 	}
@@ -41,16 +42,61 @@ func TestReadModulePath_ReadsTheModuleDirective(t *testing.T) {
 	t.Run("this repository", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := readModulePath(filepath.Join("..", "..", "go.mod"))
-		if err != nil || got != "github.com/jmrplens/gitlab-mcp-server/v3" {
-			t.Errorf("readModulePath of the repository's go.mod = %q, %v", got, err)
+		got, err := readGoMod(filepath.Join("..", "..", "go.mod"))
+		if err != nil || got.path != "github.com/jmrplens/gitlab-mcp-server/v3" {
+			t.Errorf("readGoMod of the repository's go.mod = %+v, %v", got, err)
+		}
+		// golang.org/x/crypto is what the repository's document states an
+		// advisory against, and go.mod requires it for tests alone.
+		if _, ok := got.requires["golang.org/x/crypto"]; !ok {
+			t.Errorf("readGoMod of the repository's go.mod does not name golang.org/x/crypto among %d requirements", len(got.requires))
 		}
 	})
 }
 
-// TestReadModulePath_AFileWithNoModule_IsAnError covers a go.mod that cannot
-// be read and one that declares no module.
-func TestReadModulePath_AFileWithNoModule_IsAnError(t *testing.T) {
+// TestReadGoMod_ReadsEveryRequireDirective covers a requirement written on
+// one line and in a block, quoted and marked indirect, and the directives
+// beside them that name modules without requiring them, which a reader of
+// require lines alone would otherwise take for requirements.
+func TestReadGoMod_ReadsEveryRequireDirective(t *testing.T) {
+	t.Parallel()
+
+	content := `module example.com/fixture
+
+go 1.27
+
+require example.com/single v1.0.0
+
+require (
+	example.com/direct v1.1.0
+	"example.com/quoted" v1.2.0 // indirect
+
+	example.com/lonely
+)
+
+replace (
+	example.com/direct => example.com/fork v9.0.0
+)
+
+exclude example.com/excluded v0.1.0
+`
+	path := filepath.Join(t.TempDir(), "go.mod")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing go.mod: %v", err)
+	}
+	got, err := readGoMod(path)
+	if err != nil {
+		t.Fatalf("readGoMod: %v", err)
+	}
+	want := map[string]string{"example.com/single": "v1.0.0", "example.com/direct": "v1.1.0", "example.com/quoted": "v1.2.0"}
+	if got.path != "example.com/fixture" || !maps.Equal(got.requires, want) {
+		t.Errorf("readGoMod = %+v, want the path example.com/fixture and the requirements %v", got, want)
+	}
+}
+
+// TestReadGoMod_AFileWithNoModule_IsAnError covers a go.mod that cannot be
+// read and one that declares no module.
+func TestReadGoMod_AFileWithNoModule_IsAnError(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -67,8 +113,8 @@ func TestReadModulePath_AFileWithNoModule_IsAnError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := readModulePath(tc.path); err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Errorf("readModulePath(%s) error = %v, want one naming %q", tc.path, err, tc.want)
+			if _, err := readGoMod(tc.path); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("readGoMod(%s) error = %v, want one naming %q", tc.path, err, tc.want)
 			}
 		})
 	}

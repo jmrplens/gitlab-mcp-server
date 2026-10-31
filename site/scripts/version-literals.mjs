@@ -43,13 +43,13 @@ export const LITERAL_RELEASES = [
 		text: "--vex gitlab-mcp-server.openvex.json ghcr.io/jmrplens/gitlab-mcp-server:3.1.0",
 		category: "measurement",
 		reason:
-			"what Trivy 0.76.1 reported against the 3.1.0 image with and without the VEX document, one of the two releases whose binaries carry golang.org/x/crypto",
+			"what Trivy 0.76.1 reported against the 3.1.0 image with and without the VEX document, one of the two releases since 3.0.0 whose binaries carry golang.org/x/crypto",
 	},
 	{
 		page: "es/operations/security.mdx",
 		text: "--vex gitlab-mcp-server.openvex.json ghcr.io/jmrplens/gitlab-mcp-server:3.1.0",
 		category: "measurement",
 		reason:
-			"what Trivy 0.76.1 reported against the 3.1.0 image with and without the VEX document, one of the two releases whose binaries carry golang.org/x/crypto",
+			"what Trivy 0.76.1 reported against the 3.1.0 image with and without the VEX document, one of the two releases since 3.0.0 whose binaries carry golang.org/x/crypto",
 	},
 ];

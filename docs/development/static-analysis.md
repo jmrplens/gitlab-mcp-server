@@ -344,21 +344,27 @@ vulnerability of the project. `vex/gitlab-mcp-server.openvex.json` is where
 that disagreement is written down for a scanner to read: an OpenVEX v0.2.0
 statement that the advisory is `not_affected`, `vulnerable_code_not_present`,
 for this module at every version and for the 3.0.0 and 3.1.0 images, the only
-releases whose binaries carry the module, with an impact statement that names
-the evidence. GoReleaser lists it in the signed `checksums.txt`, so the
+releases since 3.0.0 whose binaries carry the module, with an impact statement
+that names the evidence. GoReleaser lists it in the signed `checksums.txt`, so the
 provenance attestation over that file covers it, and attaches it to every
 GitHub release as `gitlab-mcp-server.openvex.json`.
 
 `make check-vex` ([`cmd/audit_vex`](cmd-utilities.md#audit_vex)) holds it to
-the specification and to the source scan, run in process with the packages and
-build tags `make govulncheck` scans. A statement whose advisory the scan no
-longer reports against its module fails as stale, a `not_affected` statement
-the scan disproves (its package imported, or its function called, depending on
-the justification) fails as contradicted, and an advisory the scan reports
-without a call that no statement about this module names fails as
-unaccounted, since OpenSSF Baseline OSPS-VM-04.02 asks for every vulnerability
-in a component that does not affect the project to be in the document. An
-advisory whose function is called stays `make govulncheck`'s to fail. It runs
+the specification, to the source scan, run in process with the packages and
+build tags `make govulncheck` scans, and to the require directives of `go.mod`,
+which are what osv-scanner and Scorecard read. What a statement says of this
+module fails as stale when the scan loads the module without reporting the
+advisory or `go.mod` no longer requires it, and as contradicted when the scan
+reports the advisory's function called or a `not_affected` justification the
+scan disproves (its package imported); a module `go.mod` requires and no
+scanned package loads, as `golang.org/x/crypto` is without the `e2e` tag,
+stands on `go.mod`'s word. What it says of a published image names the
+version that image carries and is not held to the current tree, since the
+image does not change. An advisory the scan reports without a call that no statement
+about this module names fails as unaccounted, since OpenSSF Baseline
+OSPS-VM-04.02 asks for every vulnerability in a component that does not
+affect the project to be in the document, and one whose function is called
+stays `make govulncheck`'s to fail. It runs
 in CI's govulncheck job, as step 36 of `make analyze`, and in the release
 workflow's `binary-vulns` job on the tree being tagged, so an advisory
 published since the last CI run cannot ship missing from the document.

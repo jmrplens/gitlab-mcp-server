@@ -996,8 +996,8 @@ govulncheck:
 check-binary-vulns:
 	go run ./cmd/audit_binary_vulns/
 
-## check-vex: hold vex/gitlab-mcp-server.openvex.json, the OpenVEX document every GitHub release carries, to OpenVEX v0.2.0 and to the dependency set make govulncheck scans, with the same packages and build tags.
-## Fails on a statement naming an advisory the scan no longer reports (stale) or that the scan disproves (contradicted), and on an advisory the scan reports without a call that no statement accounts for, which OpenSSF Baseline OSPS-VM-04.02 asks the document to carry.
+## check-vex: hold vex/gitlab-mcp-server.openvex.json, the OpenVEX document every GitHub release carries, to OpenVEX v0.2.0, to the dependency set make govulncheck scans, with the same packages and build tags, and to the require directives of go.mod.
+## Fails when what a statement says of the module names an advisory the scan does not report against a module it loads, or a module go.mod no longer requires (stale), or one the scan disproves or reports called (contradicted), and on an advisory the scan reports without a call that no statement accounts for, which OpenSSF Baseline OSPS-VM-04.02 asks the document to carry. What a statement says of a published image is not held to the current tree.
 check-vex:
 	go run ./cmd/audit_vex/ -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 
