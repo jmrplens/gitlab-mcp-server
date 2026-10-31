@@ -37,7 +37,7 @@ Automation is not a role. Dependabot, the automated code reviewers and the workf
 
 Collaborator access to the repository, and access to its private vulnerability reports beyond a reporter's access to their own report, is granted only to an account with two-factor authentication enabled through an authenticator app, a security key or a passkey. SMS alone does not qualify. The repository belongs to a personal GitHub account, where GitHub cannot require two-factor authentication of collaborators the way an organization can, and does not show the owner whether a collaborator has it or by which method. So the rule is applied when access is granted: the maintainer asks the account's holder to confirm the method first, and withdraws the access on learning that the account no longer meets the rule.
 
-Today the maintainer's account is the only one with any of that access: it is the repository's one collaborator, with the admin role, and it has two-factor authentication enabled. Besides that account, two deploy keys, both added by the maintainer, have write access to the repository: the release workflow pushes the version stamp with one, and the other has not been used.
+Today the maintainer's account is the only one with any of that access: it is the repository's one collaborator, with the admin role, and it has two-factor authentication enabled. Besides that account, one deploy key, added by the maintainer, has write access to the repository: the release workflow pushes the version stamp with it.
 
 Three repository rules limit what that access can do:
 
