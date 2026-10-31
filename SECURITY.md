@@ -348,6 +348,30 @@ An SBOM also names `LicenseRef-` entries for client-go, grpc-gateway and this re
 
 A module under any other license, or under none, is not merged. The pull request that adds the module, or updates it to a version under another license, says so, and it is merged only once the module is replaced or the maintainer accepts the license by adding it to the list above in that pull request, with the reason. The threshold is the same for every license outside the list: before the merge. No check fails on a license today, so the review of each pull request that changes `go.mod` is where this is held; what does fail is `cmd/gen_third_party_notices`, which stops the release when a module a binary links publishes no license file at all. Modules only the tests and the repository's commands use reach no release, and are held to the list only when a release binary starts linking them.
 
+### Static analysis findings
+
+Three static analysers read the code, and a finding is handled by the one that raised it:
+
+- **golangci-lint** runs in the required `✅ CI` check on every pull request and every push to main, with `gosec` in audit mode, `staticcheck` with all of its checks, `govet` and the other linters `.golangci.yml` enables. A finding of any severity fails the check, so it is fixed in the pull request that brings it, before the merge. A false positive is suppressed on its own line with its reason, either `//nolint:<linter> // <reason>`, which `nolintlint` refuses without both, or gosec's `// #nosec <rule> -- <reason>`; every `#nosec` in the tree names its rule and its reason, and the 31 in the server's own code are read in [the October 2026 security review](docs/development/security-review-2026-10.md#method).
+- **CodeQL** analyses the Go code, the JavaScript and TypeScript and the workflows on every pull request, every push to main and once a week, and reports to code scanning without failing the required check. An alert of any severity is fixed, or dismissed with the reason it does not apply, before the next release is tagged. Read on 31 October 2026, no CodeQL alert is open; of the 21 it has raised, 17 were fixed and 4 dismissed as false positives.
+- **SonarCloud** analyses the Go code on every pull request and every push to main, and reports its quality gate beside the required check rather than in it. A vulnerability it reports is fixed, and a security hotspot it raises is fixed or reviewed with its reason, before the next release is tagged. Read on 31 October 2026, the quality gate passes and no vulnerability and no hotspot is open.
+
+`.golangci.yml` also excludes some of gosec's rules across a scope rather than on a line, each for a reason that holds across that scope:
+
+- `G104`, an unhandled error, everywhere, since `errcheck` reports the same finding.
+- `G101`, a hard-coded credential, in test files, whose fixtures carry invented tokens on purpose, and in the `action_specs.go` files, whose constants are action IDs.
+- `G103`, `G204` and `G304`, the use of `unsafe`, a subprocess started with a variable and a file opened at a variable path, everywhere, through the linter's `common-false-positives` preset. In the server, `unsafe` serves twice in `internal/toolutil`, to read an address as an identity, of a handler's closure and of a schema, and nothing is written through either; the server starts no subprocess; and a path a tool's caller supplies is opened only after the confinement [File System Access](#file-system-access-caller-supplied-local-paths) describes, which gosec cannot follow, the other paths it opens being the operator's (a dotenv file, a certificate). The rest are the repository's commands under `cmd/`, which run `go` and `git` and read the tree they are run in.
+
+The `comments` and `std-error-handling` presets beside it silence rules no security property rests on: missing or misshapen doc comments, which `make check-godocs` judges instead, and the unchecked error of a close, a flush, a print, a removal or a write to the standard streams.
+
+To see what is open:
+
+```bash
+gh api 'repos/jmrplens/gitlab-mcp-server/code-scanning/alerts?tool_name=CodeQL&state=open' --jq length
+curl -s 'https://sonarcloud.io/api/issues/search?componentKeys=jmrplens_gitlab-mcp-server&types=VULNERABILITY&resolved=false' | jq .total
+curl -s 'https://sonarcloud.io/api/hotspots/search?projectKey=jmrplens_gitlab-mcp-server&status=TO_REVIEW' | jq .paging.total
+```
+
 ### Release Integrity
 
 - Release binaries are built from tagged commits and published via GoReleaser.

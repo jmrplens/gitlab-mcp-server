@@ -238,7 +238,9 @@ linters:
     # packages are not exercised by the selected target.
     warn-unused: false
     # Keep upstream presets that suppress generated comment noise, unchecked
-    # standard-library writes/closes, and common test fixture false positives.
+    # standard-library writes/closes, and gosec's G103, G204 and G304 across
+    # the whole tree, not only in tests (SECURITY.md, Static analysis
+    # findings, gives the reason each of those holds).
     presets:
       - comments
       - std-error-handling

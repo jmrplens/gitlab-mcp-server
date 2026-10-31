@@ -201,7 +201,7 @@ Key configured linters include:
 
 - `govet` with all checks enabled except `fieldalignment`.
 - `staticcheck` with all checks enabled.
-- `gosec` with audit mode enabled and `G104` excluded because unchecked errors are covered by `errcheck`.
+- `gosec` with audit mode enabled. `G104` is excluded because `errcheck` covers unchecked errors, `G101` in test files and `action_specs.go`, and `G103`, `G204` and `G304` everywhere through the `common-false-positives` preset; [Static analysis findings](../../SECURITY.md#static-analysis-findings) gives the reason each holds and what happens to a finding.
 - `modernize` for modern Go idiom suggestions.
 - `errcheck`, `bodyclose`, `noctx`, `nilerr`, `nilnil`, `errorlint`, `gocyclo`, `gocognit`, `nestif`, `maintidx`, `dupl`, `revive`, `gocritic`, `nolintlint`, `usetesting`, `perfsprint`, and related checks.
 

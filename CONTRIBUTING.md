@@ -215,7 +215,7 @@ The branch rules require no approval count while the project has one maintainer,
 
 ### Style Guides
 
-Contributions are expected to follow these guides. The tools listed beside each enforce them in CI, and an exception is rare and marked at its location with the reason.
+Contributions are expected to follow these guides. The tools listed beside each enforce them in CI, and an exception is rare and marked at its location with the reason, or, where it covers a whole scope, written into the tool's configuration beside its reason; [SECURITY.md](SECURITY.md#static-analysis-findings) lists the ones that touch a security rule and says what happens to a static analysis finding.
 
 | Language                                   | Style guide                                                                                                                                                                               | Enforced by                                                                                                                                     |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
