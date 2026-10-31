@@ -105,6 +105,17 @@ That shape is what determines whether something counts as a vulnerability here.
 - **Path traversal on file operations.** Upload and file-content tools take
   caller-supplied paths; one that escapes its intended directory or reads
   something the operator did not expose is a vulnerability.
+- **Path traversal in a request path.** A tool argument placed into the path of
+  a request to GitLab that, with a separator or a dot segment, makes the
+  request name a different GitLab endpoint from the one its action names. It
+  is a vulnerability even though the request still carries the user's own token,
+  as [GHSA-rxjw-584q-hxjr](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/GHSA-rxjw-584q-hxjr)
+  was.
+- **Bypassing a per-action control.** The tool exclusion list
+  (`GITLAB_MCP_EXCLUDE_TOOLS`), the tier filter, the chosen tool surface and the
+  confirmation a destructive action asks for are enforcement, like the read-only
+  and safe modes. A call that reaches a GitLab endpoint past any of them, or
+  runs a destructive action without its confirmation, is a vulnerability.
 - **Server-side request forgery.** A caller-controlled value that redirects an
   API request away from the configured `GITLAB_URL` to an internal address.
 
@@ -301,6 +312,10 @@ from a model that may have read attacker-influenced content.
 - Required parameters are checked explicitly — missing values produce clear error messages.
 - Integer IDs are validated to prevent injection.
 - String parameters are sanitized where applicable.
+- A tool argument placed into a request path is refused before any request is
+  built if it carries a `.` or `..` segment, and is escaped so that a separator
+  stays inside it; the GitLab transport also refuses any request whose path
+  carries a dot segment, as it stands or once decoded (from 3.4.0).
 
 ### Error Handling
 
