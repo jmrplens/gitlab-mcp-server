@@ -827,6 +827,37 @@ measured a day apart, the 265 packages at `ed18d7d12` and the 31 on the
 rebased branch; one run over the merged tree, either way above, takes the
 figure of one tree.
 
+That run was taken on 31 October 2026, over `main` at `1ef08b139` (3.4.0),
+on GitHub's runners in twenty shards on linux/amd64:
+`conditions.yml` with `tree=true` and `gate=all`, run
+[41178598744](https://github.com/jmrplens/gitlab-mcp-server/actions/runs/41178598744)
+in branch mode and
+[41178600207](https://github.com/jmrplens/gitlab-mcp-server/actions/runs/41178600207)
+in condition mode. Every package below `cmd/` and `internal/` but one,
+`cmd/internal/fileheader`, was measured in the same tree, the 31 above
+included:
+
+| Mode      | Packages below `cmd/` and `internal/` | Measured | Outcomes evaluated | Share |
+| --------- | ------------------------------------: | -------: | -----------------: | ----: |
+| Branch    |                                   307 |      306 |     51919 of 51946 | 99.9% |
+| Condition |                                   307 |      306 |     62191 of 62246 | 99.9% |
+
+The one package not measured, `cmd/internal/fileheader`, holds no condition at
+all. gobco reports it as `0/0`, which the script refuses because it cannot tell
+it from a package gobco did not instrument; that refusal also ends both runs
+red (#1667). Counting it would change neither total.
+
+The 27 branch outcomes not taken are in fifteen packages. Eight of them are
+in the `action_specs.go` of `internal/tools/features` and
+`internal/tools/resourceevents` (four each), the per-action metadata
+decorations `make check-spec-conditions` exists to find. The rest are spread
+over thirteen packages, at most three in one (`cmd/audit_1to1/internal/waits`
+and `internal/tools/orbit`). The 55 condition outcomes are in nineteen
+packages, the most in `cmd/audit_1to1/internal/structs` (11),
+`cmd/audit_1to1/internal/sdk` (7) and `cmd/audit_1to1/internal/waits` and
+`internal/tools/orbit` (5 each). Each run's summary names every one with its
+file and line.
+
 ## When To Use Each Layer
 
 Use unit tests for implementation changes and regression coverage. Use E2E
