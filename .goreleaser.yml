@@ -82,6 +82,15 @@ archives:
 
 checksum:
   name_template: checksums.txt
+  # The OpenVEX document (vex/gitlab-mcp-server.openvex.json) is listed in the
+  # file cosign signs, so a downloaded copy verifies like a binary, and the
+  # provenance attestation release.yml makes from checksums.txt covers it
+  # too. The name is the asset's exact file name, which release.extra_files
+  # below uploads it under; make check-vex holds the document to the
+  # dependency set of the tree being released.
+  extra_files:
+    - glob: ./vex/gitlab-mcp-server.openvex.json
+      name_template: gitlab-mcp-server.openvex.json
 
 snapshot:
   # A release rehearsal (release.yml on workflow_dispatch) builds the
@@ -188,14 +197,21 @@ release:
   github:
     owner: jmrplens
     name: gitlab-mcp-server
-  # Draft first: every asset (binaries, checksums.txt + signature, SBOMs, and
-  # the .mcpb attached by the workflow) is in place before the release becomes
-  # visible, so no installer or updater observes a partial release. The workflow's
-  # "Publish release" step flips the draft after the last upload.
+  # Draft first: every asset (binaries, checksums.txt + signature, SBOMs, the
+  # OpenVEX document, and the .mcpb attached by the workflow) is in place
+  # before the release becomes visible, so no installer or updater observes a
+  # partial release. The workflow's "Publish release" step flips the draft
+  # after the last upload.
   draft: true
   replace_existing_draft: true
   prerelease: auto
   name_template: "v{{.Version}}"
+  # The OpenVEX document, under the exact name checksum.extra_files lists it
+  # by: a scanner given it (trivy --vex, for one) stops reporting the
+  # advisories it states do not affect the server.
+  extra_files:
+    - glob: ./vex/gitlab-mcp-server.openvex.json
+      name_template: gitlab-mcp-server.openvex.json
   footer: |
     ---
 
@@ -203,7 +219,7 @@ release:
 
     ### Verify the assets
 
-    All binaries are listed in `checksums.txt`, signed keylessly with cosign:
+    All binaries, and the OpenVEX document `gitlab-mcp-server.openvex.json`, are listed in `checksums.txt`, signed keylessly with cosign:
 
     ```console
     cosign verify-blob \

@@ -50,7 +50,8 @@
 // binaries in the order the published one's header lists them, which is the
 // one thing about it its inputs do not fix, and laid out as GoReleaser lays
 // it out. What the checksum file lists beyond the binaries (the SBOMs, the
-// notices) is named as not rebuilt. With -trimpath the go command keeps the
+// notices, and the OpenVEX document its extra_files add) is named as not
+// rebuilt. With -trimpath the go command keeps the
 // linker flags out of the build information, so a binary that differs while
 // its build information agrees points at them.
 //

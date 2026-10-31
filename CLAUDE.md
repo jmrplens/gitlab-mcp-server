@@ -62,7 +62,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 788 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 488 test files under `internal/tools/`                                                                       |
-| Go packages               | 313 in the module (`go list ./...`); 349 directories hold tracked `.go` files, the thirty-six more being what `go list` leaves out: thirty-five `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
+| Go packages               | 318 in the module (`go list ./...`); 354 directories hold tracked `.go` files, the thirty-six more being what `go list` leaves out: thirty-five `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
 
 ### Orbit live tests
 
@@ -90,6 +90,7 @@ gitlab-mcp-server/
 │   ├── audit_graphql_shapes/         # GraphQL documents against the structs they decode into (make check-graphql-shapes)
 │   ├── audit_install_buttons/        # One-click install payloads (make check-install-buttons)
 │   ├── audit_binary_vulns/           # Release binaries against the Go vulnerability database (make check-binary-vulns)
+│   ├── audit_vex/                    # The OpenVEX document every release attaches, against OpenVEX v0.2.0 and the dependency set (make check-vex)
 │   ├── audit_image_vulns/            # The image's Alpine packages against Trivy's database, before the push (make check-image-vulns)
 │   ├── reproduce_release/            # Release binaries rebuilt from the tag and compared byte for byte (make check-reproducible, check-repeatable)
 │   ├── audit_site_headers/           # The documentation site's security headers, after each deploy (make check-site-headers)
@@ -175,6 +176,7 @@ gitlab-mcp-server/
 ├── examples/telemetry/               # The worked collector example the telemetry page imports; test/e2e/collector holds it to the server
 ├── test/e2e/                         # End-to-end tests: http/, stdio/, collector/, orbit/, internal/harness/, gitlab/{common,ce,ee}
 ├── plan/                             # Untracked working area; make check-plan-untracked fails on a force-added file
+├── vex/                              # The OpenVEX document every GitHub release attaches, held by make check-vex
 ├── mcpb/                             # Claude Desktop extension manifest, icon, platform.jq and the Linux launcher
 ├── .github/                          # AI assistance infrastructure: agents, skills, instructions
 ├── Makefile                          # Build, test, lint targets

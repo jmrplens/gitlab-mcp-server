@@ -99,6 +99,7 @@ gotestsum --version
 | `make fmt`                    | Apply configured Go formatters through `golangci-lint fmt`                                    |
 | `make govulncheck`            | Scan Go dependencies and reachable calls for known CVEs                                       |
 | `make check-binary-vulns`     | Build every release target and hold each binary to the vulnerability database at module grain |
+| `make check-vex`              | Hold the OpenVEX document to OpenVEX v0.2.0 and to the dependency set the source scan reads   |
 | `make check-image-vulns`      | Build the image per platform and hold its Alpine packages to Trivy's database (needs Docker)  |
 | `make check-dependency-vulns` | Hold every lockfile to OSV.dev's advisories, malicious packages included (needs Docker)       |
 | `make mdlint`                 | Lint all Markdown and MDX files, excluding `plan/` and `node_modules/`, with CI's globs       |
@@ -333,6 +334,34 @@ anything, a `before` key other than `hooks`, and a hook other than
 `go mod download`. It needs the network
 for the database and builds six binaries: one full run took 2m52s on five
 cores, about thirty seconds of it per build.
+
+#### The OpenVEX document
+
+The two scans above disagree by design about `GO-2026-5932`: the source scan
+lists it at module level and passes, because nothing calls into openpgp, while
+osv-scanner and OpenSSF Scorecard, which read `go.mod`, report it as a
+vulnerability of the project. `vex/gitlab-mcp-server.openvex.json` is where
+that disagreement is written down for a scanner to read: an OpenVEX v0.2.0
+statement that the advisory is `not_affected`, `vulnerable_code_not_present`,
+for this module at every version and for the 3.0.0 and 3.1.0 images, the only
+releases whose binaries carry the module, with an impact statement that names
+the evidence. GoReleaser lists it in the signed `checksums.txt`, so the
+provenance attestation over that file covers it, and attaches it to every
+GitHub release as `gitlab-mcp-server.openvex.json`.
+
+`make check-vex` ([`cmd/audit_vex`](cmd-utilities.md#audit_vex)) holds it to
+the specification and to the source scan, run in process with the packages and
+build tags `make govulncheck` scans. A statement whose advisory the scan no
+longer reports against its module fails as stale, a `not_affected` statement
+the scan disproves (its package imported, or its function called, depending on
+the justification) fails as contradicted, and an advisory the scan reports
+without a call that no statement about this module names fails as
+unaccounted, since OpenSSF Baseline OSPS-VM-04.02 asks for every vulnerability
+in a component that does not affect the project to be in the document. An
+advisory whose function is called stays `make govulncheck`'s to fail. It runs
+in CI's govulncheck job, as step 36 of `make analyze`, and in the release
+workflow's `binary-vulns` job on the tree being tagged, so an advisory
+published since the last CI run cannot ship missing from the document.
 
 #### The image's Alpine packages
 

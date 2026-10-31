@@ -568,7 +568,7 @@ Cada GitHub Release incluye tres artefactos de integridad:
 - `checksums.txt.sigstore.json` — bundle de firma keyless [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) / Sigstore (GitHub OIDC, sin distribución de claves)
 - `<artefacto>.sbom.json` — un SBOM en formato SPDX por cada binario
 
-A partir del primer release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`, los textos de licencia, aviso y patente de todos los módulos que enlazan los binarios, que los SBOM nombran sin incluir. Se genera a partir de los binarios en el momento del release y figura en `checksums.txt`, así que los pasos siguientes lo verifican como a un binario.
+A partir del primer release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`, los textos de licencia, aviso y patente de todos los módulos que enlazan los binarios, que los SBOM nombran sin incluir. Se genera a partir de los binarios en el momento del release y figura en `checksums.txt`, así que los pasos siguientes lo verifican como a un binario. A partir del primer release posterior a 3.4.0, cada release incluye además `gitlab-mcp-server.openvex.json`, el [documento VEX](#el-documento-vex), que figura en `checksums.txt` del mismo modo.
 
 Nada de esto se verifica por ti: el servidor nunca descarga ni reemplaza su propio binario, así que quien pone un binario en la máquina es quien lo comprueba. Los gestores de paquetes hacen su propia verificación (Homebrew fija una fórmula con checksums; npm y el registro de contenedores fijan digests). Para un binario que descargues tú, verifica tanto la firma como el checksum antes de ejecutarlo.
 
@@ -710,6 +710,21 @@ go run golang.org/x/vuln/cmd/govulncheck@latest -mode binary -scan module ./gitl
 ```
 
 Los releases 3.0.0 y 3.1.0 llevan `golang.org/x/crypto` en su información de compilación, así que esos escáneres informan de `GO-2026-5932` sobre ellos, aunque ninguno enlaza los paquetes openpgp a los que se refiere el aviso: el módulo estaba ahí por una única función HKDF, que los releases posteriores toman de la biblioteca estándar de Go, de modo que ya no llevan el módulo. Los releases anteriores al 3.0.0 sí enlazaban openpgp, a través del subsistema de autoactualización que el 3.0.0 eliminó.
+
+### El documento VEX
+
+El párrafo anterior se publica también en una forma que lee un escáner, un documento [OpenVEX](https://openvex.dev): [`vex/gitlab-mcp-server.openvex.json`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/vex/gitlab-mcp-server.openvex.json). Declara que `GO-2026-5932` es `not_affected`, con la justificación `vulnerable_code_not_present` y la evidencia que la respalda, para el módulo de Go en todas sus versiones y para las imágenes de 3.0.0 y 3.1.0, nombradas por el digest que sirven los dos registros. A partir del primer release posterior a 3.4.0, cada release adjunta el documento como `gitlab-mcp-server.openvex.json`, que figura en el `checksums.txt` firmado.
+
+La CI contrasta el documento con el conjunto de dependencias en cada pull request, y el workflow de release lo repite sobre el árbol etiquetado antes de publicar nada. Una declaración sobre un aviso que las dependencias ya no llevan hace fallar la compilación, y también una que desmiente un análisis del código fuente al encontrar importado el paquete del aviso o llamada su función. Un aviso cuyo código vulnerable el servidor no alcanza hace fallar también la compilación hasta que una declaración lo nombre, así que todos ellos están en el documento. Uno cuyo código vulnerable el servidor sí llama nunca se declara ahí: hace fallar la compilación hasta que una actualización de la dependencia lo corrige.
+
+Un escáner al que se le da el documento oculta lo que declara:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/vex/gitlab-mcp-server.openvex.json
+trivy image --vex gitlab-mcp-server.openvex.json ghcr.io/jmrplens/gitlab-mcp-server:3.1.0
+```
+
+Trivy 0.76.1 informa de `GO-2026-5932` sobre esa imagen sin `--vex` y no con él, y lo mismo ocurre con el binario del release 3.1.0 analizado con `trivy rootfs`. Los releases desde el 3.2.0 no llevan el módulo, así que ningún escáner informa del aviso sobre ellos.
 
 ## Vulnerabilidades conocidas en los paquetes de la imagen
 
