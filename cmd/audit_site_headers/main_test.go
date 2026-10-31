@@ -81,7 +81,8 @@ func (tc runCase) check(t *testing.T) {
 // and a negative delay are usage errors; with no -url the published site is
 // judged; a site serving every header passes; a site missing the two headers
 // the Cloudflare rule adds, or either one of them, fails and says what to set,
-// as an error annotation when annotations are asked for; any other header
+// as an error annotation when annotations are asked for; either of them sent
+// with a value its judge refuses fails and says why; any other header
 // missing, a page that answered 404 and a page that could not be fetched each
 // fail; every -url is judged in order; and the attempts and the delay reach
 // the retry.
@@ -94,6 +95,11 @@ func TestRunMain_Arguments_JudgeEachPageOrRefuse(t *testing.T) {
 	noPolicy.Del("Content-Security-Policy")
 	noFrameOptions := siteResponse()
 	noFrameOptions.Del("X-Frame-Options")
+	framedAnywhere := siteResponse()
+	framedAnywhere.Set("X-Frame-Options", "ALLOWALL")
+	const evalPolicy = "default-src 'self'; script-src 'self' 'unsafe-eval'; object-src 'none'"
+	evaluatesText := siteResponse()
+	evaluatesText.Set("Content-Security-Policy", evalPolicy)
 	noSniff := siteResponse()
 	noSniff.Del("X-Content-Type-Options")
 	cases := []runCase{
@@ -142,6 +148,22 @@ func TestRunMain_Arguments_JudgeEachPageOrRefuse(t *testing.T) {
 				"  FAIL     X-Frame-Options is not sent. Set: DENY\n",
 				"audit_site_headers: 1 page(s), 3 header(s) held, 1 failed, 0 waiting for the maintainer's rule\n",
 				"::error title=X-Frame-Options::https://site.example/: X-Frame-Options is not sent. Set: DENY\n",
+			},
+		},
+		{
+			name: "X-Frame-Options as ALLOWALL", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: framedAnywhere}}, wantCode: 1,
+			wantAsked: []string{"https://site.example/"},
+			wantStdout: []string{
+				"  FAIL     X-Frame-Options is permissive: it is \"ALLOWALL\", and a browser refuses a frame from another site only for DENY or SAMEORIGIN. Served: ALLOWALL. Set: DENY\n",
+				"audit_site_headers: 1 page(s), 3 header(s) held, 1 failed, 0 waiting for the maintainer's rule\n",
+			},
+		},
+		{
+			name: "a policy allowing 'unsafe-eval'", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: evaluatesText}}, wantCode: 1,
+			wantAsked: []string{"https://site.example/"},
+			wantStdout: []string{
+				"  FAIL     Content-Security-Policy is permissive: it lets a script run text as code: script-src allows 'unsafe-eval'. Served: " + evalPolicy + ". Set: " + recommendedPolicy + "\n",
+				"audit_site_headers: 1 page(s), 3 header(s) held, 1 failed, 0 waiting for the maintainer's rule\n",
 			},
 		},
 		{
