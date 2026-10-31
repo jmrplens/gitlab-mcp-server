@@ -120,7 +120,7 @@ gitlab-mcp-server/
 │   ├── format_md_tables/             # Markdown pipe table formatter (make check-md-tables)
 │   ├── measure_conditions/           # The cross-OS condition and branch coverage workflow and the whole-tree figures (make coverage-conditions-tree)
 │   ├── fuzz_targets/                 # The fuzz targets the weekly fuzz.yml runs with go test -fuzz
-│   ├── merge_coverage/               # The e2e support packages' offline profile merged with the runs' (make e2e-support-coverage)
+│   ├── merge_coverage/               # The e2e support packages' offline profile merged with the runs', their record and gate (make e2e-support-coverage, check-e2e-support-coverage)
 │   ├── gen_action_catalog_manifest/  # Audited action catalog manifest
 │   ├── gen_api_live/                 # REST oracle evaluated from a booted GitLab: gitlab-api-live.json (make gen-api-live)
 │   ├── gen_action_grants/            # What each action sends and what a token needs for it (make gen-action-grants)
@@ -345,6 +345,7 @@ All tests mock GitLab with `httptest` through `internal/testutil` (`NewTestClien
 - **Every case table runs under `t.Run`**, one subtest per case; `// sequential: <reason>` on the line above a loop declares dependent steps rather than cases, and `make check-test-subtests` gates it
 - **An address nothing answers comes from `internal/testutil/netfixture`** (`DeadEndpoint`, or `NewStoppableServer` for an instance that answers and then goes away), never from a closed `httptest` server, whose freed port another listener can answer on; `make check-closed-servers` gates it
 - **A test that compares a committed generated artifact calls `freshness.SkipIfDeferred(t)` first**, guarding the comparison and nothing else
+- **`test/e2e/internal/fixture` and `test/e2e/modeleval` are held to 100% against their offline tests and the complete runs merged**, never the offline figure alone: the runs' half is the committed `docs/development/e2e-support-coverage.json` (`make e2e-support-coverage-record` after the complete runs the instance allows, `make test-e2e-ce` and, with an EE license, `make test-e2e-ee`), and `make check-e2e-support-coverage`, in CI's coverage job, fails a package with more statements reached by neither half than the record allows, so rewriting or adding code only the runs reach records a complete run of the tree
 - Test naming: `TestToolName_Scenario_ExpectedResult`; a `_test.go` exists only under the name of a module it tests, with the exemptions `make check-test-file-names` codifies
 
 What each of these does, and why, is in [Test Infrastructure](docs/development/test-infrastructure.md).

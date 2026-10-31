@@ -127,6 +127,22 @@ jobs:
       - name: Check the recorded request inventory
         if: env.FRESHNESS == 'checked'
         run: go run ./cmd/gen_request_inventory/ -check
+      # The e2e suite's two support packages, test/e2e/internal/fixture and
+      # test/e2e/modeleval, are held to the whole-package rule against their
+      # offline tests and the complete runs together (issue 1461), because
+      # most of their code only runs against a GitLab. No GitLab runs here,
+      # so the runs' half is the committed record
+      # docs/development/e2e-support-coverage.json: the target runs the
+      # offline half on this tree, credits the record's reach to every
+      # declaration whose text is still what the runs ran, puts the table on
+      # the job's summary, and fails a package with more statements reached
+      # by neither half than the record allows. FRESHNESS deferred, below a
+      # stack's top, turns an excess a record older than the tree explains
+      # into a note, since the top records a complete run of its own tree.
+      # It runs after the inventory check, so a failure here never skips that
+      # check and hides its verdict.
+      - name: Coverage of the e2e support packages against the recorded runs
+        run: make -s check-e2e-support-coverage E2E_SUPPORT_FRESHNESS="$FRESHNESS" E2E_SUPPORT_SUMMARY="$GITHUB_STEP_SUMMARY"
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

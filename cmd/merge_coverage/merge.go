@@ -208,6 +208,12 @@ func (f figure) with(statements int, reached bool) figure {
 	return f
 }
 
+// missed is how many of the statements counted the measurement did not
+// reach.
+func (f figure) missed() int {
+	return f.statements - f.covered
+}
+
 // String spells the figure as reached out of counted with the percentage
 // truncated to one decimal, so a package short of its last statement never
 // reads 100.0%; a figure that counted nothing has no percentage.

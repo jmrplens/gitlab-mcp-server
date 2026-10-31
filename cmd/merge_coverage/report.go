@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,20 +29,39 @@ func render(sources []source, rows []row) string {
 		fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %d |\n",
 			goprogram.TrimModulePath(r.pkg), r.cell(offlineHalf), r.cell(onlineHalf), r.merged, r.onlyOnline)
 	}
-	b.WriteString("\nA half reads absent when none of its profiles carries a block of the package.\n")
+	b.WriteString(absentNote)
 	return b.String()
 }
+
+// absentNote closes the table of either report, saying what an absent half
+// is.
+const absentNote = "\nA half reads absent when none of its profiles carries a block of the package.\n"
 
 // profileNames lists the file names of one half's profiles, in the order
 // given.
 func profileNames(sources []source, h half) string {
+	return codeList(sourceNames(sources, h))
+}
+
+// sourceNames returns the file names of one half's profiles, in the order
+// given, which is also how a record names the runs it was folded from.
+func sourceNames(sources []source, h half) []string {
 	var names []string
 	for _, src := range sources {
 		if src.half == h {
-			names = append(names, "`"+filepath.Base(src.path)+"`")
+			names = append(names, filepath.Base(src.path))
 		}
 	}
-	return strings.Join(names, ", ")
+	return names
+}
+
+// codeList spells names as code, comma-separated.
+func codeList(names []string) string {
+	quoted := make([]string, 0, len(names))
+	for _, name := range names {
+		quoted = append(quoted, "`"+name+"`")
+	}
+	return strings.Join(quoted, ", ")
 }
 
 // cell is one half's figure for the row, or absent when none of that half's
@@ -51,6 +71,18 @@ func (r *row) cell(h half) string {
 		return "absent"
 	}
 	return r.halves[h].String()
+}
+
+// publish prints the report and, when summary names a file, appends it there.
+func publish(report, summary string, stdout io.Writer) error {
+	_, _ = io.WriteString(stdout, report)
+	if summary == "" {
+		return nil
+	}
+	if err := appendSummary(summary, report); err != nil {
+		return fmt.Errorf("appending the report to %s: %w", summary, err)
+	}
+	return nil
 }
 
 // appendSummary appends the report to path, after a blank line's worth of

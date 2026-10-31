@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 // main_test.go covers the command end to end over profiles on disk: what it
-// prints, the merged profile and the summary it writes, the status it exits
-// with, the command lines it refuses, and the package spellings it reads;
-// and the places that hand it its profiles: the complete-run targets and the
-// report target of the Makefile, test/e2e/scripts/run-docker-e2e.sh, and the
-// suite's job in .github/workflows/e2e.yml.
+// prints, the merged profile, the record and the summary it writes, the
+// status it exits with in each mode, the command lines it refuses, and the
+// package spellings it reads; and the places that hand it its profiles: the
+// complete-run targets, the report, record and gate targets of the Makefile,
+// test/e2e/scripts/run-docker-e2e.sh, the suite's job in
+// .github/workflows/e2e.yml and the coverage job of .github/workflows/ci.yml.
 
 package main
 
@@ -17,6 +18,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -110,6 +112,8 @@ func readFile(t *testing.T, path string) string {
 // profile is read.
 func TestRunMain_Arguments_RefuseWhatTheyCannotUse(t *testing.T) {
 	both := []string{"-offline", "a.out", "-online", "b.out"}
+	checking := []string{"-packages", "./x", "-offline", "a.out", "-check-record", "r.json"}
+	merging := append([]string{"-packages", "./x"}, both...)
 	tests := []struct {
 		name string
 		args []string
@@ -118,9 +122,14 @@ func TestRunMain_Arguments_RefuseWhatTheyCannotUse(t *testing.T) {
 		{name: "an unknown flag", args: []string{"-no-such-flag"}, want: "flag provided but not defined"},
 		{name: "an argument", args: append([]string{"-packages", "./x"}, append(both, "c.out")...), want: `takes no arguments, and was given ["c.out"]`},
 		{name: "no offline profile", args: []string{"-packages", "./x", "-online", "b.out"}, want: "needs at least one -offline profile"},
-		{name: "no run profile", args: []string{"-packages", "./x", "-offline", "a.out"}, want: "needs at least one -online profile"},
+		{name: "no run profile", args: []string{"-packages", "./x", "-offline", "a.out"}, want: "needs at least one -online profile, which a run against GitLab writes, unless -check-record"},
 		{name: "no package", args: both, want: "-packages names no package"},
 		{name: "an empty package", args: append([]string{"-packages", "./x,,./y"}, both...), want: `-packages "./x,,./y" names an empty package`},
+		{name: "a run profile beside a record", args: append(checking, "-online", "b.out"), want: "-check-record reads the runs' half from the record, so it takes no -online profile"},
+		{name: "a record checked and written", args: append(checking, "-write-record", "w.json"), want: "-check-record judges a record and -write-record writes one; give one of them"},
+		{name: "a merged profile beside a record", args: append(checking, "-o", "m.out"), want: "-o writes the merge of profiles, which -check-record does not make"},
+		{name: "a freshness of another value", args: append(checking, "-freshness", "later"), want: `-freshness "later" is neither checked nor deferred`},
+		{name: "a freshness without a record", args: append(merging, "-freshness", "deferred"), want: "-freshness says how -check-record judges a record that predates the tree, and -check-record is not given"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -220,6 +229,123 @@ func TestRunMain_SummaryThatRefusesTheWrite_ExitsOne(t *testing.T) {
 
 	if code != 1 || !strings.Contains(stderr.String(), "appending the report to /dev/full: ") {
 		t.Errorf("runMain() = %d, stderr %q; want 1 and the refused write", code, stderr.String())
+	}
+}
+
+// TestRunMain_WriteRecord_WritesTheRecordBesideTheReport runs the command the
+// way make e2e-support-coverage-record does: the merge is reported as always,
+// and the record of what the runs reached is written where -write-record
+// says.
+func TestRunMain_WriteRecord_WritesTheRecordBesideTheReport(t *testing.T) {
+	writeTree(t, nil)
+	setClock(t, time.Date(2026, 11, 19, 8, 0, 0, 0, time.UTC))
+	dir := t.TempDir()
+	recordPath := filepath.Join(dir, "e2e-support-coverage.json")
+	args := []string{
+		"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
+		"-offline", writeProfile(t, dir, "offline.out", recordOffline),
+		"-online", writeProfile(t, dir, "online.out", recordOnline),
+		"-write-record", recordPath,
+	}
+	var stdout, stderr bytes.Buffer
+
+	if code := runMain(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("runMain() = %d, want 0; stderr:\n%s", code, stderr.String())
+	}
+
+	if got := readFile(t, recordPath); got != fixtureRecord {
+		t.Errorf("record =\n%s\nwant\n%s", got, fixtureRecord)
+	}
+	if !strings.HasPrefix(stdout.String(), reportHeading) {
+		t.Errorf("stdout =\n%s\nwant the merge's report", stdout.String())
+	}
+}
+
+// TestRunMain_WriteRecord_Refusals_ExitOne holds a record the command cannot
+// build, because the source is not the one the profiles measured, or cannot
+// write, to status 1 and the reason.
+func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
+	tests := []struct {
+		name       string
+		recordPath func(dir string) string
+		source     string
+		want       string
+	}{
+		{
+			name:       "a source the profiles did not measure",
+			recordPath: func(dir string) string { return filepath.Join(dir, "record.json") },
+			source:     "package fixture\n",
+			want:       "no declaration of the file holds the block at 4.17,5.7",
+		},
+		{
+			name:       "a record it cannot write",
+			recordPath: func(dir string) string { return filepath.Join(dir, "no-such-dir", "record.json") },
+			want:       "writing the record: ",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var files map[string]string
+			if tc.source != "" {
+				files = map[string]string{"test/e2e/internal/fixture/a.go": tc.source}
+			}
+			writeTree(t, files)
+			dir := t.TempDir()
+			args := []string{
+				"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
+				"-offline", writeProfile(t, dir, "offline.out", recordOffline),
+				"-online", writeProfile(t, dir, "online.out", recordOnline),
+				"-write-record", tc.recordPath(dir),
+			}
+			var stdout, stderr bytes.Buffer
+
+			if code := runMain(args, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), tc.want) {
+				t.Errorf("runMain() = %d, stderr %q; want 1 and %q", code, stderr.String(), tc.want)
+			}
+		})
+	}
+}
+
+// TestRunMain_CheckRecord_ExitsByTheVerdict runs the gate the way CI's
+// coverage job does: status 0 on the tree the record describes, status 1
+// with the verdict on stderr and the report still printed when a package has
+// more statements reached by neither half than the record allows, and
+// -freshness deferred turning a record that predates the tree into a note.
+func TestRunMain_CheckRecord_ExitsByTheVerdict(t *testing.T) {
+	tests := []struct {
+		name      string
+		files     map[string]string
+		freshness []string
+		want      int
+	}{
+		{name: "the tree the record describes", want: 0},
+		{name: "a declaration changed, checked", files: aChanged, freshness: []string{"-freshness", "checked"}, want: 1},
+		{name: "a declaration changed, checked by default", files: aChanged, want: 1},
+		{name: "a declaration changed, deferred", files: aChanged, freshness: []string{"-freshness", "deferred"}, want: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			writeTree(t, tc.files)
+			dir := t.TempDir()
+			args := append([]string{
+				"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
+				"-offline", writeProfile(t, dir, "offline.out", recordOffline),
+				"-check-record", writeProfile(t, dir, "e2e-support-coverage.json", fixtureRecord),
+			}, tc.freshness...)
+			var stdout, stderr bytes.Buffer
+
+			code := runMain(args, &stdout, &stderr)
+
+			if code != tc.want {
+				t.Errorf("runMain() = %d, want %d; stderr:\n%s", code, tc.want, stderr.String())
+			}
+			if !strings.HasPrefix(stdout.String(), checkHeading) {
+				t.Errorf("stdout =\n%s\nwant the gate's report", stdout.String())
+			}
+			if wantStderr := map[int]string{0: "", 1: "merge_coverage: " + fixtureOver + failTail + "\n"}[tc.want]; stderr.String() != wantStderr {
+				t.Errorf("stderr = %q, want %q", stderr.String(), wantStderr)
+			}
+		})
 	}
 }
 
@@ -337,27 +463,31 @@ func TestMakefile_CompleteRunTargets_HandTheRunTheSupportPackages(t *testing.T) 
 	}
 }
 
+// supportOffline is the offline half as the Makefile spells it once, for the
+// report target and the gate alike: the two packages' own tests on this tree,
+// with the model evaluation's switches emptied so a .env cannot make it a
+// paid run, and the on-demand sweep's emptied so one exported in the shell
+// cannot make it delete anything.
+const supportOffline = "\ne2e_support_offline = MODELEVAL_MODELS= MODELEVAL_PROBE= E2E_SWEEP_MIN_AGE= E2E_SWEEP_PREFIX= " +
+	"go test -tags e2e -count=1 -coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile=$(E2E_SUPPORT_OFFLINE_PROFILE) $(E2E_SUPPORT_PACKAGES)\n"
+
 // TestMakefile_SupportCoverageTarget_MergesTheOfflineHalfWithTheRuns holds
 // the report target to its three steps: it refuses a report directory no run
-// left a profile in, runs the offline half on this tree with the model
-// evaluation's switches emptied so a .env cannot make it a paid run, and the
-// on-demand sweep's emptied so an exported one cannot make it delete anything,
-// and hands this command both halves under the names the runner writes.
+// left a profile in, runs the offline half on this tree, and hands this
+// command both halves under the names the runner writes, with the record
+// written when E2E_SUPPORT_WRITE_RECORD names one.
 func TestMakefile_SupportCoverageTarget_MergesTheOfflineHalfWithTheRuns(t *testing.T) {
 	makefile := repoFile(t, "Makefile")
 	got := recipe(t, makefile, "e2e-support-coverage")
 	tests := []struct{ name, want string }{
 		{name: "the run profiles", want: "runs=($(E2E_REPORT_DIR)/*-coverprofile.out)"},
 		{name: "no run profile refused", want: `if [ "$${#runs[@]}" -eq 0 ]; then`},
-		{
-			name: "the offline half",
-			want: "MODELEVAL_MODELS= MODELEVAL_PROBE= E2E_SWEEP_MIN_AGE= E2E_SWEEP_PREFIX= go test -tags e2e -count=1 " +
-				"-coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile=$(E2E_SUPPORT_OFFLINE_PROFILE) $(E2E_SUPPORT_PACKAGES);",
-		},
+		{name: "the offline half", want: "\n\t  $(e2e_support_offline); \\\n"},
 		{
 			name: "the merge",
 			want: `go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) "$${online[@]}" ` +
-				`-o $(E2E_SUPPORT_PROFILE) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)")`,
+				`-o $(E2E_SUPPORT_PROFILE) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)") ` +
+				`$(if $(E2E_SUPPORT_WRITE_RECORD),-write-record "$(E2E_SUPPORT_WRITE_RECORD)")'`,
 		},
 	}
 	for _, tc := range tests {
@@ -367,12 +497,88 @@ func TestMakefile_SupportCoverageTarget_MergesTheOfflineHalfWithTheRuns(t *testi
 			}
 		})
 	}
+	if !strings.Contains(makefile, supportOffline) {
+		t.Errorf("the Makefile does not spell the offline half as %q", supportOffline)
+	}
 	if !strings.Contains(makefile, "\nE2E_SUPPORT_PACKAGES = $(subst $(e2e_comma), ,$(E2E_SUPPORT_COVERPKG))\n") {
 		t.Error("E2E_SUPPORT_PACKAGES is not the list E2E_SUPPORT_COVERPKG spells, one package per word")
 	}
 	if strings.HasSuffix(assignedFileName(t, makefile, "E2E_SUPPORT_OFFLINE_PROFILE"), "-coverprofile.out") ||
 		strings.HasSuffix(assignedFileName(t, makefile, "E2E_SUPPORT_PROFILE"), "-coverprofile.out") {
 		t.Error("an output of e2e-support-coverage is named like a run's profile, so the next merge would read it as one")
+	}
+}
+
+// TestMakefile_SupportCoverageRecord_IsTheReportTargetWritingTheRecord holds
+// the record target to the report target run with the committed record as
+// what it writes, so the record is folded from exactly the halves the report
+// shows, and the record to its one place in the tree.
+func TestMakefile_SupportCoverageRecord_IsTheReportTargetWritingTheRecord(t *testing.T) {
+	makefile := repoFile(t, "Makefile")
+
+	if got, want := assignedFileName(t, makefile, "E2E_SUPPORT_RECORD"), "e2e-support-coverage.json"; got != want ||
+		!strings.Contains(makefile, "\nE2E_SUPPORT_RECORD = docs/development/e2e-support-coverage.json\n") {
+		t.Errorf("E2E_SUPPORT_RECORD names %q, want docs/development/e2e-support-coverage.json", got)
+	}
+	got := recipe(t, makefile, "e2e-support-coverage-record")
+	if want := "\n\t@$(MAKE) --no-print-directory e2e-support-coverage E2E_SUPPORT_WRITE_RECORD=$(E2E_SUPPORT_RECORD)"; !strings.HasSuffix(got, want) {
+		t.Errorf("the e2e-support-coverage-record recipe is\n%s\nwant it to end with %q", got, want)
+	}
+}
+
+// TestMakefile_SupportCoverageGate_HoldsTheOfflineHalfToTheRecord holds the
+// gate target to running the offline half and this command over it and the
+// committed record, judging freshness as E2E_SUPPORT_FRESHNESS says, which is
+// checked unless the caller says otherwise.
+func TestMakefile_SupportCoverageGate_HoldsTheOfflineHalfToTheRecord(t *testing.T) {
+	makefile := repoFile(t, "Makefile")
+	got := recipe(t, makefile, "check-e2e-support-coverage")
+	tests := []struct{ name, want string }{
+		{name: "the offline half", want: "\n\t  $(e2e_support_offline); \\\n"},
+		{
+			name: "the gate",
+			want: `go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) ` +
+				`-check-record $(E2E_SUPPORT_RECORD) -freshness $(E2E_SUPPORT_FRESHNESS) ` +
+				`$(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)")'`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("the check-e2e-support-coverage recipe does not hold %q:\n%s", tc.want, got)
+			}
+		})
+	}
+	if !strings.Contains(makefile, "\nE2E_SUPPORT_FRESHNESS ?= checked\n") {
+		t.Error("E2E_SUPPORT_FRESHNESS does not default to checked")
+	}
+}
+
+// TestCIWorkflow_CoverageJob_HoldsTheSupportPackagesToTheRecord holds the
+// coverage job of ci.yml, the gate that reads coverage, to running the gate
+// target with the summary of its run and the freshness the workflow decides,
+// so a layer below a stack's top is judged as every other committed artifact
+// is there.
+func TestCIWorkflow_CoverageJob_HoldsTheSupportPackagesToTheRecord(t *testing.T) {
+	var workflow struct {
+		Env  map[string]string `yaml:"env"`
+		Jobs struct {
+			Coverage e2eJob `yaml:"coverage"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(repoFile(t, ".github/workflows/ci.yml")), &workflow); err != nil {
+		t.Fatal(err)
+	}
+	const want = `make -s check-e2e-support-coverage E2E_SUPPORT_FRESHNESS="$FRESHNESS" E2E_SUPPORT_SUMMARY="$GITHUB_STEP_SUMMARY"`
+	found := false
+	for _, step := range workflow.Jobs.Coverage.Steps {
+		found = found || step.Run == want
+	}
+	if !found {
+		t.Errorf("no step of the coverage job runs %s", want)
+	}
+	if got := workflow.Env["FRESHNESS"]; !strings.Contains(got, "'deferred' || 'checked'") {
+		t.Errorf("FRESHNESS = %q, want the workflow's deferred-or-checked decision", got)
 	}
 }
 
