@@ -632,11 +632,11 @@ The `internal/tools/` package family is split into 182 packages, the root packag
 
 Markdown formatters use a type-based registry in `internal/toolutil/md_registry.go` instead of a central dispatch switch. Each sub-package self-registers its formatters via `init()` functions:
 
-- `toolutil.RegisterMarkdown[T](fn)` — registers a formatter for output type `T`
-- `toolutil.RegisterMarkdownResult[T](fn)` — registers a formatter for `*mcp.CallToolResult` types
-- `toolutil.MarkdownForResult(result any)` — looks up and invokes the registered formatter by `reflect.Type`
-- `internal/tools/markdown.go` is a thin delegator (~17 lines) that calls `toolutil.MarkdownForResult`
-- ~579 registrations across 166 sub-packages, validated by `TestAllMarkdownFormattersRegistered`
+- `toolutil.RegisterMarkdown[T](fn)`: registers a formatter for output type `T`
+- `toolutil.RegisterMarkdownResult[T](fn)`: registers a formatter for output type `T` that builds the `*mcp.CallToolResult` itself, for a result that carries more than text, such as an upload's image
+- `toolutil.MarkdownForResult(result any)`: looks up and invokes the registered formatter by `reflect.Type`
+- `internal/tools/markdown.go` is a thin delegator that calls `toolutil.MarkdownForResult`
+- 604 output types have a Markdown formatter, declared in 169 packages (the sub-packages that register one, and `toolutil`). The figures count types, not registration calls (`RegisterMarkdownPair` and `RegisterMarkdownTriple` register two and three), and leave out the fixtures `internal/tools` registers from its own tests; `TestAllMarkdownFormattersRegistered` holds them to the registry and, when a formatter is added or removed, names the figures to write. The comparison is a freshness check, so the layers of a stack defer it to the top
 
 A formatter escapes what it interpolates: `toolutil.EscapeMdTableCell` on every GitLab-authored string between two pipes of a table row and on every single-line list value, `toolutil.EscapeMdHeading` on the one value that lands in a heading, and `toolutil.MdTitleLink` on both halves of a link rather than hand-writing `[%s](%s)`. A code block around GitLab-authored content is built with `toolutil.MarkdownFencedBlock`, or its fence sized with `toolutil.MarkdownCodeFence`, never written as three backticks: a fixed fence is closed by the first run of three the body contains, and everything after it renders as Markdown of the response. `make check-md-escaping` (`cmd/audit_md_escaping`) is the gate for both; a value that needs none is declared in its own package with `//gitlab:allow-unescaped <expression>: <reason>`, and a declaration that excuses nothing fails too.
 

@@ -859,13 +859,13 @@ E2E_SERVER_BINARY=$PWD/dist/e2e/gitlab-mcp-server \
 
 ### Validation Tests
 
-Validation tests in `internal/tools/register_validation_test.go` ensure structural integrity across all sub-packages:
+Validation tests in `internal/tools/register_test.go` and `internal/tools/action_catalog_test.go` ensure structural integrity across all sub-packages:
 
 | Test                                                | Purpose                                                                                                                                                  |
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TestRegisterAllDoesNotUseDomainRegisterTools`      | Verifies root individual registration stays catalog-backed and cannot regress to per-domain `RegisterTools` loops                                        |
 | `TestActionSpecCoverage_AllCatalogRoutesClassified` | Builds the GitLab.com Enterprise dynamic catalog and verifies every catalog action is spec-backed                                                        |
-| `TestAllMarkdownFormattersRegistered`               | Verifies all ~266 output types across 76 sub-packages have registered markdown formatters via `toolutil.RegisterMarkdown[T]`                             |
+| `TestAllMarkdownFormattersRegistered`               | Verifies every registering sub-package has a type in the registry, every route output type has a formatter, and the registry figures `CLAUDE.md` states  |
 | `TestAllHintReferencesValid`                        | Validates all `action 'xxx'` and backtick-quoted `` `gitlab_xxx` `` references in WriteHints across all markdown.go files match registered tools/actions |
 
 ```bash
