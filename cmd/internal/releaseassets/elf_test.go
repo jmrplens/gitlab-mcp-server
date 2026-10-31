@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -88,7 +89,7 @@ func (s elfSpec) image() []byte {
 		binary.LittleEndian.PutUint64(entry[32:], uint64(size))            //#nosec G115 -- a fixture's string length
 		text = append(text, interp...)
 	}
-	return append(append(header, table...), text...)
+	return slices.Concat(header, table, text)
 }
 
 // TestReadELF_ReadsMachineAndInterpreter covers the images a release binary

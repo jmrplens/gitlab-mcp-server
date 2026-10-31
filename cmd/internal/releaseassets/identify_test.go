@@ -95,15 +95,17 @@ func TestIdentify_RefusesWhatTheReleaseDoesNotBuild(t *testing.T) {
 		{name: "a 32-bit Mach-O file", data: append(binary.LittleEndian.AppendUint32(nil, macho.Magic32), amd64[4:]...), want: "is not an ELF, 64-bit Mach-O or PE file"},
 		{name: "a big-endian Mach-O file", data: append(binary.BigEndian.AppendUint32(nil, macho.Magic64), amd64[4:]...), want: "is not an ELF, 64-bit Mach-O or PE file"},
 		{name: "a 32-bit ELF file", data: elf32.image(), want: "is not a 64-bit ELF file"},
-		{name: "an ELF file for riscv64", data: newELF(elf.EM_RISCV, "/lib/ld-linux-riscv64-lp64d.so.1").image(), want: "ELF machine 0xf3 is not one the release builds"},
+		{name: "an ELF file for riscv64", data: newELF(elf.EM_RISCV, "/lib/ld-linux-riscv64-lp64d.so.1").image(), want: "is for ELF machine 0xf3, which the release does not build"},
+		{name: "the Mach-O magic alone", data: amd64[:4], want: "is not a well-formed Mach-O file: "},
 		{name: "a Mach-O file debug/macho refuses", data: amd64[:20], want: "is not a well-formed Mach-O file: "},
-		{name: "a Mach-O file for 386", data: machOFile(macho.Cpu386, 3), want: "Mach-O cpu 0x7 is not one the release builds"},
+		{name: "a Mach-O file for 386", data: machOFile(macho.Cpu386, 3), want: "is for Mach-O cpu 0x7, which the release does not build"},
+		{name: "the universal magic alone", data: goreleaserFat()[:4], want: "is not a well-formed universal Mach-O file: "},
 		{name: "a universal file debug/macho refuses", data: goreleaserFat(), want: "is not a well-formed universal Mach-O file: file contains no images"},
 		{name: "a universal file with one slice twice", data: goreleaserFat(arm64, arm64), want: "is not a well-formed universal Mach-O file: duplicate architecture"},
-		{name: "a universal file with a ppc64 slice", data: goreleaserFat(arm64, machOFile(macho.CpuPpc64, 0)), want: "Mach-O cpu 0x1000012 is not one the release builds"},
+		{name: "a universal file with a ppc64 slice", data: goreleaserFat(arm64, machOFile(macho.CpuPpc64, 0)), want: "is for Mach-O cpu 0x1000012, which the release does not build"},
 		{name: "a PE file debug/pe refuses", data: badSignature, want: "is not a well-formed PE file: invalid PE file signature"},
 		{name: "an MZ stub too short for a DOS header", data: []byte("MZ"), want: "is not a well-formed PE file: "},
-		{name: "a PE file for 386", data: peFile(pe.IMAGE_FILE_MACHINE_I386), want: "PE machine 0x14c is not one the release builds"},
+		{name: "a PE file for 386", data: peFile(pe.IMAGE_FILE_MACHINE_I386), want: "is for PE machine 0x14c, which the release does not build"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -139,7 +141,7 @@ func TestIdentify_TheRunningTestBinary(t *testing.T) {
 		t.Fatalf("reading the test binary: %v", err)
 	}
 	want := Binary{Format: format, GOOS: runtime.GOOS, Arches: []string{runtime.GOARCH}}
-	if got, err := Identify(data); err != nil || !reflect.DeepEqual(got, want) {
-		t.Errorf("Identify(%s) = %+v, %v, want %+v", path, got, err, want)
+	if got, identifyErr := Identify(data); identifyErr != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("Identify(%s) = %+v, %v, want %+v", path, got, identifyErr, want)
 	}
 }
