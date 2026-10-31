@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,122 |
-| Unit test functions                                   | 21,431 |
+| Total test functions                                  | 23,125 |
+| Unit test functions                                   | 21,434 |
 | E2E test functions                                    |  1,691 |
 | cmd test functions                                    |  5,615 |
 | Test files (internal/)                                |    747 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,669 | 59.1% |
 | `TestFunc` (no underscore)             |    903 |  3.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,550 | 37.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,553 | 37.0% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,179 |        256 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            437 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,200 |        475 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (181) |         11,203 |        475 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,691 |        436 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,615 |        445 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,122** |  **1,628** |                                                                                                 |
+| **Total**               |     **23,125** |  **1,628** |                                                                                                 |
 
 ### Core Packages
 
@@ -115,8 +115,8 @@
 | resourceevents    |   131 |   100.0% |    17 |
 | awardemoji        |   130 |   100.0% |    24 |
 | containerregistry |   125 |   100.0% |    16 |
+| snippets          |   118 |   100.0% |    15 |
 | branches          |   115 |   100.0% |    10 |
-| snippets          |   115 |   100.0% |    15 |
 | pipelineschedules |   113 |   100.0% |    11 |
 | accesstokens      |   110 |   100.0% |    18 |
 | groupmilestones   |   110 |   100.0% |     8 |
@@ -294,7 +294,7 @@
 | sidekiq                 |         18 |          1 |   100.0% |         4 |
 | snippetdiscussions      |         42 |          2 |   100.0% |         6 |
 | snippetnotes            |         56 |          2 |   100.0% |         5 |
-| snippets                |        115 |          3 |   100.0% |        15 |
+| snippets                |        118 |          3 |   100.0% |        15 |
 | snippetstoragemoves     |         48 |          2 |   100.0% |         6 |
 | surfaces                |         21 |          1 |   100.0% |         0 |
 | systemhooks             |         48 |          2 |   100.0% |         8 |
@@ -313,7 +313,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,200** |    **475** |          | **1,195** |
+| **Total**               | **11,203** |    **475** |          | **1,195** |
 
 </details>
 

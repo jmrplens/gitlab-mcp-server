@@ -10407,7 +10407,7 @@ Use {"action":"list","params":{...}}. The only top-level keys are action and par
 Action params schema: gitlab://tools/gitlab_snippet.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so snippet.list is {"action":"list"} on this one.
 Action guidance:
 - content: Read the raw content of a single-file personal snippet by snippet_id. For multi-file snippets use snippet.file_content with a specific file path.
-- create: Create a personal snippet. Provide title plus either files[] (multi-file) or file_name and content (single-file). Set visibility to private, internal, or public.
+- create: Create a personal snippet. Provide title plus either files[] (multi-file) or file_name and content (single-file), not both. Set visibility to private, internal, or public.
 - delete: Permanently delete a personal snippet by snippet_id. Destructive. Confirm the snippet ID before calling.
 - discussion_add_note: Reply to an existing snippet discussion thread by adding a note. Use this after snippet.discussion_list or snippet.discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
 - discussion_create: Open a new discussion thread on a project snippet with an initial note. Use this to start a threaded conversation rather than a flat comment (use snippet.note_create for a non-threaded note). Supports backdating via created_at for admins/owners.
@@ -10434,7 +10434,7 @@ Action guidance:
 - note_list: List all comments (notes) on a project snippet, including system notes. Use when the task asks to read a snippet's discussion, recent comments, or activity. Supports order_by, sort, and offset pagination.
 - note_update: Replace the body of an existing snippet note. Only the original author or a Maintainer/Owner can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment.
 - project_content: Read the raw content of a project snippet by project_id and snippet_id.
-- project_create: Create a project snippet. Provide project_id and title plus either files[] (multi-file) or file_name and content (single-file). Set visibility to private, internal, or public.
+- project_create: Create a project snippet. Provide project_id and title plus either files[] (multi-file) or file_name and content (single-file), not both. Set visibility to private, internal, or public.
 - project_delete: Permanently delete a project snippet by project_id and snippet_id. Destructive. Confirm both identifiers before calling.
 - project_get: Fetch one project snippet by project_id and snippet_id. Use after a project snippet list or when both identifiers are already known.
 - project_list: List snippets belonging to one project. Provide project_id. Use order_by/sort and offset pagination when the prompt scopes snippets to a known project.
