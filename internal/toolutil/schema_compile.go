@@ -22,8 +22,8 @@ var compiledSchemaCache sync.Map
 // SDK a stable schema pointer instead of a map removes the per-registration
 // JSON remarshal inside mcp.AddTool and lets a shared [mcp.SchemaCache]
 // (keyed by pointer identity) skip schema resolution on subsequent
-// registrations — the dominant cost when the HTTP server pool builds a new
-// MCP server per token.
+// registrations, the dominant cost when HTTP mode builds a new MCP server for
+// each configuration shape (ADR-0020).
 //
 // The conversion is a faithful roundtrip: the maps are produced by
 // marshaling jsonschema output, and jsonschema.Schema preserves non-standard

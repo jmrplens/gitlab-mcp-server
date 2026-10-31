@@ -6,7 +6,7 @@ This document describes the current dynamic action search ranker.
 
 ## Current Behavior
 
-Dynamic mode builds the executable action registry eagerly when an MCP server instance is created. In stdio mode this happens during server startup. In HTTP mode this happens per token and GitLab URL server-pool entry, after enterprise detection, token-scope filtering, read-only mode, safe mode, and excluded-tool filtering have been applied.
+Dynamic mode builds the executable action registry eagerly when an MCP server instance is created. In stdio mode this happens during server startup. In HTTP mode this happens when the server for a configuration shape is created, on the first request of a credential with that shape (ADR-0020), after the tier is detected for that credential's pool entry and after token-scope filtering, read-only mode, safe mode, and excluded-tool filtering have been applied.
 
 The current registry stores each visible action as an `actionEntry` with:
 

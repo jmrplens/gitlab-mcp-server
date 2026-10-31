@@ -4,7 +4,7 @@
 // shared_catalog.go builds each catalog once per configuration and hands every
 // server a copy bound to its own client.
 //
-// The HTTP pool builds one MCP server per credential, and until this file
+// The HTTP pool used to build one MCP server per credential, and until this file
 // existed each of them built its own catalog: the same thousand actions, the
 // same schemas, the same search documents, once per token. Measured at a
 // hundred pooled credentials, that was 130 MiB per credential on the dynamic

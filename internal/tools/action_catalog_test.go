@@ -1789,8 +1789,9 @@ func formatMissingActionSpecs(ids []actioncatalog.ActionID) string {
 	return builder.String()
 }
 
-// BenchmarkBuildActionCatalog_Ultimate measures the per-server cost of
-// building the full Ultimate action catalog (paid per token+URL in HTTP mode).
+// BenchmarkBuildActionCatalog_Ultimate measures the cost of building the full
+// Ultimate action catalog, which HTTP mode pays once per catalog configuration
+// rather than per credential (see shared_catalog.go).
 func BenchmarkBuildActionCatalog_Ultimate(b *testing.B) {
 	client := benchClient(b)
 	b.ResetTimer()
