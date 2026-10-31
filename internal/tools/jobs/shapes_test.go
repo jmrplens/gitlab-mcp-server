@@ -212,37 +212,6 @@ func TestPipelineInfoObject_TrimmedFields(t *testing.T) {
 	}
 }
 
-// TestApplyListOpts_OrderAndSort verifies applyListOpts copies order_by, sort,
-// offset, and keyset parameters onto the embedded gl.ListOptions.
-func TestApplyListOpts_OrderAndSort(t *testing.T) {
-	opts := &gl.ListJobsOptions{}
-	applyListOpts(
-		opts,
-		toolutil.PaginationInput{Page: 2, PerPage: 50},
-		toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
-		"id", "desc",
-	)
-	if opts.OrderBy != "id" || opts.Sort != "desc" {
-		t.Errorf("OrderBy/Sort = %q/%q, want id/desc", opts.OrderBy, opts.Sort)
-	}
-	if opts.Page != 2 || opts.PerPage != 50 {
-		t.Errorf("Page/PerPage = %d/%d, want 2/50", opts.Page, opts.PerPage)
-	}
-	if opts.Pagination != "keyset" || opts.PageToken != "tok" {
-		t.Errorf("Pagination/PageToken = %q/%q, want keyset/tok", opts.Pagination, opts.PageToken)
-	}
-}
-
-// TestApplyListOpts_EmptyKeepsZero verifies applyListOpts leaves order_by and
-// sort empty when not supplied.
-func TestApplyListOpts_EmptyKeepsZero(t *testing.T) {
-	opts := &gl.ListJobsOptions{}
-	applyListOpts(opts, toolutil.PaginationInput{}, toolutil.KeysetPaginationInput{}, "", "")
-	if opts.OrderBy != "" || opts.Sort != "" {
-		t.Errorf("OrderBy/Sort = %q/%q, want empty", opts.OrderBy, opts.Sort)
-	}
-}
-
 // TestScopeStates_EmptyAndPopulated verifies scopeStates is nil for an empty
 // filter and maps status strings to BuildStateValue otherwise.
 func TestScopeStates_EmptyAndPopulated(t *testing.T) {

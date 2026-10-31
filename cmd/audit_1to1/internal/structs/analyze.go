@@ -205,6 +205,14 @@ const (
 	// bridgeListOffsetOnly is the reason the bridge list offers no ordering or
 	// keyset field of the gl.ListOptions either of its routes pages with.
 	bridgeListOffsetOnly = "GET /projects/:id/pipelines/:pipeline_id/trigger_jobs and the bridges route it deprecates declare scope, page and per_page and nothing else (gitlab-api-live.json, 19.5.0), and the helper both run pages with offset pagination alone (present_pipeline_trigger_jobs in lib/api/ci/pipelines.rb), so gl.ListOptions ordering and keyset fields reach nothing there"
+	// jobListsOrderedByID is the reason the project and pipeline job lists
+	// offer no ordering field of the gl.ListOptions their gl.ListJobsOptions
+	// embeds.
+	jobListsOrderedByID = "GET /projects/:id/jobs declares scope, ref, page and per_page, and GET /projects/:id/pipelines/:pipeline_id/jobs include_retried, scope, page and per_page, and neither declares order_by or sort (gitlab-api-live.json, 19.5.0-ee); both order the jobs by id, newest first, whatever is sent (user_project.builds.order(id: :desc), lib/api/ci/jobs.rb:67, and Ci::JobsFinder's order_id_desc, app/finders/ci/jobs_finder.rb:20, at v19.5.0-ee), and the keyset pager of the project route keeps that order and answers 405 to any keyset ordering but id (Ci::Build.supported_keyset_orderings, app/models/ci/build.rb:268), so gl.ListOptions ordering fields reach nothing there (issue 1165)"
+	// projectJobsListRetriedUnread is the reason the project job list offers
+	// no include_retried, which gl.ListJobsOptions carries for the pipeline
+	// job list.
+	projectJobsListRetriedUnread = "GET /projects/:id/jobs declares no include_retried (gitlab-api-live.json, 19.5.0-ee) and its handler reads none: it lists user_project.builds, retried jobs among them, filtered by scope and ref alone (lib/api/ci/jobs.rb:54-72 at v19.5.0-ee), so Grape dropped the value and a caller who set it changed nothing; the pipeline job list, which declares it, offers it (issue 1165)"
 	// serviceAccountPATsOffsetOnly is the reason the group and project service
 	// account token lists offer no keyset field of the gl.ListOptions they
 	// page with.
@@ -1108,6 +1116,14 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"jobs.BridgeListInput.sort":       bridgeListOffsetOnly,
 	"jobs.BridgeListInput.pagination": bridgeListOffsetOnly,
 	"jobs.BridgeListInput.page_token": bridgeListOffsetOnly,
+	// The project and pipeline job lists page through a gl.ListJobsOptions
+	// and GitLab orders both by id whatever is sent; the project route reads
+	// no include_retried either.
+	"jobs.ListProjectInput.order_by":        jobListsOrderedByID,
+	"jobs.ListProjectInput.sort":            jobListsOrderedByID,
+	"jobs.ListProjectInput.include_retried": projectJobsListRetriedUnread,
+	"jobs.ListInput.order_by":               jobListsOrderedByID,
+	"jobs.ListInput.sort":                   jobListsOrderedByID,
 	// The service account token lists page by offset alone: GitLab refuses a
 	// keyset request on both routes with 405, ignores page_token without one,
 	// and declares no order_by, so no keyset field is offered.

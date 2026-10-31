@@ -229,15 +229,15 @@ func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.Ac
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": guidanceProjectID(), "pipeline_id": guidancePipelineID(), "scope": guidanceScope(),
 		}
-		options.IndividualTool.Description = "List CI jobs for one pipeline with status filters, keyset pagination, and ordering. Returns: job summaries with status, stage, ref, and pipeline association. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get."
+		options.IndividualTool.Description = "List CI jobs for one pipeline, newest first, with status filters, retried jobs on request, and pagination. Returns: job summaries with status, stage, ref, and pipeline association. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get."
 	case "gitlab_job_list_project":
-		options.Usage = "List jobs in one project. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project. Combine filters and pagination as needed."
+		options.Usage = "List jobs in one project, newest first, retried jobs included. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project. Filter by scope and paginate as needed: GitLab offers no other ordering on this list."
 		options.Aliases = []string{"list project jobs", "show jobs in project", "find project jobs"}
 		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionPipelineGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": guidanceProjectID(), "scope": guidanceScope(),
 		}
-		options.IndividualTool.Description = "List CI jobs in one project with filters, keyset pagination, and ordering. Returns: job summaries, status, stage, ref, and pipeline associations. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get."
+		options.IndividualTool.Description = "List CI jobs in one project, newest first and retried jobs included, with status filters and keyset pagination. Returns: job summaries, status, stage, ref, and pipeline associations. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get."
 	case "gitlab_job_list_bridges":
 		options.Usage = "List bridge (trigger) jobs for one pipeline by project_id and pipeline_id. Use this to inspect downstream or multi-project pipeline triggers. Bridges exist only on pipelines that trigger child pipelines. Filter by scope, add retried bridges with include_retried, and page with page and per_page: GitLab offers no ordering or keyset pagination on this list."
 		options.Aliases = []string{"list bridge jobs", "show trigger jobs", "list downstream triggers"}
