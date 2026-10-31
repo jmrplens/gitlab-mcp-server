@@ -100,7 +100,7 @@ La [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/late
 | macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                                                                                                   |
 | Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                                                                                                              |
 | Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                                                                                                              |
-| Integridad            | `checksums.txt` (los binarios, sus SBOM y los avisos), `checksums.txt.sigstore.json`, y un SBOM SPDX por binario, `<archivo>.sbom.json`                                                                                                                                            |
+| Integridad            | `checksums.txt` (los binarios, sus SBOM y los avisos), `checksums.txt.sigstore.json`, un SBOM SPDX por binario, `<archivo>.sbom.json`, y la procedencia SLSA, `gitlab-mcp-server.intoto.jsonl` (desde la primera release posterior a la 3.4.0)                                     |
 | Licencias             | `THIRD_PARTY_NOTICES`, a partir de la primera release posterior a 3.1.0                                                                                                                                                                                                            |
 | Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` o `-linux.mcpb` (uno por sistema operativo, a partir de la primera release posterior a 3.1.0), y `gitlab-mcp-server.mcpb` para los tres (en todas las releases); consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
 
@@ -165,6 +165,17 @@ Los scripts de instalación ya comparan la descarga con `checksums.txt`, y compr
    Salida esperada en Linux y macOS: `gitlab-mcp-server-linux-amd64: OK`, o el nombre de tu archivo.
 
 Si cualquiera de los dos pasos falla, no ejecutes el archivo. El recorrido completo, incluida la instalación de Cosign, está en [Verificación de la integridad del release](/gitlab-mcp-server/es/operations/security/#verificación-de-la-integridad-del-release).
+
+Desde la primera release posterior a la 3.4.0, cada release trae además su procedencia de compilación SLSA, `gitlab-mcp-server.intoto.jsonl`, que cubre cada archivo de `checksums.txt` y cada bundle de Claude Desktop. Descárgala de la misma release y verifica el archivo contra ella. `--bundle` lee las atestaciones de ese archivo en lugar de preguntar a la API de GitHub, así que funciona sin `gh auth login`:
+
+```bash
+gh attestation verify gitlab-mcp-server-linux-amd64 \
+  --bundle gitlab-mcp-server.intoto.jsonl \
+  -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
+```
+
+Añade `--source-ref refs/tags/v<versión>` para atarla a la release que descargaste. Cada línea del archivo es un bundle de Sigstore, la forma que escribe `gh attestation download`.
 
 :::note[Atestaciones de procedencia y SBOM]
 El workflow de release registra ahora una atestación de procedencia de compilación para cada archivo de `checksums.txt` y emite un SBOM SPDX por binario (`<archivo>.sbom.json`), comprobables con `gh attestation verify <archivo> -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml`; `--signer-workflow` exige que la atestación venga del workflow de release, porque `-R` por sí solo acepta una emitida por cualquier workflow del repositorio, y `--source-ref refs/tags/v<versión>` la ata además a una release concreta. Los scripts de instalación piden lo mismo: una atestación del workflow de release en la etiqueta que están instalando. Esos pasos llegaron después de etiquetar v2.7.5, así que aplican a las releases publicadas a partir de ella (3.0.0 y 3.1.0 traen ambos); para la propia v2.7.5, la verificación disponible es el checksum y la firma de arriba.

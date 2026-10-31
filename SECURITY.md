@@ -399,6 +399,7 @@ curl -s 'https://sonarcloud.io/api/hotspots/search?projectKey=jmrplens_gitlab-mc
 
 - Release binaries are built from tagged commits and published via GoReleaser.
 - Checksums (`checksums.txt`) and a Cosign/Sigstore signature bundle (`checksums.txt.sigstore.json`) are attached to every GitHub Release. Verify with [`cosign`](https://docs.sigstore.dev/cosign/installation/) using the keyless GitHub OIDC identity of this repository.
+- From the first release after 3.4.0, the SLSA build provenance of every file in `checksums.txt` and of every Claude Desktop bundle is attached as well, as `gitlab-mcp-server.intoto.jsonl`. Verify a file against it with `gh attestation verify <file> --bundle gitlab-mcp-server.intoto.jsonl --repo jmrplens/gitlab-mcp-server`, holding it to the release workflow as [Verifying release integrity](https://docs.jmrp.io/gitlab-mcp-server/operations/security/#verifying-release-integrity) shows.
 - Every release tag from v2.7.0 on is an annotated tag signed with the maintainer's OpenPGP key, and no tag on the repository can be moved or deleted. [Verify a release tag](https://docs.jmrp.io/gitlab-mcp-server/operations/security/#verify-a-release-tag) shows how to check one with `git verify-tag`.
 - Some release-integrity controls are GitHub repository settings rather than files, so no commit or CI gate can apply them. They are tracked as a maintainer checklist in [Repository Settings](docs/development/repository-settings.md).
 

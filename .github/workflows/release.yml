@@ -50,7 +50,10 @@
 #
 # Invariants that must survive any edit here:
 #   * the release stays a draft until every artefact is attached AND attested,
-#     and no NuGet package is pushed before all seven are attested;
+#     and until gitlab-mcp-server.intoto.jsonl, the bundles of those
+#     attestations, is attached beside them: an immutable release takes no
+#     asset once it is published. No NuGet package is pushed before all seven
+#     are attested;
 #   * release assets are staged under the exact names dist/artifacts.json gives
 #     them, because installers and package managers match names literally;
 #   * the GitHub release opens with the written summary of the tag it
@@ -1380,18 +1383,128 @@ jobs:
           fi
           gh release upload "v${VERSION}" dist/*.mcpb --clobber
 
+      # SLSA build provenance for every GoReleaser artifact, keyed by the exact
+      # asset names in checksums.txt (the OpenVEX document among them,
+      # through checksum.extra_files in .goreleaser.yml), plus the .mcpb
+      # bundles built outside GoReleaser: all four, by one glob, since a
+      # directory looks a declared bundle's attestation up by its digest and
+      # a user of the universal bundle verifies it the same way.
+      # Stored in GitHub's attestation store, and attached to the release as
+      # gitlab-mcp-server.intoto.jsonl by the step after these two, which reads
+      # the bundle each one writes.
+      # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
+      #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
+      - name: Attest build provenance (release binaries)
+        id: attest-binaries
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-checksums: dist/checksums.txt
+
+      - name: Attest build provenance (Claude Desktop extensions)
+        id: attest-bundles
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: dist/*.mcpb
+
+      # The two attestations above as a release asset, so a release carries its
+      # own provenance rather than leaving it to GitHub's store alone: whoever
+      # downloads a file can verify it against the asset with gh attestation
+      # verify --bundle, which asks GitHub's API nothing and needs no login,
+      # and OpenSSF Scorecard's Signed-Releases counts a release as having
+      # provenance only when an asset's name ends in .intoto.jsonl. Each line
+      # is one Sigstore bundle exactly as actions/attest wrote it to its
+      # bundle-path output, in the JSON-lines form gh reads and gh attestation
+      # download writes; the first line's statement names every file in
+      # checksums.txt, the second's the four bundles.
+      #
+      # Before anything is uploaded, the subjects of the lines are held to the
+      # files the release ships, every line of checksums.txt and the SHA-256 of
+      # every .mcpb, with no file missing and no subject over, and then every
+      # one of those files is verified against the asset under the identity the
+      # publisher jobs demand, the release workflow at this tag. An immutable
+      # release cannot replace an asset once it is published, so a file that
+      # would not verify fails the release here, while it is still a draft.
+      #
+      # A rehearsal mints no attestation, so it writes the asset from the
+      # statements the release would have signed: the same subjects, read from
+      # the same files, as bare in-toto statements with no signature and an
+      # empty predicate, since actions/attest derives the predicate from the
+      # job's OIDC token. The subject check runs on them, the file travels to
+      # the publishers in the rehearsal's archive, and fetch-release-assets.sh
+      # holds each bundle it unpacks to it; nothing is verified or uploaded.
+      - name: Write the SLSA provenance and attach it to the draft
+        env:
+          # Withheld from a rehearsal, which uploads nothing.
+          GH_TOKEN: ${{ env.REHEARSAL != 'true' && secrets.GITHUB_TOKEN || '' }}
+          BINARIES_PROVENANCE: ${{ steps.attest-binaries.outputs.bundle-path }}
+          BUNDLES_PROVENANCE: ${{ steps.attest-bundles.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          provenance=dist/gitlab-mcp-server.intoto.jsonl
+          statement=https://in-toto.io/Statement/v1
+          slsa=https://slsa.dev/provenance/v1
+          bundles="${RUNNER_TEMP}/bundles.sha256"
+          (cd dist && sha256sum -- *.mcpb) > "$bundles"
+          if [ "$REHEARSAL" = "true" ]; then
+            jq -cn --rawfile binaries dist/checksums.txt --rawfile bundles "$bundles" \
+              --arg statement "$statement" --arg slsa "$slsa" '
+              def statement: {_type: $statement,
+                subject: [split("\n")[] | capture("^(?<sha256>[0-9a-f]{64})  (?<name>[^ ]+)$") | {name, digest: {sha256}}],
+                predicateType: $slsa, predicate: {}};
+              ($binaries | statement), ($bundles | statement)
+            ' > "$provenance"
+          else
+            for bundle in "$BINARIES_PROVENANCE" "$BUNDLES_PROVENANCE"; do
+              if [ ! -s "$bundle" ] || [ "$(wc -l < "$bundle")" -ne 1 ]; then
+                echo "::error::the attestation bundle at '${bundle}' is not one line of JSON"
+                exit 1
+              fi
+            done
+            cat "$BINARIES_PROVENANCE" "$BUNDLES_PROVENANCE" > "$provenance"
+          fi
+
+          shipped="${RUNNER_TEMP}/provenance-shipped.txt"
+          named="${RUNNER_TEMP}/provenance-named.txt"
+          cat dist/checksums.txt "$bundles" | LC_ALL=C sort > "$shipped"
+          jq -r --arg statement "$statement" --arg slsa "$slsa" '
+            (if has("dsseEnvelope") then .dsseEnvelope.payload | @base64d | fromjson else . end)
+            | if ._type == $statement and .predicateType == $slsa
+              then .subject[] | "\(.digest.sha256)  \(.name)"
+              else error("a line is not an SLSA provenance statement") end
+          ' "$provenance" | LC_ALL=C sort > "$named"
+          if ! diff -u "$shipped" "$named"; then
+            echo "::error::the subjects of ${provenance} are not the files the release ships (- shipped, + named)"
+            exit 1
+          fi
+          echo "${provenance#dist/}: $(wc -l < "$provenance") statements naming the $(wc -l < "$shipped") files the release ships"
+
+          if [ "$REHEARSAL" = "true" ]; then
+            echo "rehearsal: the statements are unsigned, so nothing was verified or uploaded"
+            exit 0
+          fi
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}"
+          while read -r _ name; do
+            gh attestation verify "dist/${name}" --bundle "$provenance" \
+              --repo "$GITHUB_REPOSITORY" --cert-identity "$identity" < /dev/null
+            echo "${name}: verified against ${provenance#dist/}"
+          done < "$shipped"
+          gh release upload "${RELEASE_TAG}" "$provenance" --clobber
+
       # A rehearsal hands its build to the publisher jobs the way a release
       # hands them the published assets: the staged binaries, checksums.txt,
       # THIRD_PARTY_NOTICES (which every package carries and the fetch
-      # requires) and the bundles (the universal one by name, the per-OS ones
-      # through the gitlab-mcp-server-* glob), which fetch-release-assets.sh
-      # unpacks and checks in place of downloading. One tar rather than the
-      # files, so the executable bits survive the trip.
+      # requires), the bundles (the universal one by name, the per-OS ones
+      # through the gitlab-mcp-server-* glob) and the unsigned provenance the
+      # step above wrote, which fetch-release-assets.sh unpacks and checks in
+      # place of downloading. One tar rather than the files, so the executable
+      # bits survive the trip.
       - name: Hand the rehearsal's build to the publishers
         if: env.REHEARSAL == 'true'
         run: |
           set -euo pipefail
-          (cd dist && tar -cf "${RUNNER_TEMP}/rehearsal-assets.tar" checksums.txt THIRD_PARTY_NOTICES gitlab-mcp-server.mcpb gitlab-mcp-server-*)
+          (cd dist && tar -cf "${RUNNER_TEMP}/rehearsal-assets.tar" checksums.txt THIRD_PARTY_NOTICES gitlab-mcp-server.mcpb gitlab-mcp-server.intoto.jsonl gitlab-mcp-server-*)
           tar -tf "${RUNNER_TEMP}/rehearsal-assets.tar"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -1402,31 +1515,11 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-      # SLSA build provenance for every GoReleaser artifact, keyed by the exact
-      # asset names in checksums.txt (the OpenVEX document among them,
-      # through checksum.extra_files in .goreleaser.yml), plus the .mcpb
-      # bundles built outside GoReleaser: all four, by one glob, since a
-      # directory looks a declared bundle's attestation up by its digest and
-      # a user of the universal bundle verifies it the same way.
-      # Stored in GitHub's attestation store — no release asset changes.
-      # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
-      #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
-      - name: Attest build provenance (release binaries)
-        if: env.REHEARSAL != 'true'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-checksums: dist/checksums.txt
-
-      - name: Attest build provenance (Claude Desktop extensions)
-        if: env.REHEARSAL != 'true'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-path: dist/*.mcpb
-
       # Every asset (binaries, checksums.txt + signature, SBOMs,
-      # THIRD_PARTY_NOTICES, the OpenVEX document, .mcpb) is attached and
-      # attested before the release becomes visible: a client never sees a
-      # partial release, and this is the draft-then-publish flow
+      # THIRD_PARTY_NOTICES, the OpenVEX document, .mcpb,
+      # gitlab-mcp-server.intoto.jsonl) is attached and attested before the
+      # release becomes visible: a client never sees a partial release, and
+      # this is the draft-then-publish flow
       # immutable releases require. GoReleaser creates the release as a draft
       # (.goreleaser.yml: draft: true). Everything downstream of this job reads
       # the published assets, so this step is also the handoff. GitHub marks
@@ -1903,10 +1996,13 @@ jobs:
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
+    # No attestations: read. fetch-release-assets.sh verifies the bundles
+    # against the release's own gitlab-mcp-server.intoto.jsonl, which asks
+    # GitHub's API nothing, and it refuses a release after 3.4.0 that
+    # publishes none rather than falling back to GitHub's attestation store.
     permissions:
       contents: read # download the published release assets
       id-token: write # mcp-publisher login github-oidc
-      attestations: read # verify the .mcpb provenance before hashing it
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -2128,9 +2224,9 @@ jobs:
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
+    # No attestations: read, for the reason the mcp-registry job gives.
     permissions:
       contents: read # download the published release assets
-      attestations: read # verify the .mcpb provenance before hashing it
     steps:
       # A fresh checkout of main in a job that runs no action but this
       # checkout, the cosign installer and, in a rehearsal, the artifact

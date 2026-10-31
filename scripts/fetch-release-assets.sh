@@ -18,14 +18,20 @@
 #                      it leaves out the Claude Desktop bundles
 #                      (gitlab-mcp-server-<os>.mcpb and gitlab-mcp-server.mcpb)
 #
+# Every fetch but --checksums-only also takes gitlab-mcp-server.intoto.jsonl,
+# the release's SLSA provenance (one Sigstore bundle per line), which every
+# release after 3.4.0 publishes and the bundles are verified against.
+#
 # Requires GH_TOKEN with read access to the repository's releases, and cosign
 # on PATH. REPO defaults to $GITHUB_REPOSITORY.
 #
 # REHEARSAL_ARCHIVE, when set, names a tar of the GoReleaser job's own build
 # and replaces the download: a release rehearsal has no release to fetch and
 # signs nothing, so the archive is unpacked into <dest-dir> and checked against
-# the checksums.txt it carries. That is the same integrity check a real
-# release gets, minus the signature a rehearsal deliberately does not mint.
+# the checksums.txt it carries, and each bundle against the unsigned
+# provenance statements it carries (jq on PATH). That is the same integrity
+# check a real release gets, minus the signatures a rehearsal deliberately
+# does not mint.
 #
 # Why this exists. The npm and PyPI distributions used to be assembled inside
 # the same job that produced the binaries, from a plain `cp` of GoReleaser's
@@ -77,6 +83,17 @@ TAG="v${VERSION}"
 OIDC_ISSUER="https://token.actions.githubusercontent.com"
 SIGNER_IDENTITY="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${TAG}"
 ARCHIVE="${REHEARSAL_ARCHIVE:-}"
+# The release's SLSA provenance: the build-provenance attestations of every
+# file in checksums.txt and of every bundle, as the release job attached them
+# while the release was a draft. 3.4.0 is the last release without it, so a
+# later one that lacks it is refused wherever a bundle is verified, since the
+# bundles have no other signature.
+PROVENANCE="gitlab-mcp-server.intoto.jsonl"
+LAST_WITHOUT_PROVENANCE="3.4.0"
+PROVENANCE_REQUIRED=0
+if [ "$(printf '%s\n%s\n' "$LAST_WITHOUT_PROVENANCE" "$VERSION" | sort -V | tail -n 1)" != "$LAST_WITHOUT_PROVENANCE" ]; then
+  PROVENANCE_REQUIRED=1
+fi
 
 mkdir -p "$DEST"
 
@@ -95,8 +112,12 @@ else
     args+=(--pattern "$pattern")
   done
   # checksums.txt and its bundle are never optional: they are what makes the
-  # rest verifiable.
+  # rest verifiable. The provenance is fetched beside them whenever assets
+  # are, and only the bundles depend on it, below.
   args+=(--pattern "checksums.txt" --pattern "checksums.txt.sigstore.json")
+  if [ "$CHECKSUMS_ONLY" -eq 0 ]; then
+    args+=(--pattern "$PROVENANCE")
+  fi
   gh release download "$TAG" "${args[@]}"
 
   for required in checksums.txt checksums.txt.sigstore.json; do
@@ -157,22 +178,50 @@ echo "Verified ${verified} asset(s) against checksums.txt"
 # The .mcpb bundles are built outside GoReleaser, so they are absent from
 # checksums.txt and are the one kind of asset a job can legitimately fetch on
 # its own. Their integrity comes from the build-provenance attestation instead,
-# one per bundle, and each counts towards the "something was actually
-# verified" floor below: every bundle in <dest-dir> is checked, the per-OS ones
-# a registry job fetches and the universal one alike, so a bundle nobody
-# attested fails here whichever pattern brought it. A rehearsal attests
-# nothing, and the bundles it unpacked were built by a job of the same run.
+# and each counts towards the "something was actually verified" floor below:
+# every bundle in <dest-dir> is checked, the per-OS ones a registry job fetches
+# and the universal one alike, so a bundle nobody attested fails here whichever
+# pattern brought it.
 #
-# The attestation is held to the same signer as checksums.txt above: the
-# release workflow at this release's tag. --repo alone accepts an attestation
-# any workflow of the repository minted, at any ref, and these bundles are the
-# ones whose hashes go into server.json.
+# The attestation is read from the release's own provenance, with --bundle,
+# which asks GitHub's API nothing and needs no permission beyond downloading
+# the release, and it is held to the same signer as checksums.txt above: the
+# release workflow at this release's tag. --repo alone accepts an attestation any
+# workflow of the repository minted, at any ref, and these bundles are the ones
+# whose hashes go into server.json. A release up to 3.4.0 published no
+# provenance, so its bundles are looked up in GitHub's attestation store.
+#
+# A rehearsal attests nothing: the bundles it unpacked were built by a job of
+# the same run, and the provenance it carries is the release's statements
+# unsigned, so each bundle is held to being one of their subjects, by name and
+# SHA-256, and to nothing more.
+provenance_names() {
+  # Every subject of the provenance's statements, as "<sha256>  <name>", a
+  # line in either form: a Sigstore bundle or a bare in-toto statement.
+  jq -r '(if has("dsseEnvelope") then .dsseEnvelope.payload | @base64d | fromjson else . end)
+    | .subject[] | "\(.digest.sha256)  \(.name)"' "$1"
+}
 for bundle in "$DEST"/*.mcpb; do
   [ -f "$bundle" ] || continue
-  if [ -n "$ARCHIVE" ]; then
-    echo "Rehearsal: $(basename "$bundle") came from this run's own build; its attestation is minted at release"
+  name=$(basename "$bundle")
+  if [ -f "$DEST/$PROVENANCE" ] && [ -n "$ARCHIVE" ]; then
+    entry="$(sha256sum "$bundle" | cut -d' ' -f1)  ${name}"
+    # grep reads to the end, without -q, so jq never writes into a closed pipe.
+    if ! provenance_names "$DEST/$PROVENANCE" | grep -xF "$entry" > /dev/null; then
+      echo "ERROR: ${name} is not a subject of the rehearsal's ${PROVENANCE} at its SHA-256" >&2
+      exit 1
+    fi
+    echo "Rehearsal: ${name} is a subject of this run's ${PROVENANCE}, which is signed only at release"
+  elif [ -f "$DEST/$PROVENANCE" ]; then
+    echo "Verifying ${name} against ${PROVENANCE}"
+    gh attestation verify "$bundle" --bundle "$DEST/$PROVENANCE" --repo "$REPO" --cert-identity "$SIGNER_IDENTITY"
+  elif [ "$PROVENANCE_REQUIRED" -eq 1 ]; then
+    echo "ERROR: ${TAG} carries no ${PROVENANCE}, which every release after ${LAST_WITHOUT_PROVENANCE} publishes, so ${name} has nothing to be verified against" >&2
+    exit 1
+  elif [ -n "$ARCHIVE" ]; then
+    echo "Rehearsal: ${name} came from this run's own build; its attestation is minted at release"
   else
-    echo "Verifying the build-provenance attestation of $(basename "$bundle")"
+    echo "Verifying the build-provenance attestation of ${name} in GitHub's attestation store"
     gh attestation verify "$bundle" --repo "$REPO" --cert-identity "$SIGNER_IDENTITY"
   fi
   verified=$((verified + 1))

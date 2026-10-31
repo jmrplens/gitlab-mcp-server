@@ -562,11 +562,12 @@ La especificación dice que el `clientInfo` que envía un cliente lo declara el 
 
 ## Verificación de la integridad del release
 
-Cada GitHub Release incluye tres artefactos de integridad:
+Cada GitHub Release incluye estos artefactos de integridad:
 
 - `checksums.txt` — hashes SHA-256 de todos los binarios del release
 - `checksums.txt.sigstore.json` — bundle de firma keyless [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) / Sigstore (GitHub OIDC, sin distribución de claves)
 - `<artefacto>.sbom.json` — un SBOM en formato SPDX por cada binario
+- `gitlab-mcp-server.intoto.jsonl`, a partir del primer release posterior a 3.4.0: la procedencia de compilación SLSA de cada archivo de `checksums.txt` y de cada bundle de Claude Desktop, un bundle de Sigstore por línea
 
 A partir del primer release posterior a 3.1.0, cada release incluye también `THIRD_PARTY_NOTICES`, los textos de licencia, aviso y patente de todos los módulos que enlazan los binarios, que los SBOM nombran sin incluir. Se genera a partir de los binarios en el momento del release y figura en `checksums.txt`, así que los pasos siguientes lo verifican como a un binario. A partir del primer release posterior a 3.4.0, cada release incluye además `gitlab-mcp-server.openvex.json`, el [documento VEX](#el-documento-vex), que figura en `checksums.txt` del mismo modo.
 
@@ -637,6 +638,15 @@ gh attestation verify gitlab-mcp-server-linux-amd64 -R jmrplens/gitlab-mcp-serve
 ```
 
 Es independiente de la firma Cosign: la firma dice que los checksums vienen del pipeline de release de este repositorio; la atestación dice qué ejecución construyó exactamente este fichero. `--signer-workflow` exige que la atestación venga del workflow de release, porque `-R` por sí solo acepta una emitida por cualquier workflow del repositorio; añade `--source-ref refs/tags/v<versión>` para exigir además una release concreta, que es lo que exigen `install.sh` e `install.ps1`.
+
+A partir del primer release posterior a 3.4.0, esas mismas atestaciones van adjuntas al release como `gitlab-mcp-server.intoto.jsonl`. Descárgalo junto al fichero y pásalo con `--bundle`: `gh` lee entonces las atestaciones de él en lugar de preguntar a la API de GitHub, así que la comprobación funciona sin `gh auth login`, y es el archivo que OpenSSF Scorecard lee como la procedencia del release.
+
+```bash
+gh attestation verify gitlab-mcp-server-linux-amd64 \
+  --bundle gitlab-mcp-server.intoto.jsonl \
+  -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
+```
 
 ### 6. Verificar la imagen de contenedor
 

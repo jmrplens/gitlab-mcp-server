@@ -100,7 +100,7 @@ The [latest release](https://github.com/jmrplens/gitlab-mcp-server/releases/late
 | macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                                                                                                                                                                                       |
 | Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                                                                                                                                                                                  |
 | Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                                                                                                                                                                                  |
-| Integrity             | `checksums.txt` (the binaries, their SBOMs and the notices), `checksums.txt.sigstore.json`, and an SPDX SBOM per binary, `<asset>.sbom.json`                                                                                                           |
+| Integrity             | `checksums.txt` (the binaries, their SBOMs and the notices), `checksums.txt.sigstore.json`, an SPDX SBOM per binary, `<asset>.sbom.json`, and the SLSA provenance, `gitlab-mcp-server.intoto.jsonl` (from the first release after 3.4.0)               |
 | Licenses              | `THIRD_PARTY_NOTICES`, from the first release after 3.1.0                                                                                                                                                                                              |
 | Claude Desktop        | `gitlab-mcp-server-darwin.mcpb`, `-windows.mcpb` or `-linux.mcpb` (one per operating system, from the first release after 3.1.0), and `gitlab-mcp-server.mcpb` for all three (every release); see [Claude Desktop](/gitlab-mcp-server/claude-desktop/) |
 
@@ -165,6 +165,17 @@ The install scripts already compare the download with `checksums.txt`, and check
    Expected output on Linux and macOS: `gitlab-mcp-server-linux-amd64: OK`, or the name of your asset.
 
 If either step fails, do not run the file. The full walkthrough, including installing Cosign, is under [Verifying release integrity](/gitlab-mcp-server/operations/security/#verifying-release-integrity).
+
+From the first release after 3.4.0 a release also carries its SLSA build provenance, `gitlab-mcp-server.intoto.jsonl`, covering every file in `checksums.txt` and every Claude Desktop bundle. Download it from the same release and verify the file against it. `--bundle` reads the attestations from that file instead of asking GitHub's API, so it works without `gh auth login`:
+
+```bash
+gh attestation verify gitlab-mcp-server-linux-amd64 \
+  --bundle gitlab-mcp-server.intoto.jsonl \
+  -R jmrplens/gitlab-mcp-server \
+  --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
+```
+
+Add `--source-ref refs/tags/v<version>` to hold it to the release you downloaded. Each line of the file is one Sigstore bundle, the form `gh attestation download` writes.
 
 :::note[Provenance attestations and SBOMs]
 The release workflow now records a build provenance attestation for every asset in `checksums.txt` and emits one SPDX SBOM per binary (`<asset>.sbom.json`), checkable with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml`; `--signer-workflow` holds the attestation to the release workflow, since `-R` alone accepts one any workflow of the repository minted, and `--source-ref refs/tags/v<version>` holds it to one release as well. The install scripts ask for the same thing: an attestation from the release workflow at the tag they are installing. Those steps landed after v2.7.5 was tagged, so they apply to the releases published after it (3.0.0 and 3.1.0 carry both); for v2.7.5 itself, the checksum and signature above are the verification available.
