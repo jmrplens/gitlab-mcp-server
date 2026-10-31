@@ -198,7 +198,7 @@ type DownloadInput struct {
 	PackageVersion string               `json:"package_version" jsonschema:"Package version,required"`
 	FileName       string               `json:"file_name" jsonschema:"File name to download. May include / to describe a directory structure (segments must not be empty or . or ..),required"`
 	OutputPath     string               `json:"output_path" jsonschema:"Absolute path where the file will be saved on the local filesystem, confined to the current working directory, the OS temp directory, or a directory listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. Symlinks are resolved and destinations outside those roots are rejected,required"`
-	DownloadMode   string               `json:"download_mode,omitempty" jsonschema:"How GitLab hands over a file kept in object storage: proxy streams it through GitLab, direct redirects to a signed object storage URL, which is fetched without the token. GitLab honors it only when its object storage configuration allows that mode, and otherwise uses its default. Leave it out to keep that default"`
+	DownloadMode   string               `json:"download_mode,omitempty" jsonschema:"How GitLab hands over a file kept in object storage: proxy streams it through GitLab, direct redirects to object storage or a CDN, which the server follows without the credential headers once the redirect leaves the instance's host and its subdomains. GitLab honors it only when its object storage configuration allows that mode, and otherwise uses its default. Leave it out to keep that default"`
 }
 
 // DownloadOutput contains the result of a package file download.

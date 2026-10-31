@@ -152,7 +152,7 @@ var packageActionMetadata = map[string]packageActionMeta{
 		description: "Publish a single file to the Generic Package Registry. Returns: the published file's id, package id, name, size, checksums (md5/sha1/sha256), and download URL. See also: gitlab_package_publish_and_link, gitlab_package_publish_directory, gitlab_package_list.",
 	},
 	actionNameDownload: {
-		usage:       "Download one Generic Package Registry file to a local path. Provide project_id, package_name, package_version, file_name, and the output_path to write. The file is streamed and checksummed locally. Optional download_mode asks GitLab to stream a file kept in object storage through itself (proxy) or to redirect to object storage (direct), which GitLab honors only where its configuration allows that mode.",
+		usage:       "Download one Generic Package Registry file to a local path. Provide project_id, package_name, package_version, file_name, and the output_path to write. The file is streamed and checksummed locally. Optional download_mode asks GitLab to stream a file kept in object storage through itself (proxy) or to redirect to object storage or a CDN (direct), which GitLab honors only where its configuration allows that mode.",
 		aliases:     []string{"download generic package file", "fetch package asset", "pull file from package registry", "retrieve package version file"},
 		related:     []string{actionPackageFileList, actionPackageList, actionPackagePublish},
 		description: "Download a single file from the Generic Package Registry to a local path. Returns: the local output path, byte size, and SHA256 checksum. See also: gitlab_package_file_list, gitlab_package_list.",
@@ -207,9 +207,10 @@ var packageActionMetadata = map[string]packageActionMeta{
 }
 
 // packageOptions returns the base [toolutil.ActionSpecOptions] for a
-// Generic Package Registry action and customizes the Usage,
-// ParameterGuidance, and InputSchemaOverrides for the list, file_list,
-// publish, publish_and_link, and publish_directory individual tools.
+// Generic Package Registry action, takes its usage, aliases, related actions
+// and description from packageActionMetadata, and customizes the Usage,
+// ParameterGuidance and InputSchemaOverrides of the actions that need more
+// than that entry holds.
 func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute packages domain action.", Tags: []string{"package"},
