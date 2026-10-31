@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/golist"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/releaseassets"
 )
 
 // fixtureReleaseConfig is the configuration of a fixture release built for
@@ -87,7 +88,7 @@ func publishRelease(t *testing.T, files map[string][]byte) string {
 		if err := os.WriteFile(filepath.Join(dir, name), files[name], 0o600); err != nil {
 			t.Fatal(err)
 		}
-		list.WriteString(digest(files[name]) + "  " + name + "\n")
+		list.WriteString(releaseassets.Digest(files[name]) + "  " + name + "\n")
 	}
 	if err := os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(list.String()), 0o600); err != nil {
 		t.Fatal(err)
@@ -409,7 +410,7 @@ func TestReleaseRun_Fat_RefusesWhatItCannotJoin(t *testing.T) {
 			t.Parallel()
 
 			dir := publishRelease(t, tc.published)
-			sums, err := readChecksums(filepath.Join(dir, "checksums.txt"))
+			sums, err := releaseassets.ReadChecksums(filepath.Join(dir, "checksums.txt"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -461,12 +462,12 @@ func TestInTree_RelativeToTheModuleOrAbsolute(t *testing.T) {
 func TestUnbuiltNote_NamesWhatTheChecksumFileListsBeyondTheBinaries(t *testing.T) {
 	t.Parallel()
 
-	sums := checksums{digests: map[string]string{"bin": "", "z.sbom.json": "", "NOTICES": ""}}
+	sums := releaseassets.Checksums{Digests: map[string]string{"bin": "", "z.sbom.json": "", "NOTICES": ""}}
 	want := []string{"not rebuilt, since the configuration builds none of them: NOTICES, z.sbom.json"}
 	if got := unbuiltNote(sums, []outcome{{asset: "bin"}}); !slices.Equal(got, want) {
 		t.Errorf("unbuiltNote = %q, want %q", got, want)
 	}
-	if got := unbuiltNote(checksums{digests: map[string]string{"bin": ""}}, []outcome{{asset: "bin"}}); got != nil {
+	if got := unbuiltNote(releaseassets.Checksums{Digests: map[string]string{"bin": ""}}, []outcome{{asset: "bin"}}); got != nil {
 		t.Errorf("unbuiltNote with nothing left over = %q, want none", got)
 	}
 }

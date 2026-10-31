@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"slices"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/releaseassets"
 )
 
 // outcome is one binary compared: the SHA-256 of each copy, and when they
@@ -24,7 +26,7 @@ func (o outcome) same() bool {
 
 // judge compares two copies of the binary asset, built for target.
 func judge(asset, target string, before, after []byte, s sides) outcome {
-	o := outcome{asset: asset, target: target, before: digest(before), after: digest(after)}
+	o := outcome{asset: asset, target: target, before: releaseassets.Digest(before), after: releaseassets.Digest(after)}
 	if !o.same() {
 		o.notes = explain(before, after, s)
 	}
