@@ -253,19 +253,23 @@ class BuiltWheelTest(WheelTestCase):
         with open(BUILDER, encoding="utf-8") as fh:
             header = "".join(fh.readlines()[1:3])
         self.assertTrue(header.startswith("# Copyright (c) "), header)
-        path, _ = self.wheel()
-        for module in ("__init__.py", "__main__.py"):
-            with self.subTest(module):
-                with zipfile.ZipFile(path) as zf:
-                    source = zf.read(build_pypi.PKG_NAME + "/" + module).decode("utf-8")
-                self.assertTrue(source.startswith(header + "\n"), source[:200])
-                # The header stays a comment of its own: the launcher's
-                # docstring is still the module's, and both still compile.
-                compile(source, module, "exec")
-        with zipfile.ZipFile(path) as zf:
-            launcher = zf.read(build_pypi.PKG_NAME + "/__init__.py").decode("utf-8")
-        self.assertTrue(ast.get_docstring(ast.parse(launcher)).startswith("Locator for the gitlab-mcp-server binary"))
-        self.assertIn('__version__ = "{}"'.format(VERSION), launcher)
+        for tag in validate_pypi.EXPECTED_TAGS:
+            path, _ = self.wheel(tag)
+            with zipfile.ZipFile(path) as zf:
+                sources = {module: zf.read(build_pypi.PKG_NAME + "/" + module).decode("utf-8")
+                           for module in ("__init__.py", "__main__.py")}
+            for module, source in sources.items():
+                with self.subTest(tag=tag, module=module):
+                    self.assertTrue(source.startswith(header + "\n"), source[:200])
+                    # The header stays a comment of its own: both modules
+                    # still compile, and the launcher's docstring is still
+                    # the module's.
+                    compile(source, module, "exec")
+            with self.subTest(tag=tag, module="__init__.py docstring"):
+                launcher = sources["__init__.py"]
+                docstring = ast.get_docstring(ast.parse(launcher)) or ""
+                self.assertTrue(docstring.startswith("Locator for the gitlab-mcp-server binary"), docstring)
+                self.assertIn('__version__ = "{}"'.format(VERSION), launcher)
 
     def test_every_entry_is_a_regular_file(self):
         path, _ = self.wheel()
