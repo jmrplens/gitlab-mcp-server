@@ -1431,9 +1431,10 @@ jobs:
       # statements the release would have signed: the same subjects, read from
       # the same files, as bare in-toto statements with no signature and an
       # empty predicate, since actions/attest derives the predicate from the
-      # job's OIDC token. The subject check runs on them, the file travels to
-      # the publishers in the rehearsal's archive, and fetch-release-assets.sh
-      # holds each bundle it unpacks to it; nothing is verified or uploaded.
+      # job's OIDC token. The subject check runs on them, every file is held
+      # to its digest where it lies, the asset travels to the publishers in
+      # the rehearsal's archive, and fetch-release-assets.sh holds each bundle
+      # it unpacks to it; nothing is verified against it or uploaded.
       - name: Write the SLSA provenance and attach it to the draft
         env:
           # Withheld from a rehearsal, which uploads nothing.
@@ -1480,6 +1481,24 @@ jobs:
           fi
           echo "${provenance#dist/}: $(wc -l < "$provenance") statements naming the $(wc -l < "$shipped") files the release ships"
 
+          # Every file the release ships is in dist/ under its asset name but
+          # the OpenVEX document, which checksum.extra_files in .goreleaser.yml
+          # hashes where it is committed and lists under its asset name. Each
+          # file is held to its digest where it is, in a rehearsal too, so a
+          # rehearsal finds a file the verification at the tag could not open.
+          located="${RUNNER_TEMP}/provenance-located.sha256"
+          while read -r digest name; do
+            case "$name" in
+              gitlab-mcp-server.openvex.json) file=vex/gitlab-mcp-server.openvex.json ;;
+              *) file="dist/${name}" ;;
+            esac
+            printf '%s  %s\n' "$digest" "$file"
+          done < "$shipped" > "$located"
+          if ! sha256sum --quiet --check "$located"; then
+            echo "::error::a file the release ships is missing or differs from the digest ${provenance#dist/} names (above)"
+            exit 1
+          fi
+
           if [ "$REHEARSAL" = "true" ]; then
             echo "rehearsal: the statements are unsigned, so nothing was verified or uploaded"
             exit 0
@@ -1488,11 +1507,11 @@ jobs:
           # for whoever reads a failure at the tag.
           gh --version
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}"
-          while read -r _ name; do
-            gh attestation verify "dist/${name}" --bundle "$provenance" \
+          while read -r _ file; do
+            gh attestation verify "$file" --bundle "$provenance" \
               --repo "$GITHUB_REPOSITORY" --cert-identity "$identity" < /dev/null
-            echo "${name}: verified against ${provenance#dist/}"
-          done < "$shipped"
+            echo "${file}: verified against ${provenance#dist/}"
+          done < "$located"
           gh release upload "${RELEASE_TAG}" "$provenance" --clobber
 
       # A rehearsal hands its build to the publisher jobs the way a release

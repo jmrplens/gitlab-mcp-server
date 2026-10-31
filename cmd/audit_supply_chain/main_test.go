@@ -3913,6 +3913,30 @@ func TestLoadWorkflows_ReleaseWorkflow_AttachesItsProvenanceToTheDraft(t *testin
 		t.Errorf("the rehearsal's archive (step %d) does not carry the %s step %d writes", handoff, asset, attach)
 	}
 	assertEveryAttestationReaches(t, steps, attach, attaching, asset)
+	assertEveryExtraChecksumFileIsFound(t, goreleaser, attaching, asset)
+}
+
+// assertEveryExtraChecksumFileIsFound holds the step attaching, which writes
+// asset and verifies every file checksums.txt lists against it, to naming
+// where each of checksum.extra_files in goreleaser is. GoReleaser hashes such
+// a file where its glob finds it and lists it under its name_template without
+// copying it into dist/, so it is the one kind of line in checksums.txt whose
+// file dist/ does not hold under the name the line gives, and a step that
+// looks for it there fails at the tag, which no rehearsal reaches.
+func assertEveryExtraChecksumFileIsFound(t *testing.T, goreleaser, attaching map[string]any, asset string) {
+	t.Helper()
+
+	run, _ := attaching["run"].(string)
+	checksum, _ := goreleaser["checksum"].(map[string]any)
+	extras, _ := checksum["extra_files"].([]any)
+	for _, raw := range extras {
+		extra, _ := raw.(map[string]any)
+		path := strings.TrimPrefix(pythonStr(extra["glob"]), "./")
+		name := pythonStr(extra["name_template"])
+		if !strings.Contains(run, path) || !strings.Contains(run, name) {
+			t.Errorf("the step writing %s does not look for %s, which checksums.txt lists through checksum.extra_files, at %s: dist/%s does not exist", asset, name, path, name)
+		}
+	}
 }
 
 // onlyReleaseStep returns the index and the step of the one step among steps
