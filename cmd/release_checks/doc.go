@@ -1,11 +1,13 @@
 // Copyright (c) 2026 José M. Requena Plens
 // SPDX-License-Identifier: MIT
 
-// Command release_checks answers the two questions release.yml asks of a
-// release before anything publishes it: whether the tag it is cut from may be
-// released at all and is the newest release (order), and whether its Linux
-// binaries name the loader every channel that ships them promises
-// (elf-interp).
+// Command release_checks answers two questions release.yml asks of a
+// release: before anything publishes it, whether the tag it is cut from may
+// be released at all and is the newest release (order), and before anything
+// packs its Linux binaries, whether they name the loader every channel that
+// ships them promises (elf-interp). The image is pushed before that second
+// question is asked, and its binary is not one of them: the Dockerfile links
+// it with the musl loader its own base image carries.
 //
 // # order
 //

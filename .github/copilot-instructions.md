@@ -30,7 +30,7 @@ gitlab-mcp-server/
 │   ├── audit_binary_vulns/ # Every release binary against the vulnerability database at module grain (make check-binary-vulns)
 │   ├── audit_image_vulns/ # The image's Alpine packages against Trivy's vulnerability database before the push (make check-image-vulns)
 │   ├── reproduce_release/ # Release binaries rebuilt from the tag and compared byte for byte (make check-reproducible, make check-repeatable)
-│   ├── release_checks/ # The release's preflight order and the Linux binaries' ELF loader, checked before anything publishes (make release)
+│   ├── release_checks/ # The release's preflight order, checked before anything publishes, and the Linux binaries' ELF loader (make release)
 │   ├── audit_site_headers/ # The documentation site's security headers, judged after each deploy (make check-site-headers)
 │   ├── audit_dco/          # Every commit of a pull request signed off by its author, the Developer Certificate of Origin (make check-dco)
 │   ├── audit_file_headers/ # Every source file opens with the copyright and license header; -fix writes it (make check-file-headers, make fix-file-headers)

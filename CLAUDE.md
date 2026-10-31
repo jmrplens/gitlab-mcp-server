@@ -93,7 +93,7 @@ gitlab-mcp-server/
 │   ├── audit_vex/                    # The OpenVEX document every release attaches, against OpenVEX v0.2.0 and the dependency set (make check-vex)
 │   ├── audit_image_vulns/            # The image's Alpine packages against Trivy's database, before the push (make check-image-vulns)
 │   ├── reproduce_release/            # Release binaries rebuilt from the tag and compared byte for byte (make check-reproducible, check-repeatable)
-│   ├── release_checks/               # The release's preflight order and the Linux binaries' ELF loader, before anything publishes (make release)
+│   ├── release_checks/               # The release's preflight order, before anything publishes, and the Linux binaries' ELF loader (make release)
 │   ├── audit_site_headers/           # The documentation site's security headers, after each deploy (make check-site-headers)
 │   ├── audit_dco/                    # Every commit of a pull request signed off by its author, the DCO (make check-dco)
 │   ├── audit_file_headers/           # Every source file opens with the copyright and license header (make check-file-headers, fix-file-headers)
