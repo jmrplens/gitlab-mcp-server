@@ -340,14 +340,22 @@ cores, about thirty seconds of it per build.
 The two scans above disagree by design about `GO-2026-5932`: the source scan
 lists it at module level and passes, because nothing calls into openpgp, while
 osv-scanner and OpenSSF Scorecard, which read `go.mod`, report it as a
-vulnerability of the project. `vex/gitlab-mcp-server.openvex.json` is where
-that disagreement is written down for a scanner to read: an OpenVEX v0.2.0
+vulnerability of the project unless the `osv-scanner.toml` beside `go.mod` sets
+it aside, as the root one does
+([below](#every-lockfile-malicious-packages-included)).
+`vex/gitlab-mcp-server.openvex.json` is where that disagreement is written down
+for a scanner given a release to read: an OpenVEX v0.2.0
 statement that the advisory is `not_affected`, `vulnerable_code_not_present`,
 for this module at every version and for the 3.0.0 and 3.1.0 images, the only
 releases since 3.0.0 whose binaries carry the module, with an impact statement
 that names the evidence. GoReleaser lists it in the signed `checksums.txt`, so the
 provenance attestation over that file covers it, and attaches it to every
-GitHub release as `gitlab-mcp-server.openvex.json`.
+GitHub release as `gitlab-mcp-server.openvex.json`. The allow list and the
+document give the advisory the same justification, one for a scan of the
+repository and one for a scanner given a release, and an advisory against a Go
+module set aside in the first is stated in the second as well, since the
+unaccounted rule below fails on one the source scan reports that no statement
+names.
 
 `make check-vex` ([`cmd/audit_vex`](cmd-utilities.md#audit_vex)) holds it to
 the specification, to the source scan, run in process with the packages and

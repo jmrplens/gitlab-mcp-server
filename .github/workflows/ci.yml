@@ -786,11 +786,12 @@ jobs:
   # vulnerability database, GitHub's advisories for npm and PyPI and the
   # OpenSSF malicious-packages feed (MAL- entries): every go.mod, the site's
   # pnpm-lock.yaml and the pip locks under .github/requirements. The job above
-  # asks, in two steps, what our code calls and what the release binaries
-  # link, of Go alone; until this one nothing blocked a change on the site's or
-  # the PyPI upload's dependencies, and nothing asked about malicious packages
-  # at all. Any advisory fails it unless the osv-scanner.toml beside its
-  # lockfile sets it aside, on the terms SECURITY.md (Dependencies) states and
+  # asks what our code calls and what the release binaries link, and holds the
+  # OpenVEX document to the first, of Go alone; until this one nothing blocked
+  # a change on the site's or the PyPI upload's dependencies, and nothing
+  # asked about malicious packages at all. Any advisory fails it unless the
+  # osv-scanner.toml beside its lockfile sets it aside, on the terms
+  # SECURITY.md (Dependencies) states and
   # make check-supply-chain holds every entry to, and so does an entry that
   # sets nothing aside. A malicious package fails it whatever an entry names,
   # through a second scan that honors no allow list, and so does a lockfile git

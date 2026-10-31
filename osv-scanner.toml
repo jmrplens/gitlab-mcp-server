@@ -9,6 +9,9 @@
 # A malicious-package advisory (MAL-) is never set aside, and the target's
 # second scan, which honors no allow list, fails on one whatever id an entry
 # here names. OpenSSF Scorecard's Vulnerabilities check reads this file too.
+# An advisory set aside here is also stated, with the same justification, in
+# vex/gitlab-mcp-server.openvex.json, the OpenVEX document every release
+# attaches, which make check-vex holds to the source scan.
 
 [[IgnoredVulns]]
 id = "GO-2026-5932"
