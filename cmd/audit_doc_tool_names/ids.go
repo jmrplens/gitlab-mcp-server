@@ -27,7 +27,7 @@ import (
 // mention that was never an action ID.
 var fileNameTails = map[string]struct{}{
 	"env": {}, "exe": {}, "git": {}, "go": {}, "html": {}, "instructions": {},
-	"json": {}, "log": {}, "mcpb": {}, "md": {}, "mdx": {}, "plist": {},
+	"json": {}, "log": {}, "mcpb": {}, "md": {}, "mdx": {}, "openvex": {}, "plist": {},
 	"properties": {}, "rb": {}, "service": {}, "sh": {}, "sock": {}, "svg": {},
 	"target": {}, "txt": {}, "yaml": {}, "yml": {},
 }

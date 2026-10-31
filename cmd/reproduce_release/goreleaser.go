@@ -178,9 +178,11 @@ var universalKeys = map[string]bool{"id": true, "ids": true, "name_template": tr
 // wrap_in_directory) belongs to an archive that is not the binary itself.
 var archiveKeys = map[string]bool{"id": true, "formats": true, "name_template": true}
 
-// checksumKeys are the keys the checksum section may carry. split, ids and
-// extra_files change what the file lists.
-var checksumKeys = map[string]bool{"name_template": true, "algorithm": true}
+// checksumKeys are the keys the checksum section may carry. split and ids
+// change which binaries the file lists, so they are refused. extra_files only
+// adds files beside them (the OpenVEX document), which the comparison
+// reports as not rebuilt, as it does the SBOMs and the notices.
+var checksumKeys = map[string]bool{"name_template": true, "algorithm": true, "extra_files": true}
 
 // buildEntry is one builds entry once its keys have been checked.
 type buildEntry struct {

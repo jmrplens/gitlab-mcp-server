@@ -79,7 +79,7 @@ make test                                 # all unit tests, with coverage.out
 make coverage                             # writes coverage.html
 
 # Lint / analyze
-make analyze                              # 35 steps: golangci-lint, govulncheck, markdownlint and the cmd/ audits and record checks
+make analyze                              # 36 steps: golangci-lint, govulncheck, markdownlint and the cmd/ audits and record checks
 make analyze-fix                          # apply gofumpt/goimports/gci/markdownlint --fix
 make golangci-lint                        # Go-only gate
 golangci-lint run --build-tags e2e ./internal/tools/branches/  # one package

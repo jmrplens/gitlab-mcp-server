@@ -1,0 +1,63 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/jmrplens/gitlab-mcp-server/blob/main/vex/gitlab-mcp-server.openvex.json",
+  "author": "José M. Requena Plens <mail@jmrp.io>",
+  "role": "Project maintainer",
+  "timestamp": "2026-10-31T16:30:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "@id": "https://pkg.go.dev/vuln/GO-2026-5932",
+        "name": "GO-2026-5932",
+        "description": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/jmrplens/gitlab-mcp-server/v3",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org/x/crypto"
+            }
+          ]
+        },
+        {
+          "@id": "pkg:oci/gitlab-mcp-server@sha256%3A80990c658d2ac1b95c98540fbd8fc2bcf300a86a9b18c73483ed7412441b2c04?repository_url=ghcr.io/jmrplens/gitlab-mcp-server",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org/x/crypto@v0.56.0"
+            }
+          ]
+        },
+        {
+          "@id": "pkg:oci/gitlab-mcp-server@sha256%3A80990c658d2ac1b95c98540fbd8fc2bcf300a86a9b18c73483ed7412441b2c04?repository_url=docker.io/jmrplens/gitlab-mcp-server",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org/x/crypto@v0.56.0"
+            }
+          ]
+        },
+        {
+          "@id": "pkg:oci/gitlab-mcp-server@sha256%3A87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc?repository_url=ghcr.io/jmrplens/gitlab-mcp-server",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org/x/crypto@v0.57.0"
+            }
+          ]
+        },
+        {
+          "@id": "pkg:oci/gitlab-mcp-server@sha256%3A87e483299a2663a7a5d4d28679859b0c7fba2b1a421b7de2652441a569d4a2fc?repository_url=docker.io/jmrplens/gitlab-mcp-server",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org/x/crypto@v0.57.0"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "No package of github.com/jmrplens/gitlab-mcp-server/v3 imports golang.org/x/crypto/openpgp or a package below it, so no build of the module contains the code the advisory is about. go.mod requires golang.org/x/crypto for golang.org/x/crypto/ssh, which the end-to-end harness imports, and golang.org/x/crypto/hkdf, which a test of internal/telemetry compares against; no package the release builds imports it, and the release binaries and images from 3.2.0 on do not carry the module at all. The two images named here are the 3.0.0 and 3.1.0 index digests, the same on both registries, whose binaries carry the module for golang.org/x/crypto/hkdf alone and link no openpgp package. govulncheck's source scan reports the advisory against the module only, never as an imported package or a called function, and the scan of every binary the release builds reports no advisory against any of them.",
+      "status_notes": "Held by make check-vex (cmd/audit_vex), which runs the same source scan as make govulncheck and reads go.mod beside it, and fails when what this statement says of the module names an advisory the dependency set no longer contains, when the scan finds the advisory's packages imported or its functions called, or when the scan reports an advisory that does not affect the code and no statement accounts for it. The image products describe published images, which do not change, and stay for as long as those images are published."
+    }
+  ]
+}

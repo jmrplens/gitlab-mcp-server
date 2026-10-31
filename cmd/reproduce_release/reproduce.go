@@ -149,8 +149,8 @@ func (r releaseRun) fat(fr fatRecipe, built map[string][]byte) (outcome, error) 
 }
 
 // unbuiltNote names what the checksum file lists that no recipe rebuilt,
-// which for this repository is the SBOMs and the notices, so a reader sees
-// what the comparison did not cover.
+// which for this repository is the SBOMs, the notices and the OpenVEX
+// document, so a reader sees what the comparison did not cover.
 func unbuiltNote(sums checksums, outcomes []outcome) []string {
 	var rest []string
 	for name := range sums.digests {

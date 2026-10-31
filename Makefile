@@ -8,7 +8,7 @@
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
-	golangci-lint govulncheck check-binary-vulns image-vulns-images check-image-vulns check-dependency-vulns check-repeatable check-reproducible check-site-headers sonar sonar-status \
+	golangci-lint govulncheck check-binary-vulns check-vex image-vulns-images check-image-vulns check-dependency-vulns check-repeatable check-reproducible check-site-headers sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links check-md-tables \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
@@ -996,6 +996,11 @@ govulncheck:
 check-binary-vulns:
 	go run ./cmd/audit_binary_vulns/
 
+## check-vex: hold vex/gitlab-mcp-server.openvex.json, the OpenVEX document every GitHub release carries, to OpenVEX v0.2.0, to the dependency set make govulncheck scans, with the same packages and build tags, and to the require directives of go.mod.
+## Fails when what a statement says of the module names an advisory the scan does not report against a module it loads, or a module go.mod no longer requires (stale), or one the scan disproves or reports called (contradicted), and on an advisory the scan reports without a call that no statement accounts for, which OpenSSF Baseline OSPS-VM-04.02 asks the document to carry. What a statement says of a published image is not held to the current tree.
+check-vex:
+	go run ./cmd/audit_vex/ -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
+
 ## check-repeatable: build every release target .goreleaser.yml names twice from this tree, the second time with an empty build cache, and fail unless the two builds are the same bytes.
 ## Needs no release and no git, and no network once the module cache holds the modules, so it runs anywhere the tree does, a copy synced without .git included.
 check-repeatable:
@@ -1227,41 +1232,42 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/35] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/35] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/35] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/35] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/35] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/35] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
-	run_check "[7/35] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/35] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/35] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/35] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/35] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/35] pinned GraphQL schemas, gitlab.com's and the release's" $(MAKE) --no-print-directory check-graphql-schema; \
-	run_check "[13/35] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/35] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/35] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/35] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/35] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
-	run_check "[18/35] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/35] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/35] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/35] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/35] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/35] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/35] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/35] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
-	run_check "[26/35] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
-	run_check "[27/35] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
-	run_check "[28/35] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/35] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
-	run_check "[30/35] params of the routes reached (R-PARAM)" go run ./cmd/audit_1to1/ -scope=params -gaps-only; \
-	run_check "[31/35] routes the live record mounts (R-ROUTE)" go run ./cmd/audit_1to1/ -scope=routes -gaps-only; \
-	run_check "[32/35] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
-	run_check "[33/35] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
-	run_check "[34/35] copyright and license headers" go run ./cmd/audit_file_headers/; \
-	run_check "[35/35] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
+	run_check "[1/36] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/36] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/36] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/36] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/36] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/36] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
+	run_check "[7/36] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/36] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/36] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/36] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/36] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/36] pinned GraphQL schemas, gitlab.com's and the release's" $(MAKE) --no-print-directory check-graphql-schema; \
+	run_check "[13/36] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/36] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/36] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/36] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/36] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
+	run_check "[18/36] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/36] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/36] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/36] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/36] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/36] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/36] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/36] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/36] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/36] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
+	run_check "[28/36] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
+	run_check "[29/36] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[30/36] params of the routes reached (R-PARAM)" go run ./cmd/audit_1to1/ -scope=params -gaps-only; \
+	run_check "[31/36] routes the live record mounts (R-ROUTE)" go run ./cmd/audit_1to1/ -scope=routes -gaps-only; \
+	run_check "[32/36] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
+	run_check "[33/36] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
+	run_check "[34/36] copyright and license headers" go run ./cmd/audit_file_headers/; \
+	run_check "[35/36] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
+	run_check "[36/36] the OpenVEX document against the dependency set" go run ./cmd/audit_vex/ -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \

@@ -276,6 +276,14 @@ jobs:
           cache: false
       - name: Release binaries at module grain
         run: make check-binary-vulns
+      # The OpenVEX document the release attaches, held to the dependency
+      # set of the tree being released: an advisory published since the last
+      # CI run that does not affect the server would otherwise ship missing
+      # from the document, and one the tree no longer carries would ship
+      # stated. Like the step above it reads the vulnerability database, and
+      # it runs here, in a job holding no credential, for the same reason.
+      - name: The OpenVEX document against the dependency set
+        run: make check-vex
 
   docker:
     name: "🐳 Docker"
@@ -1376,10 +1384,11 @@ jobs:
           if-no-files-found: error
 
       # SLSA build provenance for every GoReleaser artifact, keyed by the exact
-      # asset names in checksums.txt, plus the .mcpb bundles built outside
-      # GoReleaser: all four, by one glob, since a directory looks a declared
-      # bundle's attestation up by its digest and a user of the universal
-      # bundle verifies it the same way.
+      # asset names in checksums.txt (the OpenVEX document among them,
+      # through checksum.extra_files in .goreleaser.yml), plus the .mcpb
+      # bundles built outside GoReleaser: all four, by one glob, since a
+      # directory looks a declared bundle's attestation up by its digest and
+      # a user of the universal bundle verifies it the same way.
       # Stored in GitHub's attestation store — no release asset changes.
       # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
       #   --signer-workflow jmrplens/gitlab-mcp-server/.github/workflows/release.yml
@@ -1396,9 +1405,9 @@ jobs:
           subject-path: dist/*.mcpb
 
       # Every asset (binaries, checksums.txt + signature, SBOMs,
-      # THIRD_PARTY_NOTICES, .mcpb) is attached and attested before the
-      # release becomes visible: a client
-      # never sees a partial release, and this is the draft-then-publish flow
+      # THIRD_PARTY_NOTICES, the OpenVEX document, .mcpb) is attached and
+      # attested before the release becomes visible: a client never sees a
+      # partial release, and this is the draft-then-publish flow
       # immutable releases require. GoReleaser creates the release as a draft
       # (.goreleaser.yml: draft: true). Everything downstream of this job reads
       # the published assets, so this step is also the handoff. GitHub marks

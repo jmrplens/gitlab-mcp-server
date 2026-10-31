@@ -568,7 +568,7 @@ Every GitHub Release ships with three integrity artifacts:
 - `checksums.txt.sigstore.json` — keyless [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) / Sigstore signature bundle (GitHub OIDC, no key distribution required)
 - `<asset>.sbom.json` — an SPDX software bill of materials for each binary
 
-From the first release after 3.1.0 a release also ships `THIRD_PARTY_NOTICES`, the license, notice and patent texts of every module the binaries link, which the SBOMs name without carrying. It is generated from the binaries at release time and listed in `checksums.txt`, so the steps below verify it like a binary.
+From the first release after 3.1.0 a release also ships `THIRD_PARTY_NOTICES`, the license, notice and patent texts of every module the binaries link, which the SBOMs name without carrying. It is generated from the binaries at release time and listed in `checksums.txt`, so the steps below verify it like a binary. From the first release after 3.4.0 a release also ships `gitlab-mcp-server.openvex.json`, the [VEX document](#the-vex-document), listed in `checksums.txt` the same way.
 
 Nothing verifies these for you: the server never downloads or replaces its own binary, so whoever puts a binary on the machine is the one who checks it. Package managers do their own verification (Homebrew pins a checksummed formula, npm and the container registry pin digests). For a binary you download yourself, verify both the signature and the checksum before running it.
 
@@ -710,6 +710,21 @@ go run golang.org/x/vuln/cmd/govulncheck@latest -mode binary -scan module ./gitl
 ```
 
 Releases 3.0.0 and 3.1.0 carry `golang.org/x/crypto` in their build information, so those scanners report `GO-2026-5932` against them, although neither links the openpgp packages the advisory concerns: the module was there for one HKDF function, which later releases take from the Go standard library, so they do not carry the module at all. Releases before 3.0.0 did link openpgp, through the self-update subsystem 3.0.0 removed.
+
+### The VEX document
+
+The paragraph above is also published in a form a scanner reads, an [OpenVEX](https://openvex.dev) document: [`vex/gitlab-mcp-server.openvex.json`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/vex/gitlab-mcp-server.openvex.json). It states that `GO-2026-5932` is `not_affected`, with the justification `vulnerable_code_not_present` and the evidence behind it, for the Go module at every version and for the 3.0.0 and 3.1.0 images, named by the digest both registries serve. From the first release after 3.4.0, every release attaches the document as `gitlab-mcp-server.openvex.json`, listed in the signed `checksums.txt`.
+
+CI holds the document to the dependency set on every pull request, and the release workflow does so again on the tagged tree before anything is published. What it says of the Go module is held to the module's dependencies: a statement about an advisory they no longer carry fails the build, and so does one that a scan of the source disproves by finding the advisory's package imported or its function called. An advisory whose vulnerable code the server does not reach fails the build too until a statement names it, so every one of them is in the document. One whose vulnerable code the server does call is never stated there: it fails the build until a dependency update fixes it. What the document says of the 3.0.0 and 3.1.0 images stays as it is when the dependencies change, since a published image does not.
+
+A scanner given the document hides what it states:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/vex/gitlab-mcp-server.openvex.json
+trivy image --vex gitlab-mcp-server.openvex.json ghcr.io/jmrplens/gitlab-mcp-server:3.1.0
+```
+
+Trivy 0.76.1 reports `GO-2026-5932` against that image without `--vex` and not with it, and the same holds for the release binary of 3.1.0 scanned with `trivy rootfs`. Releases from 3.2.0 on do not carry the module, so no scanner reports the advisory against them.
 
 ## Known vulnerabilities in the image's packages
 

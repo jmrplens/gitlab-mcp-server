@@ -18,7 +18,8 @@ import (
 // fixtureConfig is a configuration shaped like the repository's own: one
 // build for six targets with an override per Linux target, a universal
 // darwin binary, one archive publishing each binary as it is, and a checksum
-// file, beside keys this command does not read (changelog, mod_timestamp).
+// file that also lists a file no build makes, beside keys this command does
+// not read (changelog, mod_timestamp).
 const fixtureConfig = `version: 2
 before:
   hooks:
@@ -59,6 +60,9 @@ archives:
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+  extra_files:
+    - glob: ./vex/fixture.openvex.json
+      name_template: fixture.openvex.json
 changelog:
   use: github
 `

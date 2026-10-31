@@ -749,7 +749,8 @@ jobs:
     name: "🛡️ govulncheck"
     runs-on: ubuntu-latest
     # The binary check builds the six release targets and scans each, which
-    # took 2m52s on five cores where it was measured, on top of the source scan.
+    # took 2m52s on five cores where it was measured, on top of the source scan,
+    # which the VEX check runs a second time in process.
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -773,16 +774,24 @@ jobs:
       # run in process by cmd/audit_binary_vulns.
       - name: Release binaries at module grain
         run: make check-binary-vulns
+      # The OpenVEX document every release attaches, held to OpenVEX v0.2.0
+      # and to the dependency set the source scan above reads: a statement
+      # whose advisory is gone or that the scan disproves fails, and so does
+      # an advisory the scan reports without a call that no statement names
+      # (cmd/audit_vex). It reads the same database, so it runs here.
+      - name: The OpenVEX document against the dependency set
+        run: make check-vex
 
   # Every lockfile the tree holds against OSV.dev, which carries the Go
   # vulnerability database, GitHub's advisories for npm and PyPI and the
   # OpenSSF malicious-packages feed (MAL- entries): every go.mod, the site's
   # pnpm-lock.yaml and the pip locks under .github/requirements. The job above
-  # asks, in two steps, what our code calls and what the release binaries
-  # link, of Go alone; until this one nothing blocked a change on the site's or
-  # the PyPI upload's dependencies, and nothing asked about malicious packages
-  # at all. Any advisory fails it unless the osv-scanner.toml beside its
-  # lockfile sets it aside, on the terms SECURITY.md (Dependencies) states and
+  # asks what our code calls and what the release binaries link, and holds the
+  # OpenVEX document to the first, of Go alone; until this one nothing blocked
+  # a change on the site's or the PyPI upload's dependencies, and nothing
+  # asked about malicious packages at all. Any advisory fails it unless the
+  # osv-scanner.toml beside its lockfile sets it aside, on the terms
+  # SECURITY.md (Dependencies) states and
   # make check-supply-chain holds every entry to, and so does an entry that
   # sets nothing aside. A malicious package fails it whatever an entry names,
   # through a second scan that honors no allow list, and so does a lockfile git

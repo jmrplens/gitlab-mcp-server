@@ -54,6 +54,8 @@ security:
           - .github/dependabot.yml
           - cmd/audit_supply_chain/**
           - cmd/audit_image_vulns/**
+          - cmd/audit_vex/**
+          - vex/**
           - cmd/reproduce_release/**
           - cmd/audit_site_headers/**
           - cmd/server/authgate*.go
