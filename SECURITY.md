@@ -325,12 +325,60 @@ from a model that may have read attacker-influenced content.
 
 ### Dependencies
 
-- Minimal dependency footprint.
-- Dependencies are tracked in `go.sum` with cryptographic checksums.
-- Regular dependency updates are performed to address known vulnerabilities (`govulncheck` runs in CI).
+How a dependency is chosen, obtained and kept current is in [CONTRIBUTING.md](CONTRIBUTING.md#dependencies). This section is what a finding against one sets off: a known vulnerability, or a license outside the ones accepted below.
+
+#### Vulnerabilities
+
+- `govulncheck` runs in the required `✅ CI` check on every pull request and every push to main, and fails when the project's code calls a vulnerable symbol. It accepts no advisory, so such a finding is fixed before anything else merges, by updating the module or by no longer calling the symbol.
 - The release binaries are also checked at module grain, the way scanners that read a binary or an image SBOM check them: every target the release configuration names is built from the tree and scanned, and an advisory against any module a binary links fails the check unless a reviewed declaration accepts it (`make check-binary-vulns`). CI runs it on every pull request and every push to main, and the release workflow runs it again on the tagged tree before anything is published.
-- The container image's Alpine packages are held to Trivy's vulnerability database before the image is pushed: the release workflow scans both platforms after the smoke test, and an advisory with a fixed package rated HIGH or CRITICAL stops the release unless a reviewed declaration accepts it (`make check-image-vulns`). A weekly run asks the same of the published `latest` image.
-- Automated dependency scanning via Dependabot.
+- The container image's Alpine packages are held to Trivy's vulnerability database before the image is pushed: the release workflow scans both platforms after the smoke test, and an advisory with a fixed package rated HIGH or CRITICAL stops the release unless a reviewed declaration accepts it (`make check-image-vulns`). A finding with no fix to take, or rated lower, is printed by the scan and does not stop it. A weekly run asks the same of the published `latest` image.
+- Dependabot security updates are on: an advisory against a dependency opens a pull request that waits for no cooldown.
+
+So the threshold is any severity for a Go module, fixed before the next merge and again checked before a release, and HIGH or CRITICAL with a fix for the image's Alpine packages, fixed before the release. A finding of `make check-binary-vulns` or `make check-image-vulns` can instead be accepted by a reviewed declaration, in the `declarations.go` of `cmd/audit_binary_vulns` or `cmd/audit_image_vulns`, which gives one of the reasons that command defines, code the binaries do not link or the image does not run, or a fix that exists and cannot be taken yet, with the words that back it; a finding of `govulncheck` cannot. The documentation site's packages have no threshold yet: `pnpm audit --audit-level=high` runs over them in the `docs-audit` job, which reports beside the required check and does not fail it.
+
+#### Licenses
+
+The release binaries link the Go standard library and modules under these licenses, as the SPDX SBOMs of 3.4.0's seven binaries name them (read on 31 October 2026), and these are the licenses a module a release binary or the image's binary links may carry:
+
+- **MIT, MIT-0, BSD-3-Clause and Apache-2.0.** What they ask of a binary distribution, their license and notice texts, travels with every binary in `THIRD_PARTY_NOTICES`, which every package and the image carry.
+- **MPL-2.0**, for `github.com/hashicorp/go-cleanhttp` and `github.com/hashicorp/go-retryablehttp`. Its terms bind the files of those modules rather than the program that links them, and the modules are linked as published, unmodified, with their source public at the version `go.mod` requires. A module under MPL-2.0 is accepted on that condition: linked unmodified.
+- **CC-BY-4.0** is named in an SBOM for `github.com/modelcontextprotocol/go-sdk` because that module's `LICENSE` puts its documentation under it. The code a binary links from it is Apache-2.0 or MIT.
+
+An SBOM also names `LicenseRef-` entries for client-go, grpc-gateway and this repository's own module. They are files whose names contain `license` or `notices` that the scanner took for license texts, and they carry no license: client-go's `license.go` and `license_templates.go`, its clients of GitLab's license APIs, with their tests and mocks; grpc-gateway's test fixture `license_missing_name.prototext`; and in this module the license tools and their tests, the end-to-end license tests and fixture, the model corpus's `licensed_*.go` cases, and `cmd/gen_third_party_notices/notices.go`, which writes `THIRD_PARTY_NOTICES`, with its test.
+
+A module under any other license, or under none, is not merged. The pull request that adds the module, or updates it to a version under another license, says so, and it is merged only once the module is replaced or the maintainer accepts the license by adding it to the list above in that pull request, with the reason. The threshold is the same for every license outside the list: before the merge. No check fails on a license today, so the review of each pull request that changes `go.mod` is where this is held; what does fail is `cmd/gen_third_party_notices`, which stops the release when a module a binary links publishes no license file at all. Modules only the tests and the repository's commands use reach no release, and are held to the list only when a release binary starts linking them.
+
+### Static analysis findings
+
+Three static analysers read the code, and a finding is handled by the one that raised it:
+
+- **golangci-lint** runs in the required `✅ CI` check on every pull request and every push to main, with `gosec` in audit mode, `staticcheck` with all of its checks, `govet` and the other linters `.golangci.yml` enables. A finding of any severity fails the check, so it is fixed in the pull request that brings it, before the merge. A false positive is suppressed on its own line with its reason, either `//nolint:<linter> // <reason>`, which `nolintlint` refuses without both, or gosec's `// #nosec <rule> -- <reason>`; every `#nosec` in the tree names its rule and its reason, and the 31 in the server's own code are read in [the October 2026 security review](docs/development/security-review-2026-10.md#method).
+- **CodeQL** analyses the Go code, the JavaScript and TypeScript and the workflows on every pull request, every push to main and once a week, and reports to code scanning without failing the required check. An alert of any severity is fixed, or dismissed with the reason it does not apply, before the next release is tagged. Read on 31 October 2026, no CodeQL alert is open; of the 21 it has raised, 17 were fixed and 4 dismissed as false positives.
+- **SonarCloud** analyses the Go code on every pull request and every push to main, and reports its quality gate beside the required check rather than in it. A vulnerability it reports is fixed, and a security hotspot it raises is fixed or reviewed with its reason, before the next release is tagged. Read on 31 October 2026, the quality gate passes and no vulnerability and no hotspot is open.
+
+`.golangci.yml` also excludes some of gosec's rules across a scope rather than on a line, each for a reason that holds across that scope:
+
+- `G104`, an unhandled error, everywhere, since `errcheck` reports the same finding.
+- `G101`, a hard-coded credential, in test files, whose fixtures carry invented tokens on purpose, and in the `action_specs.go` files, whose constants are action IDs.
+- `G103`, `G204` and `G304`, the use of `unsafe`, a subprocess started with a variable and a file opened at a variable path, everywhere, through the linter's `common-false-positives` preset. In the server, `unsafe` serves twice in `internal/toolutil`, to read an address as an identity, of a handler's closure and of a schema, and nothing is written through either; the server starts no subprocess; and a path a tool's caller supplies is opened only after the confinement [File System Access](#file-system-access-caller-supplied-local-paths) describes, which gosec cannot follow, the other paths it opens being the operator's (a dotenv file, a certificate). The rest are the repository's commands under `cmd/`, which run `go` and `git` and read the tree they are run in.
+
+The `comments` and `std-error-handling` presets beside it silence rules no security property rests on: missing or misshapen doc comments, which `make check-godocs` judges instead, and the unchecked error of a close, a flush, a print, a removal or a write to the standard streams.
+
+`sonar-project.properties` sets aside three of SonarCloud's security rules in named files, each with its reason written beside it, so no vulnerability or hotspot is reported for them there:
+
+- `S4830` and `S5527`, a TLS connection that verifies neither the certificate nor the host name, in `internal/gitlab/client.go`, whose one such configuration is used only when the operator sets `GITLAB_MCP_SKIP_TLS_VERIFY` for an instance with a self-signed certificate.
+- `S4036`, a command found through `PATH`, in `cmd/bench_resources` and `cmd/audit_e2e_coverage`, maintainer tooling that reaches no binary and runs where the same `PATH` has already supplied the compiler.
+- `S1313`, a hard-coded IP address, in `internal/gitlab/destination.go`, whose addresses are the cloud metadata endpoints and the RFC 6598 shared address range that the outbound destination guard refuses, not anywhere it connects.
+
+The file's other exclusions concern duplication, complexity, naming, empty test handlers, `TODO` comments, coverage and files that are not code, and set aside no security rule.
+
+To see what is open:
+
+```bash
+gh api 'repos/jmrplens/gitlab-mcp-server/code-scanning/alerts?tool_name=CodeQL&state=open' --jq length
+curl -s 'https://sonarcloud.io/api/issues/search?componentKeys=jmrplens_gitlab-mcp-server&types=VULNERABILITY&resolved=false' | jq .total
+curl -s 'https://sonarcloud.io/api/hotspots/search?projectKey=jmrplens_gitlab-mcp-server&status=TO_REVIEW' | jq .paging.total
+```
 
 ### Release Integrity
 

@@ -249,9 +249,11 @@ above.
 pushes**, **Require a pull request before merging** with **0** required
 approvals and **Require conversation resolution before merging** turned on,
 and **Require status checks to pass** with the one check `✅ CI`. Its bypass
-list holds **Deploy keys**, for the reason the next item gives, and the
-**Repository admin** role. Beside the ruleset, Repository → Settings → General
-→ Pull Requests allows **squash merging** alone.
+list holds **Deploy keys** with the mode **Always allow**, for the reason the
+next item gives, and the **Repository admin** role with the mode **For pull
+requests only** (`bypass_mode: pull_request` in the API). Beside the ruleset,
+Repository → Settings → General → Pull Requests allows **squash merging**
+alone.
 
 **Why.** [Code Review](../../CONTRIBUTING.md#code-review) says what a pull
 request needs before it is merged, and these are the parts of it GitHub can
@@ -264,11 +266,23 @@ squash commit's message is the pull request description, which
 `make check-pr-description` holds, so `main` gains one commit per pull request,
 with a message that was checked.
 
-**The admin bypass.** With the **Repository admin** role on the bypass list,
-the ruleset does not refuse a merge the maintainer makes: what holds that merge
-is [What a change needs to be accepted](../../CONTRIBUTING.md#what-a-change-needs-to-be-accepted).
-GitHub records each bypass of the ruleset, a version stamp's push included, and
-lists them:
+**Nothing else pushes to `main`.** The admin role bypasses the ruleset only
+from a pull request: a push of the maintainer's to `main` is refused like
+anyone's, and the bypass lets the maintainer merge a pull request the rules
+would refuse, from that pull request. What holds such a merge is
+[What a change needs to be accepted](../../CONTRIBUTING.md#what-a-change-needs-to-be-accepted).
+A workflow's `GITHUB_TOKEN`, Dependabot and every other app are not on the
+list, so they are held to the rules like a person. The one push the ruleset
+lets through is a deploy key's, which is the release workflow's version stamp
+([SC-01](#sc-01-keep-the-deploy-key-ruleset-bypass-declared)). Until
+2026-10-31 the admin role's mode was **Always allow**, which let it push to
+`main` directly as well. A fix developed in a security advisory's temporary
+private fork reaches `main` as a pull request merge: the rule suite of
+`39b7093af`, merged that way under the old mode, passed the pull request rule
+and bypassed only the required check, which never runs in such a fork, so the
+pull-request-only mode should still admit it, and the next advisory merged from
+its fork is the first to show that it does. GitHub records each bypass of the
+ruleset, a version stamp's push included, and lists them:
 
 ```bash
 gh api 'repos/jmrplens/gitlab-mcp-server/rulesets/rule-suites?ref=refs/heads/main&rule_suite_result=bypass&time_period=month' \
@@ -289,38 +303,63 @@ The first answers `include: ["refs/heads/main"]`; the rules `deletion` and
 `required_review_thread_resolution: true`, and `required_status_checks` naming
 the one context `✅ CI`; and two bypass actors,
 `{"actor_type": "DeployKey", "actor_id": null, "bypass_mode": "always"}` and
-`{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}`. The
-second answers `allow_squash_merge: true` and the other two `false`. The
+`{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "pull_request"}`.
+The second answers `allow_squash_merge: true` and the other two `false`. The
 ruleset's own `allowed_merge_methods` lists all three methods; the repository
 setting is what narrows them to squash.
 
-**Current state.** Applied. Read on 2026-10-25, both commands answer as above.
+**Current state.** Applied. The maintainer changed the admin role's bypass mode
+from `always` to `pull_request` on 2026-10-31; read that day after the change,
+both commands answer as above, and the ruleset answers
+`current_user_can_bypass: "pull_requests_only"` to the maintainer.
 
 **What tells you it drifted.** Nothing automatic; the commands above.
 
 ## SC-01: keep the deploy-key ruleset bypass declared
 
 **What to set.** In the `Protect main` ruleset, keep **Deploy keys** on the
-bypass list.
+bypass list with the mode **Always allow**, and keep one deploy key with write
+access on the repository, the one the release workflow pushes with.
 
-**Why.** `release.yml` pushes the version stamp straight to `main` with a deploy
-key, which is a write to a protected branch that no pull request reviewed. A
-deploy key is not subject to the ruleset, so the push succeeds either way; the
-bypass entry is what makes that visible on the settings page instead of leaving
-an audit reader to work out why a protected branch has unreviewed commits on it.
+**Why.** The `commit-manifests` job of `release.yml` pushes the version stamp
+straight to `main` with the deploy key whose private half is the
+`RELEASE_DEPLOY_KEY_B64` secret: one commit that writes into `server.json` and
+the other manifests the version, the digests and the bundle hashes the release
+has just published. A deploy key is held to the ruleset like any other actor
+unless the bypass list names deploy keys, so without this entry the pull
+request rule refuses the push and the release's last job fails. It is the one
+push to `main` the ruleset lets through, which is why the mode stays **Always
+allow** for deploy keys while the admin role's is **For pull requests only**:
+the workflow makes the commit with nobody there to open or merge a pull request
+for it, its content is what the release determined, and the job checks out
+`main` afresh, runs no action but GitHub's checkout and Sigstore's cosign
+installer, each pinned to a commit, and is given the key only for a tag's run,
+never a rehearsal's. The step reads the copy of the key the `release`
+environment holds, which deploys only from a `v*` tag, and an expression in the
+step empties it in a rehearsal. A second copy has been a repository secret since
+the key was made: no job reads it, and any workflow run of this repository that
+named it would be handed it, the gap the caveat of
+[the release environment item](#sc-04-deploy-the-release-environment-from-release-tags-only)
+describes. The entry names deploy keys as a kind, not one key, so a deploy key
+with write access is added to this repository for this job alone: today there
+is one, `release-manifest-bot-20260601-084942`, added on 2026-06-01.
 
 **How to check.**
 
 ```bash
 gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.bypass_actors'
+gh api repos/jmrplens/gitlab-mcp-server/keys --jq '.[] | {title, read_only}'
 ```
 
-**Current state.** Already satisfied. The ruleset carries
-`{"actor_type": "DeployKey", "actor_id": null, "bypass_mode": "always"}` (beside
-a `RepositoryRole` entry for the repository administrators), and
-the oldest version its history records already carries it, so it predates the
-security work that filed this item. The remaining work is to keep it: a standing
-requirement to re-check after any ruleset edit, not an outstanding change.
+**Current state.** Satisfied. The ruleset carries
+`{"actor_type": "DeployKey", "actor_id": null, "bypass_mode": "always"}` beside
+the `RepositoryRole` entry for the admin role, which bypasses only from a pull
+request since 2026-10-31, and the oldest version its history records already
+carries it, so it predates the security work that filed this item. Read on
+2026-10-31, the second command lists the one key,
+`release-manifest-bot-20260601-084942`, with `read_only: false`. The remaining
+work is to keep it: a standing requirement to re-check after any ruleset edit,
+not an outstanding change.
 
 **The alternative, and why it was not taken.** The push could go through a
 branch and a pull request instead of bypassing at all. That would remove the
@@ -593,7 +632,8 @@ request that carries a web commit without the trailer.
 ```bash
 gh api repos/jmrplens/gitlab-mcp-server/releases/latest --jq '"immutable_release=\(.immutable)"'
 gh api repos/jmrplens/gitlab-mcp-server/rulesets --jq '.[] | "ruleset=\(.name) target=\(.target)"'
-gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.bypass_actors[] | "bypass=\(.actor_type)"'
+gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.bypass_actors[] | "bypass=\(.actor_type):\(.bypass_mode)"'
+gh api repos/jmrplens/gitlab-mcp-server/keys --jq '.[] | "deploy_key=\(.title) read_only=\(.read_only)"'
 gh api repos/jmrplens/gitlab-mcp-server/rulesets/16049728 --jq '.rules[] | "main_rule=\(.type) approvals=\(.parameters.required_approving_review_count) threads=\(.parameters.required_review_thread_resolution) checks=\([.parameters.required_status_checks[]?.context] | join(","))"'
 gh api repos/jmrplens/gitlab-mcp-server --jq '"squash=\(.allow_squash_merge) merge_commit=\(.allow_merge_commit) rebase=\(.allow_rebase_merge)"'
 gh api repos/jmrplens/gitlab-mcp-server --jq '"web_commit_signoff=\(.web_commit_signoff_required)"'

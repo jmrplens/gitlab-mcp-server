@@ -17,6 +17,7 @@ How the project makes decisions, who holds which role and what it depends on to 
 - [Pull Requests](#pull-requests)
 - [Code Review](#code-review)
 - [Code Standards](#code-standards)
+- [Dependencies](#dependencies)
 - [Testing](#testing)
 - [Documentation](#documentation)
 - [Release Process](#release-process)
@@ -204,7 +205,7 @@ Every change reaches `main` through a pull request, except the version stamp the
 ### What a change needs to be accepted
 
 - The required `✅ CI` check passes. It aggregates the build, the tests on Linux, macOS and Windows, the 90% coverage floor, the linters and the repository's own gates, `make check-pr-description` and the sign-off check among them.
-- Every review thread is resolved. The branch rules refuse the merge otherwise, except to the repository admin role, which is on their bypass list; the maintainer, who holds that role, merges a pull request only once this item and the one above hold.
+- Every review thread is resolved. The branch rules refuse the merge otherwise, except to the repository admin role, whose place on their bypass list lets it pass over them only when merging a pull request, never on a push to `main`; the maintainer, who holds that role, merges a pull request only once this item and the one above hold.
 - A contributor's pull request completes the template's checklist, with any item that does not apply marked so. The maintainer's own pull requests carry the same information in the description's account of what was run.
 - The maintainer agrees the change belongs in the project. A correct change can still be declined when it falls outside the [roadmap](https://docs.jmrp.io/gitlab-mcp-server/roadmap/) or a recorded decision; the reason is given in the pull request.
 
@@ -214,7 +215,7 @@ The branch rules require no approval count while the project has one maintainer,
 
 ### Style Guides
 
-Contributions are expected to follow these guides. The tools listed beside each enforce them in CI, and an exception is rare and marked at its location with the reason.
+Contributions are expected to follow these guides. The tools listed beside each enforce them in CI, and an exception is rare and marked at its location with the reason, or, where it covers a whole scope, written into the tool's configuration beside its reason; [SECURITY.md](SECURITY.md#static-analysis-findings) lists the ones that touch a security rule and says what happens to a static analysis finding.
 
 | Language                                   | Style guide                                                                                                                                                                               | Enforced by                                                                                                                                     |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -275,6 +276,45 @@ A shebang, an encoding declaration, a Dockerfile parser directive or a CSS `@cha
 Tooling this repository runs, its auditors, generators and release steps, is a Go command under `cmd/`, sharing what it needs through `cmd/internal/`, or under `test/e2e/` for the end-to-end orchestration. A Go command runs natively on every platform a contributor uses, is tested with the rest of the module, and needs no interpreter or package installed at run time in CI, so new tooling is written as one.
 
 A script in another language is the exception, and `make check-supply-chain` holds the tree to a table of the ones allowed to exist (`declaredScripts` in `cmd/audit_supply_chain/declarations.go`), each with the reason it has to stay: an installer that runs before any binary of ours exists, the entry point a distribution hands its own runtime, Ruby GitLab evaluates, thin glue around another program's command line, run by a job where setting up Go would cost more than it saves or by a make target, or fixture content. The scripts still being ported are declared as pending, each with the item of issue 1114 that ports it. A new script fails the gate until it is declared, and the [command-line utilities reference](docs/development/cmd-utilities.md#audit_supply_chain) says what each category means.
+
+## Dependencies
+
+This is how the project chooses, obtains and keeps current what it depends on. What a known vulnerability in a dependency, or a license outside the accepted ones, sets off is in [SECURITY.md](SECURITY.md#dependencies).
+
+### Choosing a dependency
+
+A dependency is added in the pull request that needs it, which says why, and the review holds it to these points:
+
+- **Needed.** The standard library and the modules `go.mod` already requires come first; a module is added for what they do not do.
+- **The official client where one exists.** GitLab is reached through `gitlab.com/gitlab-org/api/client-go`, GitLab's own Go client, MCP through `github.com/modelcontextprotocol/go-sdk`, the protocol's official Go SDK, and telemetry through the OpenTelemetry Go SDK. An endpoint client-go has no method for is a request made through client-go's own request builder, not a second GitLab client.
+- **Maintained.** It publishes releases, answers its issues and its security reports, and is neither archived nor deprecated.
+- **A license the release can carry.** It is one of the licenses [SECURITY.md](SECURITY.md#licenses) accepts in what a release binary links.
+- **No known vulnerability.** `govulncheck` and `make check-binary-vulns` pass with it, which the required `✅ CI` check holds anyway.
+
+### How each kind is obtained
+
+Almost every dependency is named at an exact version and checked against a recorded checksum when it is fetched, so a build takes the bytes that were reviewed; the two paragraphs below the table name the exceptions.
+
+| Dependency                                                                              | Where its version is recorded                                                                                | How it is fetched and checked                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go modules of the server, of the commands under `cmd/` and of the tests                 | `go.mod`, the repository's one module, with each module's checksum in `go.sum`                               | `go` downloads them through the Go module proxy and refuses a module whose checksum differs from `go.sum` or from the checksum database (`sum.golang.org`); a build never edits either file                                                                      |
+| Go tools (`govulncheck`, `gotestsum`)                                                   | The `tool` block of `go.mod`                                                                                 | As the modules                                                                                                                                                                                                                                                   |
+| `golangci-lint`                                                                         | `GOLANGCI_LINT_VERSION` in the `Makefile`                                                                    | `make install-tools` builds that version with `go install`, which checks it as it checks a module; CI installs that version's release through the linter's own action                                                                                            |
+| The documentation site's packages                                                       | `site/package.json` and `site/pnpm-lock.yaml`; pnpm itself in the `packageManager` field, with its SHA-512   | `pnpm install --frozen-lockfile`, which refuses a lockfile out of step with `package.json` and checks every package against the integrity hash the lockfile records; install scripts run only for the packages `allowBuilds` names in `site/pnpm-workspace.yaml` |
+| The tools the release's PyPI job installs                                               | `.github/requirements/pypi-publish.txt`, compiled from `pypi-publish.in` with a hash for every file          | `pip install --require-hashes`                                                                                                                                                                                                                                   |
+| GitHub Actions                                                                          | Each `uses:`, pinned to a full commit SHA with its version in a comment                                      | `make check-supply-chain` fails on a tag or a branch                                                                                                                                                                                                             |
+| Container images                                                                        | The `Dockerfile`'s two base images, by tag and digest; an image a workflow step or an action runs, by digest | The digest pins the bytes, and `make check-supply-chain` holds the workflows to it, with the one exception it declares and gives the reason for, the image of the Scorecard action                                                                               |
+| Programs a release job downloads (Syft, Trivy, ORAS, the MCP Registry publisher, komac) | A version and a SHA-256 in `release.yml`                                                                     | The job checks the download against the SHA-256 before running it                                                                                                                                                                                                |
+
+The images the end-to-end stack starts and the GitLab the Enterprise schema check boots are an exception on purpose: GitLab and its runner follow the tags they name, because those runs exist to hold the server to the GitLab a user installs today, and the fixture services beside them decide nothing a scenario asserts ([`test/e2e/README.md`](test/e2e/README.md)). Nothing from them reaches a release.
+
+The toolchains, and the tools a pinned action installs, are fetched from their publishers by version, with no checksum of ours recorded beside them: the Go toolchain at the version `go.mod` names, the site's Node.js at the one `site/.node-version` names, the .NET SDK, GoReleaser and cosign at the exact version their workflow names, the `golangci-lint` release CI installs at the `Makefile`'s, the npm job's Node.js by its major version alone, 24, the Python the `supply-chain` job runs the scripts' tests with as `3.x`, and the Chromium the site's build renders its diagrams with, the build the Playwright version in `site/pnpm-lock.yaml` downloads. GoReleaser, cosign, the .NET SDK and that Node.js run in the release workflow, GoReleaser in the job that signs the release.
+
+### Keeping dependencies current
+
+- **Dependabot** (`.github/dependabot.yml`) checks every Monday the Go modules, the site's packages, the PyPI job's tools, the GitHub Actions, the `Dockerfile` and the two compose files, and opens a pull request for what moved. A version is proposed only after a cooldown: 7 days, and for the Go modules, the site's packages and the PyPI tools 14 days for a new minor release and 30 for a new major one. Minor and patch updates of the Go modules and of the site's packages arrive grouped, one pull request per ecosystem (`go-minor-patch`, `npm-minor-patch`), and every update of the Actions and of the PyPI tools in one group each (`actions-all`, `pypi-publish`). Dependabot's security updates are on and wait for no cooldown. The npm launcher under `npm/gitlab-mcp-server` has no entry, since the release stamps its pins, and the OpenTelemetry collector image of the telemetry example moves by hand, with the constant its end-to-end module holds.
+- **By hand.** The maintainer also raises the dependencies to their newest releases in a sweep pull request, the versions Dependabot does not manage included (the tool versions pinned in the `Makefile` and `release.yml`, the site's Node.js and pnpm). A sweep takes the newest release without waiting for the cooldown, and holds a version back only for a technical reason it states: a peer range that refuses the release, a release a rehearsal shows broken, a release withdrawn upstream. client-go is taken as soon as a release of it appears, since the workarounds [`docs/development/upstream-bugs.md`](docs/development/upstream-bugs.md) records are retired by it.
+- **Tracking.** `govulncheck` over the source, `make check-binary-vulns` over every release binary and Trivy over the image's Alpine packages watch for known vulnerabilities, as [SECURITY.md](SECURITY.md#dependencies) describes, and every release publishes an SPDX SBOM of each binary and `THIRD_PARTY_NOTICES`, the license texts of every module the binaries link.
 
 ## Testing
 

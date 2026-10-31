@@ -524,11 +524,14 @@ Install the Go extension and add to `.vscode/mcp.json`:
 
 ## Dependencies
 
-| Dependency                               | Version | Purpose                         |
-| ---------------------------------------- | ------- | ------------------------------- |
-| `github.com/modelcontextprotocol/go-sdk` | v1.7.0  | MCP server framework            |
-| `gitlab.com/gitlab-org/api/client-go/v3` | v2.62.0 | Official GitLab REST API client |
-| `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev       |
+| Dependency                               | Purpose                                                   |
+| ---------------------------------------- | --------------------------------------------------------- |
+| `github.com/modelcontextprotocol/go-sdk` | MCP server framework, the protocol's official Go SDK      |
+| `gitlab.com/gitlab-org/api/client-go/v3` | GitLab's own Go client, for the REST and GraphQL APIs     |
+| `go.opentelemetry.io/otel` and its SDK   | Traces, metrics and logs, exported over OTLP when enabled |
+| `github.com/joho/godotenv`               | Loading the dotenv files the server reads                 |
+
+The version of each is the one `go.mod` requires. How a dependency is chosen, obtained and kept current is in [CONTRIBUTING.md](../../CONTRIBUTING.md#dependencies).
 
 ## External References
 

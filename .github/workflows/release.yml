@@ -2087,9 +2087,11 @@ jobs:
       contents: read # download the published release assets
       attestations: read # verify the .mcpb provenance before hashing it
     steps:
-      # A fresh checkout of main in a job that runs no third-party code. The
-      # deploy key pushes straight to a protected branch, so nothing that ran
-      # earlier in some other job can have rewritten what it commits.
+      # A fresh checkout of main in a job that runs no action but this
+      # checkout, the cosign installer and, in a rehearsal, the artifact
+      # download, each pinned to a commit. The deploy key pushes straight to a
+      # protected branch, so nothing that ran earlier in some other job can
+      # have rewritten what it commits.
       #
       # main in a rehearsal too, since main is what the commit would land on,
       # which means this job runs main's scripts against the rehearsal's
