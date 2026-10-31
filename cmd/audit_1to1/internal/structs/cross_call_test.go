@@ -493,6 +493,86 @@ func Delegate(c *gl.Client, in DelegateInput) error {
 	_, err := c.Widgets.ListWidgets(nil)
 	return err
 }
+
+// twice hands the intermediate to the function its caller passes, two times.
+func twice(f filter, list func(filter) error) error {
+	if err := list(f); err != nil {
+		return err
+	}
+	return list(f)
+}
+
+type TwiceInput struct {
+	Search string ~json:"search"~
+}
+
+// Twice hands its closure to a function that calls it twice with the
+// intermediate.
+func Twice(c *gl.Client, in TwiceInput) error {
+	return twice(filter{search: in.Search}, func(f filter) error {
+		_, err := c.Widgets.ListWidgets(optionsOf(f))
+		return err
+	})
+}
+
+// firstOf hands back the first of the intermediates it is handed.
+func firstOf(fs []filter) filter { return fs[0] }
+
+type FieldInput struct {
+	Search string ~json:"search"~
+}
+
+// Field holds the intermediate in a field of a local, hands the field to the
+// helper, and hands on a list of intermediates whose last is that field;
+// the same field of a local filled with a constant carries nothing.
+func Field(c *gl.Client, in FieldInput) error {
+	r := read{f: filter{search: in.Search}}
+	fixedRead := read{f: filter{search: fixed}}
+	_ = firstOf([]filter{{search: in.Search}, {search: in.Search}, r.f})
+	_ = optionsOf(fixedRead.f)
+	_, err := c.Widgets.ListWidgets(optionsOf(r.f))
+	return err
+}
+
+// keep hands the intermediate back in its first named result, by a bare
+// return.
+func keep(f filter) (kept, other filter) {
+	kept = f
+	return
+}
+
+type KeepInput struct {
+	Search string ~json:"search"~
+}
+
+// Keep takes the intermediate back from the first of two named results.
+func Keep(c *gl.Client, in KeepInput) error {
+	kept, _ := keep(filter{search: in.Search})
+	_, err := c.Widgets.ListWidgets(optionsOf(kept))
+	return err
+}
+
+// optionsBeside builds the options out of the intermediate it takes after a
+// struct its callers do not fill from their input.
+func optionsBeside(a args, f filter) *gl.ListWidgetsOptions {
+	return widgetdata.ListOptions(0, f.search+a.search)
+}
+
+// applyBeside hands the intermediate to the builder its caller passes.
+func applyBeside(f filter, build func(args, filter) *gl.ListWidgetsOptions) *gl.ListWidgetsOptions {
+	return build(args{}, f)
+}
+
+type BesideInput struct {
+	Search string ~json:"search"~
+}
+
+// Beside names as a value, beside the intermediate, a helper whose first
+// parameter is a struct it does not fill from its input.
+func Beside(c *gl.Client, in BesideInput) error {
+	_, err := c.Widgets.ListWidgets(applyBeside(filter{search: in.Search}, optionsBeside))
+	return err
+}
 `
 
 // helperTree checks the two helper fixture packages and returns them,
@@ -525,9 +605,12 @@ func callerPairs(pkg *packages.Package) []string {
 // deep, or a struct of arguments the handler fills and a shared body reads,
 // and each pair says it was found through the caller. An intermediate the
 // handler fills from its input carries the input on: into the parameter of a
-// closure, into a helper named as a value beside it, into a helper that
-// sends the options itself, and through a local, a copy of it and a loop
-// over them. A function of the package that hands back several results is
+// closure, the closure called once or twice with it, into a helper named as
+// a value beside it, one whose first parameter is a struct the handler does
+// not fill among them, into a helper that sends the options itself, and
+// through a local, a copy of it, a loop over them and a field of a local,
+// whether the field is handed on alone or after other intermediates in a
+// list. A function of the package that hands back several results is
 // read through its body, so only the result it hands the intermediate back
 // in holds it, whether its value, a named result or another function's
 // result, and each does when it hands back what nothing read tells apart (a
@@ -549,12 +632,15 @@ func TestCollectCallerInputs_AHelperBuildsTheOptions_PairsThemWithTheInputOfItsC
 	got := callerPairs(pkgs[1])
 
 	want := []string{
+		"BesideInput v3.ListWidgetsOptions caller",
 		"BuildInput v3.ListWidgetsOptions caller",
 		"ChainInput v3.ListWidgetsOptions caller",
+		"FieldInput v3.ListWidgetsOptions caller",
 		"ForkInput v3.ListWidgetsOptions caller",
 		"GroupForkInput v3.ListWidgetsOptions caller",
 		"HeldInput v3.ProtectOptions caller",
 		"IndirectInput v3.ListWidgetsOptions caller",
+		"KeepInput v3.ListWidgetsOptions caller",
 		"ListInput v3.ListWidgetsOptions caller",
 		"MixedInput v3.ListWidgetsOptions caller",
 		"PickInput v3.ProtectOptions caller",
@@ -565,6 +651,7 @@ func TestCollectCallerInputs_AHelperBuildsTheOptions_PairsThemWithTheInputOfItsC
 		"SwapInput v3.ListWidgetsOptions caller",
 		"TokenInput v3.ListWidgetsOptions caller",
 		"TokenLitInput v3.ListWidgetsOptions caller",
+		"TwiceInput v3.ListWidgetsOptions caller",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("collectCallerInputs = %v, want %v", got, want)
@@ -718,6 +805,69 @@ func TestSentStructs_ASelectorTheTypeCheckerDidNotResolve_SendsNothing(t *testin
 
 	if sent := sentStructs(info, body); len(sent) != 0 {
 		t.Errorf("sentStructs = %v, want nothing", sent)
+	}
+}
+
+// TestHelperValue_ANameThatIsNotAFunction_BuildsNothing verifies a name the
+// type information resolves to something other than a function, such as the
+// package-level variable holding a helper that helperDataSource declares,
+// builds nothing as a helper named as a value. The intermediates record
+// functions alone beside an intermediate, so collect never hands it one; the
+// guard keeps helperValue answering for any name it is given.
+func TestHelperValue_ANameThatIsNotAFunction_BuildsNothing(t *testing.T) {
+	ident := ast.NewIdent("Builder")
+	held := types.NewVar(0, nil, "Builder", types.Typ[types.Int])
+	info := &types.Info{Uses: map[*ast.Ident]types.Object{ident: held}}
+
+	if built := helperValue(info, ident, helperBuilds{"Builder": nil}, nil); built != nil {
+		t.Errorf("helperValue = %v, want nothing for a variable", built)
+	}
+}
+
+// TestEnter_AReceiverWithNoNameOrNoExpression_HoldsNothing verifies that a
+// function read through its body holds nothing in its receiver when the
+// receiver has no name to hold it under, or when the call names no
+// receiver expression to hand it, however much of the input the caller
+// holds. A type-checked package reaches the second only through a method
+// value, which always names one, so the case is built by hand.
+func TestEnter_AReceiverWithNoNameOrNoExpression_HoldsNothing(t *testing.T) {
+	named := ast.NewIdent("w")
+	cases := []struct {
+		name  string
+		names []*ast.Ident
+	}{
+		{name: "a receiver with no name"},
+		{name: "a call with no receiver expression", names: []*ast.Ident{named}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			callee := ast.NewIdent("options")
+			fn := types.NewFunc(0, nil, "options", types.NewSignatureType(nil, nil, nil, nil, nil, false))
+			decl := &ast.FuncDecl{
+				Recv: &ast.FieldList{List: []*ast.Field{{Names: tc.names}}},
+				Type: &ast.FuncType{Params: &ast.FieldList{}},
+				Body: &ast.BlockStmt{},
+			}
+			receiver := types.NewParam(0, nil, "w", types.Typ[types.Int])
+			input := types.NewParam(0, nil, "in", types.Typ[types.Int])
+			info := &types.Info{
+				Uses: map[*ast.Ident]types.Object{callee: fn},
+				Defs: map[*ast.Ident]types.Object{named: receiver},
+			}
+			held := &intermediates{
+				info: info, input: input, from: map[*types.Var]bool{input: true},
+				beside: map[*ast.Ident]bool{}, decls: map[*types.Func]*ast.FuncDecl{fn: decl}, reading: map[*types.Func]bool{},
+			}
+
+			inner, entered := held.enter(&ast.CallExpr{Fun: callee})
+
+			if inner == nil || entered != decl {
+				t.Fatalf("enter = %v, %v, want the declaration read", inner, entered)
+			}
+			if len(inner.from) != 0 {
+				t.Errorf("enter held %v, want nothing", inner.from)
+			}
+		})
 	}
 }
 
