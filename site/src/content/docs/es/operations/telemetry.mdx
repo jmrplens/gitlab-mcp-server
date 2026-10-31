@@ -383,8 +383,8 @@ colector en otra máquina necesita ese bloque `tls` sea cual sea el esquema.
 El fichero de Compose deja `GITLAB_MCP_TELEMETRY_IDENTITY` en `none`, así que
 las trazas dicen qué se hizo y nada de quién lo hizo. Con el backend en tu
 propia máquina, `pseudonymous` permite a Tempo distinguir el tráfico de un
-llamante del de otro sin nombrar a nadie, y `full` pone `user.id` y `user.name`
-en cada span. Elige antes de arrancarlo:
+llamante del de otro sin nombrar a nadie, y `full` pone `user.id`, `user.name` y
+`gitlab_mcp.instance` en cada span. Elige antes de arrancarlo:
 
 ```bash
 GITLAB_MCP_TELEMETRY_IDENTITY=pseudonymous docker compose -f examples/telemetry/compose.yaml up -d
@@ -625,11 +625,11 @@ apagado y tareas de fondo no llevan ninguno, porque no hay span al que
 pertenecer.
 
 La política de identidad gobierna también estos registros, y las dos patas se
-comportan distinto a propósito. Tu terminal conserva `user` y `user_id` diga lo
-que diga la política: estás leyendo la salida de tu propio servidor, y un ajuste
-sobre lo que sale del proceso no tiene por qué editarla. La copia exportada
-lleva lo que la política permite, con los mismos nombres `user.*` que usan los
-spans, para que una sola consulta los cruce.
+comportan distinto a propósito. Tu terminal conserva `user`, `user_id` e
+`instance` diga lo que diga la política: estás leyendo la salida de tu propio
+servidor, y un ajuste sobre lo que sale del proceso no tiene por qué editarla. La
+copia exportada lleva lo que la política permite, con los mismos nombres que usan
+los spans, `user.*` y `gitlab_mcp.instance`, para que una sola consulta los cruce.
 
 Ese último párrafo no era cierto hasta hace poco, y lo enseñó un despliegue en
 marcha: con la política en `pseudonymous`, que no nombra a nadie, sus spans
@@ -745,7 +745,7 @@ Desactivado por defecto, en tres escalones:
 ```bash
 --telemetry-identity none          # el valor por defecto: nada sobre quien llama
 --telemetry-identity pseudonymous  # un resumen por proceso: correlacionable, no legible
---telemetry-identity full          # user.id y user.name
+--telemetry-identity full          # user.id, user.name y gitlab_mcp.instance
 ```
 
 o `GITLAB_MCP_TELEMETRY_IDENTITY`.
@@ -785,6 +785,13 @@ endpoint compartido lo único que necesita de verdad, distinguir el tráfico de 
 llamante del de otro, para poder atribuir una ráfaga y seguir una sesión, sin
 nombrar a nadie.
 
+El resumen se calcula sobre la instancia de GitLab y el id de usuario juntos,
+porque un id de usuario nombra a una sola persona solo dentro de una instancia:
+en un despliegue que publica dos instancias, el usuario 7 de cada una lleva un
+resumen propio. Las versiones anteriores a la 3.5.0 lo calculaban sobre el id de
+usuario solo, así que la misma persona lleva un resumen distinto tras la
+actualización, una vez.
+
 <Aside type="note" title="Dos propiedades del resumen">
 Por defecto es **estable dentro de un proceso y distinto tras un reinicio**, a
 propósito: un resumen estable entre procesos permitiría a cualquiera que tuviera
@@ -800,9 +807,10 @@ conocida con un resumen puede enlazar ambos. Eso es inherente a la técnica, no 
 esta implementación.
 </Aside>
 
-**`full`** emite `user.id` y `user.name`. Lo que quiere una organización que
-audita a sus propios usuarios, y a lo que tiene derecho: son su gente y su
-colector.
+**`full`** emite `user.id` y `user.name`, y `gitlab_mcp.instance`, la instancia
+de GitLab que respondió la llamada, que distingue al usuario 7 de una instancia
+publicada del usuario 7 de otra. Lo que quiere una organización que audita a sus
+propios usuarios, y a lo que tiene derecho: son su gente y su colector.
 
 Ninguno de estos llega nunca a una **métrica**, con ninguna política. Un span
 que lleva un identificador de usuario cuesta un span; una dimensión de métrica

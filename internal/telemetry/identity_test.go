@@ -26,6 +26,12 @@ func newRedactor(t *testing.T, policy IdentityPolicy) *Redactor {
 	return NewRedactor(policy, testKeyring(t))
 }
 
+// testInstance is the instance the callers below were resolved against.
+const testInstance = "https://gitlab.example.com"
+
+// jane is the caller most cases here record: user 42 of testInstance.
+var jane = Identity{Instance: testInstance, UserID: "42", Username: "jane"}
+
 // TestRedactor_DefaultExportsNothing pins the default, which is the only value
 // that is safe for an operator who has not thought about the question.
 //
@@ -40,7 +46,7 @@ func TestRedactor_DefaultExportsNothing(t *testing.T) {
 	if got := redactor.Policy(); got != IdentityNone {
 		t.Errorf("default policy = %q, want %q", got, IdentityNone)
 	}
-	if attrs := redactor.Attributes("42", "jane"); len(attrs) != 0 {
+	if attrs := redactor.Attributes(jane); len(attrs) != 0 {
 		t.Errorf("the default policy exported %v", attrs)
 	}
 }
@@ -68,7 +74,7 @@ func TestRedactor_NilIsUsable(t *testing.T) {
 func TestRedactor_FullUsesTheRegistryNames(t *testing.T) {
 	redactor := newRedactor(t, IdentityFull)
 
-	attrs := attrMap(t, redactor.Attributes("42", "jane"))
+	attrs := attrMap(t, redactor.Attributes(jane))
 	if attrs[AttrUserID] != "42" {
 		t.Errorf("%s = %q, want the user id", AttrUserID, attrs[AttrUserID])
 	}
@@ -94,12 +100,35 @@ func TestRedactor_FullUsesTheRegistryNames(t *testing.T) {
 func TestRedactor_FullOmitsAnAbsentUsername(t *testing.T) {
 	redactor := newRedactor(t, IdentityFull)
 
-	attrs := attrMap(t, redactor.Attributes("42", ""))
-	if _, present := attrs[AttrUserName]; present {
-		t.Errorf("%s was emitted empty rather than omitted", AttrUserName)
+	attrs := attrMap(t, redactor.Attributes(Identity{UserID: "42"}))
+	for _, absent := range []string{AttrUserName, AttrInstance} {
+		t.Run(absent, func(t *testing.T) {
+			if _, present := attrs[absent]; present {
+				t.Errorf("%s was emitted empty rather than omitted", absent)
+			}
+		})
 	}
 	if attrs[AttrUserID] != "42" {
-		t.Error("the user id was dropped along with the absent username")
+		t.Error("the user id was dropped along with the absent username and instance")
+	}
+}
+
+// TestRedactor_FullNamesTheInstance pins the half of the tenant the full
+// policy used to leave out (issue 953, F-28). A GitLab user id is unique only
+// within one instance, so user 7 of two published instances are two people,
+// and a span naming user 7 alone could not say which of them called. The
+// instance is recorded under gitlab_mcp.instance, beside the registry's user
+// keys rather than inside their namespace, which defines no key for it.
+func TestRedactor_FullNamesTheInstance(t *testing.T) {
+	redactor := newRedactor(t, IdentityFull)
+
+	first := attrMap(t, redactor.Attributes(Identity{Instance: "https://gitlab-a.example.com", UserID: "7", Username: "seven"}))
+	second := attrMap(t, redactor.Attributes(Identity{Instance: "https://gitlab-b.example.com", UserID: "7", Username: "seven"}))
+	if first[AttrInstance] != "https://gitlab-a.example.com" || second[AttrInstance] != "https://gitlab-b.example.com" {
+		t.Errorf("%s = %q and %q, want each caller's own instance", AttrInstance, first[AttrInstance], second[AttrInstance])
+	}
+	if AttrInstance != "gitlab_mcp.instance" {
+		t.Errorf("AttrInstance = %q, want gitlab_mcp.instance", AttrInstance)
 	}
 }
 
@@ -109,15 +138,18 @@ func TestRedactor_FullOmitsAnAbsentUsername(t *testing.T) {
 func TestRedactor_PseudonymousNamesNobody(t *testing.T) {
 	redactor := newRedactor(t, IdentityPseudonymous)
 
-	attrs := attrMap(t, redactor.Attributes("42", "jane"))
+	attrs := attrMap(t, redactor.Attributes(jane))
 	digest, present := attrs[AttrUserHash]
 	if !present {
 		t.Fatalf("no %s was emitted: %v", AttrUserHash, attrs)
 	}
 	for key, value := range attrs {
-		if strings.Contains(value, "jane") || value == "42" {
+		if strings.Contains(value, "jane") || value == "42" || strings.Contains(value, "gitlab.example.com") {
 			t.Errorf("%s carries the identity verbatim: %q", key, value)
 		}
+	}
+	if _, leaked := attrs[AttrInstance]; leaked {
+		t.Errorf("%s is emitted under the pseudonymous policy", AttrInstance)
 	}
 	if _, leaked := attrs[AttrUserID]; leaked {
 		t.Errorf("%s is emitted under the pseudonymous policy", AttrUserID)
@@ -133,15 +165,41 @@ func TestRedactor_PseudonymousNamesNobody(t *testing.T) {
 func TestRedactor_PseudonymIsStableWithinAProcess(t *testing.T) {
 	redactor := newRedactor(t, IdentityPseudonymous)
 
-	first := attrMap(t, redactor.Attributes("42", "jane"))[AttrUserHash]
-	second := attrMap(t, redactor.Attributes("42", "jane"))[AttrUserHash]
-	other := attrMap(t, redactor.Attributes("43", "john"))[AttrUserHash]
+	first := attrMap(t, redactor.Attributes(jane))[AttrUserHash]
+	second := attrMap(t, redactor.Attributes(jane))[AttrUserHash]
+	other := attrMap(t, redactor.Attributes(Identity{Instance: testInstance, UserID: "43", Username: "john"}))[AttrUserHash]
 
 	if first != second {
 		t.Errorf("one user produced two digests (%q, %q); their calls cannot be correlated", first, second)
 	}
 	if first == other {
 		t.Errorf("two users share digest %q; the attribute distinguishes nobody", first)
+	}
+}
+
+// TestRedactor_PseudonymSeparatesOneUserIDOnTwoInstances pins what the digest
+// names since issue 953: the tenant, the pair (instance, user id), rather than
+// the user id alone (F-28). User 7 of two published instances are two people
+// and used to share one digest, so a dashboard grouping by user.hash counted
+// them as one. The username takes no part in it, since GitLab lets a user
+// rename themselves and the digest must follow them through it.
+func TestRedactor_PseudonymSeparatesOneUserIDOnTwoInstances(t *testing.T) {
+	redactor := newRedactor(t, IdentityPseudonymous)
+	digest := func(id Identity) string { return attrMap(t, redactor.Attributes(id))[AttrUserHash] }
+
+	onA := digest(Identity{Instance: "https://gitlab-a.example.com", UserID: "7", Username: "seven"})
+	onB := digest(Identity{Instance: "https://gitlab-b.example.com", UserID: "7", Username: "seven"})
+	renamed := digest(Identity{Instance: "https://gitlab-a.example.com", UserID: "7", Username: "renamed"})
+	unnamed := digest(Identity{UserID: "7", Username: "seven"})
+
+	if onA == "" || onA == onB {
+		t.Errorf("user 7 of two instances carries digests %q and %q; want two different ones", onA, onB)
+	}
+	if renamed != onA {
+		t.Errorf("a renamed user carries a new digest (%q, was %q); the username must not take part in it", renamed, onA)
+	}
+	if unnamed == "" || unnamed == onA {
+		t.Errorf("user 7 with no instance carries %q, want a digest of its own beside %q", unnamed, onA)
 	}
 }
 
@@ -157,8 +215,8 @@ func TestRedactor_PseudonymDoesNotSurviveARestart(t *testing.T) {
 	first := newRedactor(t, IdentityPseudonymous)
 	second := newRedactor(t, IdentityPseudonymous)
 
-	a := attrMap(t, first.Attributes("42", "jane"))[AttrUserHash]
-	b := attrMap(t, second.Attributes("42", "jane"))[AttrUserHash]
+	a := attrMap(t, first.Attributes(jane))[AttrUserHash]
+	b := attrMap(t, second.Attributes(jane))[AttrUserHash]
 
 	if a == b {
 		t.Errorf("the digest %q survives a new redactor; the salt is not per-process", a)
@@ -173,7 +231,7 @@ func TestRedactor_UnauthenticatedCallsCarryNothing(t *testing.T) {
 	for _, policy := range []IdentityPolicy{IdentityNone, IdentityPseudonymous, IdentityFull} {
 		t.Run(string(policy), func(t *testing.T) {
 			redactor := newRedactor(t, policy)
-			if attrs := redactor.Attributes("", "jane"); len(attrs) != 0 {
+			if attrs := redactor.Attributes(Identity{Instance: testInstance, Username: "jane"}); len(attrs) != 0 {
 				t.Errorf("an unauthenticated call carried %v", attrs)
 			}
 		})
@@ -299,7 +357,7 @@ func TestRedactor_ABrokenKeyringYieldsNoIdentityAtAll(t *testing.T) {
 
 	redactor := NewRedactor(IdentityPseudonymous, nil)
 
-	if attrs := redactor.Attributes("42", "jane"); len(attrs) != 0 {
+	if attrs := redactor.Attributes(jane); len(attrs) != 0 {
 		t.Errorf("a redactor with no keyring produced %v; an empty digest is not a pseudonym", attrs)
 	}
 }
@@ -320,7 +378,7 @@ func TestPolicyDescription_AnUnknownPolicy_PromisesNothing(t *testing.T) {
 		policy IdentityPolicy
 		want   string
 	}{
-		{name: "full names the user", policy: IdentityFull, want: "the GitLab user id and username"},
+		{name: "full names the user", policy: IdentityFull, want: "the GitLab instance, user id and username"},
 		{name: "pseudonymous names a digest", policy: IdentityPseudonymous, want: "a per-process digest, with no readable identity"},
 		{name: "none names nobody", policy: IdentityNone, want: "nothing about who made a call"},
 		{name: "the zero value names nobody", policy: IdentityPolicy(""), want: "nothing about who made a call"},

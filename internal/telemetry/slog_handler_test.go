@@ -442,19 +442,19 @@ func TestSlogHandler_TheExportedLegHonorsTheIdentityPolicy(t *testing.T) {
 		{
 			name:    "none records nobody",
 			policy:  IdentityNone,
-			forbids: []string{"jane", "42", AttrUserID, AttrUserName, AttrUserHash},
+			forbids: []string{"jane", "42", testInstance, LogFieldInstance, AttrUserID, AttrUserName, AttrUserHash, AttrInstance},
 		},
 		{
 			name:    "pseudonymous records a digest and no readable identity",
 			policy:  IdentityPseudonymous,
 			wants:   []string{AttrUserHash},
-			forbids: []string{"jane", AttrUserID, AttrUserName},
+			forbids: []string{"jane", testInstance, LogFieldInstance + "=", AttrUserID, AttrUserName, AttrInstance},
 		},
 		{
-			name:    "full records the id and the name",
+			name:    "full records the instance, the id and the name",
 			policy:  IdentityFull,
-			wants:   []string{AttrUserID, AttrUserName, "jane", "42"},
-			forbids: []string{AttrUserHash},
+			wants:   []string{AttrUserID, AttrUserName, AttrInstance + "=" + testInstance, "jane", "42"},
+			forbids: []string{AttrUserHash, " " + LogFieldInstance + "="},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -467,7 +467,8 @@ func TestSlogHandler_TheExportedLegHonorsTheIdentityPolicy(t *testing.T) {
 				logger.Info("tool call completed",
 					"tool", "gitlab_project/get",
 					LogFieldUser, "jane",
-					LogFieldUserID, "42")
+					LogFieldUserID, "42",
+					LogFieldInstance, testInstance)
 			})
 
 			for _, want := range tc.wants {
@@ -485,6 +486,32 @@ func TestSlogHandler_TheExportedLegHonorsTheIdentityPolicy(t *testing.T) {
 	}
 }
 
+// TestSlogHandler_TheExportedRecordNamesTheCallerAsTheSpanDoes pins that the
+// two signals agree about who called once the tenant is the pair (issue 953):
+// the exported copy of a tool-call record carries exactly the attributes the
+// redactor gives a span for the same instance, user id and username, under
+// each policy that records anybody. A record digesting the user id alone while
+// the span digested the pair would show one caller as two people across the
+// signals, and a backend joining them on user.hash would find nothing.
+func TestSlogHandler_TheExportedRecordNamesTheCallerAsTheSpanDoes(t *testing.T) {
+	for _, policy := range []IdentityPolicy{IdentityPseudonymous, IdentityFull} {
+		t.Run(string(policy), func(t *testing.T) {
+			redactor := newRedactor(t, policy)
+			exported := exportedRecord(t, redactor, func(logger *slog.Logger) {
+				logger.Info("tool call completed",
+					LogFieldUser, jane.Username, LogFieldUserID, jane.UserID, LogFieldInstance, jane.Instance)
+			})
+			for _, attr := range redactor.Attributes(jane) {
+				t.Run(string(attr.Key), func(t *testing.T) {
+					if want := " " + string(attr.Key) + "=" + attr.Value.AsString(); !strings.Contains(exported, want) {
+						t.Errorf("the exported record lacks %q, which the span carries: %s", want, exported)
+					}
+				})
+			}
+		})
+	}
+}
+
 // TestSlogHandler_TheTerminalStillNamesTheCaller pins the other half, which is
 // the reason this is a redaction and not a removal.
 //
@@ -494,10 +521,10 @@ func TestSlogHandler_TheExportedLegHonorsTheIdentityPolicy(t *testing.T) {
 func TestSlogHandler_TheTerminalStillNamesTheCaller(t *testing.T) {
 	var terminal bytes.Buffer
 	handler := NewSlogHandler(slog.NewJSONHandler(&terminal, nil), slog.LevelInfo, nil)
-	slog.New(handler).Info("tool call completed", LogFieldUser, "jane", LogFieldUserID, "42")
+	slog.New(handler).Info("tool call completed", LogFieldUser, "jane", LogFieldUserID, "42", LogFieldInstance, testInstance)
 
 	written := terminal.String()
-	for _, want := range []string{"jane", "42", LogFieldUser, LogFieldUserID} {
+	for _, want := range []string{"jane", "42", testInstance, LogFieldUser, LogFieldUserID, LogFieldInstance} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(written, want) {
 				t.Errorf("stderr lost %q under the strictest policy: %s", want, written)
@@ -585,10 +612,10 @@ func TestSlogHandler_ADerivedLoggerRedactsAttachedURIs(t *testing.T) {
 func TestSlogHandler_AGroupedIdentityFieldIsStillRedacted(t *testing.T) {
 	exported := exportedRecord(t, nil, func(logger *slog.Logger) {
 		logger.Info("tool call completed",
-			slog.Group("caller", LogFieldUser, "jane", LogFieldUserID, "42"))
+			slog.Group("caller", LogFieldUser, "jane", LogFieldUserID, "42", LogFieldInstance, testInstance))
 	})
 
-	if strings.Contains(exported, "jane") || strings.Contains(exported, "user=") {
+	if strings.Contains(exported, "jane") || strings.Contains(exported, "user=") || strings.Contains(exported, testInstance) {
 		t.Errorf("an identity field inside a group reached the collector under policy none: %s", exported)
 	}
 }

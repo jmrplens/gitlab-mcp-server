@@ -55,11 +55,11 @@ within one instance.
 
 ### Per mode
 
-| Mode        | Credential source                                         | Admission                                                                                                                                                                                          | Where the tenant is resolved                                             | Today's per-caller key |
-| ----------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------- |
-| stdio       | `GITLAB_TOKEN` from the environment                       | The operator's configuration, at the `read_api` minimum: a token GitLab accepted below it keeps the process up and every catalog method is answered `-40300` in-band (`ADM-001`)                   | Once per process, after the handshake starts (`IDN-008`)                 | The process            |
-| HTTP legacy | `PRIVATE-TOKEN`, then `Authorization: Bearer` (`IDN-001`) | GitLab did not answer `GET /user` with 401 or 403, at the `read_api` minimum; a 403 refusing a fine-grained token User: Read and a token below the minimum are answered 403, uncharged (`ADM-001`) | When the pool entry is built, and put on the request context by the gate | The entry              |
-| HTTP OAuth  | `Authorization: Bearer` only (`IDN-001`)                  | Verified against the selected instance, introspected, `read_api` minimum, which a fine-grained token meets (`ADM-002`)                                                                             | The verifier's resolved user, and the pool per entry                     | The entry              |
+| Mode        | Credential source                                         | Admission                                                                                                                                                                                          | Where the tenant is resolved                                                                | Today's per-caller key |
+| ----------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------- |
+| stdio       | `GITLAB_TOKEN` from the environment                       | The operator's configuration, at the `read_api` minimum: a token GitLab accepted below it keeps the process up and every catalog method is answered `-40300` in-band (`ADM-001`)                   | Once per process, after the handshake starts (`IDN-008`)                                    | The process            |
+| HTTP legacy | `PRIVATE-TOKEN`, then `Authorization: Bearer` (`IDN-001`) | GitLab did not answer `GET /user` with 401 or 403, at the `read_api` minimum; a 403 refusing a fine-grained token User: Read and a token below the minimum are answered 403, uncharged (`ADM-001`) | When the pool entry is built, and put on the request context by the gate                    | The entry              |
+| HTTP OAuth  | `Authorization: Bearer` only (`IDN-001`)                  | Verified against the selected instance, introspected, `read_api` minimum, which a fine-grained token meets (`ADM-002`)                                                                             | The verifier's resolved user, with the instance it verified against, and the pool per entry | The entry              |
 
 On stdio, process, entry and tenant are one. Over HTTP one tenant maps to one entry per
 credential per instance, one entry to one tenant or to unknown and to one owner for the
@@ -1177,7 +1177,14 @@ included, from the API client, the OAuth verifier and the health probes alike, k
 process and on the bounded server address (`INV-018`), and exports the count as
 `gitlab_mcp.upstream.requests`. The counter bounds nothing, so no row was added for it:
 F-18 was carried by no row before and is carried by none now, and is answered by the issue
-the rows above record. Three more have been carried by no row since the register landed,
+the rows above record. F-28 is answered by issue 953, which put the instance on the
+identity of an OAuth tool call: the handlers read that caller from the verifier's
+admission, which carried the user id and the name and no instance, so user 7 of two
+published instances was logged as one caller. The admission now carries the instance it
+verified the token against, and the telemetry identity policy records the pair, the
+instance as `gitlab_mcp.instance` beside the user under `full` and inside the digest under
+`pseudonymous`, on spans and exported log records alike. `IDN-008` records the issue and
+carries the finding no longer. Three more have been carried by no row since the register landed,
 because each records something no row decides: F-24 a message the SDK gives the server no
 way to send, and F-23 and F-27 stale statements, which issue 960 corrected in the comments
 and documents that made them. `TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue`

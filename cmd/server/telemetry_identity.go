@@ -289,7 +289,14 @@ func newUserAttributer(redactor *telemetry.Redactor) mcpotel.UserAttributer {
 		// context is the source, which is what stdio uses anyway.
 		callReq, _ := req.(*mcp.CallToolRequest)
 		identity := toolutil.ResolveIdentity(ctx, callReq)
-		return redactor.Attributes(identity.UserID, identity.Username)
+		// The whole identity, the instance included (issue 953): a user id is
+		// unique only within one instance, and the log line for the same call
+		// names the instance too.
+		return redactor.Attributes(telemetry.Identity{
+			Instance: identity.Instance,
+			UserID:   identity.UserID,
+			Username: identity.Username,
+		})
 	})
 }
 

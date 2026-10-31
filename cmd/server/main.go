@@ -343,7 +343,7 @@ func main() {
 	telemetryToolNameFlag = flag.String("telemetry-tool-name", string(telemetry.ToolNameAuto),
 		"Whether the tool name is a metric dimension: auto (default; on for the dynamic and meta surfaces, off for individual, where ~1000 tools would exhaust the cardinality limit), on, or off")
 	telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy),
-		"How much telemetry records about who made a call: none (default, records nobody), pseudonymous (a per-process digest that correlates one caller's calls without naming them), or full (the GitLab user id and username)")
+		"How much telemetry records about who made a call: none (default, records nobody), pseudonymous (a per-process digest that correlates one caller's calls without naming them), or full (the GitLab instance, user id and username)")
 	telemetryIdentityRotationFlag = flag.String("telemetry-identity-rotation", "",
 		"how long a generated pseudonymisation key lives, e.g. 24h; empty or 0 keeps it for the life of the process")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")

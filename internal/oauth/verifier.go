@@ -549,6 +549,7 @@ func (g *verificationGate) acquire(ctx context.Context) (func(), error) {
 // The returned verifier populates [auth.TokenInfo] with:
 //   - UserID: the GitLab user's numeric ID (as string)
 //   - Extra["username"]: the GitLab user's login name
+//   - Extra[InstanceKey]: the instance the token was verified against
 //   - Expiration: now + cacheTTL, shortened to the token's own expiry when the
 //     instance reports one (so the SDK middleware honors both)
 //
@@ -755,10 +756,11 @@ func admitToken(cache *TokenCache, gitlabURL, token string, cacheTTL time.Durati
 		UserID:     strconv.Itoa(user.ID),
 		Scopes:     result.scopes,
 		Expiration: now.Add(ttl),
-		// The username only. The raw token stays out on purpose; see the
-		// doc comment on [NewGitLabVerifier].
+		// The username and the instance. The raw token stays out on purpose;
+		// see the doc comment on [NewGitLabVerifier].
 		Extra: map[string]any{
-			"username": user.Username,
+			"username":  user.Username,
+			InstanceKey: gitlabURL,
 		},
 	}
 	if result.tokenID != 0 {
@@ -820,6 +822,20 @@ type introspection struct {
 	// ([TokenIDKey]).
 	tokenID int64
 }
+
+// InstanceKey is the key of the verified [auth.TokenInfo]'s Extra under which
+// the instance the token was verified against travels, as the canonical URL
+// the [InstanceResolver] chose.
+//
+// It is half of the tenant (issue 953). A GitLab user id is unique only within
+// one instance, so a deployment publishing two of them admits user 7 of each,
+// who are two people, and an admission naming the user id alone attributed
+// both to one: the tool handlers read an OAuth call's caller from this
+// admission rather than from the gate's context identity beside it. It names
+// the instance and nothing about the credential, and it is the instance the
+// cache keys the admission under, so a cached admission names the instance it
+// was taken against.
+const InstanceKey = "instance"
 
 // TokenIDKey is the key of the verified [auth.TokenInfo]'s Extra under which a
 // personal access token's own id travels, as an int64, when the self endpoint

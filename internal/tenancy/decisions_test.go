@@ -752,8 +752,10 @@ func TestDecisions_StaleStatements_AreAnsweredByIssue960(t *testing.T) {
 // one credential's own requests or watchers, in the entry's unit and with no
 // per-user, per-token or share word, so each is class R as HLD-001 is and
 // none disagrees. The two tenant rows record that no allowance is keyed on the
-// tenant (F-01). F-21 and F-28 stay where they were, since issues 961 and 953
-// answer them, and every finding issue 955 answered stays filed as its own.
+// tenant (F-01). F-21 stays where it was, since issue 961 answers it, and
+// every finding issue 955 answered stays filed as its own; IDN-008 carried
+// F-28 beside them until issue 953 answered it, which
+// TestDecisions_TheTenantsInstance_IsAnsweredByIssue953 pins.
 // TestDecisions_UpstreamRetries_StateTheirCostUnderIssue955 pins the retries.
 func TestDecisions_PerCredentialAllowances_AreAnsweredByIssue955(t *testing.T) {
 	for _, tc := range []struct {
@@ -766,7 +768,7 @@ func TestDecisions_PerCredentialAllowances_AreAnsweredByIssue955(t *testing.T) {
 		{"HLD-003", []string{"F-21"}, true},
 		{"RTC-006", nil, false},
 		{"IDN-002", nil, false},
-		{"IDN-008", []string{"F-28"}, false},
+		{"IDN-008", nil, false},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			d, _ := Lookup(tc.id)
@@ -807,6 +809,33 @@ func assertReasonInEntryUnit(t *testing.T, d Decision) {
 		t.Run(word, func(t *testing.T) {
 			if strings.Contains(strings.ToLower(d.Reason), word) {
 				t.Errorf("%s's reason %q says %q; a number on the entry states what the entry bounds", d.ID, d.Reason, word)
+			}
+		})
+	}
+}
+
+// TestDecisions_TheTenantsInstance_IsAnsweredByIssue953 pins what issue 953
+// changed in the row that resolves the tenant (IDN-008). An OAuth tool call
+// was attributed to the user id alone, because the verifier's admission
+// carried no instance and ResolveIdentity read the id and the name from it,
+// and the telemetry identity policy recorded the user id alone in every mode
+// (F-28). The admission now carries the instance it was verified against and
+// the identity the handlers resolve keeps it, so the row records the issue
+// and carries the finding no longer, and its sites still name the two places
+// the instance rides: the admission and the resolution. F-28 stays filed as
+// issue 953's.
+func TestDecisions_TheTenantsInstance_IsAnsweredByIssue953(t *testing.T) {
+	tenant, _ := Lookup("IDN-008")
+	if !slices.Contains(tenant.Decided, "issue 953") || tenant.Carries("F-28") || len(tenant.Findings) != 0 {
+		t.Errorf("IDN-008: decided %v, findings %v; want issue 953 recorded and F-28 no longer carried", tenant.Decided, tenant.Findings)
+	}
+	if FindingIssue("F-28") != 953 {
+		t.Errorf("F-28 is filed as issue %d, want it kept as issue 953's", FindingIssue("F-28"))
+	}
+	for _, site := range []Site{enforce(pkgOAuth, "admitToken"), enforce(pkgToolutil, "ResolveIdentity")} {
+		t.Run(site.Name, func(t *testing.T) {
+			if !slices.Contains(tenant.Sites, site) {
+				t.Errorf("IDN-008's sites %v no longer name %s.%s, where the instance rides", tenant.Sites, site.Pkg, site.Name)
 			}
 		})
 	}
@@ -949,7 +978,9 @@ var findingsOfNoRow = []string{"F-23", "F-24", "F-27"}
 // F-18 did when issue 955 gave the budget GitLab.com keeps for the
 // deployment's address a count on the process, every request sent upstream
 // counted where the transports meet and limited by nothing, which no row
-// records because it bounds nothing.
+// records because it bounds nothing, and F-28 did when issue 953 put the
+// instance on the identity of an OAuth tool call and on what telemetry
+// records about a caller.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -977,7 +1008,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-18,F-19,F-20,F-25,F-26,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-18,F-19,F-20,F-25,F-26,F-28,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }

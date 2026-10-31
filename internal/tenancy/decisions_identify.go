@@ -136,11 +136,17 @@ func identifyDecisions() []Decision {
 			},
 		},
 		{
+			// The instance rides the identity in both HTTP modes: the gate
+			// records the one the request selected, and the OAuth verifier
+			// records the one it verified the token against in the admission,
+			// which an OAuth tool call's identity is read from (issue 953,
+			// which answered F-28 here). The telemetry identity policy records
+			// the pair: the instance beside the user under full, and inside
+			// the digest under pseudonymous.
 			ID: "IDN-008", Question: Identify, Kind: Rule, Class: ClassT, Disposition: Ruled,
 			Resource: "the tenant: (canonical instance URL, GitLab user id), or unknown",
 			Key:      KeyTenant, StdioKey: KeyProcess,
-			Decided:  []string{"issue 955"},
-			Findings: []string{"F-28"},
+			Decided: []string{"issue 955", "issue 953"},
 			Sites: []Site{
 				enforce(pkgPool, "resolveIdentity"),
 				enforce(pkgPool, "ServerPool.IdentityFor"),

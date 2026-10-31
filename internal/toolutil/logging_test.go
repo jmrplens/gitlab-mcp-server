@@ -389,9 +389,8 @@ func TestLogToolRefusal_RecordsWhatWasDeclinedAndWhy(t *testing.T) {
 // matters.
 //
 // The absent case is the other half of the claim: stdio resolves one identity
-// against one instance, and a pinned deployment has only the one, so emitting
-// the field there would repeat a constant on every line instead of giving
-// something to group by.
+// against one instance and records none, so emitting the field there would
+// repeat a constant on every line instead of giving something to group by.
 func TestLogToolCall_InstanceNamesWhichGitLabAnsweredIt(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -404,7 +403,7 @@ func TestLogToolCall_InstanceNamesWhichGitLabAnsweredIt(t *testing.T) {
 			want:     true,
 		},
 		{
-			name:     "one instance, so there is nothing to distinguish",
+			name:     "no instance recorded, so there is nothing to distinguish",
 			identity: UserIdentity{UserID: "7", Username: "someone"},
 			want:     false,
 		},

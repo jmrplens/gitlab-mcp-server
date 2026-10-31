@@ -108,11 +108,19 @@ func TestRealCollector_IdentityFullExportsTheReadableUser(t *testing.T) {
 		}
 	})
 
+	// The other half of the tenant (issue 953): a user id is unique only
+	// within one instance, so the span names the instance the request selected.
+	t.Run("the span names the instance", func(t *testing.T) {
+		if instance, present := attr(span.Attributes, "gitlab_mcp.instance"); !present || !strings.HasPrefix(instance, "http") {
+			t.Errorf("gitlab_mcp.instance = %q under the full policy, want the instance URL; recorded %v", instance, keys(span.Attributes))
+		}
+	})
+
 	t.Run("no identity key is a metric dimension", func(t *testing.T) {
 		if _, _, found := c.awaitMetric(t, exportDeadline, durationMetric); !found {
 			t.Fatalf("no %s metric, so this would pass vacuously", durationMetric)
 		}
-		for _, key := range []string{"user.id", "user.name", "user.hash"} {
+		for _, key := range []string{"user.id", "user.name", "user.hash", "gitlab_mcp.instance"} {
 			t.Run(key, func(t *testing.T) {
 				if instrument := metricDimensionExists(t, c, key); instrument != "" {
 					t.Errorf("%q is a dimension of %s; identity must never reach a metric under any policy", key, instrument)
@@ -216,8 +224,13 @@ func TestRealCollector_TheIdentityPolicyGovernsEverySignal(t *testing.T) {
 		policy  string
 		forbids []string
 	}{
-		{policy: "none", forbids: []string{"user.id", "user.name", "user.hash", "user_id"}},
-		{policy: "pseudonymous", forbids: []string{"user.id", "user.name", "user_id"}},
+		// The instance as well (issue 953): the tool-call record's instance
+		// field went out under every policy, and only full records it, under
+		// gitlab_mcp.instance; pseudonymous folds it into the digest. The
+		// field is matched as a key, with the space renderLogRecord writes
+		// before one, since a message may say the word.
+		{policy: "none", forbids: []string{"user.id", "user.name", "user.hash", "user_id", " instance=", "gitlab_mcp.instance"}},
+		{policy: "pseudonymous", forbids: []string{"user.id", "user.name", "user_id", " instance=", "gitlab_mcp.instance"}},
 	} {
 		t.Run(tc.policy, func(t *testing.T) {
 			c, srv := driveDynamic(t, map[string]string{"GITLAB_MCP_TELEMETRY_IDENTITY": tc.policy})

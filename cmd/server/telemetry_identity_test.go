@@ -15,9 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -161,6 +164,59 @@ func TestTelemetryUsers_TheFullPolicyNamesTheCallerTheHandlersResolved(t *testin
 	}
 }
 
+// TestTelemetryUsers_OneUserIDOnTwoInstances_IsTwoCallers covers what issue
+// 953 found the attributer handed the redactor (F-28): the id and the name,
+// so user 7 of two published instances was one caller to every policy. It
+// drives an OAuth tool call, whose identity the handlers resolve from the
+// verifier's admission rather than from the gate's context, and the gate's
+// context identity of a legacy request, and holds each policy that records
+// anybody to two callers: two instances under full, two digests under
+// pseudonymous.
+func TestTelemetryUsers_OneUserIDOnTwoInstances_IsTwoCallers(t *testing.T) {
+	const first, second = "https://gitlab-a.example.com", "https://gitlab-b.example.com"
+	oauthCall := func(instance string) (context.Context, mcp.Request) {
+		return context.Background(), &mcp.CallToolRequest{Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{
+			UserID: "7", Extra: map[string]any{"username": "seven", oauth.InstanceKey: instance},
+		}}}
+	}
+	legacyCall := func(instance string) (context.Context, mcp.Request) {
+		return toolutil.IdentityToContext(context.Background(),
+			toolutil.UserIdentity{UserID: "7", Username: "seven", Instance: instance}), nil
+	}
+	for _, mode := range []struct {
+		name string
+		call func(instance string) (context.Context, mcp.Request)
+	}{{"oauth", oauthCall}, {"legacy", legacyCall}} {
+		t.Run(mode.name, func(t *testing.T) {
+			attributes := func(policy telemetry.IdentityPolicy, instance string) map[string]string {
+				t.Setenv(telemetry.EnvIdentityName, string(policy))
+				resetIdentityRedactor(t)
+				ctx, req := mode.call(instance)
+				got := map[string]string{}
+				for _, attr := range telemetryUsers().UserAttributes(ctx, req) {
+					got[string(attr.Key)] = attr.Value.AsString()
+				}
+				return got
+			}
+
+			if a, b := attributes(telemetry.IdentityFull, first), attributes(telemetry.IdentityFull, second); a[telemetry.AttrInstance] != first || b[telemetry.AttrInstance] != second {
+				t.Errorf("under full the two callers carry %s %q and %q, want %q and %q",
+					telemetry.AttrInstance, a[telemetry.AttrInstance], b[telemetry.AttrInstance], first, second)
+			}
+			// One redactor for both digests, as one process holds: a second
+			// would carry a key of its own and differ for that reason alone.
+			t.Setenv(telemetry.EnvIdentityName, string(telemetry.IdentityPseudonymous))
+			resetIdentityRedactor(t)
+			users := telemetryUsers()
+			ctxA, reqA := mode.call(first)
+			ctxB, reqB := mode.call(second)
+			if a, b := digestOf(t, users.UserAttributes(ctxA, reqA)), digestOf(t, users.UserAttributes(ctxB, reqB)); a == "" || a == b {
+				t.Errorf("under pseudonymous the two callers carry digests %q and %q, want two different ones", a, b)
+			}
+		})
+	}
+}
+
 // digestOf pulls user.hash out of an attribute set.
 func digestOf(t *testing.T, attrs []attribute.KeyValue) string {
 	t.Helper()
@@ -196,7 +252,7 @@ func TestIdentityKeyring_AConfiguredKeyIsUsed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeyring: %v", err)
 	}
-	if a, b := ring.IdentityPseudonym("42"), elsewhere.IdentityPseudonym("42"); a != b {
+	if a, b := ring.IdentityPseudonym("https://gitlab.example.com", "42"), elsewhere.IdentityPseudonym("https://gitlab.example.com", "42"); a != b {
 		t.Errorf("two replicas with the same key gave one caller two digests (%q, %q)", a, b)
 	}
 }
@@ -219,7 +275,7 @@ func TestIdentityKeyring_WithoutAKeyNothingIsShared(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeyring: %v", err)
 	}
-	if a, b := ring.IdentityPseudonym("42"), elsewhere.IdentityPseudonym("42"); a == b {
+	if a, b := ring.IdentityPseudonym("https://gitlab.example.com", "42"), elsewhere.IdentityPseudonym("https://gitlab.example.com", "42"); a == b {
 		t.Errorf("two processes without a shared key produced the same digest %q", a)
 	}
 }
@@ -329,7 +385,7 @@ func TestAnnounceIdentityChoice_SaysOnlyWhatIsWorthReading(t *testing.T) {
 			// names leave the process.
 			name:   "full names what leaves the process",
 			policy: "full",
-			want:   []string{`level=WARN msg="telemetry records caller identity"`, "the GitLab user id and username"},
+			want:   []string{`level=WARN msg="telemetry records caller identity"`, "the GitLab instance, user id and username"},
 		},
 		{
 			name:   "a configured key is stable across replicas",

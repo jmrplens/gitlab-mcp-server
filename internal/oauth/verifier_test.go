@@ -113,6 +113,61 @@ func TestNewGitLabVerifier_AdmissionCarriesNoRawToken(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_AdmissionCarriesTheInstanceItWasVerifiedAgainst pins
+// the half of the tenant an OAuth admission used to drop (issue 953, F-28): a
+// GitLab user id is unique only within one instance, and a deployment that
+// publishes two of them admits user 7 of each, who are two people. The verifier
+// knows which instance it asked, so the admission carries it under InstanceKey,
+// in the identity it returns and in the one the cache holds for the next
+// request, and the two published instances give the same token and the same
+// user id two different admissions.
+func TestNewGitLabVerifier_AdmissionCarriesTheInstanceItWasVerifiedAgainst(t *testing.T) {
+	t.Parallel()
+
+	seven := func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/user" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":7,"username":"seven"}`))
+	}
+	first := httptest.NewServer(http.HandlerFunc(seven))
+	t.Cleanup(first.Close)
+	second := httptest.NewServer(http.HandlerFunc(seven))
+	t.Cleanup(second.Close)
+
+	cache := NewTokenCache()
+	resolve := func(r *http.Request) (string, error) { return r.Header.Get("GITLAB-URL"), nil }
+	verifier := NewGitLabVerifierFor(resolve, false, 15*time.Minute, cache)
+
+	for _, instance := range []string{first.URL, second.URL} {
+		t.Run(instance, func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			r.Header.Set("GITLAB-URL", instance)
+			info, err := verifier(t.Context(), "gloas-shared", r)
+			if err != nil {
+				t.Fatalf("verify against %s: %v", instance, err)
+			}
+			cached, ok := cache.Get(instance, "gloas-shared")
+			if !ok {
+				t.Fatalf("the admission against %s was not cached", instance)
+			}
+			for name, subject := range map[string]*auth.TokenInfo{"returned": info, "cached": cached} {
+				t.Run(name, func(t *testing.T) {
+					if subject.UserID != "7" {
+						t.Errorf("UserID = %q, want 7", subject.UserID)
+					}
+					if got, _ := subject.Extra[InstanceKey].(string); got != instance {
+						t.Errorf("Extra[%s] = %v, want %q, the instance the token was verified against", InstanceKey, subject.Extra[InstanceKey], instance)
+					}
+				})
+			}
+		})
+	}
+}
+
 // TestNewGitLabVerifier_InvalidToken verifies that a 401 response from
 // GitLab is translated into an error wrapping auth.ErrInvalidToken.
 func TestNewGitLabVerifier_InvalidToken(t *testing.T) {

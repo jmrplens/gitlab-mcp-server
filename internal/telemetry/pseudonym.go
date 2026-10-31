@@ -12,9 +12,22 @@ import (
 // This file is the computation. Where the keys come from and how long they
 // live is [Keyring], in keyring.go.
 
-// IdentityPseudonym returns the digest naming a caller.
-func (k *Keyring) IdentityPseudonym(userID string) string {
-	return k.digest(userID, false)
+// IdentityPseudonym returns the digest naming a caller: the tenant, the
+// instance they were resolved against and their user id on it.
+//
+// The instance is digested with the user id rather than left out (issue 953),
+// because a GitLab user id is unique only within one instance and user 7 of
+// two instances are two people. A NUL separates the two halves, since no
+// canonical instance URL holds one: joined end to end, user 7 of an instance
+// whose URL ends in 1 and user 17 of the same URL without it would be one
+// input. An empty user id is no caller and yields no digest, whatever the
+// instance; an empty instance, which is stdio's, still digests the NUL and
+// the user id.
+func (k *Keyring) IdentityPseudonym(instance, userID string) string {
+	if userID == "" {
+		return ""
+	}
+	return k.digest(instance+"\x00"+userID, false)
 }
 
 // ResourcePseudonym returns the digest naming a resource URI.
