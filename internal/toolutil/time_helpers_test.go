@@ -798,7 +798,7 @@ func itoa(n int) string {
 // formatTimePtr lives in this package as FormatTimePtr (exported). Any other
 // package that defines an unexported `formatTimePtr` re-introduces duplication
 // and confuses readers — call sites should use toolutil.FormatTimePtr or a
-// distinctively-named helper (e.g. formatAuditDate).
+// distinctively-named helper (e.g. approvalTime in internal/tools/deployments).
 func TestFormatTimePtr_UniqueAcrossRepo(t *testing.T) {
 	canonicalDir, _ := filepath.Abs(".")
 	hits := findDuplicateTimeHelper(t, formatTimePtrFuncDef, canonicalDir)
