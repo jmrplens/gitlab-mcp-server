@@ -421,8 +421,12 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 // the pool such a request belongs in: a connection it finds there leads to an
 // address tier A allows, and one it opens is one any request routed there
 // would have been allowed to dial as well.
+//
+// Every request it sends is counted in [UpstreamRequests], as the requests of
+// this package's own clients are: the OAuth verifier is its borrower, and a
+// verification spends the budgets GitLab keeps as a tool call does.
 func HTTPTransport(skipTLSVerify bool) http.RoundTripper {
-	return buildBaseTransport(skipTLSVerify)
+	return upstreamCountedTransport{base: buildBaseTransport(skipTLSVerify)}
 }
 
 // Ping validates connectivity and authentication by calling the GitLab version endpoint.
@@ -1443,7 +1447,11 @@ func insecureTLSConfig() *tls.Config {
 // The health client deliberately does NOT go through here. It probes on a timer
 // rather than in response to anything, so its spans would have no parent and
 // would arrive steadily forever, burying the calls somebody actually asked for
-// under an unbounded stream of liveness checks.
+// under an unbounded stream of liveness checks. The count of upstream requests
+// is therefore not taken here but at [destinationTransport], where the health
+// client's chain ends as well: counted on this chain, the probes would be
+// missing from it as they are from the duration histogram, and they spend the
+// same budgets.
 //
 // The response ceiling is the innermost wrapper for the same kind of reason:
 // what it must bound is the body net/http has already decompressed, so it

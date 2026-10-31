@@ -905,11 +905,10 @@ func TestDecisions_ADM014_RefusesInADM002sWords(t *testing.T) {
 }
 
 // findingsOfNoRow are the findings that record no row's departure, so no row
-// has carried them since the register landed: F-18 is a budget GitLab.com
-// keeps that nothing in the process accounts for, F-24 a message the SDK
-// gives the server no way to send, and F-23 and F-27 are stale statements in
+// has carried them since the register landed: F-24 is a message the SDK gives
+// the server no way to send, and F-23 and F-27 are stale statements in
 // comments and documents. Each is closed in its issue without a row changing.
-var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
+var findingsOfNoRow = []string{"F-23", "F-24", "F-27"}
 
 // TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue holds the rule the
 // package comment states: a finding stops being carried only when its issue
@@ -946,7 +945,11 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // that size pressure consults serverpool.WithInUse as the idle sweep does,
 // and F-01, F-02, F-05, F-06 and F-32 did when issue 955 kept on the entry
 // the three allowances whose reasons were about a GitLab user, stated each
-// reason in the entry's unit, and stated what the upstream retries cost.
+// reason in the entry's unit, and stated what the upstream retries cost, and
+// F-18 did when issue 955 gave the budget GitLab.com keeps for the
+// deployment's address a count on the process, every request sent upstream
+// counted where the transports meet and limited by nothing, which no row
+// records because it bounds nothing.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -974,7 +977,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-19,F-20,F-25,F-26,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-18,F-19,F-20,F-25,F-26,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }

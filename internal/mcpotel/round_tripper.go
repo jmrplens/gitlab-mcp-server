@@ -163,8 +163,16 @@ func routeTemplateOf(req *http.Request) string {
 	return template
 }
 
-// boundedServerAddress returns the host as the metric may carry it.
-func boundedServerAddress(host string) string {
+// BoundedServerAddress returns the host as a metric may carry it: the host
+// itself when it is one [SetMetricServerAddresses] declared, and
+// [OtherServerAddress] when it is not.
+//
+// It is exported for the process's count of upstream requests in
+// internal/gitlab, which keys its table by it: keyed by the host itself, that
+// table would gain an entry for every instance a caller names in the
+// free-selection mode, which is the cardinality the metric refuses, held in
+// memory instead of in a collector.
+func BoundedServerAddress(host string) string {
 	set := metricServerAddresses.Load()
 	if set == nil {
 		return OtherServerAddress
@@ -234,7 +242,7 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	elapsed := time.Since(started).Seconds()
 
 	metricAttrs := append([]attribute.KeyValue(nil), shared...)
-	if bounded := boundedServerAddress(host); bounded == host {
+	if bounded := BoundedServerAddress(host); bounded == host {
 		metricAttrs = append(metricAttrs, attrServerAddress.String(host), attrServerPort.Int(port))
 	} else {
 		metricAttrs = append(metricAttrs, attrServerAddress.String(bounded))

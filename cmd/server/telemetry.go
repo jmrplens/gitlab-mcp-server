@@ -9,6 +9,8 @@ import (
 	"log/slog"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
@@ -161,6 +163,23 @@ func isFlagPassed(name string) bool {
 		}
 	})
 	return found
+}
+
+// observeUpstreamRequests registers the process's count of upstream requests
+// with OpenTelemetry, as gitlab_mcp.upstream.requests.
+//
+// This is where the two packages meet: the count is kept by the transports in
+// internal/gitlab and internal/mcpotel knows nothing about them, so the caller
+// that owns both hands the reader across. It is registered on both transports,
+// since stdio sends GitLab requests as HTTP mode does, and once per run, since
+// the count is the process's. A failure is logged and not returned: telemetry
+// that cannot be registered is a reason to say so, never a reason to refuse
+// to serve. With telemetry off the global meter is a no-op, and the counter
+// counts all the same.
+func observeUpstreamRequests() {
+	if _, err := mcpotel.ObserveUpstreamRequests(gitlabclient.UpstreamRequests); err != nil {
+		slog.Warn("upstream request metrics are not being exported", "error", err)
+	}
 }
 
 // installSlogBridge sends this server's structured log records to the collector

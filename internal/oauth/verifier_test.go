@@ -1578,6 +1578,52 @@ func TestNewVerificationClient_DialsThroughTheDestinationGuard(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_CountsEveryRequestItSendsUpstream verifies that a
+// verification is counted by the process's upstream counter, request by
+// request, introspection included.
+//
+// A verification is the one request this process makes before it knows who a
+// caller is, and a stream of invented bearer tokens is nothing but
+// verifications, each spending GitLab.com's per-IP budget from the
+// deployment's address. The instance's own count is the oracle, since how
+// many requests one verification sends is the verifier's business. Not
+// parallel: the counter is the process's, and a parallel test's verifications
+// would land in the difference this test reads.
+func TestNewGitLabVerifier_CountsEveryRequestItSendsUpstream(t *testing.T) {
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if r.URL.Path != "/api/v4/user" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(gitlabUserResponse{ID: 42, Username: "testuser"})
+	}))
+	defer srv.Close()
+
+	total := func() int64 {
+		var n int64
+		for _, count := range gitlabclient.UpstreamRequests() {
+			n += count
+		}
+		return n
+	}
+	before := total()
+	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+	if _, err := verifier(t.Context(), "a-token-never-seen", httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	counted := total() - before
+
+	if hits.Load() < 1 {
+		t.Fatal("the instance received nothing, so the verification was answered from somewhere else")
+	}
+	if counted != hits.Load() {
+		t.Errorf("the process counted %d upstream requests, the instance received %d", counted, hits.Load())
+	}
+}
+
 // TestNewGitLabVerifier_SubdomainRedirect_IsRefusedUnsent verifies that an
 // instance answering /api/v4/user with a redirect to one of its own subdomains
 // cannot have that subdomain answer for the caller.
