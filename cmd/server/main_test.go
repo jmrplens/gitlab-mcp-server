@@ -1473,7 +1473,7 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 	}{
 		{"title", "gitlab-mcp-server"},
 		{"version label", "Version:"},
-		{"author", "Jose Manuel Requena Plens"},
+		{"author", "José M. Requena Plens"},
 		{"repository", "https://github.com/jmrplens/gitlab-mcp-server"},
 		{"flags section", "FLAGS"},
 		{"http flag", "-http"},
@@ -2308,8 +2308,8 @@ func TestMain_HelpParsesTierFlag(t *testing.T) {
 // TestProjectMetadata_Constants verifies that project metadata constants
 // are set to the expected values.
 func TestProjectMetadata_Constants(t *testing.T) {
-	if projectAuthor != "Jose Manuel Requena Plens" {
-		t.Errorf("projectAuthor = %q, want %q", projectAuthor, "Jose Manuel Requena Plens")
+	if projectAuthor != "José M. Requena Plens" {
+		t.Errorf("projectAuthor = %q, want %q", projectAuthor, "José M. Requena Plens")
 	}
 	if projectDepartment != "" {
 		t.Errorf("projectDepartment = %q, want empty", projectDepartment)
