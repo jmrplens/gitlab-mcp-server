@@ -2089,6 +2089,76 @@ func TestDiffPair_Kind_DecidesWhetherTheInputAllowlistApplies(t *testing.T) {
 	})
 }
 
+// TestDiffPair_TheKeysetFieldsOfListOptions_AreLeftToRPAGE verifies that
+// R-INPUT asks nothing about gl.ListOptions' pagination and page_token (issue
+// 1165). Whether an action offers them is decided by the route it sends,
+// which the keyset half of R-PAGE reads from the live record at the action's
+// grain, in both directions: page_token offered where no route pages by
+// keyset, and not offered where one does. An input pair that leaves both out
+// raises no R-INPUT finding for them, every other field it leaves out is
+// still reported, and a per-field declaration of either is answered by
+// nothing and reported stale.
+func TestDiffPair_TheKeysetFieldsOfListOptions_AreLeftToRPAGE(t *testing.T) {
+	offsetInput := makeStruct(structField{"Page", "page", tInt}, structField{"PerPage", "per_page", tInt})
+	listOptions := makeStructWithTags(
+		taggedField{name: "Pagination", tag: `url:"pagination,omitempty" json:"pagination,omitempty"`, goType: tString},
+		taggedField{name: "PerPage", tag: `url:"per_page,omitempty" json:"per_page,omitempty"`, goType: tInt},
+		taggedField{name: "Page", tag: `url:"page,omitempty" json:"page,omitempty"`, goType: tInt},
+		taggedField{name: "PageToken", tag: `url:"page_token,omitempty" json:"page_token,omitempty"`, goType: tString},
+		taggedField{name: "OrderBy", tag: `url:"order_by,omitempty" json:"order_by,omitempty"`, goType: tString},
+		taggedField{name: "Sort", tag: `url:"sort,omitempty" json:"sort,omitempty"`, goType: tString},
+	)
+	pair := structPair{
+		mcpName: "ListInput", mcpType: offsetInput,
+		sdkName: "v2.ListThingsOptions", sdkType: listOptions, sdkURLTags: true,
+	}
+
+	t.Run("an input pair reports the ordering and not the keyset fields", func(t *testing.T) {
+		g := newDiffRun().diffPair("fixturepkg", "input", pair)
+
+		want := []missingField{{Tag: "order_by", SDKType: typNameString}, {Tag: "sort", SDKType: typNameString}}
+		if !reflect.DeepEqual(g.MissingFields, want) {
+			t.Errorf("missing fields = %+v, want %+v", g.MissingFields, want)
+		}
+	})
+
+	t.Run("a per-field declaration of either is stale", func(t *testing.T) {
+		declare(t, acceptedMissingInputs, "fixturepkg.ListInput.pagination", "keyset fixture")
+		declare(t, acceptedMissingInputs, "fixturepkg.ListInput.page_token", "keyset fixture")
+		declare(t, acceptedMissingInputs, "fixturepkg.ListInput.order_by", "ordering fixture")
+		run := newDiffRun()
+		run.diffPair("fixturepkg", "input", pair)
+
+		stale := map[string]bool{}
+		for _, entry := range run.staleDeclarations([]*declarationTable{acceptedMissingInputs}) {
+			stale[entry.Key] = true
+		}
+		for key, wantStale := range map[string]bool{
+			"fixturepkg.ListInput.pagination": true,
+			"fixturepkg.ListInput.page_token": true,
+			"fixturepkg.ListInput.order_by":   false,
+		} {
+			t.Run(key, func(t *testing.T) {
+				if stale[key] != wantStale {
+					t.Errorf("%s reported stale = %t, want %t", key, stale[key], wantStale)
+				}
+			})
+		}
+	})
+
+	t.Run("an output pair is not an R-INPUT question", func(t *testing.T) {
+		g := newDiffRun().diffPair("fixturepkg", "output", pair)
+
+		tags := make([]string, 0, len(g.MissingFields))
+		for _, field := range g.MissingFields {
+			tags = append(tags, field.Tag)
+		}
+		if want := []string{"order_by", "page_token", "pagination", "sort"}; !reflect.DeepEqual(tags, want) {
+			t.Errorf("missing fields = %v, want %v", tags, want)
+		}
+	})
+}
+
 // TestDisjointPhantomInput_TheOverlapEvidence_ComesFromTheSameInputStruct
 // verifies what the phantom rule accepts as evidence. A disjoint pairing is
 // dropped only because the SAME MCP input struct has another pairing that does
