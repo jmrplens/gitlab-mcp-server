@@ -57,6 +57,7 @@ security:
           - cmd/audit_vex/**
           - vex/**
           - cmd/reproduce_release/**
+          - cmd/internal/releaseassets/**
           - cmd/audit_site_headers/**
           - cmd/server/authgate*.go
           - cmd/server/bearerguard*.go
