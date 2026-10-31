@@ -27,9 +27,9 @@ import (
 // mention that was never an action ID.
 var fileNameTails = map[string]struct{}{
 	"env": {}, "exe": {}, "git": {}, "go": {}, "html": {}, "instructions": {},
-	"json": {}, "log": {}, "mcpb": {}, "md": {}, "mdx": {}, "openvex": {}, "plist": {},
-	"properties": {}, "rb": {}, "service": {}, "sh": {}, "sock": {}, "svg": {},
-	"target": {}, "txt": {}, "yaml": {}, "yml": {},
+	"intoto": {}, "json": {}, "log": {}, "mcpb": {}, "md": {}, "mdx": {}, "openvex": {},
+	"plist": {}, "properties": {}, "rb": {}, "service": {}, "sh": {}, "sock": {},
+	"svg": {}, "target": {}, "txt": {}, "yaml": {}, "yml": {},
 }
 
 // metaEntryPrefix is the shape of a meta-surface manifest entry ID.
