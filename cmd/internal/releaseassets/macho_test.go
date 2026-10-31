@@ -143,13 +143,17 @@ func TestUniversalOrder_ReadsWhatThinArchReads(t *testing.T) {
 
 	thins := [][]byte{syntheticThin(darwinAMD64, 40, 3), syntheticThin(darwinARM64, 40, 4)}
 	order, err := UniversalOrder(goreleaserFat(thins...))
-	if err != nil {
-		t.Fatalf("UniversalOrder: %v", err)
+	if err != nil || len(order) != len(thins) {
+		t.Fatalf("UniversalOrder = %v, %v, want %d slices", order, err, len(thins))
 	}
-	for i, data := range thins {
-		got, thinErr := ThinArch(data)
-		if thinErr != nil || got != order[i] {
-			t.Errorf("slice %d: ThinArch = %v, %v, and the header lists %v", i, got, thinErr, order[i])
-		}
+	for i, name := range []string{"the first slice", "the second slice"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, thinErr := ThinArch(thins[i])
+			if thinErr != nil || got != order[i] {
+				t.Errorf("ThinArch = %v, %v, and the header lists %v", got, thinErr, order[i])
+			}
+		})
 	}
 }
