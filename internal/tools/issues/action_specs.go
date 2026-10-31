@@ -199,10 +199,14 @@ func issueListEnumOverrides() []toolutil.InputSchemaOverride {
 		toolutil.SchemaPropertyOverride("not_in", map[string]any{
 			"enum": []any{"title", "description", "title,description"},
 		}),
+		// The sort_options GitLab declares as the values of order_by on all
+		// three issue list routes, and weight, which only its Enterprise
+		// Edition appends. id is not one of them: Issue's keyset orderings
+		// name it, but the routes refuse it as a value with a 400 (issue 1688).
 		toolutil.SchemaPropertyOverride("order_by", map[string]any{
 			"enum": []any{
-				"created_at", "due_date", "id", "label_priority", "milestone_due",
-				"popularity", "priority", "relative_position", "title", "updated_at", "weight",
+				"created_at", "due_date", "label_priority", "milestone_due", "popularity",
+				"priority", "relative_position", "title", "updated_at", "weight",
 			},
 		}),
 		toolutil.SchemaEnumOverride("due_date", dueDateFilterKeywords...),
@@ -254,7 +258,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 			},
 			"order_by": {
 				SemanticRole:     "issue_list_sort_field",
-				ValueSource:      "Field requested for sorting recent or oldest issues, such as created_at or updated_at.",
+				ValueSource:      "Field requested for sorting, such as created_at or updated_at for recent or oldest issues, or title for alphabetical order.",
 				ExampleBinding:   `params.order_by:"updated_at"`,
 				CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases like newest first as the field value."},
 			},

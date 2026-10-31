@@ -183,7 +183,7 @@ type ListInput struct {
 	CreatedBefore       string               `json:"created_before,omitempty"       jsonschema:"Return issues created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
 	UpdatedAfter        string               `json:"updated_after,omitempty"        jsonschema:"Return issues updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
 	UpdatedBefore       string               `json:"updated_before,omitempty"       jsonschema:"Return issues updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
-	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
+	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Field to order by: created_at (the default), due_date, label_priority, milestone_due, popularity, priority, relative_position, title, updated_at, or weight, which only GitLab Enterprise Edition accepts"`
 	Sort                string               `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -256,7 +256,7 @@ type ListGroupInput struct {
 	IterationID         *int64               `json:"iteration_id,omitempty"         tier:"premium" jsonschema:"Filter by iteration ID"`
 	Confidential        *bool                `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
 	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks"`
-	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
+	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Field to order by: created_at (the default), due_date, label_priority, milestone_due, popularity, priority, relative_position, title, updated_at, or weight, which only GitLab Enterprise Edition accepts"`
 	Sort                string               `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
 	CreatedAfter        string               `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601)"`
 	CreatedBefore       string               `json:"created_before,omitempty"       jsonschema:"Return issues created before date (ISO 8601)"`
@@ -936,7 +936,7 @@ type ListAllInput struct {
 	IterationID         *int64               `json:"iteration_id,omitempty"         tier:"premium" jsonschema:"Filter by iteration ID"`
 	Confidential        *bool                `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
 	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date keyword, not a date: 0 (no due date), any, overdue, today, tomorrow, week, month or next_month_and_previous_two_weeks"`
-	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
+	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Field to order by: created_at (the default), due_date, label_priority, milestone_due, popularity, priority, relative_position, title, updated_at, or weight, which only GitLab Enterprise Edition accepts"`
 	Sort                string               `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
 	CreatedAfter        string               `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601)"`
 	CreatedBefore       string               `json:"created_before,omitempty"       jsonschema:"Return issues created before date (ISO 8601)"`
