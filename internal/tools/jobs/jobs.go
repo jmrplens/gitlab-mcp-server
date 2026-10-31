@@ -62,19 +62,6 @@ func scopeStates(scope []string) *[]gl.BuildStateValue {
 	return &scopes
 }
 
-// applyListOpts copies offset, keyset, and ordering parameters onto the
-// embedded gl.ListOptions of a ListJobsOptions, setting only the values the
-// caller supplied.
-func applyListOpts(opts *gl.ListJobsOptions, page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput, orderBy, sort string) {
-	toolutil.ApplyListOptions(&opts.ListOptions, page, keyset)
-	if orderBy != "" {
-		opts.OrderBy = orderBy
-	}
-	if sort != "" {
-		opts.Sort = sort
-	}
-}
-
 // rawListJobs issues a raw REST GET against a jobs list path, decoding the full
 // documented response (including the SDK-missing archived/source/runner_manager
 // and runner extras) into a slice of [jobAPI]. The supplied opts encode scope,
@@ -116,13 +103,16 @@ func rawJobsOutput(jobs []*jobAPI, resp *gl.Response) ListOutput {
 }
 
 // ListInput defines parameters for listing jobs in a pipeline.
+//
+// It offers no order_by or sort. GET /projects/:id/pipelines/:pipeline_id/jobs
+// declares neither, and Ci::JobsFinder orders the pipeline's jobs by id,
+// newest first, whatever the request carries (app/finders/ci/jobs_finder.rb:20
+// at v19.5.0-ee), so either was sent and did nothing (issue 1165).
 type ListInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
 	PipelineID     int64                `json:"pipeline_id"              jsonschema:"Pipeline ID to list jobs for,required"`
 	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled"`
 	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried jobs in the response"`
-	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
-	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -185,7 +175,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.IncludeRetried {
 		opts.IncludeRetried = new(true)
 	}
-	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	// Raw REST fetch so the documented archived/source/runner_manager and runner
 	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.
@@ -539,20 +529,24 @@ func ToOutput(j *gl.Job, measures toolutil.JobMeasures) Output {
 const maxArtifactBytes = 1 << 20
 
 // ListProjectInput defines parameters for listing all jobs in a project.
+//
+// It offers no order_by, sort or include_retried. GET /projects/:id/jobs
+// declares scope, ref and the pagination alone (gitlab-api-live.json,
+// 19.5.0-ee), and its handler lists user_project.builds, retried jobs among
+// them, ordered by id, newest first (lib/api/ci/jobs.rb:54-72 at v19.5.0-ee).
+// The keyset pager keeps that order and answers 405 to any keyset order but
+// id, and the offset pager reads no order at all, so none of the three did
+// anything a caller wants (issue 1165).
 type ListProjectInput struct {
-	ProjectID      toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
-	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled"`
-	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried jobs in the response"`
-	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
-	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`
+	ProjectID toolutil.StringOrInt `json:"project_id"      jsonschema:"Project ID or URL-encoded path,required"`
+	Scope     []string             `json:"scope,omitempty" jsonschema:"Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
 
 // ListProject retrieves a paginated list of all CI/CD jobs in a project
-// across pipelines via the GitLab Jobs API
-// (GET /projects/:id/jobs). Optional filters narrow by job status and
-// whether to include retried jobs.
+// across pipelines via the GitLab Jobs API (GET /projects/:id/jobs), newest
+// first and retried jobs included. An optional filter narrows by job status.
 func ListProject(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -561,10 +555,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return ListOutput{}, errors.New("jobListProject: project_id is required")
 	}
 	opts := &gl.ListJobsOptions{Scope: scopeStates(input.Scope)}
-	if input.IncludeRetried {
-		opts.IncludeRetried = new(true)
-	}
-	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	// Raw REST fetch so the documented archived/source/runner_manager and runner
 	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.

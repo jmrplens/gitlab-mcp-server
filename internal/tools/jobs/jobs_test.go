@@ -2330,14 +2330,15 @@ func assertListQuery(t *testing.T, r *http.Request, want map[string]string) {
 }
 
 // TestJobList_ForwardsEveryListParameter verifies List sends the retried flag,
-// the offset page, the keyset cursor and the ordering as the caller set them,
-// and reads the pagination block off the response it got.
+// the offset page and the keyset cursor as the caller set them, and no
+// ordering, which the input no longer has, and reads the pagination block off
+// the response it got.
 func TestJobList_ForwardsEveryListParameter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipelineJobs {
 			assertListQuery(t, r, map[string]string{
 				"include_retried": "true", "page": "2", "per_page": "5",
-				"order_by": "id", "sort": "asc", "pagination": "keyset", "page_token": "tok-list",
+				"order_by": "", "sort": "", "pagination": "keyset", "page_token": "tok-list",
 			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, fmt.Sprintf("[%s]", jobJSON),
 				testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "10", TotalPages: "2", PrevPage: "1"})
@@ -2350,8 +2351,6 @@ func TestJobList_ForwardsEveryListParameter(t *testing.T) {
 		ProjectID:      "42",
 		PipelineID:     10,
 		IncludeRetried: true,
-		OrderBy:        "id",
-		Sort:           "asc",
 		Page:           2, PerPage: 5,
 		Pagination: "keyset", PageToken: "tok-list",
 	})
@@ -2619,10 +2618,9 @@ func TestListProject_CancelledContext(t *testing.T) {
 }
 
 // TestListProject_ForwardsEveryListParameter verifies ListProject sends the
-// scope, the retried flag, the offset page, the keyset cursor and the ordering
-// as the caller set them, and reads the pagination block off the response.
-// The test this replaces set the retried flag and the page and read neither
-// back, so ListProject could drop include_retried and stay green.
+// scope, the offset page and the keyset cursor as the caller set them, and
+// neither an ordering nor include_retried, which the input no longer has, and
+// reads the pagination block off the response.
 func TestListProject_ForwardsEveryListParameter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectJobs {
@@ -2631,8 +2629,8 @@ func TestListProject_ForwardsEveryListParameter(t *testing.T) {
 				t.Errorf("expected scope[]=[running,failed], got %v", scopes)
 			}
 			assertListQuery(t, r, map[string]string{
-				"include_retried": "true", "page": "3", "per_page": "10",
-				"order_by": "id", "sort": "desc", "pagination": "keyset", "page_token": "tok-project",
+				"include_retried": "", "page": "3", "per_page": "10",
+				"order_by": "", "sort": "", "pagination": "keyset", "page_token": "tok-project",
 			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, fmt.Sprintf("[%s]", jobJSON),
 				testutil.PaginationHeaders{Page: "3", PerPage: "10", Total: "31", TotalPages: "4", NextPage: "4", PrevPage: "2"})
@@ -2642,12 +2640,9 @@ func TestListProject_ForwardsEveryListParameter(t *testing.T) {
 	}))
 
 	out, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:      "42",
-		Scope:          []string{"running", "failed"},
-		IncludeRetried: true,
-		OrderBy:        "id",
-		Sort:           "desc",
-		Page:           3, PerPage: 10,
+		ProjectID: "42",
+		Scope:     []string{"running", "failed"},
+		Page:      3, PerPage: 10,
 		Pagination: "keyset", PageToken: "tok-project",
 	})
 	if err != nil {
@@ -2659,6 +2654,86 @@ func TestListProject_ForwardsEveryListParameter(t *testing.T) {
 	wantPage := toolutil.PaginationOutput{Page: 3, PerPage: 10, TotalItems: 31, TotalPages: 4, NextPage: 4, PrevPage: 2, HasMore: true}
 	if out.Pagination != wantPage {
 		t.Errorf("Pagination = %+v, want %+v", out.Pagination, wantPage)
+	}
+}
+
+// jobListRoutes returns the canonical routes of the two job lists, built on
+// client: a project's jobs and a pipeline's jobs.
+func jobListRoutes(client *gitlabclient.Client) map[string]toolutil.ActionRoute {
+	return map[string]toolutil.ActionRoute{
+		actionJobListProject: toolutil.RouteAction(client, ListProject),
+		actionJobList:        toolutil.RouteAction(client, List),
+	}
+}
+
+// TestJobLists_Schema_OffersOnlyWhatTheirRoutesRead verifies that neither job
+// list publishes order_by or sort, and that the project list publishes no
+// include_retried either. GET /projects/:id/jobs declares scope, ref, page
+// and per_page, and GET /projects/:id/pipelines/:pipeline_id/jobs declares
+// include_retried, scope, page and per_page (gitlab-api-live.json,
+// 19.5.0-ee). Both order the jobs by id, newest first, whatever is sent
+// (user_project.builds.order(id: :desc), lib/api/ci/jobs.rb:67, and
+// Ci::JobsFinder's order_id_desc, app/finders/ci/jobs_finder.rb:20, at
+// v19.5.0-ee), the project route answers any keyset ordering but id with 405,
+// and it lists retried jobs whatever include_retried says, so each of these
+// was sent and did nothing a caller wants (issue 1165).
+func TestJobLists_Schema_OffersOnlyWhatTheirRoutesRead(t *testing.T) {
+	routes := jobListRoutes(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+	cases := []struct {
+		action  string
+		param   string
+		offered bool
+	}{
+		{action: actionJobListProject, param: "order_by", offered: false},
+		{action: actionJobListProject, param: "sort", offered: false},
+		{action: actionJobListProject, param: "include_retried", offered: false},
+		{action: actionJobListProject, param: "scope", offered: true},
+		{action: actionJobListProject, param: "pagination", offered: true},
+		{action: actionJobListProject, param: "page_token", offered: true},
+		{action: actionJobList, param: "order_by", offered: false},
+		{action: actionJobList, param: "sort", offered: false},
+		{action: actionJobList, param: "include_retried", offered: true},
+		{action: actionJobList, param: "scope", offered: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action+"/"+tc.param, func(t *testing.T) {
+			props, _ := routes[tc.action].InputSchema["properties"].(map[string]any)
+			if _, ok := props[tc.param]; ok != tc.offered {
+				t.Errorf("%s schema offers %s = %t, want %t", tc.action, tc.param, ok, tc.offered)
+			}
+		})
+	}
+}
+
+// TestJobLists_UnreadArgument_IsRefusedBeforeAnyRequest verifies that an
+// order_by or a sort sent to either job list, and an include_retried sent to
+// the project list, is refused as a field the input does not have, before any
+// request: GitLab never applied any of them there (see
+// [TestJobLists_Schema_OffersOnlyWhatTheirRoutesRead]).
+func TestJobLists_UnreadArgument_IsRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		action string
+		param  string
+		value  any
+	}{
+		{action: actionJobListProject, param: "order_by", value: "id"},
+		{action: actionJobListProject, param: "sort", value: "asc"},
+		{action: actionJobListProject, param: "include_retried", value: true},
+		{action: actionJobList, param: "order_by", value: "created_at"},
+		{action: actionJobList, param: "sort", value: "desc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action+"/"+tc.param, func(t *testing.T) {
+			route := jobListRoutes(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))[tc.action]
+			params := map[string]any{"project_id": "42", tc.param: tc.value}
+			if tc.action == actionJobList {
+				params["pipeline_id"] = 10
+			}
+			_, err := route.Handler(t.Context(), params)
+			if err == nil || !strings.Contains(err.Error(), `unknown field "`+tc.param+`"`) {
+				t.Errorf("%s Handler() error = %v, want %s refused as an unknown field", tc.action, err, tc.param)
+			}
+		})
 	}
 }
 

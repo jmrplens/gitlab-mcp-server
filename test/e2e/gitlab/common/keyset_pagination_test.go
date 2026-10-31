@@ -16,6 +16,13 @@
 // of a project's service account, which GitLab answers 405 for every keyset
 // request, refuse the keyset arguments before sending anything and page by
 // page number, in the named order their routes document.
+//
+// And it holds the lists GitLab pages by keyset in one order alone to that
+// order: the four project lists refuse a keyset request in any order but id,
+// which GitLab answers 405, before sending it, and the two job lists, which
+// GitLab orders by id whatever is sent, refuse order_by and sort as arguments
+// they do not take, as the project's job list does include_retried, which its
+// route never reads.
 
 package common
 
@@ -29,6 +36,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupserviceaccounts"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectserviceaccounts"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/repository"
@@ -213,16 +221,20 @@ func TestKeysetPagination_RepositoryTree_FollowsThePageTokenToTheEnd(t *testing.
 	})
 }
 
+// listArgument is one argument a list no longer takes, with a value it could
+// be sent with.
+type listArgument struct {
+	name  string
+	value any
+}
+
 // tokenListKeysetArguments are the three fields of client-go's list options
 // the service account token lists no longer take. GitLab pages those tokens
 // with paginate_with_strategies over PersonalAccessToken, which has no keyset
 // ordering, so it answers pagination=keyset with 405, pages by offset
 // otherwise, which reads no page_token, and declares no order_by on either
 // route (issue 1165).
-var tokenListKeysetArguments = []struct {
-	name  string
-	value any
-}{
+var tokenListKeysetArguments = []listArgument{
 	{name: "pagination", value: "keyset"},
 	{name: "page_token", value: "1"},
 	{name: "order_by", value: "created_at"},
@@ -289,15 +301,23 @@ func newProjectServiceAccountTokens(e *harness.Env) serviceAccountTokens {
 
 // refuseTokenListKeysetArguments sends each of [tokenListKeysetArguments] to a
 // token list and holds the answer to a refusal naming the argument, made
-// before any request. Who refuses depends on the surface: the individual
-// tool's schema admits no property it does not list, so the SDK refuses the
-// argument before the handler runs; execute holds the params to the action's
-// schema and lists the ones it does not know; and the meta dispatcher decodes
-// the action's input strictly and names the field it does not know. Sent to
-// GitLab, the first would be answered 405 and the other two would be ignored.
+// before any request (see [refuseListArguments]). Sent to GitLab, the first
+// would be answered 405 and the other two would be ignored.
 func refuseTokenListKeysetArguments(e *harness.Env, s *harness.Session, surface harness.Surface, id harness.ActionID, params map[string]any) {
 	e.T.Helper()
-	for _, argument := range tokenListKeysetArguments {
+	refuseListArguments(e, s, surface, id, params, tokenListKeysetArguments)
+}
+
+// refuseListArguments sends each of arguments to a list beside params and
+// holds the answer to a refusal naming the argument, made before any request.
+// Who refuses depends on the surface: the individual tool's schema admits no
+// property it does not list, so the SDK refuses the argument before the
+// handler runs; execute holds the params to the action's schema and lists the
+// ones it does not know; and the meta dispatcher decodes the action's input
+// strictly and names the field it does not know.
+func refuseListArguments(e *harness.Env, s *harness.Session, surface harness.Surface, id harness.ActionID, params map[string]any, arguments []listArgument) {
+	e.T.Helper()
+	for _, argument := range arguments {
 		call := withParams(params, map[string]any{argument.name: argument.value})
 		switch surface {
 		case harness.SurfaceIndividual:
@@ -395,5 +415,84 @@ func TestKeysetPagination_ProjectServiceAccountTokens_PageByOffsetAlone(t *testi
 				}
 				return names, out.Pagination
 			})
+	})
+}
+
+// keysetOrderRefusal is what the refusal of a project list's keyset request
+// in an order other than id names: the one order GitLab pages projects by
+// keyset in.
+const keysetOrderRefusal = "order_by=id"
+
+// TestKeysetPagination_ProjectLists_RefuseKeysetOutsideIDOrder holds the four
+// project lists GitLab pages by keyset only in id order to that order. Asked
+// for a keyset page with no order_by, whose default on these routes is
+// created_at, or ordered by name, each list refuses before sending anything
+// and names order_by=id, where GitLab answered 405 "Keyset pagination is not
+// yet available for this type of request"; asked in id order, each is served
+// its keyset page. The forks are those of a project created for the scenario,
+// and the user lists are the run user's.
+func TestKeysetPagination_ProjectLists_RefuseKeysetOutsideIDOrder(t *testing.T) {
+	e := harness.New(t)
+	rt := e.Runtime()
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("keysetorder"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		lists := []struct {
+			id     harness.ActionID
+			params map[string]any
+		}{
+			{id: actionProjectList, params: map[string]any{"owned": true}},
+			{id: actionProjectListForks, params: map[string]any{"project_id": project.IDParam()}},
+			{id: actionProjectListUserProjects, params: map[string]any{"user_id": rt.Username}},
+			{id: actionProjectListUserStarred, params: map[string]any{"user_id": rt.Username}},
+		}
+		for _, list := range lists {
+			keyset := withParams(list.params, map[string]any{"pagination": "keyset", "per_page": 1})
+			harness.ExpectToolError(s, list.id, keyset, keysetOrderRefusal)
+			harness.ExpectToolError(s, list.id, withParams(keyset, map[string]any{"order_by": "name"}), keysetOrderRefusal)
+			harness.DoVoid(s, list.id, withParams(keyset, map[string]any{"order_by": "id", "sort": "desc"}))
+		}
+	})
+}
+
+// TestKeysetPagination_JobLists_RefuseTheOrderingGitLabIgnores holds the two
+// job lists to the arguments their routes read. GitLab orders a project's
+// jobs and a pipeline's jobs by id, newest first, whatever is sent, and
+// declares no order_by or sort on either route, and a project's job list
+// declares no include_retried and lists retried jobs whatever it says; so
+// each list refuses order_by and sort, and the project's list
+// include_retried, before sending anything, and both still list the job of a
+// pipeline created for the scenario, the pipeline's list with include_retried
+// as well.
+func TestKeysetPagination_JobLists_RefuseTheOrderingGitLabIgnores(t *testing.T) {
+	e := harness.New(t)
+
+	type world struct {
+		project  fixture.Project
+		pipeline fixture.Pipeline
+	}
+	harness.SurfacesWith(e, func(e *harness.Env) world {
+		project := fixture.NewProject(e, fixture.WithNamePrefix("keysetjobs"))
+		fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, neverRunCIYAML, "ci: add a manual job nobody plays "+fixture.SkipCIMarker)
+		return world{project: project, pipeline: fixture.NewPipelineNoWait(e, project, project.DefaultBranch)}
+	}, func(e *harness.Env, surface harness.Surface, w world) {
+		s := e.On(surface)
+		byProject := map[string]any{"project_id": w.project.IDParam()}
+		byPipeline := withParams(byProject, map[string]any{"pipeline_id": w.pipeline.ID})
+
+		refuseListArguments(e, s, surface, actionJobListProject, byProject, []listArgument{
+			{name: "order_by", value: "id"},
+			{name: "sort", value: "asc"},
+			{name: "include_retried", value: true},
+		})
+		refuseListArguments(e, s, surface, actionJobList, byPipeline, []listArgument{
+			{name: "order_by", value: "id"},
+			{name: "sort", value: "asc"},
+		})
+
+		jobNamed(e, harness.Do[jobs.ListOutput](s, actionJobListProject, byProject), "held")
+		jobNamed(e, harness.Do[jobs.ListOutput](s, actionJobList, withParams(byPipeline, map[string]any{"include_retried": true})), "held")
 	})
 }
