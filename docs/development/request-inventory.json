@@ -1813,8 +1813,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -1872,8 +1870,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -1927,8 +1923,6 @@
         "last_used_before",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "revoked",
         "search",
@@ -2023,8 +2017,6 @@
         "last_used_before",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "revoked",
         "search",
@@ -2092,8 +2084,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort",
         "state"
@@ -2320,8 +2310,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -2412,8 +2400,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -2648,8 +2634,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -3094,8 +3078,6 @@
       "query": [
         "name",
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -3173,8 +3155,6 @@
       "query": [
         "name",
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -3251,7 +3231,6 @@
       "query": [
         "order_by",
         "page",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -3403,8 +3382,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort"
@@ -3611,8 +3588,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -3681,7 +3656,6 @@
       "path": "/bulk_imports",
       "query": [
         "order_by",
-        "pagination",
         "sort",
         "status"
       ]
@@ -3750,8 +3724,6 @@
       "path": "/bulk_imports/entities",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort",
         "status"
       ]
@@ -3822,8 +3794,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -3904,8 +3874,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -3942,8 +3910,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -3991,8 +3957,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -4045,8 +4009,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -4249,8 +4211,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort",
         "unidiff"
@@ -4276,8 +4236,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort",
         "type"
@@ -4357,8 +4315,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -4442,8 +4398,6 @@
         "all",
         "name",
         "order_by",
-        "page_token",
-        "pagination",
         "pipeline_id",
         "ref",
         "sort",
@@ -4667,7 +4621,6 @@
       "path": "/groups/:group_id/registry/repositories",
       "query": [
         "order_by",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -4777,8 +4730,6 @@
       "path": "/projects/:project_id/registry/repositories",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort",
         "tags",
         "tags_count"
@@ -5184,8 +5135,6 @@
         "order_by",
         "package_manager",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -5223,8 +5172,6 @@
       "path": "/deploy_keys",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "public",
         "sort"
       ]
@@ -5248,8 +5195,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -5324,8 +5269,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -5357,8 +5300,6 @@
         "not[labels]",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "reviewer_id",
         "reviewer_username",
@@ -5474,8 +5415,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -5526,8 +5465,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -5578,8 +5515,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -5750,8 +5685,6 @@
         "created_after",
         "created_before",
         "order_by",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -5804,8 +5737,6 @@
         "name",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -6170,8 +6101,6 @@
         "my_reaction_emoji",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -6219,8 +6148,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -6280,8 +6207,6 @@
         "before",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "scope",
         "sort",
@@ -6308,8 +6233,6 @@
         "before",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort",
         "target_type"
@@ -6339,8 +6262,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -6412,8 +6333,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -6440,8 +6359,6 @@
       "path": "/projects/:project_id/feature_flags",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "scope",
         "sort"
       ],
@@ -6671,8 +6588,6 @@
       "path": "/projects/:project_id/feature_flags_user_lists",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort"
@@ -7264,8 +7179,6 @@
       "path": "/projects/:project_id/freeze_periods",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -7330,8 +7243,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -7425,8 +7336,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -7439,8 +7348,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -7509,8 +7416,6 @@
       "path": "/groups/:group_id/boards",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -7575,8 +7480,6 @@
       "path": "/groups/:group_id/boards/:board_id/lists",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -7682,8 +7585,6 @@
         "last_used_before",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "revoked",
         "search",
@@ -7712,8 +7613,6 @@
         "expires_before",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -7754,8 +7653,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -7806,17 +7703,13 @@
       "path": "/groups/:group_id/iterations",
       "query": [
         "include_ancestors",
-        "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
-        "sort",
         "state"
       ],
       "identifiers": {
-        ":group_id": 4
+        ":group_id": 3
       }
     },
     {
@@ -7831,8 +7724,6 @@
         "only_group_labels",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -8053,8 +7944,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -8241,8 +8130,6 @@
         "include_parent_milestones",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "search_title",
@@ -8327,8 +8214,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -8345,8 +8230,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -8411,8 +8294,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort"
@@ -8497,8 +8378,6 @@
       "path": "/groups/mygroup/protected_environments",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ]
     },
@@ -8558,8 +8437,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "relation",
         "sort"
@@ -8585,8 +8462,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "simple",
         "sort"
@@ -8618,8 +8493,6 @@
         "order_by",
         "owned",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "repository_storage",
         "search",
@@ -8696,8 +8569,6 @@
       "path": "/groups/:group_id",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort",
         "with_custom_attributes",
         "with_projects"
@@ -8790,8 +8661,6 @@
         "order_by",
         "owned",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "repository_storage",
         "search",
@@ -8834,8 +8703,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -9266,8 +9133,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "query",
         "show_seat_info",
@@ -9291,8 +9156,6 @@
         "order_by",
         "owned",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "simple",
@@ -9629,8 +9492,6 @@
         "created_before",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -9883,12 +9744,8 @@
       "kind": "rest",
       "method": "GET",
       "path": "/groups/:group_id/ssh_certificates",
-      "query": [
-        "id_after",
-        "pagination"
-      ],
       "identifiers": {
-        ":group_id": 3
+        ":group_id": 2
       }
     },
     {
@@ -9927,8 +9784,6 @@
       "path": "/groups/mygroup/ssh_certificates",
       "query": [
         "page",
-        "page_token",
-        "pagination",
         "per_page"
       ]
     },
@@ -9959,8 +9814,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -9992,8 +9845,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -10031,7 +9882,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
         "per_page",
         "sort"
       ],
@@ -10268,8 +10118,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort",
         "state"
@@ -10397,8 +10245,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -10992,8 +10838,6 @@
       "path": "/groups/:group_id/invitations",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "query",
         "sort"
       ],
@@ -11027,8 +10871,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "query",
         "sort"
@@ -11063,8 +10905,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -11249,8 +11089,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -11562,8 +11400,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -11607,8 +11443,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -11808,14 +11642,11 @@
       "path": "/projects/:project_id/jobs",
       "query": [
         "cursor",
-        "include_retried",
-        "order_by",
         "page",
         "page_token",
         "pagination",
         "per_page",
-        "scope[]",
-        "sort"
+        "scope[]"
       ],
       "identifiers": {
         ":project_id": 1
@@ -12256,13 +12087,9 @@
       "path": "/projects/:project_id/pipelines/:pipeline_id/jobs",
       "query": [
         "include_retried",
-        "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
-        "scope[]",
-        "sort"
+        "scope[]"
       ],
       "identifiers": {
         ":pipeline_id": 1,
@@ -12320,8 +12147,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -12359,8 +12184,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -12418,8 +12241,6 @@
         "include_ancestor_groups",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -12629,8 +12450,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "popular",
         "sort"
@@ -12869,8 +12688,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "query",
         "show_seat_info",
@@ -12914,8 +12731,6 @@
         "not[labels]",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "reviewer_id",
         "reviewer_username",
@@ -12959,8 +12774,6 @@
         "not[labels]",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "reviewer_id",
         "reviewer_username",
@@ -13006,8 +12819,6 @@
         "not[labels]",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "reviewer_id",
         "reviewer_username",
@@ -13204,8 +13015,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -13222,8 +13031,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -13310,8 +13117,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -13430,8 +13235,6 @@
       "path": "/projects/:project_id/merge_trains",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "scope",
         "sort"
       ],
@@ -13458,9 +13261,7 @@
       "method": "GET",
       "path": "/projects/:project_id/merge_trains/main",
       "query": [
-        "order_by",
-        "page_token",
-        "pagination"
+        "order_by"
       ],
       "identifiers": {
         ":project_id": 2
@@ -13509,8 +13310,6 @@
         "include_parent_milestones",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -13591,8 +13390,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -13609,8 +13406,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -13907,12 +13702,8 @@
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/diffs",
       "query": [
-        "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
-        "sort",
         "unidiff"
       ],
       "identifiers": {
@@ -13936,12 +13727,8 @@
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/versions",
       "query": [
-        "order_by",
         "page",
-        "page_token",
-        "pagination",
-        "per_page",
-        "sort"
+        "per_page"
       ],
       "identifiers": {
         ":merge_request_id": 3,
@@ -14221,8 +14008,6 @@
       "path": "/projects/:project_id/merge_requests/:merge_request_id/draft_notes",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -14318,8 +14103,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -14389,8 +14172,6 @@
         "order_by",
         "owned_only",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -14656,8 +14437,6 @@
         "package_name",
         "package_type",
         "package_version",
-        "page_token",
-        "pagination",
         "sort",
         "status"
       ],
@@ -14692,8 +14471,6 @@
       "path": "/projects/:project_id/packages/:package_id/package_files",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -14983,8 +14760,6 @@
       "path": "/projects/:project_id/pages/domains",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -15098,8 +14873,6 @@
         "created_after",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "ref",
         "sort",
@@ -15246,8 +15019,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "scope",
         "sort"
@@ -15411,8 +15182,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -15757,8 +15526,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -15883,6 +15650,7 @@
         "order_by",
         "owned",
         "page",
+        "page_token",
         "pagination",
         "per_page",
         "sort",
@@ -16149,7 +15917,9 @@
         "id_after",
         "order_by",
         "owned",
+        "page_token",
         "pagination",
+        "per_page",
         "search",
         "sort",
         "visibility"
@@ -16661,9 +16431,6 @@
       "kind": "rest",
       "method": "GET",
       "path": "/users/:user_id/contributed_projects",
-      "query": [
-        "pagination"
-      ],
       "identifiers": {
         ":user_id": 2
       }
@@ -16676,7 +16443,10 @@
       "query": [
         "id_after",
         "order_by",
-        "pagination"
+        "page_token",
+        "pagination",
+        "per_page",
+        "sort"
       ],
       "identifiers": {
         ":user_id": 2
@@ -16690,7 +16460,10 @@
       "query": [
         "id_after",
         "order_by",
-        "pagination"
+        "page_token",
+        "pagination",
+        "per_page",
+        "sort"
       ],
       "identifiers": {
         ":user_id": 2
@@ -16912,8 +16685,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -16944,8 +16715,6 @@
       "path": "/projects/:project_id/repository_storage_moves",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -17107,8 +16876,6 @@
         "id",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort",
         "type"
@@ -17178,8 +16945,6 @@
       "path": "/projects/:project_id/protected_environments",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -17297,8 +17062,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -17347,8 +17110,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -17423,8 +17184,6 @@
         "include_html_description",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -17611,8 +17370,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -18057,8 +17814,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -18159,8 +17914,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -18245,8 +17998,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "paused",
         "per_page",
         "scope",
@@ -18307,8 +18058,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "paused",
         "per_page",
         "scope",
@@ -18509,8 +18258,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -18800,8 +18547,6 @@
       "path": "/projects/:project_id/snippets/:snippet_id/discussions",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "sort"
       ],
       "identifiers": {
@@ -18940,8 +18685,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -19091,8 +18834,6 @@
       "path": "/snippets",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -19204,8 +18945,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ]
@@ -19237,8 +18976,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -19381,8 +19118,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -19631,8 +19366,6 @@
         "group_id",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "project_id",
         "sort",
@@ -19671,8 +19404,6 @@
       "path": "/topics",
       "query": [
         "order_by",
-        "page_token",
-        "pagination",
         "per_page",
         "search",
         "sort",
@@ -19730,11 +19461,8 @@
       "method": "GET",
       "path": "/projects/:project_id/uploads",
       "query": [
-        "id_after",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -19885,8 +19613,6 @@
       "query": [
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "sort"
       ],
@@ -20384,8 +20110,6 @@
         "before",
         "order_by",
         "page",
-        "page_token",
-        "pagination",
         "per_page",
         "scope",
         "sort",

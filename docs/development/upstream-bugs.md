@@ -372,7 +372,7 @@ readable without opening the tracker:
 | 109 | gitlab-org/gitlab | [The releases list caches one rendering for both values of `include_html_description`](#the-releases-list-caches-one-rendering-for-both-values-of-include_html_description) | Yes, by another user, [gitlab-org/gitlab#588980](https://gitlab.com/gitlab-org/gitlab/-/issues/588980), which the merge request names to close and which this project's maintainer closed as fixed on 2026-10-17 | Yes, [gitlab-org/gitlab!261176](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261176), merged | **Yes, unreleased**: merged on 2026-10-16 in milestone 19.5, after the 19.5 cut, so 19.6 is its first release; deployed to GitLab.com at 17:00 UTC that day | No; `release.list` can answer the other variant for five minutes on a release before the one that carries the merge | None taken |
 | 110 | gitlab-org/gitlab | [The API pages list access levels the API refuses](#the-api-pages-list-access-levels-the-api-refuses) | Yes, by the merge request | Yes, [gitlab-org/gitlab!261285](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261285), merged | **Yes, unreleased**: merged on 2026-10-13 in milestone 19.6 and deployed to GitLab.com the next day | No; a refused value is answered 400, except that an access request approval at a level GitLab does not grant is answered 201 with the requester while the request stays pending | Yes ([issue 1280](https://github.com/jmrplens/gitlab-mcp-server/issues/1280)): every access level parameter publishes, as an enum and in its description, only what its route accepts (`toolutil.AccessLevelSet`), and both approvals refuse a level their scope does not grant before the request; a group approval at `5` is refused on a subgroup and on the Free tier and otherwise confirmed by reading the requester back |
 | 111 | gitlab-org/gitlab | [The forks list returns statistics when asked not to](#the-forks-list-returns-statistics-when-asked-not-to) | Yes, [gitlab-org/gitlab#633318](https://gitlab.com/gitlab-org/gitlab/-/issues/633318) | Yes, [gitlab-org/gitlab!261732](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261732), open in milestone 19.6, closing the issue; approved, with the reviewer's question whether a `400` for a non-boolean value is a breaking change left in the description for the maintainer; its pipelines of 2026-10-14 ran no job, and after our request of 2026-10-17 a GitLab team member ran a new one on 2026-10-20, which passed, and asked the reviewer to set it to merge, which nobody has | No | No; `project.list_forks` with `statistics: false` answers every fork's statistics, and an administrator's `project.list_user_starred` with `with_custom_attributes: false` the custom attributes | None taken |
-| 112 | gitlab-org/gitlab | [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads) | No | No | No | No | Yes, `project.list_user_contributed` refuses keyset pagination and pages by offset only |
+| 112 | gitlab-org/gitlab | [The contributed projects route writes a keyset link its finder never reads](#the-contributed-projects-route-writes-a-keyset-link-its-finder-never-reads) | No | No | No | No | Yes, `project.list_user_contributed` offers neither `pagination` nor `page_token` and pages by offset only |
 | 113 | client-go | [`DependencyListExport` carries four of the eight fields GitLab sends](#dependencylistexport-carries-four-of-the-eight-fields-gitlab-sends) | No; for a small merge request, since the joint one was closed on 2026-10-21 | No | No | No | Yes, the export create and status read take the four from the captured response |
 | 114 | gitlab-org/gitlab | [The ML model package route accepts neither PRIVATE-TOKEN nor a GitLab OAuth access token](#the-ml-model-package-route-accepts-neither-private-token-nor-a-gitlab-oauth-access-token) | No | No | No | Yes, for an oauth HTTP mode session holding a GitLab OAuth access token, which cannot download a model file at all | Yes, in part: `model_registry.download` sends the token as Bearer, and a Bearer session's 401 names the limit |
 | 115 | client-go | [The model package file path segment cannot be omitted](#the-model-package-file-path-segment-cannot-be-omitted) | No; for a small merge request, since the joint one was closed on 2026-10-21 | No | No | No | Yes, `model_registry.download` sends its own request for a file at the package root |
@@ -15530,14 +15530,17 @@ API accepts, during the GitLab Hackathon of October 2026.
 - **Merged**: no. Read in 19.4.1 and on master at `f23a2b35383` (2026-09-23),
   which carry the same lines.
 - **Blocking**: no.
-- **Workaround**: yes. `project.list_user_contributed` refuses
-  `pagination: "keyset"` and any `page_token` before it sends a request
-  (`contributedKeysetRefusal` in `internal/tools/projects/projects.go`), and
-  its usage line and description say the list pages by offset only. Beside it,
-  `toolutil.PaginationFromResponse` withholds a next link that would send again
-  the request just answered (`linkAdvances`), which stops any other route that
-  behaves this way on its second reading of a page. A fix upstream retires the
-  refusal.
+- **Workaround**: yes. `project.list_user_contributed` offers neither
+  `pagination` nor `page_token`, so every surface refuses both before a request
+  is sent: `ListUserContributedProjectsInput` in
+  `internal/tools/projects/projects.go` carries the filters and offset
+  pagination alone, and its usage line and description say the list pages by
+  offset only. Until issue 1165 it published both fields, shared with the owned
+  and starred lists GitLab does page by keyset, and refused them at run time.
+  Beside it, `toolutil.PaginationFromResponse` withholds a next link that would
+  send again the request just answered (`linkAdvances`), which stops any other
+  route that behaves this way on its second reading of a page. A fix upstream
+  lets the action offer keyset pagination again.
 
 **Where**: `lib/api/projects.rb`, `GET /users/:user_id/contributed_projects`,
 which builds `ContributedProjectsFinder.new(user: user, current_user:
@@ -15555,10 +15558,11 @@ first page again, under the same link. A client following GitLab's own link
 reads the first page for ever; one that stops on a repeated link, as this
 server does, reads it twice.
 
-**What it costs this server**: nothing at run time once the action refuses
-keyset; a caller pages a user's contributed projects with `page` and
-`per_page`. Before the refusal, a caller following `next_page_token` read the
-first page twice as two pages and was then told the listing was complete.
+**What it costs this server**: nothing at run time now that the action offers
+no keyset parameter; a caller pages a user's contributed projects with `page`
+and `per_page`. Before the action refused keyset, a caller following
+`next_page_token` read the first page twice as two pages and was then told the
+listing was complete.
 
 **How we found it**: the review of the keyset continuation of
 [issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165), which
