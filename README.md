@@ -28,6 +28,7 @@
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
 
 **Security**
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jmrplens/gitlab-mcp-server/badge)](https://scorecard.dev/viewer/?uri=github.com/jmrplens/gitlab-mcp-server)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15879/badge)](https://www.bestpractices.dev/projects/15879)
 
 **Directories**
