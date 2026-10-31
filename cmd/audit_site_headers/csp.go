@@ -8,15 +8,27 @@ import (
 	"strings"
 )
 
-// recommendedPolicy is the Content-Security-Policy the site is to be served
-// with, written for what the built site loads (read on 2026-10-26 from its
-// 216 pages): its own scripts, styles, fonts, search index and worker, the
-// inline scripts Starlight writes for the theme, the sidebar and the tabs,
-// Pagefind's WebAssembly, data: images, and the four hosts of the install
-// badges on the getting started page. Loaded with this policy in Chromium,
-// every page rendered with no violation, and the theme switch and the search
-// worked. It is one literal for the reason [cloudflareRule] is.
-const recommendedPolicy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.shields.io https://cursor.com https://kiro.dev https://files.lmstudio.ai; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+// recommendedPolicy is the Content-Security-Policy the site is served with,
+// the value the Cloudflare rule for docs.jmrp.io sets since 2026-10-31. It was
+// written for what the built site loads (read on 2026-10-26 from its 216
+// pages): its own scripts, styles, search index and worker, the inline scripts
+// Starlight writes for the theme, the sidebar and the tabs, Pagefind's
+// WebAssembly, data: images, and the four hosts of the install badges on the
+// getting started page. Loaded in Chromium with the policy injected into every
+// response on 2026-10-26, and again as served on 2026-10-31, every page
+// rendered with no violation, and the theme switch and the search worked.
+//
+// font-src 'self' data: is not for this site, which loads no font: none of its
+// 220 pages, its stylesheets or its scripts carries an @font-face rule, a font
+// file or a data: font (read on 2026-10-31). The rule serves the policy to
+// every site under docs.jmrp.io, and another of them loads KaTeX's fonts from
+// its own path and one of them as a data: URL. A font runs no code, so the
+// directive leaves every judge here with the same answer.
+//
+// It is one literal rather than a concatenation, because a constant
+// expression lies outside every block the coverage profile records, and a
+// mutation of it would be reported as not covered.
+const recommendedPolicy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.shields.io https://cursor.com https://kiro.dev https://files.lmstudio.ai; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 // policy is one serialized policy: each directive, its name lower-cased, with
 // the source expressions after it. A directive named twice keeps its first

@@ -111,7 +111,8 @@ func TestWriteReport_Pages_PrintEachLineAndTheCount(t *testing.T) {
 
 // TestFailed_Pages_FailOnARequiredHeaderOrAnUnjudgedPage verifies the exit
 // decision: a page not judged fails the run, as does a required header that
-// does not hold, while a pending header never does.
+// does not hold, whether it was not sent or was sent with a permissive value,
+// while a pending header never does.
 func TestFailed_Pages_FailOnARequiredHeaderOrAnUnjudgedPage(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -123,6 +124,7 @@ func TestFailed_Pages_FailOnARequiredHeaderOrAnUnjudgedPage(t *testing.T) {
 		{name: "pending only", pages: []page{{status: 200, verdicts: []verdict{{rule: testRules.pending}}}}, want: false},
 		{name: "a required header that holds", pages: []page{{status: 204, verdicts: []verdict{{rule: testRules.required, served: []string{"nosniff"}}}}}, want: false},
 		{name: "a required header missing", pages: []page{{status: 200, verdicts: []verdict{{rule: testRules.pending}, {rule: testRules.required}}}}, want: true},
+		{name: "a required header that is permissive", pages: []page{{status: 200, verdicts: []verdict{{rule: testRules.required, served: []string{"sniff"}, reason: "is wrong"}}}}, want: true},
 		{name: "a page not fetched", pages: []page{{err: errors.New("x")}}, want: true},
 		{name: "a page that answered 199", pages: []page{{status: 199}}, want: true},
 		{name: "a page that answered 300", pages: []page{{status: 300}}, want: true},

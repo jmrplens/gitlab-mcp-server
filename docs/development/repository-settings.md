@@ -479,12 +479,12 @@ which names the publisher its provenance carries.
 
 **What to set.** In Cloudflare, in the `jmrp.io` zone, a response header
 transform rule (**Rules**, **Transform Rules**, **Modify Response Header**)
-whose expression matches the site, for example
-`http.host eq "docs.jmrp.io" and starts_with(http.request.uri.path, "/gitlab-mcp-server/")`,
-and which sets two headers:
+whose expression matches the whole host, for example
+`http.host eq "docs.jmrp.io"`, so that this site and the other project sites
+under docs.jmrp.io are served these two headers:
 
 ```text
-Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.shields.io https://cursor.com https://kiro.dev https://files.lmstudio.ai; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.shields.io https://cursor.com https://kiro.dev https://files.lmstudio.ai; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 X-Frame-Options: DENY
 ```
 
@@ -493,7 +493,8 @@ project's website for four headers with values that are not permissive:
 `Content-Security-Policy`, `Strict-Transport-Security`,
 `X-Content-Type-Options` as `nosniff`, and `X-Frame-Options`. The site is a
 GitHub Pages build, and Pages lets a site set none of its own response headers,
-so the two it lacks can only be added by Cloudflare in front of it.
+so Cloudflare in front of it is the only place the two this rule sets can be
+added.
 
 The policy is written for what the built site loads, read from its 216 pages
 on 2026-10-26: its own scripts, styles, search index and search worker, data:
@@ -508,15 +509,27 @@ response, each of the 216 pages loaded in Chromium with no violation, the
 theme switch and the search worked, and the five badge images from the four
 hosts loaded; the same run with `script-src 'self'` and `img-src 'self' data:`
 reported violations, the search returned nothing and the badges did not load.
+`font-src 'self' data:` is there for the other sites of the host, which are
+served the policy too: this site loads no font, and none of its 220 pages, its
+stylesheets or its scripts carries an `@font-face` rule, a font file or a
+`data:` font (read on 2026-10-31), while another site under docs.jmrp.io loads
+KaTeX's fonts from its own path and one of them as a `data:` URL. A font runs
+no code, so the directive changes nothing the check judges. Served by the rule
+on 2026-10-31, each of the 220 pages loaded in Chromium with no violation, the
+theme switch and the search worked, and the five badge images loaded.
 A page that later loads an image or a script from
 another host needs that host added here, in the rule and in
 `recommendedPolicy` in `cmd/audit_site_headers/csp.go` together: the check
 judges how strict the policy is, and cannot see what it blocks.
 
-**Current state.** Not satisfied. Read on 2026-10-26, the site's responses
-carry `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
-and `X-Content-Type-Options: nosniff`, and neither `Content-Security-Policy`
-nor `X-Frame-Options`.
+**Current state.** Satisfied since 2026-10-31, when the maintainer set the
+rule. Read that day, the site's responses carry
+`Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`,
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and the
+`Content-Security-Policy` above, value for value, and `make check-site-headers`
+reports all four as `ok`. The host's root and the six other project sites read
+that day are served the same two headers. On 2026-10-26, before the rule, the
+responses carried the first two and neither of the others.
 
 **How to check.**
 
@@ -526,22 +539,17 @@ curl -sI https://docs.jmrp.io/gitlab-mcp-server/ \
   | grep -i -E '^(content-security-policy|strict-transport-security|x-content-type-options|x-frame-options):'
 ```
 
-`make check-site-headers` reports each header as `ok`, `pending` with the value
-to set, or `FAIL`. Once the rule is in place it reports the two headers as
-`notice`, served while declared pending: remove their `pending` reason from
-`siteHeaders` in `cmd/audit_site_headers/headers.go` then, so that losing them
-fails the check from then on. The same change updates the tests that pin
-today's declarations (`TestSiteHeaders_Declarations_NameTheFourHeadersAndHoldTheirOwnValues`,
-and the cases of `TestRunMain_Arguments_JudgeEachPageOrRefuse` that expect the
-two as pending or as a notice), **Current state** above, and the sentence of
-[the command's reference](cmd-utilities.md#audit_site_headers) that names the
-two pending.
+`make check-site-headers` reports each header as `ok`, or as `FAIL` with the
+value to set. All four are declared required in `siteHeaders` in
+`cmd/audit_site_headers/headers.go`, so it fails when the rule is removed or
+either of the two headers it sets turns permissive. It judges whether a value
+is permissive, not whether it matches the one above, so a policy that differs
+from it and is not permissive passes too.
 
 **What tells you it drifted.** The `🛡️ Check the security headers` job of
-`pages.yml`, after every deploy: it fails when a header declared required is
-lost or turns permissive, and warns with the value to set while one is
-pending. A change in Cloudflare between deploys shows at the next deploy, or
-at once with `make check-site-headers`.
+`pages.yml`, after every deploy: it fails when any of the four headers is
+missing or permissive, with the value to set. A change in Cloudflare between
+deploys shows at the next deploy, or at once with `make check-site-headers`.
 
 ## Web commit sign-off
 

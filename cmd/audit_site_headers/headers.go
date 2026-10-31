@@ -10,14 +10,6 @@ import (
 	"strings"
 )
 
-// cloudflareRule is what a pending header waits for: the documentation site
-// is a GitHub Pages build behind Cloudflare, and Pages lets a site set none of
-// its own response headers, so only a Cloudflare rule can add them. It is one
-// literal rather than a concatenation, because a constant expression lies
-// outside every block the coverage profile records, and a mutation of it would
-// be reported as not covered.
-const cloudflareRule = "the response header rule for docs.jmrp.io in Cloudflare, which only the maintainer can set (docs/development/repository-settings.md#documentation-site-response-headers)"
-
 // minimumMaxAge is the least Strict-Transport-Security max-age that holds: a
 // year, in seconds, which is also the least the HSTS preload list accepts.
 const minimumMaxAge = 31536000
@@ -34,16 +26,18 @@ type rule struct {
 }
 
 // siteHeaders are the four headers hardened_site names, in the order the
-// criterion names them. Strict-Transport-Security and X-Content-Type-Options
-// are served today (read on 2026-10-26), so they are required.
-// Content-Security-Policy and X-Frame-Options wait for the Cloudflare rule;
-// once the report says one is served, its pending reason is removed here, so
-// that losing it fails the check from then on.
+// criterion names them, and every one of them is required: a response without
+// one, or with a permissive value, fails the check. The documentation site is
+// a GitHub Pages build behind Cloudflare, and Pages lets a site set none of its
+// own response headers, so Content-Security-Policy and X-Frame-Options come
+// from the response header rule for docs.jmrp.io in Cloudflare, which only the
+// maintainer can set
+// (docs/development/repository-settings.md#documentation-site-response-headers).
 var siteHeaders = []rule{
-	{name: "Content-Security-Policy", recommended: recommendedPolicy, judge: judgeContentSecurityPolicy, pending: cloudflareRule},
+	{name: "Content-Security-Policy", recommended: recommendedPolicy, judge: judgeContentSecurityPolicy},
 	{name: "Strict-Transport-Security", recommended: "max-age=31536000; includeSubDomains; preload", judge: judgeStrictTransportSecurity},
 	{name: "X-Content-Type-Options", recommended: "nosniff", judge: judgeContentTypeOptions},
-	{name: "X-Frame-Options", recommended: "DENY", judge: judgeFrameOptions, pending: cloudflareRule},
+	{name: "X-Frame-Options", recommended: "DENY", judge: judgeFrameOptions},
 }
 
 // verdict is what one page's response says of one rule: the header's fields

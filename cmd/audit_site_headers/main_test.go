@@ -80,15 +80,26 @@ func (tc runCase) check(t *testing.T) {
 // a flag it does not define, an argument, a URL that is not https, no attempt
 // and a negative delay are usage errors; with no -url the published site is
 // judged; a site serving every header passes; a site missing the two headers
-// only the Cloudflare rule adds still passes and says what to set; a required
-// header missing, a page that answered 404 and a page that could not be
-// fetched each fail; every -url is judged in order; and the attempts and the
-// delay reach the retry.
+// the Cloudflare rule adds, or either one of them, fails and says what to set,
+// as an error annotation when annotations are asked for; either of them sent
+// with a value its judge refuses fails and says why; any other header
+// missing, a page that answered 404 and a page that could not be fetched each
+// fail; every -url is judged in order; and the attempts and the delay reach
+// the retry.
 func TestRunMain_Arguments_JudgeEachPageOrRefuse(t *testing.T) {
 	t.Parallel()
-	today := siteResponse()
-	today.Del("Content-Security-Policy")
-	today.Del("X-Frame-Options")
+	withoutRule := siteResponse()
+	withoutRule.Del("Content-Security-Policy")
+	withoutRule.Del("X-Frame-Options")
+	noPolicy := siteResponse()
+	noPolicy.Del("Content-Security-Policy")
+	noFrameOptions := siteResponse()
+	noFrameOptions.Del("X-Frame-Options")
+	framedAnywhere := siteResponse()
+	framedAnywhere.Set("X-Frame-Options", "ALLOWALL")
+	const evalPolicy = "default-src 'self'; script-src 'self' 'unsafe-eval'; object-src 'none'"
+	evaluatesText := siteResponse()
+	evaluatesText.Set("Content-Security-Policy", evalPolicy)
 	noSniff := siteResponse()
 	noSniff.Del("X-Content-Type-Options")
 	cases := []runCase{
@@ -104,22 +115,59 @@ func TestRunMain_Arguments_JudgeEachPageOrRefuse(t *testing.T) {
 			wantAsked: []string{defaultSiteURL},
 			wantStdout: []string{
 				defaultSiteURL + " answered 200\n",
-				"  notice   Content-Security-Policy: " + recommendedPolicy + ". It is served, and declared as waiting for ",
+				"  ok       Content-Security-Policy: " + recommendedPolicy + "\n",
 				"  ok       Strict-Transport-Security: max-age=31536000; includeSubDomains; preload\n",
+				"  ok       X-Content-Type-Options: nosniff\n",
+				"  ok       X-Frame-Options: DENY\n",
 				"audit_site_headers: 1 page(s), 4 header(s) held, 0 failed, 0 waiting for the maintainer's rule\n",
 			},
 		},
 		{
-			name: "the site as it is today", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: today}},
+			name: "without the Cloudflare rule", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: withoutRule}}, wantCode: 1,
 			wantAsked: []string{"https://site.example/"},
 			wantStdout: []string{
-				"  pending  Content-Security-Policy is not sent; it waits for " + cloudflareRule + ". Set: " + recommendedPolicy + "\n",
-				"  pending  X-Frame-Options is not sent; it waits for " + cloudflareRule + ". Set: DENY\n",
-				"audit_site_headers: 1 page(s), 2 header(s) held, 0 failed, 2 waiting for the maintainer's rule\n",
+				"  FAIL     Content-Security-Policy is not sent. Set: " + recommendedPolicy + "\n",
+				"  FAIL     X-Frame-Options is not sent. Set: DENY\n",
+				"audit_site_headers: 1 page(s), 2 header(s) held, 2 failed, 0 waiting for the maintainer's rule\n",
 			},
 		},
 		{
-			name: "a required header missing", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: noSniff}}, wantCode: 1,
+			name: "without Content-Security-Policy", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: noPolicy}}, wantCode: 1,
+			wantAsked: []string{"https://site.example/"},
+			wantStdout: []string{
+				"  FAIL     Content-Security-Policy is not sent. Set: " + recommendedPolicy + "\n",
+				"  ok       X-Frame-Options: DENY\n",
+				"audit_site_headers: 1 page(s), 3 header(s) held, 1 failed, 0 waiting for the maintainer's rule\n",
+			},
+		},
+		{
+			name: "without X-Frame-Options, annotated", args: []string{"-url", "https://site.example/", "-annotate"}, responses: []response{{status: 200, header: noFrameOptions}}, wantCode: 1,
+			wantAsked: []string{"https://site.example/"},
+			wantStdout: []string{
+				"  ok       Content-Security-Policy: " + recommendedPolicy + "\n",
+				"  FAIL     X-Frame-Options is not sent. Set: DENY\n",
+				"audit_site_headers: 1 page(s), 3 header(s) held, 1 failed, 0 waiting for the maintainer's rule\n",
+				"::error title=X-Frame-Options::https://site.example/: X-Frame-Options is not sent. Set: DENY\n",
+			},
+		},
+		{
+			name: "X-Frame-Options as ALLOWALL", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: framedAnywhere}}, wantCode: 1,
+			wantAsked: []string{"https://site.example/"},
+			wantStdout: []string{
+				"  FAIL     X-Frame-Options is permissive: it is \"ALLOWALL\", and a browser refuses a frame from another site only for DENY or SAMEORIGIN. Served: ALLOWALL. Set: DENY\n",
+				"audit_site_headers: 1 page(s), 3 header(s) held, 1 failed, 0 waiting for the maintainer's rule\n",
+			},
+		},
+		{
+			name: "a policy allowing 'unsafe-eval'", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: evaluatesText}}, wantCode: 1,
+			wantAsked: []string{"https://site.example/"},
+			wantStdout: []string{
+				"  FAIL     Content-Security-Policy is permissive: it lets a script run text as code: script-src allows 'unsafe-eval'. Served: " + evalPolicy + ". Set: " + recommendedPolicy + "\n",
+				"audit_site_headers: 1 page(s), 3 header(s) held, 1 failed, 0 waiting for the maintainer's rule\n",
+			},
+		},
+		{
+			name: "without X-Content-Type-Options", args: []string{"-url", "https://site.example/"}, responses: []response{{status: 200, header: noSniff}}, wantCode: 1,
 			wantAsked:  []string{"https://site.example/"},
 			wantStdout: []string{"  FAIL     X-Content-Type-Options is not sent. Set: nosniff\n", "3 header(s) held, 1 failed"},
 		},
@@ -260,8 +308,8 @@ func TestPagesWorkflow_AfterTheDeploy_RunsThisCheckOnThePublishedURL(t *testing.
 }
 
 // TestRepositorySettings_ThePage_ShowsEveryValueThisCheckAsksFor holds the
-// maintainer's checklist to the declarations: the section the pending reason
-// names exists, and every value this check tells Cloudflare to set appears in
+// maintainer's checklist to the declarations: the section siteHeaders points
+// to exists, and every value this check tells Cloudflare to set appears in
 // it verbatim, so the page and the check cannot disagree on what to paste.
 func TestRepositorySettings_ThePage_ShowsEveryValueThisCheckAsksFor(t *testing.T) {
 	t.Parallel()
