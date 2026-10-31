@@ -252,8 +252,8 @@ func buildListUsersOptions(input ListInput) (*gl.ListUsersOptions, error) {
 }
 
 // applyOrderSort copies the optional order_by and sort parameters onto a
-// gl.ListOptions, which exposes these for both offset and keyset pagination on
-// endpoints whose options embed ListOptions without dedicated fields.
+// gl.ListOptions, which carries them on endpoints whose options embed
+// ListOptions without dedicated fields.
 func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
 	if orderBy != "" {
 		opts.OrderBy = orderBy
@@ -387,16 +387,15 @@ type SSHKeyListOutput struct {
 
 // ListSSHKeysInput holds parameters for listing SSH keys.
 type ListSSHKeysInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListSSHKeys retrieves SSH keys for the current authenticated user.
 func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, input ListSSHKeysInput) (SSHKeyListOutput, error) {
 	opts := &gl.ListSSHKeysOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	keys, resp, err := client.GL().Users.ListSSHKeys(opts, gl.WithContext(ctx))
@@ -484,10 +483,9 @@ type ListContributionEventsInput struct {
 	Before     string `json:"before,omitempty" jsonschema:"Only events before this date (YYYY-MM-DD)"`
 	After      string `json:"after,omitempty" jsonschema:"Only events after this date (YYYY-MM-DD)"`
 	Scope      string `json:"scope,omitempty" jsonschema:"Include all events across a user's projects (e.g. 'all')"`
-	OrderBy    string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	OrderBy    string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListContributionEvents retrieves contribution events for a user.
@@ -500,7 +498,7 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 	}
 
 	opts := &gl.ListContributionEventsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

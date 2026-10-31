@@ -346,14 +346,13 @@ type ProtectedTagOutput struct {
 }
 
 // ListProtectedTagsInput defines parameters for listing protected tags. It
-// mirrors gl.ListProtectedTagsOptions (C-IMPORTS), which embeds gl.ListOptions,
-// and supports offset and keyset pagination via order_by/sort/page_token.
+// mirrors gl.ListProtectedTagsOptions (C-IMPORTS), which embeds gl.ListOptions;
+// GitLab pages the protected tag list by offset alone.
 type ListProtectedTagsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProtectedTagsOutput holds a list of protected tags.
@@ -416,7 +415,7 @@ func ListProtectedTags(ctx context.Context, client *gitlabclient.Client, input L
 		return ListProtectedTagsOutput{}, errors.New("tagListProtected: project_id is required")
 	}
 	opts := &gl.ListProtectedTagsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

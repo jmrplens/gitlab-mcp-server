@@ -97,7 +97,6 @@ type GetLatestInput struct {
 	UpdatedAfter  string               `json:"updated_after,omitempty" jsonschema:"Return pipelines updated after date (ISO 8601 format). Applies to the list fallback."`
 	UpdatedBefore string               `json:"updated_before,omitempty" jsonschema:"Return pipelines updated before date (ISO 8601 format). Applies to the list fallback."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // LatestOutput is what pipeline.latest answers: the pipeline in full, and,
@@ -292,22 +291,21 @@ func firstPipelineOnRef(ctx context.Context, client *gitlabclient.Client, input 
 // that does not parse is refused.
 func latestListOptions(input GetLatestInput) (*gl.ListProjectPipelinesOptions, error) {
 	listOpts, err := buildListOpts(ListInput{
-		ProjectID:             input.ProjectID,
-		Scope:                 input.Scope,
-		Status:                input.Status,
-		Source:                input.Source,
-		SHA:                   input.SHA,
-		Name:                  input.Name,
-		Username:              input.Username,
-		YamlErrors:            input.YamlErrors,
-		OrderBy:               input.OrderBy,
-		Sort:                  input.Sort,
-		CreatedAfter:          input.CreatedAfter,
-		CreatedBefore:         input.CreatedBefore,
-		UpdatedAfter:          input.UpdatedAfter,
-		UpdatedBefore:         input.UpdatedBefore,
-		PaginationInput:       input.PaginationInput,
-		KeysetPaginationInput: input.KeysetPaginationInput,
+		ProjectID:       input.ProjectID,
+		Scope:           input.Scope,
+		Status:          input.Status,
+		Source:          input.Source,
+		SHA:             input.SHA,
+		Name:            input.Name,
+		Username:        input.Username,
+		YamlErrors:      input.YamlErrors,
+		OrderBy:         input.OrderBy,
+		Sort:            input.Sort,
+		CreatedAfter:    input.CreatedAfter,
+		CreatedBefore:   input.CreatedBefore,
+		UpdatedAfter:    input.UpdatedAfter,
+		UpdatedBefore:   input.UpdatedBefore,
+		PaginationInput: input.PaginationInput,
 	})
 	if err != nil {
 		return nil, err
@@ -350,12 +348,12 @@ func noPipelineOnRef(input GetLatestInput, ref string) error {
 }
 
 // filtersGiven reports whether the caller narrowed the list: any filter of
-// GetLatestInput, a page past the first, or a keyset cursor. The ordering,
-// the page size and the pagination method only arrange the rows. It compares
-// the input with those cleared against the zero value, so a filter added to
-// GetLatestInput counts without a change here.
+// GetLatestInput, or a page past the first. The ordering and the page size
+// only arrange the rows. It compares the input with those cleared against the
+// zero value, so a filter added to GetLatestInput counts without a change
+// here.
 func filtersGiven(in GetLatestInput) bool {
-	in.ProjectID, in.Ref, in.OrderBy, in.Sort, in.Pagination = "", "", "", "", ""
+	in.ProjectID, in.Ref, in.OrderBy, in.Sort = "", "", "", ""
 	in.PerPage = 0
 	if in.Page == 1 {
 		in.Page = 0

@@ -93,10 +93,9 @@ func toProjectStatusCheckOutput(c *gl.ProjectStatusCheck) ProjectStatusCheckOutp
 // ListProjectStatusChecksInput defines parameters for the ListProjectStatusChecks action.
 type ListProjectStatusChecksInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by for keyset pagination (e.g. id)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // The hints a refused caller is given. Every status check route answers a
@@ -175,7 +174,7 @@ func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, i
 		"deprecated endpoint - prefer external_status_check.list_project; "+hintStatusCheckMaintainer,
 		func(projectID string, opts ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error) {
 			listOptions := &gl.ListOptions{}
-			toolutil.ApplyListOptions(listOptions, input.PaginationInput, input.KeysetPaginationInput)
+			toolutil.ApplyListOptions(listOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 			listOptions.OrderBy = input.OrderBy
 			listOptions.Sort = input.Sort
 			return client.GL().ExternalStatusChecks.ListProjectStatusChecks(projectID, listOptions, opts...)
@@ -207,10 +206,9 @@ func listProjectStatusChecks(ctx context.Context, projectID toolutil.StringOrInt
 type ListProjectMRInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by for keyset pagination (e.g. id)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProjectMRExternalStatusChecks lists external status checks for a project merge request.
@@ -225,7 +223,7 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 		return ListMergeStatusCheckOutput{}, toolutil.ErrRequiredInt64("listProjectMRExternalStatusChecks", "merge_request_iid")
 	}
 	opts := &gl.ListProjectMergeRequestExternalStatusChecksOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	opts.OrderBy = input.OrderBy
 	opts.Sort = input.Sort
 	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectMergeRequestExternalStatusChecks(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
@@ -250,10 +248,9 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 // ListProjectInput defines parameters for the ListProjectExternalStatusChecks action.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by for keyset pagination (e.g. id)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProjectExternalStatusChecks lists external status checks for a project.
@@ -261,7 +258,7 @@ func ListProjectExternalStatusChecks(ctx context.Context, client *gitlabclient.C
 	return listProjectStatusChecks(ctx, input.ProjectID, "listProjectExternalStatusChecks", hintStatusCheckMaintainer,
 		func(projectID string, opts ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error) {
 			listOptions := &gl.ListProjectExternalStatusChecksOptions{}
-			toolutil.ApplyListOptions(&listOptions.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+			toolutil.ApplyListOptions(&listOptions.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 			listOptions.OrderBy = input.OrderBy
 			listOptions.Sort = input.Sort
 			return client.GL().ExternalStatusChecks.ListProjectExternalStatusChecks(projectID, listOptions, opts...)

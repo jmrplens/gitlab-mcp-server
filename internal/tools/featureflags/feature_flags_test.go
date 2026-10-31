@@ -98,19 +98,15 @@ func TestListFeatureFlags_Success(t *testing.T) {
 }
 
 // TestListFeatureFlags_OrderingAndKeyset verifies that ListFeatureFlags forwards
-// order_by, sort, and keyset pagination (pagination + page_token) as query
-// parameters, and that top-level flag scopes are surfaced on the output
-// (including a null scope entry that must be skipped).
+// order_by and sort as query parameters, and that top-level flag scopes are
+// surfaced on the output (including a null scope entry that must be skipped).
 // It asserts the request query string and the mapped Output.Scopes.
-func TestListFeatureFlags_OrderingAndKeyset(t *testing.T) {
+func TestListFeatureFlags_Ordering(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if q.Get("order_by") != "name" || q.Get("sort") != "asc" {
 			t.Errorf("order_by/sort = %q/%q, want name/asc", q.Get("order_by"), q.Get("sort"))
-		}
-		if q.Get("pagination") != "keyset" || q.Get("page_token") != "cursor-1" {
-			t.Errorf("pagination/page_token = %q/%q, want keyset/cursor-1", q.Get("pagination"), q.Get("page_token"))
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+scopedFeatureFlagJSON+`]`, testutil.PaginationHeaders{
 			Page: "1", NextPage: "", TotalPages: "1", PerPage: "20", Total: "1",
@@ -119,10 +115,9 @@ func TestListFeatureFlags_OrderingAndKeyset(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := ListFeatureFlags(context.Background(), client, ListInput{
-		ProjectID:  "1",
-		OrderBy:    "name",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "cursor-1",
+		ProjectID: "1",
+		OrderBy:   "name",
+		Sort:      "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

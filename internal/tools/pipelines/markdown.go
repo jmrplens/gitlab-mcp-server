@@ -40,8 +40,9 @@ func formatPipelineNotFound(out pipelineNotFoundOutput) *mcp.CallToolResult {
 // collection of objects that share columns.
 //
 // The heading counts what the response can vouch for rather than
-// Pagination.TotalItems alone, which keyset pagination never sends: "Pipelines
-// (0)" above a table of rows was what a reader saw on every keyset page.
+// Pagination.TotalItems alone, which a response may not carry (GitLab sends
+// no total past 10,000 rows): "Pipelines (0)" above a table of rows was what
+// a reader saw on such a page.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Pipelines) == 0 {
 		return toolutil.EmptyMessage("pipelines")

@@ -82,7 +82,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		return opts
 	}
 
-	opts.Usage = "List the project-scoped templates of a given template_type (licenses, gitignores, dockerfiles, gitlab_ci_ymls), with optional id/type filters, ordering, and keyset pagination."
+	opts.Usage = "List the project-scoped templates of a given template_type (licenses, gitignores, dockerfiles, gitlab_ci_ymls), with optional id/type filters, ordering, and offset pagination."
 	opts.Aliases = []string{
 		individualTool,
 		"list project templates",
@@ -92,7 +92,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		"ci yaml templates",
 	}
 	opts.RelatedActions = []string{actionGet, actionProjectNew, actionProjectList}
-	opts.IndividualTool.Description = "List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: gitlab_get_project_template, gitlab_project_create."
+	opts.IndividualTool.Description = "List project templates of a given template_type with optional id/type filters, order_by/sort, and offset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: gitlab_get_project_template, gitlab_project_create."
 	opts.ParameterGuidance["type"] = toolutil.ParameterGuidance{
 		SemanticRole:   "template_type_filter",
 		ValueSource:    "Optional secondary filter passed as the 'type' query parameter. " + templateTypeGuidance,
@@ -105,7 +105,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 	}
 	opts.ParameterGuidance["order_by"] = toolutil.ParameterGuidance{
 		SemanticRole:   "order_by",
-		ValueSource:    "Column by which to order keyset-paginated results.",
+		ValueSource:    "Column by which to order results.",
 		ExampleBinding: `params.order_by:"name"`,
 	}
 	opts.ParameterGuidance["sort"] = toolutil.ParameterGuidance{

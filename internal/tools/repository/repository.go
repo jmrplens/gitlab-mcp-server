@@ -320,7 +320,6 @@ type ContributorsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order by: name, email, or commits (number of commits). Contributors are ordered by commit date when omitted"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc (default: asc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ContributorOutput represents a repository contributor.
@@ -354,7 +353,7 @@ func Contributors(ctx context.Context, client *gitlabclient.Client, input Contri
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	contribs, resp, err := client.GL().Repositories.Contributors(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ContributorsOutput{}, toolutil.WrapErrWithStatusHint("repositoryContributors", err, http.StatusNotFound,

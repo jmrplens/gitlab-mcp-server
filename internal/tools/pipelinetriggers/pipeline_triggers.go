@@ -87,15 +87,15 @@ type RunOutput struct {
 // Input types
 // ──────────────────────────────────────────────.
 
-// ListInput contains parameters for listing pipeline triggers. It embeds both
-// offset (PaginationInput) and keyset (KeysetPaginationInput) pagination plus
-// the order_by/sort controls accepted by gl.ListOptions.
+// ListInput contains parameters for listing pipeline triggers. It embeds
+// offset pagination (PaginationInput) plus the order_by/sort controls
+// accepted by gl.ListOptions; its keyset fields are not offered, since GitLab
+// pages this list by offset alone.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Field by which to order results when using keyset pagination (e.g. id)."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Field by which to order results (e.g. id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc. Defaults to the API ordering."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for getting a pipeline trigger.
@@ -145,7 +145,7 @@ func ListTriggers(ctx context.Context, client *gitlabclient.Client, input ListIn
 		return ListOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	opts := &gl.ListPipelineTriggersOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

@@ -201,11 +201,10 @@ func TestDeleteNote_Success(t *testing.T) {
 	}
 }
 
-// TestList_AppliesListAndKeysetOptions verifies that List wires order_by,
-// sort, page/per_page, and keyset pagination (pagination + page_token) into
-// the outbound request query, covering the toolutil.ApplyListOptions path and
-// the new 1:1-audit list fields.
-func TestList_AppliesListAndKeysetOptions(t *testing.T) {
+// TestList_AppliesListOptions verifies that List wires order_by, sort and
+// page/per_page into the outbound request query, covering the
+// toolutil.ApplyListOptions path and the 1:1-audit list fields.
+func TestList_AppliesListOptions(t *testing.T) {
 	var gotQuery url.Values
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.Query()
@@ -219,18 +218,15 @@ func TestList_AppliesListAndKeysetOptions(t *testing.T) {
 		OrderBy:   "created_at",
 		Sort:      "desc",
 		Page:      3, PerPage: 25,
-		Pagination: "keyset", PageToken: "cursor-99",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	wants := map[string]string{
-		"order_by":   "created_at",
-		"sort":       "desc",
-		"page":       "3",
-		"per_page":   "25",
-		"pagination": "keyset",
-		"page_token": "cursor-99",
+		"order_by": "created_at",
+		"sort":     "desc",
+		"page":     "3",
+		"per_page": "25",
 	}
 	for key, want := range wants {
 		t.Run(key, func(t *testing.T) {

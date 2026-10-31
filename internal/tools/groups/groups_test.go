@@ -3440,8 +3440,6 @@ func TestList_AuditFiltersAndKeyset(t *testing.T) {
 			"active":                 "true",
 			"archived":               "false",
 			"marked_for_deletion_on": "2026-06-01",
-			"pagination":             "keyset",
-			"page_token":             "abc",
 		}
 		for k, want := range checks {
 			t.Run(k, func(t *testing.T) {
@@ -3455,12 +3453,11 @@ func TestList_AuditFiltersAndKeyset(t *testing.T) {
 
 	active, archived := true, false
 	_, err := List(context.Background(), client, ListInput{
-		MinAccessLevel:        30,
-		RepositoryStorage:     "nfs-01",
-		Active:                &active,
-		Archived:              &archived,
-		MarkedForDeletionOn:   "2026-06-01",
-		KeysetPaginationInput: keysetKeyset(),
+		MinAccessLevel:      30,
+		RepositoryStorage:   "nfs-01",
+		Active:              &active,
+		Archived:            &archived,
+		MarkedForDeletionOn: "2026-06-01",
 	})
 	if err != nil {
 		t.Fatalf(fmtGroupListErr, err)
@@ -3500,7 +3497,6 @@ func TestSubgroupsList_AuditFilters(t *testing.T) {
 			"active":                 "true",
 			"archived":               "false",
 			"marked_for_deletion_on": "2026-06-02",
-			"pagination":             "keyset",
 		}
 		for k, want := range checks {
 			t.Run(k, func(t *testing.T) {
@@ -3517,16 +3513,15 @@ func TestSubgroupsList_AuditFilters(t *testing.T) {
 
 	active, archived := true, false
 	_, err := SubgroupsList(context.Background(), client, SubgroupsListInput{
-		GroupID:               "99",
-		Visibility:            "private",
-		TopLevelOnly:          true,
-		WithCustomAttributes:  true,
-		SkipGroups:            []int64{7},
-		RepositoryStorage:     "nfs-02",
-		Active:                &active,
-		Archived:              &archived,
-		MarkedForDeletionOn:   "2026-06-02",
-		KeysetPaginationInput: keysetKeyset(),
+		GroupID:              "99",
+		Visibility:           "private",
+		TopLevelOnly:         true,
+		WithCustomAttributes: true,
+		SkipGroups:           []int64{7},
+		RepositoryStorage:    "nfs-02",
+		Active:               &active,
+		Archived:             &archived,
+		MarkedForDeletionOn:  "2026-06-02",
 	})
 	if err != nil {
 		t.Fatalf(fmtSubgroupsListErr, err)
@@ -3562,7 +3557,6 @@ func TestListProjects_AuditFilters(t *testing.T) {
 			"with_issues_enabled":         "true",
 			"with_merge_requests_enabled": "true",
 			"with_security_reports":       "true",
-			"pagination":                  "keyset",
 		}
 		for k, want := range checks {
 			t.Run(k, func(t *testing.T) {
@@ -3584,7 +3578,6 @@ func TestListProjects_AuditFilters(t *testing.T) {
 		WithIssuesEnabled:        &t1,
 		WithMergeRequestsEnabled: &t2,
 		WithSecurityReports:      &t3,
-		KeysetPaginationInput:    keysetKeyset(),
 	})
 	if err != nil {
 		t.Fatalf("ListProjects() unexpected error: %v", err)
@@ -3606,9 +3599,6 @@ func TestMembersList_AuditFilters(t *testing.T) {
 		if q.Get("order_by") != "access_level" || q.Get("sort") != "desc" || q.Get("show_seat_info") != "true" {
 			t.Errorf("order_by/sort/show_seat_info missing: %s", r.URL.RawQuery)
 		}
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("pagination missing: %s", r.URL.RawQuery)
-		}
 		if !strings.Contains(r.URL.RawQuery, "user_ids") {
 			t.Errorf("user_ids missing: %s", r.URL.RawQuery)
 		}
@@ -3617,12 +3607,11 @@ func TestMembersList_AuditFilters(t *testing.T) {
 
 	seat := true
 	_, err := MembersList(context.Background(), client, MembersListInput{
-		GroupID:               "99",
-		OrderBy:               "access_level",
-		Sort:                  "desc",
-		ShowSeatInfo:          &seat,
-		UserIDs:               []int64{10, 11},
-		KeysetPaginationInput: keysetKeyset(),
+		GroupID:      "99",
+		OrderBy:      "access_level",
+		Sort:         "desc",
+		ShowSeatInfo: &seat,
+		UserIDs:      []int64{10, 11},
 	})
 	if err != nil {
 		t.Fatalf(fmtGroupMembersListErr, err)
@@ -3641,19 +3630,18 @@ func TestGet_AuditParams(t *testing.T) {
 		if q.Get("with_custom_attributes") != "true" || q.Get("with_projects") != "true" {
 			t.Errorf("with_* params missing: %s", r.URL.RawQuery)
 		}
-		if q.Get("order_by") != "name" || q.Get("sort") != "asc" || q.Get("pagination") != "keyset" {
-			t.Errorf("order_by/sort/pagination missing: %s", r.URL.RawQuery)
+		if q.Get("order_by") != "name" || q.Get("sort") != "asc" {
+			t.Errorf("order_by/sort missing: %s", r.URL.RawQuery)
 		}
 		testutil.RespondJSON(w, http.StatusOK, groupDetailJSON)
 	}))
 
 	_, err := Get(context.Background(), client, GetInput{
-		GroupID:               "99",
-		WithCustomAttributes:  true,
-		WithProjects:          new(true),
-		OrderBy:               "name",
-		Sort:                  "asc",
-		KeysetPaginationInput: keysetKeyset(),
+		GroupID:              "99",
+		WithCustomAttributes: true,
+		WithProjects:         new(true),
+		OrderBy:              "name",
+		Sort:                 "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtGroupGetErr, err)
@@ -3682,11 +3670,6 @@ func TestInvitedAndTransferLocations_OrderSort(t *testing.T) {
 	if _, err := TransferLocationsList(context.Background(), client, TransferLocationsListInput{GroupID: "99", OrderBy: "name", Sort: "desc"}); err != nil {
 		t.Fatalf("TransferLocationsList() unexpected error: %v", err)
 	}
-}
-
-// keysetKeyset returns a populated keyset-pagination input for tests.
-func keysetKeyset() toolutil.KeysetPaginationInput {
-	return toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc"}
 }
 
 // canceledContext returns an already-canceled context to exercise the early

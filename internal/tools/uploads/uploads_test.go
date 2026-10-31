@@ -1218,14 +1218,15 @@ func TestProjectUpload_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestList_KeysetPaginationParams verifies List forwards offset, keyset, and
-// ordering parameters as query parameters and maps pagination response headers.
-func TestList_KeysetPaginationParams(t *testing.T) {
+// TestList_PaginationParams verifies List forwards offset and ordering
+// parameters as query parameters, sends no keyset parameter, and maps
+// pagination response headers.
+func TestList_PaginationParams(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		checks := map[string]string{
-			"pagination": "keyset",
-			"page_token": "42",
+			"pagination": "",
+			"page_token": "",
 			"order_by":   "created_at",
 			"sort":       "desc",
 			"per_page":   "50",
@@ -1249,7 +1250,6 @@ func TestList_KeysetPaginationParams(t *testing.T) {
 		OrderBy:   "created_at",
 		Sort:      "desc",
 		Page:      2, PerPage: 50,
-		Pagination: "keyset", PageToken: "42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1350,28 +1350,4 @@ func TestUploadedByLabel(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestList_Continuation_IsAppliedRatherThanSentAsPageToken verifies that the
-// upload list, which builds its query by hand because client-go gives its
-// method no options struct, carries a next_page_token through the shared
-// continuation like every keyset-capable list: the link's parameters reach
-// the request, and the link never reaches GitLab whole as a page_token
-// (issue 1165). GitLab pages this list by offset today, so the listing below
-// stands for an answer it does not give yet.
-func TestList_Continuation_IsAppliedRatherThanSentAsPageToken(t *testing.T) {
-	listing := &testutil.KeysetListing{
-		Path: "/api/v4/projects/42/uploads", Param: "id_after", Value: "2",
-		First:  `[{"id":1,"filename":"a.png"},{"id":2,"filename":"b.png"}]`,
-		Second: `[{"id":3,"filename":"c.png"}]`,
-	}
-	client := testutil.NewTestClient(t, listing)
-	testutil.FollowKeyset(t, listing, func(token string) (testutil.KeysetPage, error) {
-		out, err := List(t.Context(), client, ListInput{
-			ProjectID:  "42",
-			Pagination: "keyset",
-			PageToken:  token,
-		})
-		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Uploads)}, err
-	})
 }

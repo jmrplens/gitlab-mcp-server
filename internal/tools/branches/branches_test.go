@@ -2204,9 +2204,9 @@ func TestBranchList_KeysetAndOrdering(t *testing.T) {
 	}
 }
 
-// TestProtectedList_SearchKeysetAndOrdering verifies that search, order_by,
-// sort, and keyset pagination are forwarded for the protected-branches list.
-func TestProtectedList_SearchKeysetAndOrdering(t *testing.T) {
+// TestProtectedList_SearchAndOrdering verifies that search, order_by and sort
+// are forwarded for the protected-branches list.
+func TestProtectedList_SearchAndOrdering(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedBranches {
@@ -2218,16 +2218,15 @@ func TestProtectedList_SearchKeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := ProtectedList(context.Background(), client, ProtectedListInput{
-		ProjectID:  "42",
-		Search:     "main",
-		OrderBy:    "name",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "tok",
+		ProjectID: "42",
+		Search:    "main",
+		OrderBy:   "name",
+		Sort:      "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtProtBranchListErr, err)
 	}
-	for _, want := range []string{"search=main", "order_by=name", "sort=asc", "pagination=keyset", "page_token=tok"} {
+	for _, want := range []string{"search=main", "order_by=name", "sort=asc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query missing %q: %s", want, gotQuery)

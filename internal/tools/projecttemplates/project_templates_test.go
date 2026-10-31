@@ -275,18 +275,16 @@ func TestList_ZeroPagination(t *testing.T) {
 	}
 }
 
-// TestList_WithFiltersAndKeyset verifies that id, type, order_by, sort, and
-// keyset pagination inputs are wired onto the request query string.
-func TestList_WithFiltersAndKeyset(t *testing.T) {
+// TestList_WithFilters verifies that id, type, order_by and sort inputs are
+// wired onto the request query string.
+func TestList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		for key, want := range map[string]string{
-			"id":         "42",
-			"type":       "licenses",
-			"order_by":   "name",
-			"sort":       "asc",
-			"pagination": "keyset",
-			"page_token": "tok123",
+			"id":       "42",
+			"type":     "licenses",
+			"order_by": "name",
+			"sort":     "asc",
 		} {
 			t.Run(key, func(t *testing.T) {
 				if q.Get(key) != want {
@@ -303,7 +301,6 @@ func TestList_WithFiltersAndKeyset(t *testing.T) {
 		Type:         "licenses",
 		OrderBy:      "name",
 		Sort:         "asc",
-		Pagination:   "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

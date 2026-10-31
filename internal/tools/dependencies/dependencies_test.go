@@ -88,18 +88,15 @@ func TestListDeps(t *testing.T) {
 			},
 		},
 		{
-			name: "sends order_by, sort, and keyset pagination parameters to API",
+			name: "sends order_by and sort parameters to API",
 			input: ListInput{
-				ProjectID:             "42",
-				OrderBy:               "name",
-				Sort:                  "asc",
-				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+				ProjectID: "42",
+				OrderBy:   "name",
+				Sort:      "asc",
 			},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertQueryParam(t, r, "order_by", "name")
 				testutil.AssertQueryParam(t, r, "sort", "asc")
-				testutil.AssertQueryParam(t, r, "pagination", "keyset")
-				testutil.AssertQueryParam(t, r, "page_token", "tok123")
 				testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 			}),

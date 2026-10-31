@@ -81,7 +81,6 @@ func toDetailsOutput(rc *gl.RunnerControllerDetails) DetailsOutput {
 // ListInput defines parameters for listing runner controllers.
 type ListInput struct {
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order the result set by (e.g. id, created_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort order: asc or desc"`
 }
@@ -93,7 +92,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListRunnerControllersOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

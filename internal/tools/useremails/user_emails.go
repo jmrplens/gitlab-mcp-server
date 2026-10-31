@@ -45,14 +45,14 @@ type DeleteOutput struct {
 
 // --- Input types ---.
 
-// ListForUserInput identifies a user for listing emails and carries offset
-// and keyset pagination parameters mirroring v2.ListEmailsForUserOptions
-// (which embeds v2.ListOptions).
+// ListForUserInput identifies a user for listing emails and carries the
+// offset pagination and ordering parameters of v2.ListEmailsForUserOptions
+// (which embeds v2.ListOptions); its keyset fields are not offered, since
+// GitLab pages this list by offset alone.
 type ListForUserInput struct {
 	UserID int64 `json:"user_id" jsonschema:"GitLab user ID,required"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for ordered results: asc or desc"`
 }
 
@@ -116,7 +116,7 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 		return ListOutput{}, errors.New(errUserIDPositive)
 	}
 	opts := &gl.ListEmailsForUserOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

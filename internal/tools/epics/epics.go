@@ -287,7 +287,6 @@ type ListInput struct {
 	IncludeDescendants  *bool    `json:"include_descendants,omitempty" jsonschema:"Include epics from descendant groups"`
 	toolutil.GraphQLCursorPaginationInput
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // usesWorkItemsPath reports whether the request names anything only the Work
@@ -399,10 +398,10 @@ func namesWorkItemsAttribute(in ListInput) string {
 	return ""
 }
 
-// validateListPagination refuses an offset or keyset page request that the Work
-// Items query cannot honor.
+// validateListPagination refuses an offset page request that the Work Items
+// query cannot honor.
 //
-// The four parameters below reach GitLab through gl.ListOptions, which only the
+// The two parameters below reach GitLab through gl.ListOptions, which only the
 // REST epics endpoint is given, so a request combining one of them with a
 // Work-Items-only filter used to be answered with the first cursor page and no
 // word about it: page=2 came back as page one, which reads as a list that ends
@@ -436,12 +435,6 @@ func offsetPaginationNames(in ListInput) []string {
 	}
 	if in.PerPage > 0 {
 		named = append(named, "per_page")
-	}
-	if in.Pagination != "" {
-		named = append(named, "pagination")
-	}
-	if in.PageToken != "" {
-		named = append(named, "page_token")
 	}
 	return named
 }
@@ -982,7 +975,7 @@ func buildEpicListOptions(input ListInput) (*gl.ListGroupEpicsOptions, error) {
 	if input.IncludeDescendants != nil {
 		opts.IncludeDescendantGroups = input.IncludeDescendants
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	return opts, nil
 }
 

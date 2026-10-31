@@ -869,10 +869,8 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 		UpdatedAfter:  "2026-06-01T00:00:00Z",
 		UpdatedBefore: "2026-12-31T00:00:00Z",
 
-		Page:       2,
-		PerPage:    50,
-		Pagination: "keyset",
-		PageToken:  "cursor-123",
+		Page:    2,
+		PerPage: 50,
 	}
 
 	opts, err := buildListOpts(input)
@@ -881,8 +879,8 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 	}
 	assertPipelineListStringFilters(t, opts)
 	assertPipelineListTimeAndPaginationFilters(t, opts)
-	if opts.Pagination != "keyset" || opts.PageToken != "cursor-123" {
-		t.Errorf("keyset = %q/%q, want keyset/cursor-123", opts.Pagination, opts.PageToken)
+	if opts.Pagination != "" || opts.PageToken != "" {
+		t.Errorf("keyset = %q/%q, want neither set on an offset list", opts.Pagination, opts.PageToken)
 	}
 }
 

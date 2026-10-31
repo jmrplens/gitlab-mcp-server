@@ -20,14 +20,14 @@ import (
 
 // ListInput is the input for listing CI YAML templates. It mirrors
 // gl.ListCIYMLTemplatesOptions, whose only field is the embedded gl.ListOptions.
-// OrderBy and Sort map onto gl.ListOptions.OrderBy/Sort, while offset
-// (page/per_page) and keyset (pagination/page_token) parameters map onto the
-// embedded gl.ListOptions via toolutil.ApplyListOptions.
+// OrderBy and Sort map onto gl.ListOptions.OrderBy/Sort, while the offset
+// (page/per_page) parameters map onto the embedded gl.ListOptions via
+// toolutil.ApplyListOptions; its keyset fields are not offered, since GitLab
+// pages this list by offset alone.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name, created_at, updated_at)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, name, created_at, updated_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // applyOrderSort copies the order_by and sort fields onto a gl.ListOptions,
@@ -57,7 +57,7 @@ type ListOutput struct {
 // List lists all available CI YAML templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListCIYMLTemplatesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	items, resp, err := client.GL().CIYMLTemplate.ListAllTemplates(opts, gl.WithContext(ctx))
 	if err != nil {

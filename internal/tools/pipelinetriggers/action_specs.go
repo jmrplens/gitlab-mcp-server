@@ -80,7 +80,7 @@ func pipelineTriggerOptions(individualTool string) toolutil.ActionSpecOptions {
 // discovery metadata, replacing the generic placeholder Usage/Aliases.
 var pipelineTriggerActionMeta = map[string]toolutil.ActionMetaEntry{
 	"gitlab_pipeline_trigger_list": {
-		Usage:   "List the trigger tokens defined on a project. Use when the prompt asks which trigger tokens exist, or to find a trigger_id or token to run or edit. Requires Maintainer+ to read tokens. Supports order_by, sort, offset and keyset pagination.",
+		Usage:   "List the trigger tokens defined on a project. Use when the prompt asks which trigger tokens exist, or to find a trigger_id or token to run or edit. Requires Maintainer+ to read tokens. Supports order_by, sort, and offset pagination.",
 		Aliases: []string{"list pipeline triggers", "show trigger tokens", "list trigger tokens for project"},
 		Related: []string{actionTriggerGet, actionTriggerCreate, actionTriggerRun},
 		Guidance: map[string]toolutil.ParameterGuidance{

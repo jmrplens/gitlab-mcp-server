@@ -44,14 +44,14 @@ type ListAllDomainsInput struct {
 }
 
 // ListDomainsInput defines parameters for listing Pages domains for a project.
-// It supports offset and keyset pagination (page_token/pagination) plus
-// order_by/sort to mirror the keyset-capable [gl.ListPagesDomainsOptions].
+// It supports offset pagination plus the order_by/sort of
+// [gl.ListPagesDomainsOptions]; its keyset fields are not offered, since
+// GitLab pages this list by offset alone.
 type ListDomainsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetDomainInput defines parameters for getting a single Pages domain.
@@ -256,7 +256,7 @@ func ListDomains(ctx context.Context, client *gitlabclient.Client, input ListDom
 	}
 
 	opts := &gl.ListPagesDomainsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

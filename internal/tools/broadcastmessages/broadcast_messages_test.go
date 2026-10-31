@@ -119,9 +119,9 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestList_PaginationAndOrdering verifies that List forwards offset pagination,
-// keyset pagination, and order_by/sort parameters to the GitLab API as query
-// string values. It exercises the applyOrderSort and ApplyListOptions wiring.
+// TestList_PaginationAndOrdering verifies that List forwards offset pagination
+// and order_by/sort parameters to the GitLab API as query string values. It
+// exercises the applyOrderSort and ApplyListOptions wiring.
 func TestList_PaginationAndOrdering(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -135,17 +135,15 @@ func TestList_PaginationAndOrdering(t *testing.T) {
 
 	input := ListInput{
 		OrderBy: "created_at", Sort: "desc",
-		Page:       2,
-		PerPage:    50,
-		Pagination: "keyset",
-		PageToken:  "100",
+		Page:    2,
+		PerPage: 50,
 	}
 
 	_, err := List(t.Context(), client, input)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=created_at", "sort=desc", "page=2", "per_page=50", "pagination=keyset", "page_token=100"} {
+	for _, want := range []string{"order_by=created_at", "sort=desc", "page=2", "per_page=50"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("expected query to contain %q, got %q", want, gotQuery)

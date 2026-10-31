@@ -282,8 +282,8 @@ func TestContextCancelled_Validation(t *testing.T) {
 	}
 }
 
-// TestList_KeysetAndOrdering verifies that ordering and keyset pagination inputs are forwarded as query parameters.
-func TestList_KeysetAndOrdering(t *testing.T) {
+// TestList_Ordering verifies that the ordering inputs are forwarded as query parameters.
+func TestList_Ordering(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if q.Get("order_by") != "created_at" {
@@ -292,12 +292,6 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 		if q.Get("sort") != "desc" {
 			t.Errorf("sort=%q, want desc", q.Get("sort"))
 		}
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("pagination=%q, want keyset", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "tok99" {
-			t.Errorf("page_token=%q, want tok99", q.Get("page_token"))
-		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
 			`[`+covDiscussionJSON+`]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
@@ -305,11 +299,10 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	out, err := List(t.Context(), client, ListInput{
-		ProjectID:  "1",
-		SnippetID:  5,
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok99",
+		ProjectID: "1",
+		SnippetID: 5,
+		OrderBy:   "created_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

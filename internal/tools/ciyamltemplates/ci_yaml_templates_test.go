@@ -238,10 +238,9 @@ func TestList_Error_SuggestsTheReadAPIScopeOnForbiddenAlone(t *testing.T) {
 	}
 }
 
-// TestList_OrderSortKeyset verifies that List forwards order_by, sort, and
-// keyset pagination parameters (pagination, page_token) onto the GitLab API
-// query string.
-func TestList_OrderSortKeyset(t *testing.T) {
+// TestList_OrderSort verifies that List forwards order_by and sort onto the
+// GitLab API query string.
+func TestList_OrderSort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if got := q.Get("order_by"); got != "name" {
@@ -250,18 +249,11 @@ func TestList_OrderSortKeyset(t *testing.T) {
 		if got := q.Get("sort"); got != "desc" {
 			t.Errorf("sort = %q, want desc", got)
 		}
-		if got := q.Get("pagination"); got != "keyset" {
-			t.Errorf("pagination = %q, want keyset", got)
-		}
-		if got := q.Get("page_token"); got != "Go" {
-			t.Errorf("page_token = %q, want Go", got)
-		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Python","name":"Python"}]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:    "name",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "Go",
+		OrderBy: "name",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

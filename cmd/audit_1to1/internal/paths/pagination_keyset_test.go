@@ -9,8 +9,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -474,5 +476,71 @@ func TestPaginationCheck_KeysetFindings_AreOrderedByPackageActionAndProblem(t *t
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("findings = %v, want %v", got, want)
+	}
+}
+
+// TestRun_AnUndeclaredKeysetFinding_FailsTheGate verifies that the keyset
+// half gates on what no declaration answers (issue 1165). An action offering
+// page_token on a route GitLab pages by offset alone fails the run, and so
+// does a list that sends a keyset route without offering it; the same list on
+// a route a declaration says this server cannot page by keyset passes, as
+// does an offset list that offers page and per_page alone.
+func TestRun_AnUndeclaredKeysetFinding_FailsTheGate(t *testing.T) {
+	cases := []struct {
+		name      string
+		input     map[string]any
+		route     string
+		declared  bool
+		wantClean bool
+	}{
+		{name: "page_token on an offset route", input: withPageToken, route: "GET /projects/:id/things"},
+		{name: "a keyset route without page_token", input: withoutPageToken, route: "GET /projects/:id/cursors"},
+		{
+			name: "a keyset route a declaration says cannot be followed", input: withoutPageToken,
+			route: "GET /projects/:id/cursors", declared: true, wantClean: true,
+		},
+		{name: "an offset list offering page and per_page", input: withoutPageToken, route: "GET /projects/:id/things", wantClean: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			withPaginationDeclarations(t, nil)
+			var declarations []keysetRouteDeclaration
+			if testCase.declared {
+				declarations = []keysetRouteDeclaration{{
+					Route: testCase.route, Category: categoryKeysetNotFollowable, Reason: "only a signed-out caller reaches it",
+				}}
+			}
+			withKeysetDeclarations(t, declarations)
+			withDeclarations(t, map[string]silentOwnerDeclaration{})
+			// The shape tables are about the real tree, and against this
+			// one every entry would be stale and fail the run on its own.
+			stubTypeGrainInputs(t, structs.Pairings{}, nil, nil)
+			root := recordIn(t, map[string]response{
+				"GET /projects/:id/cursors": cursorRoute,
+				"GET /projects/:id/things":  {Params: []string{"id", "page", "per_page"}},
+			})
+			makeToolsPackage(t, root, "things")
+			writeActionRequests(t, root, []actionrequests.RecordAction{sending("thing.list", "things.List", testCase.route)})
+			stubInputs(t, []requestinventory.Row{
+				{Package: "internal/tools/things", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:project_id/things"},
+			}, []requestinventory.Action{
+				listAction("thing.list", "things", reflect.TypeFor[fixturePaginatedListOutput](), testCase.input),
+			}, graphqldocs.Result{})
+
+			content, clean, err := Run(t.Context(), root, Options{})
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			if clean != testCase.wantClean {
+				t.Errorf("Run() clean = %t, want %t:\n%s", clean, testCase.wantClean, content)
+			}
+			wantUndeclared := 1
+			if testCase.wantClean {
+				wantUndeclared = 0
+			}
+			if got := decode(t, content).Summary.KeysetFindingsUndeclared; got != wantUndeclared {
+				t.Errorf("keyset_findings_undeclared = %d, want %d", got, wantUndeclared)
+			}
+		})
 	}
 }

@@ -41,7 +41,6 @@ type ListInput struct {
 	Sort                    string               `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
 	IncludeParentMilestones bool                 `json:"include_parent_milestones,omitempty" jsonschema:"Deprecated (GitLab 16.7): use include_ancestors instead. Include milestones from parent groups"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single group milestone.
@@ -83,7 +82,6 @@ type GetIssuesInput struct {
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetMergeRequestsInput defines parameters for listing merge requests assigned to a group milestone.
@@ -93,7 +91,6 @@ type GetMergeRequestsInput struct {
 	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
 	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetBurndownChartEventsInput defines parameters for listing the burndown
@@ -341,10 +338,10 @@ func applyListDates(opts *gl.ListGroupMilestonesOptions, input ListInput) error 
 	return nil
 }
 
-// applyListPagination applies offset/keyset pagination and ordering. OrderBy
+// applyListPagination applies offset pagination and ordering. OrderBy
 // and Sort are applied after ApplyListOptions so explicit values win.
 func applyListPagination(opts *gl.ListGroupMilestonesOptions, input ListInput) {
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -508,7 +505,7 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	}
 
 	opts := &gl.GetGroupMilestoneIssuesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -563,7 +560,7 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 	}
 
 	opts := &gl.GetGroupMilestoneMergeRequestsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

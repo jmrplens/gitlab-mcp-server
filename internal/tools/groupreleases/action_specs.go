@@ -37,7 +37,7 @@ func groupReleaseOptions(individualTool string) toolutil.ActionSpecOptions {
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:  individualTool,
 			Title: toolutil.TitleFromName(individualTool),
-			Description: "List releases across all projects in a group with pagination, ordering, and keyset support. " +
+			Description: "List releases across all projects in a group with ordering and offset pagination. " +
 				"Returns: tag names, release names, dates, author, commit, assets, milestones, evidences, and _links per release. " +
 				"See also: gitlab_group_get, gitlab_release_list, gitlab_release_get.",
 		},

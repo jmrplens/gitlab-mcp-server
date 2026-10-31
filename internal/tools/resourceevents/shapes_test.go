@@ -86,27 +86,25 @@ func TestMarkdownAccessors_NilBranches(t *testing.T) {
 	}
 }
 
-// TestApplyEventListOptions verifies order_by/sort/keyset/offset are copied and
-// that a nil options pointer is a no-op.
+// TestApplyEventListOptions verifies order_by/sort/offset are copied, that no
+// keyset parameter is ever set, and that a nil options pointer is a no-op.
 func TestApplyEventListOptions(t *testing.T) {
-	applyEventListOptions(nil, "id", "asc", toolutil.PaginationInput{}, toolutil.KeysetPaginationInput{})
+	applyEventListOptions(nil, "id", "asc", toolutil.PaginationInput{})
 
 	var opts gl.ListOptions
-	applyEventListOptions(&opts, "id", "desc",
-		toolutil.PaginationInput{Page: 2, PerPage: 50},
-		toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"})
+	applyEventListOptions(&opts, "id", "desc", toolutil.PaginationInput{Page: 2, PerPage: 50})
 	if opts.OrderBy != "id" || opts.Sort != "desc" {
 		t.Errorf("order_by/sort not applied: %+v", opts)
 	}
 	if opts.Page != 2 || opts.PerPage != 50 {
 		t.Errorf("offset pagination not applied: %+v", opts)
 	}
-	if opts.Pagination != "keyset" || opts.PageToken != "tok" {
-		t.Errorf("keyset pagination not applied: %+v", opts)
+	if opts.Pagination != "" || opts.PageToken != "" {
+		t.Errorf("keyset pagination set on an offset list: %+v", opts)
 	}
 
 	var empty gl.ListOptions
-	applyEventListOptions(&empty, "", "", toolutil.PaginationInput{}, toolutil.KeysetPaginationInput{})
+	applyEventListOptions(&empty, "", "", toolutil.PaginationInput{})
 	if empty.OrderBy != "" || empty.Sort != "" {
 		t.Errorf("empty inputs should leave order_by/sort unset: %+v", empty)
 	}

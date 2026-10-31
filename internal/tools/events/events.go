@@ -28,9 +28,8 @@ type ListContributionEventsInput struct {
 	After      string `json:"after,omitempty" jsonschema:"Return events after this date (YYYY-MM-DD)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order (asc or desc)"`
 	Scope      string `json:"scope,omitempty" jsonschema:"Include events from all projects (all) or only user's projects"`
-	OrderBy    string `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results (id)"`
+	OrderBy    string `json:"order_by,omitempty" jsonschema:"Column by which to order results (id)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output sub-objects (full mirrors of client-go event types).
@@ -194,7 +193,7 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	events, resp, err := client.GL().Events.ListCurrentUserContributionEvents(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -375,9 +374,8 @@ type ListProjectEventsInput struct {
 	Before     string               `json:"before,omitempty" jsonschema:"Return events before this date (YYYY-MM-DD)"`
 	After      string               `json:"after,omitempty" jsonschema:"Return events after this date (YYYY-MM-DD)"`
 	Sort       string               `json:"sort,omitempty" jsonschema:"Sort order (asc or desc, default desc)"`
-	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results (id)"`
+	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Column by which to order results (id)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output types.
@@ -458,7 +456,7 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	events, resp, err := client.GL().Events.ListProjectVisibleEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {

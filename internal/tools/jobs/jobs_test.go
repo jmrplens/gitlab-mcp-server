@@ -2338,7 +2338,7 @@ func TestJobList_ForwardsEveryListParameter(t *testing.T) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipelineJobs {
 			assertListQuery(t, r, map[string]string{
 				"include_retried": "true", "page": "2", "per_page": "5",
-				"order_by": "", "sort": "", "pagination": "keyset", "page_token": "tok-list",
+				"order_by": "", "sort": "", "pagination": "", "page_token": "",
 			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, fmt.Sprintf("[%s]", jobJSON),
 				testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "10", TotalPages: "2", PrevPage: "1"})
@@ -2352,7 +2352,6 @@ func TestJobList_ForwardsEveryListParameter(t *testing.T) {
 		PipelineID:     10,
 		IncludeRetried: true,
 		Page:           2, PerPage: 5,
-		Pagination: "keyset", PageToken: "tok-list",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

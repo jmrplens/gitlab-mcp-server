@@ -1423,9 +1423,9 @@ func deployKeySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]
 // Ordering & keyset pagination — forwarded query parameters
 // ---------------------------------------------------------------------------.
 
-// TestListProject_OrderingAndKeyset verifies ListProject forwards order_by,
-// sort, pagination=keyset, and page_token to the GitLab API.
-func TestListProject_OrderingAndKeyset(t *testing.T) {
+// TestListProject_Ordering verifies ListProject forwards order_by and sort to
+// the GitLab API.
+func TestListProject_Ordering(t *testing.T) {
 	var query string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/deploy_keys" {
@@ -1437,15 +1437,14 @@ func TestListProject_OrderingAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:  "1",
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok",
+		ProjectID: "1",
+		OrderBy:   "created_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok"} {
+	for _, want := range []string{"order_by=created_at", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(query, want) {
 				t.Errorf("query %q missing %q", query, want)
@@ -1454,9 +1453,9 @@ func TestListProject_OrderingAndKeyset(t *testing.T) {
 	}
 }
 
-// TestListAll_OrderingAndKeyset verifies ListAll forwards order_by, sort,
-// pagination=keyset, and page_token to the GitLab API.
-func TestListAll_OrderingAndKeyset(t *testing.T) {
+// TestListAll_Ordering verifies ListAll forwards order_by and sort to the
+// GitLab API.
+func TestListAll_Ordering(t *testing.T) {
 	var query string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/deploy_keys" {
@@ -1468,14 +1467,13 @@ func TestListAll_OrderingAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ListAll(context.Background(), client, ListAllInput{
-		OrderBy:    "title",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "tok",
+		OrderBy: "title",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=title", "sort=asc", "pagination=keyset", "page_token=tok"} {
+	for _, want := range []string{"order_by=title", "sort=asc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(query, want) {
 				t.Errorf("query %q missing %q", query, want)
@@ -1484,9 +1482,9 @@ func TestListAll_OrderingAndKeyset(t *testing.T) {
 	}
 }
 
-// TestListUserProject_OrderingAndKeyset verifies ListUserProject forwards
-// order_by, sort, pagination=keyset, and page_token to the GitLab API.
-func TestListUserProject_OrderingAndKeyset(t *testing.T) {
+// TestListUserProject_Ordering verifies ListUserProject forwards order_by and
+// sort to the GitLab API.
+func TestListUserProject_Ordering(t *testing.T) {
 	var query string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/project_deploy_keys" {
@@ -1498,15 +1496,14 @@ func TestListUserProject_OrderingAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ListUserProject(context.Background(), client, ListUserProjectInput{
-		UserID:     "42",
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok",
+		UserID:  "42",
+		OrderBy: "id",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=tok"} {
+	for _, want := range []string{"order_by=id", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(query, want) {
 				t.Errorf("query %q missing %q", query, want)

@@ -44,11 +44,10 @@ func topicToItem(t *gl.Topic) TopicItem {
 // ListInput is the input for listing topics.
 type ListInput struct {
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 	Search          string `json:"search,omitempty" jsonschema:"Filter topics by search query"`
 	WithoutProjects bool   `json:"without_projects,omitempty" jsonschema:"Return only the topics no project is assigned to"`
-	OrderBy         string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
-	Sort            string `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
+	OrderBy         string `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort            string `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'"`
 }
 
 // ListOutput is the output for listing topics.
@@ -63,7 +62,7 @@ type ListOutput struct {
 // to when without_projects is set.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListTopicsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

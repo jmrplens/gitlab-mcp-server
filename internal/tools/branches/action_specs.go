@@ -130,7 +130,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 		options.Usage = "List protected branches (and wildcard rules) for one project with optional search and pagination. Use to audit branch protection coverage before changing rules."
 		options.Aliases = []string{"list protected branches", "show branch protections", "audit protected branches"}
 		options.RelatedActions = []string{actionBranchGetProtected, actionBranchProtect, actionBranchUpdateProtected}
-		options.IndividualTool.Description = "List protected branches and wildcard rules for a project with optional search, ordering, and offset or keyset pagination. Returns: protected rules with push/merge/unprotect access-level arrays and pagination metadata. See also: gitlab_protected_branch_get, gitlab_branch_protect, gitlab_protected_branch_update."
+		options.IndividualTool.Description = "List protected branches and wildcard rules for a project with optional search, ordering, and offset pagination. Returns: protected rules with push/merge/unprotect access-level arrays and pagination metadata. See also: gitlab_protected_branch_get, gitlab_branch_protect, gitlab_protected_branch_update."
 	case "update_protected":
 		options.Usage = "Update an existing protected branch rule by project_id and branch_name. Use to change allow-force-push, CODEOWNERS approval, rename the rule, or replace fine-grained push/merge/unprotect access entries."
 		options.Aliases = []string{"update protected branch", "change branch protection", "edit branch protection"}

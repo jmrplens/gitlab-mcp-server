@@ -130,7 +130,7 @@ func convertBoardList(l *gl.BoardList, extra toolutil.BoardListExtra) BoardListO
 	}
 }
 
-// applyOrderSort copies the keyset order_by/sort parameters onto a
+// applyOrderSort copies the order_by/sort parameters onto a
 // gl.ListOptions, setting only the values the caller supplied.
 func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
 	if orderBy != "" {
@@ -216,14 +216,14 @@ func boardRefusal(operation string, err error, permissionHint, notFoundHint stri
 // ---------------------------------------------------------------------------.
 
 // ListBoardsInput represents input for listing project issue boards.
-// OrderBy/Sort/pagination/page_token map onto the embedded gl.ListOptions to
-// mirror the SDK's keyset-capable list options.
+// OrderBy, Sort and the offset pagination map onto the embedded
+// gl.ListOptions; its keyset fields are not offered, since GitLab pages this
+// list by offset alone.
 type ListBoardsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListBoards lists all issue boards for a project.
@@ -232,7 +232,7 @@ func ListBoards(ctx context.Context, client *gitlabclient.Client, input ListBoar
 		return ListBoardsOutput{}, toolutil.WrapErrWithMessage("board_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	opts := &gl.ListIssueBoardsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	boards, resp, err := client.GL().Boards.ListIssueBoards(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -400,15 +400,15 @@ func DeleteBoard(ctx context.Context, client *gitlabclient.Client, input DeleteB
 // ---------------------------------------------------------------------------.
 
 // ListBoardListsInput represents input for listing board lists.
-// OrderBy/Sort/pagination/page_token map onto the embedded gl.ListOptions to
-// mirror the SDK's keyset-capable list options.
+// OrderBy, Sort and the offset pagination map onto the embedded
+// gl.ListOptions; its keyset fields are not offered, since GitLab pages this
+// list by offset alone.
 type ListBoardListsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or path,required"`
 	BoardID   int64                `json:"board_id"           jsonschema:"Board ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListBoardLists lists all lists in a board.
@@ -420,7 +420,7 @@ func ListBoardLists(ctx context.Context, client *gitlabclient.Client, input List
 		return ListBoardListsOutput{}, toolutil.WrapErrWithMessage("board_list_list", toolutil.ErrFieldRequired("board_id"))
 	}
 	opts := &gl.GetIssueBoardListsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	lists, resp, err := client.GL().Boards.GetIssueBoardLists(string(input.ProjectID), input.BoardID, opts, gl.WithContext(ctx))

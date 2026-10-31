@@ -145,9 +145,9 @@ func TestPipelineScheduleList_WithScope(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleList_KeysetAndSort verifies List forwards order_by, sort,
-// and keyset pagination (pagination, page_token) query parameters.
-func TestPipelineScheduleList_KeysetAndSort(t *testing.T) {
+// TestPipelineScheduleList_Sort verifies List forwards the order_by and sort
+// query parameters.
+func TestPipelineScheduleList_Sort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedules {
 			q := r.URL.Query()
@@ -157,12 +157,6 @@ func TestPipelineScheduleList_KeysetAndSort(t *testing.T) {
 			if q.Get("sort") != "desc" {
 				t.Errorf("sort = %q, want desc", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "tok123" {
-				t.Errorf("page_token = %q, want tok123", q.Get("page_token"))
-			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 			return
 		}
@@ -170,10 +164,9 @@ func TestPipelineScheduleList_KeysetAndSort(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  "123",
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok123",
+		ProjectID: "123",
+		OrderBy:   "id",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

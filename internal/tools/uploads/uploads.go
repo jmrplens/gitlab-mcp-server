@@ -118,15 +118,13 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 
 // Markdown Upload List/Delete.
 
-// ListInput defines input for listing a project's markdown uploads. It mirrors
-// the offset and keyset pagination supported by the GitLab uploads list endpoint
-// (page/per_page plus order_by/sort/page_token for keyset traversal).
+// ListInput defines input for listing a project's markdown uploads. GitLab
+// pages the uploads list by offset alone (page and per_page).
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // UploadedByOutput mirrors the short-user representation in a markdown upload's
@@ -170,13 +168,13 @@ func uploadedByOutput(u *gl.User) *UploadedByOutput {
 	}
 }
 
-// listQueryParameters renders the offset, keyset, and ordering parameters as a
+// listQueryParameters renders the offset and ordering parameters as a
 // gl.RequestOptionFunc. The ListProjectMarkdownUploads SDK method has no options
 // struct, so pagination is applied via query parameters mirrored from a
 // gl.ListMarkdownUploadsOptions wired with toolutil.ApplyListOptions.
 func listQueryParameters(input ListInput) gl.RequestOptionFunc {
 	opts := &gl.ListMarkdownUploadsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	q := url.Values{}
 	if opts.Page > 0 {
@@ -184,12 +182,6 @@ func listQueryParameters(input ListInput) gl.RequestOptionFunc {
 	}
 	if opts.PerPage > 0 {
 		q.Set("per_page", strconv.FormatInt(opts.PerPage, 10))
-	}
-	if opts.Pagination != "" {
-		q.Set("pagination", opts.Pagination)
-	}
-	if opts.PageToken != "" {
-		q.Set("page_token", opts.PageToken)
 	}
 	if input.OrderBy != "" {
 		q.Set("order_by", input.OrderBy)
@@ -213,7 +205,6 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		string(input.ProjectID),
 		gl.WithContext(ctx),
 		listQueryParameters(input),
-		toolutil.KeysetContinuation(input.KeysetPaginationInput),
 	)
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list uploads for project %s: %w", input.ProjectID, err)

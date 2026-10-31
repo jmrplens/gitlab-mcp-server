@@ -254,7 +254,7 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			description: "Get a single merge request from a project by its IID. Returns: MR metadata, state, source/target branches, merge status, assignees, reviewers, labels, milestone, and web URL. See also: gitlab_mr_list, gitlab_mr_update, gitlab_mr_merge, gitlab_mr_commits.",
 		},
 		"list": {
-			usage:       "List merge requests in one project with rich filtering (state, labels, author/assignee/reviewer, approvals, environment, dates) and offset or keyset pagination.",
+			usage:       "List merge requests in one project with rich filtering (state, labels, author/assignee/reviewer, approvals, environment, dates) and offset pagination.",
 			aliases:     []string{"list merge requests", "list mrs", "list project merge requests"},
 			related:     []string{actionMRGet, actionMRCreate, "merge_request.list_group", "search.merge_requests"},
 			description: "List merge requests in one project with filtering and pagination. Returns: matching MRs with state, branches, merge status, assignees, reviewers, labels, and pagination metadata. See also: gitlab_mr_get, gitlab_mr_create, gitlab_mr_list_group.",
@@ -271,7 +271,7 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			description: "List merge requests across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every merge request the caller can see with scope=all. Returns: the matching MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.",
 		},
 		"list_group": {
-			usage:       "List merge requests across a group and its subgroups/projects with state, author, reviewer, approval, and label filters plus offset or keyset pagination.",
+			usage:       "List merge requests across a group and its subgroups/projects with state, author, reviewer, approval, and label filters plus offset pagination.",
 			aliases:     []string{"list group merge requests", "list mrs in group", "list merge requests for group"},
 			related:     []string{actionMRList, "merge_request.list_global", "group.get"},
 			description: "List merge requests across a group and its projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_global, gitlab_group_get.",
@@ -295,7 +295,7 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			description: "Remove the caller's approval from a merge request. Returns: the approval state left after the withdrawal, in the shape the approve answers with: the approved-by count and users, the overall approved flag, whether the caller has approved and may approve, and on an Enterprise Edition instance the approvals required and left. See also: gitlab_mr_approve, gitlab_mr_get.",
 		},
 		"commits": {
-			usage:       "List the commits contained in a merge request, ordered and paginated (offset or keyset).",
+			usage:       "List the commits contained in a merge request, ordered and paged by offset.",
 			aliases:     []string{"list merge request commits", "list mr commits", "show commits in mr"},
 			related:     []string{actionMRGet, actionChangesGet, actionCommitGet},
 			description: "List the commits that make up a merge request. Returns: commit SHAs, titles, authors, and timestamps with pagination metadata. See also: gitlab_mr_get, gitlab_commit_get.",

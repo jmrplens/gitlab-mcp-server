@@ -130,7 +130,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.Usage = "List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance."
 		options.Aliases = []string{"list labels", "show project labels", "find labels"}
 		options.RelatedActions = []string{actionLabelGet, actionLabelCreate, actionIssueList}
-		options.IndividualTool.Description = "List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, archived, the open/closed issue and open MR counts when with_counts is true, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list."
+		options.IndividualTool.Description = "List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset pagination. Returns: id, name, color, text_color, description, priority, subscribed, is_project_label, archived, the open/closed issue and open MR counts when with_counts is true, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list."
 	case specLabelGet:
 		options.Usage = "Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed."
 		options.Aliases = []string{"get label", "show label details", "lookup label"}

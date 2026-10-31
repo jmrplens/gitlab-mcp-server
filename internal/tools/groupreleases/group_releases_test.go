@@ -602,15 +602,13 @@ func TestList_MilestoneWithoutDates(t *testing.T) {
 	}
 }
 
-// TestList_OrderingAndKeyset verifies that order_by, sort, and keyset
-// pagination parameters are forwarded to the GitLab API.
-func TestList_OrderingAndKeyset(t *testing.T) {
+// TestList_Ordering verifies that order_by and sort are forwarded to the
+// GitLab API.
+func TestList_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
 			testutil.AssertQueryParam(t, r, "order_by", "released_at")
 			testutil.AssertQueryParam(t, r, "sort", "desc")
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "tok123")
 			testutil.RespondJSON(w, http.StatusOK, `[{"tag_name":"v1.0.0","name":"R"}]`)
 			return
 		}
@@ -618,10 +616,9 @@ func TestList_OrderingAndKeyset(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:    "mygroup",
-		OrderBy:    "released_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok123",
+		GroupID: "mygroup",
+		OrderBy: "released_at",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

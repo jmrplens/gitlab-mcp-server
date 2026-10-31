@@ -17,15 +17,14 @@ import (
 // List.
 
 // ListInput contains parameters for listing secure files. It mirrors
-// gl.ListProjectSecureFilesOptions (embedded gl.ListOptions), exposing keyset
-// pagination (order_by, sort, pagination, page_token) alongside offset
-// pagination.
+// gl.ListProjectSecureFilesOptions (embedded gl.ListOptions), exposing its
+// order_by and sort alongside offset pagination. Its keyset fields are not
+// offered, since GitLab pages this list by offset alone.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // SecureFileIssuer mirrors gl.SecureFileIssuer (the certificate issuer fields).
@@ -112,7 +111,7 @@ type ListOutput struct {
 // List retrieves secure files for a project.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListProjectSecureFilesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

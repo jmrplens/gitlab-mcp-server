@@ -74,19 +74,17 @@ type ListAllInput struct{}
 // ListProjectInput represents parameters for listing project deploy tokens.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListGroupInput represents parameters for listing group deploy tokens.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetProjectInput represents parameters for getting a project deploy token.
@@ -146,9 +144,10 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, _ ListAllInput) (
 	return buildListOutput(tokens, resp), nil
 }
 
-// applyKeysetOrder copies keyset pagination plus order_by/sort onto gl.ListOptions.
-func applyKeysetOrder(opts *gl.ListOptions, page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput, orderBy, sort string) {
-	toolutil.ApplyListOptions(opts, page, keyset)
+// applyListOrder copies offset pagination plus order_by/sort onto
+// gl.ListOptions. GitLab pages both deploy token lists by offset alone.
+func applyListOrder(opts *gl.ListOptions, page toolutil.PaginationInput, orderBy, sort string) {
+	toolutil.ApplyListOptions(opts, page, toolutil.KeysetPaginationInput{})
 	if orderBy != "" {
 		opts.OrderBy = orderBy
 	}
@@ -173,7 +172,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	}
 
 	opts := &gl.ListProjectDeployTokensOptions{}
-	applyKeysetOrder(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	applyListOrder(&opts.ListOptions, input.PaginationInput, input.OrderBy, input.Sort)
 
 	tokens, resp, err := client.GL().DeployTokens.ListProjectDeployTokens(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -191,7 +190,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	}
 
 	opts := &gl.ListGroupDeployTokensOptions{}
-	applyKeysetOrder(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	applyListOrder(&opts.ListOptions, input.PaginationInput, input.OrderBy, input.Sort)
 
 	tokens, resp, err := client.GL().DeployTokens.ListGroupDeployTokens(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {

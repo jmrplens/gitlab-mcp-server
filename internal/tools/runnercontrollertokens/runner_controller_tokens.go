@@ -76,7 +76,6 @@ func toOutput(t *gl.RunnerControllerToken) Output {
 type ListInput struct {
 	ControllerID int64 `json:"controller_id" jsonschema:"Runner controller ID,required"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order the result set by (e.g. id, created_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort order: asc or desc"`
 }
@@ -91,7 +90,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListRunnerControllerTokensOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

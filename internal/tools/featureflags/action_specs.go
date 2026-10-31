@@ -119,7 +119,7 @@ type featureFlagActionMetaEntry struct {
 // featureFlagActionMeta maps each individual feature-flag tool to its discovery metadata.
 var featureFlagActionMeta = map[string]featureFlagActionMetaEntry{
 	"gitlab_feature_flag_list": {
-		usage:       "List a project's feature flags. Use scope to filter enabled/disabled flags and order_by/sort plus pagination (offset or keyset) to page through large result sets. Requires GitLab Premium/Ultimate.",
+		usage:       "List a project's feature flags. Use scope to filter enabled/disabled flags and order_by/sort plus offset pagination to page through large result sets. Requires GitLab Premium/Ultimate.",
 		aliases:     []string{"list project feature flags", "show project feature flags", "find project feature flags"},
 		related:     []string{actionFeatureFlagGet, actionFeatureFlagCreate, "environment.list"},
 		description: "List feature flags in a project with optional scope filter, ordering, and pagination. Returns: matching feature flags with active state, version, scopes, strategies, and pagination metadata. See also: gitlab_feature_flag_get, gitlab_feature_flag_create.",

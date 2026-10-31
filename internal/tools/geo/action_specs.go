@@ -117,7 +117,7 @@ var geoActionMeta = map[string]geoActionMetaEntry{
 		description: "Create a new Geo site. Returns: the site with id, name, url, primary/enabled flags, capacities, selective-sync settings, and navigation links. See also: gitlab_list_geo_sites, gitlab_get_geo_site, gitlab_edit_geo_site.",
 	},
 	"gitlab_list_geo_sites": {
-		usage:       "List all configured Geo sites on the instance. Use order_by/sort and offset or keyset pagination for large fleets. Requires admin access.",
+		usage:       "List all configured Geo sites on the instance. Use order_by/sort and offset pagination for large fleets. Requires admin access.",
 		aliases:     []string{"list geo sites", "show geo nodes", "geo fleet overview"},
 		related:     []string{actionGeoGet, "geo.list_status", "geo.create"},
 		description: "List all Geo sites. Returns: each site with id, name, url, primary/enabled flags, capacities, and pagination metadata. See also: gitlab_get_geo_site, gitlab_list_status_all_geo_sites, gitlab_create_geo_site.",
@@ -147,7 +147,7 @@ var geoActionMeta = map[string]geoActionMetaEntry{
 		description: "Repair a Geo site's OAuth application. Returns: the repaired site (or a hint to refresh via get when GitLab returns no body). See also: gitlab_get_geo_site, gitlab_get_status_geo_site.",
 	},
 	"gitlab_list_status_all_geo_sites": {
-		usage:       "List the full replication and verification status of every Geo site. Use order_by/sort and offset or keyset pagination. Status is collected by the primary. Secondaries may show stale data when lagging.",
+		usage:       "List the full replication and verification status of every Geo site. Use order_by/sort and offset pagination. Status is collected by the primary. Secondaries may show stale data when lagging.",
 		aliases:     []string{"list geo statuses", "geo replication overview", "show all geo node status"},
 		related:     []string{actionGeoGetStatus, actionGeoList},
 		description: "List replication status for all Geo sites. Returns: per-site health, replication lag, and detailed sync/verification/checksum counts and percentages, with pagination metadata. See also: gitlab_get_status_geo_site, gitlab_list_geo_sites.",

@@ -406,17 +406,16 @@ func TestListForUser_TableDriven(t *testing.T) {
 			},
 		},
 		{
-			name: "passes keyset, order_by and sort parameters to API",
+			name: "passes order_by and sort parameters to API",
 			input: ListForUserInput{
-				UserID:                42,
-				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"},
-				OrderBy:               "id",
-				Sort:                  "desc",
+				UserID:  42,
+				OrderBy: "id",
+				Sort:    "desc",
 			},
 			mockStatus: http.StatusOK,
 			mockBody:   `[{"id":3,"email":"keyset@example.com"}]`,
 			wantQuery: map[string]string{
-				"pagination": "keyset", "page_token": "100", "order_by": "id", "sort": "desc",
+				"order_by": "id", "sort": "desc",
 			},
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()

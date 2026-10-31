@@ -63,7 +63,6 @@ type ListInput struct {
 	In                  string                     `json:"in,omitempty"              jsonschema:"Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description"`
 
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output is the canonical merge-request output shape shared with the
@@ -121,7 +120,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // setting only the filters the caller supplied. Interface-typed ID filters are
 // wrapped via the SDK constructors (gl.AssigneeID, gl.ApproverIDs); date filters
 // are parsed with toolutil.ParseTimeInputs, which refuses one it cannot read;
-// offset and keyset pagination are applied via toolutil.ApplyListOptions.
+// offset pagination is applied via toolutil.ApplyListOptions.
 func buildListOptions(input ListInput) (*gl.ListMergeRequestsOptions, error) {
 	opts := &gl.ListMergeRequestsOptions{}
 
@@ -134,7 +133,7 @@ func buildListOptions(input ListInput) (*gl.ListMergeRequestsOptions, error) {
 		return nil, err
 	}
 
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	return opts, nil
 }
 

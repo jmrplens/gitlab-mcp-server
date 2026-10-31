@@ -18,17 +18,16 @@ import (
 
 // ListInput defines parameters for listing commit discussions. It mirrors
 // gl.ListCommitDiscussionsOptions (which embeds gl.ListOptions), exposing
-// keyset pagination (order_by, sort, pagination, page_token) in addition to
-// offset pagination (1:1 audit P3).
+// its order_by and sort beside offset pagination (1:1 audit P3). It offers no
+// keyset pagination, since GitLab pages this list by offset alone.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	CommitSHA string               `json:"commit_sha" jsonschema:"Commit SHA,required"`
-	// OrderBy names the column used to order keyset-paginated results.
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, updated_at)"`
+	// OrderBy names the column used to order results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at)"`
 	// Sort selects the sort direction for ordered results.
 	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single commit discussion.
@@ -125,7 +124,7 @@ type ListOutput struct {
 // Handlers.
 
 // List lists commit discussions. It mirrors gl.ListCommitDiscussionsOptions,
-// applying offset and keyset pagination through toolutil.ApplyListOptions.
+// applying offset pagination through toolutil.ApplyListOptions.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -133,7 +132,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts := &gl.ListCommitDiscussionsOptions{
 		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	discussions, resp, err := client.GL().Discussions.ListCommitDiscussions(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {

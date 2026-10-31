@@ -189,24 +189,19 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_WithKeysetAndOrder verifies that List forwards keyset pagination
-// (pagination, page_token) and ordering (order_by, sort) parameters onto the
-// underlying GitLab templates request.
-func TestList_WithKeysetAndOrder(t *testing.T) {
+// TestList_WithOrder verifies that List forwards the ordering (order_by, sort)
+// parameters onto the underlying GitLab templates request.
+func TestList_WithOrder(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("pagination") != "keyset" || q.Get("page_token") != "tok" {
-			t.Errorf("expected pagination=keyset&page_token=tok, got %s", r.URL.RawQuery)
-		}
 		if q.Get("order_by") != "name" || q.Get("sort") != "asc" {
 			t.Errorf("expected order_by=name&sort=asc, got %s", r.URL.RawQuery)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Go","name":"Go"}]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:    "name",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "tok",
+		OrderBy: "name",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

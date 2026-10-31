@@ -523,10 +523,9 @@ func TestListProject_WithKeyset(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:  "10",
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "5",
+		ProjectID: "10",
+		OrderBy:   "id",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -534,7 +533,7 @@ func TestListProject_WithKeyset(t *testing.T) {
 	if len(out.DeployTokens) != 1 {
 		t.Fatalf("expected 1 token, got %d", len(out.DeployTokens))
 	}
-	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=5"} {
+	for _, want := range []string{"order_by=id", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(query, want) {
 				t.Errorf("query %q missing %q", query, want)
@@ -636,10 +635,9 @@ func TestListGroup_WithKeyset(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID:    "5",
-		OrderBy:    "id",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "3",
+		GroupID: "5",
+		OrderBy: "id",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -647,7 +645,7 @@ func TestListGroup_WithKeyset(t *testing.T) {
 	if len(out.DeployTokens) != 1 {
 		t.Fatalf("expected 1 token, got %d", len(out.DeployTokens))
 	}
-	for _, want := range []string{"order_by=id", "sort=asc", "pagination=keyset", "page_token=3"} {
+	for _, want := range []string{"order_by=id", "sort=asc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(query, want) {
 				t.Errorf("query %q missing %q", query, want)

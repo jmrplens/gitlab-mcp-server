@@ -259,17 +259,11 @@ func TestRetrieveAll_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestRetrieveAll_KeysetAndOrdering verifies that keyset pagination, order_by,
-// and sort inputs are forwarded as query parameters to the GitLab API.
-func TestRetrieveAll_KeysetAndOrdering(t *testing.T) {
+// TestRetrieveAll_Ordering verifies that the order_by and sort inputs are
+// forwarded as query parameters to the GitLab API.
+func TestRetrieveAll_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if got := q.Get("pagination"); got != "keyset" {
-			t.Errorf("pagination = %q, want keyset", got)
-		}
-		if got := q.Get("page_token"); got != "99" {
-			t.Errorf("page_token = %q, want 99", got)
-		}
 		if got := q.Get("order_by"); got != "id" {
 			t.Errorf("order_by = %q, want id", got)
 		}
@@ -280,9 +274,8 @@ func TestRetrieveAll_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	in := ListInput{
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "99",
+		OrderBy: "id",
+		Sort:    "desc",
 	}
 	out, err := RetrieveAll(context.Background(), client, in)
 	if err != nil {
@@ -293,17 +286,11 @@ func TestRetrieveAll_KeysetAndOrdering(t *testing.T) {
 	}
 }
 
-// TestRetrieveForProject_KeysetAndOrdering verifies that keyset pagination,
-// order_by, and sort inputs are forwarded for the project-scoped listing.
-func TestRetrieveForProject_KeysetAndOrdering(t *testing.T) {
+// TestRetrieveForProject_Ordering verifies that the order_by and sort inputs
+// are forwarded for the project-scoped listing.
+func TestRetrieveForProject_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if got := q.Get("pagination"); got != "keyset" {
-			t.Errorf("pagination = %q, want keyset", got)
-		}
-		if got := q.Get("page_token"); got != "7" {
-			t.Errorf("page_token = %q, want 7", got)
-		}
 		if got := q.Get("order_by"); got != "id" {
 			t.Errorf("order_by = %q, want id", got)
 		}
@@ -314,10 +301,9 @@ func TestRetrieveForProject_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	in := ListForProjectInput{
-		ProjectID:  42,
-		OrderBy:    "id",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "7",
+		ProjectID: 42,
+		OrderBy:   "id",
+		Sort:      "asc",
 	}
 	out, err := RetrieveForProject(context.Background(), client, in)
 	if err != nil {

@@ -18,7 +18,7 @@ import (
 
 // ListProvisionedUsersInput defines parameters for listing the users provisioned
 // for a group through SAML/SCIM. Mirrors gl.ListProvisionedUsersOptions filters
-// plus offset and keyset pagination.
+// plus offset pagination.
 type ListProvisionedUsersInput struct {
 	GroupID       toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Username      string               `json:"username,omitempty" jsonschema:"Filter provisioned users by exact username"`
@@ -30,7 +30,6 @@ type ListProvisionedUsersInput struct {
 	OrderBy       string               `json:"order_by,omitempty" jsonschema:"Column to order provisioned users by (e.g. id, name, username, created_at, updated_at)"`
 	Sort          string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ProvisionedUserOutput is a user provisioned through SAML or SCIM as
@@ -272,7 +271,7 @@ func provisionedUserBasicUser(u *gl.BasicUser) *ProvisionedUserBasicUser {
 
 // ListProvisionedUsers lists the users provisioned for a group through SAML/SCIM
 // (Premium/Ultimate). Supports username/search/active/blocked/created_after/
-// created_before filters plus offset and keyset pagination.
+// created_before filters plus offset pagination.
 func ListProvisionedUsers(ctx context.Context, client *gitlabclient.Client, input ListProvisionedUsersInput) (ProvisionedUsersListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ProvisionedUsersListOutput{}, err
@@ -308,11 +307,11 @@ func ListProvisionedUsers(ctx context.Context, client *gitlabclient.Client, inpu
 }
 
 // provisionedUsersOptions builds the ListProvisionedUsers options from the input,
-// applying offset/keyset pagination and every supported filter. Split out to keep
+// applying offset pagination and every supported filter. Split out to keep
 // the handler's cyclomatic complexity flat.
 func provisionedUsersOptions(input ListProvisionedUsersInput) (*gl.ListProvisionedUsersOptions, error) {
 	opts := &gl.ListProvisionedUsersOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Username != "" {
 		opts.Username = new(input.Username)
 	}

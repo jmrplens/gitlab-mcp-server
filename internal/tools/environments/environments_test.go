@@ -1662,9 +1662,9 @@ func TestEnvironmentGet_DeployableWithoutNestedRefs(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_OrderBySortKeyset verifies that List forwards order_by,
-// sort, pagination=keyset, and page_token to the GitLab API query string.
-func TestEnvironmentList_OrderBySortKeyset(t *testing.T) {
+// TestEnvironmentList_OrderBySort verifies that List forwards order_by and
+// sort to the GitLab API query string.
+func TestEnvironmentList_OrderBySort(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.RawQuery
@@ -1672,16 +1672,14 @@ func TestEnvironmentList_OrderBySortKeyset(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  "42",
-		OrderBy:    "name",
-		Sort:       "desc",
-		Pagination: "keyset",
-		PageToken:  "tok42",
+		ProjectID: "42",
+		OrderBy:   "name",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=name", "sort=desc", "pagination=keyset", "page_token=tok42"} {
+	for _, want := range []string{"order_by=name", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)

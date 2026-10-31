@@ -125,11 +125,11 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 
 	switch individualTool {
 	case "gitlab_project_members_list":
-		opts.Usage = "List the members of a project, including members inherited from parent groups. Filter with query, user_ids, and show_seat_info. Order with order_by/sort. Page with offset or keyset pagination."
+		opts.Usage = "List the members of a project, including members inherited from parent groups. Filter with query, user_ids, and show_seat_info. Order with order_by/sort. Page with offset pagination."
 		opts.Aliases = []string{individualTool, "list project members", "who has access to project", "show project team", "project collaborators"}
 		opts.RelatedActions = []string{actionMemberGet, actionMemberAdd, actionProjectGet, actionUserGet}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{paramProjectID: projectIDGuidance}
-		opts.IndividualTool.Description = "List a project's members (direct plus inherited from parent groups). Returns: each member's id, username, name, state, access level, member role, created_by, seat usage, and web URL. Supports query/user_ids/show_seat_info filtering, order_by/sort, and offset or keyset pagination. See also: gitlab_project_member_get, gitlab_project_member_add, gitlab_project_get."
+		opts.IndividualTool.Description = "List a project's members (direct plus inherited from parent groups). Returns: each member's id, username, name, state, access level, member role, created_by, seat usage, and web URL. Supports query/user_ids/show_seat_info filtering, order_by/sort, and offset pagination. See also: gitlab_project_member_get, gitlab_project_member_add, gitlab_project_get."
 	case "gitlab_project_member_get":
 		opts.Usage = "Get one direct project member by project_id plus user_id. Use after a member list, or when the prompt already names a concrete user. Returns only direct members. Use " + actionMemberGetInherited + " to include parent-group inheritance."
 		opts.Aliases = []string{individualTool, "get project member", "show member access level", "is user a member"}

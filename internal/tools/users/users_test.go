@@ -2480,9 +2480,9 @@ func TestList_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_ScopeAndKeyset covers the new scope filter and the
-// keyset pagination wiring on the contribution events list.
-func TestListContributionEvents_ScopeAndKeyset(t *testing.T) {
+// TestListContributionEvents_ScopeAndOrdering covers the scope filter and the
+// order_by wiring on the contribution events list.
+func TestListContributionEvents_ScopeAndOrdering(t *testing.T) {
 	var query url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users/42/events" {
@@ -2494,16 +2494,15 @@ func TestListContributionEvents_ScopeAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
-		UserID:     42,
-		Scope:      "all",
-		OrderBy:    "id",
-		Pagination: "keyset", PageToken: "5",
+		UserID:  42,
+		Scope:   "all",
+		OrderBy: "id",
 	})
 	if err != nil {
 		t.Fatalf("ListContributionEvents() unexpected error: %v", err)
 	}
-	if query.Get("scope") != "all" || query.Get("pagination") != "keyset" || query.Get("page_token") != "5" {
-		t.Errorf("query = %v, want scope/keyset wiring", query.Encode())
+	if query.Get("scope") != "all" || query.Get("order_by") != "id" {
+		t.Errorf("query = %v, want scope/order_by wiring", query.Encode())
 	}
 	if query.Get("order_by") != "id" {
 		t.Errorf("order_by = %q, want id", query.Get("order_by"))

@@ -1447,10 +1447,10 @@ func TestFormatListBoardListsMarkdown_ScopeOfEachColumnKind(t *testing.T) {
 // Keyset/order_by/sort and nil-shape coverage
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoards_OrderBySortKeyset verifies that order_by, sort, and keyset
-// pagination parameters are forwarded as GitLab query parameters.
+// TestListGroupBoards_OrderBySort verifies that order_by and sort are
+// forwarded as GitLab query parameters.
 // It asserts the underlying request carries the expected query string.
-func TestListGroupBoards_OrderBySortKeyset(t *testing.T) {
+func TestListGroupBoards_OrderBySort(t *testing.T) {
 	mux := http.NewServeMux()
 	var gotQuery string
 	mux.HandleFunc("/api/v4/groups/42/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -1461,12 +1461,11 @@ func TestListGroupBoards_OrderBySortKeyset(t *testing.T) {
 
 	_, err := ListGroupBoards(context.Background(), client, ListGroupBoardsInput{
 		GroupID: toolutil.StringOrInt("42"), OrderBy: "created_at", Sort: "desc",
-		Pagination: "keyset", PageToken: "100",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=100"} {
+	for _, want := range []string{"order_by=created_at", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)
@@ -1475,10 +1474,10 @@ func TestListGroupBoards_OrderBySortKeyset(t *testing.T) {
 	}
 }
 
-// TestListGroupBoardLists_OrderBySortKeyset verifies that order_by, sort, and
-// keyset pagination parameters are forwarded for the board-list list endpoint.
+// TestListGroupBoardLists_OrderBySort verifies that order_by and sort are
+// forwarded for the board-list list endpoint.
 // It asserts the underlying request carries the expected query string.
-func TestListGroupBoardLists_OrderBySortKeyset(t *testing.T) {
+func TestListGroupBoardLists_OrderBySort(t *testing.T) {
 	mux := http.NewServeMux()
 	var gotQuery string
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -1489,12 +1488,11 @@ func TestListGroupBoardLists_OrderBySortKeyset(t *testing.T) {
 
 	_, err := ListGroupBoardLists(context.Background(), client, ListGroupBoardListsInput{
 		GroupID: toolutil.StringOrInt("42"), BoardID: 1, OrderBy: "position", Sort: "asc",
-		Pagination: "keyset", PageToken: "5",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=position", "sort=asc", "pagination=keyset", "page_token=5"} {
+	for _, want := range []string{"order_by=position", "sort=asc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)

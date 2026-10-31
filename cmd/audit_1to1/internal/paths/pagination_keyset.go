@@ -60,14 +60,16 @@ import (
 // there. An instance that leaves the flag off ignores the parameter, which
 // costs a caller nothing.
 //
-// # It reports and does not gate
+// # It gates on what no declaration answers
 //
-// For the reason the collection half gives: every finding is a change to the
-// published surface. Most of what it reports against the 19.5.0 record is
-// page_token offered on a route GitLab pages by offset alone, which an action
-// publishes whenever its input embeds [toolutil.KeysetPaginationInput],
-// whatever its route does, and taking it out of those inputs is a change of
-// the surface 182 actions publish.
+// Against the 19.5.0 record it once reported 182 actions offering page_token
+// on a route GitLab pages by offset alone, which an action published whenever
+// its input embedded [toolutil.KeysetPaginationInput], whatever its route did.
+// With the keyset input taken off those inputs (issue 1165), every undeclared
+// finding is a change the surface owes, so [Summary.clean] counts them: an
+// action that offers page_token where no route pages by keyset, or a keyset
+// list that does not offer it, fails the run until its input changes or a
+// route declaration says why it cannot.
 type KeysetPagination struct {
 	// Ran is false when the request record could not be read, which is the
 	// one input this half reads that the collection half does not.

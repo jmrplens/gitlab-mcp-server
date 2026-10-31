@@ -124,10 +124,10 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 		options.RelatedActions = []string{actionTagGet, actionTagList}
 		options.IndividualTool.Description = "Get the X.509 signature of a tag. Returns: the signature type, verification status, and the X.509 certificate with issuer detail. See also: gitlab_tag_get, gitlab_tag_list."
 	case "list_protected":
-		options.Usage = "List protected tags for a project with offset or keyset pagination. Use to audit which tag patterns are protected and their create access levels."
+		options.Usage = "List protected tags for a project with offset pagination. Use to audit which tag patterns are protected and their create access levels."
 		options.Aliases = []string{"list protected tags", "show protected tags", "find protected tags"}
 		options.RelatedActions = []string{"tag.get_protected", actionTagProtect, actionTagList}
-		options.IndividualTool.Description = "List protected tags in one project with offset or keyset pagination. Returns: protected tag patterns with their create access levels and pagination metadata. See also: gitlab_tag_get_protected, gitlab_tag_protect, gitlab_tag_list."
+		options.IndividualTool.Description = "List protected tags in one project with offset pagination. Returns: protected tag patterns with their create access levels and pagination metadata. See also: gitlab_tag_get_protected, gitlab_tag_protect, gitlab_tag_list."
 	case "get_protected":
 		options.Usage = "Get a single protected tag or wildcard rule by name. Use when a concrete protected pattern is already known."
 		options.Aliases = []string{"get protected tag", "show protected tag", "lookup protected tag"}

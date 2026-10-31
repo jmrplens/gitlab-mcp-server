@@ -263,7 +263,6 @@ type ListGroupInput struct {
 	UpdatedAfter        string               `json:"updated_after,omitempty"        jsonschema:"Return issues updated after date (ISO 8601)"`
 	UpdatedBefore       string               `json:"updated_before,omitempty"       jsonschema:"Return issues updated before date (ISO 8601)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListGroupOutput holds a paginated list of group issues.
@@ -891,7 +890,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	); err != nil {
 		return ListGroupOutput{}, fmt.Errorf("issueListGroup: %w", err)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issues, resp, err := client.GL().Issues.ListGroupIssues(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -944,7 +943,6 @@ type ListAllInput struct {
 	UpdatedAfter        string               `json:"updated_after,omitempty"        jsonschema:"Return issues updated after date (ISO 8601)"`
 	UpdatedBefore       string               `json:"updated_before,omitempty"       jsonschema:"Return issues updated before date (ISO 8601)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListAllOutput holds a page of issues from the global scope. It carries the
@@ -1003,7 +1001,7 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	); err != nil {
 		return ListAllOutput{}, fmt.Errorf("issueListAll: %w", err)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	result, resp, err := client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
@@ -1638,22 +1636,21 @@ func relatedMRsOutput(op string, mrs []*gl.BasicMergeRequest, resp *gl.Response,
 	return RelatedMRsOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// mrListOptions captures the shared list-query parameters (pagination, keyset,
+// mrListOptions captures the shared list-query parameters (pagination,
 // order_by, sort) for the issue <-> merge request link list helpers so the
 // closing-MR and related-MR handlers can build the underlying gl.ListOptions
 // once. OrderBy and Sort are applied after ApplyListOptions so an explicit
-// value always wins.
+// value always wins. GitLab pages both lists by offset alone.
 type mrListOptions struct {
 	pagination toolutil.PaginationInput
-	keyset     toolutil.KeysetPaginationInput
 	orderBy    string
 	sort       string
 }
 
-// applyTo populates a [gl.ListOptions] from the captured input: offset/keyset
+// applyTo populates a [gl.ListOptions] from the captured input: offset
 // pagination via ApplyListOptions, then order_by/sort when supplied.
 func (o mrListOptions) applyTo(opts *gl.ListOptions) {
-	toolutil.ApplyListOptions(opts, o.pagination, o.keyset)
+	toolutil.ApplyListOptions(opts, o.pagination, toolutil.KeysetPaginationInput{})
 	if o.orderBy != "" {
 		opts.OrderBy = o.orderBy
 	}
@@ -1702,7 +1699,6 @@ type ListMRsClosingInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListMRsClosing retrieves merge requests that will close this issue on merge.
@@ -1710,8 +1706,8 @@ func ListMRsClosing(ctx context.Context, client *gitlabclient.Client, input List
 	return listIssueMergeRequests(ctx, issueMergeRequestsListArgs{
 		projectID: input.ProjectID, issueIID: input.IssueIID,
 		listOpts: mrListOptions{
-			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
-			orderBy: input.OrderBy, sort: input.Sort,
+			pagination: input.PaginationInput,
+			orderBy:    input.OrderBy, sort: input.Sort,
 		},
 		operation: "issueListMRsClosing",
 		hint:      "verify project_id and issue_iid with issue.get - only MRs that include 'Closes #N' are returned",
@@ -1730,7 +1726,6 @@ type ListMRsRelatedInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListMRsRelated retrieves merge requests related to this issue.
@@ -1738,8 +1733,8 @@ func ListMRsRelated(ctx context.Context, client *gitlabclient.Client, input List
 	return listIssueMergeRequests(ctx, issueMergeRequestsListArgs{
 		projectID: input.ProjectID, issueIID: input.IssueIID,
 		listOpts: mrListOptions{
-			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
-			orderBy: input.OrderBy, sort: input.Sort,
+			pagination: input.PaginationInput,
+			orderBy:    input.OrderBy, sort: input.Sort,
 		},
 		operation: "issueListMRsRelated",
 		hint:      "verify project_id and issue_iid with issue.get - returns MRs mentioning the issue in description/notes (broader than 'closing')",

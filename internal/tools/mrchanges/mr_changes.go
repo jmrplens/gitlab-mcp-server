@@ -20,14 +20,18 @@ import (
 const hintVerifyMR = "verify project_id and merge_request_iid with merge_request.list"
 
 // GetInput defines parameters for listing changed files in a merge request.
+//
+// It offers no order_by, sort, pagination or page_token (issue 1530). GET
+// /projects/:id/merge_requests/:merge_request_iid/diffs declares page,
+// per_page and unidiff (gitlab-api-live.json, 19.5.0-ee), and pages the
+// latest diff's files with paginated_diffs(params[:page], params[:per_page])
+// (lib/api/merge_requests.rb:716-722 at v19.5.0-ee), which reads no order and
+// pages by offset alone.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	Unidiff   bool                 `json:"unidiff,omitempty" jsonschema:"Return diffs in unified diff format (default: false)"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // FileDiffOutput represents a single file diff in a merge request.
@@ -90,13 +94,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.ErrRequiredInt64("mrChangesGet", "merge_request_iid")
 	}
 	opts := &gl.ListMergeRequestDiffsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	if input.OrderBy != "" {
-		opts.OrderBy = input.OrderBy
-	}
-	if input.Sort != "" {
-		opts.Sort = input.Sort
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Unidiff {
 		opts.Unidiff = new(true)
 	}
@@ -129,13 +127,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 // ---------------------------------------------------------------------------.
 
 // DiffVersionsListInput defines parameters for listing MR diff versions.
+//
+// It offers no order_by, sort, pagination or page_token. GET
+// /projects/:id/merge_requests/:merge_request_iid/versions declares page and
+// per_page (gitlab-api-live.json, 19.5.0-ee), and presents
+// paginate(merge_request.merge_request_diffs.order_id_desc)
+// (lib/api/merge_request_diffs.rb:32-35 at v19.5.0-ee): newest first by id,
+// whatever is sent, paged by offset alone.
 type DiffVersionsListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // DiffVersionGetInput defines parameters for getting a single MR diff version.
@@ -332,13 +334,7 @@ func ListDiffVersions(ctx context.Context, client *gitlabclient.Client, input Di
 		return DiffVersionsListOutput{}, toolutil.ErrRequiredInt64("mrDiffVersionsList", "merge_request_iid")
 	}
 	opts := &gl.GetMergeRequestDiffVersionsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	if input.OrderBy != "" {
-		opts.OrderBy = input.OrderBy
-	}
-	if input.Sort != "" {
-		opts.Sort = input.Sort
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	versions, resp, err := client.GL().MergeRequests.GetMergeRequestDiffVersions(
 		string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx),

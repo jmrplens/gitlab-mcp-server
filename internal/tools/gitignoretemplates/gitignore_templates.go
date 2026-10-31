@@ -14,14 +14,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// ListInput is the input for listing gitignore templates. OrderBy, Sort, and the
-// embedded keyset parameters map onto the gl.ListTemplatesOptions embedded
-// gl.ListOptions, mirroring the full client-go pagination surface.
+// ListInput is the input for listing gitignore templates. OrderBy, Sort and
+// the offset pagination map onto the gl.ListTemplatesOptions embedded
+// gl.ListOptions; its keyset fields are not offered, since GitLab pages this
+// list by offset alone.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name, created_at, updated_at)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, name, created_at, updated_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // TemplateListItem represents a gitignore template in a list.
@@ -37,7 +37,7 @@ type ListOutput struct {
 // List lists all available gitignore templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListTemplatesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

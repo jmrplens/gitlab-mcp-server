@@ -1163,6 +1163,28 @@ func TestValidatePosition_FileFoundInDiff(t *testing.T) {
 	}
 }
 
+// TestValidatePosition_FileWithEmptyDiff_SkipsTheLineCheck verifies that a
+// file GitLab lists with an empty diff, as it does for a binary file or one
+// whose diff is too large to show, passes whatever line the position names:
+// there are no lines to hold it to, so GitLab judges the write.
+func TestValidatePosition_FileWithEmptyDiff_SkipsTheLineCheck(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"logo.png","new_path":"logo.png","diff":""}]`)
+	}))
+	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+		BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
+		NewPath: "logo.png",
+		NewLine: 99,
+	})
+	if err != nil {
+		t.Errorf("validatePosition() error = %v, want nil for a file with no diff lines", err)
+	}
+}
+
 // TestValidatePosition_DiffFetchError verifies that validatePosition silently
 // skips validation when the diff API returns an error (best-effort behavior).
 func TestValidatePosition_DiffFetchError(t *testing.T) {
@@ -1362,29 +1384,6 @@ func TestToOutput_LineCodeAndLineRange(t *testing.T) {
 	}
 	if out.Position.LineRange.Start.NewLine != 40 || out.Position.LineRange.End.NewLine != 42 {
 		t.Errorf("unexpected output line_range: %+v", out.Position.LineRange)
-	}
-}
-
-// TestDraftNoteList_Keyset verifies keyset pagination parameters are forwarded.
-func TestDraftNoteList_Keyset(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "tok99" {
-			t.Errorf("expected page_token=tok99, got %q", q.Get("page_token"))
-		}
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
-
-	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  "42",
-		MRIID:      1,
-		Pagination: "keyset", PageToken: "tok99",
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 

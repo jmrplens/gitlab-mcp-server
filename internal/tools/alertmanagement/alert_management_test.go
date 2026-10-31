@@ -581,14 +581,13 @@ func TestListMetricImages_WithPagination(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListMetricImages — keyset pagination + created_at mapping
+// ListMetricImages: ordering and created_at mapping
 // ---------------------------------------------------------------------------.
 
-// TestListMetricImages_KeysetAndCreatedAt verifies that ListMetricImages
-// forwards keyset pagination parameters (order_by, sort, pagination, page_token)
-// to the GitLab API and that the SDK CreatedAt timestamp is mapped onto the
-// MCP output item in RFC3339 form.
-func TestListMetricImages_KeysetAndCreatedAt(t *testing.T) {
+// TestListMetricImages_OrderingAndCreatedAt verifies that ListMetricImages
+// forwards the order_by and sort parameters to the GitLab API and that the
+// SDK CreatedAt timestamp is mapped onto the MCP output item in RFC3339 form.
+func TestListMetricImages_OrderingAndCreatedAt(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/alert_management_alerts/5/metric_images" && r.Method == http.MethodGet {
@@ -599,11 +598,10 @@ func TestListMetricImages_KeysetAndCreatedAt(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListMetricImages(t.Context(), client, ListMetricImagesInput{
-		ProjectID:  "1",
-		AlertIID:   5,
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "42",
+		ProjectID: "1",
+		AlertIID:  5,
+		OrderBy:   "created_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -614,7 +612,7 @@ func TestListMetricImages_KeysetAndCreatedAt(t *testing.T) {
 	if out.Images[0].CreatedAt != "2024-01-02T03:04:05Z" {
 		t.Errorf("expected created_at 2024-01-02T03:04:05Z, got %q", out.Images[0].CreatedAt)
 	}
-	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=42"} {
+	for _, want := range []string{"order_by=created_at", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("expected query to contain %q, got %q", want, gotQuery)

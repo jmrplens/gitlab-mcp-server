@@ -17,10 +17,9 @@ import (
 // ListInput holds parameters for listing package protection rules.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput is not needed — GitLab API has no get-single-rule endpoint.
@@ -88,7 +87,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	opts := &gl.ListPackageProtectionRulesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}

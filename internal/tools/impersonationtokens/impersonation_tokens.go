@@ -71,14 +71,14 @@ type RevokeOutput struct {
 
 // ListInput holds parameters for listing impersonation tokens. It mirrors
 // v2.GetAllImpersonationTokensOptions (the embedded ListOptions plus the state
-// filter), exposing both offset and keyset pagination.
+// filter), exposing offset pagination; its keyset fields are not offered,
+// since GitLab pages this list by offset alone.
 type ListInput struct {
 	UserID  int64  `json:"user_id" jsonschema:"GitLab user ID,required"`
 	State   string `json:"state,omitempty" jsonschema:"Filter by state: all, active, or inactive"`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput identifies a specific impersonation token.
@@ -154,7 +154,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.State != "" {
 		opts.State = new(input.State)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

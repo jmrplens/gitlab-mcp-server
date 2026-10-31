@@ -270,12 +270,12 @@ func TestListClientKeys_WithPagination(t *testing.T) {
 // ListClientKeys — keyset pagination branch (order_by/sort/page_token/pagination)
 // ---------------------------------------------------------------------------.
 
-// TestListClientKeys_WithKeyset verifies that ListClientKeys forwards keyset
-// pagination parameters (order_by, sort, pagination, page_token) onto the
-// underlying gl.ListOptions and through to the GitLab API query string.
+// TestListClientKeys_WithOrdering verifies that ListClientKeys forwards the
+// ordering parameters (order_by, sort) onto the underlying gl.ListOptions and
+// through to the GitLab API query string.
 // The mock GitLab API at /api/v4/projects/1/error_tracking/client_keys (GET) responds with HTTP OK.
-// It asserts each keyset query parameter is forwarded exactly as supplied.
-func TestListClientKeys_WithKeyset(t *testing.T) {
+// It asserts each ordering query parameter is forwarded exactly as supplied.
+func TestListClientKeys_WithOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/error_tracking/client_keys" && r.Method == http.MethodGet {
 			q := r.URL.Query()
@@ -285,22 +285,15 @@ func TestListClientKeys_WithKeyset(t *testing.T) {
 			if got := q.Get("sort"); got != "asc" {
 				t.Errorf("sort query = %q, want asc", got)
 			}
-			if got := q.Get("pagination"); got != "keyset" {
-				t.Errorf("pagination query = %q, want keyset", got)
-			}
-			if got := q.Get("page_token"); got != "tok-5" {
-				t.Errorf("page_token query = %q, want tok-5", got)
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[`+covKeyJSON+`]`)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 	out, err := ListClientKeys(t.Context(), client, ListClientKeysInput{
-		ProjectID:  "1",
-		OrderBy:    "id",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "tok-5",
+		ProjectID: "1",
+		OrderBy:   "id",
+		Sort:      "asc",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

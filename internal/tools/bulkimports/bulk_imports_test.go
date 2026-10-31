@@ -315,9 +315,6 @@ func TestList_OK(t *testing.T) {
 		if got := q.Get("sort"); got != "desc" {
 			t.Errorf("sort = %q, want desc", got)
 		}
-		if got := q.Get("pagination"); got != "keyset" {
-			t.Errorf("pagination = %q, want keyset", got)
-		}
 		testutil.RespondJSON(w, http.StatusOK, `[
 			{"id":1,"status":"started","source_type":"gitlab","source_url":"https://src","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","has_failures":false},
 			{"id":2,"status":"started","source_type":"gitlab","source_url":"https://src","created_at":"2026-01-02T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","has_failures":true}
@@ -326,10 +323,9 @@ func TestList_OK(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := List(t.Context(), client, ListInput{
-		Status:     "started",
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset",
+		Status:  "started",
+		OrderBy: "created_at",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -484,9 +480,6 @@ func TestListEntities_AllScope(t *testing.T) {
 		if got := q.Get("sort"); got != "asc" {
 			t.Errorf("sort = %q, want asc", got)
 		}
-		if got := q.Get("page_token"); got != "tok-1" {
-			t.Errorf("page_token = %q, want tok-1", got)
-		}
 		testutil.RespondJSON(w, http.StatusOK, `[
 			{"id":1,"bulk_import_id":10,"status":"finished","entity_type":"group_entity","source_full_path":"src","destination_full_path":"dst","destination_name":"dst","destination_slug":"dst","destination_namespace":"ns","has_failures":false}
 		]`)
@@ -494,9 +487,8 @@ func TestListEntities_AllScope(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := ListEntities(t.Context(), client, ListEntitiesInput{
-		OrderBy:    "created_at",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "tok-1",
+		OrderBy: "created_at",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf("ListEntities: %v", err)

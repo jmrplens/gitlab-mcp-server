@@ -37,7 +37,6 @@ type ListInput struct {
 	FinishedAfter  string               `json:"finished_after,omitempty"  jsonschema:"Return deployments finished after this RFC3339 timestamp (GitLab 14+ only)"`
 	FinishedBefore string               `json:"finished_before,omitempty" jsonschema:"Return deployments finished before this RFC3339 timestamp (GitLab 14+ only)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for retrieving a single deployment.
@@ -228,7 +227,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gitlab.ListProjectDeploymentsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = &input.OrderBy
 	}

@@ -19,22 +19,22 @@ import (
 // toolutil.IsPermissionRefusal.
 const hintEmojiOwnerOnly = "only the user who awarded the emoji, or an administrator, can remove it"
 
-// emojiListQuery captures the shared list-query parameters (offset/keyset
-// pagination plus order_by/sort) mirrored from gl.ListAwardEmojiOptions so each
-// award emoji list handler builds the underlying gl.ListOptions once. OrderBy
-// and Sort are applied after ApplyListOptions so an explicit value always wins.
+// emojiListQuery captures the shared list-query parameters (offset pagination
+// plus order_by/sort) mirrored from gl.ListAwardEmojiOptions so each award
+// emoji list handler builds the underlying gl.ListOptions once. OrderBy and
+// Sort are applied after ApplyListOptions so an explicit value always wins.
+// GitLab pages every award emoji list by offset alone.
 type emojiListQuery struct {
 	pagination toolutil.PaginationInput
-	keyset     toolutil.KeysetPaginationInput
 	orderBy    string
 	sort       string
 }
 
 // applyTo populates a gl.ListAwardEmojiOptions from the captured input: offset
-// and keyset pagination via ApplyListOptions, then order_by/sort when supplied.
+// pagination via ApplyListOptions, then order_by/sort when supplied.
 func (q emojiListQuery) applyTo() *gl.ListAwardEmojiOptions {
 	opts := &gl.ListAwardEmojiOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, q.pagination, q.keyset)
+	toolutil.ApplyListOptions(&opts.ListOptions, q.pagination, toolutil.KeysetPaginationInput{})
 	if q.orderBy != "" {
 		opts.OrderBy = q.orderBy
 	}
@@ -50,10 +50,9 @@ func (q emojiListQuery) applyTo() *gl.ListAwardEmojiOptions {
 type IssueListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // IssueListOnNoteInput is the input for listing award emoji on an issue note.
@@ -61,10 +60,9 @@ type IssueListOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // IssueGetInput is the input for getting a single award emoji on an issue.
@@ -118,10 +116,9 @@ type IssueDeleteOnNoteInput struct {
 type MRListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // MRListOnNoteInput is the input for listing award emoji on a merge request note.
@@ -129,10 +126,9 @@ type MRListOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // MRGetInput is the input for getting a single award emoji on a merge request.
@@ -186,10 +182,9 @@ type MRDeleteOnNoteInput struct {
 type SnippetListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // SnippetListOnNoteInput is the input for listing award emoji on a snippet note.
@@ -197,10 +192,9 @@ type SnippetListOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // SnippetGetInput is the input for getting a single award emoji on a snippet.
@@ -376,7 +370,7 @@ func ListIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input
 	if input.IID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("issue_emoji_list", "issue_iid")
 	}
-	opts := emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
+	opts := emojiListQuery{pagination: input.PaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emojis, resp, err := client.GL().AwardEmoji.ListIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -452,7 +446,7 @@ func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 // ListIssueNoteAwardEmoji lists all award emoji on an issue note.
 func ListIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueListOnNoteInput) (ListOutput, error) {
 	return listNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, IIDField: "issue_iid", Operation: "issue_note_emoji_list"},
-		emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort},
+		emojiListQuery{pagination: input.PaginationInput, orderBy: input.OrderBy, sort: input.Sort},
 		"verify the issue and note exist with issue.note_get (correct project_id, issue_iid, note_id)", client.GL().AwardEmoji.ListIssuesAwardEmojiOnNote)
 }
 
@@ -485,7 +479,7 @@ func ListMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MR
 	if input.IID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("mr_emoji_list", "merge_request_iid")
 	}
-	opts := emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
+	opts := emojiListQuery{pagination: input.PaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -599,7 +593,7 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 // ListMRNoteAwardEmoji lists all award emoji on a merge request note.
 func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRListOnNoteInput) (ListOutput, error) {
 	return listNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, IIDField: "merge_request_iid", Operation: "mr_note_emoji_list"},
-		emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort},
+		emojiListQuery{pagination: input.PaginationInput, orderBy: input.OrderBy, sort: input.Sort},
 		"verify the MR and note exist with mr_review.note_get (correct project_id, merge_request_iid, note_id)", client.GL().AwardEmoji.ListMergeRequestAwardEmojiOnNote)
 }
 
@@ -632,7 +626,7 @@ func ListSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 	if input.IID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_emoji_list", "snippet_id")
 	}
-	opts := emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
+	opts := emojiListQuery{pagination: input.PaginationInput, orderBy: input.OrderBy, sort: input.Sort}.applyTo()
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	emojis, resp, err := client.GL().AwardEmoji.ListSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -708,7 +702,7 @@ func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 // ListSnippetNoteAwardEmoji lists all award emoji on a snippet note.
 func ListSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetListOnNoteInput) (ListOutput, error) {
 	return listNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, IIDField: "snippet_id", Operation: "snippet_note_emoji_list"},
-		emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort},
+		emojiListQuery{pagination: input.PaginationInput, orderBy: input.OrderBy, sort: input.Sort},
 		"verify the snippet and note exist with snippet.note_get (correct project_id, snippet_id, note_id)", client.GL().AwardEmoji.ListSnippetAwardEmojiOnNote)
 }
 

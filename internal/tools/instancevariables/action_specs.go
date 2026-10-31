@@ -66,10 +66,10 @@ func instanceVariableOptions(actionName, individualTool string) toolutil.ActionS
 
 	switch actionName {
 	case "instance_list":
-		options.Usage = "List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination. Admin-only. Use to inspect the instance variable inventory before get/update/delete actions."
+		options.Usage = "List instance-level CI/CD variables with order_by, sort, and offset pagination. Admin-only. Use to inspect the instance variable inventory before get/update/delete actions."
 		options.Aliases = []string{individualTool, "list instance variables", "show instance variables", "find instance ci variables"}
 		options.RelatedActions = []string{actionInstanceVariableGet, actionInstanceVariableCreate, actionInstanceVariableUpdate, actionInstanceVariableDelete}
-		options.IndividualTool.Description = "List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination (admin-only). Returns: each variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, description, and pagination metadata. See also: gitlab_instance_variable_get, gitlab_instance_variable_create, gitlab_instance_variable_update, gitlab_instance_variable_delete."
+		options.IndividualTool.Description = "List instance-level CI/CD variables with order_by, sort, and offset pagination (admin-only). Returns: each variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, description, and pagination metadata. See also: gitlab_instance_variable_get, gitlab_instance_variable_create, gitlab_instance_variable_update, gitlab_instance_variable_delete."
 	case "instance_get":
 		options.Usage = "Get one instance-level CI/CD variable by key. Admin-only. Use when exact variable settings are needed."
 		options.Aliases = []string{individualTool, "get instance variable", "show instance variable details", "lookup instance variable"}

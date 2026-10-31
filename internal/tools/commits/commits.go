@@ -539,16 +539,14 @@ func detailToOutput(c *gl.Commit) DetailOutput {
 }
 
 // DiffInput defines parameters for retrieving diffs of a commit. It mirrors
-// gl.GetCommitDiffOptions (C-IMPORTS) and supports offset and keyset
-// pagination via order_by/sort/page_token.
+// gl.GetCommitDiffOptions (C-IMPORTS); GitLab pages the diff by offset alone.
 type DiffInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA hash to get diffs for,required"`
 	Unidiff   bool                 `json:"unidiff,omitempty" jsonschema:"Return diffs in unified diff format"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // DiffOutput holds the list of file diffs for a commit.
@@ -568,7 +566,7 @@ func Diff(ctx context.Context, client *gitlabclient.Client, input DiffInput) (Di
 	}
 
 	opts := &gl.GetCommitDiffOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -602,16 +600,15 @@ func Diff(ctx context.Context, client *gitlabclient.Client, input DiffInput) (Di
 // ---------------------------------------------------------------------------.
 
 // RefsInput defines parameters for retrieving branches/tags referencing a
-// commit. It mirrors gl.GetCommitRefsOptions (C-IMPORTS) and supports offset
-// and keyset pagination via order_by/sort/page_token.
+// commit. It mirrors gl.GetCommitRefsOptions (C-IMPORTS); GitLab pages the
+// refs by offset alone.
 type RefsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA to look up,required"`
 	Type      string               `json:"type,omitempty" jsonschema:"Filter by ref type: branch, tag, or all (default: all)"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // RefOutput represents a branch or tag referencing a commit.
@@ -636,7 +633,7 @@ func GetRefs(ctx context.Context, client *gitlabclient.Client, input RefsInput) 
 		return RefsOutput{}, errors.New("getCommitRefs: project_id is required")
 	}
 	opts := &gl.GetCommitRefsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -663,15 +660,14 @@ func GetRefs(ctx context.Context, client *gitlabclient.Client, input RefsInput) 
 // ---------------------------------------------------------------------------.
 
 // CommentsInput defines parameters for listing comments on a commit. It mirrors
-// gl.GetCommitCommentsOptions (C-IMPORTS) and supports offset and keyset
-// pagination via order_by/sort/page_token.
+// gl.GetCommitCommentsOptions (C-IMPORTS); GitLab pages the comments by offset
+// alone.
 type CommentsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // CommentOutput represents a single commit comment. It mirrors gl.CommitComment
@@ -703,7 +699,7 @@ func GetComments(ctx context.Context, client *gitlabclient.Client, input Comment
 		return CommentsOutput{}, errors.New("getCommitComments: project_id is required")
 	}
 	opts := &gl.GetCommitCommentsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -793,8 +789,8 @@ func PostComment(ctx context.Context, client *gitlabclient.Client, input PostCom
 // ---------------------------------------------------------------------------.
 
 // StatusesInput defines parameters for listing pipeline statuses of a commit.
-// It mirrors gl.GetCommitStatusesOptions (C-IMPORTS) and supports offset and
-// keyset pagination via order_by/sort/page_token.
+// It mirrors gl.GetCommitStatusesOptions (C-IMPORTS); GitLab pages the
+// statuses by offset alone.
 type StatusesInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
 	SHA        string               `json:"sha"         jsonschema:"Full commit SHA, 40 hex characters or 64 in a SHA-256 repository. GitLab lists the statuses of the pipelines that ran on exactly this SHA, so a branch name or an abbreviated SHA lists none,required"`
@@ -803,10 +799,9 @@ type StatusesInput struct {
 	Name       string               `json:"name,omitempty"       jsonschema:"Status name filter"`
 	PipelineID int64                `json:"pipeline_id,omitempty" jsonschema:"Pipeline ID filter"`
 	All        bool                 `json:"all,omitempty"        jsonschema:"Return all statuses including retries"`
-	OrderBy    string               `json:"order_by,omitempty"   jsonschema:"For keyset pagination, the column to order results by"`
-	Sort       string               `json:"sort,omitempty"       jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy    string               `json:"order_by,omitempty"   jsonschema:"Column to order results by"`
+	Sort       string               `json:"sort,omitempty"       jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // StatusOutput represents a single commit pipeline status. It mirrors
@@ -845,7 +840,7 @@ func GetStatuses(ctx context.Context, client *gitlabclient.Client, input Statuse
 		return StatusesOutput{}, errors.New("getCommitStatuses: project_id is required")
 	}
 	opts := &gl.GetCommitStatusesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

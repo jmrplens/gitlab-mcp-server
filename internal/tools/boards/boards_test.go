@@ -1921,21 +1921,20 @@ func TestConvertBoardList_NilSubObjects(t *testing.T) {
 	}
 }
 
-// TestListBoards_OrderBySort verifies order_by/sort/keyset params are forwarded.
+// TestListBoards_OrderBySort verifies order_by/sort params are forwarded.
 func TestListBoards_OrderBySort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("order_by") != "created_at" || q.Get("sort") != "desc" || q.Get("pagination") != "keyset" {
-			t.Errorf("missing keyset params: %v", q)
+		if q.Get("order_by") != "created_at" || q.Get("sort") != "desc" {
+			t.Errorf("missing ordering params: %v", q)
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+covBoardMinimalJSON+`]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 	_, err := ListBoards(context.Background(), client, ListBoardsInput{
-		ProjectID:  "10",
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset",
+		ProjectID: "10",
+		OrderBy:   "created_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

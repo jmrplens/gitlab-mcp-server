@@ -223,6 +223,15 @@ const (
 	// projectIterationsOffsetOnly is the reason the project iteration list
 	// offers no ordering or keyset field of the gl.ListOptions it embeds.
 	projectIterationsOffsetOnly = "GET /projects/:id/iterations declares state, search, in, include_ancestors, include_descendants, updated_before, updated_after, page and per_page (gitlab-api-live.json, 19.5.0-ee); gl.ListOptions ordering and keyset fields reach nothing there"
+	// mrChangesUnordered is the reason the merge request diff list offers no
+	// ordering field of the gl.ListOptions its options struct embeds.
+	mrChangesUnordered = "GET /projects/:id/merge_requests/:merge_request_iid/diffs declares page, per_page and unidiff (gitlab-api-live.json, 19.5.0-ee) and pages the latest diff's files with paginated_diffs(params[:page], params[:per_page]) (lib/api/merge_requests.rb:716-722 at v19.5.0-ee), which reads no order, so gl.ListOptions ordering fields reach nothing there (issue 1530)"
+	// mrDiffVersionsOrderedByID is the reason the merge request diff version
+	// list offers no ordering field of the gl.ListOptions it embeds.
+	mrDiffVersionsOrderedByID = "GET /projects/:id/merge_requests/:merge_request_iid/versions declares page and per_page (gitlab-api-live.json, 19.5.0-ee) and presents paginate(merge_request.merge_request_diffs.order_id_desc) (lib/api/merge_request_diffs.rb:32-35 at v19.5.0-ee), newest first whatever is sent, so gl.ListOptions ordering fields reach nothing there (issue 1530)"
+	// groupIterationsUnordered is the reason the group iteration list offers
+	// no ordering field of the gl.ListOptions it embeds.
+	groupIterationsUnordered = "GET /groups/:id/iterations declares state, search, in, include_ancestors, include_descendants, updated_before, updated_after, page and per_page (gitlab-api-live.json, 19.5.0-ee), and iterations_finder_params hands IterationsFinder no sort, so it orders by due date, title and id whatever is sent (ee/lib/api/iterations.rb:53-73 and ee/app/finders/iterations_finder.rb:116-123 at v19.5.0-ee); gl.ListOptions ordering fields reach nothing there (issue 1600)"
 	// searchOffsetOnly is the reason the searches offer no ordering or keyset
 	// field of the gl.ListOptions gl.SearchOptions embeds.
 	searchOffsetOnly = "GET /search, GET /groups/:id/search and GET /projects/:id/search declare page and per_page and no order_by, sort, pagination or page_token (gitlab-api-live.json, 19.5.0-ee); gl.ListOptions ordering and keyset fields reach nothing there"
@@ -1103,19 +1112,16 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// The merge request approval rules list pages through a gl.ListOptions the
 	// handler's own raw request encodes, and GET /projects/:id/merge_requests/
 	// :merge_request_iid/approval_rules declares page and per_page and nothing
-	// else of it (gitlab-api-live.json, 19.4.1-ee), so neither the ordering nor
-	// the keyset fields would reach anything.
-	"mrapprovals.RulesInput.order_by":   mrApprovalRulesOffsetOnly,
-	"mrapprovals.RulesInput.sort":       mrApprovalRulesOffsetOnly,
-	"mrapprovals.RulesInput.pagination": mrApprovalRulesOffsetOnly,
-	"mrapprovals.RulesInput.page_token": mrApprovalRulesOffsetOnly,
+	// else of it (gitlab-api-live.json, 19.4.1-ee), so the ordering fields
+	// would reach nothing. Its keyset fields, like every list's, are R-PAGE's
+	// to judge ([keysetListFields]).
+	"mrapprovals.RulesInput.order_by": mrApprovalRulesOffsetOnly,
+	"mrapprovals.RulesInput.sort":     mrApprovalRulesOffsetOnly,
 	// The bridge list pages through a gl.ListJobsOptions on the bridges route
 	// and a gl.ListPipelineTriggerJobsOptions on trigger_jobs, and GitLab
 	// pages both by offset and orders neither.
-	"jobs.BridgeListInput.order_by":   bridgeListOffsetOnly,
-	"jobs.BridgeListInput.sort":       bridgeListOffsetOnly,
-	"jobs.BridgeListInput.pagination": bridgeListOffsetOnly,
-	"jobs.BridgeListInput.page_token": bridgeListOffsetOnly,
+	"jobs.BridgeListInput.order_by": bridgeListOffsetOnly,
+	"jobs.BridgeListInput.sort":     bridgeListOffsetOnly,
 	// The project and pipeline job lists page through a gl.ListJobsOptions
 	// and GitLab orders both by id whatever is sent; the project route reads
 	// no include_retried either.
@@ -1126,13 +1132,9 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"jobs.ListInput.sort":                   jobListsOrderedByID,
 	// The service account token lists page by offset alone: GitLab refuses a
 	// keyset request on both routes with 405, ignores page_token without one,
-	// and declares no order_by, so no keyset field is offered.
-	"groupserviceaccounts.ListPATInput.pagination":   serviceAccountPATsOffsetOnly,
-	"groupserviceaccounts.ListPATInput.page_token":   serviceAccountPATsOffsetOnly,
-	"groupserviceaccounts.ListPATInput.order_by":     serviceAccountPATsOffsetOnly,
-	"projectserviceaccounts.ListPATInput.pagination": serviceAccountPATsOffsetOnly,
-	"projectserviceaccounts.ListPATInput.page_token": serviceAccountPATsOffsetOnly,
-	"projectserviceaccounts.ListPATInput.order_by":   serviceAccountPATsOffsetOnly,
+	// and declares no order_by, so no order_by is offered.
+	"groupserviceaccounts.ListPATInput.order_by":   serviceAccountPATsOffsetOnly,
+	"projectserviceaccounts.ListPATInput.order_by": serviceAccountPATsOffsetOnly,
 	// The audit event lists build their options in auditevents.buildListOpts, a
 	// helper each handler calls with its input's fields, and GitLab orders
 	// none of the three routes.
@@ -1144,61 +1146,49 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"auditevents.ListProjectInput.sort":      auditEventsUnordered,
 	// The project iteration list builds its options in a helper of
 	// iterationdata, and GitLab pages that route by offset alone.
-	"projectiterations.ListInput.order_by":   projectIterationsOffsetOnly,
-	"projectiterations.ListInput.sort":       projectIterationsOffsetOnly,
-	"projectiterations.ListInput.pagination": projectIterationsOffsetOnly,
-	"projectiterations.ListInput.page_token": projectIterationsOffsetOnly,
+	"projectiterations.ListInput.order_by": projectIterationsOffsetOnly,
+	"projectiterations.ListInput.sort":     projectIterationsOffsetOnly,
+	// The group iteration list builds its options in the same helper, and
+	// GitLab orders that route by due date whatever is sent.
+	"groupiterations.ListInput.order_by": groupIterationsUnordered,
+	"groupiterations.ListInput.sort":     groupIterationsUnordered,
+	// The two merge request diff lists page by offset and order by GitLab's
+	// own choice.
+	"mrchanges.GetInput.order_by":              mrChangesUnordered,
+	"mrchanges.GetInput.sort":                  mrChangesUnordered,
+	"mrchanges.DiffVersionsListInput.order_by": mrDiffVersionsOrderedByID,
+	"mrchanges.DiffVersionsListInput.sort":     mrDiffVersionsOrderedByID,
 	// Every search builds its options in search.searchOpts, directly or
 	// through runScopedSearch, and GitLab pages every search by offset alone.
 	// The code, commit and wiki searches offer ref, since their scopes read a
 	// repository, and the others answer it here.
-	"search.CodeInput.order_by":            searchOffsetOnly,
-	"search.CodeInput.sort":                searchOffsetOnly,
-	"search.CodeInput.pagination":          searchOffsetOnly,
-	"search.CodeInput.page_token":          searchOffsetOnly,
-	"search.CommitsInput.order_by":         searchOffsetOnly,
-	"search.CommitsInput.sort":             searchOffsetOnly,
-	"search.CommitsInput.pagination":       searchOffsetOnly,
-	"search.CommitsInput.page_token":       searchOffsetOnly,
-	"search.WikiInput.order_by":            searchOffsetOnly,
-	"search.WikiInput.sort":                searchOffsetOnly,
-	"search.WikiInput.pagination":          searchOffsetOnly,
-	"search.WikiInput.page_token":          searchOffsetOnly,
-	"search.IssuesInput.order_by":          searchOffsetOnly,
-	"search.IssuesInput.sort":              searchOffsetOnly,
-	"search.IssuesInput.pagination":        searchOffsetOnly,
-	"search.IssuesInput.page_token":        searchOffsetOnly,
-	"search.IssuesInput.ref":               searchRefRepositoryScopes,
-	"search.MergeRequestsInput.order_by":   searchOffsetOnly,
-	"search.MergeRequestsInput.sort":       searchOffsetOnly,
-	"search.MergeRequestsInput.pagination": searchOffsetOnly,
-	"search.MergeRequestsInput.page_token": searchOffsetOnly,
-	"search.MergeRequestsInput.ref":        searchRefRepositoryScopes,
-	"search.MilestonesInput.order_by":      searchOffsetOnly,
-	"search.MilestonesInput.sort":          searchOffsetOnly,
-	"search.MilestonesInput.pagination":    searchOffsetOnly,
-	"search.MilestonesInput.page_token":    searchOffsetOnly,
-	"search.MilestonesInput.ref":           searchRefRepositoryScopes,
-	"search.UsersInput.order_by":           searchOffsetOnly,
-	"search.UsersInput.sort":               searchOffsetOnly,
-	"search.UsersInput.pagination":         searchOffsetOnly,
-	"search.UsersInput.page_token":         searchOffsetOnly,
-	"search.UsersInput.ref":                searchRefRepositoryScopes,
-	"search.NotesInput.order_by":           searchOffsetOnly,
-	"search.NotesInput.sort":               searchOffsetOnly,
-	"search.NotesInput.pagination":         searchOffsetOnly,
-	"search.NotesInput.page_token":         searchOffsetOnly,
-	"search.NotesInput.ref":                searchRefRepositoryScopes,
-	"search.ProjectsInput.order_by":        searchOffsetOnly,
-	"search.ProjectsInput.sort":            searchOffsetOnly,
-	"search.ProjectsInput.pagination":      searchOffsetOnly,
-	"search.ProjectsInput.page_token":      searchOffsetOnly,
-	"search.ProjectsInput.ref":             searchRefRepositoryScopes,
-	"search.SnippetsInput.order_by":        searchOffsetOnly,
-	"search.SnippetsInput.sort":            searchOffsetOnly,
-	"search.SnippetsInput.pagination":      searchOffsetOnly,
-	"search.SnippetsInput.page_token":      searchOffsetOnly,
-	"search.SnippetsInput.ref":             searchRefRepositoryScopes,
+	"search.CodeInput.order_by":          searchOffsetOnly,
+	"search.CodeInput.sort":              searchOffsetOnly,
+	"search.CommitsInput.order_by":       searchOffsetOnly,
+	"search.CommitsInput.sort":           searchOffsetOnly,
+	"search.WikiInput.order_by":          searchOffsetOnly,
+	"search.WikiInput.sort":              searchOffsetOnly,
+	"search.IssuesInput.order_by":        searchOffsetOnly,
+	"search.IssuesInput.sort":            searchOffsetOnly,
+	"search.IssuesInput.ref":             searchRefRepositoryScopes,
+	"search.MergeRequestsInput.order_by": searchOffsetOnly,
+	"search.MergeRequestsInput.sort":     searchOffsetOnly,
+	"search.MergeRequestsInput.ref":      searchRefRepositoryScopes,
+	"search.MilestonesInput.order_by":    searchOffsetOnly,
+	"search.MilestonesInput.sort":        searchOffsetOnly,
+	"search.MilestonesInput.ref":         searchRefRepositoryScopes,
+	"search.UsersInput.order_by":         searchOffsetOnly,
+	"search.UsersInput.sort":             searchOffsetOnly,
+	"search.UsersInput.ref":              searchRefRepositoryScopes,
+	"search.NotesInput.order_by":         searchOffsetOnly,
+	"search.NotesInput.sort":             searchOffsetOnly,
+	"search.NotesInput.ref":              searchRefRepositoryScopes,
+	"search.ProjectsInput.order_by":      searchOffsetOnly,
+	"search.ProjectsInput.sort":          searchOffsetOnly,
+	"search.ProjectsInput.ref":           searchRefRepositoryScopes,
+	"search.SnippetsInput.order_by":      searchOffsetOnly,
+	"search.SnippetsInput.sort":          searchOffsetOnly,
+	"search.SnippetsInput.ref":           searchRefRepositoryScopes,
 	// The approval rules of a protected environment are paired with the
 	// input element each rule is built from, and GitLab declares no
 	// description of the access level among their params.
@@ -1208,19 +1198,15 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"groupprotectedenvs.UpdateApprovalRuleInput.access_level_description": envApprovalRuleDescription,
 	// The project milestone burndown is presented whole: GitLab pages and
 	// orders nothing on that route, so the whole gl.ListOptions is plumbing.
-	"milestones.GetBurndownChartEventsInput.pagination": milestoneBurndownUnpaged,
-	"milestones.GetBurndownChartEventsInput.per_page":   milestoneBurndownUnpaged,
-	"milestones.GetBurndownChartEventsInput.page":       milestoneBurndownUnpaged,
-	"milestones.GetBurndownChartEventsInput.page_token": milestoneBurndownUnpaged,
-	"milestones.GetBurndownChartEventsInput.order_by":   milestoneBurndownUnpaged,
-	"milestones.GetBurndownChartEventsInput.sort":       milestoneBurndownUnpaged,
+	"milestones.GetBurndownChartEventsInput.per_page": milestoneBurndownUnpaged,
+	"milestones.GetBurndownChartEventsInput.page":     milestoneBurndownUnpaged,
+	"milestones.GetBurndownChartEventsInput.order_by": milestoneBurndownUnpaged,
+	"milestones.GetBurndownChartEventsInput.sort":     milestoneBurndownUnpaged,
 	// The group milestone burndown is answered by the same helper.
-	"groupmilestones.GetBurndownChartEventsInput.pagination": groupMilestoneBurndownUnpaged,
-	"groupmilestones.GetBurndownChartEventsInput.per_page":   groupMilestoneBurndownUnpaged,
-	"groupmilestones.GetBurndownChartEventsInput.page":       groupMilestoneBurndownUnpaged,
-	"groupmilestones.GetBurndownChartEventsInput.page_token": groupMilestoneBurndownUnpaged,
-	"groupmilestones.GetBurndownChartEventsInput.order_by":   groupMilestoneBurndownUnpaged,
-	"groupmilestones.GetBurndownChartEventsInput.sort":       groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.per_page": groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.page":     groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.order_by": groupMilestoneBurndownUnpaged,
+	"groupmilestones.GetBurndownChartEventsInput.sort":     groupMilestoneBurndownUnpaged,
 
 	// SDK options fields the route declares and never reads. The deployment
 	// merge request list takes merge_requests_base_params and presents
@@ -1330,6 +1316,28 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string) bool {
 	return r.answer(acceptedMissingInputs, pkg+"."+mcpType) ||
 		r.answer(acceptedMissingInputs, pkg+"."+mcpType+"."+tag)
+}
+
+// keysetListFields are the two parameters of gl.ListOptions that ask GitLab
+// for a keyset page, pagination and page_token, which client-go declares on
+// ListOptions and on no other struct (gitlab.go at v3.30.0).
+//
+// R-INPUT leaves both to the keyset half of R-PAGE (issue 1165), which asks
+// at the action's grain, from the routes the live record says it sends,
+// whether the action should offer them: page_token offered where no route
+// can be paged by keyset is one of its findings, and a keyset route an action
+// sends without offering it is the other. What this rule could ask instead,
+// whether an input struct carries both, is the same question at the coarser
+// grain of a type, which two actions sending different routes can share, and
+// answering it here took one declaration per field of every list GitLab pages
+// by offset alone.
+var keysetListFields = map[string]struct{}{"pagination": {}, "page_token": {}}
+
+// leftToKeysetCheck reports whether a missing input field is one R-INPUT
+// leaves to R-PAGE: a keyset parameter of gl.ListOptions on an input pair.
+func leftToKeysetCheck(kind, tag string) bool {
+	_, keyset := keysetListFields[tag]
+	return kind == "input" && keyset
 }
 
 // gap is one diffed MCP↔SDK struct pair under a package.
@@ -1979,6 +1987,9 @@ func (r *diffRun) diffPair(pkg, kind string, pair structPair) gap {
 			}
 		}
 		if !present {
+			if leftToKeysetCheck(kind, tag) {
+				continue
+			}
 			// Adjudicated legitimate input omission (deliberate rename, nested-object
 			// modeling, deprecated/non-accepted param, or curated subset) — each
 			// carries a rationale in acceptedMissingInputs.

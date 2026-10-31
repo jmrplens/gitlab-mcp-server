@@ -529,12 +529,12 @@ func TestInstanceVariableList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableList_OrderSortKeyset verifies that List forwards the
-// order_by, sort, and keyset pagination (pagination, page_token) parameters to
-// the GitLab API, mirroring gl.ListInstanceVariablesOptions 1:1.
+// TestInstanceVariableList_OrderSort verifies that List forwards the order_by
+// and sort parameters to the GitLab API, mirroring
+// gl.ListInstanceVariablesOptions 1:1.
 // The mock GitLab API at /api/v4/admin/ci/variables (GET) asserts each query
 // parameter and responds with HTTP OK.
-func TestInstanceVariableList_OrderSortKeyset(t *testing.T) {
+func TestInstanceVariableList_OrderSort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathInstanceVars && r.Method == http.MethodGet {
 			q := r.URL.Query()
@@ -544,12 +544,6 @@ func TestInstanceVariableList_OrderSortKeyset(t *testing.T) {
 			if q.Get("sort") != "desc" {
 				t.Errorf("sort = %q, want desc", q.Get("sort"))
 			}
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "cursor-123" {
-				t.Errorf("page_token = %q, want cursor-123", q.Get("page_token"))
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[`+varJSON+`]`)
 			return
 		}
@@ -557,9 +551,8 @@ func TestInstanceVariableList_OrderSortKeyset(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:    "key",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "cursor-123",
+		OrderBy: "key",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

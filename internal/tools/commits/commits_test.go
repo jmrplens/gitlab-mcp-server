@@ -625,8 +625,6 @@ func TestGetComments_Success(t *testing.T) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/comments" {
 			testutil.AssertQueryParam(t, r, "order_by", "id")
 			testutil.AssertQueryParam(t, r, "sort", "asc")
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "c1")
 			testutil.AssertQueryParam(t, r, "page", "2")
 			testutil.AssertQueryParam(t, r, "per_page", "10")
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -644,14 +642,12 @@ func TestGetComments_Success(t *testing.T) {
 	}))
 
 	out, err := GetComments(context.Background(), client, CommentsInput{
-		ProjectID:  "42",
-		SHA:        testSHA,
-		OrderBy:    "id",
-		Sort:       "asc",
-		Page:       2,
-		PerPage:    10,
-		Pagination: "keyset",
-		PageToken:  "c1",
+		ProjectID: "42",
+		SHA:       testSHA,
+		OrderBy:   "id",
+		Sort:      "asc",
+		Page:      2,
+		PerPage:   10,
 	})
 	if err != nil {
 		t.Fatalf("GetComments() unexpected error: %v", err)
@@ -739,8 +735,6 @@ func TestGetStatuses_Success(t *testing.T) {
 			testutil.AssertQueryParam(t, r, "all", "true")
 			testutil.AssertQueryParam(t, r, "order_by", "id")
 			testutil.AssertQueryParam(t, r, "sort", "asc")
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "s1")
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
 				{
 					"id":1,
@@ -769,8 +763,6 @@ func TestGetStatuses_Success(t *testing.T) {
 		All:        true,
 		OrderBy:    "id",
 		Sort:       "asc",
-		Pagination: "keyset",
-		PageToken:  "s1",
 	})
 	if err != nil {
 		t.Fatalf("GetStatuses() unexpected error: %v", err)
@@ -1786,8 +1778,6 @@ func TestCommitDiff_WithUnidiff(t *testing.T) {
 			}
 			testutil.AssertQueryParam(t, r, "order_by", "id")
 			testutil.AssertQueryParam(t, r, "sort", "desc")
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "d1")
 			testutil.AssertQueryParam(t, r, "page", "3")
 			testutil.AssertQueryParam(t, r, "per_page", "10")
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1797,15 +1787,13 @@ func TestCommitDiff_WithUnidiff(t *testing.T) {
 	}))
 
 	_, err := Diff(context.Background(), client, DiffInput{
-		ProjectID:  "42",
-		SHA:        "abc",
-		Unidiff:    true,
-		OrderBy:    "id",
-		Sort:       "desc",
-		Page:       3,
-		PerPage:    10,
-		Pagination: "keyset",
-		PageToken:  "d1",
+		ProjectID: "42",
+		SHA:       "abc",
+		Unidiff:   true,
+		OrderBy:   "id",
+		Sort:      "desc",
+		Page:      3,
+		PerPage:   10,
 	})
 	if err != nil {
 		t.Fatalf("Diff() unexpected error: %v", err)
@@ -1824,8 +1812,6 @@ func TestGetRefs_WithType(t *testing.T) {
 			}
 			testutil.AssertQueryParam(t, r, "order_by", "id")
 			testutil.AssertQueryParam(t, r, "sort", "asc")
-			testutil.AssertQueryParam(t, r, "pagination", "keyset")
-			testutil.AssertQueryParam(t, r, "page_token", "r1")
 			testutil.AssertQueryParam(t, r, "page", "2")
 			testutil.AssertQueryParam(t, r, "per_page", "5")
 			testutil.RespondJSON(w, http.StatusOK, `[{"type":"tag","name":"v1.0"}]`)
@@ -1835,15 +1821,13 @@ func TestGetRefs_WithType(t *testing.T) {
 	}))
 
 	out, err := GetRefs(context.Background(), client, RefsInput{
-		ProjectID:  "42",
-		SHA:        "abc",
-		Type:       "tag",
-		OrderBy:    "id",
-		Sort:       "asc",
-		Page:       2,
-		PerPage:    5,
-		Pagination: "keyset",
-		PageToken:  "r1",
+		ProjectID: "42",
+		SHA:       "abc",
+		Type:      "tag",
+		OrderBy:   "id",
+		Sort:      "asc",
+		Page:      2,
+		PerPage:   5,
 	})
 	if err != nil {
 		t.Fatalf("GetRefs() unexpected error: %v", err)

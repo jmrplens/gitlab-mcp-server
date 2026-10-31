@@ -146,7 +146,7 @@ func decorateMRNoteMeta(options *toolutil.ActionSpecOptions, individualTool stri
 		}
 		options.IndividualTool.Description = "Add a general comment (note) to a merge request. Returns: the created note with id, author, body, timestamps, and resolvable/internal flags. See also: gitlab_mr_notes_list, gitlab_mr_get, gitlab_mr_discussion_create."
 	case "gitlab_mr_notes_list":
-		options.Usage = "List all comments (notes) on a merge request, including system notes. Use when the task asks to read an MR's discussion, recent comments, or activity. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all comments (notes) on a merge request, including system notes. Use when the task asks to read an MR's discussion, recent comments, or activity. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"list mr comments", "show merge request notes", "read mr discussion", "get merge request comments"}
 		options.RelatedActions = []string{actionMRNoteGet, actionMRNoteCreate, actionMRGet, actionMRDiscussionList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

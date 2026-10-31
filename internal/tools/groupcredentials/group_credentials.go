@@ -30,10 +30,9 @@ type ListPATsInput struct {
 	CreatedBefore  string               `json:"created_before,omitempty"  jsonschema:"Return tokens created on or before this date (YYYY-MM-DD)"`
 	LastUsedAfter  string               `json:"last_used_after,omitempty" jsonschema:"Return tokens last used on or after this date (YYYY-MM-DD)"`
 	LastUsedBefore string               `json:"last_used_before,omitempty" jsonschema:"Return tokens last used on or before this date (YYYY-MM-DD)"`
-	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
-	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order results by"`
+	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListSSHKeysInput holds parameters for listing group SSH keys.
@@ -43,10 +42,9 @@ type ListSSHKeysInput struct {
 	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return keys created on or before this date (YYYY-MM-DD)"`
 	ExpiresAfter  string               `json:"expires_after,omitempty"  jsonschema:"Return keys expiring on or after this date (YYYY-MM-DD)"`
 	ExpiresBefore string               `json:"expires_before,omitempty" jsonschema:"Return keys expiring on or before this date (YYYY-MM-DD)"`
-	OrderBy       string               `json:"order_by,omitempty"       jsonschema:"Column to order keyset-paginated results by"`
-	Sort          string               `json:"sort,omitempty"           jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy       string               `json:"order_by,omitempty"       jsonschema:"Column to order results by"`
+	Sort          string               `json:"sort,omitempty"           jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // RevokePATInput holds parameters for revoking a group personal access token.
@@ -146,7 +144,7 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, in ListPATsInput
 		return PATListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := &gl.ListGroupPersonalAccessTokensOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}
@@ -193,7 +191,7 @@ func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, in ListSSHKey
 		return SSHKeyListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := &gl.ListGroupSSHKeysOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}

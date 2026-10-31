@@ -35,7 +35,6 @@ type ListInput struct {
 	Archived             *bool             `json:"archived,omitempty"              jsonschema:"Limit to archived groups (true) or non-archived (false)"`
 	MarkedForDeletionOn  string            `json:"marked_for_deletion_on,omitempty" jsonschema:"Filter to groups marked for deletion on this date (YYYY-MM-DD)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output represents a GitLab group.
@@ -260,7 +259,6 @@ type GetInput struct {
 	OrderBy              string               `json:"order_by,omitempty"               jsonschema:"Order embedded projects by field (only applies with with_projects)"`
 	Sort                 string               `json:"sort,omitempty"                   jsonschema:"Sort direction for embedded projects (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // MembersListInput defines parameters for listing group members.
@@ -272,7 +270,6 @@ type MembersListInput struct {
 	OrderBy      string               `json:"order_by,omitempty"       jsonschema:"Order members by field (id, name, username, access_level, last_activity_on)"`
 	Sort         string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // MemberOutput represents a GitLab group member.
@@ -358,7 +355,6 @@ type SubgroupsListInput struct {
 	Archived             *bool                `json:"archived,omitempty"      jsonschema:"Limit to archived subgroups (true) or non-archived (false)"`
 	MarkedForDeletionOn  string               `json:"marked_for_deletion_on,omitempty" jsonschema:"Filter to subgroups marked for deletion on this date (YYYY-MM-DD)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ToOutput converts a GitLab API [gl.Group] to the MCP tool output
@@ -749,7 +745,7 @@ func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
 // marked_for_deletion_on it cannot read.
 func listGroupsOptions(input ListInput) (*gl.ListGroupsOptions, error) {
 	opts := &gl.ListGroupsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -847,7 +843,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 	}
 
 	opts := &gl.GetGroupOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -871,13 +867,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 }
 
 // membersListOptions builds the ListAllGroupMembers options from the input,
-// applying offset/keyset pagination and every supported member filter. Split
+// applying offset pagination and every supported member filter. Split
 // out of MembersList for the reason [listGroupsOptions] is split out of List,
 // and so that the filters a request does and does not carry can be asserted
 // without an answer standing in the way.
 func membersListOptions(input MembersListInput) *gl.ListGroupMembersOptions {
 	opts := &gl.ListGroupMembersOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -957,12 +953,12 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 }
 
 // subgroupsListOptions builds the ListDescendantGroups options from the input,
-// applying offset/keyset pagination and every supported descendant-group
+// applying offset pagination and every supported descendant-group
 // filter. Split out of SubgroupsList to keep that handler's cyclomatic
 // complexity flat. A marked_for_deletion_on it cannot read is refused.
 func subgroupsListOptions(input SubgroupsListInput) (*gl.ListDescendantGroupsOptions, error) {
 	opts := &gl.ListDescendantGroupsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -1223,7 +1219,6 @@ type ListProjectsInput struct {
 	WithMergeRequestsEnabled *bool                `json:"with_merge_requests_enabled,omitempty" jsonschema:"Limit to projects with merge requests enabled"`
 	WithSecurityReports      *bool                `json:"with_security_reports,omitempty"      tier:"ultimate" jsonschema:"Limit to projects with security reports (Ultimate)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ProjectItem is one project of a group as a compact row: what names it and
@@ -1646,7 +1641,7 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 	}
 
 	opts := &gl.ListGroupProjectsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -1723,15 +1718,14 @@ type SharedWithListInput struct {
 	SkipGroups           []int64              `json:"skip_groups,omitempty"    jsonschema:"Group IDs to exclude from the results"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // sharedWithListOptions builds the ListGroupsSharedWith options from the
-// input, applying offset/keyset pagination and every supported filter. Split
+// input, applying offset pagination and every supported filter. Split
 // out for the reason [membersListOptions] is.
 func sharedWithListOptions(input SharedWithListInput) *gl.ListGroupsSharedWithOptions {
 	opts := &gl.ListGroupsSharedWithOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -1791,15 +1785,14 @@ type InvitedListInput struct {
 	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Column to order invited groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored"`
 	Sort                 string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // invitedListOptions builds the ListInvitedGroups options from the input,
-// applying offset/keyset pagination and every supported filter. Split out for
+// applying offset pagination and every supported filter. Split out for
 // the reason [membersListOptions] is.
 func invitedListOptions(input InvitedListInput) *gl.ListInvitedGroupsOptions {
 	opts := &gl.ListInvitedGroupsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -1853,7 +1846,6 @@ type TransferLocationsListInput struct {
 	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order candidate parent groups by. The GitLab API documents no ordering for this endpoint, so the value is forwarded unchanged and may be ignored"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // TransferLocationOutput represents a candidate parent group for a transfer.
@@ -1883,7 +1875,7 @@ func TransferLocationsList(ctx context.Context, client *gitlabclient.Client, inp
 	}
 
 	opts := &gl.ListTransferLocationsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

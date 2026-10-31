@@ -114,7 +114,6 @@ type ListInput struct {
 	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, preparing, waiting_for_resource, waiting_for_callback, running, success, failed, canceled, canceling, skipped, manual, scheduled"`
 	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried jobs in the response"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output represents a single CI/CD job.
@@ -175,7 +174,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.IncludeRetried {
 		opts.IncludeRetried = new(true)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	// Raw REST fetch so the documented archived/source/runner_manager and runner
 	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.

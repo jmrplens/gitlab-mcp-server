@@ -267,7 +267,6 @@ type runnerListRequest struct {
 	OrderBy string   `json:"order_by,omitempty"`
 	Sort    string   `json:"sort,omitempty"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // runnerTagList returns a pointer to the request tag list, or nil when empty,
@@ -330,8 +329,9 @@ func buildGroupRunnersOptions(req runnerListRequest) *gl.ListGroupsRunnersOption
 	return opts
 }
 
-// applyRunnerListOptions wires order_by/sort plus offset and keyset pagination
-// onto the embedded gl.ListOptions shared by every runner list endpoint.
+// applyRunnerListOptions wires order_by/sort plus offset pagination onto the
+// embedded gl.ListOptions shared by every runner list endpoint, all of which
+// GitLab pages by offset alone.
 func applyRunnerListOptions(opts *gl.ListOptions, req runnerListRequest) {
 	if opts == nil {
 		return
@@ -342,7 +342,7 @@ func applyRunnerListOptions(opts *gl.ListOptions, req runnerListRequest) {
 	if req.Sort != "" {
 		opts.Sort = req.Sort
 	}
-	toolutil.ApplyListOptions(opts, req.PaginationInput, req.KeysetPaginationInput)
+	toolutil.ApplyListOptions(opts, req.PaginationInput, toolutil.KeysetPaginationInput{})
 }
 
 func listOutput(runners []*gl.Runner, extras []toolutil.RunnerExtra, resp *gl.Response) ListOutput {
@@ -399,10 +399,9 @@ type ListInput struct {
 	Paused  *bool    `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList []string `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
 	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: active, paused, online, or offline. Prefer type and status instead"`
-	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
+	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order results by, e.g. id"`
 	Sort    string   `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // List returns owned runners with optional filters.
@@ -615,10 +614,9 @@ type ListProjectInput struct {
 	Paused    *bool                `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList   []string             `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
 	Scope     string               `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: active, paused, online, or offline. Prefer type and status instead"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Field to order results by, e.g. id"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProject returns runners assigned to a specific project.
@@ -628,7 +626,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		runnerListRequest{
 			Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList,
 			Scope: input.Scope, OrderBy: input.OrderBy, Sort: input.Sort,
-			PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
+			PaginationInput: input.PaginationInput,
 		},
 		func(scopeID string, req runnerListRequest, opts ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error) {
 			return client.GL().Runners.ListProjectRunners(scopeID, buildProjectRunnersOptions(req), opts...)
@@ -720,10 +718,9 @@ type ListGroupInput struct {
 	Type    string               `json:"type,omitempty"     jsonschema:"Runner type filter: instance_type, group_type, project_type"`
 	Status  string               `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
 	TagList []string             `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Field to order results by, e.g. id"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListGroup returns runners available in a specific group.
@@ -733,7 +730,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		runnerListRequest{
 			Type: input.Type, Status: input.Status, TagList: input.TagList,
 			OrderBy: input.OrderBy, Sort: input.Sort,
-			PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
+			PaginationInput: input.PaginationInput,
 		},
 		func(scopeID string, req runnerListRequest, opts ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error) {
 			return client.GL().Runners.ListGroupsRunners(scopeID, buildGroupRunnersOptions(req), opts...)
@@ -1049,10 +1046,9 @@ type ListAllInput struct {
 	Paused  *bool    `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList []string `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
 	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online, or offline. Prefer type and status instead"`
-	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
+	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order results by, e.g. id"`
 	Sort    string   `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListAll returns all runners across the GitLab instance (admin endpoint).

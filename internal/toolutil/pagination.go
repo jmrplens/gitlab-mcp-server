@@ -31,6 +31,12 @@ type PaginationInput struct {
 // next_page_token a keyset page publishes can be followed. Keyset pagination
 // is more efficient than offset pagination for deep pages of large, ordered
 // result sets.
+//
+// Embed it only on the input of a list whose route GitLab pages by keyset,
+// as the live record says: on a route GitLab pages by offset alone both
+// fields are ignored or refused, and R-PAGE fails the audit on an action that
+// offers page_token there (issue 1165). An offset list passes a zero value to
+// ApplyListOptions instead.
 type KeysetPaginationInput struct {
 	Pagination string `json:"pagination,omitempty" jsonschema:"Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost, and a keyset page names the next one in next_page_token rather than next_page."`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"Next page of a keyset listing: the next_page_token of the previous response of this action, passed back unchanged. It carries the position and every filter of the listing as GitLab read them, and those are what the next page is asked with, whatever filters are sent beside it. Leave it empty for the first page."`

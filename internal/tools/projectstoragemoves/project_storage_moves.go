@@ -16,19 +16,17 @@ import (
 
 // ListInput holds pagination parameters for listing all project storage moves.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'."`
-	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'."`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListForProjectInput holds parameters for listing storage moves for a specific project.
 type ListForProjectInput struct {
 	ProjectID int64  `json:"project_id"         jsonschema:"Numeric ID of the project,required"`
-	OrderBy   string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'."`
-	Sort      string `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'."`
+	OrderBy   string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
+	Sort      string `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc."`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // IDInput holds parameters for getting a single storage move by ID.
@@ -98,7 +96,7 @@ func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput)
 	}
 
 	opts := gl.RetrieveAllProjectStorageMovesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}
@@ -134,7 +132,7 @@ func RetrieveForProject(ctx context.Context, client *gitlabclient.Client, in Lis
 	}
 
 	opts := gl.RetrieveAllProjectStorageMovesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}

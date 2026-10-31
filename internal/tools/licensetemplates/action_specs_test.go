@@ -102,7 +102,7 @@ func TestActionSpecs_EachActionPublishesItsOwnMetadata(t *testing.T) {
 		"gitlab_list_license_templates": {
 			name:    "license_list",
 			id:      listID,
-			usage:   "List available license templates with optional popular filter, ordering, and keyset pagination.",
+			usage:   "List available license templates with optional popular filter, ordering, and offset pagination.",
 			related: []string{getID, "repository.file_create", "project.create"},
 			aliases: []string{
 				"gitlab_list_license_templates",
@@ -110,10 +110,10 @@ func TestActionSpecs_EachActionPublishesItsOwnMetadata(t *testing.T) {
 				"show available open-source licenses",
 				"browse mit/apache/gpl templates",
 			},
-			description: "List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: gitlab_get_license_template, gitlab_file_create.",
+			description: "List available license templates with an optional popular filter, order_by/sort, and offset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: gitlab_get_license_template, gitlab_file_create.",
 			guidance: map[string]toolutil.ParameterGuidance{
 				"popular":  {SemanticRole: "popular_filter", ValueSource: "Set true to restrict the listing to popular/featured license templates.", ExampleBinding: `params.popular:true`},
-				"order_by": {SemanticRole: "order_by", ValueSource: "Column by which to order keyset-paginated results.", ExampleBinding: `params.order_by:"name"`},
+				"order_by": {SemanticRole: "order_by", ValueSource: "Column by which to order results.", ExampleBinding: `params.order_by:"name"`},
 				"sort":     {SemanticRole: "sort", ValueSource: "Sort direction for ordered results.", ExampleBinding: `params.sort:"asc"`},
 			},
 		},

@@ -545,60 +545,30 @@ func TestPublish_SelectOverride(t *testing.T) {
 	}
 }
 
-// TestFileList_OrderingAndKeyset verifies that order_by, sort, and
-// keyset pagination inputs are propagated to the GitLab API query.
-func TestFileList_OrderingAndKeyset(t *testing.T) {
-	var orderBy, sort, pagination, pageToken string
+// TestFileList_Ordering verifies that order_by and sort inputs are propagated
+// to the GitLab API query.
+func TestFileList_Ordering(t *testing.T) {
+	var orderBy, sort string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/packages/10/package_files" {
 			q := r.URL.Query()
 			orderBy, sort = q.Get("order_by"), q.Get("sort")
-			pagination, pageToken = q.Get("pagination"), q.Get("page_token")
 			testutil.RespondJSON(w, http.StatusOK, `[{"id":20,"package_id":10,"file_name":"app.bin","size":1,"file_sha256":"h"}]`)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 	_, err := FileList(context.Background(), client, FileListInput{
-		ProjectID:  "1",
-		PackageID:  "10",
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "20",
+		ProjectID: "1",
+		PackageID: "10",
+		OrderBy:   "created_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if orderBy != "created_at" || sort != "desc" {
 		t.Errorf("order_by/sort = %q/%q, want created_at/desc", orderBy, sort)
-	}
-	if pagination != "keyset" || pageToken != "20" {
-		t.Errorf("pagination/page_token = %q/%q, want keyset/20", pagination, pageToken)
-	}
-}
-
-// TestList_KeysetPagination verifies that the package list keyset
-// pagination inputs are propagated to the GitLab API query.
-func TestList_KeysetPagination(t *testing.T) {
-	var pagination, pageToken string
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathAPIPkgs1 {
-			q := r.URL.Query()
-			pagination, pageToken = q.Get("pagination"), q.Get("page_token")
-			testutil.RespondJSON(w, http.StatusOK, `[]`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  "1",
-		Pagination: "keyset", PageToken: "55",
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if pagination != "keyset" || pageToken != "55" {
-		t.Errorf("pagination/page_token = %q/%q, want keyset/55", pagination, pageToken)
 	}
 }
 

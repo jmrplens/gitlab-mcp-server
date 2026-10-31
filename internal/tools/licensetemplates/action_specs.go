@@ -50,7 +50,7 @@ func licenseTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		Tags:           []string{"template", "license"},
 		Aliases:        []string{individualTool, "list license templates", "show available open-source licenses", "browse MIT/Apache/GPL templates"},
 		RelatedActions: []string{actionLicenseGet, actionRepositoryFileCreate, actionProjectCreate},
-		Usage:          "List available license templates with optional popular filter, ordering, and keyset pagination.",
+		Usage:          "List available license templates with optional popular filter, ordering, and offset pagination.",
 	}
 	if actionName == "license_get" {
 		opts.Usage = "Get one license template by key for project README/LICENSE scaffolding."
@@ -64,10 +64,10 @@ func licenseTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		}
 		return opts
 	}
-	opts.IndividualTool.Description = "List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: gitlab_get_license_template, gitlab_file_create."
+	opts.IndividualTool.Description = "List available license templates with an optional popular filter, order_by/sort, and offset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: gitlab_get_license_template, gitlab_file_create."
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"popular":  {SemanticRole: "popular_filter", ValueSource: "Set true to restrict the listing to popular/featured license templates.", ExampleBinding: `params.popular:true`},
-		"order_by": {SemanticRole: "order_by", ValueSource: "Column by which to order keyset-paginated results.", ExampleBinding: `params.order_by:"name"`},
+		"order_by": {SemanticRole: "order_by", ValueSource: "Column by which to order results.", ExampleBinding: `params.order_by:"name"`},
 		"sort":     {SemanticRole: "sort", ValueSource: "Sort direction for ordered results.", ExampleBinding: `params.sort:"asc"`},
 	}
 	return opts

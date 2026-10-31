@@ -18,10 +18,9 @@ import (
 // ListSSHKeysForUserInput holds parameters for listing SSH keys for a specific user.
 type ListSSHKeysForUserInput struct {
 	UserID  int64  `json:"user_id" jsonschema:"The ID of the user,required"`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListSSHKeysForUser retrieves SSH keys for a specific user.
@@ -34,7 +33,7 @@ func ListSSHKeysForUser(ctx context.Context, client *gitlabclient.Client, input 
 	}
 
 	opts := &gl.ListSSHKeysForUserOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	keys, resp, err := client.GL().Users.ListSSHKeysForUser(input.UserID, opts, gl.WithContext(ctx))

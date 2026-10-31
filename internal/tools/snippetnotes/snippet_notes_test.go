@@ -910,28 +910,6 @@ func TestToOutput_PositionNilLineRange(t *testing.T) {
 	}
 }
 
-// TestList_KeysetPagination verifies that List forwards keyset pagination
-// parameters (pagination=keyset, page_token) to the GitLab API.
-func TestList_KeysetPagination(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("pagination") != "keyset" {
-			t.Errorf("pagination = %q, want keyset", r.URL.Query().Get("pagination"))
-		}
-		if r.URL.Query().Get("page_token") != "tok123" {
-			t.Errorf("page_token = %q, want tok123", r.URL.Query().Get("page_token"))
-		}
-		testutil.RespondJSON(w, http.StatusOK, "["+noteJSON+"]")
-	}))
-	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  testProjectID,
-		SnippetID:  1,
-		Pagination: "keyset", PageToken: "tok123",
-	})
-	if err != nil {
-		t.Fatalf("List() error: %v", err)
-	}
-}
-
 // TestCreate_CreatedAt verifies that Create forwards the created_at backdating
 // timestamp to the GitLab API.
 func TestCreate_CreatedAt(t *testing.T) {

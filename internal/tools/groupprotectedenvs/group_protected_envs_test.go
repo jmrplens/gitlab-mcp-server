@@ -15,7 +15,6 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -116,18 +115,16 @@ func TestList(t *testing.T) {
 			wantCount: 0,
 		},
 		{
-			name: "forwards order_by, sort and keyset pagination query params",
+			name: "forwards order_by and sort query params",
 			input: ListInput{
-				GroupID:               "mygroup",
-				OrderBy:               "name",
-				Sort:                  "desc",
-				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+				GroupID: "mygroup",
+				OrderBy: "name",
+				Sort:    "desc",
 			},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				q := r.URL.Query()
-				if q.Get("order_by") != "name" || q.Get("sort") != "desc" ||
-					q.Get("pagination") != "keyset" || q.Get("page_token") != "42" {
-					t.Errorf("query = %q, missing order_by/sort/keyset params", r.URL.RawQuery)
+				if q.Get("order_by") != "name" || q.Get("sort") != "desc" {
+					t.Errorf("query = %q, missing order_by/sort params", r.URL.RawQuery)
 				}
 				testutil.RespondJSON(w, http.StatusOK, `[`+fullEnvJSON+`]`)
 			}),

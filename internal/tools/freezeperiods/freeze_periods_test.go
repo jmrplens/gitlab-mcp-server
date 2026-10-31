@@ -61,12 +61,12 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_KeysetAndOrdering verifies that List propagates order_by, sort,
-// pagination, and page_token query parameters to the GitLab API.
+// TestList_Ordering verifies that List propagates the order_by, sort and
+// per_page query parameters to the GitLab API.
 // The mock GitLab API at /api/v4/projects/1/freeze_periods (GET) inspects the
 // query string and responds with HTTP OK.
 // It asserts each supplied parameter appears in the outgoing request.
-func TestList_KeysetAndOrdering(t *testing.T) {
+func TestList_Ordering(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if q.Get("order_by") != "id" {
@@ -74,12 +74,6 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 		}
 		if q.Get("sort") != "desc" {
 			t.Errorf("sort = %q, want desc", q.Get("sort"))
-		}
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "42" {
-			t.Errorf("page_token = %q, want 42", q.Get("page_token"))
 		}
 		if q.Get("per_page") != "50" {
 			t.Errorf("per_page = %q, want 50", q.Get("per_page"))
@@ -90,11 +84,10 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	_, err := List(t.Context(), client, ListInput{
-		ProjectID:  "1",
-		OrderBy:    "id",
-		Sort:       "desc",
-		PerPage:    50,
-		Pagination: "keyset", PageToken: "42",
+		ProjectID: "1",
+		OrderBy:   "id",
+		Sort:      "desc",
+		PerPage:   50,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

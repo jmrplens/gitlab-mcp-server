@@ -109,10 +109,9 @@ func ChangeApprovalConfig(ctx context.Context, client *gitlabclient.Client, inpu
 // ListApprovalRulesInput defines parameters for listing project approval rules.
 type ListApprovalRulesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ApprovalRuleOutput holds a single project approval rule. It mirrors
@@ -181,7 +180,7 @@ func ListApprovalRules(ctx context.Context, client *gitlabclient.Client, input L
 		return ListApprovalRulesOutput{}, errors.New("projectListApprovalRules: project_id is required")
 	}
 	opts := &gl.GetProjectApprovalRulesListsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

@@ -18,13 +18,13 @@ import (
 // ---------------------------------------------------------------------------.
 
 // ListInput is the input for listing applications. It mirrors
-// gl.ListApplicationsOptions, which embeds gl.ListOptions and therefore exposes
-// both offset and keyset pagination plus order_by/sort.
+// gl.ListApplicationsOptions, which embeds gl.ListOptions, exposing its offset
+// pagination plus order_by/sort; its keyset fields are not offered, since
+// GitLab pages this list by offset alone.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"For keyset pagination: name of the column by which to order results"`
-	Sort    string `json:"sort,omitempty"     jsonschema:"For keyset pagination: sort order (asc or desc)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Name of the column by which to order results"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort order (asc or desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ApplicationItem represents a single application.
@@ -48,7 +48,7 @@ type ListOutput struct {
 // List retrieves all applications (admin).
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListApplicationsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

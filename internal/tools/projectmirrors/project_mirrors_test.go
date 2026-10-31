@@ -156,10 +156,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_KeysetAndOrdering verifies that List forwards keyset pagination
-// (pagination, page_token) and ordering (order_by, sort) query parameters to
-// the GitLab remote_mirrors endpoint.
-func TestList_KeysetAndOrdering(t *testing.T) {
+// TestList_Ordering verifies that List forwards the ordering (order_by, sort)
+// query parameters to the GitLab remote_mirrors endpoint.
+func TestList_Ordering(t *testing.T) {
 	var got url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathMirrors {
@@ -170,19 +169,16 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  testProjectID,
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "abc",
+		ProjectID: testProjectID,
+		OrderBy:   "id",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
 	}
 	for key, want := range map[string]string{
-		"order_by":   "id",
-		"sort":       "desc",
-		"pagination": "keyset",
-		"page_token": "abc",
+		"order_by": "id",
+		"sort":     "desc",
 	} {
 		t.Run(key, func(t *testing.T) {
 			if got.Get(key) != want {

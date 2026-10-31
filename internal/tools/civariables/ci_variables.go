@@ -24,17 +24,16 @@ const (
 // Input / Output types
 // ---------------------------------------------------------------------------.
 
-// ListInput holds parameters for listing project CI/CD variables. The OrderBy,
-// Sort, and embedded KeysetPaginationInput fields mirror the SDK
-// gitlab.ListProjectVariablesOptions (its embedded gitlab.ListOptions:
-// order_by, sort, pagination, page_token) so every supported list filter is
-// exposed 1:1.
+// ListInput holds parameters for listing project CI/CD variables. The OrderBy
+// and Sort fields mirror the order_by and sort of the SDK's
+// gitlab.ListProjectVariablesOptions (its embedded gitlab.ListOptions); its
+// pagination and page_token are not offered, since GitLab pages this list by
+// offset alone.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column by which to order results"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Filter mirrors gitlab.VariableFilter: the available filter on project
@@ -161,7 +160,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gitlab.ListProjectVariablesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

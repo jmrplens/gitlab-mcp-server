@@ -63,7 +63,7 @@ type userEmailMeta struct {
 // userEmailActionMeta maps each individual tool name to its discovery metadata.
 var userEmailActionMeta = map[string]userEmailMeta{
 	"gitlab_list_emails_for_user": {
-		usage:       "List the email addresses registered on a specific user's account by user_id. Use after resolving a user with user.get. Reading another user's emails requires an admin token. Supports offset and keyset pagination plus order_by and sort.",
+		usage:       "List the email addresses registered on a specific user's account by user_id. Use after resolving a user with user.get. Reading another user's emails requires an admin token. Supports offset pagination plus order_by and sort.",
 		aliases:     []string{"list user emails", "show emails for user", "get user email addresses"},
 		related:     []string{actionUserGetEmail, actionUserAddEmailForUser, actionUserDeleteEmailForUser, "user.get"},
 		description: "List the email addresses registered to a specific user account. Returns: each email's ID, address, and confirmation timestamp, with pagination metadata. See also: gitlab_get_email, gitlab_add_email_for_user, gitlab_delete_email_for_user, gitlab_get_user.",

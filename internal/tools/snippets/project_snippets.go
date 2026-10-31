@@ -17,15 +17,14 @@ import (
 // Project Snippet Handlers (ProjectSnippetsService)
 // ---------------------------------------------------------------------------.
 
-// ProjectListInput selects a project snippet page. OrderBy/Sort/pagination/
-// page_token map onto the embedded gl.ListOptions to mirror the SDK's
-// keyset-capable list options.
+// ProjectListInput selects a project snippet page. OrderBy, Sort and the
+// offset pagination map onto the embedded gl.ListOptions; its keyset fields
+// are not offered, since GitLab pages this list by offset alone.
 type ProjectListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"          jsonschema:"Project ID or path,required"`
-	OrderBy   string               `json:"order_by,omitempty"  jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy   string               `json:"order_by,omitempty"  jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"      jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ProjectList lists snippets for a project.
@@ -34,7 +33,7 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	opts := &gl.ListProjectSnippetsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	snippets, resp, err := client.GL().ProjectSnippets.ListSnippets(
 		string(input.ProjectID), opts, gl.WithContext(ctx),

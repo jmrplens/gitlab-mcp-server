@@ -56,19 +56,17 @@ type IDInput struct {
 
 // ListInput holds pagination and ordering parameters for listing Geo sites.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListStatusInput holds pagination and ordering parameters for listing all
 // Geo site statuses.
 type ListStatusInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output represents a single Geo site.
@@ -414,7 +412,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 
 	opts := &gl.ListGeoSitesOptions{}
-	applyGeoListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput, in.OrderBy, in.Sort)
+	applyGeoListOptions(&opts.ListOptions, in.PaginationInput, in.OrderBy, in.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	sites, resp, err := client.GL().GeoSites.ListGeoSites(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -543,7 +541,7 @@ func ListStatus(ctx context.Context, client *gitlabclient.Client, in ListStatusI
 	}
 
 	opts := &gl.ListStatusOfAllGeoSitesOptions{}
-	applyGeoListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput, in.OrderBy, in.Sort)
+	applyGeoListOptions(&opts.ListOptions, in.PaginationInput, in.OrderBy, in.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	statuses, resp, err := client.GL().GeoSites.ListStatusOfAllGeoSites(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -585,10 +583,11 @@ func GetStatus(ctx context.Context, client *gitlabclient.Client, in IDInput) (St
 	return toStatusOutput(status, extra), nil
 }
 
-// applyGeoListOptions wires offset/keyset pagination plus order_by/sort onto a
-// gl.ListOptions for the Geo list endpoints, which both order by keyset.
-func applyGeoListOptions(opts *gl.ListOptions, page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput, orderBy, sort string) {
-	toolutil.ApplyListOptions(opts, page, keyset)
+// applyGeoListOptions wires offset pagination plus order_by/sort onto a
+// gl.ListOptions for the Geo list endpoints, which GitLab pages by offset
+// alone.
+func applyGeoListOptions(opts *gl.ListOptions, page toolutil.PaginationInput, orderBy, sort string) {
+	toolutil.ApplyListOptions(opts, page, toolutil.KeysetPaginationInput{})
 	if orderBy != "" {
 		opts.OrderBy = orderBy
 	}

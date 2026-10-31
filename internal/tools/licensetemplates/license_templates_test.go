@@ -342,20 +342,14 @@ func TestList_WithPagination(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// List — with keyset pagination, order_by, and sort
+// List: with order_by and sort
 // ---------------------------------------------------------------------------.
 
-// TestList_WithKeysetAndOrdering verifies that List forwards the keyset
-// pagination cursor, pagination method, order_by, and sort query parameters.
-func TestList_WithKeysetAndOrdering(t *testing.T) {
+// TestList_WithOrdering verifies that List forwards the order_by and sort
+// query parameters.
+func TestList_WithOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("pagination") != "keyset" {
-			t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
-		}
-		if q.Get("page_token") != "tok-123" {
-			t.Errorf("expected page_token=tok-123, got %s", q.Get("page_token"))
-		}
 		if q.Get("order_by") != "name" {
 			t.Errorf("expected order_by=name, got %s", q.Get("order_by"))
 		}
@@ -365,9 +359,8 @@ func TestList_WithKeysetAndOrdering(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License"}]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:    "name",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "tok-123",
+		OrderBy: "name",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

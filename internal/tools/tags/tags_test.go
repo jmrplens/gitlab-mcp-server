@@ -1149,9 +1149,9 @@ func TestTagListProtected_Pagination(t *testing.T) {
 	}
 }
 
-// TestTagListProtected_KeysetOrderingParams verifies that order_by, sort, and
-// keyset pagination parameters are forwarded onto the request query.
-func TestTagListProtected_KeysetOrderingParams(t *testing.T) {
+// TestTagListProtected_OrderingParams verifies that the order_by and sort
+// parameters are forwarded onto the request query.
+func TestTagListProtected_OrderingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedTags {
 			q := r.URL.Query()
@@ -1161,12 +1161,6 @@ func TestTagListProtected_KeysetOrderingParams(t *testing.T) {
 			if got := q.Get("sort"); got != "desc" {
 				t.Errorf("query param sort = %q, want %q", got, "desc")
 			}
-			if got := q.Get("pagination"); got != "keyset" {
-				t.Errorf("query param pagination = %q, want %q", got, "keyset")
-			}
-			if got := q.Get("page_token"); got != "tok123" {
-				t.Errorf("query param page_token = %q, want %q", got, "tok123")
-			}
 			testutil.RespondJSON(w, http.StatusOK, `[{"name":"v*","create_access_levels":[]}]`)
 			return
 		}
@@ -1174,10 +1168,9 @@ func TestTagListProtected_KeysetOrderingParams(t *testing.T) {
 	}))
 
 	out, err := ListProtectedTags(context.Background(), client, ListProtectedTagsInput{
-		ProjectID:  "42",
-		OrderBy:    "name",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok123",
+		ProjectID: "42",
+		OrderBy:   "name",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf("ListProtectedTags() unexpected error: %v", err)

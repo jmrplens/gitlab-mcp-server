@@ -803,21 +803,17 @@ func TestToOutput_FullSnippetFields_EachValueComesFromItsOwnKey(t *testing.T) {
 	}
 }
 
-// TestRetrieveAll_OrderingAndKeyset verifies that order_by, sort, and keyset
-// pagination parameters are forwarded to the GitLab API.
-func TestRetrieveAll_OrderingAndKeyset(t *testing.T) {
+// TestRetrieveAll_Ordering verifies that the order_by and sort parameters are
+// forwarded to the GitLab API.
+func TestRetrieveAll_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertQueryParam(t, r, "order_by", "id")
 		testutil.AssertQueryParam(t, r, "sort", "desc")
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "100")
 		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
 	}))
 
 	in := ListInput{
 		OrderBy: "id", Sort: "desc",
-		Pagination: "keyset",
-		PageToken:  "100",
 	}
 	out, err := RetrieveAll(context.Background(), client, in)
 	if err != nil {
@@ -828,21 +824,17 @@ func TestRetrieveAll_OrderingAndKeyset(t *testing.T) {
 	}
 }
 
-// TestRetrieveForSnippet_OrderingAndKeyset verifies that order_by, sort, and
-// keyset pagination parameters are forwarded for the per-snippet listing.
-func TestRetrieveForSnippet_OrderingAndKeyset(t *testing.T) {
+// TestRetrieveForSnippet_Ordering verifies that the order_by and sort
+// parameters are forwarded for the per-snippet listing.
+func TestRetrieveForSnippet_Ordering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertQueryParam(t, r, "order_by", "id")
 		testutil.AssertQueryParam(t, r, "sort", "asc")
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "42")
 		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
 	}))
 
 	in := ListForSnippetInput{
 		SnippetID: 55, OrderBy: "id", Sort: "asc",
-		Pagination: "keyset",
-		PageToken:  "42",
 	}
 	out, err := RetrieveForSnippet(context.Background(), client, in)
 	if err != nil {

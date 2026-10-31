@@ -137,7 +137,6 @@ type ListInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. name, created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for getting a feature flag.
@@ -182,7 +181,7 @@ func ListFeatureFlags(ctx context.Context, client *gitlabclient.Client, input Li
 		return ListOutput{}, toolutil.WrapErrWithMessage("feature_flag_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	opts := &gl.ListProjectFeatureFlagOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

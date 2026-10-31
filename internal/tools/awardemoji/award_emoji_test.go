@@ -1760,7 +1760,7 @@ func TestFormatListMarkdownString_UserGitLabDidNotSend_KeepsTheCellAndTheFooterB
 }
 
 // TestListIssueAwardEmoji_ForwardsListQuery verifies that order_by, sort, and
-// keyset pagination parameters (mirrored from gl.ListAwardEmojiOptions /
+// offset pagination parameters (mirrored from gl.ListAwardEmojiOptions /
 // gl.ListOptions) are forwarded to the underlying list request.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the request query string carries every supplied list option.
@@ -1773,21 +1773,17 @@ func TestListIssueAwardEmoji_ForwardsListQuery(t *testing.T) {
 
 	in := IssueListInput{
 		ProjectID: testProjectID, IID: 1, OrderBy: "created_at", Sort: "desc",
-		Page:       2,
-		PerPage:    5,
-		Pagination: "keyset",
-		PageToken:  "42",
+		Page:    2,
+		PerPage: 5,
 	}
 	if _, err := ListIssueAwardEmoji(t.Context(), client, in); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for key, want := range map[string]string{
-		"order_by":   "created_at",
-		"sort":       "desc",
-		"page":       "2",
-		"per_page":   "5",
-		"pagination": "keyset",
-		"page_token": "42",
+		"order_by": "created_at",
+		"sort":     "desc",
+		"page":     "2",
+		"per_page": "5",
 	} {
 		t.Run(key, func(t *testing.T) {
 			if got := gotQuery.Get(key); got != want {

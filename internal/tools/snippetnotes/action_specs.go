@@ -152,7 +152,7 @@ func decorateSnippetNoteMeta(options *toolutil.ActionSpecOptions, individualTool
 		}
 		options.IndividualTool.Description = "Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_project_snippet_get."
 	case "gitlab_snippet_note_list":
-		options.Usage = "List all comments (notes) on a project snippet, including system notes. Use when the task asks to read a snippet's discussion, recent comments, or activity. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all comments (notes) on a project snippet, including system notes. Use when the task asks to read a snippet's discussion, recent comments, or activity. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"list snippet comments", "show snippet notes", "read snippet discussion", "get snippet comments"}
 		options.RelatedActions = []string{actionSnippetNoteGet, actionSnippetNoteCreate, actionSnippetGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

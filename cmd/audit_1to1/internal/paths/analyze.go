@@ -255,16 +255,24 @@ const observedGrain = "package: an action counts as observed when the package th
 // found something undeclared: it is a candidate list, for the reasons in
 // [EndpointCheck].
 //
-// So are the two shape comparisons and the pagination check, each for its own
-// recorded reason. What their declaration tables do reach the gate through is
-// StaleDeclarations: a finding is a candidate and a claim that has stopped being
-// true is not.
+// So are the two shape comparisons and the collection half of the pagination
+// check, each for its own recorded reason. What their declaration tables do
+// reach the gate through is StaleDeclarations: a finding is a candidate and a
+// claim that has stopped being true is not.
+//
+// The keyset half of the pagination check does gate, on the findings no route
+// declaration answers (issue 1165): with the keyset input taken off every
+// action whose route GitLab pages by offset alone, each such finding is a
+// list offering a way to page that GitLab ignores or refuses, or a keyset
+// list a caller cannot page the cheaper way, and a re-recorded live record
+// that moves a route between the two is held to the same rule.
 func (s Summary) clean() bool {
 	return s.GraphQLRefused == 0 &&
 		s.UndeclaredSilent == 0 &&
 		s.StaleDeclarations == 0 &&
 		s.ActionsUnmapped == 0 &&
-		s.UndeclaredEndpoints == 0
+		s.UndeclaredEndpoints == 0 &&
+		s.KeysetFindingsUndeclared == 0
 }
 
 // GraphQLRefusal is one document the schema will not accept.

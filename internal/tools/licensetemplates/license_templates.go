@@ -20,10 +20,9 @@ import (
 // and pagination knob is available on the MCP surface.
 type ListInput struct {
 	Popular *bool  `json:"popular,omitempty" jsonschema:"Filter by popular licenses"`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column by which to order results"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // LicenseItem represents a license template.
@@ -53,7 +52,7 @@ type ListOutput struct {
 // filter narrows to featured templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListLicenseTemplatesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

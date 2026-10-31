@@ -150,7 +150,7 @@ func decorateIssueNoteMeta(options *toolutil.ActionSpecOptions, individualTool s
 		}
 		options.IndividualTool.Description = "Add a comment (note) to an issue. Returns: the created note with id, author, body, timestamps, and resolvable/internal flags. See also: gitlab_issue_note_list, gitlab_issue_get, gitlab_create_issue_discussion."
 	case "gitlab_issue_note_list":
-		options.Usage = "List all comments (notes) on an issue, including system notes. Use when the task asks to read an issue's discussion, recent comments, or activity. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all comments (notes) on an issue, including system notes. Use when the task asks to read an issue's discussion, recent comments, or activity. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"list issue comments", "show issue notes", "read issue discussion", "get issue comments"}
 		options.RelatedActions = []string{actionIssueNoteGet, actionIssueNoteCreate, actionIssueGet, actionIssueDiscussions}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

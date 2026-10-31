@@ -26,10 +26,9 @@ type ListInput struct {
 	CreatedAfter  string               `json:"created_after,omitempty"  jsonschema:"Filter users created after this date (ISO 8601)"`
 	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Filter users created before this date (ISO 8601)"`
 	TwoFactor     string               `json:"two_factor,omitempty"     jsonschema:"Filter by 2FA status: enabled or disabled"`
-	OrderBy       string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort          string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: asc or desc"`
+	OrderBy       string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort          string               `json:"sort,omitempty"     jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput holds parameters for getting a single enterprise user.
@@ -275,7 +274,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := &gl.ListEnterpriseUsersOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, toolutil.KeysetPaginationInput{})
 	if in.OrderBy != "" {
 		opts.OrderBy = in.OrderBy
 	}

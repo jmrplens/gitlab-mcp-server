@@ -83,7 +83,7 @@ func inputNameSummary(inputs []InputObject) string {
 //
 // The table carries no link, so the footer carries no instruction to keep
 // them, and the heading counts what the response can vouch for rather than a
-// total keyset pagination never sends.
+// total the response may not carry.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Schedules) == 0 {
 		return toolutil.EmptyMessage("pipeline schedules")

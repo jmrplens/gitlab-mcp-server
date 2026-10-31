@@ -6728,26 +6728,9 @@ func TestList_ApproverFilterInvalid_ReturnsError(t *testing.T) {
 	}
 }
 
-// TestList_Keyset_ReachQuery verifies keyset pagination parameters are wired
-// onto the project list request.
-func TestList_Keyset_ReachQuery(t *testing.T) {
-	var q url.Values
-	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMRs, &q))
-
-	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  testProjectID,
-		Pagination: "keyset", PageToken: "500",
-	})
-	if err != nil {
-		t.Fatalf("List() unexpected error: %v", err)
-	}
-	assertQuery(t, q, "pagination", "keyset")
-	assertQuery(t, q, "page_token", "500")
-}
-
 // TestListGlobal_NewFilterFields_ReachQuery verifies the new global list
 // filters (approved plus author/assignee/reviewer IDs, in, view, wip, reaction,
-// not_author, label toggles, non_archived) and keyset reach the global request.
+// not_author, label toggles, non_archived) reach the global request.
 func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 	var q url.Values
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, "/api/v4/merge_requests", &q))
@@ -6767,7 +6750,6 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
 		NonArchived:            &boolTrue,
-		Pagination:             "keyset", PageToken: "900",
 	})
 	if err != nil {
 		t.Fatalf("ListGlobal() unexpected error: %v", err)
@@ -6783,8 +6765,6 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 	assertQuery(t, q, "with_labels_details", "true")
 	assertQuery(t, q, "with_merge_status_recheck", "true")
 	assertQuery(t, q, "non_archived", "true")
-	assertQuery(t, q, "pagination", "keyset")
-	assertQuery(t, q, "page_token", "900")
 	if got := q["approver_ids[]"]; !slices.Equal(got, []string{"4"}) {
 		t.Errorf("approver_ids[] = %v, want [4]", got)
 	}
@@ -6794,7 +6774,7 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 }
 
 // TestListGroup_NewFilterFields_ReachQuery verifies the new group list filters
-// and keyset reach the group request (group listing has no approved or
+// reach the group request (group listing has no approved or
 // environment/deployment filters).
 func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 	var q url.Values
@@ -6816,7 +6796,6 @@ func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
 		NonArchived:            &boolTrue,
-		Pagination:             "keyset", PageToken: "123",
 	})
 	if err != nil {
 		t.Fatalf("ListGroup() unexpected error: %v", err)
@@ -6832,8 +6811,6 @@ func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 	assertQuery(t, q, "with_labels_details", "true")
 	assertQuery(t, q, "with_merge_status_recheck", "true")
 	assertQuery(t, q, "non_archived", "true")
-	assertQuery(t, q, "pagination", "keyset")
-	assertQuery(t, q, "page_token", "123")
 	if got := q["approver_ids[]"]; !slices.Equal(got, []string{"40"}) {
 		t.Errorf("approver_ids[] = %v, want [40]", got)
 	}
@@ -6842,70 +6819,61 @@ func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 	}
 }
 
-// TestCommits_OrderSortKeyset_ReachQuery verifies order_by/sort/keyset reach
-// the MR commits list request.
-func TestCommits_OrderSortKeyset_ReachQuery(t *testing.T) {
+// TestCommits_OrderSort_ReachQuery verifies order_by/sort reach the MR commits
+// list request.
+func TestCommits_OrderSort_ReachQuery(t *testing.T) {
 	var q url.Values
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMR1+"/commits", &q))
 
 	_, err := Commits(context.Background(), client, CommitsInput{
-		ProjectID:  testProjectID,
-		MRIID:      1,
-		OrderBy:    "created_at",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "77",
+		ProjectID: testProjectID,
+		MRIID:     1,
+		OrderBy:   "created_at",
+		Sort:      "asc",
 	})
 	if err != nil {
 		t.Fatalf("Commits() unexpected error: %v", err)
 	}
 	assertQuery(t, q, "order_by", "created_at")
 	assertQuery(t, q, "sort", "asc")
-	assertQuery(t, q, "pagination", "keyset")
-	assertQuery(t, q, "page_token", "77")
 }
 
-// TestIssuesClosed_OrderSortKeyset_ReachQuery verifies order_by/sort/keyset
-// reach the issues-closed-on-merge request.
-func TestIssuesClosed_OrderSortKeyset_ReachQuery(t *testing.T) {
+// TestIssuesClosed_OrderSort_ReachQuery verifies order_by/sort reach the
+// issues-closed-on-merge request.
+func TestIssuesClosed_OrderSort_ReachQuery(t *testing.T) {
 	var q url.Values
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMR1+"/closes_issues", &q))
 
 	_, err := IssuesClosed(context.Background(), client, IssuesClosedInput{
-		ProjectID:  testProjectID,
-		MRIID:      1,
-		OrderBy:    "updated_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "88",
+		ProjectID: testProjectID,
+		MRIID:     1,
+		OrderBy:   "updated_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf("IssuesClosed() unexpected error: %v", err)
 	}
 	assertQuery(t, q, "order_by", "updated_at")
 	assertQuery(t, q, "sort", "desc")
-	assertQuery(t, q, "pagination", "keyset")
-	assertQuery(t, q, "page_token", "88")
 }
 
-// TestRelatedIssues_OrderSortKeyset_ReachQuery verifies order_by/sort/keyset
-// reach the related-issues request.
-func TestRelatedIssues_OrderSortKeyset_ReachQuery(t *testing.T) {
+// TestRelatedIssues_OrderSort_ReachQuery verifies order_by/sort reach the
+// related-issues request.
+func TestRelatedIssues_OrderSort_ReachQuery(t *testing.T) {
 	var q url.Values
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMR1+"/related_issues", &q))
 
 	_, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{
-		ProjectID:  testProjectID,
-		MRIID:      1,
-		OrderBy:    "created_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "99",
+		ProjectID: testProjectID,
+		MRIID:     1,
+		OrderBy:   "created_at",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf("RelatedIssues() unexpected error: %v", err)
 	}
 	assertQuery(t, q, "order_by", "created_at")
 	assertQuery(t, q, "sort", "desc")
-	assertQuery(t, q, "pagination", "keyset")
-	assertQuery(t, q, "page_token", "99")
 }
 
 // TestGet_OptionFields_ReachQuery verifies include_diverged_commits_count,

@@ -685,19 +685,18 @@ func TestListInboundAllowlist_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListInboundAllowlist_KeysetOrdering verifies ListInboundAllowlist forwards
-// the keyset pagination cursor and order_by/sort query parameters to the API.
-func TestListInboundAllowlist_KeysetOrdering(t *testing.T) {
+// TestListInboundAllowlist_Ordering verifies ListInboundAllowlist forwards the
+// order_by/sort query parameters to the API.
+func TestListInboundAllowlist_Ordering(t *testing.T) {
 	var gotQuery url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.Query()
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListInboundAllowlist(context.Background(), client, ListInboundAllowlistInput{
-		ProjectID:  "42",
-		OrderBy:    "id",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok-1",
+		ProjectID: "42",
+		OrderBy:   "id",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -707,12 +706,6 @@ func TestListInboundAllowlist_KeysetOrdering(t *testing.T) {
 	}
 	if got := gotQuery.Get("sort"); got != "desc" {
 		t.Errorf("sort = %q, want desc", got)
-	}
-	if got := gotQuery.Get("pagination"); got != "keyset" {
-		t.Errorf("pagination = %q, want keyset", got)
-	}
-	if got := gotQuery.Get("page_token"); got != "tok-1" {
-		t.Errorf("page_token = %q, want tok-1", got)
 	}
 }
 
@@ -805,19 +798,18 @@ func TestListGroupAllowlist_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListGroupAllowlist_KeysetOrdering verifies ListGroupAllowlist forwards the
-// keyset pagination cursor and order_by/sort query parameters to the API.
-func TestListGroupAllowlist_KeysetOrdering(t *testing.T) {
+// TestListGroupAllowlist_Ordering verifies ListGroupAllowlist forwards the
+// order_by/sort query parameters to the API.
+func TestListGroupAllowlist_Ordering(t *testing.T) {
 	var gotQuery url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.Query()
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListGroupAllowlist(context.Background(), client, ListGroupAllowlistInput{
-		ProjectID:  "42",
-		OrderBy:    "id",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "tok-2",
+		ProjectID: "42",
+		OrderBy:   "id",
+		Sort:      "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -827,12 +819,6 @@ func TestListGroupAllowlist_KeysetOrdering(t *testing.T) {
 	}
 	if got := gotQuery.Get("sort"); got != "asc" {
 		t.Errorf("sort = %q, want asc", got)
-	}
-	if got := gotQuery.Get("pagination"); got != "keyset" {
-		t.Errorf("pagination = %q, want keyset", got)
-	}
-	if got := gotQuery.Get("page_token"); got != "tok-2" {
-		t.Errorf("page_token = %q, want tok-2", got)
 	}
 }
 

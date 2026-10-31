@@ -94,18 +94,15 @@ func TestList(t *testing.T) {
 			},
 		},
 		{
-			name: "forwards order_by, sort, and keyset params",
+			name: "forwards order_by and sort params",
 			input: ListInput{
-				GroupID:               testGroupID,
-				OrderBy:               "name",
-				Sort:                  "desc",
-				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+				GroupID: testGroupID,
+				OrderBy: "name",
+				Sort:    "desc",
 			},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertQueryParam(t, r, "order_by", "name")
 				testutil.AssertQueryParam(t, r, "sort", "desc")
-				testutil.AssertQueryParam(t, r, "pagination", "keyset")
-				testutil.AssertQueryParam(t, r, "page_token", "tok")
 				testutil.RespondJSON(w, http.StatusOK, "[]")
 			}),
 			wantCount: 0,
@@ -537,6 +534,21 @@ func TestGet_CancelledContext(t *testing.T) {
 	_, err := Get(ctx, client, GetInput{GroupID: testGroupID, BoardID: 1})
 	if err == nil {
 		t.Fatal("Get() expected context error, got nil")
+	}
+}
+
+// TestRawBoardFetch_RequestThatCannotBeBuilt_IsRefusedBeforeAnyRequest covers
+// the request-building error of both raw helpers. The handlers escape the
+// group into the path, so only a path built by hand reaches it: an invalid
+// percent-escape ("%zz") makes NewRequest fail, and the helper returns that
+// error without sending anything.
+func TestRawBoardFetch_RequestThatCannotBeBuilt_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	if boards, resp, err := rawListBoards(t.Context(), client, "groups/%zz/epic_boards", nil); err == nil || boards != nil || resp != nil {
+		t.Errorf("rawListBoards() = %v, %v, %v; want nil, nil and a request error", boards, resp, err)
+	}
+	if board, resp, err := rawGetBoard(t.Context(), client, "groups/%zz/epic_boards/1"); err == nil || board != nil || resp != nil {
+		t.Errorf("rawGetBoard() = %v, %v, %v; want nil, nil and a request error", board, resp, err)
 	}
 }
 

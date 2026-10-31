@@ -21,12 +21,11 @@ import (
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
-	// OrderBy names the column used to order keyset-paginated results.
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, updated_at)"`
+	// OrderBy names the column used to order results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at)"`
 	// Sort selects the sort direction for ordered results.
 	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single issue discussion.
@@ -109,7 +108,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts := &gl.ListIssueDiscussionsOptions{
 		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	discussions, resp, err := client.GL().Discussions.ListIssueDiscussions(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {

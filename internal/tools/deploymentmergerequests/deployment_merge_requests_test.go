@@ -430,12 +430,6 @@ func TestList_MergeRequestFilters(t *testing.T) {
 		if got := q.Get("created_before"); !strings.HasPrefix(got, "2025-12-31") {
 			t.Errorf("created_before = %q, want 2025-12-31 prefix", got)
 		}
-		if got := q.Get("pagination"); got != "keyset" {
-			t.Errorf("pagination = %q, want keyset", got)
-		}
-		if got := q.Get("page_token"); got != "cursor-1" {
-			t.Errorf("page_token = %q, want cursor-1", got)
-		}
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
@@ -453,8 +447,6 @@ func TestList_MergeRequestFilters(t *testing.T) {
 		CreatedBefore:       "2025-12-31T23:59:59Z",
 		Draft:               &draft,
 		In:                  "title",
-		Pagination:          "keyset",
-		PageToken:           "cursor-1",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

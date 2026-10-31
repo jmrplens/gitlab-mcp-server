@@ -51,7 +51,6 @@ type ListInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at, name)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for getting a feature flag user list.
@@ -91,7 +90,7 @@ func ListUserLists(ctx context.Context, client *gitlabclient.Client, input ListI
 		return ListOutput{}, toolutil.WrapErrWithMessage("ff_user_list_list", toolutil.ErrFieldRequired("project_id"))
 	}
 	opts := &gl.ListFeatureFlagUserListsOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.Search != "" {
 		opts.Search = input.Search
 	}

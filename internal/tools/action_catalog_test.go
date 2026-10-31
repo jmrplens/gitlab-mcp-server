@@ -1691,6 +1691,84 @@ func derefType(t reflect.Type) reflect.Type {
 	return t
 }
 
+// TestBuildActionCatalog_OffsetLists_ClaimNoKeysetPagination verifies that no
+// list GitLab pages by offset alone tells a caller it can be paged by keyset
+// (issue 1165). Such a list takes page and offers no page_token, since R-PAGE
+// fails the audit on one that offers it, and its usage line, its individual
+// tool description, its parameter descriptions and its parameter guidance
+// say nothing of keyset pagination but to deny it: a model that read "offset
+// or keyset pagination" asked for pagination=keyset, which GitLab ignores or
+// refuses there. A list that does page by keyset offers page_token and is not
+// judged, and a GraphQL list takes no page.
+func TestBuildActionCatalog_OffsetLists_ClaimNoKeysetPagination(t *testing.T) {
+	instances := []struct {
+		name   string
+		client *gitlabclient.Client
+	}{{name: "self-managed", client: UnboundClient(false)}, {name: "GitLab.com", client: UnboundClient(true)}}
+	for _, instance := range instances {
+		t.Run(instance.name, func(t *testing.T) {
+			catalog := mustBuildActionCatalog(t, instance.client, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+			judged := 0
+			for _, action := range catalog.Actions() {
+				properties, _ := action.Route.InputSchema["properties"].(map[string]any)
+				_, page := properties["page"]
+				_, pageToken := properties["page_token"]
+				if !page || pageToken {
+					continue
+				}
+				judged++
+				for _, claim := range keysetClaims(action) {
+					t.Errorf("%s pages by offset alone, and its %s", action.ID, claim)
+				}
+			}
+			if judged == 0 {
+				t.Error("no action takes page without page_token, so the rule was never exercised")
+			}
+		})
+	}
+}
+
+// keysetClaims lists the served texts of an action that offer keyset
+// pagination, each named by where it is served.
+func keysetClaims(action actioncatalog.Action) []string {
+	texts := map[string]string{"usage line": action.Usage, "individual description": action.IndividualTool.Description}
+	properties, _ := action.Route.InputSchema["properties"].(map[string]any)
+	for name, property := range properties {
+		if schema, ok := property.(map[string]any); ok {
+			description, _ := schema["description"].(string)
+			texts["description of "+name] = description
+		}
+	}
+	for name, guidance := range action.Route.ParameterGuidance {
+		texts["guidance of "+name] = strings.Join(append([]string{guidance.ValueSource}, guidance.CommonConfusions...), ". ")
+	}
+	var claims []string
+	for _, where := range slices.Sorted(maps.Keys(texts)) {
+		for sentence := range strings.SplitSeq(texts[where], ". ") {
+			if claimsKeyset(sentence) {
+				claims = append(claims, fmt.Sprintf("%s says %q", where, sentence))
+			}
+		}
+	}
+	return claims
+}
+
+// claimsKeyset reports whether a sentence offers keyset pagination: it names
+// keyset and does not deny it, as "GitLab does not page this list by keyset"
+// and "GitLab offers no ordering or keyset pagination on this list" do.
+func claimsKeyset(sentence string) bool {
+	lower := strings.ToLower(sentence)
+	if !strings.Contains(lower, "keyset") {
+		return false
+	}
+	for _, denial := range []string{"no ", "not ", "never "} {
+		if strings.Contains(lower, denial) {
+			return false
+		}
+	}
+	return true
+}
+
 // mustBuildDynamicActionCatalogForTest builds dynamic action catalog for test test fixtures and fails the test on error.
 func mustBuildDynamicActionCatalogForTest(t *testing.T, client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
 	t.Helper()

@@ -100,9 +100,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_OrderBySortKeyset verifies List forwards order_by, sort, and keyset
-// pagination parameters (pagination, page_token) to the GitLab API query.
-func TestList_OrderBySortKeyset(t *testing.T) {
+// TestList_OrderBySort verifies List forwards the order_by and sort parameters
+// to the GitLab API query.
+func TestList_OrderBySort(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedEnvs {
@@ -115,15 +115,14 @@ func TestList_OrderBySortKeyset(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:  "42",
-		OrderBy:    "name",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "tok123",
+		ProjectID: "42",
+		OrderBy:   "name",
+		Sort:      "desc",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
-	for _, want := range []string{"order_by=name", "sort=desc", "pagination=keyset", "page_token=tok123"} {
+	for _, want := range []string{"order_by=name", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)

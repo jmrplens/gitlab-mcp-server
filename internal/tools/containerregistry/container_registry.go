@@ -133,10 +133,9 @@ type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Tags      bool                 `json:"tags,omitempty" jsonschema:"Include tags in response"`
 	TagsCount bool                 `json:"tags_count,omitempty" jsonschema:"Include tags count in response"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListProject lists container registry repositories for a project.
@@ -145,7 +144,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return RepositoryListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	opts := &gl.ListProjectRegistryRepositoriesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -184,10 +183,9 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 // ListGroupInput selects a group registry repository page.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ListGroup lists container registry repositories for a group.
@@ -196,7 +194,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return RepositoryListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := &gl.ListGroupRegistryRepositoriesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}

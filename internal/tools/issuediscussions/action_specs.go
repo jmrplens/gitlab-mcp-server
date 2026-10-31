@@ -113,7 +113,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 func decorateIssueDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_list_issue_discussions":
-		options.Usage = "List all discussion threads on one issue, including system notes and threaded replies. Use this when the prompt asks for an issue's comment threads or conversation history, or before replying to a thread with issue.discussion_add_note. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all discussion threads on one issue, including system notes and threaded replies. Use this when the prompt asks for an issue's comment threads or conversation history, or before replying to a thread with issue.discussion_add_note. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"gitlab_list_issue_discussions", "list issue discussions", "show issue comment threads", "get issue conversation"}
 		options.RelatedActions = []string{actionDiscussionGet, actionDiscussionCreate, actionIssueGet, actionIssueNoteList}
 		options.ParameterGuidance = projectScopeGuidance()
@@ -123,7 +123,7 @@ func decorateIssueDiscussionMeta(options *toolutil.ActionSpecOptions, individual
 			ExampleBinding:   `params.order_by:"created_at"`,
 			CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases as the field value."},
 		}
-		options.IndividualTool.Description = "List discussion threads on an issue with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state) and pagination metadata. See also: gitlab_get_issue_discussion, gitlab_create_issue_discussion, gitlab_issue_get, gitlab_issue_note_list."
+		options.IndividualTool.Description = "List discussion threads on an issue with ordering and offset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state) and pagination metadata. See also: gitlab_get_issue_discussion, gitlab_create_issue_discussion, gitlab_issue_get, gitlab_issue_note_list."
 	case "gitlab_get_issue_discussion":
 		options.Usage = "Fetch one discussion thread on an issue by its discussion_id, returning every note in the thread. Use this after issue.discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_issue_discussion", "get issue discussion", "show issue discussion thread", "fetch issue discussion"}

@@ -34,7 +34,6 @@ type ListInput struct {
 	UpdatedAfter  string               `json:"updated_after,omitempty" jsonschema:"Return pipelines updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
 	UpdatedBefore string               `json:"updated_before,omitempty" jsonschema:"Return pipelines updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // Output represents a single pipeline in the list response.
@@ -129,7 +128,7 @@ func buildListOpts(input ListInput) (*gl.ListProjectPipelinesOptions, error) {
 	); err != nil {
 		return nil, err
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	return opts, nil
 }
 

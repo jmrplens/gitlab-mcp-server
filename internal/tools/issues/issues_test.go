@@ -3965,9 +3965,9 @@ func TestListMRsRelated_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListMRsClosing_KeysetOrderSort verifies that the keyset pagination,
-// order_by, and sort inputs are forwarded to the GitLab query string.
-func TestListMRsClosing_KeysetOrderSort(t *testing.T) {
+// TestListMRsClosing_OrderSort verifies that the order_by and sort inputs are
+// forwarded to the GitLab query string.
+func TestListMRsClosing_OrderSort(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathIssue10+"/closed_by" {
@@ -3979,14 +3979,13 @@ func TestListMRsClosing_KeysetOrderSort(t *testing.T) {
 	}))
 	_, err := ListMRsClosing(context.Background(), client, ListMRsClosingInput{
 		ProjectID: testProjectID, IssueIID: 10,
-		OrderBy:    "created_at",
-		Sort:       "asc",
-		Pagination: "keyset", PageToken: "42",
+		OrderBy: "created_at",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf("ListMRsClosing keyset: %v", err)
 	}
-	for _, want := range []string{"order_by=created_at", "sort=asc", "pagination=keyset", "page_token=42"} {
+	for _, want := range []string{"order_by=created_at", "sort=asc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)
@@ -3995,9 +3994,9 @@ func TestListMRsClosing_KeysetOrderSort(t *testing.T) {
 	}
 }
 
-// TestListMRsRelated_KeysetOrderSort verifies keyset/order_by/sort forwarding
-// for the related-MR list endpoint.
-func TestListMRsRelated_KeysetOrderSort(t *testing.T) {
+// TestListMRsRelated_OrderSort verifies order_by/sort forwarding for the
+// related-MR list endpoint.
+func TestListMRsRelated_OrderSort(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathIssue10+"/related_merge_requests" {
@@ -4009,14 +4008,13 @@ func TestListMRsRelated_KeysetOrderSort(t *testing.T) {
 	}))
 	_, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{
 		ProjectID: testProjectID, IssueIID: 10,
-		OrderBy:    "updated_at",
-		Sort:       "desc",
-		Pagination: "keyset", PageToken: "7",
+		OrderBy: "updated_at",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf("ListMRsRelated keyset: %v", err)
 	}
-	for _, want := range []string{"order_by=updated_at", "sort=desc", "pagination=keyset", "page_token=7"} {
+	for _, want := range []string{"order_by=updated_at", "sort=desc"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)

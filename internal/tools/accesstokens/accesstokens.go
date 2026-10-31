@@ -261,7 +261,6 @@ type ProjectListInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, expires_at, last_used_at)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // ProjectList returns access tokens for a project.
@@ -283,7 +282,7 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	tokens, resp, err := client.GL().ProjectAccessTokens.ListProjectAccessTokens(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -617,7 +616,6 @@ type GroupListInput struct {
 	OrderBy        string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, expires_at, last_used_at)"`
 	Sort           string               `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GroupList returns access tokens for a group.
@@ -657,7 +655,7 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 		sort := gl.AccessTokenSort(input.Sort)
 		opts.Sort = &sort
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	tokens, resp, err := client.GL().GroupAccessTokens.ListGroupAccessTokens(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -962,7 +960,6 @@ type PersonalListInput struct {
 	OrderBy        string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, expires_at, last_used_at)"`
 	Sort           string `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // PersonalList returns personal access tokens.
@@ -1000,7 +997,7 @@ func PersonalList(ctx context.Context, client *gitlabclient.Client, input Person
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	tokens, resp, err := client.GL().PersonalAccessTokens.ListPersonalAccessTokens(opts, gl.WithContext(ctx))

@@ -20,12 +20,11 @@ import (
 type ListMetricImagesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	AlertIID  int64                `json:"alert_iid" jsonschema:"Alert IID,required"`
-	// OrderBy names the column used to order keyset-paginated results.
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, id)"`
+	// OrderBy names the column used to order results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, id)"`
 	// Sort selects the sort direction for ordered results.
 	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // MetricImageItem represents a single metric image.
@@ -70,7 +69,7 @@ func ListMetricImages(ctx context.Context, client *gitlabclient.Client, input Li
 	opts := &gl.ListMetricImagesOptions{
 		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	images, resp, err := client.GL().AlertManagement.ListMetricImages(string(input.ProjectID), input.AlertIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMetricImagesOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_alert_metric_images", err, http.StatusNotFound, "verify project_id and alert_iid. Check alerts with the project's alert management")

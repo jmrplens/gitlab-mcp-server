@@ -56,10 +56,10 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 
 func groupSSHCertReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := groupSSHCertOptions(individualTool)
-	opts.Usage = "List the SSH CA certificates registered on a group so members can authenticate Git over SSH with certificates signed by that CA. Use this when the prompt asks which SSH certificate authorities a group trusts, before adding or revoking one. Requires the group Owner role. Supports offset and keyset pagination."
+	opts.Usage = "List the SSH CA certificates registered on a group so members can authenticate Git over SSH with certificates signed by that CA. Use this when the prompt asks which SSH certificate authorities a group trusts, before adding or revoking one. Requires the group Owner role. Supports offset pagination."
 	opts.Aliases = []string{individualTool, "list group ssh ca certificates", "show group ssh certificate authorities", "view trusted ssh signing certificates"}
 	opts.RelatedActions = []string{actionCreate, actionDelete, actionGroupGet}
-	opts.IndividualTool.Description = "List the SSH CA certificates registered on a group. Returns: each certificate's id, title, public key, and creation timestamp, with offset/keyset pagination. See also: gitlab_create_group_ssh_certificate, gitlab_delete_group_ssh_certificate, gitlab_group_get."
+	opts.IndividualTool.Description = "List the SSH CA certificates registered on a group. Returns: each certificate's id, title, public key, and creation timestamp, with offset pagination. See also: gitlab_create_group_ssh_certificate, gitlab_delete_group_ssh_certificate, gitlab_group_get."
 	return toolutil.NewReadActionSpec(name, route, opts)
 }
 

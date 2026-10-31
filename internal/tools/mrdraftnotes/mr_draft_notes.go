@@ -26,7 +26,6 @@ type ListInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order by: id (default)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort: asc or desc (default)"`
 	toolutil.PaginationInput
-	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for retrieving a single draft note.
@@ -283,7 +282,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("draftNoteList", "merge_request_iid")
 	}
 	opts := &gl.ListDraftNotesOptions{}
-	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	if input.OrderBy != "" {
 		opts.OrderBy = new(input.OrderBy)
 	}

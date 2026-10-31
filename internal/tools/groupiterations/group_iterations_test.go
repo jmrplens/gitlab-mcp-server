@@ -165,30 +165,37 @@ func TestList_QueryParams(t *testing.T) {
 	}
 }
 
-// TestList_KeysetParams verifies that List forwards keyset pagination and
-// sort parameters (pagination, page_token, order_by, sort) to the GitLab API.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the keyset and ordering query parameters are present on the request.
-func TestList_KeysetParams(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestPath(t, r, "/api/v4/groups/7/iterations")
-		testutil.AssertQueryParam(t, r, "pagination", "keyset")
-		testutil.AssertQueryParam(t, r, "page_token", "cursor-1")
-		testutil.AssertQueryParam(t, r, "order_by", "due_date")
-		testutil.AssertQueryParam(t, r, "sort", "desc")
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
-			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
-	}))
-
-	_, err := List(context.Background(), client, ListInput{
-		GroupID:    "7",
-		OrderBy:    "due_date",
-		Sort:       "desc",
-		Pagination: "keyset",
-		PageToken:  "cursor-1",
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+// TestList_Schema_OffersNoOrderingOrKeysetArgument verifies that the group
+// iteration list publishes no order_by, sort, pagination or page_token, and
+// refuses each before any request (issue 1600). GET /groups/:id/iterations
+// declares state, search, in, include_ancestors, include_descendants,
+// updated_before, updated_after, page and per_page (gitlab-api-live.json,
+// 19.5.0-ee); list_iterations_for pages the finder's result by offset, and
+// iterations_finder_params hands IterationsFinder no sort, so it orders by
+// due date, title and id whatever is sent (ee/lib/api/iterations.rb:53-73
+// and ee/app/finders/iterations_finder.rb:116-123 at v19.5.0-ee).
+func TestList_Schema_OffersNoOrderingOrKeysetArgument(t *testing.T) {
+	route := toolutil.RouteAction(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), List)
+	cases := []struct {
+		param string
+		value any
+	}{
+		{param: "order_by", value: "due_date"},
+		{param: "sort", value: "desc"},
+		{param: "pagination", value: "keyset"},
+		{param: "page_token", value: "cursor-1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.param, func(t *testing.T) {
+			props, _ := route.InputSchema["properties"].(map[string]any)
+			if _, offered := props[tc.param]; offered {
+				t.Errorf("the schema offers %s, which GET /groups/:id/iterations never reads", tc.param)
+			}
+			_, err := route.Handler(t.Context(), map[string]any{"group_id": "7", tc.param: tc.value})
+			if err == nil || !strings.Contains(err.Error(), `unknown field "`+tc.param+`"`) {
+				t.Errorf("Handler() error = %v, want %s refused as an unknown field", err, tc.param)
+			}
+		})
 	}
 }
 

@@ -18,7 +18,6 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestScheduleExport verifies the ScheduleExport handler.
@@ -413,11 +412,11 @@ func TestListExportStatus_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_KeysetAndOrdering verifies that keyset pagination,
-// order_by, sort, and relation parameters are forwarded as query parameters.
+// TestListExportStatus_Ordering verifies that order_by, sort, and relation
+// parameters are forwarded as query parameters.
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts the request carries pagination, ordering, and the parsed batches.
-func TestListExportStatus_KeysetAndOrdering(t *testing.T) {
+// It asserts the request carries ordering and the parsed batches.
+func TestListExportStatus_Ordering(t *testing.T) {
 	var gotQuery string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -431,16 +430,15 @@ func TestListExportStatus_KeysetAndOrdering(t *testing.T) {
 		}`)
 	}))
 	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{
-		GroupID:               "10",
-		Relation:              "project",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: testKeyset(),
+		GroupID:  "10",
+		Relation: "project",
+		OrderBy:  "id",
+		Sort:     "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=abc", "relation=project"} {
+	for _, want := range []string{"order_by=id", "sort=desc", "relation=project"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(gotQuery, want) {
 				t.Errorf("query %q missing %q", gotQuery, want)
@@ -457,11 +455,6 @@ func TestListExportStatus_KeysetAndOrdering(t *testing.T) {
 	if b.UpdatedAt == "" {
 		t.Error("expected batch UpdatedAt to be populated")
 	}
-}
-
-// testKeyset returns a keyset pagination input used across tests.
-func testKeyset() toolutil.KeysetPaginationInput {
-	return toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc"}
 }
 
 // TestListExportStatus_EmptyResponse verifies the ListExportStatus_EmptyResponse handler.
