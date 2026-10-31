@@ -18,11 +18,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -764,72 +766,91 @@ func TestServerShell_NewCredentialState_AnEntryWithNoConfiguration_FallsBackToTh
 	}
 }
 
-// TestServerShell_DefaultCredentialState_FailsClosedOnlyWhenShared covers the
-// state a request that bound none runs under.
-//
-// On stdio that is the process's one credential, and it owns the watchers, the
-// bucket and the ceiling exactly as the server used to, so nothing about the
-// single-credential case changed. On a server shared by a configuration shape
-// it is the fail-closed default instead: no watchers, and the unbound client,
-// so a subscription that could not be attributed is refused rather than
-// accepted and polled with a client that refuses every read.
-func TestServerShell_DefaultCredentialState_FailsClosedOnlyWhenShared(t *testing.T) {
+// ratedTestShell builds a shell on the full capability surface with a rate,
+// so a default state it builds has a bucket to hold.
+func ratedTestShell(t *testing.T, opts ...serverOption) *serverShell {
+	t.Helper()
 	_, gitlab := newPipelineBackend(t, "running")
+	shell, err := newServerShell(t.Context(), subscriptionGitLabClient(t, gitlab.URL), &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		RateLimitRPS:      config.DefaultHTTPRateLimitRPS,
+		RateLimitBurst:    config.DefaultRateLimitBurst,
+	}, append([]serverOption{withSubscriptionOptions(fastOptions())}, opts...)...)
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	if state := shell.state; state != nil {
+		t.Cleanup(func() { state.close(nil, endOfCredentialEviction) })
+	}
+	return shell
+}
 
-	tests := []struct {
-		name         string
-		opts         []serverOption
-		wantWatchers bool
-	}{
-		{
-			name:         "one credential, as stdio has",
-			opts:         []serverOption{withSubscriptionOptions(fastOptions())},
-			wantWatchers: true,
-		},
-		{
-			name: "a server shared by a configuration shape",
-			opts: []serverOption{
-				withSubscriptionOptions(fastOptions()),
-				withSharedCredentials(&credentialStates{}, newSessionOwners(false)),
-			},
-		},
+// TestServerShell_DefaultCredentialState_OneCredential_OwnsWhatStdioHolds
+// covers the state a request that bound none runs under on a server serving
+// one credential, as stdio does: the process's one credential, which owns the
+// watchers, the bucket and the ceiling exactly as the server used to, and which
+// every request finds, since on stdio no request binds anything.
+func TestServerShell_DefaultCredentialState_OneCredential_OwnsWhatStdioHolds(t *testing.T) {
+	shell := ratedTestShell(t)
+	state := shell.state
+	if state == nil {
+		t.Fatal("the shell has no default state; the one credential's own requests would resolve to nothing")
+	}
+	if state.owner != "" {
+		t.Errorf("the default state claims owner %q; it belongs to no pool entry", state.owner)
+	}
+	if state.client != shell.client {
+		t.Error("the default state carries a client other than the process's own")
+	}
+	if state.limiter == nil || state.listen == nil || state.subs == nil {
+		t.Errorf("default bucket %v, listen counter %v, watchers %v; the one credential owns all three",
+			state.limiter, state.listen, state.subs)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			shell, err := newServerShell(t.Context(), subscriptionGitLabClient(t, gitlab.URL), &config.ServerConfig{
-				ToolSurface:       config.ToolSurfaceDynamic,
-				CapabilitySurface: config.CapabilitySurfaceFull,
-			}, tt.opts...)
-			if err != nil {
-				t.Fatalf("newServerShell: %v", err)
-			}
-			t.Cleanup(func() { shell.state.close(nil, endOfCredentialEviction) })
+	ctx := t.Context()
+	if got := shell.stateFor(ctx); got != state {
+		t.Errorf("stateFor(unbound) = %v, want the process's own credential", got)
+	}
+	if shell.rateLimiterFor(ctx) != state.limiter {
+		t.Error("rateLimiterFor(unbound) is not the process's own bucket")
+	}
+	if shell.listenCounterFor(ctx) != state.listen {
+		t.Error("listenCounterFor(unbound) is not the process's own counter")
+	}
+	if shell.subscriptionRuntimeFor(ctx) != state.subs {
+		t.Error("subscriptionRuntimeFor(unbound) is not the process's own watchers")
+	}
+}
 
-			if shell.state == nil {
-				t.Fatal("the shell has no default state; every unbound request would resolve to nothing at all")
-			}
-			if got := shell.state.subs != nil; got != tt.wantWatchers {
-				t.Errorf("default watchers = %v, want %v", got, tt.wantWatchers)
-			}
-			if shell.state.owner != "" {
-				t.Errorf("the default state claims owner %q; it belongs to no pool entry", shell.state.owner)
-			}
-			// Resolved for a request nothing bound, which is the whole point of
-			// its existing.
-			if got := shell.stateFor(t.Context()); got != shell.state {
-				t.Errorf("stateFor(unbound) = %v, want the shell's default", got)
-			}
-			if got := shell.subscriptionRuntimeFor(t.Context()); (got != nil) != tt.wantWatchers {
-				t.Errorf("subscriptionRuntimeFor(unbound) = %v, want watchers=%v", got, tt.wantWatchers)
-			}
-			if got := shell.listenCounterFor(t.Context()); got != shell.state.listen {
-				t.Errorf("listenCounterFor(unbound) = %v, want the default state's counter", got)
-			}
-			if got := shell.rateLimiterFor(t.Context()); got != shell.state.limiter {
-				t.Errorf("rateLimiterFor(unbound) = %v, want the default state's bucket", got)
-			}
-		})
+// TestServerShell_DefaultCredentialState_SharedServer_HasNone covers the same
+// on a server shared by a configuration shape, where there is none (issue 953,
+// register row IDN-007).
+//
+// The default it used to hold had no watchers and the unbound client, so it
+// failed closed towards GitLab, but it also had a bucket and a listen counter of
+// its own, and every request the server could not attribute drew on those two:
+// one budget shared by all of them (F-15). A request nothing bound now resolves
+// to no state at all, so it holds no bucket, no listen slot and no watcher.
+func TestServerShell_DefaultCredentialState_SharedServer_HasNone(t *testing.T) {
+	shell := ratedTestShell(t, withSharedCredentials(&credentialStates{}, newSessionOwners(false)))
+	if state := shell.state; state != nil {
+		t.Errorf("the shared server holds a default state (bucket %v, listen counter %v); "+
+			"every request it cannot attribute would draw on that one budget", state.limiter, state.listen)
+	}
+
+	ctx := t.Context()
+	if got := shell.stateFor(ctx); got != nil {
+		t.Errorf("stateFor(unbound) = %v, want nil: an unattributed request belongs to nobody", got)
+	}
+	if got := shell.rateLimiterFor(ctx); got != nil {
+		t.Errorf("rateLimiterFor(unbound) = %v, want nil: no bucket is shared by the unattributed", got)
+	}
+	if got := shell.listenCounterFor(ctx); got != nil {
+		t.Errorf("listenCounterFor(unbound) = %v, want nil: no listen counter is shared by the unattributed", got)
+	}
+	if got := shell.subscriptionRuntimeFor(ctx); got != nil {
+		t.Errorf("subscriptionRuntimeFor(unbound) = %v, want nil so an unattributed subscribe is refused", got)
 	}
 }
 
@@ -864,12 +885,12 @@ func TestServerShell_StateFor_ABoundRequest_OverridesTheDefault(t *testing.T) {
 }
 
 // TestServerShell_ResolversWithNoStateAtAll_AnswerNothing covers the nil-state
-// branch of each resolver.
+// branch of each resolver on the zero shell.
 //
-// It is unreachable from newServerShell, which always builds a default, and
-// answered rather than dereferenced because each of these runs inside a
-// middleware: a nil here would be a panic on the request path rather than a
-// refusal.
+// A shared shell reaches the same branch for every request nothing bound,
+// which TestServerShell_DefaultCredentialState_SharedServer_HasNone covers. Each is answered rather than dereferenced because each of these runs
+// inside a middleware: a nil here would be a panic on the request path rather
+// than a refusal.
 func TestServerShell_ResolversWithNoStateAtAll_AnswerNothing(t *testing.T) {
 	shell := &serverShell{}
 	ctx := t.Context()
@@ -885,5 +906,221 @@ func TestServerShell_ResolversWithNoStateAtAll_AnswerNothing(t *testing.T) {
 	}
 	if got := shell.listenCounterFor(ctx); got != nil {
 		t.Errorf("listenCounterFor = %v, want nil, which the process-wide ceiling still bounds", got)
+	}
+}
+
+// TestRefuseUnattributed_RefusesTheListingAndTheListenNothingElseRefuses
+// covers the middleware a server shared by a configuration shape runs right
+// after the binding (issue 953, register row IDN-007).
+//
+// Every other method that needs a credential refuses an unattributed request
+// where it resolves its client: a tool call, a resource read, a prompt, a
+// subscription naming a resource and a completion. A tools/list and a
+// subscriptions/listen that asks only for list-changed notifications resolve
+// none, so nothing on their path refused them: they were answered under the
+// shell's default state, charged to its one bucket and counted and held on its
+// one listen counter. This refuses both with the refusals IDN-007 declares for
+// their methods, every listen rather than only the list-changed one so that
+// none reaches the listen ceilings, and lets everything else through: a bound
+// request, the server's own listings and the methods their handlers refuse.
+func TestRefuseUnattributed_RefusesTheListingAndTheListenNothingElseRefuses(t *testing.T) {
+	bound := withCredentialState(t.Context(), credentialTestState(t, "owner-mine"))
+	unattributed := t.Context()
+	listenFor := func(wanted *mcp.NotificationSubscriptions) mcp.Request {
+		return &mcp.ServerRequest[*mcp.SubscriptionsListenParams]{
+			Params: &mcp.SubscriptionsListenParams{Notifications: wanted},
+		}
+	}
+	listChangedOnly := listenFor(&mcp.NotificationSubscriptions{ToolsListChanged: true})
+	namingAResource := listenFor(&mcp.NotificationSubscriptions{
+		ToolsListChanged:      true,
+		ResourceSubscriptions: []string{"gitlab://project/42/pipeline/99"},
+	})
+
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		method  string
+		req     mcp.Request
+		refusal string // empty when the request must reach the next handler
+	}{
+		{"an unattributed tools/list", unattributed, "tools/list", stdioRequest(), toolutil.UnattributedRequestMessage},
+		{"an unattributed list-changed-only listen", unattributed, methodSubscriptionsListen, listChangedOnly, errUnboundSubscribe.Message},
+		{"an unattributed listen naming a resource", unattributed, methodSubscriptionsListen, namingAResource, errUnboundSubscribe.Message},
+		{"a bound tools/list", bound, "tools/list", stdioRequest(), ""},
+		{"a bound listen", bound, methodSubscriptionsListen, listChangedOnly, ""},
+		{"the server's own listing", toolutil.WithInternalInspection(unattributed), "tools/list", stdioRequest(), ""},
+		{"an unattributed tool call, which its handler refuses", unattributed, "tools/call", stdioRequest(), ""},
+		{"an unattributed resource read, which its handler refuses", unattributed, "resources/read", stdioRequest(), ""},
+		{"an unattributed handshake", unattributed, "initialize", stdioRequest(), ""},
+		{"an unattributed ping", unattributed, "ping", stdioRequest(), ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reached := false
+			handler := refuseUnattributed(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+				reached = true
+				return &mcp.ListToolsResult{}, nil
+			})
+
+			result, err := handler(tt.ctx, tt.method, tt.req)
+			if tt.refusal == "" {
+				if err != nil || !reached || result == nil {
+					t.Errorf("reached %v, result %v, error %v; want it passed to the next handler", reached, result, err)
+				}
+				return
+			}
+			if reached || result != nil {
+				t.Errorf("reached %v, result %v; an unattributed %s must be refused before anything counts it", reached, result, tt.method)
+			}
+			assertInternalRefusal(t, err, tt.refusal)
+		})
+	}
+
+	t.Run("an abandoned request is answered with why it ended", func(t *testing.T) {
+		// A POST the client abandoned takes its carrier with it, so it reaches
+		// here unbound; asking that caller to report a wiring defect would be
+		// wrong, as it is on the other surfaces.
+		gone := errors.New("the caller went away")
+		ctx, cancel := context.WithCancelCause(t.Context())
+		cancel(gone)
+		handler := refuseUnattributed(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+			t.Error("an abandoned unattributed request reached the next handler")
+			return &mcp.ListToolsResult{}, nil
+		})
+		for _, method := range []string{"tools/list", methodSubscriptionsListen} {
+			t.Run(method, func(t *testing.T) {
+				if _, err := handler(ctx, method, listChangedOnly); !errors.Is(err, gone) {
+					t.Errorf("error = %v, want the cause the request ended with", err)
+				}
+			})
+		}
+	})
+}
+
+// TestCreateServer_SharedServer_RefusesAnUnattributedListingAndListen drives
+// the two requests issue 953 found unrefused through the whole receiving chain
+// of a server shared by a configuration shape. An in-memory session carries no
+// carrier, so the binding leaves every request on it unbound, which is what an
+// unattributed request is on such a server.
+//
+// The listen is the one a 2026-07-28 client with a list-changed handler opens
+// on its own while it connects. The SDK client sends it without waiting for an
+// answer, so the answer is read on the server, by a middleware added after
+// createServer, which makes it the outermost and shows what the whole chain
+// returned. Before the fix the listen was acknowledged and held on the shell's
+// default listen counter, and the listing was answered under its bucket. The
+// server's own listing, which registration and the tool manifest depend on, is
+// still answered, and a server serving one credential, as stdio does, answers
+// both.
+func TestCreateServer_SharedServer_RefusesAnUnattributedListingAndListen(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	shared := subscriptionTestServer(t, gitlab.URL, config.CapabilitySurfaceFull,
+		withSharedCredentials(&credentialStates{}, newSessionOwners(false)))
+	single := subscriptionTestServer(t, gitlab.URL, config.CapabilitySurfaceFull)
+	listenAnswers := recordListenAnswers(shared)
+	acknowledged := recordListenAcknowledgments(single)
+
+	t.Run("an unattributed tools/list is refused", func(t *testing.T) {
+		session := newInMemorySession(t, shared)
+		result, err := session.ListTools(t.Context(), nil)
+		if result != nil {
+			t.Errorf("tools/list was answered with %d tools to a caller this server could not attribute", len(result.Tools))
+		}
+		assertInternalRefusal(t, err, toolutil.UnattributedRequestMessage)
+	})
+
+	t.Run("an unattributed list-changed-only listen is refused", func(t *testing.T) {
+		connectListeningClient(t, shared)
+		select {
+		case err := <-listenAnswers:
+			assertInternalRefusal(t, err, errUnboundSubscribe.Message)
+		case <-time.After(5 * time.Second):
+			t.Fatal("the shared server never answered the listen: it is holding a stream for a caller it could not attribute")
+		}
+	})
+
+	t.Run("the server's own listing is answered", func(t *testing.T) {
+		tools, err := toolutil.ListRegisteredTools(t.Context(), shared, "")
+		if err != nil || len(tools) == 0 {
+			t.Errorf("ListRegisteredTools = %d tools, %v; registration lists the server's own tools on a session nothing binds", len(tools), err)
+		}
+	})
+
+	t.Run("one credential answers both", func(t *testing.T) {
+		session := connectListeningClient(t, single)
+		select {
+		case <-acknowledged:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the listen was never acknowledged where every request is the process's own")
+		}
+		if result, listErr := session.ListTools(t.Context(), nil); listErr != nil || len(result.Tools) == 0 {
+			t.Errorf("tools/list = %v, %v; want the catalog", result, listErr)
+		}
+	})
+}
+
+// recordListenAnswers reports what server answered each subscriptions/listen,
+// read by a middleware added last, which makes it the outermost and shows what
+// the whole chain returned. A held listen never returns while its session is
+// open, which is how holding one shows on the channel: nothing arrives.
+func recordListenAnswers(server *mcp.Server) <-chan error {
+	answers := make(chan error, 1)
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			result, err := next(ctx, method, req)
+			if method == methodSubscriptionsListen {
+				select {
+				case answers <- err:
+				default:
+				}
+			}
+			return result, err
+		}
+	})
+	return answers
+}
+
+// recordListenAcknowledgments reports each listen server acknowledged, the
+// SDK's signal that the stream is registered and held open.
+func recordListenAcknowledgments(server *mcp.Server) <-chan struct{} {
+	acknowledged := make(chan struct{}, 1)
+	server.AddSendingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			result, err := next(ctx, method, req)
+			if method == "notifications/subscriptions/acknowledged" {
+				select {
+				case acknowledged <- struct{}{}:
+				default:
+				}
+			}
+			return result, err
+		}
+	})
+	return acknowledged
+}
+
+// connectListeningClient connects a 2026-07-28 client with a list-changed
+// handler, which opens a list-changed-only subscriptions/listen of its own
+// while it connects and sends it without waiting for the answer.
+func connectListeningClient(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
+	client := mcp.NewClient(&mcp.Implementation{Name: "listening-client", Version: "1"}, &mcp.ClientOptions{
+		ToolListChangedHandler: func(context.Context, *mcp.ToolListChangedRequest) {},
+	})
+	session := newInMemorySessionWith(t, server, client, nil)
+	if got := session.InitializeResult().ProtocolVersion; got < protocolVersionStatelessOnly {
+		t.Fatalf("the in-memory client negotiated %s; the listen it opens exists only from %s", got, protocolVersionStatelessOnly)
+	}
+	return session
+}
+
+// assertInternalRefusal holds err to the JSON-RPC internal error carrying
+// message, which is how IDN-007 refuses an unattributed listing or listen.
+func assertInternalRefusal(t *testing.T, err error, message string) {
+	t.Helper()
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInternalError || rpcErr.Message != message {
+		t.Errorf("error = %v, want the internal error %q", err, message)
 	}
 }

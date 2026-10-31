@@ -53,9 +53,11 @@ incluyera.
 Quién hizo una llamada se registra solo si lo pides, mediante
 `--telemetry-identity`. El valor por defecto no registra a nadie. Un ajuste
 intermedio registra un digest por proceso que permite distinguir el tráfico de
-un llamante del de otro sin nombrar a nadie. La identidad completa está
-disponible para una organización que audita a sus propios usuarios en su
-propio colector.
+un llamante del de otro sin nombrar a nadie; un llamante es un usuario de una
+instancia de GitLab, así que el digest se calcula sobre la instancia y el
+identificador de usuario juntos. La identidad completa, el usuario y la
+instancia, está disponible para una organización que audita a sus propios
+usuarios en su propio colector.
 
 El detalle completo, incluido lo que exporta cada modo, está en
 [OpenTelemetry](/gitlab-mcp-server/es/operations/telemetry/).

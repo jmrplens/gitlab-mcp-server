@@ -4390,9 +4390,17 @@ func TestRunStdio_ASignalDuringStartup_IsAStopRatherThanAFailure(t *testing.T) {
 
 // TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted covers the same
 // failure on the wire: the request that triggered the build is answered with
-// the retry-able refusal rather than an empty catalog, and the next request
-// for the same credential builds again instead of finding the poisoned entry
+// a retry-able refusal rather than an empty catalog, and the next request for
+// the same credential builds again instead of finding the poisoned entry
 // cached.
+//
+// Which of two refusals it is depends on whether the pool adopted the entry
+// before the registration failed. Adopted, the request is bound and waits in
+// the readiness gate, which tells it the catalog was not built. Not adopted,
+// because the failed shape was already forgotten, the request reaches the
+// server bound to no credential, and on a shared server an unattributed
+// tools/list is refused as such before anything counts it (issue 953). Both
+// ask for the retry this test exists to prove rebuilds.
 func TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted(t *testing.T) {
 	var builds atomic.Int64
 	failDynamicCatalog(t, &builds)
@@ -4403,8 +4411,9 @@ func TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted(t *testing.T) {
 	for attempt := range 2 {
 		resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 		body := readAndCloseBody(t, resp)
-		if !strings.Contains(body, "retry it") {
-			t.Errorf("request %d = %d %q, want the catalog refusal asking for a retry", attempt, resp.StatusCode, body)
+		if !strings.Contains(body, "retry it") && !strings.Contains(body, toolutil.UnattributedRequestMessage) {
+			t.Errorf("request %d = %d %q, want the catalog refusal or the unattributed one, each asking for a retry",
+				attempt, resp.StatusCode, body)
 		}
 	}
 	if builds.Load() != 2 {

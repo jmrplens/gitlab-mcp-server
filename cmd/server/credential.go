@@ -267,8 +267,10 @@ func (c *credentialStates) remove(owner string, orphaned []*mcp.ServerSession, e
 // every test that builds a server directly: there the server's own client is
 // the answer, and [gitlabclient.Client.For] returns it. On a shape server the
 // same absence means the request fails closed, because the client it falls back
-// to refuses everything. An unbound request runs as the empty principal, so
-// state issued to a bound one yields it no answers.
+// to refuses everything, and it runs under no credential state at all, so it
+// holds no bucket, no listen slot and no watcher; [refuseUnattributed] refuses
+// the two methods that resolve no client. An unbound request runs as the empty
+// principal, so state issued to a bound one yields it no answers.
 //
 // It is added LAST of the receiving middlewares that need it, which makes it
 // run FIRST: the telemetry, rate-limit and subscription middlewares all read
@@ -288,6 +290,52 @@ func (c *credentialStates) bindCredential(next mcp.MethodHandler) mcp.MethodHand
 			return next(ctx, method, req)
 		}
 		return next(withCredentialState(ctx, state), method, req)
+	}
+}
+
+// methodToolsList is the tool catalog listing, the one method
+// [refuseUnattributed] refuses beside the listen.
+const methodToolsList = "tools/list"
+
+// refuseUnattributed refuses, on a server shared by a configuration shape, the
+// two requests nothing else refuses when no credential was bound to them: a
+// tools/list and a subscriptions/listen (issue 953, register row IDN-007).
+//
+// Every other method that needs a credential refuses an unattributed request
+// where it resolves its client: a tool call, a resource read, a prompt, a
+// subscription naming a resource and a completion. These two resolve none. A
+// tools/list reads the registered catalog, and a listen that asks only for
+// list-changed notifications never reaches the subscribe handler, so nothing
+// on their path refused them, and they were answered under the shell's default
+// state: charged to its one bucket, and counted and held on its one listen
+// counter, a budget every request the server could not attribute shared. The
+// shared shell has no default state any more, and this answers both with the
+// refusals the row declares for their methods. Every listen is refused rather
+// than only the list-changed one, because one naming a resource would be
+// refused by the subscribe handler with the same error, after the listen
+// ceilings had counted it.
+//
+// It is added right before [credentialStates.bindCredential], so it runs right
+// after it: before the telemetry, rate-limit, listen-ceiling and subscription
+// middlewares, none of which has anybody to answer for.
+//
+// The server's own listings are let through. Registration, the tool manifest
+// and the server card list the tools on an in-memory session no carrier binds,
+// and each is marked as the server asking itself ([toolutil.WithInternalInspection]).
+// A request that is already over is answered with why it ended, as the other
+// surfaces answer it, since an abandoned POST takes its carrier with it.
+func refuseUnattributed(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+		if credentialStateFrom(ctx) != nil || toolutil.IsInternalInspection(ctx) {
+			return next(ctx, method, req)
+		}
+		switch method {
+		case methodToolsList:
+			return nil, toolutil.UnattributedRequestErrorFor(ctx)
+		case methodSubscriptionsListen:
+			return nil, unboundSubscribeError(ctx)
+		}
+		return next(ctx, method, req)
 	}
 }
 

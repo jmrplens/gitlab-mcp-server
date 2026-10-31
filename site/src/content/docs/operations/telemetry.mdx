@@ -789,6 +789,12 @@ None of these ever reach a **metric**, under any policy. A span carrying a user
 id costs one span; a metric dimension carrying one is a time series per person,
 growing without bound with the number of people using the deployment.
 
+A request an HTTP server could not attribute to any credential is rare, a POST
+whose client went away or a credential the pool dropped while serving it. A
+`tools/list` or a `subscriptions/listen` of that kind is refused before
+telemetry sees it and leaves no span; a tool call, a resource read or a prompt
+is refused by its handler, inside its span.
+
 ## Turning it off
 
 ```bash

@@ -100,17 +100,24 @@ func identifyDecisions() []Decision {
 			},
 		},
 		{
+			// On a server shared by a configuration shape a request no
+			// credential was bound to runs under no state at all: the shell
+			// holds no default bucket or listen counter for it to draw on, and
+			// the methods no handler refuses, a tools/list and a listen asking
+			// only for list-changed notifications, are refused right after the
+			// binding (issue 953, which answered F-15 here). Stdio's one
+			// credential is the default state every request there finds.
 			ID: "IDN-007", Question: Identify, Kind: Rule, Class: ClassP, Disposition: Ruled,
 			Resource: "the state a request no credential was bound to runs under",
 			Key:      KeyUnbound, StdioKey: KeyNone,
-			Findings: []string{"F-15"},
+			Decided: []string{"issue 953"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"tools/call"}, Channel: ToolError, Answer: RetryLater,
 					At: refuse(pkgToolutil, "UnattributedRequestMessage"),
 				},
 				{
-					Methods: []string{"resources/read", "prompts/get"}, Channel: RPC, Code: codeInternalError,
+					Methods: []string{"tools/list", "resources/read", "prompts/get"}, Channel: RPC, Code: codeInternalError,
 					Prefix: "this request could not be attributed to a credential", Answer: RetryLater,
 					At: refuse(pkgToolutil, "UnattributedRequestError"),
 				},
@@ -129,6 +136,7 @@ func identifyDecisions() []Decision {
 			Sites: []Site{
 				enforce(pkgServer, "serverShell.defaultCredentialState"),
 				enforce(pkgServer, "serverShell.stateFor"),
+				enforce(pkgServer, "refuseUnattributed"),
 				refuse(pkgToolutil, "UnattributedRequestMessage"),
 				refuse(pkgToolutil, "UnattributedRequestError"),
 				refuse(pkgServer, "errUnboundSubscribe"),
