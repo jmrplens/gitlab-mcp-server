@@ -276,8 +276,13 @@ list, so they are held to the rules like a person. The one push the ruleset
 lets through is a deploy key's, which is the release workflow's version stamp
 ([SC-01](#sc-01-keep-the-deploy-key-ruleset-bypass-declared)). Until
 2026-10-31 the admin role's mode was **Always allow**, which let it push to
-`main` directly as well. GitHub records each bypass of the ruleset, a version
-stamp's push included, and lists them:
+`main` directly as well. A fix developed in a security advisory's temporary
+private fork reaches `main` as a pull request merge: the rule suite of
+`39b7093af`, merged that way under the old mode, passed the pull request rule
+and bypassed only the required check, which never runs in such a fork, so the
+pull-request-only mode should still admit it, and the next advisory merged from
+its fork is the first to show that it does. GitHub records each bypass of the
+ruleset, a version stamp's push included, and lists them:
 
 ```bash
 gh api 'repos/jmrplens/gitlab-mcp-server/rulesets/rule-suites?ref=refs/heads/main&rule_suite_result=bypass&time_period=month' \
@@ -327,11 +332,17 @@ push to `main` the ruleset lets through, which is why the mode stays **Always
 allow** for deploy keys while the admin role's is **For pull requests only**:
 the workflow makes the commit with nobody there to open or merge a pull request
 for it, its content is what the release determined, and the job checks out
-`main` afresh, runs no
-third-party code and is given the key only for a tag's run, never a
-rehearsal's. The entry names deploy keys as a kind, not one key, so a deploy
-key with write access is added to this repository for this job alone: today
-there is one, `release-manifest-bot-20260601-084942`, added on 2026-06-01.
+`main` afresh, runs no action but GitHub's checkout and Sigstore's cosign
+installer, each pinned to a commit, and is given the key only for a tag's run,
+never a rehearsal's. The step reads the copy of the key the `release`
+environment holds, which deploys only from a `v*` tag, and an expression in the
+step empties it in a rehearsal. A second copy has been a repository secret since
+the key was made: no job reads it, and any workflow run of this repository that
+named it would be handed it, the gap the caveat of
+[the release environment item](#sc-04-deploy-the-release-environment-from-release-tags-only)
+describes. The entry names deploy keys as a kind, not one key, so a deploy key
+with write access is added to this repository for this job alone: today there
+is one, `release-manifest-bot-20260601-084942`, added on 2026-06-01.
 
 **How to check.**
 
