@@ -79,10 +79,13 @@ env:
   FRESHNESS: ${{ github.event_name == 'pull_request' && ((github.event.pull_request.stack != null && github.event.pull_request.stack.position != github.event.pull_request.stack.size) || (github.event.pull_request.stack == null && github.event.pull_request.base.ref != 'main')) && 'deferred' || 'checked' }}
 
 jobs:
-  # The unit suite with coverage, and nothing else: it is the longest single
-  # command in the pipeline at close to seven minutes, so anything that shares
-  # a job with it waits on it for no reason, and the only consumer of its
-  # output is the SonarCloud scan below.
+  # The unit suite with coverage, and only the two short gates that belong
+  # with it: the suite is the longest single command in the pipeline at close
+  # to seven minutes, so anything else that shares a job with it waits on it
+  # for no reason. The request inventory check reads the recording the suite
+  # leaves, and the e2e support packages' coverage is here because it is the
+  # gate that reads coverage (issue 1461), at about a minute. The coverage
+  # profile's only consumer is the SonarCloud scan below.
   coverage:
     name: "🧪 Coverage"
     runs-on: ubuntu-latest
