@@ -1,19 +1,19 @@
 ---
 title: Hoja de ruta
-description: Qué pretende hacer GitLab MCP Server durante los próximos doce meses, y qué ha decidido no hacer.
+description: Qué pretende hacer GitLab MCP Server hasta diciembre de 2027, y qué ha decidido no hacer.
 datePublished: "2026-10-25"
 faq:
   - q: "¿Tiene GitLab MCP Server una hoja de ruta?"
-    a: "Sí. Abarca los doce meses hasta octubre de 2027: seguir cada release mensual de GitLab y mantener una acción por cada operación que ofrecen las API REST y GraphQL de GitLab, acompañar el siguiente major de client-go y cada revisión de la especificación MCP, cerrar lo que un token granular todavía no alcanza, dar a cada límite de un despliegue compartido un valor por defecto y una regla al llegar a su capacidad, y terminar la reorganización de la documentación. Es una declaración de rumbo, no un calendario: el milestone abierto en GitHub reúne lo previsto para la siguiente release."
+    a: "Sí. Abarca los meses hasta diciembre de 2027: seguir cada release mensual de GitLab y mantener una acción por cada operación que ofrecen las API REST y GraphQL de GitLab, acompañar el siguiente major de client-go y cada revisión de la especificación MCP, cerrar lo que un token granular todavía no alcanza, mantener cada límite de un despliegue compartido con un valor por defecto y una regla al llegar a su capacidad, y terminar la reorganización de la documentación. Es una declaración de rumbo, no un calendario: el milestone abierto en GitHub reúne lo previsto para la siguiente release."
   - q: "¿Aceptará GitLab MCP Server webhooks de GitLab?"
     a: "No. El servidor no ejecuta ningún receptor de webhooks, en ningún modo de transporte. Las suscripciones a recursos se atienden consultando GitLab periódicamente con el token del propio suscriptor, y las fuentes de eventos que ofrece GitLab y que un proceso podría consultar o recibir en su lugar se estudiaron y se descartaron. Las dos decisiones están registradas como registros de decisiones de arquitectura, ADR-0016 y ADR-0017."
 ---
 
 import FAQ from "../../../components/FAQ.astro";
 
-Esta página dice hacia dónde va el proyecto durante los doce meses hasta octubre de 2027: qué pretende hacer y qué ha decidido no hacer. Es una declaración de rumbo, no un calendario ni una promesa. El trabajo llega cuando está listo, el [milestone](https://github.com/jmrplens/gitlab-mcp-server/milestones) abierto en GitHub reúne los issues previstos para la siguiente release, y el mantenedor fija las prioridades como describe [GOVERNANCE.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/GOVERNANCE.md).
+Esta página dice hacia dónde va el proyecto hasta diciembre de 2027: qué pretende hacer y qué ha decidido no hacer. Es una declaración de rumbo, no un calendario ni una promesa. El trabajo llega cuando está listo, el [milestone](https://github.com/jmrplens/gitlab-mcp-server/milestones) abierto en GitHub reúne los issues previstos para la siguiente release, y el mantenedor fija las prioridades como describe [GOVERNANCE.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/GOVERNANCE.md).
 
-Revisada por última vez el 2026-10-25. La página se revisa al menos una vez al año, y cada vez que una release mayor cambia el rumbo.
+Revisada por última vez el 2026-10-31. La página se revisa al menos una vez al año, y cada vez que una release mayor cambia el rumbo.
 
 ## Qué pretende hacer el proyecto
 
@@ -27,15 +27,15 @@ El objetivo no cambia: una acción por cada operación que ofrecen las API REST 
 
 La versión mayor del servidor sigue a la de [client-go](https://gitlab.com/gitlab-org/api/client-go), el cliente de la API de GitLab sobre el que está construido. Cuando client-go publique su siguiente major, el servidor pasará a su propio siguiente major en la misma actualización de dependencias, y el resto de actualizaciones de dependencias se publican como releases minor o patch. Esa fecha la marca client-go, así que esta página no da ninguna.
 
-Cada revisión de la [especificación MCP](https://modelcontextprotocol.io/) se adopta a medida que el [SDK de MCP para Go](https://github.com/modelcontextprotocol/go-sdk) la soporta. Una propuesta que cambiaría lo que envía el servidor, como el idioma en el que lee el usuario ([issue 1013](https://github.com/jmrplens/gitlab-mcp-server/issues/1013)), se sigue hasta que se integra en la especificación, y se implementa entonces.
+Cada revisión de la [especificación MCP](https://modelcontextprotocol.io/) se adopta a medida que el [SDK de MCP para Go](https://github.com/modelcontextprotocol/go-sdk) la soporta. Una propuesta que cambiaría lo que envía el servidor, como que cada petición pueda nombrar el idioma en el que lee su usuario ([issue 1013](https://github.com/jmrplens/gitlab-mcp-server/issues/1013)), se sigue hasta que se integra en la especificación, y se implementa entonces. Hasta entonces el idioma lo decide el operador, uno para todo el proceso: desde la 3.4.0, `GITLAB_MCP_LANGUAGE=es` sirve en español [los textos que una persona lee directamente](/gitlab-mcp-server/es/capabilities/elicitation/#en-qué-idioma-se-hacen-las-preguntas), como las preguntas de los flujos guiados y los mensajes de progreso.
 
 ### Cerrar lo que un token granular no alcanza
 
 Un [token granular](/gitlab-mcp-server/es/operations/fine-grained-tokens/) se juzga acción por acción a partir de sus permisos. GitLab todavía deja parte de su API fuera de cualquier permiso, y el proyecto lo sigue a medida que los amplía: servir una acción por REST cuando un token granular no alcanza su GraphQL ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)), leer los permisos de la propia respuesta del token cuando GitLab los envía ahí ([issue 1400](https://github.com/jmrplens/gitlab-mcp-server/issues/1400)), y que las acciones que crean tokens puedan enviar los permisos granulares que GitLab acepta ([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
 
-### Dar a cada límite de un despliegue compartido una sola regla
+### Mantener cada límite de un despliegue compartido bajo una sola regla
 
-En el [modo HTTP](/gitlab-mcp-server/es/operations/http-server/) un proceso atiende a muchos llamantes, y lo que cada uno puede tener, gastar o recibir es un límite. Los límites se deciden en un único registro que leen las capas del servidor. Lo que falta es dar a cada límite un único valor por defecto documentado, un único significado para el cero y una única regla para lo que ocurre al llegar a su capacidad ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958)), y llevar bajo esa regla los ajustes que todavía se leen fuera de la regla de nombres y lectura de la configuración ([issue 957](https://github.com/jmrplens/gitlab-mcp-server/issues/957)).
+En el [modo HTTP](/gitlab-mcp-server/es/operations/http-server/) un proceso atiende a muchos llamantes, y lo que cada uno puede tener, gastar o recibir es un límite. Los límites se deciden en un único registro que leen las capas del servidor. Desde la 3.4.0 cada límite tiene un único valor por defecto documentado, un significado declarado para el cero y una única regla para lo que ocurre al llegar a su capacidad ([issue 958](https://github.com/jmrplens/gitlab-mcp-server/issues/958)), y cada límite que fija el operador se lee bajo la regla de nombres y lectura de la propia configuración ([issue 957](https://github.com/jmrplens/gitlab-mcp-server/issues/957)). Un límite que se añada después se escribe como una fila del registro, cuyas comprobaciones someten esa fila a las mismas reglas.
 
 ### Terminar la documentación y las herramientas
 
