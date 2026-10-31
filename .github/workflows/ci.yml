@@ -1227,9 +1227,10 @@ jobs:
   #
   # A push to main has nothing for it to judge, so the job skips itself there
   # and the verdict below counts the skip as a pass: main receives the squash
-  # commit, into which GitHub copies the sign-offs of the pull request's
-  # commits, and the release workflow's version stamp, which never sits in a
-  # pull request.
+  # commit of a pull request whose commits this job has already judged, a fix
+  # merged from a security advisory's temporary private fork, whose pull
+  # request GitHub runs no check on (SECURITY.md, Coordinated Disclosure), and
+  # the release workflow's version stamp, which never sits in a pull request.
   dco:
     name: "✍️ DCO sign-off"
     if: github.event_name == 'pull_request'

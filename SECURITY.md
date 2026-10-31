@@ -22,21 +22,34 @@ English (preferred) or Spanish.
 
 ## Response SLA
 
-| Stage                       | Target                                                                       |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| Acknowledgement of report   | within **48 hours**                                                          |
-| Initial triage and severity | within **7 days**                                                            |
-| Fix for **Critical / High** | within **30 days** of confirmation                                           |
-| Fix for **Medium / Low**    | within **90 days** of confirmation                                           |
-| Public advisory             | a few days after the release that carries the fix, so users can update first |
+| Stage                       | Target                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| Acknowledgement of report   | within **48 hours**                                                           |
+| Initial triage and severity | within **7 days**                                                             |
+| Fix for **Critical / High** | within **30 days** of confirmation                                            |
+| Fix for **Medium / Low**    | within **90 days** of confirmation                                            |
+| Public advisory             | once the release that carries the fix is published, which can be the same day |
 
 These targets are best-effort for a maintainer-driven open-source project. We will keep you informed of progress and any expected delay.
 
-One advisory has been published so far.
-[GHSA-fcj2-hj27-hj26](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/GHSA-fcj2-hj27-hj26),
-rated High, was reported on 12 June 2026 and fixed in 3.0.0, released on
-10 September 2026: 90 days after the report, where the target for a High is 30
-days from confirmation. Its advisory was published on 14 September.
+Two advisories have been published so far:
+
+- [GHSA-fcj2-hj27-hj26](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/GHSA-fcj2-hj27-hj26),
+  rated High, was a server-side request forgery in legacy HTTP mode: with no
+  fixed GitLab URL, a caller chose the host the server sent requests to through
+  the `GITLAB-URL` header. It was reported on 12 June 2026 and fixed in 3.0.0,
+  released on 10 September 2026: 90 days after the report, where the target for
+  a High is 30 days from confirmation. Its advisory was published on
+  14 September.
+- [GHSA-rxjw-584q-hxjr](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/GHSA-rxjw-584q-hxjr),
+  rated Medium, was a tool argument placed into the path of a request to GitLab
+  without a check for path separators or dot segments, so a crafted value could
+  make the request name a different GitLab API endpoint than the action
+  intended, under the user's own token. The maintainer found it in the
+  [October 2026 security review](docs/development/security-review-2026-10.md#findings),
+  where it is finding 8, and opened its advisory on 28 October 2026. It was
+  fixed in 3.4.0, released on 31 October 2026, and its advisory was published
+  the same day.
 
 ## Threat model
 
@@ -92,6 +105,17 @@ That shape is what determines whether something counts as a vulnerability here.
 - **Path traversal on file operations.** Upload and file-content tools take
   caller-supplied paths; one that escapes its intended directory or reads
   something the operator did not expose is a vulnerability.
+- **Path traversal in a request path.** A tool argument placed into the path of
+  a request to GitLab that, with a separator or a dot segment, makes the
+  request name a different GitLab endpoint from the one its action names. It
+  is a vulnerability even though the request still carries the user's own token,
+  as [GHSA-rxjw-584q-hxjr](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/GHSA-rxjw-584q-hxjr)
+  was.
+- **Bypassing a per-action control.** The tool exclusion list
+  (`GITLAB_MCP_EXCLUDE_TOOLS`), the tier filter, the chosen tool surface and the
+  confirmation a destructive action asks for are enforcement, like the read-only
+  and safe modes. A call that reaches a GitLab endpoint past any of them, or
+  runs a destructive action without its confirmation, is a vulnerability.
 - **Server-side request forgery.** A caller-controlled value that redirects an
   API request away from the configured `GITLAB_URL` to an internal address.
 
@@ -152,9 +176,9 @@ We follow a **coordinated disclosure** model aligned with [ISO/IEC 29147](https:
 
 1. You report privately, through GitHub's private vulnerability reporting or by email, as [above](#reporting-a-vulnerability).
 2. We acknowledge the report, triage it, and confirm the issue.
-3. We develop and test the fix in this repository, as pull requests that run the same CI as any other change, while the report itself stays private. The fix of GHSA-fcj2-hj27-hj26 was developed that way, in [#479](https://github.com/jmrplens/gitlab-mcp-server/pull/479) and [#645](https://github.com/jmrplens/gitlab-mcp-server/pull/645).
+3. We develop and test the fix while the report itself stays private, in one of two ways. Either in pull requests of this repository, which run the same CI as any other change: the fix of GHSA-fcj2-hj27-hj26 was developed that way, in [#479](https://github.com/jmrplens/gitlab-mcp-server/pull/479) and [#645](https://github.com/jmrplens/gitlab-mcp-server/pull/645). Or in the advisory's temporary private fork, which is merged into `main` from the advisory: GitHub runs no CI and no status checks in such a fork, so the repository's CI first runs on the fix once it is on `main`. The fix of GHSA-rxjw-584q-hxjr was developed that way and merged as [`39b7093af`](https://github.com/jmrplens/gitlab-mcp-server/commit/39b7093afffede232184c1e385b1ef4a215b0258).
 4. We release the fix, and request a CVE through GitHub when applicable.
-5. A few days after the release, so users can update first, we publish the GitHub Security Advisory with the full technical details, crediting you as you choose. For GHSA-fcj2-hj27-hj26 that was four days.
+5. Once the release that carries the fix is published, we publish the GitHub Security Advisory with the full technical details, crediting you as you choose. That can be the same day: GHSA-rxjw-584q-hxjr was published on 31 October 2026, the day 3.4.0 was released, once the release workflow had finished, with its fix already public on `main`. GHSA-fcj2-hj27-hj26 was published four days after 3.0.0.
 
 If a vulnerability is being actively exploited in the wild, we may publish the advisory sooner to protect users.
 
@@ -288,6 +312,10 @@ from a model that may have read attacker-influenced content.
 - Required parameters are checked explicitly — missing values produce clear error messages.
 - Integer IDs are validated to prevent injection.
 - String parameters are sanitized where applicable.
+- A tool argument placed into a request path is refused before any request is
+  built if it carries a `.` or `..` segment, and is escaped so that a separator
+  stays inside it; the GitLab transport also refuses any request whose path
+  carries a dot segment, as it stands or once decoded (from 3.4.0).
 
 ### Error Handling
 
