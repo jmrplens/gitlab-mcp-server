@@ -106,7 +106,7 @@ func resolveBuildVersion(ldflagsVersion, ldflagsCommit string, readBuildInfo fun
 
 // Project metadata.
 const (
-	projectAuthor     = "Jose Manuel Requena Plens"
+	projectAuthor     = "José M. Requena Plens"
 	projectDepartment = ""
 	projectRepository = "https://github.com/jmrplens/gitlab-mcp-server"
 

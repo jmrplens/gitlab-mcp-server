@@ -519,7 +519,7 @@ export default defineConfig({
 					tag: "meta",
 					attrs: {
 						name: "author",
-						content: "José Manuel Requena Plens",
+						content: "José M. Requena Plens",
 					},
 				},
 				// Theme color
