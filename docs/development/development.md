@@ -435,8 +435,13 @@ GITLAB_COM_TOKEN=glpat-... \
 
 ### Example: Adding a tools sub-package
 
+Each new file opens with the copyright and license header and a blank line, which `make check-file-headers` requires and `make fix-file-headers` writes ([Copyright and License Headers](file-headers.md)).
+
+In `internal/tools/branches/branches.go`:
+
 ```go
-// internal/tools/branches/branches.go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
 
 package branches
 
@@ -461,8 +466,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 }
 ```
 
+In `internal/tools/branches/action_specs.go`:
+
 ```go
-// internal/tools/branches/action_specs.go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
 
 package branches
 

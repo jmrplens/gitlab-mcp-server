@@ -57,6 +57,8 @@ Without the blank line the header would be read as the package's doc comment, wh
 
 A generated file carries the header because its generator writes it, never by an edit of the output: `cmd/gen_action_catalog_manifest`, `cmd/gen_action_grants` and `cmd/gen_brand` open the Go file each writes with `fileheader.Go`, before the `// Code generated` line, and each has a test holding it there (`TestGenerateManifest_OpensWithTheFileHeader`, `TestRenderTable_OpensWithTheFileHeader`, `TestBrandMarkGo_OpensWithTheFileHeader`). A new generator that writes source does the same; the gate fails its output otherwise, the first time it is regenerated.
 
+`scripts/build_pypi.py` writes source the gate never reads: the two Python modules of the PyPI wheel, `gitlab_mcp_server/__init__.py` and `gitlab_mcp_server/__main__.py`, which exist only inside the wheels it builds and the registry publishes. Both open with the header in its `#` form and a blank line, from the script's `FILE_HEADER`, which is spelled on one line because the gate reads each line of the script alone and would take a line of a multi-line string opening with the notice for a second copy of the script's own header. Since no gate sees the modules, `test_the_package_modules_open_with_the_file_header` in `scripts/validate_pypi_test.py` builds the wheels and holds both to the header the script itself opens with.
+
 The other generators write documentation and data (the tool reference, the `llms*.txt` files, JSON records, SVG and WebP assets), which carry no header.
 
 ## A file this repository did not write

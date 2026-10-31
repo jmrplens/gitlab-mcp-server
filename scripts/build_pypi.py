@@ -91,7 +91,16 @@ LICENSE_FILES = [("LICENSE", os.path.join(ROOT, "LICENSE"))]
 # value.
 NOTICES = "THIRD_PARTY_NOTICES"
 
-LAUNCHER = '''\
+# The copyright and license header the two Python modules of the package open
+# with, followed by the blank line that keeps it apart from what comes next:
+# the wheel publishes them as source, and every source file of the project
+# carries the header (cmd/internal/fileheader). It is one line here because
+# make check-file-headers reads each line of this script alone, so a line of
+# the strings below that opened with the notice would count as a second copy
+# of this file's own header.
+FILE_HEADER = "# Copyright (c) 2026 José M. Requena Plens\n# SPDX-License-Identifier: MIT\n\n"
+
+LAUNCHER = FILE_HEADER + '''\
 """Locator for the gitlab-mcp-server binary installed by this wheel.
 
 The binary itself ships in the wheel's .data/scripts directory, so the
@@ -140,7 +149,7 @@ def main():
     os.execv(path, argv)
 '''
 
-MAIN_MODULE = '''\
+MAIN_MODULE = FILE_HEADER + '''\
 from gitlab_mcp_server import main
 
 if __name__ == "__main__":

@@ -75,6 +75,9 @@ mkdir -p ${dstDir}
 Create minimal `doc.go` if this is a new package:
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package branches implements MCP tool handlers for GitLab branch operations.
 package branches
 ```
@@ -163,6 +166,9 @@ Verify after each consumer update: `go build ./...`
 Create or update `${dstDir}/action_specs.go` with canonical `ActionSpecs()` metadata:
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package branches
 
 import (
