@@ -73,8 +73,8 @@ Action guidance:
 - invite_list_project: List the pending (not yet accepted) invitations for a project. Use to audit outstanding email invitations before resending or revoking them. This lists invitations, not current members.
 - invite_project: Invite a user to a project by email address or user_id with a chosen access_level. Use when adding someone who is not yet a project member, including external users invited by email. For users who already have an account prefer project.member_add.
 - request_group: Request membership access to a group for the authenticated user. Use to self-request joining a group. An owner must later approve or deny the request.
-- request_list_group: List pending group access requests. Use before approving or denying user access requests at group scope. Supports order_by, sort, and keyset pagination.
-- request_list_project: List pending project access requests. Use before approving or denying user access requests at project scope. Supports order_by, sort, and keyset pagination.
+- request_list_group: List pending group access requests. Use before approving or denying user access requests at group scope. Supports order_by, sort, and offset pagination.
+- request_list_project: List pending project access requests. Use before approving or denying user access requests at project scope. Supports order_by, sort, and offset pagination.
 - request_project: Request membership access to a project for the authenticated user. Use to self-request joining a project. A maintainer must later approve or deny the request.
 - token_group_create: Use for GitLab group access tokens: this action creates a group-scoped API token.
 - token_group_get: Use for GitLab group access tokens: this action gets a group-scoped API token.
@@ -146,8 +146,8 @@ Parameter guidance:
 - invite_project.user_id: user_id. Source: Numeric user ID when inviting an existing GitLab user. Avoid: Use user_id for existing accounts and email otherwise. Do not pass a username here.
 - request_group.group_id: scope_group. Source: Group numeric ID or full path to request access to.
 - request_list_group.group_id: scope_group. Source: Group numeric ID or full path where requests are pending.
-- request_list_group.order_by. Source: Column to order keyset-paginated results by (e.g. id). Avoid: Combine order_by with sort (asc/desc). Do not pass natural-language phrases as the field value.
-- request_list_project.order_by. Source: Column to order keyset-paginated results by (e.g. id). Avoid: Combine order_by with sort (asc/desc). Do not pass natural-language phrases as the field value.
+- request_list_group.order_by. Source: Column to order results by (e.g. id). Avoid: Combine order_by with sort (asc/desc). Do not pass natural-language phrases as the field value.
+- request_list_project.order_by. Source: Column to order results by (e.g. id). Avoid: Combine order_by with sort (asc/desc). Do not pass natural-language phrases as the field value.
 - request_list_project.project_id: scope_project. Source: Project numeric ID or path where access requests are pending.
 - request_project.project_id: scope_project. Source: Project numeric ID or path to request access to.
 - token_group_create.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
@@ -2041,7 +2041,7 @@ Action guidance:
 - instance_create: Create an instance-level CI/CD variable. Admin-only. Use for instance-wide pipeline/runtime configuration that should not be stored in repository files.
 - instance_delete: Delete an instance-level CI/CD variable by key. Admin-only.
 - instance_get: Get one instance-level CI/CD variable by key. Admin-only. Use when exact variable settings are needed.
-- instance_list: List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination. Admin-only. Use to inspect the instance variable inventory before get/update/delete actions.
+- instance_list: List instance-level CI/CD variables with order_by, sort, and offset pagination. Admin-only. Use to inspect the instance variable inventory before get/update/delete actions.
 - instance_update: Update an instance-level CI/CD variable by key. Admin-only.
 - list: List project CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions.
 - update: Update an existing project CI/CD variable's value or flags by key (and optional environment scope). Use to rotate secrets or change protected/masked settings without recreating the variable.
@@ -2601,12 +2601,12 @@ Action guidance:
 - feature_flag_create: Create a feature flag in a project. Provide a name and optionally description, version, active, and activation strategies (each with a name, parameters, and environment scopes). Requires Developer+ on a Premium/Ultimate project.
 - feature_flag_delete: Permanently delete a feature flag by name. Destructive and irreversible. Confirm project_id and name before calling. Requires Maintainer+ on a Premium/Ultimate project.
 - feature_flag_get: Get one feature flag by its name (case-sensitive). Use after a list result or when the prompt names a concrete flag to inspect its active state, scopes, and strategies.
-- feature_flag_list: List a project's feature flags. Use scope to filter enabled/disabled flags and order_by/sort plus pagination (offset or keyset) to page through large result sets. Requires GitLab Premium/Ultimate.
+- feature_flag_list: List a project's feature flags. Use scope to filter enabled/disabled flags and order_by/sort plus offset pagination to page through large result sets. Requires GitLab Premium/Ultimate.
 - feature_flag_update: Update a feature flag by name. Use to rename it, change description or active state, or replace activation strategies. Requires Developer+ on a Premium/Ultimate project.
 - ff_user_list_create: Create a named feature flag user list of user_xids in a project so feature flag strategies can roll a flag out to that explicit cohort of users.
 - ff_user_list_delete: Delete a feature flag user list by its user_list_iid. Only do this once no feature flag strategy references the cohort, since the user_xids it groups are removed permanently.
 - ff_user_list_get: Get one feature flag user list by its user_list_iid to inspect the cohort name and the exact set of user_xids it targets for percentage or user-id rollout strategies.
-- ff_user_list_list: List a project's feature flag user lists (the named cohorts of user_xids targeted by gradual rollout strategies) with search, ordering, and offset or keyset pagination. Use it to discover a list's user_list_iid before getting, updating, or deleting it.
+- ff_user_list_list: List a project's feature flag user lists (the named cohorts of user_xids targeted by gradual rollout strategies) with search, ordering, and offset pagination. Use it to discover a list's user_list_iid before getting, updating, or deleting it.
 - ff_user_list_update: Update a feature flag user list's name or its set of user_xids by user_list_iid to change which users a rollout cohort targets without recreating the list.
 Parameter guidance:
 - feature_flag_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -4492,7 +4492,7 @@ Action guidance:
 - discussion_create: Open a new discussion thread on an issue with an initial note. Use this to start a threaded conversation rather than a flat comment (use issue.note_create for a non-threaded note). Supports backdating via created_at for admins/owners.
 - discussion_delete_note: Permanently delete a note from an issue discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
 - discussion_get: Fetch one discussion thread on an issue by its discussion_id, returning every note in the thread. Use this after issue.discussion_list when the target thread is already known.
-- discussion_list: List all discussion threads on one issue, including system notes and threaded replies. Use this when the prompt asks for an issue's comment threads or conversation history, or before replying to a thread with issue.discussion_add_note. Supports order_by, sort, and keyset pagination.
+- discussion_list: List all discussion threads on one issue, including system notes and threaded replies. Use this when the prompt asks for an issue's comment threads or conversation history, or before replying to a thread with issue.discussion_add_note. Supports order_by, sort, and offset pagination.
 - discussion_update_note: Edit the body of an existing note in an issue discussion thread. Only the note author can edit a note. Identify the note with discussion_id plus note_id.
 - emoji_issue_create: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_delete: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
@@ -4523,7 +4523,7 @@ Action guidance:
 - note_create: Add a comment (note) to an issue. Use when the task asks to comment on, reply to, or annotate an existing issue. Set internal=true for a confidential note visible only to project members.
 - note_delete: Permanently delete an issue note. Destructive and irreversible. Only the note author or a project Maintainer can delete a note. System notes cannot be deleted. Requires explicit confirmation.
 - note_get: Get one issue note by params.note_id. Use when the task references a specific comment or note ID on an issue.
-- note_list: List all comments (notes) on an issue, including system notes. Use when the task asks to read an issue's discussion, recent comments, or activity. Supports order_by, sort, and keyset pagination.
+- note_list: List all comments (notes) on an issue, including system notes. Use when the task asks to read an issue's discussion, recent comments, or activity. Supports order_by, sort, and offset pagination.
 - note_update: Replace the body of an existing issue note. Only the original author can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment.
 - participants: List the users participating in an issue (author, assignees, commenters, and subscribers), one page at a time with page and per_page.
 - reorder: Reposition an issue relative to another issue (move before or after) to change its manual order on a board or list.
@@ -5335,7 +5335,7 @@ Action guidance:
 - keep_artifacts: Prevent a CI job's artifacts from expiring by project_id and job_id. Use this to retain build outputs indefinitely by clearing the artifact expire_at. Requires Maintainer+.
 - list: List jobs for one pipeline by project_id and pipeline_id. Use this when the prompt references a specific pipeline and asks which jobs ran, failed, or are pending. Filter by scope and paginate as needed.
 - list_bridges: List bridge (trigger) jobs for one pipeline by project_id and pipeline_id. Use this to inspect downstream or multi-project pipeline triggers. Bridges exist only on pipelines that trigger child pipelines. Filter by scope, add retried bridges with include_retried, and page with page and per_page: GitLab offers no ordering or keyset pagination on this list.
-- list_project: List jobs in one project. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project. Combine filters and pagination as needed.
+- list_project: List jobs in one project, newest first, retried jobs included. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project. Filter by scope and paginate as needed: GitLab offers no other ordering on this list.
 - play: Run a manual CI job by project_id and job_id, optionally injecting job_variables_attributes. Use this for jobs defined as when:manual that have not yet run. Use retry for finished jobs.
 - retry: Retry a failed or canceled CI job by project_id and job_id. Use this to re-run a job that ended in failure. Running or successful jobs cannot be retried.
 - token_scope_add_group: Add a group to this project's CI/CD job token allowlist so job tokens from the group's projects may access this project. Requires GitLab 17.0+.
@@ -5412,7 +5412,7 @@ Param conventions: * = required. All job actions need project_id*. List actions 
 
 Jobs:
 - list: project_id*, pipeline_id*, scope
-- list_project: project_id*, scope, include_retried
+- list_project: project_id*, scope
 - get: project_id*, job_id*
 - trace: project_id*, job_id*. Returns job log (truncated to 100KB).
 - cancel / retry / erase / keep_artifacts: project_id*, job_id*
@@ -5652,7 +5652,7 @@ Action guidance:
 - approval_reset: Reset (clear) all existing approvals on a merge request. Only a bot user that may approve it can: a project or group access token, or a service account's token. A person's token is refused, and so is a merge request that is already merged. Use when approvals must be re-collected after changes.
 - approve: Add the caller's approval to a merge request. Pass sha to approve only if the MR HEAD still matches (a safety check against new pushes).
 - cancel_auto_merge: Cancels auto-merge on a merge request and returns the merge request. It does not cancel a running pipeline. When the instance is known to run GitLab 19.5 or later, a merge request with no auto-merge set is refused, while an older instance, one whose version cannot be read, or a node of the instance not yet on 19.5 answers with the merge request as it is.
-- commits: List the commits contained in a merge request, ordered and paginated (offset or keyset).
+- commits: List the commits contained in a merge request, ordered and paged by offset.
 - context_commits_create: Attach one or more existing repository commit SHAs to a merge request as context commits, adding them to the review without changing the MR's source/target branches. Resolve SHAs with repository.commit_list or merge_request.commits first.
 - context_commits_delete: Remove specified context commits from a merge request by SHA, detaching them from the review without deleting the underlying repository commits. List context commits first to confirm which SHAs are currently pinned.
 - context_commits_list: List the context commits attached to a merge request, one page at a time with page and per_page: extra commits a reviewer added for context that are not part of the MR's diff range. Use after merge_request.get to inspect which supplementary commits are pinned to the review.
@@ -5676,9 +5676,9 @@ Action guidance:
 - event_mr_state_list: List the state-change audit events for one merge request (close, reopen, and merge transitions and who made them).
 - get: Fetch a single merge request by its project-scoped IID, optionally including diverged-commit count, rebase-in-progress state, or HTML-rendered title/description.
 - issues_closed: List issues that will be closed when this merge request is merged (issues referenced via 'Closes #N' in the MR description or commits).
-- list: List merge requests in one project with rich filtering (state, labels, author/assignee/reviewer, approvals, environment, dates) and offset or keyset pagination.
+- list: List merge requests in one project with rich filtering (state, labels, author/assignee/reviewer, approvals, environment, dates) and offset pagination.
 - list_global: List merge requests across projects. When scope is omitted GitLab answers scope=created_by_me, only the merge requests the caller created. Pass scope=all for every merge request the caller can see, or assigned_to_me or reviews_for_me for the ones assigned to the caller or where it is a reviewer, and narrow with author, reviewer, approval, or label filters.
-- list_group: List merge requests across a group and its subgroups/projects with state, author, reviewer, approval, and label filters plus offset or keyset pagination.
+- list_group: List merge requests across a group and its subgroups/projects with state, author, reviewer, approval, and label filters plus offset pagination.
 - merge: Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use pipeline.wait unless the task only asks to wait for an existing pipeline.
 - participants: List the users participating in a merge request (author, assignees, reviewers, commenters), one page at a time with page and per_page.
 - pipelines: Lists pipelines attached to a merge request, one page at a time with page and per_page. Use pipeline.wait with the returned pipeline_id only when the task asks to wait for CI completion.
@@ -6349,7 +6349,7 @@ Action guidance:
 - diff_versions_list: List the diff versions (historical snapshots) of a merge request. Use when the prompt asks for the MR's diff revisions or version history. Returns version IDs and SHAs but not the diffs themselves. Pass a version_id to diff_version_get to retrieve the actual diff.
 - discussion_create: Open a new discussion thread on a merge request. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners.
 - discussion_get: Fetch one discussion thread on a merge request by its discussion_id, returning every note in the thread. Use this after mr_review.discussion_list when the target thread is already known.
-- discussion_list: List all discussion threads on one merge request, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for an MR's review conversation, or before replying to or resolving a thread. Supports order_by, sort, and keyset pagination.
+- discussion_list: List all discussion threads on one merge request, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for an MR's review conversation, or before replying to or resolving a thread. Supports order_by, sort, and offset pagination.
 - discussion_note_delete: Permanently delete a note from a merge request discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
 - discussion_note_update: Edit the body of a note in a merge request discussion thread, or resolve/unresolve a single resolvable note. Only the note author can edit the body. Only Maintainers can change the resolved flag. Identify the note with discussion_id plus note_id.
 - discussion_reply: Reply to an existing merge request discussion thread by adding a note. Use this after mr_review.discussion_list or mr_review.discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
@@ -6364,7 +6364,7 @@ Action guidance:
 - note_create: Add a general comment (note) to a merge request. Use when the task asks to comment on, reply to, or annotate an existing MR. Set internal=true for a confidential note visible only to project members.
 - note_delete: Permanently delete a merge request note. Destructive and irreversible. Only the note author or a project Maintainer can delete a note. System notes cannot be deleted. Requires explicit confirmation.
 - note_get: Get one merge request note by params.note_id. Use when the task references a specific comment or note ID on an MR.
-- note_list: List all comments (notes) on a merge request, including system notes. Use when the task asks to read an MR's discussion, recent comments, or activity. Supports order_by, sort, and keyset pagination.
+- note_list: List all comments (notes) on a merge request, including system notes. Use when the task asks to read an MR's discussion, recent comments, or activity. Supports order_by, sort, and offset pagination.
 - note_update: Replace the body of an existing merge request note. Only the original author can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment.
 - raw_diffs: Get the raw unified-diff output for a merge request in plain-text git-apply format. Use this when a raw patch or unified diff is requested, or when changes_get reports truncated_files and the full diff payload is needed.
 Parameter guidance:
@@ -6377,7 +6377,6 @@ Parameter guidance:
 - diff_version_get.unidiff. Source: Set true to request diffs rendered in unified-diff format.
 - diff_version_get.version_id: mr_diff_version_id. Source: Diff version ID taken from a prior diff_versions_list result. Avoid: Use the diff version id, not the merge_request_iid or a commit SHA.
 - diff_versions_list.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the MR URL or prior list output. Avoid: Use the project-scoped IID, not the MR's global database ID.
-- diff_versions_list.order_by. Source: Column to order keyset-paginated results by. Avoid: Combine order_by with sort and pagination='keyset'. Not a free-text phrase.
 - diff_versions_list.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or the MR's global ID.
 - discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
 - discussion_create.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
@@ -6480,9 +6479,9 @@ Discussions (threaded, can be inline via position):
 - discussion_note_delete: discussion_id*, note_id*
 
 Changes and diff versions:
-- changes_get: page, per_page, unidiff (bool), order_by, sort. Returns one page of structured MR file diffs. Use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
+- changes_get: page, per_page, unidiff (bool). Returns one page of structured MR file diffs. Use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
 - raw_diffs: project_id*, merge_request_iid*. Returns the full raw unified diff for the MR head (use only when a raw patch/unified diff is requested or changes_get reports truncated_files)
-- diff_versions_list: order_by, sort. Lists the MR diff revisions.
+- diff_versions_list: page, per_page. Lists the MR diff revisions, newest first.
 - diff_version_get: version_id*, unidiff (bool)
 
 Draft notes (batch review, not immediately published):
@@ -7078,8 +7077,8 @@ Action guidance:
 - schedule_delete_variable: Delete a pipeline schedule variable by key. Destructive. Confirm project_id, schedule_id, and key before calling.
 - schedule_edit_variable: Edit an existing pipeline schedule variable by key. Provide the new value. Value is always required. Only the schedule owner can manage variables.
 - schedule_get: Get one pipeline schedule by schedule_id. Use after listing schedules or when the prompt names a concrete schedule. The single-schedule payload includes last_pipeline, variables, and inputs.
-- schedule_list: List pipeline schedules in a project. Use scope to filter active or inactive schedules and order_by/sort with pagination='keyset' for large ordered result sets.
-- schedule_list_triggered_pipelines: List the pipelines that a schedule has triggered. Use order-independent offset or keyset pagination for long histories.
+- schedule_list: List pipeline schedules in a project. Use scope to filter active or inactive schedules, order_by/sort to order them, and page/per_page for large result sets.
+- schedule_list_triggered_pipelines: List the pipelines that a schedule has triggered. Use offset pagination for long histories.
 - schedule_run: Trigger a pipeline schedule to run immediately. Only the schedule owner can run it. Runs are rate-limited to roughly one per minute.
 - schedule_take_ownership: Take ownership of a pipeline schedule so the authenticated user becomes its owner. Requires Maintainer+ and is a prerequisite for editing or running schedules owned by others.
 - schedule_update: Edit a pipeline schedule's description, ref, cron, cron_timezone, active state, or inputs. Only the schedule owner can edit. Take ownership first if needed.
@@ -7088,7 +7087,7 @@ Action guidance:
 - trigger_create: Create a new pipeline trigger token on a project so external systems can start pipelines. Provide project_id and a clear description. Requires Maintainer+.
 - trigger_delete: Permanently delete a pipeline trigger token. Destructive and irreversible. The token is invalidated immediately. Confirm project_id and trigger_id before calling.
 - trigger_get: Get one pipeline trigger token by project_id plus trigger_id. Use after a list result or when the trigger_id is already known.
-- trigger_list: List the trigger tokens defined on a project. Use when the prompt asks which trigger tokens exist, or to find a trigger_id or token to run or edit. Requires Maintainer+ to read tokens. Supports order_by, sort, offset and keyset pagination.
+- trigger_list: List the trigger tokens defined on a project. Use when the prompt asks which trigger tokens exist, or to find a trigger_id or token to run or edit. Requires Maintainer+ to read tokens. Supports order_by, sort, and offset pagination.
 - trigger_run: Trigger a pipeline on a ref using a trigger token. Provide project_id, ref, and token. Optionally pass variables (CI/CD variables) or inputs (pipeline spec inputs).
 - trigger_update: Update a pipeline trigger token's description. Use when renaming or re-labeling an existing token. The token secret is unchanged.
 - update_metadata: Update a pipeline's metadata (its display name) by project_id and pipeline_id. Use to rename a pipeline. Requires Developer+ role and a non-archived pipeline.
@@ -7580,7 +7579,7 @@ Action guidance:
 - member_edit: Edit an existing project member's access_level, expires_at, or member_role_id. Requires at least the same access level as the target member.
 - member_get: Get one direct project member by project_id plus user_id. Use after a member list, or when the prompt already names a concrete user. Returns only direct members. Use project.member_inherited to include parent-group inheritance.
 - member_inherited: Get a project member including membership inherited from any parent group. Use when project.member_get returns not-found but the user has access through an ancestor group.
-- members: List the members of a project, including members inherited from parent groups. Filter with query, user_ids, and show_seat_info. Order with order_by/sort. Page with offset or keyset pagination.
+- members: List the members of a project, including members inherited from parent groups. Filter with query, user_ids, and show_seat_info. Order with order_by/sort. Page with offset pagination.
 - milestone_create: Create a milestone in a project with title and optional description/start/due dates.
 - milestone_delete: Delete a milestone from a project by milestone_iid. Requires Maintainer or Owner role.
 - milestone_get: Get one milestone by project_id and milestone_iid. Use this when a specific milestone is referenced and detailed fields are required.
@@ -7751,7 +7750,7 @@ Parameter guidance:
 - mirror_get.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
 - mirror_get_public_key.mirror_id: mirror_id. Source: Numeric remote-mirror id from a prior project.mirror_list response. Avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
 - mirror_get_public_key.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
-- mirror_list.order_by. Source: Column to order keyset-paginated results by, such as id. Avoid: order_by only applies when pagination='keyset'. Combine it with sort.
+- mirror_list.order_by. Source: Column to order results by, such as id. Avoid: Combine order_by with sort.
 - mirror_list.project_id: scope_project. Source: Project ID or full namespace path that owns the remote mirror. Avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
 - pages_domain_create.domain: pages_domain. Source: Fully qualified domain name of the Pages domain.
 - pages_domain_create.project_id: scope_project. Source: Project ID or path owning the Pages configuration.
@@ -9305,12 +9304,12 @@ Action guidance:
 - commit_comment_create: Post a comment on a commit, optionally inline by supplying path, line, and line_type. Use this to leave review feedback on a specific commit or changed line.
 - commit_comments: List the comments posted on a commit with pagination. Use this before adding a comment or to review existing review notes attached to a commit.
 - commit_create: Create a commit by applying one or more file actions (create/update/delete/move/chmod) to a branch in a single API call. Use for multi-file changes where single-file repository APIs are not enough.
-- commit_diff: Get the file diffs for a single commit with offset or keyset pagination. Use unidiff=true for a git-compatible unified-diff format when applying or rendering changes.
+- commit_diff: Get the file diffs for a single commit with offset pagination. Use unidiff=true for a git-compatible unified-diff format when applying or rendering changes.
 - commit_discussion_add_note: Reply to an existing commit discussion thread by adding a note. Use this after repository.commit_discussion_list or repository.commit_discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
 - commit_discussion_create: Open a new discussion thread on a commit. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general commit discussion. Supports backdating via created_at for admins/owners.
 - commit_discussion_delete_note: Permanently delete a note from a commit discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
 - commit_discussion_get: Fetch one discussion thread on a commit by its discussion_id, returning every note in the thread. Use this after repository.commit_discussion_list when the target thread is already known.
-- commit_discussion_list: List all discussion threads tied to a commit SHA, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for a commit's review conversation, or before replying to a thread. Supports order_by, sort, and keyset pagination.
+- commit_discussion_list: List all discussion threads tied to a commit SHA, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for a commit's review conversation, or before replying to a thread. Supports order_by, sort, and offset pagination.
 - commit_discussion_update_note: Edit the body of a note in a commit discussion thread. Only the note author can edit the body. Identify the note with discussion_id plus note_id. Supports overriding created_at for admins/owners.
 - commit_get: Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata, message, stats, trailers, or last pipeline are needed. Set stats=true to force inclusion of line stats.
 - commit_list: List commits for a project/ref with date, path, and author filters plus offset or keyset pagination. Use this to inspect history before selecting a commit for diff, comments, statuses, or revert/cherry-pick workflows.
@@ -10414,7 +10413,7 @@ Action guidance:
 - discussion_create: Open a new discussion thread on a project snippet with an initial note. Use this to start a threaded conversation rather than a flat comment (use snippet.note_create for a non-threaded note). Supports backdating via created_at for admins/owners.
 - discussion_delete_note: Permanently delete a note from a snippet discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
 - discussion_get: Fetch one discussion thread on a project snippet by its discussion_id, returning every note in the thread. Use this after snippet.discussion_list when the target thread is already known.
-- discussion_list: List all discussion threads on one project snippet, including system notes and threaded replies. Use this when the prompt asks for a snippet's comment threads or conversation history, or before replying to a thread with snippet.discussion_add_note. Supports order_by, sort, and keyset pagination.
+- discussion_list: List all discussion threads on one project snippet, including system notes and threaded replies. Use this when the prompt asks for a snippet's comment threads or conversation history, or before replying to a thread with snippet.discussion_add_note. Supports order_by, sort, and offset pagination.
 - discussion_update_note: Edit the body of an existing note in a snippet discussion thread. Only the note author can edit a note. Identify the note with discussion_id plus note_id.
 - emoji_snippet_create: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
 - emoji_snippet_delete: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
@@ -10424,21 +10423,21 @@ Action guidance:
 - emoji_snippet_note_delete: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
 - emoji_snippet_note_get: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
 - emoji_snippet_note_list: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
-- explore: List public snippets visible across the instance. Use order_by/sort and keyset pagination to browse public snippets the user does not own.
+- explore: List public snippets visible across the instance. Use order_by/sort and offset pagination to browse public snippets the user does not own.
 - file_content: Read the raw content of one file inside a multi-file personal snippet at a given Git ref. Use when the snippet has multiple files and you need a specific one.
 - get: Fetch one personal snippet by its global snippet_id. Use after a snippet list or when the prompt already names a concrete snippet ID. Returns a structured not-found result on 404.
 - list: List snippets owned by the authenticated user. Page through it with page and per_page, since GitLab pages this list by offset only, when the prompt asks for the caller's own snippets.
-- list_all: List every snippet on the instance (admin only). Use created_after/created_before and repository_storage filters, plus order_by/sort and keyset pagination, for cross-instance audits.
+- list_all: List every snippet on the instance (admin only). Use created_after/created_before and repository_storage filters, plus order_by/sort and offset pagination, for cross-instance audits.
 - note_create: Add a comment (note) to a project snippet. Use when the task asks to comment on, reply to, or annotate an existing snippet.
 - note_delete: Permanently delete a snippet note. Destructive and irreversible. Only the note author or a project Maintainer/Owner can delete a note. System notes cannot be deleted. Requires explicit confirmation.
 - note_get: Get one snippet note by params.note_id. Use when the task references a specific comment or note ID on a snippet.
-- note_list: List all comments (notes) on a project snippet, including system notes. Use when the task asks to read a snippet's discussion, recent comments, or activity. Supports order_by, sort, and keyset pagination.
+- note_list: List all comments (notes) on a project snippet, including system notes. Use when the task asks to read a snippet's discussion, recent comments, or activity. Supports order_by, sort, and offset pagination.
 - note_update: Replace the body of an existing snippet note. Only the original author or a Maintainer/Owner can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment.
 - project_content: Read the raw content of a project snippet by project_id and snippet_id.
 - project_create: Create a project snippet. Provide project_id and title plus either files[] (multi-file) or file_name and content (single-file). Set visibility to private, internal, or public.
 - project_delete: Permanently delete a project snippet by project_id and snippet_id. Destructive. Confirm both identifiers before calling.
 - project_get: Fetch one project snippet by project_id and snippet_id. Use after a project snippet list or when both identifiers are already known.
-- project_list: List snippets belonging to one project. Provide project_id. Use order_by/sort and keyset pagination when the prompt scopes snippets to a known project.
+- project_list: List snippets belonging to one project. Provide project_id. Use order_by/sort and offset pagination when the prompt scopes snippets to a known project.
 - project_update: Update a project snippet's metadata or files. Pass files[] with action set to create, update, delete, or move and use the file_path from project_get. Use file_name/content only for single-file legacy snippets.
 - update: Update a personal snippet's metadata or files. Pass files[] with action set to create, update, delete, or move to modify content. Use file_name/content only for single-file legacy snippets.
 Parameter guidance:
@@ -11054,7 +11053,7 @@ Action guidance:
 - get_protected: Get a single protected tag or wildcard rule by name. Use when a concrete protected pattern is already known.
 - get_signature: Get the X.509 signature attached to a tag. Use to verify tag provenance and certificate status.
 - list: List tags in one project. Use this to discover release points, version tags, and candidates for release/tag workflows.
-- list_protected: List protected tags for a project with offset or keyset pagination. Use to audit which tag patterns are protected and their create access levels.
+- list_protected: List protected tags for a project with offset pagination. Use to audit which tag patterns are protected and their create access levels.
 - protect: Protect a tag or wildcard pattern with create access levels. Provide create_access_level for a simple rule, or allowed_to_create for granular user/group/deploy-key permissions.
 - unprotect: Remove protection from a tag or wildcard pattern by name. Destructive. Allows the matched tags to be created or deleted again.
 Parameter guidance:
@@ -11184,18 +11183,18 @@ Action guidance:
 - gitignore_get: Get one .gitignore template by key for repository bootstrap workflows.
 - gitignore_list: List available .gitignore templates.
 - license_get: Get one license template by key for project README/LICENSE scaffolding.
-- license_list: List available license templates with optional popular filter, ordering, and keyset pagination.
+- license_list: List available license templates with optional popular filter, ordering, and offset pagination.
 - lint: Validate a .gitlab-ci.yml snippet against a project's namespace without committing it. Use when the prompt provides raw CI YAML to check, or to confirm edits before pushing. Pass content with the YAML and project_id for include/component resolution, and set dry_run to simulate pipeline creation.
 - lint_project: Validate the .gitlab-ci.yml already committed to a project at a given ref. Use when the prompt names a project rather than supplying YAML. Pass project_id and optionally content_ref/ref to choose the branch or tag, and dry_run to simulate pipeline creation for that ref.
 - project_template_get: Get one project-scoped template (license, gitignore, Dockerfile, .gitlab-ci.yml) by template_type and key, returning its full rendered content.
-- project_template_list: List the project-scoped templates of a given template_type (licenses, gitignores, dockerfiles, gitlab_ci_ymls), with optional id/type filters, ordering, and keyset pagination.
+- project_template_list: List the project-scoped templates of a given template_type (licenses, gitignores, dockerfiles, gitlab_ci_ymls), with optional id/type filters, ordering, and offset pagination.
 Parameter guidance:
 - dockerfile_get.key: template_key. Source: Template key returned by dockerfile template list output.
 - gitignore_get.key: template_key. Source: Template key returned by gitignore template list output.
 - license_get.fullname: placeholder_fullname. Source: Full name substituted into the rendered license copyright placeholder.
 - license_get.key: template_key. Source: License key returned by license template list output.
 - license_get.project: placeholder_project. Source: Project name substituted into the rendered license content placeholder.
-- license_list.order_by: order_by. Source: Column by which to order keyset-paginated results.
+- license_list.order_by: order_by. Source: Column by which to order results.
 - license_list.popular: popular_filter. Source: Set true to restrict the listing to popular/featured license templates.
 - license_list.sort: sort. Source: Sort direction for ordered results.
 - lint.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -11206,7 +11205,7 @@ Parameter guidance:
 - project_template_get.project_id: scope_project. Source: Project ID or path whose template namespace is queried.
 - project_template_get.template_type: template_type. Source: Template family, one of: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests.
 - project_template_list.id: template_id_filter. Source: Optional numeric template id to fetch a single template entry.
-- project_template_list.order_by: order_by. Source: Column by which to order keyset-paginated results.
+- project_template_list.order_by: order_by. Source: Column by which to order results.
 - project_template_list.project_id: scope_project. Source: Project ID or path whose template namespace is queried.
 - project_template_list.sort: sort. Source: Sort direction for ordered results.
 - project_template_list.template_type: template_type. Source: Template family, one of: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests.
@@ -11380,9 +11379,9 @@ Action guidance:
 - delete_ssh_key_for_user: Delete a specific SSH key from a specific user's account (admin only) by user_id and key_id. Use when the prompt asks to remove another user's key.
 - disable_two_factor: Disable two-factor authentication for a user by user_id (admin only). Use when the prompt asks to clear a user's locked-out 2FA.
 - emails: List the authenticated user's registered email addresses, one page at a time with page and per_page. Use when the prompt asks which emails are on the current account.
-- emails_for_user: List the email addresses registered on a specific user's account by user_id. Use after resolving a user with user.get. Reading another user's emails requires an admin token. Supports offset and keyset pagination plus order_by and sort.
-- event_list_contributions: List the authenticated user's contribution events (pushes, comments, issue and merge request activity) across visible resources, with action/target filters and offset or keyset pagination.
-- event_list_project: List the visible activity events for one specific project (pushes, comments, member changes, issue and merge request actions), with action/target filters and offset or keyset pagination.
+- emails_for_user: List the email addresses registered on a specific user's account by user_id. Use after resolving a user with user.get. Reading another user's emails requires an admin token. Supports offset pagination plus order_by and sort.
+- event_list_contributions: List the authenticated user's contribution events (pushes, comments, issue and merge request activity) across visible resources, with action/target filters and offset pagination.
+- event_list_project: List the visible activity events for one specific project (pushes, comments, member changes, issue and merge request actions), with action/target filters and offset pagination.
 - get: Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields.
 - get_email: Fetch a single email address belonging to the authenticated user by email_id. Use after listing emails when the exact email ID is known.
 - get_gpg_key: Fetch a single GPG key belonging to the authenticated user by key_id. Use after listing keys when the exact key ID is known and the full armored key is needed.
@@ -11396,7 +11395,7 @@ Action guidance:
 - key_get_by_fingerprint: Look up a single SSH key or deploy key by its fingerprint and return the owning user. Admin-only on self-managed instances. Accepts the modern SHA256:base64 form or the legacy MD5 form of 16 hex pairs, with or without its MD5: label. Use when you have only a key fingerprint (for example from an auth log) and need to identify its owner.
 - key_get_with_user: Look up a single SSH key by its global numeric key ID and return the owning user. Admin-only on self-managed instances. Use when a prompt or audit log gives a bare key ID and you need to identify who owns it. For a specific user's own keys use the per-user SSH-key tools instead.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
-- list_impersonation_tokens: List the impersonation tokens of a user (admin token required). Use to audit a user's impersonation tokens, optionally filtering by state and paginating with offset or keyset pagination.
+- list_impersonation_tokens: List the impersonation tokens of a user (admin token required). Use to audit a user's impersonation tokens, optionally filtering by state and paginating with page and per_page.
 - list_service_accounts: List instance-level service accounts with order_by/sort and pagination. Admin-only. Use when the prompt asks which service accounts exist.
 - me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
 - memberships: List a user's project and group memberships by user_id, optionally filtered by type (Project or Namespace). Use when the prompt asks where a user is a member and at what access level.
@@ -12559,7 +12558,7 @@ Action guidance:
 - delete: Delete an enterprise user from the group's enterprise namespace. Use hard_delete to permanently remove the user instead of soft-deleting. This action is irreversible.
 - disable_2fa: Disable two-factor authentication for an enterprise user by group_id plus user_id. Use when a user is locked out of 2FA and the group administrator must reset it.
 - get: Get one enterprise user by group_id plus user_id. Use after a list result or when the prompt already names a concrete enterprise user.
-- list: List the enterprise users managed by a top-level group's enterprise namespace. Use filters such as username, search, active, blocked, two_factor, created_after/created_before, plus order_by/sort and offset or keyset pagination.
+- list: List the enterprise users managed by a top-level group's enterprise namespace. Use filters such as username, search, active, blocked, two_factor, created_after/created_before, plus order_by/sort and offset pagination.
 Parameter guidance:
 - delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - delete.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
@@ -12626,9 +12625,9 @@ Action params schema: gitlab://tools/gitlab_external_status_check.<action>. A do
 Action guidance:
 - create_project: Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires the Maintainer role and an Ultimate license.
 - delete_project: Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires the Maintainer role and an Ultimate license. GitLab before 19.5 answers a caller without the role with success and deletes nothing, so on those releases confirm the deletion with external_status_check.list_project.
-- list_project: List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires the Maintainer role and an Ultimate license. Supports order_by, sort, and keyset pagination.
+- list_project: List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires the Maintainer role and an Ultimate license. Supports order_by, sort, and offset pagination.
 - list_project_checks: List a project's external status check services (deprecated path). Prefer external_status_check.list_project. Use this only when matching the legacy endpoint. Requires the Maintainer role and an Ultimate license.
-- list_project_mr_checks: List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and keyset pagination.
+- list_project_mr_checks: List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and offset pagination.
 - retry_project: Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires at least the Developer role and an Ultimate license.
 - set_project_mr_status: Set the status (passed, failed or pending) of an external status check for a merge request, identified by external_status_check_id and the full SHA of the merge request's head commit. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.
 - update_project: Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license.
@@ -12739,8 +12738,8 @@ Action guidance:
 - edit: Update settings of an existing Geo site (enabled, name, url, capacities, selective sync). The primary flag cannot be toggled. Recreate the site to change it.
 - get: Fetch one Geo site by its numeric id. Use after listing sites or when the prompt names a concrete site id. Requires admin access.
 - get_status: Fetch the full replication and verification status of one Geo site by id. The site must have reported status at least once. Requires admin access.
-- list: List all configured Geo sites on the instance. Use order_by/sort and offset or keyset pagination for large fleets. Requires admin access.
-- list_status: List the full replication and verification status of every Geo site. Use order_by/sort and offset or keyset pagination. Status is collected by the primary. Secondaries may show stale data when lagging.
+- list: List all configured Geo sites on the instance. Use order_by/sort and offset pagination for large fleets. Requires admin access.
+- list_status: List the full replication and verification status of every Geo site. Use order_by/sort and offset pagination. Status is collected by the primary. Secondaries may show stale data when lagging.
 - repair: Repair the OAuth authentication of a Geo secondary by re-creating its OAuth application. Must be run from the primary site.
 
 Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate).

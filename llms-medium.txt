@@ -518,7 +518,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_ci_variable_create: Create a CI/CD variable in a project with type, environment scope, and protected/masked/raw/masked_and_hidden flags.
 - gitlab_ci_variable_delete: Delete a CI/CD variable by key, selecting an environment-scoped instance via the filter.
 - gitlab_ci_variable_get: Get a single CI/CD variable by key, optionally selecting an environment-scoped instance via the filter.
-- gitlab_ci_variable_list: List a project's CI/CD variables with order_by, sort, and offset or keyset pagination.
+- gitlab_ci_variable_list: List a project's CI/CD variables with order_by, sort, and offset pagination.
 - gitlab_ci_variable_update: Update a CI/CD variable, selecting an environment-scoped instance via the filter.
 - gitlab_commit_cherry_pick: Cherry-pick a commit onto a target branch, optionally as a dry run.
 - gitlab_commit_comment_create: Post a comment on a commit, optionally inline on a specific file path and line.
@@ -637,7 +637,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_deployment_create: Create a deployment record for an environment at a given ref and sha with an initial status.
 - gitlab_deployment_delete: Delete a deployment record by deployment_id within a project.
 - gitlab_deployment_get: Get details of a specific deployment in a GitLab project by its ID.
-- gitlab_deployment_list: List deployments in a project with environment, status, and date filters plus offset or keyset pagination.
+- gitlab_deployment_list: List deployments in a project with environment, status, and date filters plus offset pagination.
 - gitlab_deployment_update: Update a deployment's status by deployment_id within a project.
 - gitlab_detach_security_scan_profile: Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL.
 - gitlab_disable_2fa_enterprise_user: Disable two-factor authentication for an enterprise user.
@@ -685,7 +685,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_ff_user_list_create: Create a feature flag user list in a project.
 - gitlab_ff_user_list_delete: Delete a feature flag user list by its user_list_iid.
 - gitlab_ff_user_list_get: Get a single feature flag user list by its user_list_iid.
-- gitlab_ff_user_list_list: List feature flag user lists for a project with search, ordering, and offset or keyset pagination.
+- gitlab_ff_user_list_list: List feature flag user lists for a project with search, ordering, and offset pagination.
 - gitlab_ff_user_list_update: Update a feature flag user list's name or user_xids by its user_list_iid.
 - gitlab_file_blame: Get blame information for a file, optionally for a line range.
 - gitlab_file_create: Create a new file in a repository in a single commit.
@@ -858,22 +858,22 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_group_milestone_update: Update an existing group milestone.
 - gitlab_group_projects: List the projects in a GitLab group.
 - gitlab_group_protected_branch_get: Get a single group-level protected branch by name or wildcard.
-- gitlab_group_protected_branch_list: List group-level protected branches with search and offset or keyset pagination.
+- gitlab_group_protected_branch_list: List group-level protected branches with search and offset pagination.
 - gitlab_group_protected_branch_protect: Protect a group-level branch or wildcard, optionally with per-user, per-group or per-custom-role allowed-to-push, merge, and unprotect entries.
 - gitlab_group_protected_branch_unprotect: Unprotect a group-level branch, cascading the removal to all subgroup projects.
 - gitlab_group_protected_branch_update: Update a group-level protected branch, adding or removing (_destroy) allowed-to-push, merge, and unprotect entries.
 - gitlab_group_protected_environment_get: Get a single group-level protected environment by tier name.
-- gitlab_group_protected_environment_list: List group-level protected environments with order_by/sort and offset or keyset pagination.
+- gitlab_group_protected_environment_list: List group-level protected environments with order_by/sort and offset pagination.
 - gitlab_group_protected_environment_protect: Protect a group-level environment tier with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each naming ...
 - gitlab_group_protected_environment_unprotect: Unprotect a group-level environment tier, removing its deployment gates from the group and its subgroup projects.
 - gitlab_group_protected_environment_update: Update a group-level protected environment's deploy access levels and approval rules.
-- gitlab_group_release_list: List releases across all projects in a group with pagination, ordering, and keyset support.
+- gitlab_group_release_list: List releases across all projects in a group with ordering and offset pagination.
 - gitlab_group_restore: Restore a GitLab group marked for deletion.
 - gitlab_group_saml_link_add: Add a SAML group link to a GitLab group.
 - gitlab_group_saml_link_delete: Delete a SAML group link from a GitLab group by SAML group name.
 - gitlab_group_saml_link_get: Get one SAML group link of a GitLab group by SAML group name.
 - gitlab_group_saml_link_list: List a GitLab group's SAML group links.
-- gitlab_group_saml_users_list: List SAML SSO-provisioned users of a top-level GitLab group, with keyset pagination.
+- gitlab_group_saml_users_list: List SAML SSO-provisioned users of a top-level GitLab group, with offset pagination.
 - gitlab_group_search: Search GitLab groups by name or path.
 - gitlab_group_service_account_create: Create a service account in a GitLab group (top-level only).
 - gitlab_group_service_account_delete: Delete a service account from a GitLab group (top-level only).
@@ -899,7 +899,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_group_variable_create: Create a CI/CD variable in a group with type, environment scope, and protected/masked/raw/masked_and_hidden flags.
 - gitlab_group_variable_delete: Delete a group CI/CD variable by key, selecting an environment-scoped instance via the filter.
 - gitlab_group_variable_get: Get a single group CI/CD variable by key, optionally selecting an environment-scoped instance via the filter.
-- gitlab_group_variable_list: List a group's CI/CD variables with order_by, sort, and offset or keyset pagination.
+- gitlab_group_variable_list: List a group's CI/CD variables with order_by, sort, and offset pagination.
 - gitlab_group_variable_update: Update a group CI/CD variable, selecting an environment-scoped instance via the filter.
 - gitlab_group_wiki_create: Create a new group wiki page.
 - gitlab_group_wiki_delete: Delete a group wiki page permanently.
@@ -915,7 +915,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_instance_variable_create: Create an instance-level CI/CD variable with type and protected/masked/raw flags (admin-only).
 - gitlab_instance_variable_delete: Delete an instance-level CI/CD variable by key (admin-only).
 - gitlab_instance_variable_get: Get a single instance-level CI/CD variable by key (admin-only).
-- gitlab_instance_variable_list: List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination (admin-only).
+- gitlab_instance_variable_list: List instance-level CI/CD variables with order_by, sort, and offset pagination (admin-only).
 - gitlab_instance_variable_update: Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only).
 - gitlab_interactive_issue_create: Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API.
 - gitlab_interactive_mr_create: Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API.
@@ -978,9 +978,9 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_job_erase: Erase a finished CI job's trace log and artifacts (destructive).
 - gitlab_job_get: Get one CI job.
 - gitlab_job_keep_artifacts: Keep a CI job's artifacts by clearing their expiration.
-- gitlab_job_list: List CI jobs for one pipeline with status filters, keyset pagination, and ordering.
+- gitlab_job_list: List CI jobs for one pipeline, newest first, with status filters, retried jobs on request, and pagination.
 - gitlab_job_list_bridges: List CI bridge (trigger) jobs for one pipeline with status filters and page-number pagination.
-- gitlab_job_list_project: List CI jobs in one project with filters, keyset pagination, and ordering.
+- gitlab_job_list_project: List CI jobs in one project, newest first and retried jobs included, with status filters and keyset pagination.
 - gitlab_job_play: Run a manual CI job with optional variable overrides.
 - gitlab_job_retry: Retry a failed or canceled CI job.
 - gitlab_job_trace: Get CI job trace output, the end of it when it is over 100 KB.
@@ -988,7 +988,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_label_create: Create a project label with required name and hex color, plus optional description, priority, and archived state.
 - gitlab_label_delete: Delete a project label by ID or name.
 - gitlab_label_get: Get a single project label by ID or name.
-- gitlab_label_list: List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination.
+- gitlab_label_list: List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset pagination.
 - gitlab_label_promote: Promote a project label to a group label, sharing it across the group's projects.
 - gitlab_label_subscribe: Subscribe the authenticated user to a project label for notifications.
 - gitlab_label_unsubscribe: Unsubscribe the authenticated user from a project label.
@@ -1007,10 +1007,10 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_list_ci_yml_templates: List the GitLab-provided CI/CD pipeline YAML templates.
 - gitlab_list_cluster_agent_tokens: List cluster agent tokens.
 - gitlab_list_cluster_agents: List project cluster agents.
-- gitlab_list_commit_discussions: List discussion threads on a commit with ordering and keyset pagination.
+- gitlab_list_commit_discussions: List discussion threads on a commit with ordering and offset pagination.
 - gitlab_list_custom_attributes: List custom attributes for a resource.
 - gitlab_list_custom_emoji: List custom emoji for a GitLab group via GraphQL API.
-- gitlab_list_deployment_merge_requests: List the merge requests associated with a deployment, with merge-request filtering (state, approval, author, assignee, draft, created date) and offset or keyset...
+- gitlab_list_deployment_merge_requests: List the merge requests associated with a deployment, with merge-request filtering (state, approval, author, assignee, draft, created date) and offset paginatio...
 - gitlab_list_dockerfile_templates: List available Dockerfile templates with pagination and sorting.
 - gitlab_list_emails: List the current user's email addresses.
 - gitlab_list_emails_for_user: List the email addresses registered to a specific user account.
@@ -1021,7 +1021,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_list_features: List instance feature flags.
 - gitlab_list_freeze_periods: List deploy freeze periods for a GitLab project.
 - gitlab_list_geo_sites: List all Geo sites.
-- gitlab_list_gitignore_templates: List available .gitignore templates with order_by, sort, and offset or keyset pagination.
+- gitlab_list_gitignore_templates: List available .gitignore templates with order_by, sort, and offset pagination.
 - gitlab_list_gpg_keys: List the authenticated user's GPG keys.
 - gitlab_list_gpg_keys_for_user: List a specific user's GPG keys.
 - gitlab_list_group_audit_events: List group-level audit events for a group.
@@ -1041,10 +1041,10 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_list_instance_audit_events: List instance-level audit events (administrator only).
 - gitlab_list_instance_member_roles: List instance-level custom member roles.
 - gitlab_list_integrations: List all integrations (services) configured for a project, including their active status.
-- gitlab_list_issue_discussions: List discussion threads on an issue with ordering and keyset pagination.
+- gitlab_list_issue_discussions: List discussion threads on an issue with ordering and offset pagination.
 - gitlab_list_job_token_group_allowlist: List groups on a project's CI/CD job token allowlist.
 - gitlab_list_job_token_inbound_allowlist: List projects on a project's CI/CD job token inbound allowlist.
-- gitlab_list_license_templates: List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination.
+- gitlab_list_license_templates: List available license templates with an optional popular filter, order_by/sort, and offset pagination.
 - gitlab_list_merge_request_in_merge_train: List the merge requests on a merge train for a target branch.
 - gitlab_list_mr_context_commits: List the context commits pinned to a merge request for review.
 - gitlab_list_package_protection_rules: List package protection rules for a project.
@@ -1059,14 +1059,14 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_list_project_mr_external_status_checks: List the external status checks for a merge request and their status.
 - gitlab_list_project_scan_profile_statuses: List the security scan profile statuses for a GitLab project via GraphQL.
 - gitlab_list_project_status_checks: List a project's external status check services (deprecated endpoint).
-- gitlab_list_project_templates: List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination.
+- gitlab_list_project_templates: List project templates of a given template_type with optional id/type filters, order_by/sort, and offset pagination.
 - gitlab_list_repository_submodules: List the Git submodules defined in a repository's .gitmodules.
 - gitlab_list_resource_group_upcoming_jobs: List the upcoming CI jobs queued for one resource group by key.
 - gitlab_list_resource_groups: List the CI resource groups configured for a project.
 - gitlab_list_secure_files: List project secure files.
 - gitlab_list_security_findings: List a pipeline's security report findings with severity, scanner, report-type and state filters, severity sorting and keyset pagination.
 - gitlab_list_service_accounts: List instance-level service accounts.
-- gitlab_list_snippet_discussions: List discussion threads on a project snippet with ordering and keyset pagination.
+- gitlab_list_snippet_discussions: List discussion threads on a project snippet with ordering and offset pagination.
 - gitlab_list_ssh_keys: List the current user's SSH keys.
 - gitlab_list_ssh_keys_for_user: List a specific user's SSH keys.
 - gitlab_list_status_all_geo_sites: List replication status for all Geo sites.
@@ -1113,7 +1113,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_mr_diff_versions_list: List all diff versions (historical snapshots) of a merge request. Returns: an array of diff versions with id, head/base/start SHAs, state, real_size, and create...
 - gitlab_mr_discussion_create: Create a new discussion thread on a merge request, optionally as an inline diff comment.
 - gitlab_mr_discussion_get: Get a single merge request discussion thread by its discussion id.
-- gitlab_mr_discussion_list: List discussion threads on a merge request with ordering and keyset pagination.
+- gitlab_mr_discussion_list: List discussion threads on a merge request with ordering and offset pagination.
 - gitlab_mr_discussion_note_delete: Delete a note from a merge request discussion thread (destructive).
 - gitlab_mr_discussion_note_update: Update the body or resolved state of a note in a merge request discussion thread.
 - gitlab_mr_discussion_reply: Add a reply note to an existing merge request discussion thread.
@@ -1331,9 +1331,9 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_project_upload_list: List all Markdown uploads in a project.
 - gitlab_protected_branch_get: Get a single protected branch or wildcard rule by name.
 - gitlab_protected_branch_update: Update an existing protected branch rule: allow-force-push, CODEOWNERS approval, rename, or fine-grained allowed_to_push/merge/unprotect entries.
-- gitlab_protected_branches_list: List protected branches and wildcard rules for a project with optional search, ordering, and offset or keyset pagination.
+- gitlab_protected_branches_list: List protected branches and wildcard rules for a project with optional search, ordering, and offset pagination.
 - gitlab_protected_environment_get: Get a single protected (or wildcard) environment by name.
-- gitlab_protected_environment_list: List protected environments in a project with order_by/sort and offset or keyset pagination.
+- gitlab_protected_environment_list: List protected environments in a project with order_by/sort and offset pagination.
 - gitlab_protected_environment_protect: Protect a single environment or wildcard with deploy access levels, each naming exactly one of access_level, user_id or group_id, and approval rules, each namin...
 - gitlab_protected_environment_unprotect: Unprotect a single environment or wildcard, removing its deployment gates.
 - gitlab_protected_environment_update: Update a protected environment's deploy access levels and approval rules.
@@ -1365,7 +1365,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_release_link_create_batch: Create multiple release asset links in one call.
 - gitlab_release_link_delete: Delete a release asset link by link_id.
 - gitlab_release_link_get: Get one release asset link by link_id.
-- gitlab_release_link_list: List asset links for a release with offset or keyset pagination.
+- gitlab_release_link_list: List asset links for a release with offset pagination.
 - gitlab_release_link_update: Update an existing release asset link by link_id.
 - gitlab_release_list: List releases in a project with pagination.
 - gitlab_release_update: Update an existing release's title, notes, release date, or milestones.
@@ -1401,7 +1401,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_runner_controller_create: Register a new runner controller (admin-only, experimental API) with optional description and state (enabled/disabled/dry_run).
 - gitlab_runner_controller_delete: Delete a runner controller by controller_id (destructive, admin-only, experimental API).
 - gitlab_runner_controller_get: Get one runner controller by controller_id (admin-only, experimental API).
-- gitlab_runner_controller_list: List registered runner controllers (admin-only, experimental API) with offset or keyset pagination.
+- gitlab_runner_controller_list: List registered runner controllers (admin-only, experimental API) with offset pagination.
 - gitlab_runner_controller_scope_add_instance: Grant a runner controller the instance-level scope (admin only).
 - gitlab_runner_controller_scope_add_runner: Scope a runner controller to a specific instance runner by runner ID (admin only).
 - gitlab_runner_controller_scope_list: List every scope assigned to a runner controller (admin only).
@@ -1494,7 +1494,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1099 tools, one per operation
 - gitlab_tag_get_protected: Get a single protected tag or wildcard rule by name.
 - gitlab_tag_get_signature: Get the X.509 signature of a tag.
 - gitlab_tag_list: List tags in one project with optional search and offset or keyset pagination.
-- gitlab_tag_list_protected: List protected tags in one project with offset or keyset pagination.
+- gitlab_tag_list_protected: List protected tags in one project with offset pagination.
 - gitlab_tag_protect: Protect a tag or wildcard pattern with create access levels.
 - gitlab_tag_unprotect: Remove protection from a tag or wildcard pattern.
 - gitlab_test_system_hook: Send a test event to a system hook.
