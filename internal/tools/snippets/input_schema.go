@@ -58,9 +58,9 @@ func ProjectCreateInputSchemaMap() map[string]any {
 // content. It is a root oneOf of two branches, the single file as file_name
 // with content and the files, which find, the gitlab://tools manifest and the
 // tool reference read as two alternatives of which a call completes exactly
-// one. No tool's served input schema carries it, since the Anthropic Messages
-// API refuses a tool list holding a root combinator, so the handler refuses a
-// call completing none or both before it sends anything
+// one. No tool's served input schema carries it at its root, since the
+// Anthropic Messages API refuses a tool list holding a root combinator, so
+// the handler refuses a call completing none or both before it sends anything
 // ([validateCreateSnippetContent]).
 //
 // A field counts in a branch only with a value, a string that is not empty or
