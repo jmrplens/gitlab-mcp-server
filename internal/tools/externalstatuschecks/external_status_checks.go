@@ -93,7 +93,7 @@ func toProjectStatusCheckOutput(c *gl.ProjectStatusCheck) ProjectStatusCheckOutp
 // ListProjectStatusChecksInput defines parameters for the ListProjectStatusChecks action.
 type ListProjectStatusChecksInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by for keyset pagination (e.g. id)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
@@ -206,7 +206,7 @@ func listProjectStatusChecks(ctx context.Context, projectID toolutil.StringOrInt
 type ListProjectMRInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by for keyset pagination (e.g. id)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
@@ -248,7 +248,7 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 // ListProjectInput defines parameters for the ListProjectExternalStatusChecks action.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by for keyset pagination (e.g. id)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }

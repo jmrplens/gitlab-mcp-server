@@ -48,7 +48,7 @@ func groupVariableOptionsForAction(actionName, individualTool string) toolutil.A
 		options.Usage = "List group CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions."
 		options.Aliases = []string{"list group variables", "show group variables", "find group ci variables"}
 		options.RelatedActions = []string{actionGroupVariableGet, actionGroupVariableUpdate, actionGroupVariableDelete}
-		options.IndividualTool.Description = "List a group's CI/CD variables with order_by, sort, and offset or keyset pagination. Returns: each variable's key, value, type, protected/masked/hidden/raw flags, environment scope, description, and pagination metadata. See also: gitlab_group_variable_get, gitlab_group_variable_create, gitlab_group_variable_update."
+		options.IndividualTool.Description = "List a group's CI/CD variables with order_by, sort, and offset pagination. Returns: each variable's key, value, type, protected/masked/hidden/raw flags, environment scope, description, and pagination metadata. See also: gitlab_group_variable_get, gitlab_group_variable_create, gitlab_group_variable_update."
 	case "group_get":
 		options.Usage = "Get one group CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed."
 		options.Aliases = []string{"get group variable", "show group variable details", "lookup group variable"}

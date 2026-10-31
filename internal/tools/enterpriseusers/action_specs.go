@@ -48,7 +48,7 @@ func enterpriseUserReadSpec(name string, route toolutil.ActionRoute, individualT
 	options := enterpriseUserOptions(individualTool)
 	switch individualTool {
 	case "gitlab_list_enterprise_users":
-		options.Usage = "List the enterprise users managed by a top-level group's enterprise namespace. Use filters such as username, search, active, blocked, two_factor, created_after/created_before, plus order_by/sort and offset or keyset pagination."
+		options.Usage = "List the enterprise users managed by a top-level group's enterprise namespace. Use filters such as username, search, active, blocked, two_factor, created_after/created_before, plus order_by/sort and offset pagination."
 		options.Aliases = []string{individualTool, "list enterprise users", "show enterprise users", "browse enterprise users"}
 		options.RelatedActions = []string{actionEnterpriseUserGet, actionEnterpriseUserDisable2FA, actionEnterpriseUserDelete}
 		options.IndividualTool.Description = "List enterprise users for a top-level group with filtering and pagination. Returns: enterprise users with full profile fields (identities, SCIM identities, custom attributes, sign-in metadata, license seat usage) and pagination metadata. See also: gitlab_get_enterprise_user, gitlab_disable_2fa_enterprise_user, gitlab_delete_enterprise_user."

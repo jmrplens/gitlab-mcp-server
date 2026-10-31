@@ -1346,11 +1346,11 @@ func (input ListInput) toFilter() userProjectFilter {
 	}
 }
 
-// applyKeysetOrder sets the keyset ordering column and direction on a
-// gl.ListOptions, leaving unset values untouched. GitLab uses order_by/sort
-// from the embedded ListOptions to drive keyset pagination on small list
-// endpoints (users, groups, starrers, invited groups, hooks).
-func applyKeysetOrder(opts *gl.ListOptions, orderBy, sort string) {
+// applyListOrder sets the order_by column and the sort direction on a
+// gl.ListOptions, leaving unset values untouched, for the project lists whose
+// options carry them only through the embedded ListOptions (users, groups,
+// starrers, invited groups, hooks). GitLab pages those lists by offset alone.
+func applyListOrder(opts *gl.ListOptions, orderBy, sort string) {
 	if orderBy != "" {
 		opts.OrderBy = orderBy
 	}
@@ -2386,7 +2386,7 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	}
 	opts := &gl.ListProjectHooksOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
-	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
+	applyListOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	hooks, resp, err := doProjectRequest[[]projectHookAPI](ctx, client, http.MethodGet, projectHooksPath(string(input.ProjectID)), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -2819,7 +2819,7 @@ func ListProjectUsers(ctx context.Context, client *gitlabclient.Client, input Li
 		opts.Search = new(input.Search)
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
-	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
+	applyListOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().Projects.ListProjectsUsers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -2909,7 +2909,7 @@ func ListProjectGroups(ctx context.Context, client *gitlabclient.Client, input L
 		opts.SharedMinAccessLevel = new(gl.AccessLevelValue(input.SharedMinAccessLevel))
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
-	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
+	applyListOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	groups, resp, err := client.GL().Projects.ListProjectsGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectGroupsOutput{}, toolutil.WrapErrWithStatusHint("projectListGroups", err, http.StatusNotFound,
@@ -2961,7 +2961,7 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 		opts.Search = new(input.Search)
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
-	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
+	applyListOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	starrers, resp, err := client.GL().Projects.ListProjectStarrers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -3136,7 +3136,7 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 		opts.WithCustomAttributes = input.WithCustomAttributes
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
-	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
+	applyListOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	groups, resp, err := client.GL().Projects.ListProjectsInvitedGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectGroupsOutput{}, toolutil.WrapErrWithStatusHint("projectListInvitedGroups", err, http.StatusNotFound,

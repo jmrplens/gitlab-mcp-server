@@ -122,13 +122,13 @@ var externalStatusCheckActionMeta = map[string]externalStatusCheckActionMetaEntr
 		description: "List a project's external status check services (deprecated endpoint). Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_list_project_mr_external_status_checks.",
 	},
 	"gitlab_list_project_external_status_checks": {
-		usage:       "List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires the Maintainer role and an Ultimate license. Supports order_by, sort, and keyset pagination.",
+		usage:       "List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires the Maintainer role and an Ultimate license. Supports order_by, sort, and offset pagination.",
 		aliases:     []string{"list project external status checks", "show project status check services", "project status checks"},
 		related:     []string{actionCreateProject, actionUpdateProject, actionDeleteProject, actionListProjectMR},
 		description: "List a project's external status check services. Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_create_project_external_status_check, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check, gitlab_list_project_mr_external_status_checks.",
 	},
 	"gitlab_list_project_mr_external_status_checks": {
-		usage:       "List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and keyset pagination.",
+		usage:       "List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and offset pagination.",
 		aliases:     []string{"list merge request status checks", "show mr external status checks", "status checks for a merge request"},
 		related:     []string{actionListProject, "external_status_check.set_project_mr_status", "external_status_check.retry_project"},
 		description: "List the external status checks for a merge request and their status. Returns: each check with id, name, external_url, status, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_set_project_mr_external_status_check_status, gitlab_retry_failed_external_status_check_for_project_mr.",

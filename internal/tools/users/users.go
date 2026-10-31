@@ -252,8 +252,8 @@ func buildListUsersOptions(input ListInput) (*gl.ListUsersOptions, error) {
 }
 
 // applyOrderSort copies the optional order_by and sort parameters onto a
-// gl.ListOptions, which exposes these for both offset and keyset pagination on
-// endpoints whose options embed ListOptions without dedicated fields.
+// gl.ListOptions, which carries them on endpoints whose options embed
+// ListOptions without dedicated fields.
 func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
 	if orderBy != "" {
 		opts.OrderBy = orderBy

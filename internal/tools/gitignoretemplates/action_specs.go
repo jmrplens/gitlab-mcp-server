@@ -44,7 +44,7 @@ func gitignoreTemplateOptions(actionName, individualTool string) toolutil.Action
 	if actionName == "gitignore_list" {
 		opts.Aliases = []string{individualTool, "list dedicated gitignore templates", "show available .gitignore presets", "browse gitignore boilerplate"}
 		opts.RelatedActions = []string{actionGitignoreGet, actionRepositoryFileCreate, actionProjectCreate}
-		opts.IndividualTool.Description = "List available .gitignore templates with order_by, sort, and offset or keyset pagination. Returns: each template's key and name, plus pagination metadata. See also: gitlab_get_gitignore_template, gitlab_file_create."
+		opts.IndividualTool.Description = "List available .gitignore templates with order_by, sort, and offset pagination. Returns: each template's key and name, plus pagination metadata. See also: gitlab_get_gitignore_template, gitlab_file_create."
 	}
 	if actionName == "gitignore_get" {
 		opts.Aliases = []string{individualTool, "get dedicated gitignore template", "fetch .gitignore template content", "show gitignore preset for language"}

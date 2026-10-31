@@ -74,16 +74,16 @@ type ListAllInput struct{}
 // ListProjectInput represents parameters for listing project deploy tokens.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }
 
 // ListGroupInput represents parameters for listing group deploy tokens.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }
 

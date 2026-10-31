@@ -17,7 +17,7 @@ import (
 // ListInput holds parameters for listing package protection rules.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

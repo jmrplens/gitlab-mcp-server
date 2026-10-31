@@ -169,8 +169,7 @@ func snippetVisibility(value string) *gl.VisibilityValue {
 }
 
 // applyOrderSort copies the order_by and sort fields onto a gl.ListOptions,
-// setting only the values the caller supplied. These fields drive keyset
-// ordering for the snippet list endpoints.
+// setting only the values the caller supplied.
 func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
 	if opts == nil {
 		return
@@ -324,10 +323,11 @@ func authorUsername(a *SnippetAuthorOutput) string {
 // ---------------------------------------------------------------------------.
 
 // ListInput carries pagination and ordering for the authenticated user's
-// snippets. OrderBy, Sort, pagination, and page_token map onto the embedded
-// gl.ListOptions to mirror the SDK's keyset-capable list options.
+// snippets. OrderBy, Sort and the offset pagination map onto the embedded
+// gl.ListOptions; its keyset fields are not offered, since GitLab pages the
+// snippet lists by offset alone.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
@@ -353,7 +353,7 @@ type ListAllInput struct {
 	CreatedAfter      string `json:"created_after,omitempty"      jsonschema:"Filter snippets created after this time, an ISO 8601 timestamp such as 2026-01-01T08:30:00Z. A date such as 2026-01-01 is read as midnight UTC"`
 	CreatedBefore     string `json:"created_before,omitempty"     jsonschema:"Filter snippets created before this time, an ISO 8601 timestamp such as 2026-02-01T18:00:00Z. A date such as 2026-02-01 is read as midnight UTC"`
 	RepositoryStorage string `json:"repository_storage,omitempty" tier:"premium" jsonschema:"Filter by repository storage name (admin only)"`
-	OrderBy           string `json:"order_by,omitempty"           jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy           string `json:"order_by,omitempty"           jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort              string `json:"sort,omitempty"               jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
@@ -587,7 +587,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 // ExploreInput carries pagination and ordering for public snippet discovery.
 // OrderBy/Sort/pagination/page_token map onto the embedded gl.ListOptions.
 type ExploreInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

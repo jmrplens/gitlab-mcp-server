@@ -102,8 +102,8 @@ type UserActivitiesOutput struct {
 // GetUserActivitiesInput holds parameters for listing user activities (admin only).
 type GetUserActivitiesInput struct {
 	From    string `json:"from,omitempty" jsonschema:"Only activities after this date (YYYY-MM-DD)"`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -162,8 +162,8 @@ type UserMembershipsOutput struct {
 type GetUserMembershipsInput struct {
 	UserID  int64  `json:"user_id" jsonschema:"The ID of the user,required"`
 	Type    string `json:"type,omitempty" jsonschema:"Filter by membership type: Project or Namespace"`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }
 

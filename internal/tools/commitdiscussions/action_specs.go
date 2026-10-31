@@ -128,7 +128,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_list_commit_discussions":
-		options.Usage = "List all discussion threads tied to a commit SHA, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for a commit's review conversation, or before replying to a thread. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all discussion threads tied to a commit SHA, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for a commit's review conversation, or before replying to a thread. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"gitlab_list_commit_discussions", "list commit discussions", "show commit review threads", "get commit conversation"}
 		options.RelatedActions = []string{canonicalID(specGet), canonicalID(specCreate), actionCommitGet, actionCommitDiff}
 		options.ParameterGuidance = commitScopeGuidance()
@@ -138,7 +138,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 			ExampleBinding:   `params.order_by:"created_at"`,
 			CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases as the field value."},
 		}
-		options.IndividualTool.Description = "List discussion threads on a commit with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_get_commit_discussion, gitlab_create_commit_discussion, gitlab_commit_get."
+		options.IndividualTool.Description = "List discussion threads on a commit with ordering and offset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_get_commit_discussion, gitlab_create_commit_discussion, gitlab_commit_get."
 	case "gitlab_get_commit_discussion":
 		options.Usage = "Fetch one discussion thread on a commit by its discussion_id, returning every note in the thread. Use this after repository.commit_discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_commit_discussion", "get commit discussion", "show commit discussion thread", "fetch commit discussion"}

@@ -18,8 +18,8 @@ import (
 type ListInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
 	PackageManager string               `json:"package_manager,omitempty" jsonschema:"Filter by package manager (bundler, composer, conan, go, gradle, maven, npm, nuget, pip, pipenv, pnpm, yarn, sbt, setuptools)"`
-	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
-	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset-paginated results: asc or desc"`
+	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order results by"`
+	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }
 

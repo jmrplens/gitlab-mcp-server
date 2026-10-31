@@ -20,8 +20,8 @@ import (
 type ListMetricImagesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	AlertIID  int64                `json:"alert_iid" jsonschema:"Alert IID,required"`
-	// OrderBy names the column used to order keyset-paginated results.
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, id)"`
+	// OrderBy names the column used to order results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, id)"`
 	// Sort selects the sort direction for ordered results.
 	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
 	toolutil.PaginationInput

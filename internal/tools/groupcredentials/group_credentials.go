@@ -30,8 +30,8 @@ type ListPATsInput struct {
 	CreatedBefore  string               `json:"created_before,omitempty"  jsonschema:"Return tokens created on or before this date (YYYY-MM-DD)"`
 	LastUsedAfter  string               `json:"last_used_after,omitempty" jsonschema:"Return tokens last used on or after this date (YYYY-MM-DD)"`
 	LastUsedBefore string               `json:"last_used_before,omitempty" jsonschema:"Return tokens last used on or before this date (YYYY-MM-DD)"`
-	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
-	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order results by"`
+	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }
 
@@ -42,8 +42,8 @@ type ListSSHKeysInput struct {
 	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return keys created on or before this date (YYYY-MM-DD)"`
 	ExpiresAfter  string               `json:"expires_after,omitempty"  jsonschema:"Return keys expiring on or after this date (YYYY-MM-DD)"`
 	ExpiresBefore string               `json:"expires_before,omitempty" jsonschema:"Return keys expiring on or before this date (YYYY-MM-DD)"`
-	OrderBy       string               `json:"order_by,omitempty"       jsonschema:"Column to order keyset-paginated results by"`
-	Sort          string               `json:"sort,omitempty"           jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy       string               `json:"order_by,omitempty"       jsonschema:"Column to order results by"`
+	Sort          string               `json:"sort,omitempty"           jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }
 

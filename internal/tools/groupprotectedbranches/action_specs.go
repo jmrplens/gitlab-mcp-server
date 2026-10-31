@@ -30,8 +30,8 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupProtectedBranchReadSpec("protected_branch_list", toolutil.RouteAction(client, List), "gitlab_group_protected_branch_list",
-			"List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id, member_role_name), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
-			"List the protected-branch rules defined on a group so subgroup projects inherit them. Use params.group_id. Supports search plus offset or keyset pagination. Prefer this over inspecting a single rule when enumerating or auditing a group's inherited branch protections.",
+			"List group-level protected branches with search and offset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id, member_role_id, member_role_name), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
+			"List the protected-branch rules defined on a group so subgroup projects inherit them. Use params.group_id. Supports search plus offset pagination. Prefer this over inspecting a single rule when enumerating or auditing a group's inherited branch protections.",
 			[]string{"list group protected branches", "show group branch protection rules", "audit inherited branch protections"},
 			[]string{actionGet, actionProtect, actionGroupGet}),
 		groupProtectedBranchReadSpec("protected_branch_get", toolutil.RouteAction(client, Get), "gitlab_group_protected_branch_get",

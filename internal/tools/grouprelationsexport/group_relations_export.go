@@ -42,11 +42,11 @@ func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input Sche
 
 // ListExportStatusInput represents input for listing group relations export status.
 // It mirrors gl.ListGroupRelationsStatusOptions, including the embedded
-// gl.ListOptions offset/keyset pagination and ordering controls.
+// gl.ListOptions offset pagination and ordering controls.
 type ListExportStatusInput struct {
 	GroupID  toolutil.StringOrInt `json:"group_id" jsonschema:"The ID or URL-encoded path of the group,required"`
 	Relation string               `json:"relation,omitempty" jsonschema:"Filter by relation type (for example labels, milestones, badges)"`
-	OrderBy  string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	OrderBy  string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort     string               `json:"sort,omitempty" jsonschema:"Sort order for results: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }

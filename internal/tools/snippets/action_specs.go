@@ -141,7 +141,7 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 		description: "List snippets owned by the authenticated user. Returns: snippets with title, visibility, author, files, and pagination metadata. See also: gitlab_snippet_get, gitlab_snippet_create, gitlab_snippet_explore.",
 	},
 	"gitlab_snippet_list_all": {
-		usage:       "List every snippet on the instance (admin only). Use created_after/created_before and repository_storage filters, plus order_by/sort and keyset pagination, for cross-instance audits.",
+		usage:       "List every snippet on the instance (admin only). Use created_after/created_before and repository_storage filters, plus order_by/sort and offset pagination, for cross-instance audits.",
 		aliases:     []string{"list all snippets", "admin list snippets", "list snippets across instance"},
 		related:     []string{actionSnippetList, "snippet.explore", actionSnippetGet},
 		description: "List all snippets on the instance (admin). Returns: snippets with author, visibility, repository storage, and pagination metadata. See also: gitlab_snippet_list, gitlab_snippet_explore, gitlab_snippet_get.",
@@ -183,13 +183,13 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 		description: "Delete a personal snippet permanently. Returns: a success confirmation. See also: gitlab_snippet_get, gitlab_snippet_list.",
 	},
 	"gitlab_snippet_explore": {
-		usage:       "List public snippets visible across the instance. Use order_by/sort and keyset pagination to browse public snippets the user does not own.",
+		usage:       "List public snippets visible across the instance. Use order_by/sort and offset pagination to browse public snippets the user does not own.",
 		aliases:     []string{"explore public snippets", "browse public snippets", "list public snippets"},
 		related:     []string{actionSnippetList, actionSnippetGet},
 		description: "List public snippets across the instance. Returns: public snippets with author, visibility, and pagination metadata. See also: gitlab_snippet_list, gitlab_snippet_get.",
 	},
 	"gitlab_project_snippet_list": {
-		usage:       "List snippets belonging to one project. Provide project_id. Use order_by/sort and keyset pagination when the prompt scopes snippets to a known project.",
+		usage:       "List snippets belonging to one project. Provide project_id. Use order_by/sort and offset pagination when the prompt scopes snippets to a known project.",
 		aliases:     []string{"list project snippets", "show project snippets", "find snippets in project"},
 		related:     []string{actionSnippetProjectGet, "snippet.project_create", actionSnippetList},
 		description: "List a project's snippets. Returns: snippets with title, visibility, author, files, and pagination metadata. See also: gitlab_project_snippet_get, gitlab_project_snippet_create, gitlab_snippet_list.",

@@ -19,10 +19,10 @@ const groupEpicBoardHint = "verify group_id; epic boards require Premium/Ultimat
 
 // ListInput defines parameters for listing group epic boards. It mirrors
 // gl.ListGroupEpicBoardsOptions (which embeds gl.ListOptions), exposing the
-// offset and keyset pagination controls of that options struct.
+// offset pagination and ordering controls of that options struct.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column by which to order results (keyset pagination)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column by which to order results"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

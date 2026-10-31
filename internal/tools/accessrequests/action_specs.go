@@ -96,7 +96,7 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 
 	switch actionName {
 	case "request_list_project":
-		options.Usage = "List pending project access requests. Use before approving or denying user access requests at project scope. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List pending project access requests. Use before approving or denying user access requests at project scope. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"list project access requests", "project join requests", "pending project requests"}
 		options.RelatedActions = []string{actionAccessApproveProject, actionAccessDenyProject, actionProjectMemberList}
 		options.IndividualTool.Description = "List pending access requests for a project. Returns: access requests with id, username, name, state, whether the account is locked, the address the user publishes, the requested_at timestamp, and pagination metadata. A pending request carries no access level: GitLab grants one when it is approved. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_members_list."
@@ -107,13 +107,13 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 				ExampleBinding: `params.project_id:"group/project"`,
 			},
 			"order_by": {
-				ValueSource:      "Column to order keyset-paginated results by (e.g. id).",
+				ValueSource:      "Column to order results by (e.g. id).",
 				ExampleBinding:   `params.order_by:"id"`,
 				CommonConfusions: []string{"Combine order_by with sort (asc/desc). Do not pass natural-language phrases as the field value."},
 			},
 		}
 	case "request_list_group":
-		options.Usage = "List pending group access requests. Use before approving or denying user access requests at group scope. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List pending group access requests. Use before approving or denying user access requests at group scope. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"list group access requests", "group join requests", "pending group requests"}
 		options.RelatedActions = []string{actionAccessApproveGroup, actionAccessDenyGroup, actionGroupMemberList}
 		options.IndividualTool.Description = "List pending access requests for a group. Returns: access requests with id, username, name, state, whether the account is locked, the address the user publishes, the requested_at timestamp, and pagination metadata. A pending request carries no access level: GitLab grants one when it is approved. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_members_list."
@@ -124,7 +124,7 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 				ExampleBinding: `params.group_id:"my-group"`,
 			},
 			"order_by": {
-				ValueSource:      "Column to order keyset-paginated results by (e.g. id).",
+				ValueSource:      "Column to order results by (e.g. id).",
 				ExampleBinding:   `params.order_by:"id"`,
 				CommonConfusions: []string{"Combine order_by with sort (asc/desc). Do not pass natural-language phrases as the field value."},
 			},

@@ -31,8 +31,8 @@ const (
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"        jsonschema:"Project ID or URL-encoded path,required"`
 	Scope     string               `json:"scope,omitempty"   jsonschema:"Filter by scope: active or inactive"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }
 

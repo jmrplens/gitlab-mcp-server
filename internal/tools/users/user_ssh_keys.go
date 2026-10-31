@@ -18,8 +18,8 @@ import (
 // ListSSHKeysForUserInput holds parameters for listing SSH keys for a specific user.
 type ListSSHKeysForUserInput struct {
 	UserID  int64  `json:"user_id" jsonschema:"The ID of the user,required"`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }
 

@@ -17,16 +17,16 @@ import (
 // ListInput holds pagination parameters for listing all group storage moves.
 type ListInput struct {
 	toolutil.PaginationInput
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only used when pagination='keyset'."`
-	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only used when pagination='keyset'."`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc."`
 }
 
 // ListForGroupInput holds parameters for listing storage moves for a specific group.
 type ListForGroupInput struct {
 	GroupID int64 `json:"group_id" jsonschema:"Numeric ID of the group,required"`
 	toolutil.PaginationInput
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only used when pagination='keyset'."`
-	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only used when pagination='keyset'."`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc."`
 }
 
 // IDInput holds parameters for getting a single storage move by ID.

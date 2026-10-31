@@ -100,8 +100,8 @@ type ReplyInput struct {
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	// OrderBy names the column used to order keyset-paginated results.
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, updated_at)"`
+	// OrderBy names the column used to order results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at)"`
 	// Sort selects the sort direction for ordered results.
 	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
 	toolutil.PaginationInput

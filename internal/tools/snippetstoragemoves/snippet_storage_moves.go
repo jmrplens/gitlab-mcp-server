@@ -15,8 +15,9 @@ import (
 )
 
 // ListInput holds pagination and ordering parameters for listing all snippet
-// storage moves. Offset and keyset pagination are both supported, mirroring
-// gl.RetrieveAllSnippetStorageMovesOptions (embedded gl.ListOptions).
+// storage moves. Offset pagination is supported, mirroring
+// gl.RetrieveAllSnippetStorageMovesOptions (embedded gl.ListOptions), whose
+// keyset fields are not offered since GitLab pages this list by offset alone.
 type ListInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Field to order results by (for example 'id'). Maps to the GitLab order_by query parameter."`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction: 'asc' or 'desc'. Maps to the GitLab sort query parameter."`
@@ -24,8 +25,9 @@ type ListInput struct {
 }
 
 // ListForSnippetInput holds parameters for listing storage moves for a specific
-// snippet. Offset and keyset pagination are both supported, mirroring
-// gl.RetrieveAllSnippetStorageMovesOptions (embedded gl.ListOptions).
+// snippet. Offset pagination is supported, mirroring
+// gl.RetrieveAllSnippetStorageMovesOptions (embedded gl.ListOptions), whose
+// keyset fields are not offered since GitLab pages this list by offset alone.
 type ListForSnippetInput struct {
 	SnippetID int64  `json:"snippet_id"         jsonschema:"Numeric ID of the snippet,required"`
 	OrderBy   string `json:"order_by,omitempty" jsonschema:"Field to order results by (for example 'id'). Maps to the GitLab order_by query parameter."`

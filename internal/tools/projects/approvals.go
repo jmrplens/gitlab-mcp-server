@@ -109,8 +109,8 @@ func ChangeApprovalConfig(ctx context.Context, client *gitlabclient.Client, inpu
 // ListApprovalRulesInput defines parameters for listing project approval rules.
 type ListApprovalRulesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
 

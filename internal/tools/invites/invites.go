@@ -22,8 +22,8 @@ import (
 type ListPendingProjectInvitationsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Query     string               `json:"query,omitempty" jsonschema:"Filter invitations by email or name"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }
 
@@ -31,8 +31,8 @@ type ListPendingProjectInvitationsInput struct {
 type ListPendingGroupInvitationsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Query   string               `json:"query,omitempty" jsonschema:"Filter invitations by email or name"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
-	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }
 

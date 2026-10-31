@@ -282,8 +282,8 @@ type SAMLUsersListInput struct {
 	Blocked       *bool  `json:"blocked,omitempty" jsonschema:"Limit to blocked users only"`
 	CreatedAfter  string `json:"created_after,omitempty" jsonschema:"Return users created after the specified time. Format: ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)"`
 	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return users created before the specified time. Format: ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)"`
-	OrderBy       string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id, name, username, created_at)"`
-	Sort          string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy       string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, name, username, created_at)"`
+	Sort          string `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }
 

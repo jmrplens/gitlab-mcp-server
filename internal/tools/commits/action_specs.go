@@ -98,7 +98,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "Get a single commit from a project by SHA (full, short, branch, or tag). Returns: full commit metadata, message, parent IDs, author/committer, dates, stats, trailers, project ID, and last pipeline. See also: gitlab_commit_list, gitlab_commit_diff, gitlab_commit_refs, gitlab_commit_statuses."
 	case "commit_diff":
-		options.Usage = "Get the file diffs for a single commit with offset or keyset pagination. Use unidiff=true for a git-compatible unified-diff format when applying or rendering changes."
+		options.Usage = "Get the file diffs for a single commit with offset pagination. Use unidiff=true for a git-compatible unified-diff format when applying or rendering changes."
 		options.Aliases = []string{"commit diff", "show commit changes", "get commit diff", "diff commit"}
 		options.RelatedActions = []string{actionCommitGet, actionCommitList, actionCommitComments}
 		options.ParameterGuidance["sha"] = shaGuidance()

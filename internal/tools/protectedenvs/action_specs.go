@@ -170,7 +170,7 @@ var protectedEnvironmentActionMeta = map[string]protectedEnvironmentActionMetaEn
 func protectedEnvironmentDescription(individualTool string) string {
 	switch individualTool {
 	case "gitlab_protected_environment_list":
-		return "List protected environments in a project with order_by/sort and offset or keyset pagination. Returns: protected environments with their deploy access levels, required approval count, approval rules, and pagination metadata. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_environment_list."
+		return "List protected environments in a project with order_by/sort and offset pagination. Returns: protected environments with their deploy access levels, required approval count, approval rules, and pagination metadata. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_environment_list."
 	case "gitlab_protected_environment_get":
 		return "Get a single protected (or wildcard) environment by name. Returns: the environment with its deploy access levels (id, access level, user/group, group inheritance) and approval rules. See also: gitlab_protected_environment_list, gitlab_protected_environment_update, gitlab_protected_environment_unprotect."
 	case "gitlab_protected_environment_protect":

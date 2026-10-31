@@ -56,7 +56,7 @@ func ciVariableOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Usage = "List project CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions."
 		options.Aliases = []string{"list ci variables", "show project variables", "find ci variables"}
 		options.RelatedActions = []string{actionCIVariableGet, actionCIVariableUpdate, "ci_variable.delete"}
-		options.IndividualTool.Description = "List a project's CI/CD variables with order_by, sort, and offset or keyset pagination. Returns: each variable's key, type, protected/masked/hidden/raw flags, environment scope, description, and pagination metadata. See also: gitlab_ci_variable_get, gitlab_ci_variable_create, gitlab_ci_variable_update."
+		options.IndividualTool.Description = "List a project's CI/CD variables with order_by, sort, and offset pagination. Returns: each variable's key, type, protected/masked/hidden/raw flags, environment scope, description, and pagination metadata. See also: gitlab_ci_variable_get, gitlab_ci_variable_create, gitlab_ci_variable_update."
 	case "get":
 		options.Usage = "Get one CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed."
 		options.Aliases = []string{"get ci variable", "show variable details", "lookup variable"}

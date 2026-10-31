@@ -867,7 +867,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 }
 
 // membersListOptions builds the ListAllGroupMembers options from the input,
-// applying offset/keyset pagination and every supported member filter. Split
+// applying offset pagination and every supported member filter. Split
 // out of MembersList for the reason [listGroupsOptions] is split out of List,
 // and so that the filters a request does and does not carry can be asserted
 // without an answer standing in the way.
@@ -953,7 +953,7 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 }
 
 // subgroupsListOptions builds the ListDescendantGroups options from the input,
-// applying offset/keyset pagination and every supported descendant-group
+// applying offset pagination and every supported descendant-group
 // filter. Split out of SubgroupsList to keep that handler's cyclomatic
 // complexity flat. A marked_for_deletion_on it cannot read is refused.
 func subgroupsListOptions(input SubgroupsListInput) (*gl.ListDescendantGroupsOptions, error) {
@@ -1721,7 +1721,7 @@ type SharedWithListInput struct {
 }
 
 // sharedWithListOptions builds the ListGroupsSharedWith options from the
-// input, applying offset/keyset pagination and every supported filter. Split
+// input, applying offset pagination and every supported filter. Split
 // out for the reason [membersListOptions] is.
 func sharedWithListOptions(input SharedWithListInput) *gl.ListGroupsSharedWithOptions {
 	opts := &gl.ListGroupsSharedWithOptions{}
@@ -1788,7 +1788,7 @@ type InvitedListInput struct {
 }
 
 // invitedListOptions builds the ListInvitedGroups options from the input,
-// applying offset/keyset pagination and every supported filter. Split out for
+// applying offset pagination and every supported filter. Split out for
 // the reason [membersListOptions] is.
 func invitedListOptions(input InvitedListInput) *gl.ListInvitedGroupsOptions {
 	opts := &gl.ListInvitedGroupsOptions{}

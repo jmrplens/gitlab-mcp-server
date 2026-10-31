@@ -20,11 +20,12 @@ import (
 
 // ListInput is the input for listing CI YAML templates. It mirrors
 // gl.ListCIYMLTemplatesOptions, whose only field is the embedded gl.ListOptions.
-// OrderBy and Sort map onto gl.ListOptions.OrderBy/Sort, while offset
-// (page/per_page) and keyset (pagination/page_token) parameters map onto the
-// embedded gl.ListOptions via toolutil.ApplyListOptions.
+// OrderBy and Sort map onto gl.ListOptions.OrderBy/Sort, while the offset
+// (page/per_page) parameters map onto the embedded gl.ListOptions via
+// toolutil.ApplyListOptions; its keyset fields are not offered, since GitLab
+// pages this list by offset alone.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name, created_at, updated_at)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, name, created_at, updated_at)"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

@@ -338,7 +338,7 @@ func applyListDates(opts *gl.ListGroupMilestonesOptions, input ListInput) error 
 	return nil
 }
 
-// applyListPagination applies offset/keyset pagination and ordering. OrderBy
+// applyListPagination applies offset pagination and ordering. OrderBy
 // and Sort are applied after ApplyListOptions so explicit values win.
 func applyListPagination(opts *gl.ListGroupMilestonesOptions, input ListInput) {
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})

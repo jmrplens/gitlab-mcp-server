@@ -118,11 +118,11 @@ type UpdateApprovalRuleInput = protectedenvdata.UpdateApprovalRuleInput
 // ListInput defines parameters for the List action which retrieves group-level
 // protected environments. It mirrors
 // gl.ListGroupProtectedEnvironmentsOptions, which embeds gl.ListOptions,
-// exposing keyset pagination (order_by, sort, pagination, page_token) in
-// addition to offset pagination.
+// exposing its order_by and sort in addition to offset pagination. Its keyset
+// fields are not offered, since GitLab pages this list by offset alone.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

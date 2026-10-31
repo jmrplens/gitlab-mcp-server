@@ -15,27 +15,27 @@ import (
 )
 
 // ListProjectInput defines parameters for listing project merge trains. It
-// mirrors gl.ListMergeTrainsOptions (scope, sort) and the embedded gl.ListOptions
-// (order_by, sort, pagination, page_token), exposing both offset and keyset
-// pagination via the embedded PaginationInput and KeysetPaginationInput.
+// mirrors gl.ListMergeTrainsOptions (scope, sort) and the order_by of the
+// embedded gl.ListOptions, with offset pagination through the embedded
+// PaginationInput. Its keyset fields are not offered, since GitLab pages this
+// list by offset alone.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Scope     string               `json:"scope,omitempty" jsonschema:"Filter by scope: active, complete"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	toolutil.PaginationInput
 }
 
 // ListBranchInput defines parameters for listing MRs in a merge train for a
 // specific branch. It mirrors gl.ListMergeTrainsOptions (scope, sort) and the
-// embedded gl.ListOptions (order_by, sort, pagination, page_token), exposing
-// both offset and keyset pagination.
+// order_by of the embedded gl.ListOptions, with offset pagination alone.
 type ListBranchInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	TargetBranch string               `json:"target_branch" jsonschema:"Target branch name,required"`
 	Scope        string               `json:"scope,omitempty" jsonschema:"Filter by scope: active, complete"`
 	Sort         string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
-	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	toolutil.PaginationInput
 }
 

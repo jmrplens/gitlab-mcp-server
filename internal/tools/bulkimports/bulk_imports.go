@@ -116,8 +116,9 @@ type MigrationSummary struct {
 }
 
 // ListInput defines parameters for listing bulk import migrations. It mirrors
-// gl.ListBulkImportsOptions, including keyset pagination (order_by, sort,
-// pagination, page_token) via the embedded gl.ListOptions.
+// gl.ListBulkImportsOptions, including the order_by and sort of the embedded
+// gl.ListOptions; its keyset fields are not offered, since GitLab pages this
+// list by offset alone.
 type ListInput struct {
 	Status  string `json:"status,omitempty"   jsonschema:"Filter by status: created, started, finished, timeout, failed, canceled"`
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at)"`
@@ -252,8 +253,9 @@ type EntitySummary struct {
 // ListEntitiesInput defines parameters for listing bulk import entities.
 // When BulkImportID > 0, entities are scoped to that import; otherwise all
 // entities visible to the caller are returned.
-// It mirrors gl.ListBulkImportsEntitiesOptions, including keyset pagination
-// (order_by, sort, pagination, page_token) via the embedded gl.ListOptions.
+// It mirrors gl.ListBulkImportsEntitiesOptions, including the order_by and
+// sort of the embedded gl.ListOptions; its keyset fields are not offered,
+// since GitLab pages both entity lists by offset alone.
 type ListEntitiesInput struct {
 	BulkImportID int64  `json:"bulk_import_id,omitempty" jsonschema:"Bulk import ID. If omitted, returns entities across all imports."`
 	Status       string `json:"status,omitempty"          jsonschema:"Filter by entity status: created, started, finished, timeout, failed, canceled"`

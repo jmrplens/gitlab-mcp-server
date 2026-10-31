@@ -112,7 +112,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 func decorateSnippetDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_list_snippet_discussions":
-		options.Usage = "List all discussion threads on one project snippet, including system notes and threaded replies. Use this when the prompt asks for a snippet's comment threads or conversation history, or before replying to a thread with snippet.discussion_add_note. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all discussion threads on one project snippet, including system notes and threaded replies. Use this when the prompt asks for a snippet's comment threads or conversation history, or before replying to a thread with snippet.discussion_add_note. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"gitlab_list_snippet_discussions", "list snippet discussions", "show snippet comment threads", "get snippet conversation"}
 		options.RelatedActions = []string{actionDiscussionGet, actionDiscussionCreate, actionSnippetGet, actionSnippetNoteList}
 		options.ParameterGuidance = snippetScopeGuidance()
@@ -122,7 +122,7 @@ func decorateSnippetDiscussionMeta(options *toolutil.ActionSpecOptions, individu
 			ExampleBinding:   `params.order_by:"created_at"`,
 			CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases as the field value."},
 		}
-		options.IndividualTool.Description = "List discussion threads on a project snippet with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state) and pagination metadata. See also: gitlab_get_snippet_discussion, gitlab_create_snippet_discussion, gitlab_project_snippet_get, gitlab_snippet_note_list."
+		options.IndividualTool.Description = "List discussion threads on a project snippet with ordering and offset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state) and pagination metadata. See also: gitlab_get_snippet_discussion, gitlab_create_snippet_discussion, gitlab_project_snippet_get, gitlab_snippet_note_list."
 	case "gitlab_get_snippet_discussion":
 		options.Usage = "Fetch one discussion thread on a project snippet by its discussion_id, returning every note in the thread. Use this after snippet.discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_snippet_discussion", "get snippet discussion", "show snippet discussion thread", "fetch snippet discussion"}

@@ -109,7 +109,7 @@ type scheduleActionMetaEntry struct {
 // description) per the 1:1 audit R-META requirement.
 var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_list": {
-		usage:   "List pipeline schedules in a project. Use scope to filter active or inactive schedules and order_by/sort with pagination='keyset' for large ordered result sets.",
+		usage:   "List pipeline schedules in a project. Use scope to filter active or inactive schedules, order_by/sort to order them, and page/per_page for large result sets.",
 		aliases: []string{"list pipeline schedules", "show scheduled pipelines", "list cron pipelines"},
 		related: []string{actionScheduleGet, actionScheduleCreate},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -252,7 +252,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 		description: "Delete a pipeline schedule variable. Returns: a success confirmation naming the key. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_edit_variable.",
 	},
 	"gitlab_pipeline_schedule_list_triggered_pipelines": {
-		usage:   "List the pipelines that a schedule has triggered. Use order-independent offset or keyset pagination for long histories.",
+		usage:   "List the pipelines that a schedule has triggered. Use offset pagination for long histories.",
 		aliases: []string{"list pipelines triggered by schedule", "show scheduled pipeline runs", "schedule run history"},
 		related: []string{actionScheduleGet, actionScheduleRun, actionPipelineList},
 		guidance: map[string]toolutil.ParameterGuidance{

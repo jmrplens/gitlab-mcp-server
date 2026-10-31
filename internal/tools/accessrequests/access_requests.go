@@ -215,7 +215,7 @@ func capturedAccessRequesters(op string, requests []*gl.AccessRequest, capture *
 // ListProjectInput selects a project and pagination window for pending access requests.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset-paginated result sets (e.g. id)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }
@@ -248,7 +248,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 // ListGroupInput selects a group and pagination window for pending access requests.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset-paginated result sets (e.g. id)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }

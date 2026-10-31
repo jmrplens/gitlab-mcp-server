@@ -43,8 +43,8 @@ func configProjectOutput(cp gl.ConfigProject) ConfigProjectOutput {
 type ListAgentsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	toolutil.PaginationInput
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only used with pagination='keyset'."`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc."`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc."`
 }
 
 // AgentItem holds agent item data for the clusteragents package. It mirrors
@@ -168,8 +168,8 @@ type ListAgentTokensInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	AgentID   int64                `json:"agent_id" jsonschema:"Agent ID,required"`
 	toolutil.PaginationInput
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only used with pagination='keyset'."`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc."`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc."`
 }
 
 // AgentTokenItem holds agent token item data for the clusteragents package. It

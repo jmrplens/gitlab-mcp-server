@@ -17,12 +17,12 @@ import (
 // Project Snippet Handlers (ProjectSnippetsService)
 // ---------------------------------------------------------------------------.
 
-// ProjectListInput selects a project snippet page. OrderBy/Sort/pagination/
-// page_token map onto the embedded gl.ListOptions to mirror the SDK's
-// keyset-capable list options.
+// ProjectListInput selects a project snippet page. OrderBy, Sort and the
+// offset pagination map onto the embedded gl.ListOptions; its keyset fields
+// are not offered, since GitLab pages this list by offset alone.
 type ProjectListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"          jsonschema:"Project ID or path,required"`
-	OrderBy   string               `json:"order_by,omitempty"  jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy   string               `json:"order_by,omitempty"  jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"      jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

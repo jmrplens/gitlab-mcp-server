@@ -43,8 +43,8 @@ var credentialedURLPattern = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)([^
 // ListInput holds parameters for listing project mirrors.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'."`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc."`
 	toolutil.PaginationInput
 }
 

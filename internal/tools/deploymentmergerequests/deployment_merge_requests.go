@@ -120,7 +120,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // setting only the filters the caller supplied. Interface-typed ID filters are
 // wrapped via the SDK constructors (gl.AssigneeID, gl.ApproverIDs); date filters
 // are parsed with toolutil.ParseTimeInputs, which refuses one it cannot read;
-// offset and keyset pagination are applied via toolutil.ApplyListOptions.
+// offset pagination is applied via toolutil.ApplyListOptions.
 func buildListOptions(input ListInput) (*gl.ListMergeRequestsOptions, error) {
 	opts := &gl.ListMergeRequestsOptions{}
 

@@ -97,8 +97,8 @@ type BranchPermissionInput struct {
 }
 
 // ListInput defines parameters for the List action which retrieves group-level
-// protected branches. It supports offset pagination plus keyset pagination via
-// the embedded gl.ListOptions (order_by, sort, pagination, page_token).
+// protected branches. It supports offset pagination alone, since GitLab pages
+// this list by offset.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Search  string               `json:"search,omitempty"   jsonschema:"Search by branch name"`

@@ -9060,14 +9060,14 @@ func TestBuildUserProjectOpts_FullFilterSet(t *testing.T) {
 	assertKeysetPagination(t, opts, 2, 25, "tok-user")
 }
 
-// TestApplyKeysetOrder verifies the order/sort helper only sets supplied values.
-func TestApplyKeysetOrder(t *testing.T) {
+// TestApplyListOrder verifies the order/sort helper only sets supplied values.
+func TestApplyListOrder(t *testing.T) {
 	opts := &gl.ListOptions{}
-	applyKeysetOrder(opts, "", "")
+	applyListOrder(opts, "", "")
 	if opts.OrderBy != "" || opts.Sort != "" {
 		t.Error("empty values must not be set")
 	}
-	applyKeysetOrder(opts, "name", "desc")
+	applyListOrder(opts, "name", "desc")
 	if opts.OrderBy != "name" || opts.Sort != "desc" {
 		t.Error("order_by/sort not set")
 	}

@@ -36,11 +36,11 @@ const protectEntriesHint = "a user_id must name a user with the Developer role o
 
 // ListInput holds parameters for listing protected environments. It mirrors
 // gl.ListProtectedEnvironmentsOptions, which embeds gl.ListOptions, exposing
-// keyset pagination (order_by, sort, pagination, page_token) in addition to
-// offset pagination.
+// its order_by and sort in addition to offset pagination. Its keyset fields
+// are not offered, since GitLab pages this list by offset alone.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

@@ -78,12 +78,13 @@ func EnableDisable(ctx context.Context, client *gitlabclient.Client, input Enabl
 // ListClientKeys.
 
 // ListClientKeysInput contains parameters for listing error tracking client keys.
-// It supports offset pagination and GitLab keyset pagination via
-// order_by/sort/page_token, mirroring the embedded gl.ListOptions.
+// It supports offset pagination and the order_by and sort of the embedded
+// gl.ListOptions; its keyset fields are not offered, since GitLab pages this
+// list by offset alone.
 type ListClientKeysInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: 'asc' or 'desc'"`
 	toolutil.PaginationInput
 }
 

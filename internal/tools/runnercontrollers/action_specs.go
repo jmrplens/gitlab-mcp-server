@@ -127,10 +127,10 @@ type runnerControllerActionMetaEntry struct {
 // plane.
 var (
 	listControllerMeta = runnerControllerActionMetaEntry{
-		usage:       "List every registered runner controller on the instance (admin-only, experimental API). Use to discover controller IDs and their enabled/disabled/dry_run state before getting, updating, or deleting one. Supports offset and keyset pagination for large fleets.",
+		usage:       "List every registered runner controller on the instance (admin-only, experimental API). Use to discover controller IDs and their enabled/disabled/dry_run state before getting, updating, or deleting one. Supports offset pagination for large fleets.",
 		aliases:     []string{"list runner controllers", "runner controller fleet", "registered runner controllers"},
 		related:     []string{actionControllerGet, actionControllerCreate, actionControllerUpdate, actionControllerDelete},
-		description: "List registered runner controllers (admin-only, experimental API) with offset or keyset pagination. Returns: controllers with id, description, state, created/updated timestamps, plus pagination metadata. See also: gitlab_runner_controller_get, gitlab_runner_controller_create, gitlab_runner_controller_update.",
+		description: "List registered runner controllers (admin-only, experimental API) with offset pagination. Returns: controllers with id, description, state, created/updated timestamps, plus pagination metadata. See also: gitlab_runner_controller_get, gitlab_runner_controller_create, gitlab_runner_controller_update.",
 	}
 	getControllerMeta = runnerControllerActionMetaEntry{
 		usage:       "Fetch one runner controller by numeric controller_id, including its live connection status (admin-only, experimental API). Use after runner.controller_list to inspect a specific controller before updating or deleting it.",

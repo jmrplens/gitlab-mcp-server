@@ -17,16 +17,16 @@ import (
 // List.
 
 // ListInput contains parameters for listing project templates of a given type.
-// It mirrors gl.ListProjectTemplatesOptions (id, type) and the embedded
-// gl.ListOptions (order_by, sort, pagination, page_token) so every SDK filter
-// and pagination knob is available on the MCP surface.
+// It mirrors gl.ListProjectTemplatesOptions (id, type) and the order_by and
+// sort of the embedded gl.ListOptions, with offset pagination. Its keyset
+// fields are not offered, since GitLab pages this list by offset alone.
 type ListInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	TemplateType string               `json:"template_type" jsonschema:"Template family in the request path: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests,required"`
 	ID           int64                `json:"id,omitempty" jsonschema:"Filter to a single template by numeric id (maps to gl.ListProjectTemplatesOptions.ID)"`
 	Type         string               `json:"type,omitempty" jsonschema:"Optional secondary template type filter passed as the 'type' query parameter (maps to gl.ListProjectTemplatesOptions.Type)"`
-	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results"`
-	Sort         string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Column by which to order results"`
+	Sort         string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
 

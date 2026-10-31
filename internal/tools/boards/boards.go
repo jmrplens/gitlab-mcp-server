@@ -130,7 +130,7 @@ func convertBoardList(l *gl.BoardList, extra toolutil.BoardListExtra) BoardListO
 	}
 }
 
-// applyOrderSort copies the keyset order_by/sort parameters onto a
+// applyOrderSort copies the order_by/sort parameters onto a
 // gl.ListOptions, setting only the values the caller supplied.
 func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
 	if orderBy != "" {
@@ -216,11 +216,12 @@ func boardRefusal(operation string, err error, permissionHint, notFoundHint stri
 // ---------------------------------------------------------------------------.
 
 // ListBoardsInput represents input for listing project issue boards.
-// OrderBy/Sort/pagination/page_token map onto the embedded gl.ListOptions to
-// mirror the SDK's keyset-capable list options.
+// OrderBy, Sort and the offset pagination map onto the embedded
+// gl.ListOptions; its keyset fields are not offered, since GitLab pages this
+// list by offset alone.
 type ListBoardsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
@@ -399,12 +400,13 @@ func DeleteBoard(ctx context.Context, client *gitlabclient.Client, input DeleteB
 // ---------------------------------------------------------------------------.
 
 // ListBoardListsInput represents input for listing board lists.
-// OrderBy/Sort/pagination/page_token map onto the embedded gl.ListOptions to
-// mirror the SDK's keyset-capable list options.
+// OrderBy, Sort and the offset pagination map onto the embedded
+// gl.ListOptions; its keyset fields are not offered, since GitLab pages this
+// list by offset alone.
 type ListBoardListsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or path,required"`
 	BoardID   int64                `json:"board_id"           jsonschema:"Board ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

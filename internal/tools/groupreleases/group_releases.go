@@ -71,8 +71,9 @@ func toOutput(r *gl.Release) Output {
 
 // ListInput defines parameters for the List action which retrieves all releases
 // across projects in a group. It mirrors gl.ListGroupReleasesOptions (the
-// embedded gl.ListOptions plus the simple flag) and exposes ordering and keyset
-// pagination supported by the underlying gl.ListOptions.
+// embedded gl.ListOptions plus the simple flag) and exposes the ordering and
+// offset pagination of the underlying gl.ListOptions; its keyset fields are
+// not offered, since GitLab pages this list by offset alone.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id"           jsonschema:"Group ID or URL-encoded path,required"`
 	Simple  bool                 `json:"simple,omitempty"   jsonschema:"Return only limited fields for each release"`

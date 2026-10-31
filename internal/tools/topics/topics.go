@@ -46,8 +46,8 @@ type ListInput struct {
 	toolutil.PaginationInput
 	Search          string `json:"search,omitempty" jsonschema:"Filter topics by search query"`
 	WithoutProjects bool   `json:"without_projects,omitempty" jsonschema:"Return only the topics no project is assigned to"`
-	OrderBy         string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
-	Sort            string `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
+	OrderBy         string `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort            string `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'"`
 }
 
 // ListOutput is the output for listing topics.

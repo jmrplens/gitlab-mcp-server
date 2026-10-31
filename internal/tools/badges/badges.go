@@ -17,8 +17,7 @@ import (
 const hintVerifyGroupBadgeID = "verify badge_id with group.badge_list"
 
 // applyOrderSort copies the order_by and sort fields onto a gl.ListOptions,
-// setting only the values the caller supplied. These fields drive keyset
-// ordering for the badge list endpoints.
+// setting only the values the caller supplied.
 func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
 	if opts == nil {
 		return
@@ -71,12 +70,13 @@ func groupBadgeToItem(b *gl.GroupBadge) BadgeItem {
 // Project Badges.
 
 // ListProjectInput is the input for listing project badges. Name maps onto
-// gl.ListProjectBadgesOptions; OrderBy/Sort/pagination/page_token map onto the
-// embedded gl.ListOptions and enable keyset pagination.
+// gl.ListProjectBadgesOptions; OrderBy, Sort and the offset pagination map
+// onto the embedded gl.ListOptions, whose keyset fields are not offered since
+// GitLab pages this list by offset alone.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Name      string               `json:"name,omitempty"     jsonschema:"Filter by badge name"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, name)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
@@ -275,12 +275,13 @@ func PreviewProject(ctx context.Context, client *gitlabclient.Client, input Prev
 // Group Badges.
 
 // ListGroupInput is the input for listing group badges. Name maps onto
-// gl.ListGroupBadgesOptions; OrderBy/Sort/pagination/page_token map onto the
-// embedded gl.ListOptions and enable keyset pagination.
+// gl.ListGroupBadgesOptions; OrderBy, Sort and the offset pagination map onto
+// the embedded gl.ListOptions, whose keyset fields are not offered since
+// GitLab pages this list by offset alone.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Name    string               `json:"name,omitempty"     jsonschema:"Filter by badge name"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, name)"`
 	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

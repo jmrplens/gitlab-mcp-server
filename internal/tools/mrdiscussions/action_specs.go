@@ -134,7 +134,7 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 			toolutil.SchemaEnumOverride("position.line_range.end.type", "new", "old"),
 		}
 	case "gitlab_mr_discussion_list":
-		options.Usage = "List all discussion threads on one merge request, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for an MR's review conversation, or before replying to or resolving a thread. Supports order_by, sort, and keyset pagination."
+		options.Usage = "List all discussion threads on one merge request, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for an MR's review conversation, or before replying to or resolving a thread. Supports order_by, sort, and offset pagination."
 		options.Aliases = []string{"gitlab_mr_discussion_list", "list merge request discussions", "show MR review threads", "get merge request conversation"}
 		options.RelatedActions = []string{actionDiscussionGet, actionDiscussionCreate, actionMRGet, actionMRNoteList}
 		options.ParameterGuidance = mrScopeGuidance()
@@ -144,7 +144,7 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 			ExampleBinding:   `params.order_by:"created_at"`,
 			CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases as the field value."},
 		}
-		options.IndividualTool.Description = "List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_notes_list."
+		options.IndividualTool.Description = "List discussion threads on a merge request with ordering and offset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_notes_list."
 	case "gitlab_mr_discussion_get":
 		options.Usage = "Fetch one discussion thread on a merge request by its discussion_id, returning every note in the thread. Use this after mr_review.discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_mr_discussion_get", "get merge request discussion", "show MR discussion thread", "fetch merge request discussion"}

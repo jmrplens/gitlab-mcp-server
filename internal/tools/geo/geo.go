@@ -56,7 +56,7 @@ type IDInput struct {
 
 // ListInput holds pagination and ordering parameters for listing Geo sites.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
@@ -64,7 +64,7 @@ type ListInput struct {
 // ListStatusInput holds pagination and ordering parameters for listing all
 // Geo site statuses.
 type ListStatusInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

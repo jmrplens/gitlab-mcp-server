@@ -123,9 +123,9 @@ var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"order_by": {
-				ValueSource:      "Column to order keyset-paginated results by, such as id.",
+				ValueSource:      "Column to order results by, such as id.",
 				ExampleBinding:   `params.order_by:"id"`,
-				CommonConfusions: []string{"order_by only applies when pagination='keyset'. Combine it with sort."},
+				CommonConfusions: []string{"Combine order_by with sort."},
 			},
 		},
 		Description: "List a project's push (remote) mirrors. Returns: each mirror with id, enabled state, redacted URL, last-update status, and pagination metadata. See also: gitlab_get_project_mirror, gitlab_add_project_mirror, gitlab_project_pull_mirror_get.",

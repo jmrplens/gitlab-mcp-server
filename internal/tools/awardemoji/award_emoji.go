@@ -50,7 +50,7 @@ func (q emojiListQuery) applyTo() *gl.ListAwardEmojiOptions {
 type IssueListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
 }
@@ -60,7 +60,7 @@ type IssueListOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"issue_iid" jsonschema:"Issue IID (project-scoped internal ID),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
 }
@@ -116,7 +116,7 @@ type IssueDeleteOnNoteInput struct {
 type MRListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
 }
@@ -126,7 +126,7 @@ type MRListOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"merge_request_iid" jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
 }
@@ -182,7 +182,7 @@ type MRDeleteOnNoteInput struct {
 type SnippetListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
 }
@@ -192,7 +192,7 @@ type SnippetListOnNoteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IID       int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	NoteID    int64                `json:"note_id" jsonschema:"Note ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination."`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at, id)."`
 	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'."`
 	toolutil.PaginationInput
 }

@@ -168,7 +168,7 @@ var groupProtectedEnvActionMeta = map[string]groupProtectedEnvActionMetaEntry{
 func groupProtectedEnvDescription(individualTool string) string {
 	switch individualTool {
 	case "gitlab_group_protected_environment_list":
-		return "List group-level protected environments with order_by/sort and offset or keyset pagination. Returns: group protected environments with their deploy access levels, required approval count, approval rules, and pagination metadata. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_get."
+		return "List group-level protected environments with order_by/sort and offset pagination. Returns: group protected environments with their deploy access levels, required approval count, approval rules, and pagination metadata. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_get."
 	case "gitlab_group_protected_environment_get":
 		return "Get a single group-level protected environment by tier name. Returns: the environment with its deploy access levels (id, access level, user/group, group inheritance) and approval rules. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect."
 	case "gitlab_group_protected_environment_protect":

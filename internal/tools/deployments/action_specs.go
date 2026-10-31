@@ -81,7 +81,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Usage = "Lists deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions."
 		options.Aliases = []string{"list deployments", "show deployment history", "find deployments"}
 		options.RelatedActions = []string{actionDeploymentGet, actionEnvironmentList, actionPipelineGet}
-		options.IndividualTool.Description = "List deployments in a project with environment, status, and date filters plus offset or keyset pagination. Returns: matching deployments with ref, sha, status, user, environment, and deployable (CI job) objects, and pagination metadata. See also: gitlab_deployment_get, gitlab_environment_list, gitlab_pipeline_get."
+		options.IndividualTool.Description = "List deployments in a project with environment, status, and date filters plus offset pagination. Returns: matching deployments with ref, sha, status, user, environment, and deployable (CI job) objects, and pagination metadata. See also: gitlab_deployment_get, gitlab_environment_list, gitlab_pipeline_get."
 		// doc/api/deployments.md "List project deployments": the status
 		// filter also takes blocked, which client-go's DeploymentStatusValue
 		// has no constant for; the handler forwards the string as is.

@@ -28,7 +28,7 @@ type ListContributionEventsInput struct {
 	After      string `json:"after,omitempty" jsonschema:"Return events after this date (YYYY-MM-DD)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order (asc or desc)"`
 	Scope      string `json:"scope,omitempty" jsonschema:"Include events from all projects (all) or only user's projects"`
-	OrderBy    string `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results (id)"`
+	OrderBy    string `json:"order_by,omitempty" jsonschema:"Column by which to order results (id)"`
 	toolutil.PaginationInput
 }
 
@@ -374,7 +374,7 @@ type ListProjectEventsInput struct {
 	Before     string               `json:"before,omitempty" jsonschema:"Return events before this date (YYYY-MM-DD)"`
 	After      string               `json:"after,omitempty" jsonschema:"Return events after this date (YYYY-MM-DD)"`
 	Sort       string               `json:"sort,omitempty" jsonschema:"Sort order (asc or desc, default desc)"`
-	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results (id)"`
+	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Column by which to order results (id)"`
 	toolutil.PaginationInput
 }
 

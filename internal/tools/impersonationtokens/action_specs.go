@@ -104,7 +104,7 @@ type userTokenActionMetaEntry struct {
 // (R-META; 1:1 audit).
 var userTokenActionMeta = map[string]userTokenActionMetaEntry{
 	"gitlab_list_impersonation_tokens": {
-		usage:       "List the impersonation tokens of a user (admin token required). Use to audit a user's impersonation tokens, optionally filtering by state and paginating with offset or keyset pagination.",
+		usage:       "List the impersonation tokens of a user (admin token required). Use to audit a user's impersonation tokens, optionally filtering by state and paginating with page and per_page.",
 		aliases:     []string{"list impersonation tokens", "show user impersonation tokens", "audit impersonation tokens"},
 		related:     []string{actionImpersonationTokenGet, actionImpersonationTokenCreate, actionImpersonationTokenRevoke},
 		description: "List the impersonation tokens of a user. Returns: each token's id, name, active flag, scopes, revoked flag, created_at, expires_at, and last_used_at, with pagination metadata. See also: gitlab_get_impersonation_token, gitlab_create_impersonation_token, gitlab_revoke_impersonation_token.",

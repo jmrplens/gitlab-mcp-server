@@ -70,7 +70,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 				ExampleBinding: `params.username:"jdoe"`,
 			},
 		}
-		options.IndividualTool.Description = "List SAML SSO-provisioned users of a top-level GitLab group, with keyset pagination. Returns: matching users with full profile (id, username, name, state, email, identities, scim_identities, custom_attributes, created_by) plus pagination metadata. See also: gitlab_group_saml_link_list, gitlab_group_members_list, gitlab_group_get."
+		options.IndividualTool.Description = "List SAML SSO-provisioned users of a top-level GitLab group, with offset pagination. Returns: matching users with full profile (id, username, name, state, email, identities, scim_identities, custom_attributes, created_by) plus pagination metadata. See also: gitlab_group_saml_link_list, gitlab_group_members_list, gitlab_group_get."
 	case "gitlab_group_saml_link_get":
 		options.Usage = "Get a single SAML group link on a group by its SAML group name (Premium/Ultimate). Use to inspect the access level and provider for one specific SAML SSO group mapping rather than listing them all."
 		options.Aliases = []string{"get saml link", "show one saml group mapping", "inspect saml group link", "fetch saml sso mapping"}

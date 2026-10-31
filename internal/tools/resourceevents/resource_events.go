@@ -22,8 +22,8 @@ import (
 type ListIssueLabelEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -38,8 +38,8 @@ type GetIssueLabelEventInput struct {
 type ListMRLabelEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -54,8 +54,8 @@ type GetMRLabelEventInput struct {
 type ListGroupEpicLabelEventsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	EpicIID int64                `json:"epic_iid" jsonschema:"Epic internal ID (IID) within the group,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -70,8 +70,8 @@ type GetGroupEpicLabelEventInput struct {
 type ListIssueMilestoneEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -86,8 +86,8 @@ type GetIssueMilestoneEventInput struct {
 type ListMRMilestoneEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -102,8 +102,8 @@ type GetMRMilestoneEventInput struct {
 type ListIssueStateEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -118,8 +118,8 @@ type GetIssueStateEventInput struct {
 type ListMRStateEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -636,8 +636,8 @@ func toStateEventsOutput(events []*gl.StateEvent, extras []toolutil.ResourceStat
 type ListIssueIterationEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 
@@ -656,8 +656,8 @@ type GetIssueIterationEventInput struct {
 type ListIssueWeightEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
-	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
 }
 

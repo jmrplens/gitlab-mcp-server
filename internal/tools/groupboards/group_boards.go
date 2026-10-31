@@ -214,7 +214,7 @@ func groupBoardRefusal(operation string, err error, permissionHint, notFoundHint
 // ListGroupBoardsInput represents input for listing group issue boards.
 type ListGroupBoardsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
@@ -426,7 +426,7 @@ func DeleteGroupBoard(ctx context.Context, client *gitlabclient.Client, input De
 type ListGroupBoardListsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	BoardID int64                `json:"board_id" jsonschema:"Board ID,required"`
-	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }

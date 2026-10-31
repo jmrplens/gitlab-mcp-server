@@ -60,9 +60,9 @@ func toItem(m *gl.BroadcastMessage) MessageItem {
 
 // ListInput is the input for listing broadcast messages. It mirrors
 // v2.ListBroadcastMessagesOptions (which embeds v2.ListOptions), exposing
-// offset and keyset pagination plus order_by/sort ordering controls.
+// offset pagination plus order_by/sort ordering controls.
 type ListInput struct {
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, created_at, updated_at)"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 }
