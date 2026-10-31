@@ -404,7 +404,7 @@ Open an issue at <https://github.com/jmrplens/gitlab-mcp-server/issues/new/choos
 - **Enhancement** — improvement to existing behavior
 - **Documentation** — missing, outdated or incorrect docs
 
-For **security issues**, do not open a public issue — report privately via [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) (see [SECURITY.md](SECURITY.md)).
+For **security issues**, do not open a public issue: report privately via [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) (see [SECURITY.md](SECURITY.md)). If you cannot use them, email the same information to the maintainer at [mail@jmrp.io](mailto:mail@jmrp.io), encrypted if you can to the OpenPGP key [SECURITY.md](SECURITY.md#reporting-a-vulnerability) names.
 
 Templates auto-apply the relevant labels listed in [Labels](#labels).
 
