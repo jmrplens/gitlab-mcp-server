@@ -93,15 +93,16 @@ gotestsum --version
 
 ### Individual Targets
 
-| Target                    | Description                                                                                   |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
-| `make golangci-lint`      | Verify `.golangci.yml`, check configured Go formatting, and run configured Go linters         |
-| `make fmt`                | Apply configured Go formatters through `golangci-lint fmt`                                    |
-| `make govulncheck`        | Scan Go dependencies and reachable calls for known CVEs                                       |
-| `make check-binary-vulns` | Build every release target and hold each binary to the vulnerability database at module grain |
-| `make check-image-vulns`  | Build the image per platform and hold its Alpine packages to Trivy's database (needs Docker)  |
-| `make mdlint`             | Lint all Markdown and MDX files, excluding `plan/` and `node_modules/`, with CI's globs       |
-| `make mdlint-fix`         | Auto-fix Markdown and MDX lint issues                                                         |
+| Target                        | Description                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `make golangci-lint`          | Verify `.golangci.yml`, check configured Go formatting, and run configured Go linters         |
+| `make fmt`                    | Apply configured Go formatters through `golangci-lint fmt`                                    |
+| `make govulncheck`            | Scan Go dependencies and reachable calls for known CVEs                                       |
+| `make check-binary-vulns`     | Build every release target and hold each binary to the vulnerability database at module grain |
+| `make check-image-vulns`      | Build the image per platform and hold its Alpine packages to Trivy's database (needs Docker)  |
+| `make check-dependency-vulns` | Hold every lockfile to OSV.dev's advisories, malicious packages included (needs Docker)       |
+| `make mdlint`                 | Lint all Markdown and MDX files, excluding `plan/` and `node_modules/`, with CI's globs       |
+| `make mdlint-fix`             | Auto-fix Markdown and MDX lint issues                                                         |
 
 ### Combined Targets
 
@@ -373,6 +374,75 @@ locally; it needs Docker, so `make analyze` does not run it, and a run of one
 platform lists a declaration that accepts nothing as unjudged rather than
 stale.
 
+#### Every lockfile, malicious packages included
+
+`make check-dependency-vulns` asks of every lockfile in the tree what
+`govulncheck` and `make check-binary-vulns` ask of Go: every `go.mod` (from Go
+1.17 it lists every module a build needs, and `go.sum` holds checksums),
+`site/pnpm-lock.yaml`, and the pip locks under `.github/requirements`, which
+OSV-Scanner does not recognize by name and is handed as requirements files.
+Until it existed, nothing blocked a change on the site's or the PyPI upload's
+dependencies (the site's `pnpm audit` job is informational, since it reports
+the npm registry's state), and nothing asked about malicious packages at all.
+It runs OSV-Scanner from its own image, pinned by digest in the Makefile
+(`OSV_SCANNER_IMAGE`), over the checkout mounted read-only, as the invoking
+user, and reads every lockfile it recognizes below the root, except what
+`.gitignore` keeps out and the worktrees under `.claude`. Its database is
+[OSV.dev](https://osv.dev), which carries the Go vulnerability database,
+GitHub's advisories for npm and PyPI and the OpenSSF malicious-packages feed,
+whose entries are the `MAL-` ids.
+
+It reads at module grain, as `make check-binary-vulns` reads a binary: Go call
+analysis is off (`--no-call-analysis=go`), so an advisory against a module
+counts whether or not this repository's code calls it. That is what reports
+`GO-2026-5932` against `golang.org/x/crypto`, which `go.mod` requires for test
+code alone (above), and the root `osv-scanner.toml` sets it aside.
+
+A finding of any severity fails the run unless the `osv-scanner.toml` beside
+the lockfile it was found in sets it aside, so the allow lists are
+`osv-scanner.toml` at the root, for `go.mod`, and `site/osv-scanner.toml`, for
+the site's lockfile. They are written in OSV-Scanner's own format rather than
+in a Go declaration table, because OSV-Scanner applies them where the scan is
+made and OpenSSF Scorecard's Vulnerabilities check reads the same files, so an
+advisory set aside here is set aside there for the same written reason. They
+are held to the terms every declaration table here is held to all the same,
+split between two places. `make check-supply-chain` (property 8 of
+[`audit_supply_chain`](cmd-utilities.md#audit_supply_chain)) reads each one in
+a single shape and refuses anything outside it: an entry gives an `id` that is
+not a `MAL-` one, a `reason` that opens with one of OpenVEX's five
+`not_affected` justifications and says why it holds, which plays the part of a
+category, and an `ignoreUntil` at most six months ahead. The scan enforces the
+rest: OSV-Scanner stops honoring an entry on its `ignoreUntil` date, and the
+make target fails on an entry it reports as an unused ignore, which is how a
+stale one shows. That second check reads the line `<file> has unused ignores:`
+that OSV-Scanner 2.7.0 prints, so a bump of the image checks that the wording
+still holds.
+
+The allow lists cannot be the last word on a malicious package. OSV-Scanner
+groups an advisory with its aliases, and an entry naming any id of the group
+sets the whole group aside: an entry for `CVE-2025-59144` sets aside
+`MAL-2025-46974`, the compromised `debug` 4.4.2, and the embedded malware of
+`ua-parser-js` 0.7.29 has no `MAL-` id at all, only `GHSA-pjwm-rvh2-c87w`,
+which GitHub classifies as CWE-506. So the target scans a second time under
+`--config /dev/null`, which honors no `osv-scanner.toml`, with a JSON report,
+and fails on any `MAL-` id or CWE-506 in it; `make check-supply-chain` accepts
+`--config` in the recipe only in that spelling, and requires it. Both scans
+must also report reading every lockfile git holds, by the line
+`Scanned /src/<path> file` and the names `DEPENDENCY_VULNS_LOCKFILES` lists, so
+an `--x-exclude` or a scan path that leaves the site out fails rather than
+passing over 837 packages unread.
+
+A scan that reaches no verdict, because OSV.dev did not answer or a lockfile
+could not be read, fails the run too. The site's audit is annotated rather than
+failed when its registry does not answer, because it does not decide; this
+one does, so a run that could not ask is run again. It runs in CI's
+`dependency-vulns` job, which the `checks` fan-in needs and `✅ CI` counts, on
+every pull request and every push to main, as the whole of its step and after
+the checkout alone, which `make check-supply-chain` holds it to. It needs
+Docker, git and the network, so `make analyze` does not run it. What blocks and what may be declared is
+[SECURITY.md](../../SECURITY.md#malicious-and-vulnerable-dependencies)'s to
+say; this is how it is enforced.
+
 ### markdownlint-cli2
 
 `markdownlint-cli2` checks Markdown style and consistency.
@@ -409,6 +479,7 @@ GitHub Actions uses the same separation as Make:
 
 - The `golangci-lint` job installs the pinned `golangci-lint` release through the official action and runs `make golangci-lint`, so CI and a developer's machine run the same three commands with the same version. Its analysis cache is deliberately not kept between runs, so a result depends on the tree being linted and nothing else: a pull request restores a cache from its own ref first, which after a rebase holds the analysis of the branch's previous tree, and that once failed a cascaded layer on an unused `//nolint` in a file it never touched (issue 945). The action is given `skip-cache: true` for that, because `install-only` does not stop it restoring that cache before the install and saving it after the job; the first fix removed a cache step of the workflow's own and left the action's in place, whose key names only the runner OS, a seven-day interval and the hash of `go.mod`, so a pull request that leaves `go.mod` alone can restore `main`'s analysis of another tree. The Go build and module caches are still restored, since their keys are content hashes.
 - The `govulncheck` job installs the `govulncheck` named by the `tool` directive in `go.mod` (a bare `go install`, so the pin lives in one place) and runs `make govulncheck`, then `make check-binary-vulns` over the six release binaries.
+- The `dependency-vulns` job runs `make check-dependency-vulns`, OSV-Scanner's image pinned by digest over every lockfile of the checkout, and sets up no toolchain of its own.
 - The `Markdown` job runs `markdownlint-cli2` for Markdown and MDX content through the linter's own action, which bundles the tool and touches no registry.
 
 Separate jobs for `goimports`, `gofmt`, `go vet`, `modernize`, `gosec`, and `staticcheck` are intentionally omitted because `golangci-lint` already covers them with the repository configuration.

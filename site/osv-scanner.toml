@@ -1,0 +1,23 @@
+# The advisories make check-dependency-vulns may set aside in this directory's
+# lockfile, pnpm-lock.yaml, each because it is not exploitable here. The
+# policy and the shape of an entry are SECURITY.md, Dependencies, and the
+# header of the osv-scanner.toml at the repository root; make
+# check-supply-chain holds every entry to them. A fixed version the site can
+# take goes in pnpm-workspace.yaml as an override instead, and an entry here
+# turns into a failure the day the lockfile moves past the advisory, which is
+# what removes it.
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2027-01-31
+reason = "vulnerable_code_not_in_execute_path: glob 13.0.6 reaches the site only through htmlhint 1.9.2, a devDependency that pnpm run lint runs over the site's own build output, and htmlhint walks it with globStream and globSync and no signal option, so the abort branches of src/walker.ts the advisory concerns are never taken. The fix is glob 14.0.2, a major htmlhint 1.9.2, the newest release, does not accept (^13.0.6)."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-01-31
+reason = "vulnerable_code_cannot_be_controlled_by_adversary: the amplification needs an attacker to supply the glob pattern, and minimatch 10.2.6 and 3.1.5 reach the site only through development tooling (eslint, @eslint/config-array, @typescript-eslint/typescript-estree and glob 13 under htmlhint; glob 7 under pa11y-ci's globby 7) that matches patterns written in this repository against its own files. Nothing the site serves runs it. The fix is minimatch 11.0.1, a major none of those consumers accepts, and forcing it onto the 3.x consumers would also change the API they import."
+
+[[IgnoredVulns]]
+id = "GHSA-238p-pmpm-9mq7"
+ignoreUntil = 2027-01-31
+reason = "vulnerable_code_cannot_be_controlled_by_adversary: katex 0.16.47 reaches the site only through mermaid 11 under mermaid-isomorphic 3.1.0, which rehype-mermaid runs at build time in a headless Chromium to render the diagrams of this repository's own pages to inline SVG. The gadget needs an Object.prototype polluted beforehand and math written by an attacker, and the site ships no KaTeX or Mermaid runtime to a reader. The fix is katex 0.18.2, outside the ^0.16.0 that mermaid-isomorphic 3.1.0, the newest release, asks for."

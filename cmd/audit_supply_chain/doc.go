@@ -4,7 +4,7 @@
 // Command audit_supply_chain audits the release supply chain's configuration
 // invariants.
 //
-// Seven properties, each of which was false at some point and each of which is
+// Eight properties, each of which was false at some point and each of which is
 // invisible to every other gate in this repository:
 //
 //  1. Every uses: in .github/workflows is pinned to a 40-character commit SHA,
@@ -164,6 +164,39 @@
 //     GitHub skip workflows, or a credit to an assistant, since the body is
 //     published under the maintainer's name and the text is the one most
 //     likely to be pasted into the pull request that moves VERSION.
+//  8. A known malicious or vulnerable dependency blocks a change, as
+//     SECURITY.md (Dependencies) promises. The Makefile's
+//     check-dependency-vulns runs OSV_SCANNER_IMAGE, assigned once and pinned
+//     by its sha256 digest, passes --config only as --config /dev/null, since
+//     a file there would replace the osv-scanner.toml beside each lockfile,
+//     and does pass it once: OSV-Scanner sets an advisory aside with all of
+//     its aliases, so an entry naming a malicious package's GHSA or CVE id
+//     sets its MAL- one aside, and only a pass that honors no allow list
+//     sees it. A job of ci.yml runs that target from the root Makefile as
+//     the whole run block of a step, comments aside, under no if:, no
+//     continue-on-error: and no shell: of the job's, the step's or a
+//     defaults.run.shell, with no MAKEFLAGS, GNUMAKEFLAGS, MAKEFILES,
+//     BASH_ENV, OSV_SCANNER_IMAGE or DEPENDENCY_VULNS_ variable in the
+//     workflow's, the job's or the step's env, after no step but
+//     actions/checkout; and the job ci, the check branch protection
+//     requires, reaches it through needs without passing a job whose verdict
+//     excuses it (INFORMATIONAL or MAY_SKIP, which
+//     .github/scripts/needs-verdict.sh reads). Every osv-scanner.toml the scan
+//     could honor is read, below every directory but .git, node_modules,
+//     dist, plan, the worktrees under .claude and another checkout, a
+//     dot-directory included, since the scan leaves a directory out only for
+//     .gitignore or an exclusion and never for its name. Each is read in one
+//     shape, comments and [[IgnoredVulns]] tables of id, ignoreUntil and
+//     reason with each value on one line, and anything else in it is a
+//     finding, since what OSV-Scanner makes of the rest is what it sets
+//     aside. Each entry names an advisory that is not a malicious package's
+//     (MAL-), once per file; a reason that opens with one of OpenVEX's five
+//     not_affected justifications, a colon and the claim a reviewer checks;
+//     and an ignoreUntil no more than six months ahead. OSV-Scanner stops
+//     honoring an entry on that day, and the make target fails on an entry
+//     that sets nothing aside, so the review date and staleness are the
+//     scan's to enforce: this rule fails no entry because its day has
+//     passed, and its bound only ever relaxes as the days go by.
 //
 // Rules 1 and 2 do not stop at a uses: line. The action a step names is
 // opened and its steps are judged as though the workflow had written them: a

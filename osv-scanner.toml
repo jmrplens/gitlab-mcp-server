@@ -1,0 +1,16 @@
+# The advisories make check-dependency-vulns may set aside in the lockfile of
+# this directory, go.mod, each because it is not exploitable here.
+# The policy is SECURITY.md, Dependencies, and make check-supply-chain holds
+# every entry to it: one [[IgnoredVulns]] table per advisory, written as id,
+# ignoreUntil and reason and nothing else, the reason opening with the OpenVEX
+# justification that makes the advisory not exploitable here, and ignoreUntil,
+# the review date, at most six months ahead. OSV-Scanner stops honoring an
+# entry on that date, and the scan fails on an entry that sets nothing aside.
+# A malicious-package advisory (MAL-) is never set aside, and the target's
+# second scan, which honors no allow list, fails on one whatever id an entry
+# here names. OpenSSF Scorecard's Vulnerabilities check reads this file too.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+ignoreUntil = 2027-04-30
+reason = "vulnerable_code_not_present: the advisory concerns golang.org/x/crypto/openpgp and its subpackages, which nothing in this module imports and no release binary links (make check-binary-vulns builds and scans all six). The module stays in go.mod for golang.org/x/crypto/ssh in the e2e fixtures and golang.org/x/crypto/hkdf in the tests of internal/telemetry, and the advisory names no fixed version, since openpgp is frozen rather than patched, so no bump can clear it."
