@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
@@ -134,6 +135,34 @@ func TestWaitForBranchListed_NeverListed_ReportsTheTimeoutWithTheLastState(t *te
 	}
 	if !strings.Contains(err.Error(), `HEAD of branch "feature" in project 1: HTTP 404`) {
 		t.Errorf("timeout error = %q, want it to carry the last answer", err)
+	}
+}
+
+// TestWaitForBranchListed_AnswerInFlightAtTheDeadline_IsTheLastState checks
+// that a HEAD still in flight when the wait runs out is answered rather than
+// cut short by the wait's own deadline: GitLab answers it 404 after the wait
+// has ended, and the timeout names that 404, not a request with no answer.
+func TestWaitForBranchListed_AnswerInFlightAtTheDeadline_IsTheLastState(t *testing.T) {
+	shortBranchListedPolls(t)
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(150 * time.Millisecond):
+			w.WriteHeader(http.StatusNotFound)
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(slow.Close)
+	client, err := gitlabclient.NewClientWithTokenRetries(slow.URL, stubToken, false, true)
+	if err != nil {
+		t.Fatalf("building a client for the slow GitLab: %v", err)
+	}
+
+	err = waitForBranchListed(t.Context(), client, 1, "feature", 50*time.Millisecond)
+	if !errors.Is(err, harness.ErrPollTimeout) {
+		t.Fatalf("waitForBranchListed() error = %v, want a poll timeout", err)
+	}
+	if !strings.Contains(err.Error(), `HEAD of branch "feature" in project 1: HTTP 404`) {
+		t.Errorf("timeout error = %q, want it to name the 404 answered after the wait ran out", err)
 	}
 }
 

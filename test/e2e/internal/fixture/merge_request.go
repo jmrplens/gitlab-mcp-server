@@ -135,6 +135,10 @@ var (
 	branchListedPollInterval   = 250 * time.Millisecond
 )
 
+// branchListedRequestGrace is how long a HEAD still in flight when the wait
+// runs out may take to be answered, beyond the wait itself.
+const branchListedRequestGrace = 5 * time.Second
+
 // awaitBranchesListed holds until GitLab's branch name cache lists every
 // branch named, and reports whether it did within the wait. It never fails the
 // test itself: a branch the cache does not list in time is logged with what
@@ -164,13 +168,19 @@ func awaitBranchesListed(e *harness.Env, project Project, branches []string) boo
 // (Repository#branch_exists?), the one the merge request validation reads,
 // while GET reads the branch from Gitaly, which held it all along and would
 // end the wait at once.
+//
+// The wait ends on Poll's own timer, and its requests are bounded
+// [branchListedRequestGrace] later. Were they bounded by the wait itself, the
+// HEAD in flight when it ran out would be cut short, and the timeout would
+// name a request GitLab seemed never to answer rather than the 404 it kept
+// answering.
 func waitForBranchListed(ctx context.Context, client *gitlabclient.Client, projectID int64, branch string, wait time.Duration) error {
-	pollCtx, cancel := context.WithTimeout(ctx, wait)
+	requestCtx, cancel := context.WithTimeout(ctx, wait+branchListedRequestGrace)
 	defer cancel()
 
 	path := fmt.Sprintf("projects/%d/repository/branches/%s", projectID, gl.PathEscape(branch))
-	return harness.Poll(pollCtx, branchListedPollInterval, wait, func() (bool, string, error) {
-		answer, err := probeREST(pollCtx, client, http.MethodHead, path, nil)
+	return harness.Poll(requestCtx, branchListedPollInterval, wait, func() (bool, string, error) {
+		answer, err := probeREST(requestCtx, client, http.MethodHead, path, nil)
 		if err != nil {
 			return harness.WaitThrough(fmt.Sprintf("HEAD of branch %q in project %d", branch, projectID), err)
 		}
