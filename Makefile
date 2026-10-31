@@ -8,7 +8,7 @@
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
 	lint fmt clean version release release-check checksum \
-	golangci-lint govulncheck check-binary-vulns image-vulns-images check-image-vulns check-repeatable check-reproducible check-site-headers sonar sonar-status \
+	golangci-lint govulncheck check-binary-vulns image-vulns-images check-image-vulns check-dependency-vulns check-repeatable check-reproducible check-site-headers sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links check-md-tables \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
@@ -1069,6 +1069,42 @@ check-image-vulns: image-vulns-images
 		set -- "$$@" "$$dir/report-$$name.json"; \
 	done; \
 	go run ./cmd/audit_image_vulns/ -platforms "$(IMAGE_VULNS_PLATFORMS)" -db "$$dir/trivy-version.json" "$$@"
+
+# OSV-Scanner's own image, pinned by the digest of its multi-platform index,
+# which make check-supply-chain requires. The target below reads an entry that
+# sets nothing aside from the line "<file> has unused ignores:" this release
+# prints (on stdout beside the table, on stderr beside a JSON report), so a
+# bump checks that the line still reads that way.
+OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:v2.7.0@sha256:4f3b7e2c64b9d38a5febc5a7e4a3dfef1d1362f726dea7a2ef4762b46469fcd0
+# The pip locks, which OSV-Scanner does not recognize by their names, handed to
+# it as requirements files; every other lockfile it finds by walking the tree.
+DEPENDENCY_VULNS_PIP_LOCKS=$(wildcard .github/requirements/*.txt)
+DEPENDENCY_VULNS_DIR=dist/dependency-vulns
+
+## check-dependency-vulns: hold every lockfile the tree holds (go.mod with go.sum, site/pnpm-lock.yaml, the pip locks under .github/requirements) to OSV.dev's advisories, the OpenSSF malicious-package (MAL-) entries included, with OSV-Scanner's image pinned by digest.
+## Fails on an advisory of any severity that the osv-scanner.toml beside its lockfile does not set aside, on an entry there that sets nothing aside, and on a scan that reached no verdict, an OSV.dev that did not answer included.
+## Module grain, as check-binary-vulns reads a binary: Go call analysis is off, so an advisory against a module counts whether or not our code calls it.
+## The policy is SECURITY.md#dependencies, and make check-supply-chain holds every osv-scanner.toml entry to it.
+## Needs Docker and the network, so make analyze does not run it; the dependency-vulns job of ci.yml does, inside the required check.
+check-dependency-vulns:
+	@command -v docker >/dev/null || { echo "ERROR: Docker is required"; exit 1; }
+	@set -u; dir="$(CURDIR)/$(DEPENDENCY_VULNS_DIR)"; mkdir -p "$$dir"; status=0; \
+	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/src:ro" "$(OSV_SCANNER_IMAGE)" \
+		scan source --recursive --no-call-analysis=go --x-exclude /src/.claude/worktrees \
+		$(foreach lock,$(DEPENDENCY_VULNS_PIP_LOCKS),--lockfile requirements.txt:/src/$(lock)) /src \
+		> "$$dir/report.txt" 2> "$$dir/scan.log" || status=$$?; \
+	cat "$$dir/scan.log" "$$dir/report.txt"; \
+	unused=0; grep -q ' has unused ignores:' "$$dir/scan.log" "$$dir/report.txt" && unused=1; \
+	case "$$status" in \
+		0) ;; \
+		1) echo "ERROR: an advisory no osv-scanner.toml sets aside affects a dependency (listed above): take the fixed version, remove a malicious package, or declare why it is not exploitable as SECURITY.md#dependencies says";; \
+		*) echo "ERROR: OSV-Scanner reached no verdict (exit $$status), so nothing vouches for the dependencies: run it again once OSV.dev answers";; \
+	esac; \
+	if [ "$$unused" -eq 1 ]; then \
+		echo "ERROR: an osv-scanner.toml entry sets nothing aside (listed above): remove it, or renew it after a review if its ignoreUntil has passed"; \
+	fi; \
+	if [ "$$status" -ne 0 ] || [ "$$unused" -ne 0 ]; then exit 1; fi; \
+	echo "dependency advisories: every lockfile scanned, and nothing found that an osv-scanner.toml does not set aside"
 
 ## sonar: run the full SonarCloud pipeline like CI — unit tests with coverage,
 ## upload via sonar-scanner, poll the Compute Engine task, then print the quality
@@ -2675,8 +2711,11 @@ check-test-file-names:
 ## check-supply-chain: fail when a release-configuration invariant nothing else
 ## in the pipeline can see has broken — an unpinned uses:, a credentialed job
 ## that runs code resolved at run time, a dropped Dependabot cooldown, a stale
-## security policy, an installer that stopped verifying the signature, or a
-## VERSION whose release has no written summary in .github/release-notes.
+## security policy, an installer that stopped verifying the signature, a
+## VERSION whose release has no written summary in .github/release-notes, or a
+## dependency scan (check-dependency-vulns) the required check of ci.yml no
+## longer counts, an unpinned scanner, or an osv-scanner.toml entry outside
+## the terms SECURITY.md sets.
 check-supply-chain:
 	go run ./cmd/audit_supply_chain/
 

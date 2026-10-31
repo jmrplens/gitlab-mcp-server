@@ -15,9 +15,10 @@
 #   coverage ─── sonarcloud
 #   docker (×2) ─── docker-build
 #   cross_platform (×3) ─── cross_platform_summary
-#   generated · golangci-lint · govulncheck · markdown · site-lint · site-build
-#   hadolint · supply-chain · docs-audit · em-dash · dco ─── checks
-#                                                    └──► ci
+#   generated · golangci-lint · govulncheck · dependency-vulns · markdown
+#   site-lint · site-build · hadolint · supply-chain · docs-audit · em-dash
+#   dco ─── checks
+#           └──► ci
 #
 # Every edge joins neighbouring columns, and that is deliberate. GitHub draws
 # a job with no parent and no child at the end of the first column, in one box
@@ -465,7 +466,10 @@ jobs:
   # registry outage stops blocking merges, while the analysis still runs and is
   # still published. This job is deliberately not in the required-check list:
   # what it reports is the state of somebody else's advisory database, which
-  # can turn red without a commit.
+  # can turn red without a commit. The blocking question about the same
+  # lockfile is asked by dependency-vulns below, of OSV.dev rather than the npm
+  # registry, for every lockfile and for malicious packages too, against allow
+  # lists SECURITY.md sets the terms of.
   docs-audit:
     name: "📦 Site dependency audit"
     runs-on: ubuntu-latest
@@ -769,6 +773,33 @@ jobs:
       # run in process by cmd/audit_binary_vulns.
       - name: Release binaries at module grain
         run: make check-binary-vulns
+
+  # Every lockfile the tree holds against OSV.dev, which carries the Go
+  # vulnerability database, GitHub's advisories for npm and PyPI and the
+  # OpenSSF malicious-packages feed (MAL- entries): go.mod with go.sum, the
+  # site's pnpm-lock.yaml and the pip locks under .github/requirements. The two
+  # jobs above ask what our code calls and what the release binaries link, of
+  # Go alone; until this one nothing blocked a change on the site's or the PyPI
+  # upload's dependencies, and nothing asked about malicious packages at all.
+  # Any advisory fails it unless the osv-scanner.toml beside its lockfile sets
+  # it aside, on the terms SECURITY.md (Dependencies) states and make
+  # check-supply-chain holds every entry to, and so does an entry that sets
+  # nothing aside. OSV-Scanner runs from its own image, pinned by digest in the
+  # Makefile, and reads the checkout read-only as an unprivileged user.
+  #
+  # Unlike the site's audit above, a registry that does not answer fails this
+  # job: it is the required answer for every lockfile, and a scan that reached
+  # no verdict is not one. Run it again.
+  dependency-vulns:
+    name: "🦠 Dependency advisories"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Every lockfile against OSV.dev, malicious packages included
+        run: make check-dependency-vulns
 
   # This job took six and a half minutes on a day the npm registry was slow, of
   # which the lint itself was eight seconds: `npx --yes` resolved and installed
@@ -1259,7 +1290,9 @@ jobs:
   # parents are drawn last, and every edge stays between neighbouring columns.
   #
   # The site dependency audit reaches here and is printed, but does not
-  # decide: it reports the state of somebody else's advisory database.
+  # decide: it reports the state of somebody else's advisory database. The
+  # dependency advisories job does decide, for every lockfile, and make
+  # check-supply-chain fails if it ever stops reaching the verdict of "ci".
   checks:
     name: "🧰 Checks"
     runs-on: ubuntu-latest
@@ -1281,6 +1314,7 @@ jobs:
       - generated
       - golangci-lint
       - govulncheck
+      - dependency-vulns
       - analyze-md
       - site-lint
       - site-build

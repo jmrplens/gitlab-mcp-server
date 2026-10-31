@@ -1131,6 +1131,11 @@ func auditWith(root string, declared tables, store *actionStore) ([]string, erro
 		return nil, err
 	}
 	problems = append(problems, checkInstallers(installSh, installPS1)...)
+	dependencyScan, err := checkDependencyScan(root)
+	if err != nil {
+		return nil, err
+	}
+	problems = append(problems, dependencyScan...)
 	return append(problems, scriptProblems(scriptsInTree(root), declared)...), nil
 }
 
@@ -1396,7 +1401,7 @@ func run(args []string, stdout, stderr io.Writer, declared tables) int {
 	}
 	fmt.Fprint(stdout, "supply-chain audit passed: pinned actions, locked release jobs, "+
 		"stated cooldowns, current security policy, signature-verifying installers, declared scripts, "+
-		"written release notes\n")
+		"written release notes, a blocking dependency scan\n")
 	return 0
 }
 

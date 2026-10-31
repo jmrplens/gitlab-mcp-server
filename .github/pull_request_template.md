@@ -74,7 +74,7 @@ What a review checks and what a merge requires are in [Code Review](https://gith
 - [ ] No secrets, tokens, or credentials in code, tests, fixtures, or logs
 - [ ] Input validation for user-provided parameters
 - [ ] Error messages do not leak sensitive information
-- [ ] No new dependencies with known vulnerabilities (verify with `govulncheck`)
+- [ ] No new dependency with a known vulnerability or a malicious-package advisory (`make check-dependency-vulns`, which CI runs, and `govulncheck` for the calls our code makes), and any advisory set aside is declared as [SECURITY.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/SECURITY.md#malicious-and-vulnerable-dependencies) says
 
 ## Screenshots / Logs (if applicable)
 

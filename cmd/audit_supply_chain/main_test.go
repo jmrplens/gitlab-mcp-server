@@ -3217,7 +3217,7 @@ func TestRun_CleanRepository_PrintsTheSuccessLine(t *testing.T) {
 	}
 	want := "supply-chain audit passed: pinned actions, locked release jobs, " +
 		"stated cooldowns, current security policy, signature-verifying installers, declared scripts, " +
-		"written release notes\n"
+		"written release notes, a blocking dependency scan\n"
 	if stdout.String() != want {
 		t.Errorf("run() stdout = %q, want %q", stdout.String(), want)
 	}
@@ -3316,7 +3316,7 @@ func TestRun_UnreadableRoot_ExitsNonZero(t *testing.T) {
 // It swaps the fetcher seam, so it does not run in parallel.
 func TestRun_Record_WritesWhatTheAuditReadThenAudits(t *testing.T) {
 	root := brokenRepository(t)
-	writeWorkflow(t, root, "ci.yml", "jobs:\n  release:\n    permissions:\n      contents: write\n    steps:\n      - uses: "+composedKey+"\n")
+	writeWorkflow(t, root, "ci.yml", "jobs:\n  release:\n    permissions:\n      contents: write\n    steps:\n      - uses: "+composedKey+"\n"+scanJobs)
 	served := map[string]string{
 		"example/composite/" + testSHA + "/action.yml": "runs:\n  using: composite\n  steps:\n    - run: bash \"$GITHUB_ACTION_PATH/run.sh\"\n      shell: bash\n",
 		"example/composite/" + testSHA + "/run.sh":     "echo run\n",
@@ -3556,6 +3556,7 @@ func TestAudit_MissingInput_IsAnError(t *testing.T) {
 		{name: "security policy", removed: "SECURITY.md"},
 		{name: "shell installer", removed: "scripts/install.sh"},
 		{name: "powershell installer", removed: "scripts/install.ps1"},
+		{name: "makefile", removed: "Makefile"},
 	}
 
 	for _, testCase := range cases {
@@ -4367,12 +4368,14 @@ func installerTables() tables {
 }
 
 // brokenRepository builds the smallest tree the audit can read end to end,
-// carrying exactly one violation: an unpinned action reference.
+// carrying exactly one violation: an unpinned action reference. Its ci.yml
+// ends with the dependency scan's two jobs and its Makefile pins the scanner,
+// so the eighth property finds nothing there.
 func brokenRepository(t *testing.T) string {
 	t.Helper()
 
 	root := t.TempDir()
-	writeWorkflow(t, root, "ci.yml", "name: CI\njobs:\n  test:\n    steps:\n      - uses: actions/checkout@v7\n")
+	writeWorkflow(t, root, "ci.yml", "name: CI\njobs:\n  test:\n    steps:\n      - uses: actions/checkout@v7\n"+scanJobs)
 
 	files := map[string]string{
 		".github/dependabot.yml": "version: 2\nupdates:\n  - package-ecosystem: gomod\n    directory: /\n    cooldown:\n      default-days: 7\n",
@@ -4380,6 +4383,7 @@ func brokenRepository(t *testing.T) string {
 		"SECURITY.md":            "| Version | Supported |\n| Latest `2.x` release | :white_check_mark: |\n",
 		"scripts/install.sh":     "cosign verify-blob --bundle checksums.txt.sigstore.json\n",
 		"scripts/install.ps1":    "cosign verify-blob --bundle checksums.txt.sigstore.json\n",
+		"Makefile":               scanMakefile,
 	}
 	for relative, body := range files {
 		full := filepath.Join(root, filepath.FromSlash(relative))
