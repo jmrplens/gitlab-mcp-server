@@ -204,7 +204,7 @@ Every change reaches `main` through a pull request, except the version stamp the
 ### What a change needs to be accepted
 
 - The required `✅ CI` check passes. It aggregates the build, the tests on Linux, macOS and Windows, the 90% coverage floor, the linters and the repository's own gates, `make check-pr-description` and the sign-off check among them.
-- Every review thread is resolved. The branch rules refuse the merge otherwise, except to the repository admin role, which is on their bypass list; the maintainer, who holds that role, merges a pull request only once this item and the one above hold.
+- Every review thread is resolved. The branch rules refuse the merge otherwise, except to the repository admin role, whose place on their bypass list lets it pass over them only when merging a pull request, never on a push to `main`; the maintainer, who holds that role, merges a pull request only once this item and the one above hold.
 - A contributor's pull request completes the template's checklist, with any item that does not apply marked so. The maintainer's own pull requests carry the same information in the description's account of what was run.
 - The maintainer agrees the change belongs in the project. A correct change can still be declined when it falls outside the [roadmap](https://docs.jmrp.io/gitlab-mcp-server/roadmap/) or a recorded decision; the reason is given in the pull request.
 
