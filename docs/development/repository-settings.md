@@ -528,10 +528,8 @@ rule. Read that day, the site's responses carry
 `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and the
 `Content-Security-Policy` above, value for value, and `make check-site-headers`
 reports all four as `ok`. The host's root and the six other project sites read
-that day are served the same two headers, except `/phonometry/`, which is
-served `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN` in their
-place. On 2026-10-26, before the rule, the responses carried the first two and
-neither of the others.
+that day are served the same two headers. On 2026-10-26, before the rule, the
+responses carried the first two and neither of the others.
 
 **How to check.**
 

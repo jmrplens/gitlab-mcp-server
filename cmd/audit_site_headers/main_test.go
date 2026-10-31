@@ -286,8 +286,8 @@ func TestPagesWorkflow_AfterTheDeploy_RunsThisCheckOnThePublishedURL(t *testing.
 }
 
 // TestRepositorySettings_ThePage_ShowsEveryValueThisCheckAsksFor holds the
-// maintainer's checklist to the declarations: the section the pending reason
-// names exists, and every value this check tells Cloudflare to set appears in
+// maintainer's checklist to the declarations: the section siteHeaders points
+// to exists, and every value this check tells Cloudflare to set appears in
 // it verbatim, so the page and the check cannot disagree on what to paste.
 func TestRepositorySettings_ThePage_ShowsEveryValueThisCheckAsksFor(t *testing.T) {
 	t.Parallel()
