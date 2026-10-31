@@ -63,17 +63,24 @@
 // The release workflow's version stamp is not declared, because it never sits
 // in a pull request: the release job pushes it to main with its deploy key
 // after a release, as GOVERNANCE.md describes, and the commits a pull request
-// brings are the only ones this command reads.
+// brings are the only ones this command reads. A fix developed in a security
+// advisory's temporary private fork reaches main from a pull request of that
+// fork, merged from the advisory, and GitHub runs no check on it there, so CI
+// never runs this command on its commits: make check-dco on the fork's
+// branch, before the advisory is merged, is what can judge them.
 //
 // # The squash commit
 //
-// main gains one squash commit per pull request, whose message is the pull
-// request description, and the description is not judged. GitHub copies the
-// Signed-off-by trailers of the pull request's commits into the squash commit
-// itself, once each, after the description: the squash commits of pull
-// requests 1512 and 1529 carry the trailer their descriptions did not, and so
-// do the squash commits of Dependabot's pull requests. A description that
-// carried its own would repeat it.
+// main gains one squash commit per pull request, whose message is, by
+// default, the pull request description, and the description is not judged.
+// With GitHub's default squash message, GitHub copies the Signed-off-by
+// trailers of the pull request's commits into the squash commit itself, once
+// each, after the description: the squash commits of pull requests 1512 and
+// 1529 carry the trailer their descriptions did not, and so do the squash
+// commits of Dependabot's pull requests. A description that carried its own
+// would repeat it. A message written by hand at the merge carries only the
+// trailers it holds, so it should end with the pull request's Signed-off-by
+// lines.
 //
 // # Exit codes
 //
