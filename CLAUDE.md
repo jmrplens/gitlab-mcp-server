@@ -62,7 +62,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 788 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 488 test files under `internal/tools/`                                                                       |
-| Go packages               | 318 in the module (`go list ./...`); 354 directories hold tracked `.go` files, the thirty-six more being what `go list` leaves out: thirty-five `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
+| Go packages               | 320 in the module (`go list ./...`); 356 directories hold tracked `.go` files, the thirty-six more being what `go list` leaves out: thirty-five `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
 
 ### Orbit live tests
 
@@ -93,6 +93,7 @@ gitlab-mcp-server/
 │   ├── audit_vex/                    # The OpenVEX document every release attaches, against OpenVEX v0.2.0 and the dependency set (make check-vex)
 │   ├── audit_image_vulns/            # The image's Alpine packages against Trivy's database, before the push (make check-image-vulns)
 │   ├── reproduce_release/            # Release binaries rebuilt from the tag and compared byte for byte (make check-reproducible, check-repeatable)
+│   ├── release_checks/               # The release's preflight order and the Linux binaries' ELF loader, before anything publishes (make release)
 │   ├── audit_site_headers/           # The documentation site's security headers, after each deploy (make check-site-headers)
 │   ├── audit_dco/                    # Every commit of a pull request signed off by its author, the DCO (make check-dco)
 │   ├── audit_file_headers/           # Every source file opens with the copyright and license header (make check-file-headers, fix-file-headers)
@@ -130,7 +131,7 @@ gitlab-mcp-server/
 │   ├── gen_testing_docs/             # docs/development/testing/testing.md
 │   ├── gen_tool_reference/           # The site's per-domain tool reference (make gen-tool-reference)
 │   ├── gen_third_party_notices/      # THIRD_PARTY_NOTICES at release time
-│   └── internal/                     # Helpers the commands share (actionrequests, sdkroutes, actionids, apilive, fileheader, graphqldocs, goprogram, sourcegate, mcpsurface, provenance, ...)
+│   └── internal/                     # Helpers the commands share (actionrequests, sdkroutes, actionids, apilive, fileheader, graphqldocs, goprogram, sourcegate, mcpsurface, provenance, releaseassets, ...)
 ├── internal/
 │   ├── cachehints/                   # SEP-2549 cache hints on MCP results
 │   ├── capguard/                     # Methods answered kept in step with capabilities declared
@@ -401,7 +402,7 @@ make check-model-results                                        # the offline ga
 **Major-version policy**: the server's major tracks client-go's major, moving in the same dependency bump, and every other dependency update ships as a minor or a patch. The rules that bite most often:
 
 - **Rehearse before tagging.** `gh workflow run release.yml --ref <branch>` builds, smoke-tests and dry-runs every publisher from the dispatched tree, as the version its `VERSION` file carries, and publishes nothing; its publisher jobs run in the `release-rehearsal` environment, which no trusted publisher names.
-- **Only the newest stable release moves "latest"** (`scripts/release-order.sh`): a backport publishes under its own version on every channel and moves no pointer.
+- **Only the newest stable release moves "latest"** (`go run ./cmd/release_checks/ order` in preflight): a backport publishes under its own version on every channel and moves no pointer.
 - **Every release opens with a written summary**: the pull request that moves `VERSION` adds `.github/release-notes/vX.Y.Z.md` (Summary, Breaking changes, Upgrading, Security), which `make check-supply-chain` requires and GoReleaser publishes with `--release-header`; see [Release Process](docs/development/release-process.md).
 - **Release link names are exact filenames**, never decorated: the Homebrew formula, winget, the installers and `scripts/fetch-release-assets.sh` look assets up by exact name.
 - **What a generator reads from the environment ships in the committed file**, so a generator that describes the served surface pins its inputs in `cmd/internal/mcpsurface` (the per-surface listings and the offline stub client) rather than reading `GITLAB_MCP_TOOL_SURFACE`, `GITLAB_URL` or `GITLAB_TOKEN` at the call site. A generator whose job is to record a GitLab, such as `cmd/gen_graphql_schema` or `cmd/gen_orbit_record`, reads its credential on purpose.
