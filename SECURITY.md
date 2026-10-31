@@ -364,6 +364,14 @@ Three static analysers read the code, and a finding is handled by the one that r
 
 The `comments` and `std-error-handling` presets beside it silence rules no security property rests on: missing or misshapen doc comments, which `make check-godocs` judges instead, and the unchecked error of a close, a flush, a print, a removal or a write to the standard streams.
 
+`sonar-project.properties` sets aside three of SonarCloud's security rules in named files, each with its reason written beside it, so no vulnerability or hotspot is reported for them there:
+
+- `S4830` and `S5527`, a TLS connection that verifies neither the certificate nor the host name, in `internal/gitlab/client.go`, whose one such configuration is used only when the operator sets `GITLAB_MCP_SKIP_TLS_VERIFY` for an instance with a self-signed certificate.
+- `S4036`, a command found through `PATH`, in `cmd/bench_resources` and `cmd/audit_e2e_coverage`, maintainer tooling that reaches no binary and runs where the same `PATH` has already supplied the compiler.
+- `S1313`, a hard-coded IP address, in `internal/gitlab/destination.go`, whose addresses are the cloud metadata endpoints and the RFC 6598 shared address range that the outbound destination guard refuses, not anywhere it connects.
+
+The file's other exclusions concern duplication, complexity, naming, empty test handlers, `TODO` comments, coverage and files that are not code, and set aside no security rule.
+
 To see what is open:
 
 ```bash
