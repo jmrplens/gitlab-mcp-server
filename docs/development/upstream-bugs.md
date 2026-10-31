@@ -1546,9 +1546,9 @@ bump has to answer. Row 19's merge request was rebased onto v3.34.0 and has
 had no review since. Rows 25 and 26 named `acceptedMissingMethods` entries
 that the waits table of the 1:1 audit replaced, and now name the table's
 entries, and row 3 named v3.15.0 as the pin. Rows 4, 5, 7, 20, 22, 27 to 30,
-32 and 33 are unchanged. The other client-go rows were not read in this
-pass; rows 52, 59, 96, 98 and 101 among them carry merges of ours that row
-34's section now names and their own sections do not yet record.
+32 and 33 are unchanged. The other client-go rows were read in the two
+passes below, which record in their own sections the merges of ours that
+row 34's section names for rows 52, 59, 96, 98 and 101.
 
 Re-verified on 2026-10-31 for client-go rows 35 to 37, 40 to 45, 51, 52, 54,
 58 to 65, 69 and 144, through GET requests only, against gitlab.com and the
@@ -1602,9 +1602,11 @@ the handler's own; v3.40.0 retires nothing else of these rows. This
 project's maintainer closed the issues of rows 53 and 55, and a GitLab team
 member closed `gitlab-org/gitlab#616442`, which row 82's section names, all
 on 2026-10-26. Row 72's block now holds only before 19.5, row 77's e2e
-scenario passed in both complete runs of 3.4.0, and row 24's effort no
-longer calls its merged halves in review. Rows 2, 38, 39, 47, 56, 57, 71, 79,
-80 and 92 are unchanged.
+scenario passed in the CE release gate of the v3.4.0 tag and in the
+complete EE run of its candidate, row 24's effort no longer calls its
+merged halves in review, and row 56's section heads its fix as merged, as
+its row has said since 19.5.0. Rows 2, 38, 39, 47, 57, 71, 79, 80 and 92 are
+unchanged.
 
 Re-verified on 2026-10-31 for GitLab rows 83, 85 to 91, 94, 99, 100, 109 to
 112, 114, 118, 123, 124, 127, 131 and 141 to 143, through GET requests only,
@@ -13526,7 +13528,7 @@ merged without an answer to that offer.
   [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486),
   "Answer external status check create and delete role refusals with 403",
   opened from the community fork at 19:43 UTC on 2026-10-07 and readied at
-  19:48 (Fix in review, below). No reviewer was assigned, so at 20:09 the
+  19:48 (Fix merged, below). No reviewer was assigned, so at 20:09 the
   triage bot moved it back to `workflow::in dev`, where it waited for a
   reviewer to be asked. One was at 22:16 UTC: a
   `@gitlab-bot ready @sashi_kumar` with the `backend`, `type::bug` and
@@ -13596,7 +13598,7 @@ while fixing their hints
 delete's service builds a 401 like the update's, and following it to the
 response showed it goes nowhere.
 
-**Fix in review**: the fix is in the route, not in the service. The delete
+**Fix merged**: the fix is in the route, not in the service. The delete
 and the create routes of `ee/lib/api/status_checks.rb` call `authorize!` on the
 ability and subject the service checks (`:delete_external_status_check` on
 the check, `:create_external_status_check` on the project) before the service
