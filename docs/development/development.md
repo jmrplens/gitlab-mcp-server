@@ -244,11 +244,9 @@ go test ./internal/tools/ -run TestBranch -count=1    # Run specific tests
 
 #### Test pattern (sub-package style)
 
-Each sub-package has its own `*_test.go` with table-driven tests:
+Each sub-package has its own `*_test.go` with table-driven tests. A case of `internal/tools/branches/branches_test.go`:
 
 ```go
-// internal/tools/branches/branches_test.go
-
 func TestCreate_Success(t *testing.T) {
     mux := http.NewServeMux()
     mux.HandleFunc("/api/v4/projects/1/repository/branches", func(w http.ResponseWriter, r *http.Request) {
