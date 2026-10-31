@@ -776,16 +776,20 @@ jobs:
 
   # Every lockfile the tree holds against OSV.dev, which carries the Go
   # vulnerability database, GitHub's advisories for npm and PyPI and the
-  # OpenSSF malicious-packages feed (MAL- entries): go.mod with go.sum, the
-  # site's pnpm-lock.yaml and the pip locks under .github/requirements. The two
-  # jobs above ask what our code calls and what the release binaries link, of
-  # Go alone; until this one nothing blocked a change on the site's or the PyPI
-  # upload's dependencies, and nothing asked about malicious packages at all.
-  # Any advisory fails it unless the osv-scanner.toml beside its lockfile sets
-  # it aside, on the terms SECURITY.md (Dependencies) states and make
-  # check-supply-chain holds every entry to, and so does an entry that sets
-  # nothing aside. OSV-Scanner runs from its own image, pinned by digest in the
-  # Makefile, and reads the checkout read-only as an unprivileged user.
+  # OpenSSF malicious-packages feed (MAL- entries): every go.mod, the site's
+  # pnpm-lock.yaml and the pip locks under .github/requirements. The job above
+  # asks, in two steps, what our code calls and what the release binaries
+  # link, of Go alone; until this one nothing blocked a change on the site's or
+  # the PyPI upload's dependencies, and nothing asked about malicious packages
+  # at all. Any advisory fails it unless the osv-scanner.toml beside its
+  # lockfile sets it aside, on the terms SECURITY.md (Dependencies) states and
+  # make check-supply-chain holds every entry to, and so does an entry that
+  # sets nothing aside. A malicious package fails it whatever an entry names,
+  # through a second scan that honors no allow list, and so does a lockfile git
+  # holds that a scan did not read. OSV-Scanner runs from its own image, pinned
+  # by digest in the Makefile, and reads the checkout read-only as an
+  # unprivileged user. make check-supply-chain holds the step below to the
+  # target alone, after the checkout alone.
   #
   # Unlike the site's audit above, a registry that does not answer fails this
   # job: it is the required answer for every lockfile, and a scan that reached

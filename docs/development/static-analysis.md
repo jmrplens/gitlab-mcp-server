@@ -376,19 +376,21 @@ stale.
 
 #### Every lockfile, malicious packages included
 
-`make check-dependency-vulns` asks of every lockfile in the tree what the two
-gates above ask of Go: `go.mod` with `go.sum`, `site/pnpm-lock.yaml`, and the
-pip locks under `.github/requirements`, which OSV-Scanner does not recognize by
-name and is handed as requirements files. Until it existed, nothing blocked a
-change on the site's or the PyPI upload's dependencies (the site's `pnpm audit`
-job is informational, since it reports the npm registry's state), and nothing
-asked about malicious packages at all. It runs OSV-Scanner from its own image,
-pinned by digest in the Makefile (`OSV_SCANNER_IMAGE`), over the checkout
-mounted read-only, as the invoking user, and reads every lockfile it
-recognizes below the root, except what `.gitignore` keeps out and the
-worktrees under `.claude`. Its database is [OSV.dev](https://osv.dev), which
-carries the Go vulnerability database, GitHub's advisories for npm and PyPI and
-the OpenSSF malicious-packages feed, whose entries are the `MAL-` ids.
+`make check-dependency-vulns` asks of every lockfile in the tree what
+`govulncheck` and `make check-binary-vulns` ask of Go: every `go.mod` (from Go
+1.17 it lists every module a build needs, and `go.sum` holds checksums),
+`site/pnpm-lock.yaml`, and the pip locks under `.github/requirements`, which
+OSV-Scanner does not recognize by name and is handed as requirements files.
+Until it existed, nothing blocked a change on the site's or the PyPI upload's
+dependencies (the site's `pnpm audit` job is informational, since it reports
+the npm registry's state), and nothing asked about malicious packages at all.
+It runs OSV-Scanner from its own image, pinned by digest in the Makefile
+(`OSV_SCANNER_IMAGE`), over the checkout mounted read-only, as the invoking
+user, and reads every lockfile it recognizes below the root, except what
+`.gitignore` keeps out and the worktrees under `.claude`. Its database is
+[OSV.dev](https://osv.dev), which carries the Go vulnerability database,
+GitHub's advisories for npm and PyPI and the OpenSSF malicious-packages feed,
+whose entries are the `MAL-` ids.
 
 It reads at module grain, as `make check-binary-vulns` reads a binary: Go call
 analysis is off (`--no-call-analysis=go`), so an advisory against a module
@@ -416,13 +418,28 @@ stale one shows. That second check reads the line `<file> has unused ignores:`
 that OSV-Scanner 2.7.0 prints, so a bump of the image checks that the wording
 still holds.
 
+The allow lists cannot be the last word on a malicious package. OSV-Scanner
+groups an advisory with its aliases, and an entry naming any id of the group
+sets the whole group aside: an entry for `CVE-2025-59144` sets aside
+`MAL-2025-46974`, the compromised `debug` 4.4.2, and the embedded malware of
+`ua-parser-js` 0.7.29 has no `MAL-` id at all, only `GHSA-pjwm-rvh2-c87w`,
+which GitHub classifies as CWE-506. So the target scans a second time under
+`--config /dev/null`, which honors no `osv-scanner.toml`, with a JSON report,
+and fails on any `MAL-` id or CWE-506 in it; `make check-supply-chain` accepts
+`--config` in the recipe only in that spelling, and requires it. Both scans
+must also report reading every lockfile git holds, by the line
+`Scanned /src/<path> file` and the names `DEPENDENCY_VULNS_LOCKFILES` lists, so
+an `--x-exclude` or a scan path that leaves the site out fails rather than
+passing over 837 packages unread.
+
 A scan that reaches no verdict, because OSV.dev did not answer or a lockfile
 could not be read, fails the run too. The site's audit is annotated rather than
 failed when its registry does not answer, because it does not decide; this
 one does, so a run that could not ask is run again. It runs in CI's
 `dependency-vulns` job, which the `checks` fan-in needs and `✅ CI` counts, on
-every pull request and every push to main. It needs Docker and the network, so
-`make analyze` does not run it. What blocks and what may be declared is
+every pull request and every push to main, as the whole of its step and after
+the checkout alone, which `make check-supply-chain` holds it to. It needs
+Docker, git and the network, so `make analyze` does not run it. What blocks and what may be declared is
 [SECURITY.md](../../SECURITY.md#malicious-and-vulnerable-dependencies)'s to
 say; this is how it is enforced.
 
