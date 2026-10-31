@@ -222,6 +222,16 @@ sesión en lugar de reducirlo, así que lo que ve un asistente nunca cambia por 
 de GitLab. El servidor lee como mucho 1 MiB y 1000 scopes de una concesión; una
 concesión mayor no se evalúa.
 
+Cuando una sesión empieza con su concesión leída, el servidor escribe una línea en
+`INFO` que lo dice y dice qué decide la concesión, en stdio y cuando el pool HTTP
+construye la entrada de la sesión. La línea lleva `phase=B`, el major.minor del que
+informó la instancia (`bucket`), el que registra la tabla de permisos
+(`recorded_bucket`) y `listing_only`, que solo es `true` en la versión previa de
+[más abajo](#gitlabcom-y-otras-versiones), donde la concesión decide solo el listado.
+Como la línea de la retención de más abajo, nunca nombra el token, su id ni sus
+proyectos y grupos. Una relectura que encuentra el veredicto que la sesión ya tenía no
+escribe nada, y una que la lleva a otro escribe una línea con los mismos pares.
+
 ### Cuando la concesión no se evalúa
 
 La sesión pasa a retener solo lo que ningún token de grano fino alcanza

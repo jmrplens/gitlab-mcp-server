@@ -1676,6 +1676,13 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 // tier's namespace paging would keep it for no reason. No slot free within the
 // probe wait is [ErrCredentialProbeBusy], the 503 that row already answers.
 // A token that may not read its grant reads nothing and takes no slot.
+//
+// An authority it builds is logged once at INFO, in either phase, with its
+// [finegrained.Authority.LogArgs]: in phase A that the grant was not
+// evaluated, and in phase B that it was read and what it decides, so an
+// operator can tell an entry judged by its grant from a classic one, and one
+// on the prerelease past the table, judged for the listing alone, from one
+// judged for the calls too (issue 1417).
 func (p *ServerPool) fineGrainedAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts) (*finegrained.Authority, error) {
 	if !facts.FineGrained {
 		return nil, nil //nolint:nilnil // no authority and no error is what a token that is not fine-grained is worth, and the entry stores it as such
@@ -1691,7 +1698,10 @@ func (p *ServerPool) fineGrainedAuthority(ctx context.Context, client *gitlabcli
 	if authority.Phase() == finegrained.PhaseUnknown {
 		slog.InfoContext(ctx, "server pool: a fine-grained token's grant was not evaluated; withholding what no grant reaches",
 			authority.LogArgs()...)
+		return authority, nil
 	}
+	slog.InfoContext(ctx, "server pool: a fine-grained token's grant was read; it decides "+authority.GrantDecides(),
+		authority.LogArgs()...)
 	return authority, nil
 }
 
@@ -1716,10 +1726,11 @@ func (p *ServerPool) readUnderProbeSlot(ctx context.Context, client *gitlabclien
 // instance lengthens the sweep without holding a slot another tenant waits
 // for. A re-read that moved the token to another verdict, such as an instance
 // upgraded to a release no table records, is logged with the same arguments an
-// entry build in phase A logs; one that kept the authority is logged once per
-// entry, with its reason and nothing else. An entry whose token's kind is
-// still unknown is asked that instead ([redetectKind]), and ends if the answer
-// names scopes below the admission minimum, as admission would have refused it.
+// entry build logs its authority with, and one that found the verdict it had
+// writes nothing; one that kept the authority is logged once per entry, with
+// its reason and nothing else. An entry whose token's kind is still unknown is
+// asked that instead ([redetectKind]), and ends if the answer names scopes
+// below the admission minimum, as admission would have refused it.
 func (p *ServerPool) refreshAuthority(ctx context.Context, key string, entry *Entry) {
 	facts := entry.tokenFacts()
 	if facts.KindUnknown {
@@ -1754,8 +1765,8 @@ func (p *ServerPool) refreshAuthority(ctx context.Context, key string, entry *En
 // narrowing stay what its build decided, since they name the server the entry
 // shares with every credential of its shape, while a fine-grained token's
 // authority is its client's own. The line written once the kind is learned
-// names the phase and the reason as an entry build in phase A does, and never
-// the token's id.
+// carries the arguments an entry build logs its authority with, and never the
+// token's id.
 //
 // It reports whether the answer names scopes below the admission minimum, a
 // read_user token being the usual one, which the caller ends the entry for:

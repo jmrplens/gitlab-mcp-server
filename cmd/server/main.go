@@ -1857,6 +1857,13 @@ func prepareStdioCatalog(
 // from its grant and the version [gitlabclient.Client.Initialize] already read,
 // and nil for any other token. A start that could not reach GitLab asks the
 // version again, since Initialize left none.
+//
+// It writes one line at INFO about a fine-grained token in either phase, with
+// the authority's [finegrained.Authority.LogArgs]: in phase A that the grant
+// was not evaluated, and in phase B that it was read and what it decides, so
+// an operator can tell a session judged by its grant from a classic one, and
+// one on the prerelease past the table, judged for the listing alone, from
+// one judged for the calls too (issue 1417).
 func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts) *finegrained.Authority {
 	if !facts.FineGrained {
 		return nil
@@ -1871,7 +1878,9 @@ func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitl
 	if authority.Phase() == finegrained.PhaseUnknown {
 		slog.InfoContext(ctx, "the fine-grained token's grant was not evaluated; withholding what no grant reaches",
 			authority.LogArgs()...)
+		return authority
 	}
+	slog.InfoContext(ctx, "the fine-grained token's grant was read; it decides "+authority.GrantDecides(), authority.LogArgs()...)
 	return authority
 }
 
@@ -1884,8 +1893,9 @@ func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitl
 // ([redetectStdioToken]). A token that may not read its grant, or that is
 // learned to be a classic one, is not asked anything more, so the goroutine
 // returns. A re-read that moved the token to another verdict is logged with
-// the arguments the start logs a phase A authority with, and one that kept the
-// authority is logged once, with its reason.
+// the arguments the start logs its authority with, one that found the verdict
+// it had writes nothing, and one that kept the authority is logged once, with
+// its reason.
 //
 // An interval of zero, which GITLAB_MCP_SESSION_REVALIDATE_INTERVAL=0 asks
 // for, starts no timer, as it stops the HTTP pool's revalidation: the token is
@@ -1947,8 +1957,9 @@ func refreshStdioAuthority(ctx context.Context, client *gitlabclient.Client, fac
 // and the version as the start judges it ([stdioAuthority]), so the calls after
 // it are decided as a fine-grained session's are; the catalog the start
 // registered, and its scope narrowing, stay what the start decided, since they
-// were registered before the gate opened. The line written then names the
-// phase and the reason, never the token's id.
+// were registered before the gate opened. Besides the line [stdioAuthority]
+// writes about the authority, the line written then says the kind was learned,
+// with the same arguments, and neither names the token's id.
 func redetectStdioToken(ctx context.Context, client *gitlabclient.Client) gitlabclient.TokenFacts {
 	facts := gitlabclient.RedetectToken(ctx, client.GL())
 	if facts.FineGrained {

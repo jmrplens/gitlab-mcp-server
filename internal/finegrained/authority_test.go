@@ -63,3 +63,39 @@ func TestAuthority_Decide_PhaseAWithholdsOnlyTheDenied(t *testing.T) {
 		})
 	}
 }
+
+// TestAuthority_GrantDecides_NamesWhatTheGrantDecidesInEachState verifies the
+// words a start's log line says the grant decides with (issue 1417): the
+// listing and the calls at the recorded release, the listing alone on the
+// prerelease past the table, where a call phase A allows is handed to GitLab,
+// and nothing in phase A, whose grant was not evaluated.
+func TestAuthority_GrantDecides_NamesWhatTheGrantDecidesInEachState(t *testing.T) {
+	cases := []struct {
+		name      string
+		authority *Authority
+		want      string
+	}{
+		{
+			name:      "the recorded release",
+			authority: Judge(phaseBTable(), Reading{Grant: Grant{}, Version: "19.4.1-ee"}),
+			want:      "the listing and the calls",
+		},
+		{
+			name:      "the prerelease past the table",
+			authority: Judge(phaseBTable(), Reading{Grant: Grant{}, Version: "19.5.0-pre"}),
+			want:      "the listing alone, and every call phase A allows is handed to GitLab",
+		},
+		{
+			name:      "phase A",
+			authority: Unevaluated(phaseBTable(), FallbackGrantUnreadable, ""),
+			want:      "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.authority.GrantDecides(); got != tc.want {
+				t.Errorf("GrantDecides() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

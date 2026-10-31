@@ -522,19 +522,45 @@ func TestMoved_IsAChangeOfWhatALogLineStates(t *testing.T) {
 }
 
 // TestAuthority_LogArgs_NamesThePhaseAndNothingOfTheGrant verifies the pairs a
-// log line about an authority carries, and that the unknown permissions are
-// named only for a grant that held some.
+// log line about an authority carries: a phase B authority says whether its
+// grant decides the listing alone, which the prerelease past the table is, and
+// a phase A one carries no such pair, since its grant decides nothing; the
+// unknown permissions are named only for a grant that held some.
 func TestAuthority_LogArgs_NamesThePhaseAndNothingOfTheGrant(t *testing.T) {
-	plain := Judge(phaseBTable(), Reading{Grant: Grant{}, Version: "19.4.1-ee"}).LogArgs()
-	if want := []any{"phase", "B", "reason", "", "bucket", "19.4", "recorded_bucket", "19.4"}; !slices.Equal(plain, want) {
-		t.Errorf("LogArgs() = %v, want %v", plain, want)
+	cases := []struct {
+		name string
+		args []any
+		want []any
+	}{
+		{
+			name: "phase B at the recorded release",
+			args: Judge(phaseBTable(), Reading{Grant: Grant{}, Version: "19.4.1-ee"}).LogArgs(),
+			want: []any{"phase", "B", "reason", "", "bucket", "19.4", "recorded_bucket", "19.4", "listing_only", false},
+		},
+		{
+			name: "phase B on the prerelease past the table",
+			args: Judge(phaseBTable(), Reading{Grant: Grant{}, Version: "19.5.0-pre"}).LogArgs(),
+			want: []any{"phase", "B", "reason", "", "bucket", "19.5", "recorded_bucket", "19.4", "listing_only", true},
+		},
+		{
+			name: "phase A outside the record",
+			args: Judge(phaseBTable(), Reading{Grant: Grant{}, Version: "99.0.0"}).LogArgs(),
+			want: []any{"phase", "A", "reason", string(FallbackVersionOutside), "bucket", "99.0", "recorded_bucket", "19.4"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !slices.Equal(tc.args, tc.want) {
+				t.Errorf("LogArgs() = %v, want %v", tc.args, tc.want)
+			}
+		})
 	}
 	unknown := Judge(phaseBTable(), Reading{
 		Grant:   Grant{Scopes: []Scope{scope(AccessUser, NamespaceNone, "gone")}},
 		Version: "19.4.1-ee",
 	}).LogArgs()
 	if len(unknown) != 12 || unknown[1] != "A" || unknown[3] != string(FallbackUnknownPermission) ||
-		unknown[8] != "unknown_permissions" || unknown[9] != 1 {
+		unknown[8] != "unknown_permissions" || unknown[9] != 1 || slices.Contains(unknown, any("listing_only")) {
 		t.Errorf("LogArgs() = %v, want phase A, the reason and one unknown permission", unknown)
 	}
 }

@@ -135,8 +135,8 @@ func (c *Client) ReadFineGrainedAt(ctx context.Context, facts TokenFacts, versio
 // It returns the new authority when the replacement moved the token to
 // another verdict ([finegrained.Moved]: its phase, its reason or the release it
 // was judged at), which the caller logs with its [finegrained.Authority.LogArgs]
-// as an entry build logs one in phase A, so an instance upgraded to a release
-// no table records leaves a line saying the sessions on it fell back. A
+// as an entry build logs the one it builds, so an instance upgraded to a
+// release no table records leaves a line saying the sessions on it fell back. A
 // replacement that moved nothing returns neither, since a re-read that answered
 // replaces the authority on every round. When it kept the authority it returns
 // the reason, which the caller logs once rather than on every round: a version

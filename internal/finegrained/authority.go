@@ -116,9 +116,26 @@ func (a *Authority) Reported() string { return a.reported }
 // one release past the table's [Judge] lets in.
 func (a *Authority) ListingOnly() bool { return a.listingOnly }
 
+// GrantDecides names what the grant decides, for the line a start writes once
+// it was read (issue 1417): the listing and the calls at the recorded release,
+// and the listing alone on the prerelease past the table, where every call
+// phase A allows is handed to GitLab. It is "" in phase A, where the grant was
+// not evaluated and decides nothing.
+func (a *Authority) GrantDecides() string {
+	if a.phase == PhaseUnknown {
+		return ""
+	}
+	if a.listingOnly {
+		return "the listing alone, and every call phase A allows is handed to GitLab"
+	}
+	return "the listing and the calls"
+}
+
 // LogArgs are the key and value pairs a log line about this authority may
 // carry: its phase, why it stayed in phase A, the major.minor the instance
-// reported and the one the table was recorded at, and for a grant naming
+// reported and the one the table was recorded at; in phase B, whether the
+// grant decides the listing alone ([Authority.ListingOnly]), which phase A
+// leaves out since its grant decides nothing; and for a grant naming
 // permissions the table does not define, how many and the first few, each
 // cut. Nothing of the grant, the token or its id is among them.
 func (a *Authority) LogArgs() []any {
@@ -127,6 +144,9 @@ func (a *Authority) LogArgs() []any {
 		"reason", string(a.fallback),
 		"bucket", Bucket(a.reported),
 		"recorded_bucket", a.table.Bucket,
+	}
+	if a.phase == PhaseGranted {
+		args = append(args, "listing_only", a.listingOnly)
 	}
 	if a.unknownCount > 0 {
 		args = append(args, "unknown_permissions", a.unknownCount, "unknown_sample", a.unknownSample)

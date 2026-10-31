@@ -34,6 +34,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
@@ -5981,6 +5982,87 @@ func TestGetOrCreate_FineGrainedTokenThatMayReadItsGrant_IsServedWhatItReaches(t
 	}
 }
 
+// TestGetOrCreate_AFineGrainedEntry_WritesOneStartLineNamingWhatItsGrantDecides
+// verifies the line an entry build writes about a fine-grained token (issue
+// 1417): one at INFO in either phase, carrying the phase, the major.minor the
+// instance reported and the one the table was recorded at. In phase B it says
+// the grant was read and what it decides, the listing and the calls at the
+// recorded release and the listing alone on the prerelease past the table,
+// with listing_only saying which; in phase A it is the line it was, with its
+// reason and no listing_only. None of them carries the token's id, and the
+// revalidations after the build that find the verdict it judged write nothing
+// more.
+func TestGetOrCreate_AFineGrainedEntry_WritesOneStartLineNamingWhatItsGrantDecides(t *testing.T) {
+	recorded := actiongrants.Table().Bucket
+	next := e2erelease.NextPrerelease(recorded)
+	cases := []struct {
+		name, version string
+		// line is the start line as its level, its message and its pairs,
+		// every pair it carries and in order, which leaves no room for the
+		// token's id.
+		line []string
+	}{
+		{
+			name: "the recorded release", version: recordedRelease,
+			line: []string{"INFO", phaseBEntryLog, "phase=B", "reason=", "bucket=" + recorded, "recorded_bucket=" + recorded, "listing_only=false"},
+		},
+		{
+			name: "the prerelease past the table", version: next,
+			line: []string{"INFO", listingOnlyEntryLog, "phase=B", "reason=", "bucket=" + finegrained.Bucket(next), "recorded_bucket=" + recorded, "listing_only=true"},
+		},
+		{
+			name: "a release outside the record", version: releaseOutsideTheTable,
+			line: []string{
+				"INFO", phaseAEntryLog, "phase=A", "reason=" + string(finegrained.FallbackVersionOutside),
+				"bucket=" + finegrained.Bucket(releaseOutsideTheTable), "recorded_bucket=" + recorded,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newFineGrainedGitLab(t)
+			g.setVersion(tc.version)
+			logs := captureLogs(t)
+			pool, _ := fineGrainedEntry(t, g)
+			pool.revalidateAll(context.Background())
+			pool.revalidateAll(context.Background())
+			if g.versions.Load() != 3 {
+				t.Fatalf("the build and two revalidations read the version %d times, want three", g.versions.Load())
+			}
+			starts, rereads := fineGrainedEntryLines(logs)
+			if len(starts) != 1 || !slices.Equal(starts[0], tc.line) {
+				t.Errorf("start lines = %q, want one, %q", starts, tc.line)
+			}
+			if len(rereads) != 0 {
+				t.Errorf("revalidations that found the verdict the build judged wrote %q", rereads)
+			}
+		})
+	}
+}
+
+// fineGrainedEntryLines returns, from what logs captured, the lines an entry
+// build wrote about a fine-grained token's authority, each as its level, its
+// message and its pairs written key=value, and the messages of the lines a
+// re-read wrote.
+func fineGrainedEntryLines(logs *capturedRecords) (starts [][]string, rereads []string) {
+	logs.mu.Lock()
+	defer logs.mu.Unlock()
+	for _, record := range logs.records {
+		switch record.Message {
+		case phaseAEntryLog, phaseBEntryLog, listingOnlyEntryLog:
+			line := []string{record.Level.String(), record.Message}
+			record.Attrs(func(attr slog.Attr) bool {
+				line = append(line, attr.Key+"="+attr.Value.String())
+				return true
+			})
+			starts = append(starts, line)
+		case rereadMovedLog, rereadKeptLog:
+			rereads = append(rereads, record.Message)
+		}
+	}
+	return starts, rereads
+}
+
 // TestGetOrCreate_FineGrainedTokenUnderIgnoreScopes_IsStillJudged verifies
 // --ignore-scopes skips the scope filter and the read_api narrowing and
 // nothing else: the token is still asked about, so a fine-grained token's
@@ -6287,15 +6369,19 @@ func TestRevalidateAll_AClassicEntry_RereadsNothing(t *testing.T) {
 	}
 }
 
-// The four log lines a fine-grained entry may write: when it is built in
-// phase A, when a re-read moved it to another verdict, when a re-read kept the
-// authority it carried, and when a revalidation learns that a token whose kind
-// was not known is a fine-grained one.
+// The six log lines a fine-grained entry may write: when it is built in phase
+// A, in phase B with the grant deciding the listing and the calls, or in phase
+// B with the grant deciding the listing alone; when a re-read moved it to
+// another verdict, when a re-read kept the authority it carried, and when a
+// revalidation learns that a token whose kind was not known is a fine-grained
+// one.
 const (
-	phaseAEntryLog = "server pool: a fine-grained token's grant was not evaluated; withholding what no grant reaches"
-	rereadMovedLog = "server pool: a fine-grained token's re-read moved what it is shown"
-	rereadKeptLog  = "server pool: a fine-grained token's re-read could not be used; keeping what it was shown"
-	kindLearnedLog = "server pool: a token whose kind was not known is a fine-grained one; serving it what it may be shown"
+	phaseAEntryLog      = "server pool: a fine-grained token's grant was not evaluated; withholding what no grant reaches"
+	phaseBEntryLog      = "server pool: a fine-grained token's grant was read; it decides the listing and the calls"
+	listingOnlyEntryLog = "server pool: a fine-grained token's grant was read; it decides the listing alone, and every call phase A allows is handed to GitLab"
+	rereadMovedLog      = "server pool: a fine-grained token's re-read moved what it is shown"
+	rereadKeptLog       = "server pool: a fine-grained token's re-read could not be used; keeping what it was shown"
+	kindLearnedLog      = "server pool: a token whose kind was not known is a fine-grained one; serving it what it may be shown"
 )
 
 // insufficientScopeBody is GitLab's answer to GET /api/v4/user for a token
