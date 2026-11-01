@@ -338,7 +338,7 @@ func TestUpdateTrigger_Success(t *testing.T) {
 	out, err := UpdateTrigger(context.Background(), client, UpdateInput{
 		ProjectID:   "1",
 		TriggerID:   10,
-		Description: "updated",
+		Description: new("updated"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -355,22 +355,31 @@ func TestUpdateTrigger_Success(t *testing.T) {
 // before, so inverting that guard failed no test.
 func TestUpdateTrigger_Description_IsSentOnlyWhenGiven(t *testing.T) {
 	t.Run("given", func(t *testing.T) {
-		body := updateTriggerRequestBody(t, "nightly deploy")
+		body := updateTriggerRequestBody(t, new("nightly deploy"))
 		if body["description"] != "nightly deploy" {
 			t.Errorf("request body = %v, want description %q", body, "nightly deploy")
 		}
 	})
 	t.Run("omitted", func(t *testing.T) {
-		body := updateTriggerRequestBody(t, "")
+		body := updateTriggerRequestBody(t, nil)
 		if _, ok := body["description"]; ok {
 			t.Errorf("request body = %v, want no description key", body)
+		}
+	})
+	// An empty description is the caller removing it, which Ci::Trigger
+	// allows (a length validation only), so it reaches GitLab as "" rather
+	// than being read as left out (issue 1306).
+	t.Run("emptied", func(t *testing.T) {
+		body := updateTriggerRequestBody(t, new(""))
+		if value, ok := body["description"]; !ok || value != "" {
+			t.Errorf("request body = %v, want an empty description", body)
 		}
 	})
 }
 
 // updateTriggerRequestBody drives UpdateTrigger against a mock that records the
 // JSON body of the PUT, and returns that body decoded.
-func updateTriggerRequestBody(t *testing.T, description string) map[string]any {
+func updateTriggerRequestBody(t *testing.T, description *string) map[string]any {
 	t.Helper()
 	body := map[string]any{}
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1054,7 +1063,7 @@ func TestUpdateTrigger_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := UpdateTrigger(context.Background(), client, UpdateInput{
-		ProjectID: "1", TriggerID: 10, Description: "updated",
+		ProjectID: "1", TriggerID: 10, Description: new("updated"),
 	})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
@@ -1432,7 +1441,7 @@ func TestPipelineTriggers_UnreadableCapturedExpiresAt(t *testing.T) {
 		}},
 		{Name: "update", Call: func() error {
 			client := poisoned(`{"id":1,"description":"nightly","expires_at":"never"}`)
-			_, err := UpdateTrigger(context.Background(), client, UpdateInput{ProjectID: "42", TriggerID: 1, Description: "renamed"})
+			_, err := UpdateTrigger(context.Background(), client, UpdateInput{ProjectID: "42", TriggerID: 1, Description: new("renamed")})
 			return err
 		}},
 	})

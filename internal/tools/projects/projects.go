@@ -2477,7 +2477,7 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 
 // HookOptionsInput defines common project webhook settings shared by add and edit operations.
 type HookOptionsInput struct {
-	Name                      string  `json:"name,omitempty" jsonschema:"Webhook name"`
+	Name                      *string `json:"name,omitempty" jsonschema:"Webhook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
 	Description               *string `json:"description,omitempty" jsonschema:"Webhook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
 	Token                     string  `json:"token,omitempty" jsonschema:"Secret token for validation"`
 	SigningToken              string  `json:"signing_token,omitempty" jsonschema:"Write-only signing token for webhook signature validation"`
@@ -2557,11 +2557,10 @@ func applyProjectHookOptions(url string, input HookOptionsInput, opts *gl.AddPro
 	if url != "" {
 		opts.URL = new(url)
 	}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	}
-	// The description, branch filter and custom template go through as given:
-	// on an edit an empty one is the caller removing it (issue 1306).
+	// The name, description, branch filter and custom template go through as
+	// given: on an edit an empty one is the caller removing it (issue 1306),
+	// and WebHooks::Hook validates a name's length only.
+	opts.Name = input.Name
 	opts.Description = input.Description
 	opts.PushEventsBranchFilter = input.PushEventsBranchFilter
 	opts.CustomWebhookTemplate = input.CustomWebhookTemplate

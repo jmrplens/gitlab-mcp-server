@@ -261,7 +261,7 @@ func TestEditMember_MemberRoleID(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := EditMember(context.Background(), client, EditInput{
-		GroupID: "5", UserID: 10, AccessLevel: 40, MemberRoleID: new(int64(9)), ExpiresAt: "2026-12-31",
+		GroupID: "5", UserID: 10, AccessLevel: 40, MemberRoleID: new(int64(9)), ExpiresAt: new("2026-12-31"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -801,7 +801,7 @@ func TestAddAndEdit_ExpiresAtThatIsNotADate_IsRefusedBeforeAnyRequest(t *testing
 			return err
 		},
 		"edit": func() error {
-			_, err := EditMember(ctx, client, EditInput{GroupID: "10", UserID: 7, AccessLevel: 30, ExpiresAt: "not-a-date"})
+			_, err := EditMember(ctx, client, EditInput{GroupID: "10", UserID: 7, AccessLevel: 30, ExpiresAt: new("not-a-date")})
 			return err
 		},
 	}
@@ -984,7 +984,7 @@ func TestEditMember_WithExpiresAt(t *testing.T) {
 	out, err := EditMember(context.Background(), client, EditInput{
 		GroupID:   "5",
 		UserID:    10,
-		ExpiresAt: "2026-06-30",
+		ExpiresAt: new("2026-06-30"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1985,7 +1985,7 @@ func TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven(t *tes
 			name: "edit",
 			full: func(client *gitlabclient.Client) error {
 				_, err := EditMember(context.Background(), client, EditInput{
-					GroupID: "5", UserID: 7, AccessLevel: 30, ExpiresAt: "2027-01-31", MemberRoleID: new(int64(3)),
+					GroupID: "5", UserID: 7, AccessLevel: 30, ExpiresAt: new("2027-01-31"), MemberRoleID: new(int64(3)),
 				})
 				return err
 			},

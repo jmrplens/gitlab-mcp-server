@@ -333,7 +333,7 @@ func TestEdit_AllOptionalFields(t *testing.T) {
 	out, err := Edit(context.Background(), client, EditInput{
 		ID:                     2,
 		URL:                    "https://example.com/hook2",
-		Name:                   "Named Hook",
+		Name:                   new("Named Hook"),
 		Description:            new("Hook desc"),
 		Token:                  "secret-token",
 		SigningToken:           "signing-secret",
@@ -827,7 +827,7 @@ var hookRequestStrings = []struct {
 	setAdd  func(*AddInput, string)
 	setEdit func(*EditInput, string)
 }{
-	{"name", "named-hook", func(i *AddInput, v string) { i.Name = v }, func(i *EditInput, v string) { i.Name = v }},
+	{"name", "named-hook", func(i *AddInput, v string) { i.Name = v }, func(i *EditInput, v string) { i.Name = new(v) }},
 	{"description", "described-hook", func(i *AddInput, v string) { i.Description = v }, func(i *EditInput, v string) { i.Description = new(v) }},
 	{"token", "token-value", func(i *AddInput, v string) { i.Token = v }, func(i *EditInput, v string) { i.Token = v }},
 	{"signing_token", "signing-value", func(i *AddInput, v string) { i.SigningToken = v }, func(i *EditInput, v string) { i.SigningToken = v }},
@@ -979,7 +979,7 @@ func TestEdit_WithoutURL_LeavesTheURLOutOfTheRequest(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, hookJSON)
 	}))
 
-	if _, err := Edit(t.Context(), client, EditInput{ID: 1, Name: "Renamed"}); err != nil {
+	if _, err := Edit(t.Context(), client, EditInput{ID: 1, Name: new("Renamed")}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if strings.Contains(sentBody, `"url"`) {
@@ -987,6 +987,25 @@ func TestEdit_WithoutURL_LeavesTheURLOutOfTheRequest(t *testing.T) {
 	}
 	if !strings.Contains(sentBody, `"name":"Renamed"`) {
 		t.Errorf("edit request body missing the new name: %s", sentBody)
+	}
+}
+
+// TestEdit_EmptyName_ReachesTheBody holds an empty name, given through
+// toolutil.UnmarshalParams as every surface's arguments go, to the body as
+// the empty string that clears it. The name sat behind a non-empty guard, so
+// the edit answered success with the old name in place; WebHooks::Hook
+// validates a name's length only (issue 1306).
+func TestEdit_EmptyName_ReachesTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[EditInput](map[string]any{"id": 1, "name": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	body := captureHookBody(t, func(client *gitlabclient.Client) error {
+		_, editErr := Edit(t.Context(), client, input)
+		return editErr
+	})
+	if !strings.Contains(body, `"name":""`) {
+		t.Errorf("edit request body does not carry an empty name: %s", body)
 	}
 }
 

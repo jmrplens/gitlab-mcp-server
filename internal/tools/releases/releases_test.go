@@ -112,7 +112,7 @@ func TestReleaseUpdate_Success(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:   "42",
 		TagName:     testTagV120,
-		Description: testUpdatedNotes,
+		Description: new(testUpdatedNotes),
 	})
 	if err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
@@ -455,7 +455,7 @@ func TestUpdate_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := Update(context.Background(), client, UpdateInput{
-		ProjectID: "42", TagName: "v1.0.0", Name: "updated",
+		ProjectID: "42", TagName: "v1.0.0", Name: new("updated"),
 	})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
@@ -1887,8 +1887,8 @@ func TestReleaseUpdate_SendsTheTitleAndNotesItWasGiven(t *testing.T) {
 	if _, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:   "42",
 		TagName:     testTagV120,
-		Name:        "Renamed",
-		Description: "rewritten",
+		Name:        new("Renamed"),
+		Description: new("rewritten"),
 	}); err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
 	}
@@ -1925,8 +1925,13 @@ func TestReleaseUpdate_PartialUpdate_SendsOnlyWhatTheCallerSet(t *testing.T) {
 	}{
 		{"released_at alone", UpdateInput{ReleasedAt: "2026-01-15T10:00:00Z"}, []string{"released_at"}},
 		{"milestones alone", UpdateInput{Milestones: []string{"m1"}}, []string{"milestones"}},
-		{"name alone", UpdateInput{Name: "Renamed"}, []string{"name"}},
-		{"description alone", UpdateInput{Description: "rewritten"}, []string{"description"}},
+		{"name alone", UpdateInput{Name: new("Renamed")}, []string{"name"}},
+		{"description alone", UpdateInput{Description: new("rewritten")}, []string{"description"}},
+		// An empty title or empty notes are the caller removing them, which
+		// Release allows (length validations only), so each is sent as given
+		// rather than dropped as a field left out (issue 1306).
+		{"name emptied", UpdateInput{Name: new("")}, []string{"name"}},
+		{"description emptied", UpdateInput{Description: new("")}, []string{"description"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

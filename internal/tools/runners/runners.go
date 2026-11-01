@@ -447,15 +447,18 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 
 // UpdateInput defines parameters for updating a runner.
 type UpdateInput struct {
-	RunnerID        int64    `json:"runner_id"                    jsonschema:"Runner ID,required"`
-	Description     string   `json:"description,omitempty"        jsonschema:"Runner description"`
+	RunnerID int64 `json:"runner_id"                    jsonschema:"Runner ID,required"`
+	// The description and the maintenance note are pointers so the empty
+	// string that clears either reaches GitLab: Ci::Runner validates their
+	// length only (issue 1306).
+	Description     *string  `json:"description,omitempty"        jsonschema:"Runner description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Paused          *bool    `json:"paused,omitempty"             jsonschema:"Pause/unpause the runner"`
 	TagList         []string `json:"tag_list,omitempty"           jsonschema:"List of runner tags"`
 	RunUntagged     *bool    `json:"run_untagged,omitempty"       jsonschema:"Whether to run untagged jobs"`
 	Locked          *bool    `json:"locked,omitempty"             jsonschema:"Whether runner is locked to current project"`
 	AccessLevel     string   `json:"access_level,omitempty"       jsonschema:"Access level: not_protected, ref_protected"`
 	MaximumTimeout  *int64   `json:"maximum_timeout,omitempty"    jsonschema:"Maximum job timeout in seconds"`
-	MaintenanceNote string   `json:"maintenance_note,omitempty"   jsonschema:"Maintenance note for the runner"`
+	MaintenanceNote *string  `json:"maintenance_note,omitempty"   jsonschema:"Maintenance note for the runner. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Active          *bool    `json:"active,omitempty"             jsonschema:"Deprecated: runner active state. Prefer paused instead"`
 }
 
@@ -468,9 +471,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return DetailsOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	opts := &gl.UpdateRunnerDetailsOptions{}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
+	opts := &gl.UpdateRunnerDetailsOptions{
+		Description:     input.Description,
+		MaintenanceNote: input.MaintenanceNote,
 	}
 	if input.Paused != nil {
 		opts.Paused = input.Paused
@@ -489,9 +492,6 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.MaximumTimeout != nil {
 		opts.MaximumTimeout = input.MaximumTimeout
-	}
-	if input.MaintenanceNote != "" {
-		opts.MaintenanceNote = new(input.MaintenanceNote)
 	}
 	if input.Active != nil {
 		opts.Active = input.Active //nolint:staticcheck // Active is deprecated in client-go but mirrored 1:1.

@@ -9,10 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"reflect"
 	"strings"
 	"testing"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -290,8 +293,8 @@ func TestUpdate_Success(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:                   testProjectID,
 		RuleID:                      1,
-		MinimumAccessLevelForPush:   "maintainer",
-		MinimumAccessLevelForDelete: "admin",
+		MinimumAccessLevelForPush:   new(gl.ProtectionRuleAccessLevel("maintainer")),
+		MinimumAccessLevelForDelete: new(gl.ProtectionRuleAccessLevel("admin")),
 	})
 	if err != nil {
 		t.Fatalf("Update() error: %v", err)
@@ -540,8 +543,8 @@ func TestUpdate_LeavesAnUnnamedPatternOutOfTheRequest(t *testing.T) {
 		if _, err := Update(context.Background(), client, UpdateInput{
 			ProjectID:                   testProjectID,
 			RuleID:                      1,
-			MinimumAccessLevelForPush:   "maintainer",
-			MinimumAccessLevelForDelete: "owner",
+			MinimumAccessLevelForPush:   new(gl.ProtectionRuleAccessLevel("maintainer")),
+			MinimumAccessLevelForDelete: new(gl.ProtectionRuleAccessLevel("owner")),
 		}); err != nil {
 			t.Errorf("Update() error: %v", err)
 		}
@@ -552,6 +555,56 @@ func TestUpdate_LeavesAnUnnamedPatternOutOfTheRequest(t *testing.T) {
 	}
 	if !reflect.DeepEqual(body, want) {
 		t.Errorf("update body = %#v, want %#v", body, want)
+	}
+}
+
+// TestUpdate_EmptyAccessLevels_ReachGitLabAsNull holds an empty minimum
+// access level, given through toolutil.UnmarshalParams as every surface's
+// arguments go, to the body as the null that removes it, and a level left out
+// to no key at all. Both sat behind a non-empty guard, so a minimum could be
+// set and never removed, which the update route documents null for (issue
+// 1306).
+func TestUpdate_EmptyAccessLevels_ReachGitLabAsNull(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		params map[string]any
+		want   map[string]any
+	}{
+		{
+			"push removed",
+			map[string]any{"minimum_access_level_for_push": ""},
+			map[string]any{"minimum_access_level_for_push": nil},
+		},
+		{
+			"delete removed",
+			map[string]any{"minimum_access_level_for_delete": ""},
+			map[string]any{"minimum_access_level_for_delete": nil},
+		},
+		{
+			"both removed",
+			map[string]any{"minimum_access_level_for_push": "", "minimum_access_level_for_delete": ""},
+			map[string]any{"minimum_access_level_for_push": nil, "minimum_access_level_for_delete": nil},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]any{"project_id": testProjectID, "rule_id": 1}
+			maps.Copy(params, tc.params)
+			input, err := toolutil.UnmarshalParams[UpdateInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
+				if _, updateErr := Update(context.Background(), client, input); updateErr != nil {
+					t.Errorf("Update() error: %v", updateErr)
+				}
+			})
+			// The pattern and the type the caller did not name stay out of the
+			// body (TestUpdate_LeavesAnUnnamedPatternOutOfTheRequest), so the
+			// levels are all it carries.
+			if !reflect.DeepEqual(body, tc.want) {
+				t.Errorf("update body = %#v, want %#v", body, tc.want)
+			}
+		})
 	}
 }
 
@@ -751,7 +804,7 @@ func TestUpdate_AnswersEachRefusalWithItsOwnHint(t *testing.T) {
 			_, err := Update(context.Background(), client, UpdateInput{
 				ProjectID:                 testProjectID,
 				RuleID:                    1,
-				MinimumAccessLevelForPush: "maintainer",
+				MinimumAccessLevelForPush: new(gl.ProtectionRuleAccessLevel("maintainer")),
 			})
 			if err == nil {
 				t.Fatalf("Update() error = nil, want the %d to be reported", tc.status)

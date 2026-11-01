@@ -202,17 +202,20 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // UpdateInput is the input for updating a broadcast message.
 type UpdateInput struct {
-	ID                 int64   `json:"id" jsonschema:"Broadcast message ID,required"`
-	Message            string  `json:"message,omitempty" jsonschema:"Message text. Supports Markdown."`
-	StartsAt           string  `json:"starts_at,omitempty" jsonschema:"Start time in ISO 8601 format"`
-	EndsAt             string  `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
-	Font               string  `json:"font,omitempty" jsonschema:"Font for the message"`
+	ID       int64  `json:"id" jsonschema:"Broadcast message ID,required"`
+	Message  string `json:"message,omitempty" jsonschema:"Message text. Supports Markdown."`
+	StartsAt string `json:"starts_at,omitempty" jsonschema:"Start time in ISO 8601 format"`
+	EndsAt   string `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
+	// The font and the color are pointers so the empty string that clears
+	// either reaches GitLab: app/models/system/broadcast_message.rb allows a
+	// blank one of each (issue 1306).
+	Font               *string `json:"font,omitempty" jsonschema:"Font for the message. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest, 15=Planner, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). A broadcast message cannot target Security Manager. Pass [] to show the message to every role. Omit the field to leave them untouched"`
 	TargetPath         *string `json:"target_path,omitempty" jsonschema:"Target path to show message on. Pass an empty string to remove it, so the message shows on every page. Omit the field to leave it untouched"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`
 	Theme              string  `json:"theme,omitempty" jsonschema:"Color theme, banners only: indigo (default), light-indigo, blue, light-blue, green, light-green, red, light-red, dark, or light"`
-	Color              string  `json:"color,omitempty" jsonschema:"Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it"`
+	Color              *string `json:"color,omitempty" jsonschema:"Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it. Pass an empty string to remove it. Omit the field to leave it untouched"`
 }
 
 // UpdateOutput contains the updated broadcast message.
@@ -271,13 +274,12 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateBroadcastMessageOptions, erro
 	); err != nil {
 		return nil, err
 	}
-	if input.Font != "" {
-		opts.Font = new(input.Font)
-	}
 	opts.TargetAccessLevels = accessLevels(input.TargetAccessLevels)
-	// Presence decides, never emptiness: an empty path is the caller removing
-	// it (issue 1306).
+	// Presence decides, never emptiness: an empty path, font or color is the
+	// caller removing it (issue 1306).
 	opts.TargetPath = input.TargetPath
+	opts.Font = input.Font
+	opts.Color = input.Color
 	if input.BroadcastType != "" {
 		opts.BroadcastType = new(input.BroadcastType)
 	}
@@ -286,9 +288,6 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateBroadcastMessageOptions, erro
 	}
 	if input.Theme != "" {
 		opts.Theme = new(input.Theme)
-	}
-	if input.Color != "" {
-		opts.Color = new(input.Color)
 	}
 	return opts, nil
 }

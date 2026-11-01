@@ -137,7 +137,7 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 		}},
 		{Name: "get", Call: func() error { _, err := Get(context.Background(), client, GetInput{RunnerID: 10}); return err }},
 		{Name: "update", Call: func() error {
-			_, err := Update(context.Background(), client, UpdateInput{RunnerID: 10, Description: "x"})
+			_, err := Update(context.Background(), client, UpdateInput{RunnerID: 10, Description: new("x")})
 			return err
 		}},
 		{Name: "enable project", Call: func() error {
@@ -393,7 +393,7 @@ func TestUpdate_Success(t *testing.T) {
 	paused := true
 	out, err := Update(context.Background(), client, UpdateInput{
 		RunnerID:    10,
-		Description: "updated",
+		Description: new("updated"),
 		Paused:      &paused,
 	})
 	if err != nil {
@@ -1556,14 +1556,14 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 	maxTimeout := int64(7200)
 	out, err := Update(context.Background(), client, UpdateInput{
 		RunnerID:        10,
-		Description:     "desc",
+		Description:     new("desc"),
 		Paused:          &paused,
 		TagList:         []string{"docker", "linux"},
 		RunUntagged:     &runUntagged,
 		Locked:          &locked,
 		AccessLevel:     "ref_protected",
 		MaximumTimeout:  &maxTimeout,
-		MaintenanceNote: "under repair",
+		MaintenanceNote: new("under repair"),
 		Active:          &active,
 	})
 	if err != nil {
@@ -1608,14 +1608,19 @@ func TestUpdate_OneFieldAtATime_SendsThatFieldAndNothingElse(t *testing.T) {
 		want  map[string]any
 	}{
 		{"nothing", UpdateInput{RunnerID: 10}, map[string]any{}},
-		{"description", UpdateInput{RunnerID: 10, Description: "desc-1"}, map[string]any{"description": "desc-1"}},
+		{"description", UpdateInput{RunnerID: 10, Description: new("desc-1")}, map[string]any{"description": "desc-1"}},
+		// An empty description or note is the caller removing it, which
+		// Ci::Runner allows (length validations only), so each reaches
+		// GitLab as "" rather than being read as left out (issue 1306).
+		{"description emptied", UpdateInput{RunnerID: 10, Description: new("")}, map[string]any{"description": ""}},
+		{"maintenance_note emptied", UpdateInput{RunnerID: 10, MaintenanceNote: new("")}, map[string]any{"maintenance_note": ""}},
 		{"paused", UpdateInput{RunnerID: 10, Paused: &paused}, map[string]any{"paused": false}},
 		{"tag_list", UpdateInput{RunnerID: 10, TagList: []string{"docker", "linux"}}, map[string]any{"tag_list": []any{"docker", "linux"}}},
 		{"run_untagged", UpdateInput{RunnerID: 10, RunUntagged: &runUntagged}, map[string]any{"run_untagged": true}},
 		{"locked", UpdateInput{RunnerID: 10, Locked: &locked}, map[string]any{"locked": false}},
 		{"access_level", UpdateInput{RunnerID: 10, AccessLevel: "ref_protected"}, map[string]any{"access_level": "ref_protected"}},
 		{"maximum_timeout", UpdateInput{RunnerID: 10, MaximumTimeout: &maxTimeout}, map[string]any{"maximum_timeout": float64(7200)}},
-		{"maintenance_note", UpdateInput{RunnerID: 10, MaintenanceNote: "under repair"}, map[string]any{"maintenance_note": "under repair"}},
+		{"maintenance_note", UpdateInput{RunnerID: 10, MaintenanceNote: new("under repair")}, map[string]any{"maintenance_note": "under repair"}},
 		{"active", UpdateInput{RunnerID: 10, Active: &active}, map[string]any{"active": true}},
 	}
 	for _, tt := range tests {

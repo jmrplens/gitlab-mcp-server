@@ -35,12 +35,16 @@ type CreateInput struct {
 
 // UpdateInput holds parameters for updating a package protection rule.
 type UpdateInput struct {
-	ProjectID                   toolutil.StringOrInt         `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
-	RuleID                      int64                        `json:"rule_id"                                 jsonschema:"Package protection rule ID,required"`
-	PackageNamePattern          string                       `json:"package_name_pattern,omitempty"          jsonschema:"Package name pattern with optional wildcards"`
-	PackageType                 string                       `json:"package_type,omitempty"                  jsonschema:"Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list"`
-	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
-	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
+	ProjectID          toolutil.StringOrInt `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
+	RuleID             int64                `json:"rule_id"                                 jsonschema:"Package protection rule ID,required"`
+	PackageNamePattern string               `json:"package_name_pattern,omitempty"          jsonschema:"Package name pattern with optional wildcards"`
+	PackageType        string               `json:"package_type,omitempty"                  jsonschema:"Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list"`
+	// The two levels are pointers so an empty one, the caller removing the
+	// minimum, is told from one left out: the update route documents null
+	// among their values, and GitLab stores a rule without either minimum
+	// (issue 1306).
+	MinimumAccessLevelForPush   *gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove the minimum, which GitLab stores as null. Omit the field to leave it untouched"`
+	MinimumAccessLevelForDelete *gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove the minimum, which GitLab stores as null. Omit the field to leave it untouched"`
 }
 
 // DeleteInput holds parameters for deleting a package protection rule.
@@ -138,6 +142,20 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 	return toOutput(rule), nil
 }
 
+// protectionLevelUpdate reads one minimum access level an update sets: nil
+// leaves it out, an empty one sends null, which removes the minimum, and any
+// other value sends that level. client-go's Nullable carries the null the
+// options' pointer could not.
+func protectionLevelUpdate(level *gl.ProtectionRuleAccessLevel) gl.Nullable[gl.ProtectionRuleAccessLevel] {
+	if level == nil {
+		return nil
+	}
+	if *level == "" {
+		return gl.NewNullNullable[gl.ProtectionRuleAccessLevel]()
+	}
+	return gl.NewNullableWithValue(*level)
+}
+
 // Update modifies an existing package protection rule.
 func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
@@ -156,12 +174,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 	if in.PackageType != "" {
 		opts.PackageType = new(in.PackageType)
 	}
-	if in.MinimumAccessLevelForPush != "" {
-		opts.MinimumAccessLevelForPush = gl.NewNullableWithValue(in.MinimumAccessLevelForPush)
-	}
-	if in.MinimumAccessLevelForDelete != "" {
-		opts.MinimumAccessLevelForDelete = gl.NewNullableWithValue(in.MinimumAccessLevelForDelete)
-	}
+	opts.MinimumAccessLevelForPush = protectionLevelUpdate(in.MinimumAccessLevelForPush)
+	opts.MinimumAccessLevelForDelete = protectionLevelUpdate(in.MinimumAccessLevelForDelete)
 	// A field the caller did not name is left out of the request, which
 	// client-go's UpdatePackageProtectionRulesOptions does from v3.38.0
 	// (register row 52), so GitLab keeps the rule's pattern and type as they

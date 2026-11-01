@@ -270,7 +270,7 @@ func TestModifyUser_AllOptionalFields(t *testing.T) {
 		SkipReconfirmation: &skipReconf,
 		Bio:                new("Updated bio"),
 		Location:           "London",
-		Organization:       "NewOrg",
+		Organization:       new("NewOrg"),
 		ProjectsLimit:      &projLimit,
 		Note:               "Updated note",
 		PrivateProfile:     &privateProf,
@@ -504,7 +504,10 @@ func TestModify_EachOptionReachesTheRequest(t *testing.T) {
 		{"view_diffs_file_by_file", ModifyInput{ViewDiffsFileByFile: &yes}, map[string]any{"view_diffs_file_by_file": true}},
 		{"bio", ModifyInput{Bio: new("bio")}, map[string]any{"bio": "bio"}},
 		{"location", ModifyInput{Location: "location"}, map[string]any{"location": "location"}},
-		{"organization", ModifyInput{Organization: "organization"}, map[string]any{"organization": "organization"}},
+		{"organization", ModifyInput{Organization: new("organization")}, map[string]any{"organization": "organization"}},
+		// The users route says of organization "Empty string or nil clears
+		// the field", so an empty one reaches GitLab as given (issue 1306).
+		{"organization emptied", ModifyInput{Organization: new("")}, map[string]any{"organization": ""}},
 		{"note", ModifyInput{Note: "admin note"}, map[string]any{"note": "admin note"}},
 		{"commit_email", ModifyInput{CommitEmail: "commit@x.test"}, map[string]any{"commit_email": "commit@x.test"}},
 		{"public_email", ModifyInput{PublicEmail: "public@x.test"}, map[string]any{"public_email": "public@x.test"}},

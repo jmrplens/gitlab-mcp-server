@@ -1150,7 +1150,7 @@ type UpdateInput struct {
 	SharedRunnersMinutesLimit       *int64                         `json:"shared_runners_minutes_limit,omitempty"       jsonschema:"Shared runner compute-minutes limit (administrators only)"`
 	SharedRunnersSetting            string                         `json:"shared_runners_setting,omitempty"             jsonschema:"Shared runners setting (enabled, disabled_and_overridable, disabled_and_unoverridable)"`
 	SubGroupCreationLevel           string                         `json:"subgroup_creation_level,omitempty"            jsonschema:"Who can create subgroups (owner, maintainer)"`
-	StepUpAuthRequiredOAuthProvider string                         `json:"step_up_auth_required_oauth_provider,omitempty" jsonschema:"OAuth provider required for step-up authentication"`
+	StepUpAuthRequiredOAuthProvider *string                        `json:"step_up_auth_required_oauth_provider,omitempty" jsonschema:"OAuth provider required for step-up authentication. Pass an empty string to turn step-up authentication off. Omit the field to leave it untouched"`
 	TwoFactorGracePeriod            *int64                         `json:"two_factor_grace_period,omitempty"            jsonschema:"Grace period in hours before two-factor authentication is enforced"`
 	WikiAccessLevel                 string                         `json:"wiki_access_level,omitempty"                  tier:"premium" jsonschema:"Wiki access level (disabled, private, enabled)"`
 
@@ -1490,9 +1490,10 @@ func applyUpdateGroupEnums(input UpdateInput, opts *gl.UpdateGroupOptions) {
 	if input.AllowedEmailDomainsList != "" {
 		opts.AllowedEmailDomainsList = new(input.AllowedEmailDomainsList)
 	}
-	if input.StepUpAuthRequiredOAuthProvider != "" {
-		opts.StepUpAuthRequiredOAuthProvider = new(input.StepUpAuthRequiredOAuthProvider)
-	}
+	// An empty provider is the caller turning step-up authentication off,
+	// which the route's own description says ("Pass empty string to
+	// disable"), so it goes through as given (issue 1306).
+	opts.StepUpAuthRequiredOAuthProvider = input.StepUpAuthRequiredOAuthProvider
 	if input.DuoAvailability != "" {
 		opts.DuoAvailability = new(gl.DuoAvailabilityValue(input.DuoAvailability))
 	}

@@ -4815,8 +4815,8 @@ func TestReleaseUpdate_AllOptionalParams(t *testing.T) {
 	out, err := releases.Update(context.Background(), client, releases.UpdateInput{
 		ProjectID:   "42",
 		TagName:     "v1.0",
-		Name:        "Updated",
-		Description: "new notes",
+		Name:        new("Updated"),
+		Description: new("new notes"),
 	})
 	if err != nil {
 		t.Fatalf("releaseUpdate() unexpected error: %v", err)

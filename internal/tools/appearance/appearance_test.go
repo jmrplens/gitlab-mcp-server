@@ -98,8 +98,8 @@ func TestUpdate_Success(t *testing.T) {
 
 	enabled := true
 	out, err := Update(t.Context(), client, UpdateInput{
-		Title:                       "New Title",
-		HeaderMessage:               "New Header",
+		Title:                       new("New Title"),
+		HeaderMessage:               new("New Header"),
 		EmailHeaderAndFooterEnabled: &enabled,
 	})
 	if err != nil {
@@ -118,7 +118,7 @@ func TestUpdate_Error(t *testing.T) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 
-	_, err := Update(t.Context(), client, UpdateInput{Title: "test"})
+	_, err := Update(t.Context(), client, UpdateInput{Title: new("test")})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -264,24 +264,23 @@ func TestUpdate_AllFields(t *testing.T) {
 
 	enabled := true
 	out, err := Update(t.Context(), client, UpdateInput{
-		Title:                       "New Title",
-		Description:                 "New Desc",
-		PWAName:                     "MyApp",
-		PWAShortName:                "MA",
-		PWADescription:              "Progressive",
+		Title:                       new("New Title"),
+		Description:                 new("New Desc"),
+		PWAName:                     new("MyApp"),
+		PWAShortName:                new("MA"),
+		PWADescription:              new("Progressive"),
 		PWAIcon:                     "/uploads/pwa.png",
 		Logo:                        "/uploads/logo.png",
 		HeaderLogo:                  "/uploads/header.png",
 		Favicon:                     "/uploads/favicon.ico",
-		URL:                         "https://example.com",
-		HeaderMessage:               "Header",
-		FooterMessage:               "Footer",
-		MessageBackgroundColor:      "#000000",
-		MessageFontColor:            "#ffffff",
+		HeaderMessage:               new("Header"),
+		FooterMessage:               new("Footer"),
+		MessageBackgroundColor:      new("#000000"),
+		MessageFontColor:            new("#ffffff"),
 		EmailHeaderAndFooterEnabled: &enabled,
-		MemberGuidelines:            "Be kind",
-		NewProjectGuidelines:        "Name it well",
-		ProfileImageGuidelines:      "Use a face",
+		MemberGuidelines:            new("Be kind"),
+		NewProjectGuidelines:        new("Name it well"),
+		ProfileImageGuidelines:      new("Use a face"),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -315,25 +314,24 @@ func TestUpdate_RequestBody_NamesExactlyTheFieldsTheCallerSet(t *testing.T) {
 		{
 			name: "every field set",
 			input: UpdateInput{
-				SiteName:                    "Production",
-				Title:                       "New Title",
-				Description:                 "New Desc",
-				PWAName:                     "MyApp",
-				PWAShortName:                "MA",
-				PWADescription:              "Progressive",
+				SiteName:                    new("Production"),
+				Title:                       new("New Title"),
+				Description:                 new("New Desc"),
+				PWAName:                     new("MyApp"),
+				PWAShortName:                new("MA"),
+				PWADescription:              new("Progressive"),
 				PWAIcon:                     "/uploads/pwa.png",
 				Logo:                        "/uploads/logo.png",
 				HeaderLogo:                  "/uploads/header.png",
 				Favicon:                     "/uploads/favicon.ico",
-				URL:                         "https://example.com",
-				HeaderMessage:               "Header",
-				FooterMessage:               "Footer",
-				MessageBackgroundColor:      "#000000",
-				MessageFontColor:            "#ffffff",
+				HeaderMessage:               new("Header"),
+				FooterMessage:               new("Footer"),
+				MessageBackgroundColor:      new("#000000"),
+				MessageFontColor:            new("#ffffff"),
 				EmailHeaderAndFooterEnabled: &enabled,
-				MemberGuidelines:            "Be kind",
-				NewProjectGuidelines:        "Name it well",
-				ProfileImageGuidelines:      "Use a face",
+				MemberGuidelines:            new("Be kind"),
+				NewProjectGuidelines:        new("Name it well"),
+				ProfileImageGuidelines:      new("Use a face"),
 			},
 			want: map[string]any{
 				"site_name":                       "Production",
@@ -346,7 +344,6 @@ func TestUpdate_RequestBody_NamesExactlyTheFieldsTheCallerSet(t *testing.T) {
 				"logo":                            "/uploads/logo.png",
 				"header_logo":                     "/uploads/header.png",
 				"favicon":                         "/uploads/favicon.ico",
-				"url":                             "https://example.com",
 				"header_message":                  "Header",
 				"footer_message":                  "Footer",
 				"message_background_color":        "#000000",
@@ -364,6 +361,26 @@ func TestUpdate_RequestBody_NamesExactlyTheFieldsTheCallerSet(t *testing.T) {
 			name:  "nothing set",
 			input: UpdateInput{},
 			want:  map[string]any{},
+		},
+		{
+			// Each text and color the caller empties reaches GitLab as the
+			// empty string that clears it (issue 1306), while the image
+			// fields, parts of an upload, are never sent empty.
+			name: "every text and color emptied",
+			input: UpdateInput{
+				SiteName: new(""), Title: new(""), Description: new(""),
+				PWAName: new(""), PWAShortName: new(""), PWADescription: new(""),
+				HeaderMessage: new(""), FooterMessage: new(""),
+				MessageBackgroundColor: new(""), MessageFontColor: new(""),
+				MemberGuidelines: new(""), NewProjectGuidelines: new(""), ProfileImageGuidelines: new(""),
+			},
+			want: map[string]any{
+				"site_name": "", "title": "", "description": "",
+				"pwa_name": "", "pwa_short_name": "", "pwa_description": "",
+				"header_message": "", "footer_message": "",
+				"message_background_color": "", "message_font_color": "",
+				"member_guidelines": "", "new_project_guidelines": "", "profile_image_guidelines": "",
+			},
 		},
 	}
 
@@ -521,7 +538,7 @@ func TestAppearance_UnreadableSiteName(t *testing.T) {
 			return err
 		}},
 		{Name: "update", Call: func() error {
-			_, err := Update(t.Context(), client, UpdateInput{Title: "test"})
+			_, err := Update(t.Context(), client, UpdateInput{Title: new("test")})
 			return err
 		}},
 	})

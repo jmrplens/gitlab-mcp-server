@@ -221,7 +221,7 @@ type EditInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
 	UserID       int64                `json:"user_id"                 jsonschema:"User ID of the member to edit,required"`
 	AccessLevel  int                  `json:"access_level"            jsonschema:"New access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level,required"`
-	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
+	ExpiresAt    *string              `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD). Pass an empty string to remove the expiration, so the membership never expires. Omit the field to leave it untouched"`
 	MemberRoleID *int64               `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched"`
 }
 
@@ -337,6 +337,16 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	return ToOutput(m, extra), nil
 }
 
+// memberExpiry parses the expiry an edit sets, or returns nil when it sets
+// none: an expiry left out, or one being removed, which the caller has
+// already written into the body as null.
+func memberExpiry(value *string) (*string, error) {
+	if value == nil {
+		return nil, nil //nolint:nilnil // no expiry to set: the option stays unset
+	}
+	return toolutil.ParseDateFieldString("expires_at", *value)
+}
+
 // Edit modifies an existing project member's access level, expiration
 // date, or custom member role via the GitLab Project members API
 // (PUT /projects/:id/members/:user_id). Requires at least the same
@@ -352,7 +362,13 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 		return Output{}, errors.New("memberEdit: access_level is required")
 	}
 
-	expiresAt, err := toolutil.ParseDateFieldString("expires_at", input.ExpiresAt)
+	// GitLab takes a custom role off a member only on null, and an expiry is
+	// removed by null too (Member validates expires_at allow_blank), neither
+	// of which the option's omitempty pointers can carry, so 0 and "" are
+	// written into the body as null through a request option (issue 1306,
+	// upstream register row 122).
+	var nulls toolutil.BodyEdit
+	expiresAt, err := memberExpiry(toolutil.NullWhenZero(input.ExpiresAt, "expires_at", &nulls))
 	if err != nil {
 		return Output{}, fmt.Errorf("memberEdit: %w", err)
 	}
@@ -360,11 +376,6 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 		AccessLevel: new(gl.AccessLevelValue(input.AccessLevel)),
 		ExpiresAt:   expiresAt,
 	}
-	// GitLab takes a custom role off a member only on null, which the
-	// option's omitempty pointer cannot carry, so 0 is written into the body
-	// as null through a request option (issue 1306, upstream register row
-	// 122).
-	var nulls toolutil.BodyEdit
 	opts.MemberRoleID = toolutil.NullWhenZero(input.MemberRoleID, "member_role_id", &nulls)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)

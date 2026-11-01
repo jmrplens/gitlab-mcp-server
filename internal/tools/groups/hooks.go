@@ -21,7 +21,7 @@ import (
 // declares the add's own, which GitLab requires.
 type HookInput struct {
 	URL                       string                  `json:"url,omitempty"                        jsonschema:"New webhook URL"`
-	Name                      string                  `json:"name,omitempty"                       jsonschema:"Hook name"`
+	Name                      *string                 `json:"name,omitempty"                       jsonschema:"Hook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
 	Description               *string                 `json:"description,omitempty"                jsonschema:"Hook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
 	Token                     string                  `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
 	SigningToken              string                  `json:"signing_token,omitempty"              jsonschema:"Write-only signing token for webhook signature validation"`
@@ -325,11 +325,10 @@ func applyGroupHookIdentityOptions(input HookInput, opts *gl.AddGroupHookOptions
 	if input.URL != "" {
 		opts.URL = new(input.URL)
 	}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	}
-	// The description, branch filter and custom template go through as given:
-	// on an edit an empty one is the caller removing it (issue 1306).
+	// The name, description, branch filter and custom template go through as
+	// given: on an edit an empty one is the caller removing it (issue 1306),
+	// and WebHooks::Hook validates a name's length only.
+	opts.Name = input.Name
 	opts.Description = input.Description
 	opts.PushEventsBranchFilter = input.PushEventsBranchFilter
 	opts.CustomWebhookTemplate = input.CustomWebhookTemplate

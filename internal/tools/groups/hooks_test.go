@@ -1144,7 +1144,7 @@ func TestHookToOutput_SecretCarryingListsAreEmptyWhenGitLabSendsNone(t *testing.
 func TestApplyGroupHookIdentityOptions_CarriesEachFieldOnlyWhenGiven(t *testing.T) {
 	full := &gl.AddGroupHookOptions{}
 	applyGroupHookIdentityOptions(HookInput{
-		URL: "https://example.com/hook", Name: "Named", Description: new("why"),
+		URL: "https://example.com/hook", Name: new("Named"), Description: new("why"),
 		Token: "s3cret", EnableSSLVerification: new(true),
 	}, full)
 	if full.URL == nil || full.Name == nil || full.Description == nil || full.Token == nil || full.EnableSSLVerification == nil {
@@ -1343,7 +1343,7 @@ func TestEditHook_CarriesEveryIdentityFieldUnderItsOwnKey(t *testing.T) {
 	body := recordedJSONBody(t, http.StatusOK, groupHookJSON, func(client *gitlabclient.Client) error {
 		_, err := EditHook(context.Background(), client, EditHookInput{
 			GroupID: "99", HookID: 10,
-			URL: "https://ci.example.com/hook", Name: "CI Hook", Description: new("Triggers CI"),
+			URL: "https://ci.example.com/hook", Name: new("CI Hook"), Description: new("Triggers CI"),
 			Token: "shared-secret", SigningToken: "signing-secret",
 			PushEventsBranchFilter: new("release/*"), BranchFilterStrategy: "wildcard",
 			CustomWebhookTemplate: new(`{"a":1}`),
