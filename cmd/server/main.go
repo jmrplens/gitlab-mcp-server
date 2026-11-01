@@ -2996,7 +2996,9 @@ func sseWriteDeadlineMiddleware(next http.Handler) http.Handler {
 // mobile carrier NATs are less generous still. A standalone GET stream is silent
 // by design until something happens, and a streamed POST is silent for as long
 // as GitLab takes, so the streams this transport depends on are exactly the ones
-// an idle timer collects. 25 seconds leaves room for two frames inside the
+// an idle timer collects. The heartbeat reaches a stream once it has committed,
+// though, and go-sdk v1.8.0 commits a streamed POST only with its first event
+// (see [sseAwareWriter.Write]). 25 seconds leaves room for two frames inside the
 // tightest of those windows.
 //
 // A var, not a const, only so tests can shorten it; nothing at runtime writes it.
@@ -3065,8 +3067,12 @@ func (w *sseAwareWriter) WriteHeader(code int) {
 	}
 }
 
-// Write covers the streamed POST response, which never calls WriteHeader
-// explicitly — so this is the only hook that fires for a long tool call.
+// Write commits a response nothing has committed yet, which is how go-sdk
+// commits a streamed POST: it never calls WriteHeader, and its first Write is
+// its first event. The heartbeat starts there and not before, so on go-sdk
+// v1.8.0 a tool call that sends nothing before its result puts no byte on the
+// wire, its headers included, until the result ends the stream; row 8 of
+// docs/development/upstream-bugs.md records it.
 func (w *sseAwareWriter) Write(b []byte) (int, error) {
 	if !w.wroteHeader {
 		w.WriteHeader(http.StatusOK)

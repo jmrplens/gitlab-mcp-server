@@ -666,10 +666,12 @@ The server speaks the modern **Streamable HTTP** transport, which uses Server-Se
 
 To avoid severing those streams without weakening protection elsewhere, the global `WriteTimeout` stays at a safe `60s` (guarding standard endpoints like `/health` from slow-write attacks) and any response the server actually answers as `text/event-stream` — both the standalone GET stream and streamed POST responses — disables its own write deadline dynamically and carries `X-Accel-Buffering: no`. The decision comes from the response, not from the request's `Accept` header: a client sending `*/*` or `text/*` is answered with a stream too. Because `--http-idle-timeout` defaults to `0` (disabled), the HTTP layer also does not close idle connections out of the box. Under `--stateless=false` that makes `--session-timeout` the effective idle lifetime; under the default stateless transport there is no MCP session to expire — each POST's session ends with its response — so nothing above the transport bounds a connection at all. Set a low `--http-idle-timeout` only if you want idle connections recycled sooner.
 
-An SSE response that stays silent emits a **keep-alive** every 25 seconds: a comment frame (a line beginning with `:`), which a conforming SSE reader discards without producing an event. Clearing the write deadline settles this end of the connection and nothing in between, and nginx closes an idle upstream response at `proxy_read_timeout` — 60 seconds by default — so the heartbeat is what holds the stream open. A stream that has written recently is skipped rather than padded. This is the server's own behaviour: the go-sdk emits no periodic ping of its own.
+An SSE response that has begun streaming and then stays silent emits a **keep-alive** 25 seconds after its last byte, and every 25 seconds after that: a comment frame (a line beginning with `:`), which a conforming SSE reader discards without producing an event. Clearing the write deadline settles this end of the connection and nothing in between, and nginx closes an idle upstream response at `proxy_read_timeout`, 60 seconds by default, so the heartbeat is what holds the stream open. A stream that has written recently is not padded. This is the server's own behaviour: the go-sdk emits no periodic ping of its own.
+
+The heartbeat starts when a response begins streaming, and that moment differs by stream. The standalone GET stream begins as it opens and a `subscriptions/listen` stream with its acknowledgement, so both are kept alive. A streamed tool call begins with its first event, so a call that has nothing to report before its result, such as one waiting on GitLab, sends nothing until then, not even its response headers, and the heartbeat never reaches it. Behind a proxy, such a call is cut once it outlives the proxy's read timeout.
 
 :::caution[Behind a reverse proxy]
-When server-side idle closure is disabled, the proxy/edge read or idle timeout becomes the limiting factor. The 25-second keep-alive holds an idle stream open across a default nginx `proxy_read_timeout`; if your edge is tighter than that, raise it rather than relying on the heartbeat.
+When server-side idle closure is disabled, the proxy/edge read or idle timeout becomes the limiting factor. The 25-second keep-alive holds an idle stream open across a default nginx `proxy_read_timeout`; if your edge is tighter than that, raise it rather than relying on the heartbeat. A tool call that is silent until its result gets no keep-alive at all, so set the read timeout above the longest tool call you expect, as `proxy_read_timeout 1h` does in the example below.
 :::
 
 ## Rate limiting
@@ -898,7 +900,9 @@ location /mcp {
     # A subscriptions/listen stream, and a standalone GET, are silent between
     # notifications. The server's 25-second keep-alive holds them open across
     # the 60-second default; raise the timeout if you expect quiet periods
-    # longer than your clients tolerate reconnecting through.
+    # longer than your clients tolerate reconnecting through. A tool call that
+    # sends nothing until its result gets no keep-alive, so this timeout is
+    # also the longest such call the proxy lets finish.
     proxy_read_timeout 1h;
     proxy_http_version 1.1;
 }

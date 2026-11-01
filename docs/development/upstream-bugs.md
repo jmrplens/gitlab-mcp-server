@@ -9142,9 +9142,10 @@ was filed on 2026-09-25.
   `application/json` responses are still not kept alive.
 - **Blocking**: no.
 - **Workaround**: partial.
-  `sseAwareWriter` in `cmd/server/main.go` emits a comment frame every 25s on
-  **any** response that commits to `text/event-stream`, guarding its writes with
-  the same mutex the handler's writes take. It stays once a release carries
+  `sseAwareWriter` in `cmd/server/main.go` emits a comment frame 25s after the
+  last byte of **any** response that has committed to `text/event-stream`, and
+  every 25s after that, guarding its writes with the same mutex the handler's
+  writes take. It stays once a release carries
   the option, since the option still leaves the standalone GET stream alone.
   The option is on
   by default, at 30 seconds when left at zero (`DefaultStreamKeepAlive`), and
@@ -9153,17 +9154,29 @@ was filed on 2026-09-25.
   carries the option every streamed POST response, a listen's included, is
   kept alive by the SDK's comment every 30 seconds and by ours whenever 25
   seconds pass with neither, since the SDK's idle clock counts only its own
-  writes, and the standalone GET stream by ours alone. Measured on 2026-10-31
-  with v1.8.0's `StreamableHTTPHandler` behind verbatim copies of
-  `sseWriteDeadlineMiddleware` and `sseAwareWriter`, not against the binary,
-  whose handler chain commits nothing earlier: a tool call silent for 700 ms,
-  with the heartbeat at 100 ms, got its headers and its first byte together
-  with its result, on 2025-06-18 and on 2025-11-25. This heartbeat starts
+  writes, and the standalone GET stream by ours alone. This heartbeat starts
   when the response commits, and v1.8.0's streamed POST writes nothing before
   its first event, so a tool call that sends nothing until its result never
   starts it, and the headers half of the What below is not worked around
   here; on `main` the SDK's first comment commits the headers, which starts
-  it. Whether to keep the SDK's comment or pass a negative
+  it. Measured on 2026-11-01 against the binary, which
+  `TestSSE_ASilentToolCall_GetsNoByteBeforeItsResult` in `test/e2e/http` now
+  holds: a `project.get` that GitLab held for 35 seconds got its headers after
+  35.04 seconds, with its result as its first bytes, on 2026-07-28 and on
+  2025-06-18 alike, and a progress token changed nothing, since the action
+  reports no progress. The hold is longer than the SDK's 30-second default,
+  so the bump that brings the option fails that test, and
+  `TestSSEKeepAlive_ASilentToolCall_GetsNoByteBeforeItsResult` in
+  `cmd/server` holds the same against v1.8.0's handler. The same measurement
+  found the heartbeat itself late. It ticked on a grid laid down when the
+  response committed, and a tick that found the stream written less than 25
+  seconds before waited for the next one, so the standalone GET, committed
+  with `: ok` and given the server's list announcements 1.6 seconds later,
+  went 48 seconds without a byte, and a `subscriptions/listen` stream
+  alternated gaps of 25 and 50 seconds as the ticks' jitter fell. Since
+  2026-11-01 its timer is re-armed from the stream's last write, and both
+  streams carry a frame 25 seconds after their last byte. Whether to keep the
+  SDK's comment or pass a negative
   value is decided at the bump that brings it, together with the HTTP server
   page, which says the go-sdk emits no periodic ping of its own. The write
   deadline half is already a middleware of the kind the maintainer
