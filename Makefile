@@ -1531,10 +1531,11 @@ ensure-mcp-publisher:
 	@test -x $(MCP_PUBLISHER) || GOBIN=$(MCP_PUBLISHER_DIR) go install github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION)
 
 ## check-server-json-packages: verify every package server.json declares is
-## really published and really installable. Downloads the artifacts, so it needs
-## network access; the schema check above cannot see any of this.
+## really published and really installable (cmd/release_packages). Downloads the
+## artifacts, so it needs network access; the schema check above cannot see any
+## of this.
 check-server-json-packages:
-	scripts/validate-server-json-packages.sh
+	go run ./cmd/release_packages/ server-json-packages
 
 ## check-openplugin: validate the Agent Plugins manifests (root plugin.json +
 ## mcp.json) and the legacy Open Plugins manifest (.plugin/plugin.json).
@@ -1542,7 +1543,7 @@ check-openplugin:
 	scripts/check-openplugin.sh
 
 # Pin the MCPB CLI for supply-chain integrity. Only check-mcpb runs it:
-# scripts/build-mcpb.sh packs the bundle with zip and no longer calls the CLI.
+# cmd/release_packages packs the bundles itself and never calls the CLI.
 # CI reads this line for its npx cache key (ci.yml, the Markdown job).
 MCPB_CLI_VERSION := 2.1.2
 
@@ -1557,16 +1558,17 @@ GOLANGCI_LINT_VERSION := v2.15.0
 
 ## check-mcpb: validate the Claude Desktop extension manifests: mcpb/manifest.json,
 ## which the universal bundle packs, and the darwin, win32 and linux manifests
-## mcpb/platform.jq derives from it for the per-OS bundles. The CLI looks for the
-## icon beside the manifest it validates, so each derived one gets a copy.
+## cmd/release_packages derives from it for the per-OS bundles (mcpb-manifest).
+## The CLI looks for the icon beside the manifest it validates, so each derived
+## one gets a copy.
 check-mcpb:
 	npx --yes @anthropic-ai/mcpb@$(MCPB_CLI_VERSION) validate mcpb/manifest.json
 	@set -e; tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
 	for platform in darwin win32 linux; do \
 		mkdir -p "$$tmp/$$platform"; \
 		cp mcpb/icon.png "$$tmp/$$platform/icon.png"; \
-		jq --arg platform "$$platform" -f mcpb/platform.jq mcpb/manifest.json > "$$tmp/$$platform/manifest.json"; \
-		echo "$$platform manifest (mcpb/platform.jq):"; \
+		go run ./cmd/release_packages/ mcpb-manifest "$$platform" > "$$tmp/$$platform/manifest.json"; \
+		echo "$$platform manifest (cmd/release_packages mcpb-manifest):"; \
 		npx --yes @anthropic-ai/mcpb@$(MCPB_CLI_VERSION) validate "$$tmp/$$platform/manifest.json"; \
 	done
 
@@ -1576,7 +1578,7 @@ check-mcpb:
 ## binary (lipo), the windows/amd64 binary and the linux/amd64 and linux/arm64
 ## binaries the Linux launcher chooses between, writes the third-party notices
 ## of those binaries (cmd/gen_third_party_notices, from the module cache), then
-## assembles, packs and measures the bundles with scripts/build-mcpb.sh.
+## assembles, packs and measures the bundles with cmd/release_packages.
 mcpb:
 	@command -v lipo >/dev/null || { echo "ERROR: lipo is required (macOS Xcode CLT)"; exit 1; }
 	@set -e; \
@@ -1594,7 +1596,7 @@ mcpb:
 		dist/local_darwin_amd64/gitlab-mcp-server dist/local_darwin_arm64/gitlab-mcp-server \
 		dist/local_linux_amd64/gitlab-mcp-server dist/local_linux_arm64/gitlab-mcp-server \
 		dist/local_windows_amd64/gitlab-mcp-server.exe; \
-	bash scripts/build-mcpb.sh "$$VER"
+	go run ./cmd/release_packages/ mcpb "$$VER"
 
 ## gen-npm: assemble the npm distribution (launcher + 6 per-platform packages).
 ## Reads release binaries from a directory of assets named as published

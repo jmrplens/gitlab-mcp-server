@@ -38,6 +38,35 @@ const scanMakefile = "OSV_SCANNER_IMAGE=" + pinnedScanner + "\n\ncheck-dependenc
 // reviewDay is the day the allow list tests measure the review bound from.
 var reviewDay = time.Date(2026, time.October, 31, 15, 4, 5, 0, time.UTC)
 
+// TestDependencyScanNames_Literals_SpellWhatTheyName verifies that the names
+// the dependency scan rule writes out as literals are the ones they stand
+// for: ci.yml in the workflow directory, make of the scan target, and the
+// Makefile variable the assignment pattern reads.
+//
+// They are literals rather than concatenations so that every expression the
+// rule evaluates runs in a statement, and this test is what keeps each one
+// from drifting away from the name it was built from.
+func TestDependencyScanNames_Literals_SpellWhatTheyName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name, got, want string
+	}{
+		{name: "the CI workflow", got: ciWorkflow, want: workflowDir + "/ci.yml"},
+		{name: "the scan command", got: scanCommand, want: "make " + dependencyScanTarget},
+		{name: "the assignment pattern", got: strings.TrimPrefix(osvImageAssignment.String(), "(?m)^")[:len(osvImageVariable)], want: osvImageVariable},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			if testCase.got != testCase.want {
+				t.Errorf("%s is %q, want %q", testCase.name, testCase.got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestMakefileScanProblems_Recipe_RunsThePinnedScanner verifies that the
 // Makefile's scan is held to an image named by its digest, assigned once, and
 // run by a recipe that reads the allow list beside each lockfile and scans a
@@ -90,6 +119,11 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 			name:     "one pass, over the allow lists only",
 			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\tdocker run $(OSV_SCANNER_IMAGE) scan source --recursive /src\n",
 			want:     []string{noUnfilteredPass},
+		},
+		{
+			name: "two passes, both under the empty config",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source --config /dev/null /src\n\tdocker run $(OSV_SCANNER_IMAGE) scan source --config=/dev/null --format json /src\n",
 		},
 		{
 			name:     "an empty config beside a named one",
@@ -323,6 +357,20 @@ func TestOSVConfigProblems_Entry_IsHeldToThePolicy(t *testing.T) {
 		{
 			name: "a reason with no justification",
 			text: "[[IgnoredVulns]]\nid = \"GO-2026-5932\"\nignoreUntil = 2027-01-31\nreason = \"not used\"\n",
+			want: []string{"x.toml:4: the reason does not open with one of the OpenVEX justifications for not_affected (component_not_present, " +
+				"inline_mitigations_already_exist, vulnerable_code_cannot_be_controlled_by_adversary, vulnerable_code_not_in_execute_path, " +
+				"vulnerable_code_not_present) and a colon, so it does not say why the advisory is not exploitable here"},
+		},
+		{
+			name: "a justification with no colon after it",
+			text: "[[IgnoredVulns]]\nid = \"GO-2026-5932\"\nignoreUntil = 2027-01-31\nreason = \"vulnerable_code_not_present\"\n",
+			want: []string{"x.toml:4: the reason does not open with one of the OpenVEX justifications for not_affected (component_not_present, " +
+				"inline_mitigations_already_exist, vulnerable_code_cannot_be_controlled_by_adversary, vulnerable_code_not_in_execute_path, " +
+				"vulnerable_code_not_present) and a colon, so it does not say why the advisory is not exploitable here"},
+		},
+		{
+			name: "a colon after a word that is no justification",
+			text: "[[IgnoredVulns]]\nid = \"GO-2026-5932\"\nignoreUntil = 2027-01-31\nreason = \"unused: nothing imports the package\"\n",
 			want: []string{"x.toml:4: the reason does not open with one of the OpenVEX justifications for not_affected (component_not_present, " +
 				"inline_mitigations_already_exist, vulnerable_code_cannot_be_controlled_by_adversary, vulnerable_code_not_in_execute_path, " +
 				"vulnerable_code_not_present) and a colon, so it does not say why the advisory is not exploitable here"},

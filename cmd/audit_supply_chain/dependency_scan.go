@@ -31,8 +31,9 @@ const osvImageVariable = "OSV_SCANNER_IMAGE"
 // Vulnerabilities check reads it the same way.
 const osvConfigName = "osv-scanner.toml"
 
-// ciWorkflow is the workflow whose verdict job branch protection requires.
-const ciWorkflow = workflowDir + "/ci.yml"
+// ciWorkflow is the workflow whose verdict job branch protection requires, in
+// workflowDir.
+const ciWorkflow = ".github/workflows/ci.yml"
 
 // requiredVerdictJob is the job of ci.yml that branch protection requires,
 // "✅ CI": a check decides whether a change merges only when this job needs
@@ -82,8 +83,8 @@ var (
 )
 
 // osvImageAssignment finds the Makefile's assignment of the scanner image,
-// in any of make's assignment operators.
-var osvImageAssignment = regexp.MustCompile(`(?m)^` + osvImageVariable + `[ \t]*(?:::?|\?|\+)?=[ \t]*(.*?)[ \t]*$`)
+// osvImageVariable, in any of make's assignment operators.
+var osvImageAssignment = regexp.MustCompile(`(?m)^OSV_SCANNER_IMAGE[ \t]*(?:::?|\?|\+)?=[ \t]*(.*?)[ \t]*$`)
 
 // pinnedOSVImage is an image named by the sha256 digest of its manifest, a
 // tag before the digest allowed, as rule 1 reads a docker:// image.
@@ -140,19 +141,7 @@ func checkDependencyScan(root string) ([]string, error) {
 // lockfile rather than one file a --config would put in all their places, and
 // to a second pass under --config /dev/null, which no allow list narrows.
 func makefileScanProblems(makefile string) []string {
-	var problems []string
-	assignments := osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1)
-	switch {
-	case len(assignments) == 0:
-		problems = append(problems, fmt.Sprintf("Makefile: %s is not assigned, so make %s names no scanner image this audit can hold to a digest",
-			osvImageVariable, dependencyScanTarget))
-	case len(assignments) > 1:
-		problems = append(problems, fmt.Sprintf("Makefile: %s is assigned %d times, so which image make %s runs depends on the order make reads them in",
-			osvImageVariable, len(assignments), dependencyScanTarget))
-	case !pinnedOSVImage.MatchString(assignments[0][1]):
-		problems = append(problems, fmt.Sprintf("Makefile: %s=%s is not pinned to a sha256 image digest, so the scanner that decides is whatever the tag names when the job runs",
-			osvImageVariable, assignments[0][1]))
-	}
+	problems := osvImageProblems(osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1))
 	rule := parseMakefile(makefile)[dependencyScanTarget]
 	if rule == nil {
 		return append(problems, fmt.Sprintf("Makefile: no rule makes %s, so nothing holds the lockfiles to the dependency advisories", dependencyScanTarget))
@@ -179,12 +168,30 @@ func makefileScanProblems(makefile string) []string {
 	return problems
 }
 
+// osvImageProblems holds the Makefile's assignments of the scanner image to
+// one, naming the image by its digest.
+func osvImageProblems(assignments [][]string) []string {
+	if len(assignments) == 0 {
+		return []string{fmt.Sprintf("Makefile: %s is not assigned, so make %s names no scanner image this audit can hold to a digest",
+			osvImageVariable, dependencyScanTarget)}
+	}
+	if len(assignments) > 1 {
+		return []string{fmt.Sprintf("Makefile: %s is assigned %d times, so which image make %s runs depends on the order make reads them in",
+			osvImageVariable, len(assignments), dependencyScanTarget)}
+	}
+	if !pinnedOSVImage.MatchString(assignments[0][1]) {
+		return []string{fmt.Sprintf("Makefile: %s=%s is not pinned to a sha256 image digest, so the scanner that decides is whatever the tag names when the job runs",
+			osvImageVariable, assignments[0][1])}
+	}
+	return nil
+}
+
 // scanCommand is the whole run block of the step that makes the scan, its
 // comments aside: anything written beside it, a variable assignment, an
 // option, a || or a pipe, can change which scanner runs or let its failure
 // pass, and none of those is a make invocation this audit could refuse by its
-// targets alone.
-const scanCommand = "make " + dependencyScanTarget
+// targets alone. It names dependencyScanTarget.
+const scanCommand = "make check-dependency-vulns"
 
 // scanEnvironment are the variables a workflow, the scan's job or its step may
 // not set, each read by make or by the step's shell before the recipe runs:
@@ -213,14 +220,14 @@ func workflowScanProblems(workflows []workflow) []string {
 	file := workflows[index]
 	jobs, _ := file.doc["jobs"].(map[string]any)
 	var problems []string
-	scanners := 0
+	scanned := false
 	for _, id := range orderedKeys(jobs, file.jobOrder) {
 		job, _ := jobs[id].(map[string]any)
 		positions := scanSteps(file.doc, job)
 		if len(positions) == 0 {
 			continue
 		}
-		scanners++
+		scanned = true
 		where := fmt.Sprintf("%s: job %s runs make %s", ciWorkflow, id, dependencyScanTarget)
 		all, _ := job["steps"].([]any)
 		steps := make([]map[string]any, 0, len(positions))
@@ -251,7 +258,7 @@ func workflowScanProblems(workflows []workflow) []string {
 			problems = append(problems, where+", and "+excuse)
 		}
 	}
-	if scanners == 0 {
+	if !scanned {
 		problems = append(problems, fmt.Sprintf("%s: no job runs make %s, so no change is held to the dependency advisories before it merges",
 			ciWorkflow, dependencyScanTarget))
 	}
