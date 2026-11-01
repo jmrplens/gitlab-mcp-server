@@ -37,9 +37,12 @@ import (
 //   - Whether the instance is GitLab.com: it decides whether the Orbit group
 //     exists at all.
 //   - Read-only, the narrowing a token carrying read_api and not api causes,
-//     safe mode, the excluded tools and the token scopes: these are the
+//     safe mode, the excluded tools, the token scopes and whether the OAuth
+//     verifier knows the credential to be an OAuth access token: these are the
 //     narrowing [gitlabtools.FilterActionCatalog] applies, and two credentials
-//     narrowed differently are served different catalogs.
+//     narrowed differently are served different catalogs. The last is one
+//     bit, as the read_api narrowing is: GitLab refuses such a token what acts
+//     on the calling token itself whatever its scopes (issue 1238).
 //   - The language the texts a person reads are rendered in, which the shell
 //     installs. It is set per process, so every shape of one deployment
 //     carries the same and it splits nothing in practice; it is the effective
@@ -54,10 +57,10 @@ import (
 // no gain, and a deployment publishing several instances is exactly the one
 // that most wants the sharing.
 //
-// Nor is anything about the credential itself. The token, the user, the
-// instance the token belongs to: none of them changes what is registered, and a
-// key that depended on any of them would be a key per credential, which is what
-// this replaces.
+// Nor is anything about the credential itself but that bit of its kind. The
+// token, the user, the instance the token belongs to: none of them changes
+// what is registered, and a key that depended on any of them would be a key
+// per credential, which is what this replaces.
 func serverShapeKey(cfg *config.ServerConfig, dotcom bool) string {
 	toolSurface := config.EffectiveToolSurface(cfg.ToolSurface)
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
