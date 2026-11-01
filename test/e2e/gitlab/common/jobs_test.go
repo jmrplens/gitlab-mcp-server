@@ -648,6 +648,9 @@ func TestJob_TokenScope_EnablesAndAllowlistsProjectsAndGroups(t *testing.T) {
 	}, func(e *harness.Env, surface harness.Surface, f tokenScopeFixture) {
 		s := e.On(surface)
 		params := map[string]any{"project_id": f.project.IDParam()}
+		// The four allowlist writes take the project as a number alone, the
+		// type GitLab declares for :id on their routes, which refuse a path.
+		writes := map[string]any{"project_id": f.project.ID}
 
 		// The patch answers a status rather than the settings it wrote, so
 		// the effect is read back rather than taken from the reply.
@@ -660,7 +663,7 @@ func TestJob_TokenScope_EnablesAndAllowlistsProjectsAndGroups(t *testing.T) {
 			e.T.Errorf("the token scope reads back as %+v after asking for it to be enabled", settings)
 		}
 
-		added := harness.Do[jobtokenscope.InboundAllowItemOutput](s, actionJobTokenScopeAddProject, withParams(params, map[string]any{"target_project_id": f.other.ID}))
+		added := harness.Do[jobtokenscope.InboundAllowItemOutput](s, actionJobTokenScopeAddProject, withParams(writes, map[string]any{"target_project_id": f.other.ID}))
 		if added.SourceProjectID != f.project.ID || added.TargetProjectID != f.other.ID {
 			e.T.Errorf("token scope add project answered %+v, want %d allowed into %d", added, f.other.ID, f.project.ID)
 		}
@@ -668,13 +671,13 @@ func TestJob_TokenScope_EnablesAndAllowlistsProjectsAndGroups(t *testing.T) {
 		if !containsID(inboundProjectIDs(inbound.Projects), f.other.ID) {
 			e.T.Errorf("the inbound allowlist does not hold project %d: %v", f.other.ID, inboundProjectIDs(inbound.Projects))
 		}
-		harness.DoVoid(s, actionJobTokenScopeRemoveProject, withParams(params, map[string]any{"target_project_id": f.other.ID}))
+		harness.DoVoid(s, actionJobTokenScopeRemoveProject, withParams(writes, map[string]any{"target_project_id": f.other.ID}))
 		inboundAfter := harness.Do[jobtokenscope.ListInboundAllowlistOutput](s, actionJobTokenScopeListInbound, params)
 		if containsID(inboundProjectIDs(inboundAfter.Projects), f.other.ID) {
 			e.T.Errorf("the inbound allowlist still holds project %d after its removal: %v", f.other.ID, inboundProjectIDs(inboundAfter.Projects))
 		}
 
-		groupAdded := harness.Do[jobtokenscope.GroupAllowlistItemOutput](s, actionJobTokenScopeAddGroup, withParams(params, map[string]any{"target_group_id": f.group.ID}))
+		groupAdded := harness.Do[jobtokenscope.GroupAllowlistItemOutput](s, actionJobTokenScopeAddGroup, withParams(writes, map[string]any{"target_group_id": f.group.ID}))
 		if groupAdded.SourceProjectID != f.project.ID || groupAdded.TargetGroupID != f.group.ID {
 			e.T.Errorf("token scope add group answered %+v, want group %d allowed into %d", groupAdded, f.group.ID, f.project.ID)
 		}
@@ -682,7 +685,7 @@ func TestJob_TokenScope_EnablesAndAllowlistsProjectsAndGroups(t *testing.T) {
 		if !containsID(allowlistGroupIDs(groups.Groups), f.group.ID) {
 			e.T.Errorf("the group allowlist does not hold group %d: %v", f.group.ID, allowlistGroupIDs(groups.Groups))
 		}
-		harness.DoVoid(s, actionJobTokenScopeRemoveGroup, withParams(params, map[string]any{"target_group_id": f.group.ID}))
+		harness.DoVoid(s, actionJobTokenScopeRemoveGroup, withParams(writes, map[string]any{"target_group_id": f.group.ID}))
 		groupsAfter := harness.Do[jobtokenscope.ListGroupAllowlistOutput](s, actionJobTokenScopeListGroups, params)
 		if containsID(allowlistGroupIDs(groupsAfter.Groups), f.group.ID) {
 			e.T.Errorf("the group allowlist still holds group %d after its removal: %v", f.group.ID, allowlistGroupIDs(groupsAfter.Groups))

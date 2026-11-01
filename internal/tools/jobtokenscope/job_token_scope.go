@@ -136,9 +136,16 @@ func ListInboundAllowlist(ctx context.Context, client *gitlabclient.Client, inpu
 }
 
 // AddProjectAllowlistInput is the input for adding a project to the inbound allowlist.
+//
+// It and the three other allowlist writes take the project as its numeric ID
+// alone, where the reads and the settings routes beside them take either
+// spelling: GitLab declares :id an Integer on the four write routes
+// (lib/api/project_job_token_scope.rb) and refuses a URL-encoded path with
+// 400 {"error":"id is invalid"}, although its API page says a path is
+// accepted (docs/development/upstream-bugs.md, row 157).
 type AddProjectAllowlistInput struct {
-	ProjectID       toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	TargetProjectID int64                `json:"target_project_id" jsonschema:"ID of the project to add to the allowlist,required"`
+	ProjectID       int64 `json:"project_id" jsonschema:"Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first,required"`
+	TargetProjectID int64 `json:"target_project_id" jsonschema:"ID of the project to add to the allowlist,required"`
 }
 
 // InboundAllowItemOutput is the output for an inbound allowlist item.
@@ -150,13 +157,16 @@ type InboundAllowItemOutput struct {
 
 // AddProjectAllowlist adds a project to the CI/CD job token inbound allowlist.
 func AddProjectAllowlist(ctx context.Context, client *gitlabclient.Client, input AddProjectAllowlistInput) (InboundAllowItemOutput, error) {
+	if input.ProjectID <= 0 {
+		return InboundAllowItemOutput{}, toolutil.ErrRequiredInt64("add_project_job_token_allowlist", "project_id")
+	}
 	if input.TargetProjectID <= 0 {
 		return InboundAllowItemOutput{}, toolutil.ErrRequiredInt64("add_project_job_token_allowlist", "target_project_id")
 	}
 	opts := &gl.JobTokenInboundAllowOptions{
 		TargetProjectID: new(input.TargetProjectID),
 	}
-	item, _, err := client.GL().JobTokenScope.AddProjectToJobScopeAllowList(string(input.ProjectID), opts, gl.WithContext(ctx))
+	item, _, err := client.GL().JobTokenScope.AddProjectToJobScopeAllowList(input.ProjectID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return InboundAllowItemOutput{}, toolutil.WrapErrWithStatusHint("add_project_job_token_allowlist", err, http.StatusForbidden,
 			"adding to inbound allowlist requires Maintainer role on source project; verify target_project_id exists and is accessible")
@@ -169,16 +179,19 @@ func AddProjectAllowlist(ctx context.Context, client *gitlabclient.Client, input
 
 // RemoveProjectAllowlistInput is the input for removing a project from the inbound allowlist.
 type RemoveProjectAllowlistInput struct {
-	ProjectID       toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	TargetProjectID int64                `json:"target_project_id" jsonschema:"ID of the project to remove from the allowlist,required"`
+	ProjectID       int64 `json:"project_id" jsonschema:"Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first,required"`
+	TargetProjectID int64 `json:"target_project_id" jsonschema:"ID of the project to remove from the allowlist,required"`
 }
 
 // RemoveProjectAllowlist removes a project from the CI/CD job token inbound allowlist.
 func RemoveProjectAllowlist(ctx context.Context, client *gitlabclient.Client, input RemoveProjectAllowlistInput) error {
+	if input.ProjectID <= 0 {
+		return toolutil.ErrRequiredInt64("remove_project_job_token_allowlist", "project_id")
+	}
 	if input.TargetProjectID <= 0 {
 		return toolutil.ErrRequiredInt64("remove_project_job_token_allowlist", "target_project_id")
 	}
-	_, err := client.GL().JobTokenScope.RemoveProjectFromJobScopeAllowList(string(input.ProjectID), input.TargetProjectID, gl.WithContext(ctx))
+	_, err := client.GL().JobTokenScope.RemoveProjectFromJobScopeAllowList(input.ProjectID, input.TargetProjectID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("remove_project_job_token_allowlist", err, http.StatusNotFound,
 			"verify target_project_id is on the allowlist with job.token_scope_list_inbound; requires Maintainer role")
@@ -237,8 +250,8 @@ func ListGroupAllowlist(ctx context.Context, client *gitlabclient.Client, input 
 
 // AddGroupAllowlistInput is the input for adding a group to the allowlist.
 type AddGroupAllowlistInput struct {
-	ProjectID     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	TargetGroupID int64                `json:"target_group_id" jsonschema:"ID of the group to add to the allowlist,required"`
+	ProjectID     int64 `json:"project_id" jsonschema:"Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first,required"`
+	TargetGroupID int64 `json:"target_group_id" jsonschema:"ID of the group to add to the allowlist,required"`
 }
 
 // GroupAllowlistItemOutput is the output for a group allowlist item.
@@ -250,13 +263,16 @@ type GroupAllowlistItemOutput struct {
 
 // AddGroupAllowlist adds a group to the CI/CD job token allowlist.
 func AddGroupAllowlist(ctx context.Context, client *gitlabclient.Client, input AddGroupAllowlistInput) (GroupAllowlistItemOutput, error) {
+	if input.ProjectID <= 0 {
+		return GroupAllowlistItemOutput{}, toolutil.ErrRequiredInt64("add_group_job_token_allowlist", "project_id")
+	}
 	if input.TargetGroupID <= 0 {
 		return GroupAllowlistItemOutput{}, toolutil.ErrRequiredInt64("add_group_job_token_allowlist", "target_group_id")
 	}
 	opts := &gl.AddGroupToJobTokenAllowlistOptions{
 		TargetGroupID: new(input.TargetGroupID),
 	}
-	item, _, err := client.GL().JobTokenScope.AddGroupToJobTokenAllowlist(string(input.ProjectID), opts, gl.WithContext(ctx))
+	item, _, err := client.GL().JobTokenScope.AddGroupToJobTokenAllowlist(input.ProjectID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return GroupAllowlistItemOutput{}, toolutil.WrapErrWithStatusHint("add_group_job_token_allowlist", err, http.StatusForbidden,
 			"adding to group allowlist requires Maintainer role on project; verify target_group_id exists; requires GitLab 17.0+")
@@ -269,16 +285,19 @@ func AddGroupAllowlist(ctx context.Context, client *gitlabclient.Client, input A
 
 // RemoveGroupAllowlistInput is the input for removing a group from the allowlist.
 type RemoveGroupAllowlistInput struct {
-	ProjectID     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	TargetGroupID int64                `json:"target_group_id" jsonschema:"ID of the group to remove from the allowlist,required"`
+	ProjectID     int64 `json:"project_id" jsonschema:"Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first,required"`
+	TargetGroupID int64 `json:"target_group_id" jsonschema:"ID of the group to remove from the allowlist,required"`
 }
 
 // RemoveGroupAllowlist removes a group from the CI/CD job token allowlist.
 func RemoveGroupAllowlist(ctx context.Context, client *gitlabclient.Client, input RemoveGroupAllowlistInput) error {
+	if input.ProjectID <= 0 {
+		return toolutil.ErrRequiredInt64("remove_group_job_token_allowlist", "project_id")
+	}
 	if input.TargetGroupID <= 0 {
 		return toolutil.ErrRequiredInt64("remove_group_job_token_allowlist", "target_group_id")
 	}
-	_, err := client.GL().JobTokenScope.RemoveGroupFromJobTokenAllowlist(string(input.ProjectID), input.TargetGroupID, gl.WithContext(ctx))
+	_, err := client.GL().JobTokenScope.RemoveGroupFromJobTokenAllowlist(input.ProjectID, input.TargetGroupID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("remove_group_job_token_allowlist", err, http.StatusNotFound,
 			"verify target_group_id is on the allowlist with job.token_scope_list_groups; requires Maintainer role")

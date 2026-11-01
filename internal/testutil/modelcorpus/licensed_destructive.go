@@ -17,21 +17,26 @@ package modelcorpus
 // tier a case declares is the tier its steps need and nothing else, which is
 // why some cases in this file declare none.
 //
+// One text changed after the port, and it changes what the model is asked:
+// MS-005 names the project by its numeric ID and not its path, and binds every
+// step to that ID, for MT-066's reason in destructive.go: the allowlist removal
+// it ends with takes project_id as an integer.
+//
 //nolint:maintidx // one table of data, cyclomatic complexity 1: see readCases.
 func licensedDestructiveCases() []Case {
 	return []Case{
 		{
 			ID: "MS-005",
-			Prompt: "Review the outside integrations of project `{{ .Facts.project_path }}`: list its " +
+			Prompt: "Review the outside integrations of project `{{ .Facts.project_id }}`: list its " +
 				"webhooks, list its status checks, look at the inbound CI job token allowlist, then take " +
 				"project `{{ .Facts.job_token_target_project_id }}` off that allowlist.",
 			Recipe: RecipeJobTokenScope,
 			Needs:  Needs{Tier: TierUltimate},
 			key: Key{Steps: []Step{
-				step("project.hook_list", project()),
-				step("external_status_check.list_project", project()),
-				step("job.token_scope_list_inbound", project()),
-				step("job.token_scope_remove_project", project(),
+				step("project.hook_list", req("project_id", fact(FactProjectID))),
+				step("external_status_check.list_project", req("project_id", fact(FactProjectID))),
+				step("job.token_scope_list_inbound", req("project_id", fact(FactProjectID))),
+				step("job.token_scope_remove_project", req("project_id", fact(FactProjectID)),
 					req("target_project_id", fact(FactJobTokenTargetProjectID))),
 			}},
 		},
