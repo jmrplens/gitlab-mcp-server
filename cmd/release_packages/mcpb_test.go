@@ -324,10 +324,8 @@ func TestMcpbBuild_BuildMcpbRecord_SaysAndPacksWhatTheScriptDid(t *testing.T) {
 				if first := runBuild(t, root, record.Version, buildRun{}); first.code != 0 {
 					t.Fatalf("the first run exited %d: %s", first.code, first.stderr)
 				}
-				for _, name := range []string{"gitlab-mcp-server-darwin.mcpb", "gitlab-mcp-server.mcpb"} {
-					if !regularFile(filepath.Join(root, "dist", name)) {
-						t.Fatalf("the first run left no %s", name)
-					}
+				if left := bundlesLeft(root); len(left) != len(bundleTargets()) {
+					t.Fatalf("the first run left %q, want every bundle", left)
 				}
 				breakTree(t, root, run.Break)
 			}

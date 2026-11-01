@@ -47,15 +47,19 @@ func TestWriteZip_Entries_AreRecordedAsZipXDRecordedThem(t *testing.T) {
 		{name: "manifest.json", attrs: 0o100644 << 16, data: "from data"},
 		{name: "server/x", attrs: 0o100755 << 16, data: "from the file"},
 	} {
-		file := archive.File[i]
-		if file.Name != want.name || file.ExternalAttrs != want.attrs || file.CreatorVersion>>8 != 3 ||
-			file.Method != zip.Deflate || len(file.Extra) != 0 ||
-			file.Modified.Format("2006-01-02 15:04:05") != "1980-01-01 00:00:00" {
-			t.Errorf("entry %d is %+v", i, file.FileHeader)
-		}
-		if got := string(readEntry(t, file)); got != want.data {
-			t.Errorf("entry %s holds %q, want %q", want.name, got, want.data)
-		}
+		t.Run(want.name, func(t *testing.T) {
+			t.Parallel()
+
+			file := archive.File[i]
+			if file.Name != want.name || file.ExternalAttrs != want.attrs || file.CreatorVersion>>8 != 3 ||
+				file.Method != zip.Deflate || len(file.Extra) != 0 ||
+				file.Modified.Format("2006-01-02 15:04:05") != "1980-01-01 00:00:00" {
+				t.Errorf("entry %d is %+v", i, file.FileHeader)
+			}
+			if got := string(readEntry(t, file)); got != want.data {
+				t.Errorf("entry %s holds %q, want %q", want.name, got, want.data)
+			}
+		})
 	}
 }
 

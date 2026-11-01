@@ -101,14 +101,18 @@ func TestMcpbBuild_ASuccessfulRun_ListsEachBundle(t *testing.T) {
 	if got.code != 0 {
 		t.Fatalf("exit %d: %s", got.code, got.stderr)
 	}
-	for _, want := range []string{
-		"Built 4 bundles (version 9.8.7)\ndist/gitlab-mcp-server-darwin.mcpb:\n  -rw-r--r--       5689  manifest.json\n",
-		"  -rwxr-xr-x        116  server/gitlab-mcp-server\ndist/gitlab-mcp-server-windows.mcpb:\n",
-		"dist/gitlab-mcp-server.mcpb:\n",
+	for name, want := range map[string]string{
+		"the line after the sizes and the first entry": "Built 4 bundles (version 9.8.7)\ndist/gitlab-mcp-server-darwin.mcpb:\n  -rw-r--r--       5689  manifest.json\n",
+		"an executable entry and the next bundle":      "  -rwxr-xr-x        116  server/gitlab-mcp-server\ndist/gitlab-mcp-server-windows.mcpb:\n",
+		"the universal bundle":                         "dist/gitlab-mcp-server.mcpb:\n",
 	} {
-		if !strings.Contains(got.stdout, want) {
-			t.Errorf("stdout does not hold %q:\n%s", want, got.stdout)
-		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if !strings.Contains(got.stdout, want) {
+				t.Errorf("stdout does not hold %q:\n%s", want, got.stdout)
+			}
+		})
 	}
 	var stdout bytes.Buffer
 	b := newMcpbBuild(t.TempDir(), "dist", "9.8.7", &stdout, &stdout, noEnv)
