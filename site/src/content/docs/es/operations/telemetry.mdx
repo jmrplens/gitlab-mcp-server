@@ -470,6 +470,7 @@ de servidor, y un `5xx` lo marca como error.
 | `mcp.server.operation.duration`        | `s`          | cuánto tardan las peticiones, por método, dominio y, donde se conserva el nombre de la herramienta, acción                  |
 | `mcp.client.operation.duration`        | `s`          | cuánto espera este servidor al cliente en lo que inicia él (elicitación, muestreo, `roots/list`, notificaciones)            |
 | `http.client.request.duration`         | `s`          | cuánto tarda GitLab                                                                                                         |
+| `gitlab_mcp.upstream.requests`         | `{request}`  | cuántas peticiones ha enviado el proceso a GitLab, con los reintentos y los saltos de redirección, por `server.address`     |
 | `mcp.server.session.duration`          | `s`          | cuánto sigue conectado un cliente (stdio y `--stateless=false`)                                                             |
 | `gitlab_mcp.credential_pool.entries`   | `{entry}`    | cuántas credenciales tiene el pool (modo HTTP)                                                                              |
 | `gitlab_mcp.credential_pool.capacity`  | `{entry}`    | cuántas puede tener, que es `--max-http-clients`                                                                            |
@@ -504,6 +505,25 @@ que solo existe cuando se confía en esa cabecera. Los cuatro se exportan desde
 el arranque, ceros incluidos. La dirección rechazada no es una dimensión, a
 propósito: haría que la serie identificara a personas y crecería sin límite
 justo con el tráfico que mide.
+
+`gitlab_mcp.upstream.requests` cuenta cada petición que el proceso envía a
+GitLab, y cada salto de redirección que sigue desde allí, en los dos
+transportes: las de las llamadas a herramientas y las de los vigilantes, las
+del verificador OAuth y las de las sondas de salud, que
+`http.client.request.duration` no ve. Cada intento es una petición, así que una
+petición que se reenvía tras un `429` o un error del servidor cuenta cada vez,
+porque GitLab cuenta cada uno de ellos en sus propios límites
+([Qué cuenta GitLab](/gitlab-mcp-server/es/operations/http-server/#qué-cuenta-gitlab)).
+Una petición que la
+[protección de salida](/gitlab-mcp-server/es/operations/security/#conexiones-salientes)
+rechazó nunca salió del proceso y no se cuenta. Su única dimensión es
+`server.address`, acotada como en `http.client.request.duration`: un host para
+el que está configurado este despliegue aparece con su nombre, y cualquier otro,
+incluidos una instancia que nombra quien llama con `--allow-any-gitlab-url` y
+una redirección fuera de la instancia, es `_OTHER`. Un host configurado se
+exporta desde el arranque, a cero. No lleva credencial, usuario ni ruta: es la
+cuenta del despliegue, que es contra lo que GitLab.com aplica su límite de 2000
+peticiones por minuto por dirección IP, y no limita nada.
 
 Los tres instrumentos del pool de credenciales llevan el espacio de nombres
 propio de este servidor en lugar del `mcp.` de la convención, porque un pool de

@@ -974,6 +974,9 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 	}
 
 	mcpotel.SetMetricServerAddresses(metricHostsFor(hcfg, os.Getenv("GITLAB_URL")))
+	// After the declaration above, which decides the addresses the upstream
+	// count is kept and published under: no request has been sent before it.
+	observeUpstreamRequests()
 	// The routes a GitLab call's span may name are the ones the binary's own
 	// table carries, each a template with no identifier in it, so the span
 	// says which endpoint was called without saying which project or file.

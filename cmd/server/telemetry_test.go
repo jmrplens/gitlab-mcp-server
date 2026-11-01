@@ -6,16 +6,26 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // TestTelemetryEnabled_DefaultsToOff pins the default, which is a privacy
@@ -573,5 +583,96 @@ func TestStartTelemetry_WarnsWhenACredentialCrossesTheNetworkInTheClear(t *testi
 	const warning = "a collector credential is configured against a plaintext endpoint on another host; it crosses the network in the clear on every export"
 	if !slices.Contains(messages, warning) {
 		t.Errorf("the plaintext-credential warning was not logged; captured %v", messages)
+	}
+}
+
+// TestObserveUpstreamRequests_PublishesTheProcessCount pins the one place the
+// process's upstream counter reaches a collector.
+//
+// The counter lives with the transports and internal/mcpotel knows nothing
+// about them, so nothing but this registration hands one to the other, and a
+// registration that read the wrong function, or none, would publish a series
+// that never moves. The figure is held from below rather than exactly: the
+// counter is the process's, and requests this package's earlier tests sent
+// are in it too. A registration that succeeded must say nothing, since a
+// warning there sends an operator looking for a fault that is not there.
+func TestObserveUpstreamRequests_PublishesTheProcessCount(t *testing.T) {
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	previous := otel.GetMeterProvider()
+	otel.SetMeterProvider(provider)
+	t.Cleanup(func() {
+		otel.SetMeterProvider(previous)
+		_ = provider.Shutdown(context.Background())
+	})
+	logged := testutil.CaptureSlog(t)
+
+	observeUpstreamRequests()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+	before := upstreamRequestTotal(gitlabclient.UpstreamRequests())
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v4/version", http.NoBody)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	resp, err := gitlabclient.HTTPTransport(false).RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip() error: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	var collected metricdata.ResourceMetrics
+	if err = reader.Collect(t.Context(), &collected); err != nil {
+		t.Fatalf("collecting metrics: %v", err)
+	}
+	published := map[string]int64{}
+	for _, scope := range collected.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			if sum, ok := m.Data.(metricdata.Sum[int64]); ok && m.Name == "gitlab_mcp.upstream.requests" {
+				for _, point := range sum.DataPoints {
+					address, _ := point.Attributes.Value("server.address")
+					published[address.AsString()] = point.Value
+				}
+			}
+		}
+	}
+	if got := upstreamRequestTotal(published); got < before+1 {
+		t.Errorf("the collector was given %d upstream requests, want at least the %d counted before plus the one sent", got, before)
+	}
+	if strings.Contains(logged.String(), "not being exported") {
+		t.Errorf("a registration that succeeded logged a failure: %s", logged.String())
+	}
+}
+
+// upstreamRequestTotal is every request a reading holds, whatever address it
+// was counted under.
+func upstreamRequestTotal(reading map[string]int64) int64 {
+	var total int64
+	for _, count := range reading {
+		total += count
+	}
+	return total
+}
+
+// TestObserveUpstreamRequests_ARefusedRegistration_IsLoggedNotReturned covers
+// the failure the registration keeps to itself. A provider that refuses the
+// counter costs that series and nothing else, so the server still starts;
+// what must not happen is the loss going unsaid, since an absent series reads
+// as a deployment that has not sent GitLab anything.
+func TestObserveUpstreamRequests_ARefusedRegistration_IsLoggedNotReturned(t *testing.T) {
+	refused := errors.New("the provider refused this instrument")
+	previous := otel.GetMeterProvider()
+	otel.SetMeterProvider(refusingCounterMeterProvider{MeterProvider: noopmetric.NewMeterProvider(), err: refused})
+	t.Cleanup(func() { otel.SetMeterProvider(previous) })
+	logged := testutil.CaptureSlog(t)
+
+	observeUpstreamRequests()
+
+	if !strings.Contains(logged.String(), "upstream request metrics are not being exported") ||
+		!strings.Contains(logged.String(), refused.Error()) {
+		t.Errorf("the refused registration was not reported with its cause.\nlogged: %s", logged.String())
 	}
 }

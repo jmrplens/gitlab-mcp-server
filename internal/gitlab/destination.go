@@ -894,7 +894,10 @@ type destinationPools struct {
 // It sits at the bottom of the chain, immediately around the base transports,
 // so the stamp and the routing are structurally the last things that happen
 // before the dial rather than something a later wrapper could be inserted in
-// front of.
+// front of. That is also why the upstream count is taken here ([sendUpstream]):
+// the API client and the health client both end here, every retry and
+// redirect hop reaches this layer as a request of its own, and a request it
+// refuses unsent never reaches the count.
 type destinationTransport struct {
 	pools  destinationPools
 	client *Client
@@ -912,7 +915,7 @@ func (t *destinationTransport) RoundTrip(req *http.Request) (*http.Response, err
 		// Tier A alone allows a private address, so an unstamped request
 		// belongs with the permissive pool: nothing there was dialed under an
 		// answer stricter than the one its own dial would get.
-		return t.pools.permissive.RoundTrip(req)
+		return sendUpstream(t.pools.permissive, req)
 	}
 	target := dialTarget{policy: policy, offOrigin: !policy.coversInstance(req.URL)}
 	pool := t.pools.strict
@@ -929,7 +932,7 @@ func (t *destinationTransport) RoundTrip(req *http.Request) (*http.Response, err
 			return nil, refuseUnsent(req, err)
 		}
 	}
-	resp, err := pool.RoundTrip(req.WithContext(withDialTarget(req.Context(), target)))
+	resp, err := sendUpstream(pool, req.WithContext(withDialTarget(req.Context(), target)))
 	// No err != nil beside it: errors.Is is false for nil, and every other
 	// dial error goes back as it came, *net.OpError included, so client-go
 	// keeps retrying what is worth retrying.

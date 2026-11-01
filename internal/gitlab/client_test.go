@@ -617,8 +617,8 @@ func skipsVerification(transport *http.Transport) bool {
 //
 // It must be one pair per process, since the connection pool is why the
 // transports are shared at all, and its permissive half must be the transport
-// [HTTPTransport] lends, so that an unstamped borrower keeps the pool it
-// always had.
+// [HTTPTransport] lends under the upstream count, so that an unstamped
+// borrower keeps the pool it always had.
 func TestBuildDestinationPools_Verified_OnePairSharedAndLent(t *testing.T) {
 	permissive, strict := destinationPoolTransports(t, buildDestinationPools(false))
 
@@ -626,8 +626,8 @@ func TestBuildDestinationPools_Verified_OnePairSharedAndLent(t *testing.T) {
 	if again.permissive != permissive || again.strict != strict {
 		t.Error("buildDestinationPools(false) built a fresh pair; the connection pools must be shared")
 	}
-	if HTTPTransport(false) != permissive {
-		t.Error("HTTPTransport(false) is not the shared permissive pool, so an unstamped borrower moved pools")
+	if lent, ok := HTTPTransport(false).(upstreamCountedTransport); !ok || lent.base != permissive {
+		t.Error("HTTPTransport(false) is not the shared permissive pool under the upstream count, so an unstamped borrower moved pools")
 	}
 	if skipsVerification(permissive) || skipsVerification(strict) {
 		t.Error("a shared pool skips certificate verification")

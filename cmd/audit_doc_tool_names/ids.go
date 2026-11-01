@@ -63,6 +63,7 @@ var allowedIDs = map[string]string{
 	"project.security_setting": "GitLab's own entity name, quoted in upstream-bugs.md as the thing the endpoint answers with",
 	"resources.subscribe":      "the MCP method, spelled with a dot by the gateway configuration the MCP gateways page quotes",
 	"result.content":           "a jq path into a JSON-RPC response, in the CI/CD examples",
+	"server.address":           "the OpenTelemetry attribute the upstream request count and the GitLab call duration name the host by",
 	"server.name":              "the io.modelcontextprotocol.server.name image label the registry validates ownership through",
 	"server.type":              "a key of the .mcpb manifest, whose value says the bundle carries a binary",
 	"stats.tools":              "an Astro binding into site/src/data/stats.json, interpolated into a sentence",

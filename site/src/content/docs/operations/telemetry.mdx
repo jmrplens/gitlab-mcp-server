@@ -460,6 +460,7 @@ marks it as an error.
 | `mcp.server.operation.duration`        | `s`          | how long requests take, by method, domain and, where the tool name is kept, action                                  |
 | `mcp.client.operation.duration`        | `s`          | how long this server waits on the client for what it initiates (elicitation, sampling, `roots/list`, notifications) |
 | `http.client.request.duration`         | `s`          | how long GitLab takes                                                                                               |
+| `gitlab_mcp.upstream.requests`         | `{request}`  | how many requests the process has sent GitLab, retries and redirect hops included, by `server.address`              |
 | `mcp.server.session.duration`          | `s`          | how long a client stays connected (stdio and `--stateless=false`)                                                   |
 | `gitlab_mcp.credential_pool.entries`   | `{entry}`    | how many credentials the pool holds (HTTP mode)                                                                     |
 | `gitlab_mcp.credential_pool.capacity`  | `{entry}`    | how many it may hold, which is `--max-http-clients`                                                                 |
@@ -494,6 +495,24 @@ only when such a header is trusted. All four are exported from startup, zeros
 included. The address refused is deliberately not a dimension: it would make
 the series identify people, and grow without bound under exactly the traffic it
 measures.
+
+`gitlab_mcp.upstream.requests` counts every request the process sends GitLab,
+and every redirect hop it follows from there, on both transports: the tool
+calls' and the watchers', the OAuth verifier's and the health probes', which
+`http.client.request.duration` does not see. Each attempt is one request, so a
+request sent again after a `429` or a server error counts each time, because
+GitLab counts each of them against its own limits
+([What GitLab counts](/gitlab-mcp-server/operations/http-server/#what-gitlab-counts)).
+A request the
+[outbound guard](/gitlab-mcp-server/operations/security/#outbound-connections)
+refused never left the process and is not counted. Its one dimension is
+`server.address`, bounded as on `http.client.request.duration`: a host this
+deployment is configured for is named, and every other one, an instance a
+caller names under `--allow-any-gitlab-url` and a redirect off the instance
+included, is `_OTHER`. A configured host is exported from startup, at zero.
+No credential, user or path is on it: it is the deployment's count, which is
+what GitLab.com's limit of 2,000 requests a minute per IP address is kept
+against, and it limits nothing.
 
 The three credential-pool instruments carry this server's own namespace rather
 than the convention's `mcp.`, because a credential pool is this deployment's

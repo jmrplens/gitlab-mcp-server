@@ -241,10 +241,10 @@ func TestSetMetricServerAddresses_ABlankHostIsNotDeclared(t *testing.T) {
 
 	SetMetricServerAddresses([]string{"", "gitlab.example.com"})
 
-	if got := boundedServerAddress(""); got != OtherServerAddress {
+	if got := BoundedServerAddress(""); got != OtherServerAddress {
 		t.Errorf("an empty host reached the metric as %q, want %q", got, OtherServerAddress)
 	}
-	if got := boundedServerAddress("gitlab.example.com"); got != "gitlab.example.com" {
+	if got := BoundedServerAddress("gitlab.example.com"); got != "gitlab.example.com" {
 		t.Errorf("the declared host beside the blank one was bounded away to %q", got)
 	}
 }
@@ -294,17 +294,17 @@ func TestNewTransport_TheMetricCannotBeMadeToNameACallersHost(t *testing.T) {
 	t.Cleanup(func() { metricServerAddresses.Store(previous) })
 
 	SetMetricServerAddresses([]string{"gitlab.example.com"})
-	if got := boundedServerAddress("gitlab.example.com"); got != "gitlab.example.com" {
+	if got := BoundedServerAddress("gitlab.example.com"); got != "gitlab.example.com" {
 		t.Errorf("a declared host was bounded away to %q", got)
 	}
-	if got := boundedServerAddress("attacker-chosen.example"); got != OtherServerAddress {
+	if got := BoundedServerAddress("attacker-chosen.example"); got != OtherServerAddress {
 		t.Errorf("an undeclared host reached the metric as %q", got)
 	}
 
 	// The free-selection mode declares nothing, and then no host at all may
 	// label the metric: every one is a caller's choice.
 	SetMetricServerAddresses(nil)
-	if got := boundedServerAddress("gitlab.example.com"); got != OtherServerAddress {
+	if got := BoundedServerAddress("gitlab.example.com"); got != OtherServerAddress {
 		t.Errorf("with no declared set, %q reached the metric", got)
 	}
 }
@@ -334,7 +334,7 @@ func TestServerPort_SchemeDefaultsCollapse(t *testing.T) {
 // bounding rule exists to keep open.
 //
 // The half that refuses an undeclared host is checked directly on
-// boundedServerAddress; this is the other half, and it has to run through a
+// BoundedServerAddress; this is the other half, and it has to run through a
 // real round trip because that is the only place the pair is assembled. A host
 // the operator declared is carried verbatim, with its port, which is what makes
 // the instrument useful to a deployment publishing more than one instance: two

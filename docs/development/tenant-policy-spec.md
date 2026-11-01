@@ -1169,12 +1169,18 @@ at most three upstream requests, and one tool call the bucket charges once may s
 several, which GitLab counts against the user while the bucket sees one (F-32). Those
 four rows and the two that resolve the entry and the tenant (`IDN-002`, `IDN-008`),
 where no allowance is keyed on the tenant, record the issue and carry none of the
-five. Four
-more
-have been carried by no row since the register landed, because each records something no
-row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
-message the SDK gives the server no way to send, and F-23 and F-27 stale statements,
-which issue 960 corrected in the comments and documents that made them.
-`TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue` holds both sets: a finding no
-row carries fails unless it is one of those four or a row records its issue in `Decided`,
-and the answered set is named, so a finding dropped from a row by mistake fails too.
+five. F-18 is answered by issue 955 as well, with the observe-only counter the same
+decision named. GitLab.com keeps a budget per IP address that every tenant spends through
+the deployment's egress address, and that no row records because nothing here is keyed on
+it; the process now counts every request it sends upstream, retries and redirect hops
+included, from the API client, the OAuth verifier and the health probes alike, keyed on the
+process and on the bounded server address (`INV-018`), and exports the count as
+`gitlab_mcp.upstream.requests`. The counter bounds nothing, so no row was added for it:
+F-18 was carried by no row before and is carried by none now, and is answered by the issue
+the rows above record. Three more have been carried by no row since the register landed,
+because each records something no row decides: F-24 a message the SDK gives the server no
+way to send, and F-23 and F-27 stale statements, which issue 960 corrected in the comments
+and documents that made them. `TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue`
+holds both sets: a finding no row carries fails unless it is one of those three or a row
+records its issue in `Decided`, and the answered set is named, so a finding dropped from a
+row by mistake fails too.
