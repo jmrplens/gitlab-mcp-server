@@ -185,6 +185,7 @@ for the fork, branch, fix, test and MR workflow.
   - [gobco type-checks every file of a package directory, whatever its build constraints say](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say)
   - [gobco cannot instrument a package whose export_test.go feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package)
   - [gobco bridges a black box test package through an import it may not find](#gobco-bridges-a-black-box-test-package-through-an-import-it-may-not-find)
+  - [gobco drops GOPATH from its go test, which then reads another module cache](#gobco-drops-gopath-from-its-go-test-which-then-reads-another-module-cache)
   - [go/types reads an imported generic instance another checker is expanding](#gotypes-reads-an-imported-generic-instance-another-checker-is-expanding)
 
 ## Writing an entry
@@ -414,6 +415,7 @@ readable without opening the tracker:
 | 150 | client-go | [Routes this server or its e2e suite sends have no client-go method, or one that takes no options](#routes-this-server-or-its-e2e-suite-sends-have-no-client-go-method-or-one-that-takes-no-options) | No | No | No | No | Yes, the Orbit reads of the MCP endpoint, the e2e fixture and the model registry scenario send their own request, and eighteen paginated lists write their query through a request option |
 | 151 | client-go | [`UploadRequest` writes only the first value of each field](#uploadrequest-writes-only-the-first-value-of-each-field) | No | No | No | No | Yes, the project and group creates send a list beside an avatar as one comma-separated value, and the group create refuses its alert list beside one; a unit test pins the behaviour |
 | 152 | gitlab-org/gitlab | [A merge request creation can be refused for a branch that exists](#a-merge-request-creation-can-be-refused-for-a-branch-that-exists-from-a-stale-branch-name-cache) | Yes, by GitLab, [gitlab-org/gitlab#506430](https://gitlab.com/gitlab-org/gitlab/-/issues/506430), open | No | No | No; it failed the e2e suite, not a tool | Yes, in the e2e fixture: `fixture.NewMergeRequest` tries the refusal again once the branch name cache lists the branch |
+| 153 | gobco | [gobco drops `GOPATH` from the `go test` it runs](#gobco-drops-gopath-from-its-go-test-which-then-reads-another-module-cache) | No | No | No | No; where `GOPATH` is not the default, that `go test` reads another module cache and needs the network to fill it | Yes, `scripts/coverage-conditions.sh` hands gobco `GOMODCACHE` as `go env` reports it, until a gobco release passes `GOPATH` on |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -17407,14 +17409,14 @@ branch nor a merged results pipeline.
   both packages and fail on a condition left one-way in a file Linux does not
   build. It retires when a gobco release carries the fix and the pin,
   `github.com/rillig/gobco@v1.3.4` in `scripts/coverage-conditions.sh`
-  (line 180), moves to it. That change, once the release exists, does four
-  things. It moves the pin and measures `test/e2e/internal/harness` directly
-  with `TAGS=e2e`, which under the pull request's build gave 863 of 1162
-  conditions; once measurable, the harness is held to the gate like any
+  (its `GOBCO` constant), moves to it. That change, once the release exists,
+  does four things. It moves the pin and measures
+  `test/e2e/internal/harness` directly with `TAGS=e2e`, which under the pull
+  request's build gave 863 of 1162 conditions; once measurable, the harness is held to the gate like any
   package a change touches, which means closing its one-way conditions. It
   retires the staged module copy and its constraint blanking from
   `scripts/coverage-conditions.sh`, with the text that describes them: the
-  script's header (line 108 says the harness waits for gobco to honour build
+  script's header (which says the harness waits for gobco to honour build
   tags), the staging note of `scripts/check-spec-conditions.sh`, and the two
   paragraphs of `docs/development/testing/README.md` that begin "gobco reads
   a package as every `.go` file" and "The e2e harness stays unmeasured until
@@ -17625,6 +17627,59 @@ FAIL	github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/freezeperiods [setu
 **How we found it**: the first whole-tree measurement, on 26 October 2026,
 reported the three packages as not measured, and reading
 `writeGobcoBlackBox` gave the cause.
+
+### gobco drops GOPATH from its go test, which then reads another module cache
+
+- **Reported**: no. Read on 2026-10-31, gobco's tracker has no issue about it.
+- **In review**: no.
+- **Merged**: no. No gobco release has been tagged since v1.3.4 (2024-03-08),
+  and `master` at `7a09995`, read on 2026-10-31, drops the variable the same
+  way.
+- **Blocking**: no. Where `GOPATH` is the default, `$HOME/go`, as on CI's
+  runners, the `go test` gobco runs reads the module cache the rest of the job
+  reads. Where it names another directory, that `go test` reads the default
+  cache instead, downloads every dependency it does not find there, and fails
+  without the network, which is what running gobco from `PATH`
+  ([issue 1515](https://github.com/jmrplens/gitlab-mcp-server/issues/1515))
+  is meant to need none of.
+- **Workaround**: yes, since 2026-10-31, with the change for issue 1515:
+  `scripts/coverage-conditions.sh` reads `GOMODCACHE` from `go env` and
+  exports it to gobco, which passes every variable but `GOPATH` on, so its
+  `go test` reads the cache `go mod download` filled whatever `GOPATH` says.
+  It retires when a gobco release passes `GOPATH` on for a package in a
+  module and the pin of
+  [entry 73](#gobco-type-checks-every-file-of-a-package-directory-whatever-its-build-constraints-say)
+  moves to it.
+
+**Where**: `rillig/gobco` at `v1.3.4`, `goTest.env` (`main.go`, lines 458 to
+478), and `master` at `7a09995` alike. `runGoTest` hands it no `GOPATH` for a
+package in a module, and it then leaves `GOPATH` out of the environment of
+the `go test` it runs; for a package in `GOPATH` mode it sets a `GOPATH` of
+its own.
+
+**What**: the go command takes the module cache from `GOMODCACHE`, and from
+`GOPATH` as `$GOPATH/pkg/mod` when that is unset, so with `GOPATH` gone the
+`go test` takes the cache below `$HOME/go`. The official `golang` image sets
+`GOPATH=/go` with `HOME=/root`, and in it, with `/go/pkg/mod` filled and the
+module proxy off, `GOPROXY=off gobco ./internal/config` fails before any test
+runs:
+
+```text
+go: downloading github.com/joho/godotenv v1.5.1
+# github.com/jmrplens/gitlab-mcp-server/v3/internal/config
+env_file.go:40:2: module lookup disabled by GOPROXY=off
+FAIL	github.com/jmrplens/gitlab-mcp-server/v3/internal/config [setup failed]
+FAIL
+go test ./internal/config: exit status 1
+```
+
+The same run with `GOMODCACHE=/go/pkg/mod` reports
+`Condition coverage: 402/402`.
+
+**How we found it**: checking the change for issue 1515 against the real go
+and gobco, in that image: with gobco on `PATH` and the module proxy
+unreachable, a run still failed, in the `go test` gobco runs, where every run
+through `go run` had failed on the proxy before reaching it.
 
 ### go/types reads an imported generic instance another checker is expanding
 

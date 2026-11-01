@@ -1153,7 +1153,9 @@ jobs:
       # the deadline it hands gremlins to the run gremlins actually times.
       # scripts/coverage_conditions_sh_test.py drives the condition recipe,
       # scripts/coverage-conditions.sh, against a stand-in go and gobco, and
-      # holds it to staging one build context for gobco to read.
+      # holds it to staging one build context for gobco to read, to measuring
+      # with the network unreachable once its --install has put gobco on PATH,
+      # and the workflows to installing gobco before they measure.
       # scripts/check_spec_conditions_sh_test.py runs the condition gate over
       # action specs, scripts/check-spec-conditions.sh, in a throwaway git
       # repository against a stand-in recipe, and holds the reason it gives a
@@ -1504,6 +1506,20 @@ jobs:
       # cmd/server on Windows. A Go runtime crash of issue 467 fails this step
       # the way it fails the suite's first run, with a "fatal error:" line in
       # the log, and is answered the same way: rerun the failed job.
+      #
+      # gobco is installed once, by the step just before it, so the step runs
+      # it from PATH. The script would otherwise run it through `go run`, which
+      # asks the module proxy on every run, and a macOS runner that lost name
+      # resolution failed this step twice in two days without measuring
+      # anything (issue 1515). The install goes through the script, which holds
+      # the one pin of gobco's release, tries go install three times with a
+      # pause, and fails when PATH does not then find that release. Its
+      # timeout bounds three attempts that each wait on a resolver.
+      - name: Install gobco
+        if: matrix.os != 'ubuntu-latest'
+        shell: bash
+        timeout-minutes: 5
+        run: bash scripts/coverage-conditions.sh --install
       - name: Condition coverage of the platform halves
         if: matrix.os != 'ubuntu-latest'
         shell: bash
