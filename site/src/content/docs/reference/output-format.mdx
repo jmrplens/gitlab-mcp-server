@@ -65,10 +65,10 @@ An address shown as itself, such as the `URL` row of a card, is written once, as
 - **URL**: <https://gitlab.example.com/group/project/-/issues/42>
 ```
 
-Both halves of a link are escaped, so a title cannot close the link or open one of its own, and an address that is not `http` or `https` is shown as code instead of being linked. An address carrying a character an autolink cannot hold (a space, a line break, `<`, `>` or a pipe) is written in the long form instead, with both halves escaped. A list whose table carries links opens its next steps with one more line, written for the model:
+Both halves of a link are escaped, so a title cannot close the link or open one of its own, and an address that is not `http` or `https` is shown as code instead of being linked. An address carrying a character an autolink cannot hold (a space, a tab, a line break, `<`, `>` or a pipe) is written in the long form instead, with both halves escaped. A list whose table carries links opens its next steps with one more line, written for the model:
 
 ```text
-When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab
+When presenting these results, always include the clickable links from the table so the user can navigate to GitLab
 ```
 
 The Markdown leaves avatars out: a card about a user, a topic or an achievement does not show the picture's address, and `structuredContent` carries it as `avatar_url`, as GitLab sent it. An answer that is nothing but the avatar keeps it: `user.avatar_get`, and `user.upload_avatar`, which GitLab answers with the avatar alone.
@@ -254,7 +254,7 @@ Page 1 of 15 | 45 items total | 3 per page
 
 ---
 💡 **Next steps:**
-- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab
+- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab
 - Use action 'branch.get' to see one branch in full
 - Use action 'branch.create' to create a new branch
 - Use action 'branch.protect' to protect a branch
@@ -265,7 +265,7 @@ The `structuredContent` of the same call, with each branch's head `commit` left 
 ```json
 {
   "next_steps": [
-    "When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab",
+    "When presenting these results, always include the clickable links from the table so the user can navigate to GitLab",
     "Use action 'branch.get' to see one branch in full",
     "Use action 'branch.create' to create a new branch",
     "Use action 'branch.protect' to protect a branch"

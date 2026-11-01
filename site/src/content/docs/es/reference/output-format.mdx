@@ -65,10 +65,10 @@ Una dirección que se muestra a sí misma, como la fila `URL` de una ficha, se e
 - **URL**: <https://gitlab.example.com/group/project/-/issues/42>
 ```
 
-Las dos mitades de un enlace se escapan, así que un título no puede cerrar el enlace ni abrir uno propio, y una dirección que no es `http` ni `https` se muestra como código en lugar de enlazarse. Una dirección con un carácter que un autoenlace no admite (un espacio, un salto de línea, `<`, `>` o una barra vertical) se escribe en la forma larga, con las dos mitades escapadas. Una lista cuya tabla lleva enlaces abre sus próximos pasos con una línea más, escrita para el modelo:
+Las dos mitades de un enlace se escapan, así que un título no puede cerrar el enlace ni abrir uno propio, y una dirección que no es `http` ni `https` se muestra como código en lugar de enlazarse. Una dirección con un carácter que un autoenlace no admite (un espacio, un tabulador, un salto de línea, `<`, `>` o una barra vertical) se escribe en la forma larga, con las dos mitades escapadas. Una lista cuya tabla lleva enlaces abre sus próximos pasos con una línea más, escrita para el modelo:
 
 ```text
-When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab
+When presenting these results, always include the clickable links from the table so the user can navigate to GitLab
 ```
 
 El Markdown deja fuera los avatares: la ficha de un usuario, un tema o un logro no muestra la dirección de la imagen, y `structuredContent` la lleva como `avatar_url`, tal como la envió GitLab. Una respuesta que no es más que el avatar lo conserva: `user.avatar_get`, y `user.upload_avatar`, a cuya llamada GitLab responde solo con el avatar.
@@ -254,7 +254,7 @@ Page 1 of 15 | 45 items total | 3 per page
 
 ---
 💡 **Next steps:**
-- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab
+- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab
 - Use action 'branch.get' to see one branch in full
 - Use action 'branch.create' to create a new branch
 - Use action 'branch.protect' to protect a branch
@@ -265,7 +265,7 @@ El `structuredContent` de la misma llamada, sin el `commit` de la punta de cada 
 ```json
 {
   "next_steps": [
-    "When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab",
+    "When presenting these results, always include the clickable links from the table so the user can navigate to GitLab",
     "Use action 'branch.get' to see one branch in full",
     "Use action 'branch.create' to create a new branch",
     "Use action 'branch.protect' to protect a branch"
