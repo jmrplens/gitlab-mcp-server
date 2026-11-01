@@ -285,7 +285,7 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/mcpb_launch_sh_test.py":                   {category: scriptPortPending, item: 15},
 	"scripts/mcpb_manifest_test.py":                    {category: scriptPortPending, item: 15},
 	"scripts/npm_cli_js_test.py":                       {category: scriptPortPending, item: 15},
-	"scripts/packaging_checksums_test.py":              {category: scriptPortPending, item: 1},
+	"scripts/packaging_checksums_test.py":              {category: scriptPortPending, item: 13},
 	"scripts/publish_npm_sh_test.py":                   {category: scriptPortPending, item: 15},
 	"scripts/publish_pypi_sh_test.py":                  {category: scriptPortPending, item: 15},
 	"scripts/release-order.sh":                         {category: scriptPortPending, item: 1},

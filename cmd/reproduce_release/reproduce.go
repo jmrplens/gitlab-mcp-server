@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/releaseassets"
 )
 
 // reproduce rebuilds every binary a release published from a clone of the
@@ -45,7 +47,7 @@ func reproduce(ctx context.Context, o options) (report, error) {
 		return report{}, fmt.Errorf("checksum name_template: %w", err)
 	}
 	listPath := filepath.Join(o.published, name)
-	sums, err := readChecksums(listPath)
+	sums, err := releaseassets.ReadChecksums(listPath)
 	if err != nil {
 		return report{}, err
 	}
@@ -92,7 +94,7 @@ func shortCommitHint(rep report, given string, rel release, f fields) []string {
 // listing them, and where the rebuilt binaries go.
 type releaseRun struct {
 	src, commit, published, out string
-	sums                        checksums
+	sums                        releaseassets.Checksums
 }
 
 // thin rebuilds one binary with the toolchain the published one records,
@@ -126,7 +128,7 @@ func (r releaseRun) fat(fr fatRecipe, built map[string][]byte) (outcome, error) 
 	if err != nil {
 		return outcome{}, err
 	}
-	order, err := readFatOrder(published)
+	order, err := releaseassets.UniversalOrder(published)
 	if err != nil {
 		return outcome{}, fmt.Errorf("the published %s %w", fr.asset, err)
 	}
@@ -151,9 +153,9 @@ func (r releaseRun) fat(fr fatRecipe, built map[string][]byte) (outcome, error) 
 // unbuiltNote names what the checksum file lists that no recipe rebuilt,
 // which for this repository is the SBOMs, the notices and the OpenVEX
 // document, so a reader sees what the comparison did not cover.
-func unbuiltNote(sums checksums, outcomes []outcome) []string {
+func unbuiltNote(sums releaseassets.Checksums, outcomes []outcome) []string {
 	var rest []string
-	for name := range sums.digests {
+	for name := range sums.Digests {
 		if !slices.ContainsFunc(outcomes, func(o outcome) bool { return o.asset == name }) {
 			rest = append(rest, name)
 		}
