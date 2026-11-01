@@ -39423,8 +39423,11 @@
                   "type": "string"
                 },
                 "height": {
-                  "description": "Image height in pixels (position_type=image).",
-                  "type": "integer"
+                  "description": "Image height in pixels. Required for position_type=image.",
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
                 },
                 "line_range": {
                   "additionalProperties": false,
@@ -39509,11 +39512,11 @@
                   "type": "integer"
                 },
                 "old_path": {
-                  "description": "File path before the change (for modified/deleted files)",
+                  "description": "File path before the change (for modified/deleted files). Required for position_type=file.",
                   "type": "string"
                 },
                 "position_type": {
-                  "description": "Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment.",
+                  "description": "Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
                   "enum": [
                     "text",
                     "image",
@@ -39526,16 +39529,25 @@
                   "type": "string"
                 },
                 "width": {
-                  "description": "Image width in pixels (position_type=image).",
-                  "type": "integer"
+                  "description": "Image width in pixels. Required for position_type=image.",
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
                 },
                 "x": {
-                  "description": "X coordinate of the comment on the image (position_type=image).",
-                  "type": "number"
+                  "description": "X coordinate of the comment on the image. Required for position_type=image.",
+                  "type": [
+                    "null",
+                    "number"
+                  ]
                 },
                 "y": {
-                  "description": "Y coordinate of the comment on the image (position_type=image).",
-                  "type": "number"
+                  "description": "Y coordinate of the comment on the image. Required for position_type=image.",
+                  "type": [
+                    "null",
+                    "number"
+                  ]
                 }
               },
               "required": [
@@ -40030,8 +40042,11 @@
                   "type": "string"
                 },
                 "height": {
-                  "description": "Image height in pixels. Only for position_type 'image'.",
-                  "type": "integer"
+                  "description": "Image height in pixels. Required for position_type 'image', and only for it.",
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
                 },
                 "line_range": {
                   "additionalProperties": false,
@@ -40108,11 +40123,11 @@
                   "type": "integer"
                 },
                 "old_path": {
-                  "description": "File path before the change (for modified/deleted files)",
+                  "description": "File path before the change (for modified/deleted files). Required for position_type 'file'.",
                   "type": "string"
                 },
                 "position_type": {
-                  "description": "Position type: 'text' for code diffs (default) or 'image' for image diffs.",
+                  "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
                   "type": "string"
                 },
                 "start_sha": {
@@ -40120,16 +40135,25 @@
                   "type": "string"
                 },
                 "width": {
-                  "description": "Image width in pixels. Only for position_type 'image'.",
-                  "type": "integer"
+                  "description": "Image width in pixels. Required for position_type 'image', and only for it.",
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
                 },
                 "x": {
-                  "description": "X coordinate of the comment on an image diff. Only for position_type 'image'.",
-                  "type": "number"
+                  "description": "X coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+                  "type": [
+                    "null",
+                    "number"
+                  ]
                 },
                 "y": {
-                  "description": "Y coordinate of the comment on an image diff. Only for position_type 'image'.",
-                  "type": "number"
+                  "description": "Y coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+                  "type": [
+                    "null",
+                    "number"
+                  ]
                 }
               },
               "required": [
@@ -40520,8 +40544,11 @@
                   "type": "string"
                 },
                 "height": {
-                  "description": "Image height in pixels. Only for position_type 'image'.",
-                  "type": "integer"
+                  "description": "Image height in pixels. Required for position_type 'image', and only for it.",
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
                 },
                 "line_range": {
                   "additionalProperties": false,
@@ -40598,11 +40625,11 @@
                   "type": "integer"
                 },
                 "old_path": {
-                  "description": "File path before the change (for modified/deleted files)",
+                  "description": "File path before the change (for modified/deleted files). Required for position_type 'file'.",
                   "type": "string"
                 },
                 "position_type": {
-                  "description": "Position type: 'text' for code diffs (default) or 'image' for image diffs.",
+                  "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
                   "type": "string"
                 },
                 "start_sha": {
@@ -40610,16 +40637,25 @@
                   "type": "string"
                 },
                 "width": {
-                  "description": "Image width in pixels. Only for position_type 'image'.",
-                  "type": "integer"
+                  "description": "Image width in pixels. Required for position_type 'image', and only for it.",
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
                 },
                 "x": {
-                  "description": "X coordinate of the comment on an image diff. Only for position_type 'image'.",
-                  "type": "number"
+                  "description": "X coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+                  "type": [
+                    "null",
+                    "number"
+                  ]
                 },
                 "y": {
-                  "description": "Y coordinate of the comment on an image diff. Only for position_type 'image'.",
-                  "type": "number"
+                  "description": "Y coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+                  "type": [
+                    "null",
+                    "number"
+                  ]
                 }
               },
               "required": [
