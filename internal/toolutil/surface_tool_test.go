@@ -220,7 +220,7 @@ func TestRegisterSurfaceToolFromSpec_RouteOwnPendingInput_IsReturnedAsResult(t *
 	var pending, completed atomic.Int32
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	route := RouteFunc(func(ctx context.Context, _ surfaceToolTestInput) (DeleteOutput, error) {
-		flow, err := elicitation.FlowFromRequest(RequestFromContext(ctx))
+		flow, err := elicitation.FlowFromRequest(ctx, RequestFromContext(ctx))
 		if err != nil {
 			return DeleteOutput{}, err
 		}

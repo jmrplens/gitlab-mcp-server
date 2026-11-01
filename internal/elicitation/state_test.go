@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -34,12 +35,15 @@ import (
 // What it broke is the integrity requirement, and the meaning of the gate.
 func TestDecodeState_RefusesWhatThisServerDidNotIssue(t *testing.T) {
 	now := time.Now()
-	const digest = "the-call"
+	bound := stateBinding{request: "the-call", principal: "entry-owner"}
 
-	valid, err := encodeState(map[string]answerRecord{"confirm": {Action: "accept"}}, digest, now)
+	valid, err := encodeState(map[string]answerRecord{"confirm": {Action: "accept"}}, bound, now)
 	if err != nil {
 		t.Fatalf("encodeState: %v", err)
 	}
+	prefix, body, bind, seal := wireParts(t, valid)
+	edited := base64.RawURLEncoding.EncodeToString([]byte(`{"v":2,"exp":99999999999,"req":"the-call","answers":{"confirm":{"action":"accept"}}}`))
+	otherBind := bindPayload(body, "another-entry")
 
 	tests := []struct {
 		name  string
@@ -52,25 +56,32 @@ func TestDecodeState_RefusesWhatThisServerDidNotIssue(t *testing.T) {
 		},
 		{
 			name:  "the right shape with a forged signature",
-			state: "v1." + strings.Split(valid, ".")[1] + ".Zm9yZ2VkLW1hYy12YWx1ZQ",
+			state: strings.Join([]string{prefix, body, bind, "Zm9yZ2VkLW1hYy12YWx1ZQ"}, "."),
 		},
 		{
 			name:  "a payload edited after signing",
-			state: "v1." + base64.RawURLEncoding.EncodeToString([]byte(`{"v":1,"exp":99999999999,"req":"the-call","answers":{"confirm":{"action":"accept"}}}`)) + "." + strings.Split(valid, ".")[2],
+			state: strings.Join([]string{prefix, edited, bind, seal}, "."),
+		},
+		{
+			// The seal covers the binding as well as the payload, so a binding
+			// moved from another principal's state is an edit, not a state
+			// issued to someone else.
+			name:  "a binding edited after signing",
+			state: strings.Join([]string{prefix, body, otherBind, seal}, "."),
 		},
 		{
 			name:  "no signature at all",
-			state: "v1." + strings.Split(valid, ".")[1],
+			state: strings.Join([]string{prefix, body, bind}, "."),
 		},
 		{
 			name:  "empty",
-			state: "..",
+			state: "...",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			answers, decodeErr := decodeState(tt.state, digest, now)
+			answers, decodeErr := decodeState(tt.state, bound, now)
 			if decodeErr == nil {
 				t.Fatalf("accepted state this server did not issue, yielding %v", answers)
 			}
@@ -81,7 +92,7 @@ func TestDecodeState_RefusesWhatThisServerDidNotIssue(t *testing.T) {
 	}
 
 	t.Run("state this server issued is accepted", func(t *testing.T) {
-		answers, decodeErr := decodeState(valid, digest, now)
+		answers, decodeErr := decodeState(valid, bound, now)
 		if decodeErr != nil {
 			t.Fatalf("refused its own state: %v", decodeErr)
 		}
@@ -109,7 +120,7 @@ func TestDecodeState_BindsStateToItsOwnCall(t *testing.T) {
 	now := time.Now()
 	answers := map[string]answerRecord{"title": {Action: "accept", Content: map[string]any{"title": "t"}}}
 
-	issued, err := encodeState(answers, requestDigest("gitlab_interactive_issue_create", []byte(`{"project_id":"7"}`)), now)
+	issued, err := encodeState(answers, stateBinding{request: requestDigest("gitlab_interactive_issue_create", []byte(`{"project_id":"7"}`))}, now)
 	if err != nil {
 		t.Fatalf("encodeState: %v", err)
 	}
@@ -138,7 +149,7 @@ func TestDecodeState_BindsStateToItsOwnCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, decodeErr := decodeState(issued, tt.digest, tt.at)
+			got, decodeErr := decodeState(issued, stateBinding{request: tt.digest}, tt.at)
 			if decodeErr != nil {
 				t.Fatalf("err = %v, want the flow to re-prompt rather than fail", decodeErr)
 			}
@@ -149,7 +160,7 @@ func TestDecodeState_BindsStateToItsOwnCall(t *testing.T) {
 	}
 
 	t.Run("the call it was issued for still gets its answers", func(t *testing.T) {
-		got, decodeErr := decodeState(issued, requestDigest("gitlab_interactive_issue_create", []byte(`{"project_id":"7"}`)), now.Add(time.Minute))
+		got, decodeErr := decodeState(issued, stateBinding{request: requestDigest("gitlab_interactive_issue_create", []byte(`{"project_id":"7"}`))}, now.Add(time.Minute))
 		if decodeErr != nil {
 			t.Fatalf("decodeState: %v", decodeErr)
 		}
@@ -157,6 +168,143 @@ func TestDecodeState_BindsStateToItsOwnCall(t *testing.T) {
 			t.Errorf("got %d answers, want the one recorded", len(got))
 		}
 	})
+}
+
+// TestDecodeState_BindsStateToThePrincipalItWasIssuedUnder pins the binding
+// issue 953 added beside the call's.
+//
+// "Servers SHOULD bind the state to the user session or principal." On the HTTP
+// server the credentials of one configuration shape share one server, and so
+// the key this process signs with, so state issued to one caller verified for
+// any other for its whole life: presented with the same tool and arguments, a
+// second credential was handed the answers the first had given. The principal
+// is the pool entry a request was bound to, which every round of one flow
+// shares and no other credential does.
+//
+// As with a foreign call, none of these is an error. State issued to someone
+// else is not a forgery, and the caller presenting it has answered nothing yet,
+// so the flow asks its questions again.
+func TestDecodeState_BindsStateToThePrincipalItWasIssuedUnder(t *testing.T) {
+	now := time.Now()
+	const digest = "one-call"
+	answers := map[string]answerRecord{"title": {Action: "accept", Content: map[string]any{"title": "t"}}}
+
+	issued, err := encodeState(answers, stateBinding{request: digest, principal: "entry-first"}, now)
+	if err != nil {
+		t.Fatalf("encodeState: %v", err)
+	}
+	unbound, err := encodeState(answers, stateBinding{request: digest}, now)
+	if err != nil {
+		t.Fatalf("encodeState: %v", err)
+	}
+
+	for _, tt := range []struct {
+		name        string
+		state       string
+		principal   string
+		wantAnswers int
+	}{
+		{name: "presented by the principal it was issued under", state: issued, principal: "entry-first", wantAnswers: 1},
+		{name: "presented by another principal", state: issued, principal: "entry-second"},
+		{name: "presented by a principal the issuer's extends", state: issued, principal: "entry-first-and-more"},
+		{name: "presented with no principal", state: issued, principal: ""},
+		{name: "issued with no principal, presented by one", state: unbound, principal: "entry-first"},
+		{name: "issued and presented with no principal", state: unbound, principal: "", wantAnswers: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, decodeErr := decodeState(tt.state, stateBinding{request: digest, principal: tt.principal}, now)
+			if decodeErr != nil {
+				t.Fatalf("err = %v, want the flow to re-prompt rather than fail", decodeErr)
+			}
+			if got == nil {
+				t.Fatal("decodeState returned a nil map; no answers is a result, not an absence")
+			}
+			if len(got) != tt.wantAnswers {
+				t.Errorf("decodeState returned %d answers, want %d", len(got), tt.wantAnswers)
+			}
+		})
+	}
+}
+
+// TestEncodeState_CarriesNoPrincipalOnTheWire pins where the principal is
+// bound: inside the MACs, never in anything a client can read.
+//
+// The state travels to the client and back, and the principal is the pool
+// entry's owner token, which a shared server tells its tenants apart by. Put on
+// the wire in any readable form, even a keyed digest of it, it would hand every
+// client a stable identifier of the entry it ran as. So the payload of a state
+// is the same bytes whichever principal it was issued under, the owner token
+// appears nowhere in the wire form, and what does differ, the binding and the
+// seal, are MACs that change with the payload they cover.
+func TestEncodeState_CarriesNoPrincipalOnTheWire(t *testing.T) {
+	now := time.Now()
+	const owner = "an-owner-token-that-must-not-travel"
+	answers := map[string]answerRecord{"title": {Action: "accept", Content: map[string]any{"title": "t"}}}
+
+	issued, err := encodeState(answers, stateBinding{request: "one-call", principal: owner}, now)
+	if err != nil {
+		t.Fatalf("encodeState: %v", err)
+	}
+	other, err := encodeState(answers, stateBinding{request: "one-call", principal: "another-owner"}, now)
+	if err != nil {
+		t.Fatalf("encodeState: %v", err)
+	}
+
+	_, body, bind, seal := wireParts(t, issued)
+	_, otherBody, otherBind, otherSeal := wireParts(t, other)
+	payload, err := base64.RawURLEncoding.DecodeString(body)
+	if err != nil {
+		t.Fatalf("the payload is not base64: %v", err)
+	}
+
+	t.Run("the payload names the version, the answers, the expiry and the call alone", func(t *testing.T) {
+		var fields map[string]json.RawMessage
+		if unmarshalErr := json.Unmarshal(payload, &fields); unmarshalErr != nil {
+			t.Fatalf("the payload is not a JSON object: %v", unmarshalErr)
+		}
+		var keys []string
+		for key := range fields {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+		if want := []string{"answers", "exp", "req", "v"}; !slices.Equal(keys, want) {
+			t.Errorf("the payload carries %v, want only %v", keys, want)
+		}
+	})
+	for _, tt := range []struct{ name, text string }{
+		{name: "the owner token appears nowhere in the wire form", text: issued},
+		{name: "the owner token appears nowhere in the decoded payload", text: string(payload)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if strings.Contains(tt.text, owner) {
+				t.Errorf("the owner token travels in %q", tt.text)
+			}
+		})
+	}
+	t.Run("the payload is the same under any principal", func(t *testing.T) {
+		if body != otherBody {
+			t.Errorf("the payload differs between two principals, so it carries something of them:\n%s\n%s", body, otherBody)
+		}
+	})
+	t.Run("the binding and the seal are what differ", func(t *testing.T) {
+		if bind == otherBind || seal == otherSeal {
+			t.Errorf("binding %q/%q and seal %q/%q, want both to differ between two principals", bind, otherBind, seal, otherSeal)
+		}
+	})
+}
+
+// wireParts splits a state of this encoding into its four parts, failing the
+// test on any other shape.
+func wireParts(t *testing.T, state string) (prefix, body, bind, seal string) {
+	t.Helper()
+	parts := strings.Split(state, ".")
+	if len(parts) != 4 {
+		t.Fatalf("state %q has %d parts, want version, payload, binding and seal", state, len(parts))
+	}
+	if want := fmt.Sprintf("v%d", flowStateVersion); parts[0] != want {
+		t.Fatalf("state %q opens with %q, want %q", state, parts[0], want)
+	}
+	return parts[0], parts[1], parts[2], parts[3]
 }
 
 // TestRequestDigest_IgnoresReserialization checks that the binding survives a
@@ -216,18 +364,39 @@ func TestRequestDigest_CanonicalFormThatWillNotEncode_HashesTheArgumentsAsSent(t
 // TestDecodeState_MalformedIsAnIntegrityFailure checks the classification of a
 // state that cannot be parsed at all, which is not the same as one whose
 // version this build does not know.
+//
+// The version is read before anything else, so a state of another encoding is
+// named for its version whatever shape the rest of it has: the three-part
+// encoding of version 1, which bound no principal, is refused as version 1,
+// not as a state with a part missing.
 func TestDecodeState_MalformedIsAnIntegrityFailure(t *testing.T) {
-	_, err := decodeState("not-even-close", "d", time.Now())
-	if !errors.Is(err, errStateTampered) {
-		t.Errorf("err = %v, want an integrity failure", err)
+	bound := stateBinding{request: "d"}
+	for _, raw := range []string{
+		"not-even-close",
+		"v99",
+		"...",
+		"no-version.a.b.c",
+		fmt.Sprintf("v%d", flowStateVersion),
+		fmt.Sprintf("v%d.a.b", flowStateVersion),
+		fmt.Sprintf("v%d.a.b.c.d", flowStateVersion),
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := decodeState(raw, bound, time.Now()); !errors.Is(err, errStateTampered) {
+				t.Errorf("err = %v, want an integrity failure", err)
+			}
+		})
 	}
 
-	_, err = decodeState("v99.eyJ2Ijo5OX0.bWFj", "d", time.Now())
-	if errors.Is(err, errStateTampered) {
-		t.Error("a future version was reported as tampering; it is simply not this encoding")
-	}
-	if err == nil || !strings.Contains(err.Error(), "unsupported requestState version") {
-		t.Errorf("err = %v, want the unknown version named", err)
+	for _, raw := range []string{"v99.eyJ2Ijo5OX0.bWFj", "v1.eyJ2IjoxfQ.bWFj"} {
+		t.Run(raw, func(t *testing.T) {
+			_, err := decodeState(raw, bound, time.Now())
+			if errors.Is(err, errStateTampered) {
+				t.Error("another version was reported as tampering; it is simply not this encoding")
+			}
+			if err == nil || !strings.Contains(err.Error(), "unsupported requestState version") {
+				t.Errorf("err = %v, want the unknown version named", err)
+			}
+		})
 	}
 }
 
@@ -235,9 +404,9 @@ func TestDecodeState_MalformedIsAnIntegrityFailure(t *testing.T) {
 // transport, which hands the state back as an ordinary JSON string.
 func TestEncodeState_RoundTripsThroughJSON(t *testing.T) {
 	now := time.Now()
-	const digest = "call"
+	bound := stateBinding{request: "call", principal: "entry-owner"}
 
-	issued, err := encodeState(map[string]answerRecord{"a": {Action: "accept"}}, digest, now)
+	issued, err := encodeState(map[string]answerRecord{"a": {Action: "accept"}}, bound, now)
 	if err != nil {
 		t.Fatalf("encodeState: %v", err)
 	}
@@ -251,7 +420,7 @@ func TestEncodeState_RoundTripsThroughJSON(t *testing.T) {
 		t.Fatalf("unmarshal: %v", decodeErr)
 	}
 
-	answers, err := decodeState(decoded["requestState"], digest, now)
+	answers, err := decodeState(decoded["requestState"], bound, now)
 	if err != nil {
 		t.Fatalf("the state did not survive a JSON round trip: %v", err)
 	}
@@ -422,9 +591,9 @@ func TestDecodeState_SignedButUnreadable_IsThisServersBug(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			state := fmt.Sprintf("v%d.%s.%s", flowStateVersion, tt.body, signPayload(tt.body))
+			state := wireState(tt.body, "entry-owner")
 
-			answers, err := decodeState(state, "digest", time.Now())
+			answers, err := decodeState(state, stateBinding{request: "digest", principal: "entry-owner"}, time.Now())
 
 			if err == nil {
 				t.Fatalf("decodeState accepted an unreadable state and returned %v", answers)
@@ -538,9 +707,9 @@ func TestStateTTL_IsLongEnoughToAnswerAndShortEnoughToBoundReplay(t *testing.T) 
 func TestDecodeState_ExpiresAtTheSecondItNames(t *testing.T) {
 	t.Parallel()
 
-	const digest = "one-call"
+	bound := stateBinding{request: "one-call"}
 	issuedAt := time.Now()
-	issued, err := encodeState(map[string]answerRecord{"q": {Action: "accept"}}, digest, issuedAt)
+	issued, err := encodeState(map[string]answerRecord{"q": {Action: "accept"}}, bound, issuedAt)
 	if err != nil {
 		t.Fatalf("encodeState: %v", err)
 	}
@@ -559,7 +728,7 @@ func TestDecodeState_ExpiresAtTheSecondItNames(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			answers, decodeErr := decodeState(issued, digest, tt.readAt)
+			answers, decodeErr := decodeState(issued, bound, tt.readAt)
 			if decodeErr != nil {
 				t.Fatalf("decodeState: %v, want expiry reported as no answers rather than as an error", decodeErr)
 			}
@@ -615,7 +784,7 @@ func TestEncodeState_AnswerItCannotEncode_IsReported(t *testing.T) {
 		"q": {Action: "accept", Content: map[string]any{"handle": make(chan int)}},
 	}
 
-	state, err := encodeState(answers, "one-call", time.Now())
+	state, err := encodeState(answers, stateBinding{request: "one-call"}, time.Now())
 
 	if err == nil {
 		t.Fatalf("encodeState() error = nil and state = %q, want the failure reported", state)

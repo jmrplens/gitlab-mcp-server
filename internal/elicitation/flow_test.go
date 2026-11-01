@@ -58,7 +58,7 @@ func TestFlow_Pending_QueuesInputRequest(t *testing.T) {
 	// The state is signed now, so its version is readable from the prefix
 	// rather than from the JSON: nothing inside can be trusted before the MAC
 	// has been checked, and the version has to be legible before that.
-	if !strings.HasPrefix(result.RequestState, "v1.") {
+	if !strings.HasPrefix(result.RequestState, "v2.") {
 		t.Errorf("RequestState = %q, want state tagged with its version", result.RequestState)
 	}
 }
@@ -494,7 +494,7 @@ func flowTestTool(t *testing.T, fn func(context.Context, *mcp.CallToolRequest, *
 		Name:        "flow_tool",
 		Description: "flow test tool",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
-		fl, err := FlowFromRequest(req)
+		fl, err := FlowFromRequest(ctx, req)
 		if err != nil {
 			return inBandToolError("", err, true)
 		}
@@ -693,7 +693,7 @@ func TestFlow_MRTR_MultiStepAccumulatesState(t *testing.T) {
 func TestFlow_MRTR_InvalidRequestState(t *testing.T) {
 	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
 		req.Params.RequestState = "{not json"
-		if _, err := FlowFromRequest(req); err != nil {
+		if _, err := FlowFromRequest(ctx, req); err != nil {
 			return inBandError("state rejected: ", err)
 		}
 		return textResult("state accepted"), nil
@@ -720,13 +720,13 @@ func TestFlow_MRTR_InvalidRequestState(t *testing.T) {
 // silently misread the accumulated answers; refusing it restarts the flow,
 // which costs one round trip and cannot corrupt anything.
 func TestFlow_MRTR_UnsupportedStateVersion(t *testing.T) {
-	handler := func(_ context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
 		// Shaped as this build emits state, with a version it does not know.
 		// The point of the prefix is exactly this: the version is legible
 		// before the signature, so a payload from another build is refused for
 		// what it is rather than for failing a check it was never given.
-		req.Params.RequestState = "v99.eyJ2Ijo5OX0.bm90LWEtdmFsaWQtbWFj"
-		if _, err := FlowFromRequest(req); err != nil {
+		req.Params.RequestState = "v99.eyJ2Ijo5OX0.YmluZGluZw.bm90LWEtdmFsaWQtbWFj"
+		if _, err := FlowFromRequest(ctx, req); err != nil {
 			return inBandError("state rejected: ", err)
 		}
 		return textResult("state accepted"), nil
@@ -756,9 +756,9 @@ func TestFlow_MRTR_UnsupportedStateVersion(t *testing.T) {
 // synchronous path here would send a server-initiated elicitation request on
 // a session where the specification forbids one.
 func TestFlow_MRTR_NoParams_StillUsesMultiRoundTrip(t *testing.T) {
-	handler := func(_ context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
 		req.Params = nil
-		fl, err := FlowFromRequest(req)
+		fl, err := FlowFromRequest(ctx, req)
 		if err != nil {
 			return inBandError("unexpected error: ", err)
 		}
@@ -784,10 +784,10 @@ func TestFlow_MRTR_NoParams_StillUsesMultiRoundTrip(t *testing.T) {
 // type this flow never requests (anything but *mcp.ElicitResult) is rejected
 // as an error instead of being silently dropped and re-queued forever.
 func TestFlow_MRTR_UnexpectedResponseType(t *testing.T) {
-	handler := func(_ context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
 		//nolint:staticcheck // deliberately uses a non-elicitation InputResponse type to exercise the mismatch rejection; all such types are deprecated upstream
 		req.Params.InputResponses = mcp.InputResponseMap{"confirm": &mcp.ListRootsResult{}}
-		if _, err := FlowFromRequest(req); err != nil {
+		if _, err := FlowFromRequest(ctx, req); err != nil {
 			return inBandError("response rejected: ", err)
 		}
 		return textResult("response accepted"), nil
@@ -815,7 +815,7 @@ func TestFlowFromRequest_LegacySession_UsesSynchronousPath(t *testing.T) {
 	})
 	defer cleanup()
 
-	fl, err := FlowFromRequest(&mcp.CallToolRequest{Session: ss})
+	fl, err := FlowFromRequest(ctx, &mcp.CallToolRequest{Session: ss})
 	if err != nil {
 		t.Fatalf("FlowFromRequest error: %v", err)
 	}
@@ -901,6 +901,65 @@ func TestFlow_MRTR_TwoRounds_CarriesTheAnswerForward(t *testing.T) {
 	// going round again.
 	if rounds != 2 {
 		t.Errorf("the handler ran %d times, want 2 (queue, then resolve)", rounds)
+	}
+}
+
+// TestFlowFromRequest_StateIssuedUnderAnotherPrincipal_IsAskedAgain is the
+// flow-level check that the principal a request runs as, which the HTTP server
+// puts on the handler's context with [WithPrincipal], is what the state is
+// bound to.
+//
+// Inside one live 2026-07-28 call, a flow under one principal records an
+// answer and hands back the state carrying it. The same call presented with
+// that state under the same principal replays the answer; under another
+// principal, or under none, the flow asks the question again, which is the
+// answer a caller the state was not issued to is given.
+func TestFlowFromRequest_StateIssuedUnderAnotherPrincipal_IsAskedAgain(t *testing.T) {
+	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+		req.Params.InputResponses = mcp.InputResponseMap{
+			"title": &mcp.ElicitResult{Action: "accept", Content: map[string]any{"title": "typed under the first"}},
+		}
+		issuer, err := FlowFromRequest(WithPrincipal(ctx, "entry-first"), req)
+		if err != nil {
+			return inBandError("issuing flow: ", err)
+		}
+		if _, err = issuer.PromptText(ctx, "title", i18n.Verbatim("Enter title"), Field{Name: "title"}); err != nil {
+			return inBandError("the answered question: ", err)
+		}
+		if _, err = issuer.PromptText(ctx, "description", i18n.Verbatim("Enter description"), Field{Name: "description"}); !errors.Is(err, ErrInputPending) {
+			return inBandError("the open question: ", err)
+		}
+		req.Params.InputResponses = nil
+		req.Params.RequestState = issuer.InputRequiredResult().RequestState
+
+		var outcomes []string
+		for _, principal := range []string{"entry-first", "entry-second", ""} {
+			presented, flowErr := FlowFromRequest(WithPrincipal(ctx, principal), req)
+			if flowErr != nil {
+				return inBandError("presenting the state: ", flowErr)
+			}
+			title, promptErr := presented.PromptText(ctx, "title", i18n.Verbatim("Enter title"), Field{Name: "title"})
+			switch {
+			case errors.Is(promptErr, ErrInputPending):
+				outcomes = append(outcomes, principal+":asked")
+			case promptErr != nil:
+				return inBandError("presenting the state: ", promptErr)
+			default:
+				outcomes = append(outcomes, principal+":"+title)
+			}
+		}
+		return textResult(strings.Join(outcomes, " ")), nil
+	}
+	cs := flowTestTool(t, handler, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return nil, errors.New("the client was asked, and nothing here returns a pending result")
+	})
+
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "flow_tool", Arguments: map[string]any{"project_id": "7"}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if got, want := resultText(result), "entry-first:typed under the first entry-second:asked :asked"; got != want {
+		t.Errorf("the state was read as %q, want %q", got, want)
 	}
 }
 
@@ -1151,7 +1210,7 @@ func TestFlow_MRTR_ClientWithoutFormMode_IsNotAsked(t *testing.T) {
 	server := mcp.NewServer(testImpl, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "form_tool", Description: "form test tool"},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
-			fl, err := FlowFromRequest(req)
+			fl, err := FlowFromRequest(ctx, req)
 			if err != nil {
 				return inBandToolError("flow error: ", err, false)
 			}
@@ -1216,7 +1275,7 @@ func TestFlow_MRTR_ClientWithoutFormMode_IsNotAsked(t *testing.T) {
 // request was covered and this shape was not, which left the two halves of one
 // guard asserted unequally.
 func TestFlowFromRequest_RequestWithoutASession_IsInactive(t *testing.T) {
-	f, err := FlowFromRequest(&mcp.CallToolRequest{})
+	f, err := FlowFromRequest(context.Background(), &mcp.CallToolRequest{})
 	if err != nil {
 		t.Fatalf("FlowFromRequest(no session) error = %v, want a quiet inactive flow", err)
 	}

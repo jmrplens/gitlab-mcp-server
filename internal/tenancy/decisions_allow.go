@@ -993,16 +993,27 @@ func allowDecisions() []Decision {
 			},
 		},
 		{
+			// The state is bound to its call and to the principal its request
+			// ran under (issue 953, which answered F-12 here): the
+			// credential binding puts the pool entry's owner token on the
+			// request, the flow reads it, and the state's MACs cover it
+			// without carrying it, so state issued under one credential of a
+			// shared server yields no answers under another and the flow asks
+			// again. On stdio the principal is empty for everyone the process
+			// serves. A rebuilt entry has a new owner token, so a flow in
+			// progress across the rebuild asks again too.
 			ID: "IDN-011", Question: Allow, Kind: Lifetime, Class: ClassQ, Disposition: Valued,
 			Resource: "how long signed multi-round-trip request state stays usable",
 			Key:      KeyRequest, StdioKey: KeyRequest,
 			Values: []string{"RequestStateTTL"}, Source: Constant, Zero: ZeroNotApplicable,
 			Fixed: "it bounds how long signed request state can be replayed, against how long a person takes to " +
 				"answer a prompt, and neither depends on the deployment",
-			Findings: []string{"F-12"},
+			Decided: []string{"issue 953"},
 			Sites: []Site{
 				alias(pkgElicitation, "stateTTL", "RequestStateTTL"),
 				enforce(pkgElicitation, "decodeState"),
+				enforce(pkgElicitation, "FlowFromRequest"),
+				enforce(pkgServer, "withCredentialState"),
 			},
 		},
 		{

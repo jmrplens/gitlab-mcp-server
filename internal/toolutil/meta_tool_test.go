@@ -2460,7 +2460,7 @@ func TestMakeMetaHandler_RouteOwnPendingInputIsReturnedAsResult(t *testing.T) {
 	routes := ActionMap{
 		"needs_input": Route(func(ctx context.Context, _ map[string]any) (any, error) {
 			req := RequestFromContext(ctx)
-			flow, err := elicitation.FlowFromRequest(req)
+			flow, err := elicitation.FlowFromRequest(ctx, req)
 			if err != nil {
 				return nil, err
 			}

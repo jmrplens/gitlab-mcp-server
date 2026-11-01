@@ -49,8 +49,9 @@ func multiRoundTrip(version string) bool {
 }
 
 // flowStateVersion versions the RequestState encoding so future changes
-// can reject or migrate stale client-echoed state.
-const flowStateVersion = 1
+// can reject or migrate stale client-echoed state. Version 2 added the
+// principal binding (issue 953); version 1 bound the call alone.
+const flowStateVersion = 2
 
 // ErrInputPending is returned by [Flow] prompt methods when the answer is
 // not yet available and an input request has been queued for the client.
@@ -93,16 +94,20 @@ type Flow struct {
 	mrtr    bool
 	answers map[string]answerRecord
 	pending mcp.InputRequestMap
-	// digest identifies the call this flow belongs to, so answers given to
-	// one call cannot be presented on another.
-	digest string
+	// bound identifies the call this flow belongs to and the principal it
+	// runs as, so answers given to one call cannot be presented on another,
+	// nor answers given under one credential under another.
+	bound stateBinding
 }
 
 // FlowFromRequest builds a Flow for the current tool call. For multi
 // round-trip sessions it decodes the client-echoed RequestState and merges
 // the InputResponses from the retried call. It returns an error when the
 // echoed state is malformed.
-func FlowFromRequest(req *mcp.CallToolRequest) (*Flow, error) {
+//
+// The state is bound to the principal ctx names (see [WithPrincipal]), so ctx
+// is the handler's own, the one the server's credential binding ran it under.
+func FlowFromRequest(ctx context.Context, req *mcp.CallToolRequest) (*Flow, error) {
 	f := &Flow{legacy: FromRequest(req), answers: map[string]answerRecord{}}
 	if req == nil || req.Session == nil {
 		return f, nil
@@ -124,9 +129,12 @@ func FlowFromRequest(req *mcp.CallToolRequest) (*Flow, error) {
 	if req.Params == nil {
 		return f, nil
 	}
-	f.digest = requestDigest(req.Params.Name, req.Params.Arguments)
+	f.bound = stateBinding{
+		request:   requestDigest(req.Params.Name, req.Params.Arguments),
+		principal: PrincipalFrom(ctx),
+	}
 	if state := req.Params.RequestState; state != "" {
-		answers, err := decodeState(state, f.digest, time.Now())
+		answers, err := decodeState(state, f.bound, time.Now())
 		if err != nil {
 			return nil, err
 		}
@@ -334,7 +342,7 @@ func (f *Flow) ElicitURL(ctx context.Context, id, gitlabBaseURL, targetURL strin
 // The result must be returned as-is, with no content added: the protocol
 // forbids mixing content and inputRequests in one result.
 func (f *Flow) InputRequiredResult() *mcp.CallToolResult {
-	state, err := encodeState(f.answers, f.digest, time.Now())
+	state, err := encodeState(f.answers, f.bound, time.Now())
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},

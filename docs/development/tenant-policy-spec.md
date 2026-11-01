@@ -1184,7 +1184,20 @@ published instances was logged as one caller. The admission now carries the inst
 verified the token against, and the telemetry identity policy records the pair, the
 instance as `gitlab_mcp.instance` beside the user under `full` and inside the digest under
 `pseudonymous`, on spans and exported log records alike. `IDN-008` records the issue and
-carries the finding no longer. Three more have been carried by no row since the register landed,
+carries the finding no longer. F-12 is answered by issue 953 too, which bound signed
+request state to the principal its request ran under beside its call: the state was
+signed with one key per process and bound to the tool and its arguments alone, so on a
+server the credentials of one shape share, state issued under one credential verified
+under any other for its ten minutes, and the second was handed the first one's answers
+(`INV-019`). The credential binding now puts the pool entry's owner token on the request
+(`withCredentialState`), the flow reads it (`FlowFromRequest`), and the state carries a
+MAC of its payload under a key derived from that token beside a seal under the process
+key, so nothing readable on the wire names the principal, nothing derived from the
+credential travels at all, and state issued under another credential yields no answers
+and the flow asks again (`decodeState`). The token is random and minted per entry, so a rebuilt
+entry asks again too, which is the answer the flow already gave state it cannot use; on
+stdio the principal is empty for everyone the process serves. `IDN-011` records the issue,
+keeps its lifetime and carries the finding no longer. Three more have been carried by no row since the register landed,
 because each records something no row decides: F-24 a message the SDK gives the server no
 way to send, and F-23 and F-27 stale statements, which issue 960 corrected in the comments
 and documents that made them. `TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue`

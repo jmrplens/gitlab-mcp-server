@@ -109,7 +109,7 @@ func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, par
 	// that does not support elicitation (most non-interactive agents) would
 	// execute destructive actions silently, while the dynamic surface's own
 	// guard requires confirm=true. Mirrors that guard's contract.
-	flow, err := elicitation.FlowFromRequest(req)
+	flow, err := elicitation.FlowFromRequest(ctx, req)
 	if err != nil {
 		slog.WarnContext(ctx, "destructive confirmation state invalid", "tool", tool, "error", err)
 		return nil, InvalidParams(err)
@@ -158,7 +158,7 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, prompt i18n.Me
 		tool = req.Params.Name
 	}
 
-	flow, err := elicitation.FlowFromRequest(req)
+	flow, err := elicitation.FlowFromRequest(ctx, req)
 	if err != nil {
 		slog.WarnContext(ctx, "destructive confirmation state invalid", "tool", tool, "error", err)
 		return nil, InvalidParams(err)

@@ -151,9 +151,10 @@ func flowError(fl *elicitation.Flow, err error, label string) error {
 
 // newWizardFlow builds the elicitation flow shared by the interactive
 // creation wizards, translating flow construction failures and missing
-// client support into wizard-level errors.
-func newWizardFlow(req *mcp.CallToolRequest) (*elicitation.Flow, error) {
-	fl, err := elicitation.FlowFromRequest(req)
+// client support into wizard-level errors. ctx is the handler's, which names
+// the principal the wizard's state is bound to.
+func newWizardFlow(ctx context.Context, req *mcp.CallToolRequest) (*elicitation.Flow, error) {
+	fl, err := elicitation.FlowFromRequest(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +187,7 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 	}
 
 	tracker := progress.FromRequest(req)
-	fl, err := newWizardFlow(req)
+	fl, err := newWizardFlow(ctx, req)
 	if err != nil {
 		return issues.Output{}, err
 	}
@@ -274,7 +275,7 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 	}
 
 	tracker := progress.FromRequest(req)
-	fl, err := newWizardFlow(req)
+	fl, err := newWizardFlow(ctx, req)
 	if err != nil {
 		return mergerequests.Output{}, err
 	}
@@ -474,7 +475,7 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	}
 
 	tracker := progress.FromRequest(req)
-	fl, err := newWizardFlow(req)
+	fl, err := newWizardFlow(ctx, req)
 	if err != nil {
 		return releases.Output{}, err
 	}
@@ -544,7 +545,7 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 //gitlab:allow-card ProjectCreate: a consent prompt, escaped by EscapeConsentValue, which defangs a URL scheme as Card does not
 func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, _ ProjectInput) (projects.Output, error) {
 	tracker := progress.FromRequest(req)
-	fl, err := newWizardFlow(req)
+	fl, err := newWizardFlow(ctx, req)
 	if err != nil {
 		return projects.Output{}, err
 	}

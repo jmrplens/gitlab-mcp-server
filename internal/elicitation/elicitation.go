@@ -387,7 +387,7 @@ const ConfirmExchangeID = "confirm"
 // closed with an error result: a destructive action must never proceed on a
 // malformed or failed confirmation exchange.
 func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message i18n.Text) *mcp.CallToolResult {
-	flow, err := FlowFromRequest(req)
+	flow, err := FlowFromRequest(ctx, req)
 	if err != nil {
 		return ConfirmFailedResult(err)
 	}
