@@ -160,7 +160,9 @@ For a full walkthrough use the `create-mcp-tool` skill
    on that: it is the one check that reads the request rather than the surface.
 5. **Markdown formatter**: register via `toolutil.RegisterMarkdown[T](fn)`
    in the sub-package `markdown.go` `init()`. List formatters must add
-   `toolutil.HintPreserveLinks` as the first hint in `WriteHints()`.
+   `toolutil.HintPreserveLinks` as the first hint in `WriteHints()`. A type
+   added or removed moves the registry figures `CLAUDE.md` states, and
+   `TestAllMarkdownFormattersRegistered` names the sentence to write.
 6. **Refresh**: `audit_tokens -footprint`, `audit_metrics -site-stats` (`make gen-site-stats`),
    `gen_action_grants` (`make gen-action-grants`), `gen_action_catalog_manifest`, `format_md_tables`,
    `gen_testing_docs`, `gen_llms`, `gen_lhm_manifest` (run `--check` on each before pushing).
@@ -198,7 +200,7 @@ means something else pairs it with `IsHTTPStatus`.
 
 Sub-packages self-register formatters via `init()` against a type-keyed
 registry in `internal/toolutil/md_registry.go`. There is no central
-dispatch. `internal/tools/markdown.go` is a thin delegator (~17 lines) to
+dispatch. `internal/tools/markdown.go` is a thin delegator to
 `toolutil.MarkdownForResult`. List output should include
 `toolutil.HintPreserveLinks` so LLMs keep `[text](url)` clickable.
 
