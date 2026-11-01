@@ -3738,23 +3738,25 @@ func TestAudit_Repository_IsClean(t *testing.T) {
 
 // TestLoadWorkflows_ReleaseWorkflow_OnlyTheNewestReleaseMovesAPointer verifies
 // that the release workflow, as loadWorkflows reads it, hands preflight's
-// answer from scripts/release-order.sh to everything that points at the newest
-// release (issue 1323): the image's :latest on both registries, the Docker Hub
-// repository description, the GitHub release marked Latest, npm's dist-tag,
-// the Homebrew tap, the MCP Registry entry and main's manifests.
+// answer from the order check of cmd/release_checks to everything that points
+// at the newest release (issue 1323): the image's :latest on both registries,
+// the Docker Hub repository description, the GitHub release marked Latest,
+// npm's dist-tag, the Homebrew tap, the MCP Registry entry and main's
+// manifests.
 //
-// scripts/release_order_sh_test.py holds what the script answers; this holds
-// the workflow to reading the answer, which no script test can see. Without
-// it, a step that moves a pointer could drop its condition and a backport
-// would roll that pointer back to itself with nothing failing. A pointer added
-// to the workflow later is not found by this test and has to be added to it.
+// The command's own tests hold what the check answers; this holds the
+// workflow to asking it and to reading the answer, which no test of the
+// command can see. Without it, a step that moves a pointer could drop its
+// condition and a backport would roll that pointer back to itself with
+// nothing failing. A pointer added to the workflow later is not found by this
+// test and has to be added to it.
 func TestLoadWorkflows_ReleaseWorkflow_OnlyTheNewestReleaseMovesAPointer(t *testing.T) {
 	t.Parallel()
 
 	const newest = "needs.preflight.outputs.newest == 'true'"
 	release := releaseWorkflow(t, repositoryRoot(t))
 
-	t.Run("preflight answers from release-order.sh", func(t *testing.T) {
+	t.Run("preflight answers from the order check", func(t *testing.T) {
 		t.Parallel()
 
 		assertPreflightAnswersFromReleaseOrder(t, release)
@@ -4169,9 +4171,16 @@ func stepNamed(name string) func(map[string]any) bool {
 	return func(step map[string]any) bool { return step["name"] == name }
 }
 
+// releaseOrderCommand is how preflight asks the order check of
+// cmd/release_checks, with the tags the repository holds on stdin.
+const releaseOrderCommand = `go run ./cmd/release_checks/ order "${RELEASE_TAG}" < "${RUNNER_TEMP}/tags.txt" | tee -a "$GITHUB_OUTPUT"`
+
 // assertPreflightAnswersFromReleaseOrder holds the release workflow's
-// preflight job to exporting the three answers of scripts/release-order.sh,
-// each read from the step that runs it.
+// preflight job to exporting the three answers of the order check of
+// cmd/release_checks, each read from the step that runs it, and to setting Go
+// up before that step, from go.mod and with no Actions cache, since the job
+// has no toolchain otherwise and the check's answer decides what every
+// publisher moves.
 func assertPreflightAnswersFromReleaseOrder(t *testing.T, release map[string]any) {
 	t.Helper()
 
@@ -4182,9 +4191,72 @@ func assertPreflightAnswersFromReleaseOrder(t *testing.T, release map[string]any
 			t.Errorf("preflight output %s = %q, want %q", name, got, want)
 		}
 	}
-	order := releaseStep(t, preflight, func(step map[string]any) bool { return step["id"] == "order" })
-	if run := pythonStr(order["run"]); !strings.Contains(run, "bash scripts/release-order.sh") {
-		t.Errorf("preflight's order step runs %q, want it to ask scripts/release-order.sh", run)
+	steps, _ := preflight["steps"].([]any)
+	setupGo, order := -1, -1
+	for index, raw := range steps {
+		step, _ := raw.(map[string]any)
+		if strings.HasPrefix(pythonStr(step["uses"]), "actions/setup-go@") {
+			setupGo = index
+		}
+		if step["id"] == "order" {
+			order = index
+		}
+	}
+	if order < 0 {
+		t.Fatalf("preflight has no step with id order")
+	}
+	orderStep, _ := steps[order].(map[string]any)
+	if run := pythonStr(orderStep["run"]); !hasLine(run, releaseOrderCommand) {
+		t.Errorf("preflight's order step runs %q, want a line %q", run, releaseOrderCommand)
+	}
+	if setupGo < 0 || setupGo > order {
+		t.Fatalf("preflight sets Go up at step %d and asks the order check at step %d, want actions/setup-go before it", setupGo, order)
+	}
+	setupStep, _ := steps[setupGo].(map[string]any)
+	with, _ := setupStep["with"].(map[string]any)
+	if pythonStr(with["go-version-file"]) != "go.mod" || !inputFalse(with, "cache") {
+		t.Errorf("preflight's setup-go takes %v, want go-version-file: go.mod and cache: false", with)
+	}
+}
+
+// TestLoadWorkflows_ReleaseWorkflow_HoldsTheLinuxBinariesToTheirLoader
+// verifies that the release job runs the elf-interp check of
+// cmd/release_checks over both staged Linux binaries, after GoReleaser's
+// binaries are staged under their asset names and before anything packs
+// them, and in a rehearsal too. Every Linux channel hands out those two
+// binaries, so this one step is what holds all of them to the glibc loader
+// they promise; a release that lost it would ship whatever loader the build
+// host gave, which is how the image's arm64 binary once died at exec.
+func TestLoadWorkflows_ReleaseWorkflow_HoldsTheLinuxBinariesToTheirLoader(t *testing.T) {
+	t.Parallel()
+
+	const (
+		check  = "Check the Linux binaries' ELF interpreter"
+		stage  = "Stage release-named binaries at dist root"
+		pack   = "Build and upload Claude Desktop extensions (.mcpb)"
+		runner = "go run ./cmd/release_checks/ elf-interp dist/gitlab-mcp-server-linux-amd64 dist/gitlab-mcp-server-linux-arm64"
+	)
+	steps, _ := releaseJob(t, releaseWorkflow(t, repositoryRoot(t)), "release")["steps"].([]any)
+	at := map[string]int{}
+	for index, raw := range steps {
+		step, _ := raw.(map[string]any)
+		if name := pythonStr(step["name"]); name == check || name == stage || name == pack {
+			at[name] = index
+		}
+	}
+	index, found := at[check]
+	if !found {
+		t.Fatalf("the release job has no step named %q", check)
+	}
+	step, _ := steps[index].(map[string]any)
+	if run := pythonStr(step["run"]); run != runner {
+		t.Errorf("the release job's ELF check runs %q, want %q", run, runner)
+	}
+	if condition, guarded := step["if"]; guarded {
+		t.Errorf("the release job's ELF check runs only if %v, want it in a rehearsal too", condition)
+	}
+	if staged, packed := at[stage], at[pack]; staged >= index || index >= packed {
+		t.Errorf("the ELF check is step %d, the binaries are staged at step %d and packed from step %d, want it between the two", index, staged, packed)
 	}
 }
 

@@ -99,6 +99,7 @@ distribution:
       - any-glob-to-any-file:
           - .goreleaser.yml
           - .github/workflows/release.yml
+          - cmd/release_checks/**
           - Dockerfile
           - .dockerignore
           - docker-compose.yml

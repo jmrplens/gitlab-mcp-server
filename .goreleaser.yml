@@ -47,8 +47,10 @@ builds:
     # launcher), so they are named here rather than left to whatever host
     # builds the release: the image's arm64 binary once shipped with a loader
     # its base image did not have and died at exec. An override replaces the
-    # whole ldflags list, hence the anchor. scripts/check_elf_interp.py holds
-    # the built binaries to these paths right after GoReleaser.
+    # whole ldflags list, hence the anchor. The elf-interp check of
+    # cmd/release_checks holds the built binaries to these paths right after
+    # GoReleaser, and a test of that command holds its table of loaders to
+    # these overrides.
     overrides:
       - goos: linux
         goarch: amd64

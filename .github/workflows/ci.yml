@@ -1161,9 +1161,6 @@ jobs:
       # scripts/check-em-dash.sh, over titles and bodies written to disk and
       # once through a stand-in gh, and holds it to refusing a command that
       # makes GitHub skip workflows.
-      # scripts/check_elf_interp_test.py holds the release's PT_INTERP check
-      # to ELF images built byte by byte, and its table of loaders to the
-      # per-target overrides .goreleaser.yml builds with.
       # scripts/smoke_test_image_sh_test.py runs the image smoke test against
       # a stand-in docker, and holds it to refusing an image without this
       # repository's LICENSE or without third-party notices for its platform.
@@ -1199,12 +1196,9 @@ jobs:
       # comments and to refusing a translated placeholder, a block one
       # language lacks, a `translated` marker that excuses nothing and a
       # translated block that changes the code it quotes (issue 1110).
-      # scripts/release_order_sh_test.py holds the release's preflight
-      # decision, scripts/release-order.sh, to refusing a prerelease tag and
-      # to telling the newest release from a backport by version order, and
       # scripts/publish_npm_sh_test.py holds scripts/publish-npm.sh, run
       # against a stand-in npm, to publishing every package under the
-      # dist-tag that decision hands it (issue 1323).
+      # dist-tag the release's preflight decision hands it (issue 1323).
       # scripts/publish_pypi_sh_test.py runs scripts/publish-pypi.sh against a
       # stand-in python3, curl, dirname and venv, and holds it to installing
       # from the hash-pinned requirements, attesting each wheel before it

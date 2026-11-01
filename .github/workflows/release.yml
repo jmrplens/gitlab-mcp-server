@@ -67,8 +67,8 @@
 #     to the newest release: the image's :latest, the Docker Hub repository
 #     description, the GitHub release marked Latest, npm's latest dist-tag,
 #     the Homebrew formula, the MCP Registry entry and main's manifests.
-#     Preflight decides both through scripts/release-order.sh before
-#     anything publishes (issue 1323);
+#     Preflight decides both through the order check of cmd/release_checks
+#     before anything publishes (issue 1323);
 #   * nothing that signs or attests the image lives in the job that builds it.
 #     The build is not byte-reproducible, so a re-run of that job pushes a new
 #     index under the same tags; keeping the fourteen signing and attestation
@@ -143,13 +143,13 @@ jobs:
       # names it; a dispatch reads it from VERSION unless the input names it,
       # and either way the file and the name have to agree.
       release_tag: ${{ steps.tag.outputs.release_tag }}
-      # Where the release stands among the ones already out, decided by
-      # scripts/release-order.sh (issue 1323). stable is true or the run has
-      # already failed: a prerelease or malformed tag is refused here, before
-      # anything publishes. newest is false for a backport, a stable tag lower
-      # than one already released, and every pointer to the newest release
-      # (the image's :latest, the Docker Hub repository description, the
-      # GitHub release marked Latest, npm's latest dist-tag, the Homebrew
+      # Where the release stands among the ones already out, decided by the
+      # order check of cmd/release_checks (issue 1323). stable is true or the
+      # run has already failed: a prerelease or malformed tag is refused here,
+      # before anything publishes. newest is false for a backport, a stable
+      # tag lower than one already released, and every pointer to the newest
+      # release (the image's :latest, the Docker Hub repository description,
+      # the GitHub release marked Latest, npm's latest dist-tag, the Homebrew
       # formula, the MCP Registry entry and main's manifests) is then left
       # where it is; npm_dist_tag is the dist-tag the npm job publishes
       # under. A rehearsal computes the three from the version VERSION
@@ -203,9 +203,24 @@ jobs:
           fi
           echo "the release opens with ${NOTES}"
 
+      # The order check below is a Go command, and this job sets Go up for it
+      # alone, after the two checks that need none, so a tag they refuse
+      # fails before the download. No Actions cache, as in the release job:
+      # the answer decides what every publisher moves, so the command is
+      # compiled from the checkout and the standard library rather than from a
+      # build cache another run wrote. It imports nothing outside this module,
+      # so nothing is downloaded besides the toolchain, and a cold build of it
+      # takes seconds, well inside the job's five minutes.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
       # The repository is public, so the tags are listed without a credential,
       # and the list is read from the remote rather than from the checkout,
-      # which a tag push fetches shallow and without the other tags.
+      # which a tag push fetches shallow and without the other tags. Only the
+      # three answers reach stdout, so the whole of it is appended to
+      # $GITHUB_OUTPUT; a refused tag fails the step through pipefail.
       - name: Decide whether this release is stable and the newest
         id: order
         env:
@@ -213,7 +228,7 @@ jobs:
         run: |
           set -euo pipefail
           git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}.git" 'v*' > "${RUNNER_TEMP}/tags.txt"
-          bash scripts/release-order.sh "${RELEASE_TAG}" < "${RUNNER_TEMP}/tags.txt" | tee -a "$GITHUB_OUTPUT"
+          go run ./cmd/release_checks/ order "${RELEASE_TAG}" < "${RUNNER_TEMP}/tags.txt" | tee -a "$GITHUB_OUTPUT"
 
   # The same workflow a maintainer runs by hand, called rather than copied.
   # This job used to be e2e.yml pasted in line for line, so a fix to the
@@ -1334,9 +1349,13 @@ jobs:
       # the loader each one names in PT_INTERP is checked once here, before
       # anything packs them. .goreleaser.yml names the loaders explicitly;
       # this holds the build to them, the way the Dockerfile holds the image's
-      # binary to the musl loader.
+      # binary to the musl loader. The check is compiled from this module and
+      # the standard library alone, which is what rule 2 of
+      # cmd/audit_supply_chain allows code in this job, and carries its table
+      # of loaders rather than reading .goreleaser.yml; its tests hold the two
+      # to each other.
       - name: Check the Linux binaries' ELF interpreter
-        run: python3 scripts/check_elf_interp.py dist/gitlab-mcp-server-linux-amd64 dist/gitlab-mcp-server-linux-arm64
+        run: go run ./cmd/release_checks/ elf-interp dist/gitlab-mcp-server-linux-amd64 dist/gitlab-mcp-server-linux-arm64
 
       # The bundles are built before the stamp because server.json declares
       # the three per-OS ones and needs their SHA256. GoReleaser does not
