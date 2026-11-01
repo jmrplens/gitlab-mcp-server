@@ -301,32 +301,37 @@ func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 		// wantCode is the JSON-RPC error code the sender must receive, or 0
 		// when the input is dropped without an answer.
 		wantCode int
-		// wantID is the id the answer carries, as JSON. Only a string or a
-		// number may be echoed; anything else is answered null.
+		// wantID is the id the answer carries, as JSON, or empty when it must
+		// carry no id member. Only a string or a number may be echoed; an id
+		// that cannot be read leaves the member out, since MCP forbids a null
+		// id in every revision.
 		wantID string
 	}{
 		{name: "an unknown method", body: `{"jsonrpc":"2.0","id":1,"method":"no/such/method","params":{}}`, wantCode: -32601, wantID: "1"},
 		{name: "a tool that does not exist", body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"not_a_tool","arguments":{}}}`, wantCode: -32602, wantID: "1"},
-		{name: "not JSON at all", body: `{not json`, wantCode: -32700, wantID: "null"},
-		{name: "a truncated message", body: `{"jsonrpc":"2.0","id":1,"meth`, wantCode: -32700, wantID: "null"},
-		{name: "JSON carrying no jsonrpc version", body: `{"hello":"world"}`, wantCode: -32600, wantID: "null"},
+		{name: "not JSON at all", body: `{not json`, wantCode: -32700},
+		{name: "a truncated message", body: `{"jsonrpc":"2.0","id":1,"meth`, wantCode: -32700},
+		{name: "JSON carrying no jsonrpc version", body: `{"hello":"world"}`, wantCode: -32600},
 		// Valid JSON of the wrong shape: the server parsed it, so -32700 would
 		// send the client looking for a syntax error it does not have.
-		{name: "a JSON array, which is not a message", body: `["jsonrpc","2.0"]`, wantCode: -32600, wantID: "null"},
+		{name: "a JSON array, which is not a message", body: `["jsonrpc","2.0"]`, wantCode: -32600},
 		{name: "a blank line is framing, not a message", body: ``, wantCode: 0},
 		// Frames carrying "jsonrpc":"2.0" that the SDK's decoder rejects. Each
 		// of them used to reach that decoder and end the session, so the
 		// survival half of the check is the one that failed.
-		{name: "a boolean id", body: `{"jsonrpc":"2.0","id":true,"method":"ping"}`, wantCode: -32600, wantID: "null"},
-		{name: "an object id", body: `{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}`, wantCode: -32600, wantID: "null"},
-		{name: "an array id", body: `{"jsonrpc":"2.0","id":[1],"method":"ping"}`, wantCode: -32600, wantID: "null"},
+		{name: "a boolean id", body: `{"jsonrpc":"2.0","id":true,"method":"ping"}`, wantCode: -32600},
+		{name: "an object id", body: `{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}`, wantCode: -32600},
+		{name: "an array id", body: `{"jsonrpc":"2.0","id":[1],"method":"ping"}`, wantCode: -32600},
 		{name: "a method that is not a string", body: `{"jsonrpc":"2.0","id":1,"method":5}`, wantCode: -32600, wantID: "1"},
-		{name: "an object carrying only the version tag", body: `{"jsonrpc":"2.0"}`, wantCode: -32600, wantID: "null"},
+		{name: "an object carrying only the version tag", body: `{"jsonrpc":"2.0"}`, wantCode: -32600},
 		{name: "the version key spelled in another case", body: `{"JSONRPC":"2.0","id":5,"method":"ping"}`, wantCode: -32600, wantID: "5"},
 		// A frame with no method is a response, whose id is one this server
-		// gave a request of its own, so the refusal carries null instead.
-		{name: "a response whose error is not an object", body: `{"jsonrpc":"2.0","id":3,"error":"oops"}`, wantCode: -32600, wantID: "null"},
-		{name: "an id no number can hold", body: `{"jsonrpc":"2.0","id":1e400,"method":"ping"}`, wantCode: -32600, wantID: "null"},
+		// gave a request of its own, so the refusal carries no id instead.
+		{name: "a response whose error is not an object", body: `{"jsonrpc":"2.0","id":3,"error":"oops"}`, wantCode: -32600},
+		{name: "an id no number can hold", body: `{"jsonrpc":"2.0","id":1e400,"method":"ping"}`, wantCode: -32600},
+		// The sender's own id, and null, which no MCP revision admits, so the
+		// refusal does not echo it.
+		{name: "a refused request whose id is null", body: `{"jsonrpc":"1.0","id":null,"method":"tools/list"}`, wantCode: -32600},
 		// A valid message with whitespace after it on its line: the SDK's
 		// read loop ended the session on the space, so the survival half is
 		// the one that failed. The SDK answers the ping, which the survival
@@ -356,12 +361,50 @@ func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 	}
 }
 
+// TestMalformedInput_On20250618_IsAnsweredWithNoID pins what a session of
+// 2025-06-18 is told about a line whose id cannot be read: the same refusal as
+// any other revision, with no id member.
+//
+// That revision admits no answer here. Its schema requires the id of an error
+// and types it as a string or a number, so null breaks the type and leaving
+// the member out breaks its presence. The filter answers below the SDK and
+// cannot tell which revision a session negotiated, and the absent member is
+// the shape 2025-11-25 then gave this case, which no null ever was in any
+// revision; the reasoning is on refuseUnreadable in cmd/server/stdio.go.
+func TestMalformedInput_On20250618_IsAnsweredWithNoID(t *testing.T) {
+	s := startSession(t, baseEnv(startFakeGitLab(t).URL))
+
+	initialized := s.call(t, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18",`+
+		`"capabilities":{},"clientInfo":{"name":"stdio-e2e","version":"1"}}}`)
+	result, _ := initialized["result"].(map[string]any)
+	if negotiated := result["protocolVersion"]; negotiated != "2025-06-18" {
+		t.Fatalf("initialize asking for 2025-06-18 negotiated %v, want 2025-06-18: %v", negotiated, initialized)
+	}
+	s.send(t, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	if got := s.call(t, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`); got["error"] != nil {
+		t.Fatalf("the 2025-06-18 session was not healthy to begin with: %v", got["error"])
+	}
+
+	s.send(t, `{not json`)
+	assertRefusedWith(t, s, -32700, "")
+
+	if got := s.call(t, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`); got["error"] != nil || got["result"] == nil {
+		t.Errorf("the 2025-06-18 session did not serve a call after the refusal: %v", got)
+	}
+}
+
 // assertRefusedWith checks that the server's next message is a refusal carrying
-// the given JSON-RPC error code and the given id, written as JSON.
+// the given JSON-RPC error code and the given id, written as JSON, or no id
+// member at all when wantID is empty. The line is read as the server wrote it,
+// since a decoded message reads an absent id and a null one alike, and a
+// notification the server sends meanwhile is read past, since it is no answer.
 func assertRefusedWith(t *testing.T, s *session, want int, wantID string) {
 	t.Helper()
 
-	got := s.readMessage(t, 30*time.Second)
+	line, got := s.readRawMessage(t, 30*time.Second)
+	for _, isNotification := got["method"]; isNotification; _, isNotification = got["method"] {
+		line, got = s.readRawMessage(t, 30*time.Second)
+	}
 	code, ok := errorCode(got)
 	if !ok {
 		t.Fatalf("the input was not refused: %v", got)
@@ -369,12 +412,24 @@ func assertRefusedWith(t *testing.T, s *session, want int, wantID string) {
 	if code != want {
 		t.Errorf("error code = %d, want %d: %v", code, want, got)
 	}
-	id, err := json.Marshal(got["id"])
-	if err != nil {
-		t.Fatalf("re-encoding the answer's id: %v", err)
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(line), &members); err != nil {
+		t.Fatalf("decoding the refusal %q: %v", line, err)
+	}
+	id, present := members["id"]
+	if !present && wantID == "" {
+		return
+	}
+	if !present {
+		t.Errorf("the refusal carries no id, want %s: %s", wantID, line)
+		return
+	}
+	if wantID == "" {
+		t.Errorf("the refusal carries the id %s, want no id member: an id that cannot be read is left out, since MCP forbids null: %s", id, line)
+		return
 	}
 	if string(id) != wantID {
-		t.Errorf("id = %s, want %s: %v", id, wantID, got)
+		t.Errorf("id = %s, want %s: %s", id, wantID, line)
 	}
 }
 

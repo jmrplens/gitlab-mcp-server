@@ -9275,7 +9275,16 @@ The test hung instead of failing, which is how the header-flush half surfaced.
   a frame it rejects is answered `-32600` and dropped, so the SDK still decides
   what a valid message is. The answer carries the sender's `id` only when the
   frame is a request and the SDK can hold that `id`: a frame with no `method`
-  is a response, whose `id` is one this server gave a request of its own. A
+  is a response, whose `id` is one this server gave a request of its own.
+  Otherwise it carries no `id` member at all, the reading @guglielmo-san gave
+  on
+  [modelcontextprotocol/go-sdk#1392](https://github.com/modelcontextprotocol/go-sdk/pull/1392),
+  where until 2026-11-01 it carried `null`: MCP forbids a null `id` in every
+  revision, and 2025-11-25 and 2026-07-28 mark the member optional on an
+  error for exactly this case. A session of 2025-06-18 or earlier is answered
+  the same way although its schema admits neither form, since the filter
+  cannot tell which revision a session negotiated and no revision ever
+  admitted the `null`. A
   line the filter passes loses the whitespace after its message, since the
   read loop ends the session on any byte after a value but a line break.
   Until 2026-10-13 (issue 1358) every object carrying `"jsonrpc":"2.0"` was

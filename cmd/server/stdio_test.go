@@ -65,24 +65,29 @@ func TestResilientStdio_PassesValidMessagesThroughUnchanged(t *testing.T) {
 
 // TestResilientStdio_AnswersUnreadableInput pins what each shape of unreadable
 // line is answered with, and that none of them reaches the SDK.
+//
+// A refusal whose id cannot be read carries no id member at all. MCP forbids a
+// null id in every revision, and from 2025-11-25 on the schema marks the
+// member optional on an error for exactly this case, so an empty wantID means
+// the member must be absent, and a null there fails the case.
 func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 	tests := []struct {
 		name     string
 		line     string
 		wantCode int
-		wantID   string
+		// wantID is the id the answer carries, as JSON, or empty when the
+		// answer must carry no id member.
+		wantID string
 	}{
 		{
 			name:     "not JSON",
 			line:     `{not json`,
 			wantCode: -32700,
-			wantID:   "null",
 		},
 		{
 			name:     "truncated mid-key",
 			line:     `{"jsonrpc":"2.0","id":1,"meth`,
 			wantCode: -32700,
-			wantID:   "null",
 		},
 		{
 			// Well-formed JSON that is not a Request object. -32700 would be
@@ -92,25 +97,21 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 			name:     "a JSON array is valid JSON and an invalid request",
 			line:     `["jsonrpc","2.0"]`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			name:     "a bare JSON string is the same case",
 			line:     `"hello"`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			name:     "a bare number is the same case",
 			line:     `42`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			name:     "JSON with no version tag",
 			line:     `{"hello":"world"}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			name: "JSON with the wrong version tag keeps its id",
@@ -123,18 +124,24 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 		{
 			// With no method it is no request, and its id may be one this
 			// server gave a request of its own.
-			name:     "JSON with the wrong version tag and no method answers null",
+			name:     "JSON with the wrong version tag and no method answers with no id",
 			line:     `{"jsonrpc":"1.0","id":5}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			// A boolean is no id JSON-RPC allows, so it is not echoed: a
 			// refusal carrying it would itself be an invalid response.
-			name:     "JSON with the wrong version tag and a boolean id answers null",
+			name:     "JSON with the wrong version tag and a boolean id answers with no id",
 			line:     `{"jsonrpc":"1.0","id":true}`,
 			wantCode: -32600,
-			wantID:   "null",
+		},
+		{
+			// The sender's own id, and still none to echo: MCP forbids a null
+			// id in every revision, so a refusal carrying one is no more valid
+			// than the request was.
+			name:     "a request whose id is null answers with no id",
+			line:     `{"jsonrpc":"1.0","id":null,"method":"tools/list"}`,
+			wantCode: -32600,
 		},
 		// The frames below carry "jsonrpc":"2.0" and are still ones the SDK's
 		// decoder rejects, which ends a stdio session as surely as a line that
@@ -143,19 +150,16 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 			name:     "a boolean id",
 			line:     `{"jsonrpc":"2.0","id":true,"method":"ping"}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			name:     "an object id",
 			line:     `{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			name:     "an array id",
 			line:     `{"jsonrpc":"2.0","id":[1],"method":"ping"}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			name:     "a method that is not a string keeps its id",
@@ -169,7 +173,6 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 			name:     "an object carrying only the version tag",
 			line:     `{"jsonrpc":"2.0"}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			// encoding/json matches keys without regard to case and the SDK's
@@ -183,26 +186,23 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 		// A frame with no method is a response, and its id is one this
 		// server chose for a request of its own. Echoing it would answer
 		// that request with this refusal and fail a call that has nothing to
-		// do with the bad frame, so the refusal carries null.
+		// do with the bad frame, so the refusal carries no id.
 		{
-			name:     "a response whose error is not an object answers null",
+			name:     "a response whose error is not an object answers with no id",
 			line:     `{"jsonrpc":"2.0","id":3,"error":"oops"}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
-			name:     "a response whose error code is not a number answers null",
+			name:     "a response whose error code is not a number answers with no id",
 			line:     `{"jsonrpc":"2.0","id":3,"result":{},"error":{"code":"x","message":"m"}}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			// The SDK's decoder refuses this frame for its id, a number no
 			// float64 holds, so that id is not one to answer with either.
-			name:     "an id no number can hold answers null",
+			name:     "an id no number can hold answers with no id",
 			line:     `{"jsonrpc":"2.0","id":1e400,"method":"ping"}`,
 			wantCode: -32600,
-			wantID:   "null",
 		},
 		{
 			// JSON on the line after the message is no message of its own:
@@ -211,7 +211,13 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 			name:     "a message followed by more text on its line",
 			line:     `{"jsonrpc":"2.0","id":4,"method":"ping"} trailing`,
 			wantCode: -32700,
-			wantID:   "null",
+		},
+		{
+			// Nested past the ceiling, refused before anything decodes it, so
+			// its id is not read at all.
+			name:     "a line nested past the depth ceiling",
+			line:     `{"jsonrpc":"2.0","id":4,"method":"ping","params":{"_meta":` + strings.Repeat("[", maxInboundJSONDepth) + strings.Repeat("]", maxInboundJSONDepth) + `}}`,
+			wantCode: -32600,
 		},
 	}
 
@@ -246,13 +252,22 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 				t.Errorf("code = %d, want %d", answer.Error.Code, tt.wantCode)
 			}
 			if string(answer.ID) != tt.wantID {
-				t.Errorf("id = %s, want %s", answer.ID, tt.wantID)
+				t.Errorf("id = %s, want %s: %q", idText(answer.ID), idText(json.RawMessage(tt.wantID)), out.String())
 			}
 			if !strings.HasSuffix(out.String(), "\n") {
 				t.Error("the refusal is not newline-terminated, so it runs into the next message")
 			}
 		})
 	}
+}
+
+// idText names an id as a failure message reads it: the JSON it holds, or
+// that the member is absent, which printing an empty value would hide.
+func idText(id json.RawMessage) string {
+	if len(id) == 0 {
+		return "no id member"
+	}
+	return string(id)
 }
 
 // TestResilientStdio_PassesWhatTheSDKDecoderAccepts pins the other half of
@@ -386,10 +401,11 @@ func TestLockedWriter_SerializesConcurrentWrites(t *testing.T) {
 }
 
 // TestScalarID_ObjectsAndArraysAreNotEchoed pins the response's own validity:
-// JSON-RPC allows a string, number or null id, so a refusal echoing an object,
-// array or boolean id would itself be an invalid response. A number no float64
-// holds is no id the SDK can read back either, and an absent id is nothing to
-// echo.
+// MCP allows a string or a number as an id, so a refusal echoing an object,
+// array or boolean id would itself be an invalid response, and so would one
+// echoing null, which JSON-RPC allows and every MCP revision forbids. A number
+// no float64 holds is no id the SDK can read back either, and an absent id is
+// nothing to echo.
 func TestScalarID_ObjectsAndArraysAreNotEchoed(t *testing.T) {
 	t.Parallel()
 
@@ -397,7 +413,8 @@ func TestScalarID_ObjectsAndArraysAreNotEchoed(t *testing.T) {
 		`7`:        `7`,
 		`1.5`:      `1.5`,
 		`"seven"`:  `"seven"`,
-		`null`:     `null`,
+		`null`:     ``,
+		` null`:    ``,
 		`{"a":1}`:  ``,
 		`[1,2]`:    ``,
 		` {"a":1}`: ``,
@@ -741,6 +758,25 @@ func TestErrorLine_AnIDThatIsNotJSON_WritesNothing(t *testing.T) {
 	}
 }
 
+// TestErrorLine_WithNoID_OmitsTheMember pins the refusal of a line whose id
+// cannot be read, byte for byte: no id member, rather than "id": null.
+//
+// MCP forbids a null id in every revision (RequestId is a string or a number),
+// and from 2025-11-25 on the schema marks the member optional on an error so
+// that it can be left out when the id could not be read, which is what a
+// maintainer of go-sdk asked for on go-sdk#1392 and what the HTTP gate's
+// refusals already do ([requestIDFromBody]). 2025-06-18 and older revisions
+// admit neither form; the filter cannot tell which revision a session
+// negotiated, and the absent member is the shape the specification chose for
+// this case once it chose one.
+func TestErrorLine_WithNoID_OmitsTheMember(t *testing.T) {
+	t.Parallel()
+	const want = `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"}}` + "\n"
+	if got := string(errorLine(nil, -32700, "Parse error")); got != want {
+		t.Errorf("errorLine with no id wrote %q, want %q", got, want)
+	}
+}
+
 // TestResilientStdio_WhatItPassesTheSDKReads hands the filtered stream to the
 // SDK's own stdio connection, which is the judge that matters: an error from
 // its read ends the session, whatever the filter made of the line.
@@ -783,8 +819,9 @@ func TestResilientStdio_WhatItPassesTheSDKReads(t *testing.T) {
 //
 // What the filter passes, the SDK's stdio connection reads as one message and
 // nothing else, since an error there ends the session. What it drops, it
-// answers with one JSON-RPC error whose id is null or the sender's own, and
-// never the id of a response, which is the id of a request this server sent.
+// answers with one JSON-RPC error that carries no id member or the sender's
+// own, never a null one, and never the id of a response, which is the id of a
+// request this server sent.
 // And it drops no line that connection would have read as one message, with
 // two exceptions that are the filter's own: a line nested past its depth
 // ceiling, and a JSON-RPC batch, which it refuses whatever revision was
@@ -807,6 +844,7 @@ func FuzzRefuseUnreadable(f *testing.F) {
 		`{"hello":"world"}`,
 		`{"jsonrpc":"1.0","id":7,"method":"tools/list"}`,
 		`{"jsonrpc":"1.0","id":true}`,
+		`{"jsonrpc":"1.0","id":null,"method":"tools/list"}`,
 		`{"jsonrpc":"2.0","id":1,"method":"ping"}`,
 		`  {"jsonrpc":"2.0","id":1,"method":"ping"}  `,
 		"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\t\r",
@@ -898,9 +936,10 @@ func readThroughSDK(t *testing.T, in io.ReadCloser) ([]jsonrpc.Message, error) {
 }
 
 // assertAnswersWithoutTakingAResponseID checks that refusal is one JSON-RPC
-// error answering frame: version 2.0, a parse or invalid request code, and an
-// id that is null unless frame is a request, in which case the SDK itself can
-// read the refusal back, which no id it cannot hold would let it do.
+// error answering frame: version 2.0, a parse or invalid request code, never a
+// null id, and no id member at all unless frame is a request, in which case the
+// SDK itself can read the refusal back, which no id it cannot hold would let it
+// do.
 func assertAnswersWithoutTakingAResponseID(t *testing.T, frame, refusal []byte) {
 	t.Helper()
 	if bytes.Count(refusal, []byte("\n")) != 1 || !bytes.HasSuffix(refusal, []byte("\n")) {
@@ -920,6 +959,10 @@ func assertAnswersWithoutTakingAResponseID(t *testing.T, frame, refusal []byte) 
 		t.Errorf("the refusal of %q is not a JSON-RPC parse or invalid request error: %q", frame, refusal)
 	}
 	if string(answer.ID) == "null" {
+		t.Errorf("the refusal of %q carries a null id, which no revision of MCP admits: %q", frame, refusal)
+		return
+	}
+	if len(answer.ID) == 0 {
 		return
 	}
 	var members map[string]json.RawMessage

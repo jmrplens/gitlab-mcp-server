@@ -294,6 +294,28 @@ func (s *sanitizedInput) Close() error { return nil }
 // ignores the rest, while the read loop ends the session on anything after a
 // value but a line break. Without it a message followed by more text would
 // pass the decoder here and still end the session.
+//
+// # The id a refusal carries
+//
+// The sender's own when the line is a request whose id MCP allows, and
+// otherwise no id member at all. Base JSON-RPC 2.0 prescribes null for an id
+// that could not be read, but MCP forbids a null id in every revision: the
+// schema types an id as a string or a number throughout, and from 2025-11-25
+// on it marks the member optional on an error response so that it can be
+// left out when the id could not be read. That is the reading a maintainer of
+// go-sdk gave on go-sdk#1392, and it is what the HTTP gate's refusals already
+// do ([requestIDFromBody]).
+//
+// 2025-06-18 and the revisions before it have no valid answer here: their
+// schema requires the member and types it as a string or a number, so null
+// breaks its type and leaving it out breaks its presence. The filter answers
+// them the same way all the same. It cannot tell which revision a session
+// negotiated, since a line can arrive before the initialize that would say, and
+// the absent member is the shape the specification gave this case when it
+// first gave it one: a client that validates against a schema of 2025-11-25
+// or later accepts it, while no schema of any revision accepts a null id, and
+// a client that admits neither, go-sdk v1.8.0's decoder among them, refuses
+// both alike.
 func refuseUnreadable(line string, maxDepth int) (refusal []byte, refuse bool) {
 	trimmed := trimSpace(line)
 	if trimmed == "" {
@@ -302,8 +324,7 @@ func refuseUnreadable(line string, maxDepth int) (refusal []byte, refuse bool) {
 
 	if maxDepth > 0 && toolutil.ExceedsJSONDepth([]byte(trimmed), maxDepth) {
 		// The id is not knowable without the parse this is refusing to
-		// perform, so it is null, as JSON-RPC 2.0 prescribes when it cannot
-		// be read.
+		// perform, so the answer carries none.
 		return errorLine(nil, -32600, fmt.Sprintf(
 			"Invalid Request: message nests JSON deeper than %d levels", maxDepth,
 		)), true
@@ -311,8 +332,8 @@ func refuseUnreadable(line string, maxDepth int) (refusal []byte, refuse bool) {
 
 	frame := []byte(trimmed)
 	if !json.Valid(frame) {
-		// Not JSON, or more than one value. The id is unknowable, so it is
-		// null, which is what JSON-RPC 2.0 prescribes for a parse error.
+		// Not JSON, or more than one value. The id is unknowable, so the
+		// answer carries none.
 		return errorLine(nil, -32700, "Parse error"), true
 	}
 	if _, err := jsonrpc.DecodeMessage(frame); err != nil {
@@ -351,32 +372,34 @@ func refusalID(frame []byte) json.RawMessage {
 	return scalarID(members["id"])
 }
 
-// scalarID returns the id if JSON-RPC may echo it, or nothing.
+// scalarID returns the id if MCP may echo it, or nothing.
 //
-// JSON-RPC allows a string, a number or null, and the SDK's own rule for what
-// an id can be (jsonrpc.MakeID over the value encoding/json decodes) decides
-// it: an object, an array or a boolean is dropped, and so is a number no
-// float64 holds, which the SDK cannot read back. The answer then carries null.
+// MCP allows a string or a number, and the SDK's own rule for what an id can
+// be (jsonrpc.MakeID over the value encoding/json decodes) decides it: an
+// object, an array or a boolean is dropped, and so is a number no float64
+// holds, which the SDK cannot read back. A null, which JSON-RPC allows, is
+// dropped too: the SDK reads it as no id at all, and MCP forbids it in every
+// revision. The answer then carries no id member.
 func scalarID(id json.RawMessage) json.RawMessage {
 	var value any
 	if json.Unmarshal(id, &value) != nil {
 		return nil
 	}
-	if _, err := jsonrpc.MakeID(value); err != nil {
+	parsed, err := jsonrpc.MakeID(value)
+	if err != nil || !parsed.IsValid() {
 		return nil
 	}
 	return id
 }
 
-// errorLine builds one newline-terminated JSON-RPC error response.
+// errorLine builds one newline-terminated JSON-RPC error response, with no id
+// member when id is empty (see refuseUnreadable). It is the shape the HTTP
+// gate answers with, so both transports refuse alike.
 func errorLine(id json.RawMessage, code int, message string) []byte {
-	if len(id) == 0 {
-		id = json.RawMessage("null")
-	}
-	body, err := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      id,
-		"error":   map[string]any{"code": code, "message": message},
+	body, err := json.Marshal(jsonRPCError{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error:   jsonRPCErrorBody{Code: code, Message: message},
 	})
 	if err != nil {
 		// Unreachable: every field here marshals. Staying silent is better
