@@ -2191,8 +2191,9 @@ func TestRules_OverriddenVersionTolerant(t *testing.T) {
 	}
 }
 
-// TestRawRuleToOutput_NilNested verifies rawRuleToOutput is nil-safe for absent
-// nested approver/user/group/source-rule objects and maps the scalar fields.
+// TestRawStateRuleToOutput_NilNested verifies rawStateRuleToOutput is nil-safe
+// for absent nested approver/user/group/source-rule objects and maps the scalar
+// fields.
 func TestRawStateRuleToOutput_NilNested(t *testing.T) {
 	out := rawStateRuleToOutput(&mergeRequestApprovalRuleAPI{
 		ID: 3, Name: "n", RuleType: "regular", ReportType: "rt", Section: "s",
