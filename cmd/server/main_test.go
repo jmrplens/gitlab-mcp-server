@@ -11804,6 +11804,72 @@ func TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire(t *testing.T) {
 	}
 }
 
+// TestSSEKeepAlive_ComesOneIntervalAfterTheLastWrite pins how long a stream
+// stays silent after its last event: one interval, not up to two.
+//
+// The heartbeat used to tick on a grid laid down when the response committed
+// and skip a tick that found the stream written less than an interval before,
+// so an event between two ticks pushed the next frame to the tick after: the
+// standalone GET, which go-sdk commits with ": ok" and then writes the
+// server's list announcements to a second later, went 48 seconds without a
+// byte against the binary, and a listen stream alternated gaps of 25 and 50
+// seconds as the ticks' jitter fell. Against nginx's default sixty seconds that
+// left ten, not the two frames the interval was chosen for. The handler writes
+// as go-sdk does, without calling WriteHeader: its first Write commits the
+// stream, and its event a fifth of an interval later is the last byte before
+// the silence.
+func TestSSEKeepAlive_ComesOneIntervalAfterTheLastWrite(t *testing.T) {
+	restore := sseKeepAliveInterval
+	sseKeepAliveInterval = 400 * time.Millisecond
+	t.Cleanup(func() { sseKeepAliveInterval = restore })
+
+	release := make(chan struct{})
+	ts := httptest.NewServer(sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(hdrContentType, "text/event-stream")
+		_, _ = w.Write([]byte(": ok\n\n"))
+		_ = http.NewResponseController(w).Flush()
+		time.Sleep(sseKeepAliveInterval / 5)
+		_, _ = w.Write([]byte("event: message\ndata: {}\n\n"))
+		_ = http.NewResponseController(w).Flush()
+		<-release
+	})))
+	t.Cleanup(ts.Close)
+	// Before the cleanup that waits for the handler, so a failed assertion
+	// reports itself instead of deadlocking Close.
+	defer close(release)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL, http.NoBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	client := ts.Client()
+	client.Timeout = 10 * time.Second
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	reader := bufio.NewReader(resp.Body)
+	var lastEvent time.Time
+	for {
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			t.Fatalf("reading the stream: %v", readErr)
+		}
+		if strings.HasPrefix(line, "data: ") {
+			lastEvent = time.Now()
+		}
+		if line == ": keep-alive\n" && !lastEvent.IsZero() {
+			break
+		}
+	}
+	if silence := time.Since(lastEvent); silence > sseKeepAliveInterval*3/2 {
+		t.Errorf("the first keep-alive came %v after the last event, want one interval (%v): a proxy's idle timer sees the whole gap",
+			silence.Round(time.Millisecond), sseKeepAliveInterval)
+	}
+}
+
 // TestSSEKeepAlive_LeavesNonStreamingResponsesAlone verifies the heartbeat is
 // scoped to SSE. Injecting a comment into a JSON body would corrupt it, and
 // --json-response is a supported mode, so the Content-Type check is what keeps
@@ -14747,8 +14813,8 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now()}
 
-		if !writer.writeKeepAlive(time.Now()) {
-			t.Error("the heartbeat stopped on a stream that is alive")
+		if wait, alive := writer.writeKeepAlive(time.Now()); !alive || wait <= 0 || wait > sseKeepAliveInterval {
+			t.Errorf("writeKeepAlive = (%v, %v), want the heartbeat to go on and wait out the rest of the interval", wait, alive)
 		}
 		if rec.Body.Len() != 0 {
 			t.Errorf("body = %q, want no frame written to a stream that just wrote", rec.Body.String())
@@ -14764,8 +14830,8 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now().Add(-time.Hour)}
 
-		if !writer.writeKeepAlive(time.Now()) {
-			t.Error("the heartbeat stopped on a stream that is alive")
+		if wait, alive := writer.writeKeepAlive(time.Now()); !alive || wait != sseKeepAliveInterval {
+			t.Errorf("writeKeepAlive = (%v, %v), want the heartbeat to go on and wait a whole interval after its frame", wait, alive)
 		}
 		if got := rec.Body.String(); got != string(sseKeepAliveFrame) {
 			t.Errorf("body = %q, want the keep-alive comment on a stream idle since its last event", got)
@@ -14778,7 +14844,7 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, stopped: true}
 
-		if writer.writeKeepAlive(time.Now()) {
+		if _, alive := writer.writeKeepAlive(time.Now()); alive {
 			t.Error("the heartbeat continued after the handler returned")
 		}
 		if rec.Body.Len() != 0 {
@@ -14791,7 +14857,7 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 
 		writer := &sseAwareWriter{ResponseWriter: brokenResponseWriter{httptest.NewRecorder()}}
 
-		if writer.writeKeepAlive(time.Now()) {
+		if _, alive := writer.writeKeepAlive(time.Now()); alive {
 			t.Error("the heartbeat continued after the write failed; it would write into a closed socket forever")
 		}
 	})
@@ -14799,10 +14865,12 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 
 // TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle pins the
 // boundary between the two answers a live stream gets: a stream that last
-// wrote exactly one interval before the tick has been silent for as long as
-// the heartbeat waits, so it is idle and gets the frame, and one a nanosecond
-// short of that has not and does not. The tick records itself as the last
-// write, so the next tick measures from it.
+// wrote exactly one interval before the timer fired has been silent for as
+// long as the heartbeat waits, so it is idle and gets the frame, and one a
+// nanosecond short of that has not and does not. The frame records itself as
+// the last write, so the wait after it is a whole interval, and a stream not
+// yet idle is waited on for what is left of its interval, so its frame comes
+// one interval after its last byte rather than at a tick after that.
 func TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle(t *testing.T) {
 	t.Parallel()
 
@@ -14811,9 +14879,11 @@ func TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle(t *testing.T
 		name      string
 		silence   time.Duration
 		wantFrame bool
+		wantWait  time.Duration
 	}{
-		{name: "one interval exactly", silence: sseKeepAliveInterval, wantFrame: true},
-		{name: "a nanosecond short of one", silence: sseKeepAliveInterval - time.Nanosecond, wantFrame: false},
+		{name: "one interval exactly", silence: sseKeepAliveInterval, wantFrame: true, wantWait: sseKeepAliveInterval},
+		{name: "a nanosecond short of one", silence: sseKeepAliveInterval - time.Nanosecond, wantFrame: false, wantWait: time.Nanosecond},
+		{name: "a fifth of one", silence: sseKeepAliveInterval / 5, wantFrame: false, wantWait: sseKeepAliveInterval - sseKeepAliveInterval/5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -14821,8 +14891,12 @@ func TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle(t *testing.T
 			writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: lastWrite}
 			tick := lastWrite.Add(tc.silence)
 
-			if !writer.writeKeepAlive(tick) {
+			wait, alive := writer.writeKeepAlive(tick)
+			if !alive {
 				t.Fatal("the heartbeat stopped on a stream that is alive")
+			}
+			if wait != tc.wantWait {
+				t.Errorf("wait = %v after %v of silence, want %v", wait, tc.silence, tc.wantWait)
 			}
 			if wrote := rec.Body.String() == string(sseKeepAliveFrame); wrote != tc.wantFrame {
 				t.Errorf("frame written = %v after %v of silence, want %v", wrote, tc.silence, tc.wantFrame)
