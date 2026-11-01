@@ -61,24 +61,45 @@ func measured(status int) bool {
 	return status == statusMeasured || status == statusGateHeld
 }
 
-// verdict is how a progress line names what became of one package.
-func verdict(status int) string {
+// verdict is how a progress line names what became of one package: the
+// script's status, or that there was nothing to measure and the script was
+// not run.
+func verdict(status int, nothing bool) string {
+	if nothing {
+		return "measured, nothing to measure (no condition, the script not run)"
+	}
 	if measured(status) {
 		return fmt.Sprintf("measured (exit %d)", status)
 	}
 	return fmt.Sprintf("not measured (exit %d)", status)
 }
 
+// scriptMode is the GOBCO_MODE the script will read from value, the
+// environment's: gobco's default when it is empty, and empty when it is not a
+// mode the script reads, which the script refuses itself.
+func scriptMode(value string) string {
+	if value == "" {
+		return defaultMode
+	}
+	if _, known := coverageModes[value]; known {
+		return value
+	}
+	return ""
+}
+
 // measurer is what every package of one run is measured with: the runner of
-// the script, the module root it runs in, the system the records name, the
-// directory of records they are left below, and what is added to the script's
-// environment.
+// the script, the go command that lists a package's files, the module root
+// both run in, the system the records name, the directory of records they
+// are left below, what is added to the script's environment, and the mode
+// the script counts in, empty when it is one the script will refuse.
 type measurer struct {
 	run     scriptRunner
+	list    lister
 	dir     string
 	system  string
 	records string
 	env     []string
+	mode    string
 }
 
 // measurePackage runs the script over one package and leaves, in the
@@ -87,14 +108,36 @@ type measurer struct {
 // output as it is printed. It returns the script's status, or an error when
 // the script could not be run or a file could not be written, in which case
 // the package has no record.
-func measurePackage(ctx context.Context, m measurer, pkg string, echo io.Writer) (int, error) {
-	var output bytes.Buffer
-	status, err := m.run(ctx, m.dir, pkg, m.env, io.MultiWriter(echo, &output))
-	if err != nil {
-		return 0, fmt.Errorf("%s could not be run over %s: %w", coverageScript, pkg, err)
+//
+// A package whose files hold no condition gobco counts in the mode is not
+// handed to the script, whose gobco would report 0/0 for it, the figure the
+// script refuses because a package gobco did not instrument reports it too
+// (issue 1667). It is recorded as measured, with nothing to measure: the
+// status of a measurement the gate held nothing in, and in place of the
+// script's output the line that says so (nothingLine), and nothing comes
+// back true. A package whose conditions could not be counted is handed to
+// the script, which says why it cannot measure it if it cannot.
+func measurePackage(ctx context.Context, m measurer, pkg string, echo io.Writer) (status int, nothing bool, err error) {
+	recordDir := filepath.Join(m.records, packageSlug(pkg))
+	if m.mode != "" {
+		if counted, countErr := countPackage(ctx, m, pkg); countErr == nil && counted.count == 0 {
+			said := nothingLine(pkg, m.mode, counted)
+			fmt.Fprint(echo, said)
+			return statusMeasured, true, writeRecord(recordDir, []byte(said), recordOf(pkg, m.system, statusMeasured))
+		}
 	}
-	text := fmt.Sprintf("package=%s\nsystem=%s\nplatform=%s/%s\nstatus=%d\n", pkg, m.system, runtime.GOOS, runtime.GOARCH, status)
-	return status, writeRecord(filepath.Join(m.records, packageSlug(pkg)), output.Bytes(), text)
+	var output bytes.Buffer
+	status, err = m.run(ctx, m.dir, pkg, m.env, io.MultiWriter(echo, &output))
+	if err != nil {
+		return 0, false, fmt.Errorf("%s could not be run over %s: %w", coverageScript, pkg, err)
+	}
+	return status, false, writeRecord(recordDir, output.Bytes(), recordOf(pkg, m.system, status))
+}
+
+// recordOf is the record of one package's run: the package, the system, the
+// platform it ran on, and the status.
+func recordOf(pkg, system string, status int) string {
+	return fmt.Sprintf("package=%s\nsystem=%s\nplatform=%s/%s\nstatus=%d\n", pkg, system, runtime.GOOS, runtime.GOARCH, status)
 }
 
 // writeRecord leaves one run in recordDir: the raw output first and the
@@ -113,10 +156,12 @@ func writeRecord(recordDir string, output []byte, text string) error {
 // runMeasure measures the packages -packages names one after another, as a
 // job of the workflow does, streaming the script's output to stdout and
 // leaving each package's record below -records, where the upload step takes
-// them from. It returns 2 for a usage error, 1 when a package could not be
-// measured or a record could not be written, and 0 when every package was
-// measured, whatever the figures say.
-func runMeasure(args []string, stdout, stderr io.Writer, run scriptRunner) int {
+// them from. The mode a package's conditions are counted in is the one the
+// script will read, GOBCO_MODE as the job's environment gives it. It returns
+// 2 for a usage error, 1 when a package could not be measured or a record
+// could not be written, and 0 when every package was measured, whatever the
+// figures say.
+func runMeasure(args []string, stdout, stderr io.Writer, list lister, run scriptRunner) int {
 	flags := flag.NewFlagSet("measure", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	packagesFlag := flags.String("packages", "", "packages to measure one after another, ./cmd/server style, separated by spaces or commas")
@@ -136,14 +181,14 @@ func runMeasure(args []string, stdout, stderr io.Writer, run scriptRunner) int {
 		return 2
 	}
 	var unmeasured []string
-	m := measurer{run: run, dir: *dir, system: *system, records: *records}
+	m := measurer{run: run, list: list, dir: *dir, system: *system, records: *records, mode: scriptMode(os.Getenv("GOBCO_MODE"))}
 	for _, pkg := range packages {
-		status, measureErr := measurePackage(context.Background(), m, pkg, stdout)
+		status, nothing, measureErr := measurePackage(context.Background(), m, pkg, stdout)
 		if measureErr != nil {
 			fmt.Fprintf(stderr, "%s: %v\n", toolName, measureErr)
 			return 1
 		}
-		fmt.Fprintf(stderr, "%s: %s on %s: %s\n", toolName, pkg, *system, verdict(status))
+		fmt.Fprintf(stderr, "%s: %s on %s: %s\n", toolName, pkg, *system, verdict(status, nothing))
 		if !measured(status) {
 			unmeasured = append(unmeasured, pkg)
 		}

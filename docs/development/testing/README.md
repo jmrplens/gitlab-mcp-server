@@ -867,8 +867,14 @@ included:
 
 The one package not measured, `cmd/internal/fileheader`, holds no condition at
 all. gobco reports it as `0/0`, which the script refuses because it cannot tell
-it from a package gobco did not instrument; that refusal also ends both runs
-red (#1667). Counting it would change neither total.
+it from a package gobco did not instrument; that refusal also ended both runs
+red (#1667). Counting it would change neither total. Since #1667,
+`cmd/measure_conditions` counts a package's conditions by gobco's own rule
+before it runs the script, and records a package with none as measured with
+nothing to measure (0 of 0) without running the script. Its count of those
+307 packages at `1ef08b139` was 31123 conditions and 25973 branches, exactly
+half of each total gobco reported above, and only `cmd/internal/fileheader`
+counted none in either mode.
 
 The 27 branch outcomes not taken are in fifteen packages. Eight of them are
 in the `action_specs.go` of `internal/tools/features` and

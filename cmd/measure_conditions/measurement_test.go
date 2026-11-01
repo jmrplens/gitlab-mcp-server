@@ -161,6 +161,53 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 	}
 }
 
+// TestParseMeasurement_NothingToMeasure_IsZeroOfZero verifies the reading of
+// a record measurePackage wrote for a package with nothing to measure: its
+// line stands for 0 of 0 in its own mode and is passed over in the other,
+// and beside a figure, a condition or a held line, or under the gate's
+// status, it is an output nothing writes and is refused.
+func TestParseMeasurement_NothingToMeasure_IsZeroOfZero(t *testing.T) {
+	t.Parallel()
+	line := func(mode string) string {
+		return plantedNothing("./cmd/none", mode, "none.go")
+	}
+	const never = `main.go:1:2: condition "x" was never evaluated`
+	const both = "the output says there was nothing to measure, and carries a figure or a condition as well"
+	cases := []struct {
+		name    string
+		output  string
+		status  int
+		mode    string
+		wantErr string
+	}{
+		{name: "in condition mode", output: line("condition"), status: statusMeasured, mode: "condition"},
+		{name: "in branch mode", output: line("branch") + "\r\n", status: statusMeasured, mode: "branch"},
+		{
+			name: "the other mode's line", output: line("branch"), status: statusMeasured, mode: "condition",
+			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+		},
+		{name: "beside a figure", output: line("condition") + "Condition coverage: 1/2\n", status: statusMeasured, mode: "condition", wantErr: both},
+		{name: "beside a condition", output: line("condition") + never + "\n", status: statusMeasured, mode: "condition", wantErr: both},
+		{name: "beside a held line", output: line("condition") + "  " + never + "\n", status: statusGateHeld, mode: "condition", wantErr: both},
+		{name: "under the gate's status", output: line("condition"), status: statusGateHeld, mode: "condition", wantErr: "the script exited 3 and its gate held 0 condition(s)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseMeasurement(tc.output, tc.status, tc.mode)
+			if tc.wantErr == "" {
+				if err != nil || !reflect.DeepEqual(got, measurement{}) {
+					t.Errorf("parseMeasurement() = %+v, %v; want 0 of 0 and nothing named", got, err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tc.wantErr {
+				t.Errorf("parseMeasurement() error = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 // TestUnquoteCode_Quotings_AreUndoneWhereGoReadsThem verifies that the code
 // gobco quoted is shown as written, on one line, and a quoting Go cannot read
 // is shown as printed rather than dropped. A condition written across lines
