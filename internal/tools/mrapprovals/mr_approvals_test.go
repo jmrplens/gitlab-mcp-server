@@ -1615,7 +1615,7 @@ const (
 		"- Use action 'merge_request.approval_rule_update' to change an existing rule\n" +
 		"- Use action 'merge_request.approval_rule_delete' to remove a rule\n"
 	rulesLinkedHints = "\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'merge_request.approval_rule_create' to add a rule\n" +
 		"- Use action 'merge_request.approval_rule_update' to change an existing rule\n" +
 		"- Use action 'merge_request.approval_rule_delete' to remove a rule\n"

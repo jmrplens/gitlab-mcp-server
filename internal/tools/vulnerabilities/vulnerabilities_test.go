@@ -1419,7 +1419,7 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
-	if contains(got, "clickable [text](url) links") {
+	if contains(got, toolutil.HintPreserveLinks) {
 		t.Error("the list tells the model to keep links a table without links cannot have")
 	}
 }
@@ -1459,7 +1459,7 @@ func TestFormatListMarkdown_LinksTheTitleAndAsksForTheLinksToBeKept(t *testing.T
 		"| `gid://gitlab/Vulnerability/1` | 🔴 CRITICAL | [SQL Injection (CWE-89)](" + webURL + ") | DETECTED | semgrep | SAST | 15 Jan 2026 10:00 UTC |\n\n" +
 		"Showing 1 items | no more pages\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'vulnerability.get' to read one vulnerability in full, naming the ID above\n" +
 		"- Use action 'vulnerability.severity_count' to see how many vulnerabilities the project has at each severity\n" +
 		"- Use action 'security_finding.list' to read the findings one pipeline's scanners reported\n"

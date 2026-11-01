@@ -270,7 +270,7 @@ func TestFormatReorderOutputMarkdown(t *testing.T) {
 // a nil entry is skipped rather than counted in the heading.
 //
 // Two of the subtests are about the preserve-links hint rather than the table.
-// That hint asks the reading model to keep the `[text](url)` cells intact, and
+// That hint asks the reading model to keep the linked cells intact, and
 // it is written only when some cell really carried one, so a page whose rows
 // are all plain handles must not ask for it: a hint that names something not
 // in the document teaches the model to invent links for later answers. The

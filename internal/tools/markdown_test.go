@@ -197,7 +197,7 @@ func TestFormatBranch_ListMarkdown(t *testing.T) {
 		"| main | ✅ | ✅ | ❌ |\n" +
 		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'branch.get' to see one branch in full\n" +
 		"- Use action 'branch.create' to create a new branch\n" +
 		"- Use action 'branch.protect' to protect a branch\n"

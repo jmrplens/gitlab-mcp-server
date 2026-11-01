@@ -1508,7 +1508,7 @@ func TestCreate_NoVariables_SendsNoVariablesKey(t *testing.T) {
 
 // listHints is the guidance section every pipeline list closes with.
 const listHints = "\n---\n💡 **Next steps:**\n" +
-	"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+	"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 	"- Use action 'pipeline.get' to see one pipeline in full\n" +
 	"- Use action 'job.list' to see the jobs of a pipeline\n"
 

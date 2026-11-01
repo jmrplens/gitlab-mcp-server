@@ -2337,7 +2337,7 @@ func TestFormatTriggeredPipelinesMarkdown_WithData(t *testing.T) {
 		"| [#101](https://example.com/101) | 11 | main | ❌ failed | schedule |\n" +
 		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'pipeline.get' to see one pipeline in full\n" +
 		"- Use action 'pipeline.schedule_list' to see the schedules of this project\n"
 	if got := FormatTriggeredPipelinesMarkdown(out); got != want {

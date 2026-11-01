@@ -3168,7 +3168,7 @@ const (
 		"- Use action 'merge_request.get' to see one merge request in full\n" +
 		"- Use action 'merge_request.create' to open a new merge request\n" +
 		"- Use action 'mr_review.changes_get' to review a merge request's diff\n"
-	preserveLinksHint = "- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n"
+	preserveLinksHint = "- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n"
 )
 
 // TestFormatMarkdown_Populated verifies the whole rendering of a merge request

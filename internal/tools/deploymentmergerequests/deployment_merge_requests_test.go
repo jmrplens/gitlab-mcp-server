@@ -215,7 +215,7 @@ func TestList_Error(t *testing.T) {
 // closes with, written once so the whole-output expectations below name it
 // rather than repeating four lines each.
 const listHints = "\n---\n💡 **Next steps:**\n" +
-	"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+	"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 	"- Use action 'merge_request.get' to read one of these merge requests in full\n" +
 	"- Use action 'mr_review.changes_get' to see what one of them changed\n"
 

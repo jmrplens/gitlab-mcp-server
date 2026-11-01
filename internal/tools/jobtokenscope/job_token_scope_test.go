@@ -905,7 +905,7 @@ func TestFormatListInboundAllowlistMarkdown_WithData(t *testing.T) {
 		"| 10 | [proj-a](https://gitlab.example.com/grp/proj-a) | grp/proj-a | internal |\n" +
 		"| 11 | [proj-b](https://gitlab.example.com/grp/proj-b) | grp/proj-b | private |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'job.token_scope_add_project' to allow another project\n" +
 		"- Use action 'job.token_scope_remove_project' to remove one from the allowlist\n"
 	if got := markdownText(t, r); got != want {
@@ -950,7 +950,7 @@ func TestFormatListGroupAllowlistMarkdown_WithData(t *testing.T) {
 		"| 5 | [group-a](https://gitlab.example.com/groups/group-a) |\n" +
 		"| 6 | [group-b](https://gitlab.example.com/groups/org/group-b) |\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'job.token_scope_add_group' to allow another group\n" +
 		"- Use action 'job.token_scope_remove_group' to remove one from the allowlist\n"
 	if got := markdownText(t, r); got != want {

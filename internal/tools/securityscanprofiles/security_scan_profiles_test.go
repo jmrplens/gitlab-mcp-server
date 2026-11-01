@@ -549,7 +549,7 @@ func TestFormatListProjectStatusesMarkdown(t *testing.T) {
 	if md != want {
 		t.Errorf("FormatListProjectStatusesMarkdown() =\n%s\nwant:\n%s", md, want)
 	}
-	if strings.Contains(md, "clickable [text](url) links") {
+	if strings.Contains(md, toolutil.HintPreserveLinks) {
 		t.Error("the list tells the model to keep links a table without links cannot have")
 	}
 }

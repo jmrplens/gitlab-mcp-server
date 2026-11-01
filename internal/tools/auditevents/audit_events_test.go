@@ -1076,7 +1076,7 @@ func TestFormatListMarkdown_WithEvents(t *testing.T) {
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
-	if strings.Contains(got, "clickable [text](url) links") {
+	if strings.Contains(got, toolutil.HintPreserveLinks) {
 		t.Error("the list tells the model to keep links a table without links cannot have")
 	}
 }
