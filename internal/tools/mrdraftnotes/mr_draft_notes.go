@@ -47,16 +47,16 @@ type DiffPosition struct {
 	BaseSHA      string         `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
 	StartSHA     string         `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
 	HeadSHA      string         `json:"head_sha"  jsonschema:"HEAD commit SHA of the MR source branch,required"`
-	OldPath      string         `json:"old_path,omitempty"  jsonschema:"File path before the change (for modified/deleted files)"`
+	OldPath      string         `json:"old_path,omitempty"  jsonschema:"File path before the change (for modified/deleted files). Required for position_type 'file'."`
 	NewPath      string         `json:"new_path"            jsonschema:"File path after the change,required"`
-	PositionType string         `json:"position_type,omitempty" jsonschema:"Position type: 'text' for code diffs (default) or 'image' for image diffs."`
+	PositionType string         `json:"position_type,omitempty" jsonschema:"Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line."`
 	OldLine      int            `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
 	NewLine      int            `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
 	LineRange    *DiffLineRange `json:"line_range,omitempty" jsonschema:"Line range for multi-line text comments. Set start and end line positions to span more than one line."`
-	Width        *int64         `json:"width,omitempty" jsonschema:"Image width in pixels. Only for position_type 'image'."`
-	Height       *int64         `json:"height,omitempty" jsonschema:"Image height in pixels. Only for position_type 'image'."`
-	X            *float64       `json:"x,omitempty" jsonschema:"X coordinate of the comment on an image diff. Only for position_type 'image'."`
-	Y            *float64       `json:"y,omitempty" jsonschema:"Y coordinate of the comment on an image diff. Only for position_type 'image'."`
+	Width        *int64         `json:"width,omitempty" jsonschema:"Image width in pixels. Required for position_type 'image', and only for it."`
+	Height       *int64         `json:"height,omitempty" jsonschema:"Image height in pixels. Required for position_type 'image', and only for it."`
+	X            *float64       `json:"x,omitempty" jsonschema:"X coordinate of the comment on an image diff. Required for position_type 'image', and only for it."`
+	Y            *float64       `json:"y,omitempty" jsonschema:"Y coordinate of the comment on an image diff. Required for position_type 'image', and only for it."`
 }
 
 // DiffLineRange describes the start and end line positions of a multi-line
@@ -202,7 +202,7 @@ func ToOutput(d *gl.DraftNote) Output {
 func toDiffPositionOptions(p *DiffPosition) *gl.PositionOptions {
 	positionType := p.PositionType
 	if positionType == "" {
-		positionType = "text"
+		positionType = toolutil.PositionTypeText
 	}
 	pos := &gl.PositionOptions{
 		BaseSHA:      new(p.BaseSHA),
@@ -472,13 +472,36 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 	return nil
 }
 
-// validatePosition fetches the MR diff and validates that the given position
-// refers to a line actually present in the diff. This prevents draft notes
-// from being silently lost when published with out-of-range positions. When
-// the diff cannot be listed, or cannot be shown to be the one the position's
-// SHAs name, the check is skipped and the write that follows is judged by
-// GitLab, for the reasons [toolutil.MergeRequestDiffForPositionCheck] gives.
+// validatePosition judges a position by the fields GitLab reads for its
+// position_type, before the write is sent. A text position, which is what an
+// unnamed type is sent as, is judged against the lines of the merge
+// request's diff by [validateTextPosition]. An image position is judged by
+// its width, height, x and y, and a file position by its old and new paths,
+// with no request, since GitLab places neither by a line of the diff. For a
+// draft note that is the only judgement before publication: GitLab saves a
+// draft whose position is incomplete and publishes it as a general comment.
+// A position_type GitLab does not declare is left to GitLab, which refuses
+// it by name.
 func validatePosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
+	switch pos.PositionType {
+	case "", toolutil.PositionTypeText:
+		return validateTextPosition(ctx, client, projectID, mrIID, pos)
+	case toolutil.PositionTypeImage:
+		return toolutil.ValidateImagePosition(pos.Width, pos.Height, pos.X, pos.Y)
+	case toolutil.PositionTypeFile:
+		return toolutil.ValidateFilePosition(pos.OldPath, pos.NewPath)
+	}
+	return nil
+}
+
+// validateTextPosition fetches the MR diff and validates that the given
+// position refers to a line actually present in the diff. This prevents
+// draft notes from being silently lost when published with out-of-range
+// positions. When the diff cannot be listed, or cannot be shown to be the
+// one the position's SHAs name, the check is skipped and the write that
+// follows is judged by GitLab, for the reasons
+// [toolutil.MergeRequestDiffForPositionCheck] gives.
+func validateTextPosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
 	targetPath := pos.NewPath
 	if targetPath == "" {
 		targetPath = pos.OldPath

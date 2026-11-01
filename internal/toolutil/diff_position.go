@@ -101,6 +101,81 @@ func mergeRequestPositionSnapshotMatches(ctx context.Context, client *gitlabclie
 	return true
 }
 
+// The position types GitLab's merge request discussion and draft note routes
+// accept: both declare position_type with values text, image and file
+// (lib/api/discussions.rb and lib/api/draft_notes.rb), and the tools send
+// text when the caller names none.
+const (
+	// PositionTypeText places a comment on a line of a text diff.
+	PositionTypeText = "text"
+	// PositionTypeImage places a comment on a point of an image.
+	PositionTypeImage = "image"
+	// PositionTypeFile places a comment on a whole file.
+	PositionTypeFile = "file"
+)
+
+// ValidateImagePosition refuses an image position that lacks one of the four
+// fields GitLab places an image comment by. GitLab completes an image
+// position only when its width, height, x and y are all present
+// (Gitlab::Diff::Formatters::ImageFormatter#complete?), and a 0 is present
+// there, so a field is missing here only when it was not given. Nothing else
+// of an image position is judged: GitLab computes no line code for one (a
+// DiffNote validates its line code only on a text position), so the lines of
+// the merge request's diff have nothing to say about it.
+//
+// The check runs before any request because GitLab's own answers to an
+// incomplete position name no field, and differ by route: a discussion is
+// refused with a 400 saying the position is incomplete, and a draft note is
+// saved and later published as a general comment with its position dropped
+// (DraftNote#publish_params keeps the position only when it is complete).
+func ValidateImagePosition(width, height *int64, x, y *float64) error {
+	var missing []string
+	if width == nil {
+		missing = append(missing, "width")
+	}
+	if height == nil {
+		missing = append(missing, "height")
+	}
+	if x == nil {
+		missing = append(missing, "x")
+	}
+	if y == nil {
+		missing = append(missing, "y")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"an image position needs width, height, x and y (missing: %s): GitLab places an image comment by "+
+			"the image's width and height in pixels and the x and y of the point on it, and reads no line of it",
+		strings.Join(missing, ", "),
+	)
+}
+
+// ValidateFilePosition refuses a file position that lacks its old or its new
+// path. GitLab completes a file position only when both are present
+// (Gitlab::Diff::Formatters::FileFormatter#complete?), where a path of blanks
+// is not, and reads no line of one, so the lines of the merge request's diff
+// are not consulted. It runs before any request for the reason
+// [ValidateImagePosition] gives.
+func ValidateFilePosition(oldPath, newPath string) error {
+	var missing []string
+	if strings.TrimSpace(oldPath) == "" {
+		missing = append(missing, "old_path")
+	}
+	if strings.TrimSpace(newPath) == "" {
+		missing = append(missing, "new_path")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"a file position needs both old_path and new_path (missing: %s): take them from the file's entry in "+
+			"mr_review.changes_get, which gives an added or a deleted file the same path in both",
+		strings.Join(missing, ", "),
+	)
+}
+
 // LineType classifies a line within a unified diff hunk.
 type LineType int
 
@@ -200,6 +275,10 @@ func parseHunkHeader(line string) (oldStart, newStart int) {
 //
 // Returns nil when the position is valid, or a descriptive error explaining
 // exactly why the position is invalid and what the caller should do instead.
+//
+// The rules are those of a text position, the only kind GitLab places by a
+// line: an image position is judged by [ValidateImagePosition] and a file
+// position by [ValidateFilePosition], neither against the diff's lines.
 func ValidateDiffPosition(diffLines []DiffLine, newLine, oldLine int) error {
 	if len(diffLines) == 0 {
 		return errors.New("no diff content available for this file")
