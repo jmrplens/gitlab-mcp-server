@@ -6253,7 +6253,11 @@ route.
   projects out of indexing attempts. The answers GitLab.com gave on
   2026-10-29 that `TestGraphStatus_EachScope_AsksTheMatchingDocument` and
   `TestGraphStatus_TopLevelGroup_PublishesAccessAndTrial` replay carry the
-  key (`internal/tools/orbit/graphql_test.go:430` and `:568`). Until 3.4.0
+  key as `0` (`internal/tools/orbit/graphql_test.go:430` and `:568`), which
+  is also what a field nothing decodes is left at, so
+  `TestGraphStatus_ProjectCounts_EachLandsInItsOwnField` replays an answer of
+  its own whose five counts all differ, and fails if `gaps` stops reaching
+  `Gaps`. Until 3.4.0
   the field was read from the captured response of `GET /orbit/graph_status`
   ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
   and that read and its two tests went with the route in
