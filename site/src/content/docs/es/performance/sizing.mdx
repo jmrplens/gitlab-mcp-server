@@ -294,9 +294,12 @@ dicen cosas distintas y llevan códigos distintos: el del proceso dice que el
 servidor no puede vigilar otro recurso ahora, `server-wide`, con `-50300`, y el
 de por credencial dice que quien llama tiene demasiados, con la cuenta de esa
 credencial y `-42900`, así que el error de un cliente dice con qué número se
-encontró. Una credencial se acuña con una llamada a la
-API, así que un número por credencial se multiplica por cuantas tenga quien
-llame y solo el del proceso acota el proceso: 52 credenciales en su tope de diez
+encontró. Acuñar una credencial cuesta poco (desde GitLab 19.2 un token de
+acceso personal de grano fino es una llamada a la API, y un token de acceso de
+proyecto es una para quien tenga el rol Maintainer en el proyecto, lo que en
+GitLab.com requiere una suscripción Premium o Ultimate), así que un número por
+credencial se multiplica por cuantas tenga quien llame y solo el del proceso
+acota el proceso: 52 credenciales en su tope de diez
 bastan para alcanzarlo. Mantenerlo es barato con `--stateless=false`, donde un
 watcher no necesita ninguna conexión retenida, y un despliegue cuyos suscriptores
 se desplazan unos a otros de esta forma lo dice con un `WARN` por cada rechazo;

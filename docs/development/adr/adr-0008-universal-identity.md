@@ -11,7 +11,7 @@ superseded_by: ""
 
 ## Status
 
-**Accepted, partially unimplemented** — the unified resolution API exists and stdio and HTTP OAuth populate it. HTTP legacy does not: see the Superseded note under Decision. The title's "universal" describes the interface, not the coverage.
+**Accepted.** The unified resolution API exists and every transport populates it: stdio at startup, HTTP OAuth through `req.Extra.TokenInfo`, and HTTP legacy through the identity the gate attaches to the request context (see the Superseded note under Decision). What remains is [issue 953](https://github.com/jmrplens/gitlab-mcp-server/issues/953)'s attribution work, the first part of which is that an HTTP OAuth tool call resolves its user without the instance.
 
 ## Context
 
@@ -91,7 +91,7 @@ Implement Option 4 with the following architecture:
 >
 > `oauth.NormalizeAuthHeader` survived as unmounted code for a while after that, with this document still describing it as wired. It was deleted in 2026-08; the surviving statements about it below record what was decided in April 2026, not how the server behaves.
 >
-> Two further corrections to the description above: `auth.RequireBearerToken` is mounted in **oauth mode only**, not "all HTTP modes" — legacy mode authenticates in `mcpServerGate` alone, which is why `req.Extra.TokenInfo` is unset there and identity in legacy HTTP mode degrades to the empty value that `ResolveIdentity` returns. And in oauth mode the SDK middleware is no longer the outermost layer: `bearerGuard` runs in front of it to rate-limit, cache rejections, and answer with RFC 6750 error codes.
+> Two further corrections to the description above: `auth.RequireBearerToken` is mounted in **oauth mode only**, not "all HTTP modes": legacy mode authenticates in `mcpServerGate` alone, which is why `req.Extra.TokenInfo` is unset there. That used to leave legacy HTTP mode with the empty identity; since 2026-08 the gate attaches the user the pool resolved when it built the entry to the request context (`mcpServerGate.withIdentity`), with the instance since 2026-09, and `ResolveIdentity` falls back to it. And in oauth mode the SDK middleware is no longer the outermost layer: `bearerGuard` runs in front of it to rate-limit, cache rejections, and answer with RFC 6750 error codes.
 
 ### Stdio Mode (`cmd/server/main.go`)
 
@@ -119,7 +119,7 @@ Implement Option 4 with the following architecture:
 
 ### Positive
 
-- **POS-001**: ~~All tool handlers can access user identity via `ResolveIdentity(ctx, req)` regardless of transport mode.~~ Narrowed: the call is uniform, the coverage is not. It resolves an identity in stdio and HTTP OAuth mode, and returns the zero value in HTTP legacy mode, where nothing populates `req.Extra.TokenInfo`. Its only consumer today is log enrichment in `toolutil/logging.go`, so the visible effect is a missing username in some log lines.
+- **POS-001**: ~~All tool handlers can access user identity via `ResolveIdentity(ctx, req)` regardless of transport mode.~~ Narrowed, then restored: the call is uniform, and so is the coverage now. It resolves an identity in every mode; in HTTP legacy mode, where nothing populates `req.Extra.TokenInfo`, it reads the identity the gate put on the context, which carries the instance, while in HTTP OAuth mode the identity it reads from `TokenInfo` carries none, the gap [issue 953](https://github.com/jmrplens/gitlab-mcp-server/issues/953) tracks. Its consumers are log enrichment in `toolutil/logging.go` and the telemetry identity of a tool call in `cmd/server/telemetry_identity.go`.
 - **POS-002**: HTTP legacy mode now validates tokens against GitLab (was previously unvalidated).
 - **POS-003**: Caching prevents redundant GitLab API calls — single validation per token per TTL period.
 - **POS-004**: ~~The `NormalizeAuthHeader` adapter enables legacy clients to work without code changes.~~ Withdrawn: the adapter was removed. Legacy clients keep working because the legacy gate reads `PRIVATE-TOKEN` directly.

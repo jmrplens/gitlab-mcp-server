@@ -395,7 +395,7 @@ const (
 type Site struct {
 	// Pkg is the module-relative package directory, "cmd/server".
 	Pkg string
-	// Name is the symbol: "maxListenStreamsPerServer" for a package-level
+	// Name is the symbol: "maxListenStreamsPerCredential" for a package-level
 	// const or var or a function, "listenLimits.middleware" for a method.
 	Name string
 	// Role is what the symbol is to the decision.

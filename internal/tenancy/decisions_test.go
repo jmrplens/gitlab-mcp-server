@@ -702,6 +702,48 @@ func TestDecisions_ToolCallRefusal_AnswersF20UnderIssue961(t *testing.T) {
 	}
 }
 
+// TestDecisions_StaleStatements_AreAnsweredByIssue960 pins what issue 960
+// corrected in the two rows whose comments it restated. HLD-001's reason is
+// quoted from maxListenStreamsPerCredential, names the ceiling by the unit it
+// is kept in and uses no share word, so the INV-003 departure F-04 recorded is
+// gone, while F-21, the go-sdk behavior issue 961 tracks, is still carried.
+// POL-002's comments say that size pressure consults serverpool.WithInUse as
+// the idle sweep does, so F-26 is gone. Both rows record the issue, and both
+// findings stay filed as issue 960's.
+func TestDecisions_StaleStatements_AreAnsweredByIssue960(t *testing.T) {
+	for _, tc := range []struct {
+		id      string
+		dropped string
+		kept    []string
+	}{
+		{"HLD-001", "F-04", []string{"F-21"}},
+		{"POL-002", "F-26", nil},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			d, _ := Lookup(tc.id)
+			if !slices.Contains(d.Decided, "issue 960") || d.Carries(tc.dropped) || !slices.Equal(d.Findings, tc.kept) {
+				t.Errorf("%s: decided %v, findings %v; want issue 960 recorded, %s no longer carried and %v kept",
+					tc.id, d.Decided, d.Findings, tc.dropped, tc.kept)
+			}
+			if FindingIssue(tc.dropped) != 960 {
+				t.Errorf("%s is filed as issue %d, want it kept as issue 960's", tc.dropped, FindingIssue(tc.dropped))
+			}
+		})
+	}
+
+	listen, _ := Lookup("HLD-001")
+	if listen.ReasonAt.Name != "maxListenStreamsPerCredential" {
+		t.Errorf("HLD-001 quotes its reason from %s, want maxListenStreamsPerCredential, the ceiling's own name", listen.ReasonAt.Name)
+	}
+	for _, word := range []string{"fair", "quota", "entitlement", "per server"} {
+		t.Run(word, func(t *testing.T) {
+			if strings.Contains(strings.ToLower(listen.Reason), word) {
+				t.Errorf("HLD-001's reason %q says %q, which INV-003 or ADR-0020 no longer allows of a per-credential ceiling", listen.Reason, word)
+			}
+		})
+	}
+}
+
 // TestDecisions_OAuthVerification_IsBoundedByIssue950 pins what issue 950
 // decided for the two things on the OAuth admission path that grew with what
 // callers send. The identity cache (ADM-005) has a constant capacity and takes
@@ -816,7 +858,9 @@ var findingsOfNoRow = []string{"F-18", "F-23", "F-24", "F-27"}
 // window switching the distinct-credential budget off, and wrote each default
 // and fallback once, and F-13 did when issue 957 moved every variable a row
 // names onto the configuration package's list, read through it, and gave
-// the listen ceiling its flag.
+// the listen ceiling its flag, and F-04 and F-26 did when issue 960 stated
+// the listen ceiling's reason in its own unit with no share word and said
+// that size pressure consults serverpool.WithInUse as the idle sweep does.
 func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 	carried := map[string]bool{}
 	decided := map[string]bool{}
@@ -844,7 +888,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-03,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-19,F-20,F-25,F-29,F-30,F-31,F-33,F-34,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-03,F-04,F-07,F-08,F-09,F-10,F-11,F-13,F-14,F-16,F-17,F-19,F-20,F-25,F-26,F-29,F-30,F-31,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }

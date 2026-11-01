@@ -125,12 +125,12 @@ Latency is bounded by the cadence by design. The pull-safe event channels GitLab
 
 ### What are the limits?
 
-| Limit                   | Value                      | Why                                                                                                                                          |
-| ----------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Watchers per credential | 10                         | A watcher polls with the subscriber's own token, so this is the ceiling on one credential's polling                                          |
-| Watchers per process    | 512                        | A credential is one API call to mint, so a per-credential number multiplies by however many a caller holds; only this one bounds the process |
-| Floor interval          | 5s                         | Ten watchers at the floor already make 120 requests a minute                                                                                 |
-| Rate-limit pause        | 30s, doubling to 5 minutes | GitLab enforces its limits per user, so one 429 pauses every watcher of that credential                                                      |
+| Limit                   | Value                      | Why                                                                                                                                               |
+| ----------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Watchers per credential | 10                         | A watcher polls with the subscriber's own token, so this is the ceiling on one credential's polling                                               |
+| Watchers per process    | 512                        | A credential is cheap to mint (see below), so a per-credential number multiplies by however many a caller holds; only this one bounds the process |
+| Floor interval          | 5s                         | Ten watchers at the floor already make 120 requests a minute                                                                                      |
+| Rate-limit pause        | 30s, doubling to 5 minutes | GitLab enforces its limits per user, so one 429 pauses every watcher of that credential                                                           |
 
 A credential is one pool entry, one token and GitLab URL pair, in HTTP mode. On stdio the process serves one credential, so its ten watchers are the bound and the process ceiling never binds.
 
@@ -142,7 +142,7 @@ A credential is one pool entry, one token and GitLab URL pair, in HTTP mode. On 
 
 Neither ceiling is configurable, and both refusals say which one was met: the process one says `server-wide` in as many words, and the per-credential one carries that credential's own count and limit, so an operator reading the error knows whether to look at the caller or the deployment. The lever an operator does have is `--max-http-clients`, which decides how many credentials the pool serves at once ([The lever, and what it costs](/gitlab-mcp-server/operations/http-server/#the-lever-and-what-it-costs)).
 
-What the process ceiling costs is worth knowing before you meet it. Fifty-one credentials at the per-credential cap fill 510 of the 512 slots, and they keep them for as long as their watches live, up to 24 hours each, while every other subscribe is refused. That is accepted deliberately: the alternative is unbounded polling from one process, and a share per credential would bound nothing, since a credential is one API call to mint. A saturated deployment says so in its own log, one WARN line per refusal.
+What the process ceiling costs is worth knowing before you meet it. Fifty-one credentials at the per-credential cap fill 510 of the 512 slots, and they keep them for as long as their watches live, up to 24 hours each, while every other subscribe is refused. That is accepted deliberately: the alternative is unbounded polling from one process, and a share per credential would bound nothing, since a credential is cheap to mint. Since GitLab 19.2 a fine-grained personal access token is one API call (`POST /user/personal_access_tokens`, behind a feature flag that is on by default), a classic one is a form in the UI with no cap, and anyone with the Maintainer role on a project can create project access tokens for it in one call, which on GitLab.com needs a Premium or Ultimate subscription. A saturated deployment says so in its own log, one WARN line per refusal.
 
 ## Lifetime and renewal
 

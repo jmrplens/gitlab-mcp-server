@@ -14,8 +14,9 @@ import (
 // row carries, the unit of what its reason cites and its key, to reproducing
 // the specification's class D set exactly: the tool-call bucket on HTTP, the
 // watcher pause on a GitLab 429 and the watcher cap. HLD-001 is class R, with
-// HLD-002 as its partner: its stated unit is the entry's own, and its word
-// "fairness" is a vocabulary departure the gate holds, not a unit mismatch.
+// HLD-002 as its partner: its stated unit is the entry's own, and the word
+// "fairness" it used until issue 960 was a vocabulary departure, never a unit
+// mismatch.
 // RTC-003 left the set when RTC-007 gave it a process partner: its reason is
 // still the processor, and the partner is what now meets it.
 func TestDecision_Disagrees_IsExactlyTheClassDSet(t *testing.T) {

@@ -425,11 +425,11 @@ func allowDecisions() []Decision {
 			Resource: "open subscriptions/listen streams",
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			// The stated unit is the entry's own, so the row is class R. The
-			// word fairness breaks INV-003's vocabulary rule, which no field
-			// can hold; the gate holds it in the comment (F-04, issue 960).
+			// reason names that unit and no share word, as INV-003 asks of a
+			// number on a key a caller can mint (issue 960, answering F-04).
 			StatedUnit: KeyEntry, ReasonUnit: KeyEntry, ProtectsProcess: true, Partner: "HLD-002",
-			Reason:   "Per server is per pool entry, which is per token and instance, and bounds fairness",
-			ReasonAt: reasonAt(pkgServer, "maxListenStreamsPerServer"),
+			Reason:   "Per credential is per pool entry, which is per token and instance, and bounds what one credential holds open",
+			ReasonAt: reasonAt(pkgServer, "maxListenStreamsPerCredential"),
 			Values:   []string{"ListenStreamsPerCredential"},
 			// A value that does not parse warns and keeps the default rather
 			// than refusing startup (issue 957), for the stdio line limit's
@@ -442,8 +442,8 @@ func allowDecisions() []Decision {
 			Envs:      []string{"GITLAB_MCP_MAX_LISTEN_STREAMS"},
 			Malformed: WarnKeepDefault, MalformedBy: "issue 957",
 			Zero: ZeroOffKeepsCount, AtCapacity: RefuseNewcomer,
-			Decided:  []string{"issue 540", "issue 956", "issue 957"},
-			Findings: []string{"F-04", "F-21"},
+			Decided:  []string{"issue 540", "issue 956", "issue 957", "issue 960"},
+			Findings: []string{"F-21"},
 			Refusals: []Refusal{
 				{
 					Methods: []string{"subscriptions/listen"}, Era: EraModern, Channel: RPC, Code: CodeTooManyRequests,
@@ -454,7 +454,7 @@ func allowDecisions() []Decision {
 			// moves it: a listen past its caller's ceiling is what it refuses
 			// first, and the watcher ceiling and GitLab's 429 read it too.
 			Sites: []Site{
-				alias(pkgServer, "maxListenStreamsPerServer", "ListenStreamsPerCredential"),
+				alias(pkgServer, "maxListenStreamsPerCredential", "ListenStreamsPerCredential"),
 				alias(pkgServer, "codeTooManyRequests", "CodeTooManyRequests"),
 				enforce(pkgServer, "maxListenStreamsEnv"),
 				enforce(pkgServer, "maxListenStreamsSetting"),
@@ -877,8 +877,11 @@ func allowDecisions() []Decision {
 			ID: "POL-002", Question: Allow, Kind: Rule, Class: ClassR, Disposition: Ruled,
 			Resource: "the entry evicted under size pressure, quiet ones first",
 			Key:      KeyEntry, StdioKey: KeyNone,
-			Decided:  []string{"ADR-0020", "issue 561"},
-			Findings: []string{"F-26"},
+			// The idle sweep and size pressure both ask serverpool.WithInUse,
+			// the sweep to keep a busy entry and size pressure to take one
+			// only when every entry is busy, which the pool's comments used
+			// to give to the sweep alone (issue 960, answering F-26).
+			Decided: []string{"ADR-0020", "issue 561", "issue 960"},
 			Refusals: []Refusal{
 				listenEnd("credential_evicted", StartOver, refuse(pkgServer, "endOfCredentialEviction")),
 				{

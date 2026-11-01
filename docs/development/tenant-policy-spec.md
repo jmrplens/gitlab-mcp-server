@@ -160,7 +160,7 @@ words, and the unit of what it cites. They differ for `RTC-001` alone, whose com
 names GitLab's per-token limits while GitLab keeps the limit it cites per user, and that
 misstatement is itself a finding. A ceiling a comment calls "fairness" is not class D on
 that account, since fairness names no unit; the defect is `INV-003`'s vocabulary rule,
-which `HLD-001` breaks.
+which `HLD-001` broke until issue 960 stated its reason in the entry's own unit.
 
 ## Invariants any limit must satisfy
 
@@ -1145,11 +1145,17 @@ one it does, and `ADM-006` and `AUB-004` record the issue and carry the finding 
 longer. F-16 and F-34 are answered by issue 958 too, as the paragraph that records them
 says: every zero that does not mean off is a stated exception with its reason, every
 other zero means off through the flag and the variable alike and switches nothing else
-off, and each default and fallback is written once. Four
+off, and each default and fallback is written once. F-04 and F-26 are answered by
+issue 960, which restated comments and changed no code: `HLD-001`'s reason calls the
+listen ceiling per credential and bounding what one credential holds open, with no
+share word, and the pool's comments say that size pressure consults
+`serverpool.WithInUse` as the idle sweep does (`POL-002`); both rows record the issue
+and carry the finding no longer. Four
 more
 have been carried by no row since the register landed, because each records something no
 row decides: F-18 a budget GitLab.com keeps that the process does not account for, F-24 a
-message the SDK gives the server no way to send, and F-23 and F-27 stale statements.
+message the SDK gives the server no way to send, and F-23 and F-27 stale statements,
+which issue 960 corrected in the comments and documents that made them.
 `TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue` holds both sets: a finding no
 row carries fails unless it is one of those four or a row records its issue in `Decided`,
 and the answered set is named, so a finding dropped from a row by mistake fails too.

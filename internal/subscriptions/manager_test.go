@@ -2201,10 +2201,13 @@ func TestDemotedCount_CountsTheWatchesThatSlowedDown(t *testing.T) {
 // The shared watcher ceiling.
 //
 // MaxWatchers bounds one manager, which in HTTP mode is one credential, and a
-// credential is one API call to mint. The gate is what bounds the process, and
-// the tests below hold it to the three things that make it worth having: it
-// refuses rather than evicting somebody else's watch, it reserves nothing for
-// anyone, and every path that removes a watcher gives its slot back.
+// credential is cheap to mint: since GitLab 19.2 a fine-grained personal access
+// token is one API call, and a project access token is one for a Maintainer of
+// the project, on GitLab.com with a Premium or Ultimate subscription. The gate
+// is what bounds the process, and the tests below hold it to the three things
+// that make it worth having: it refuses rather than evicting somebody else's
+// watch, it reserves nothing for anyone, and every path that removes a watcher
+// gives its slot back.
 
 // gatedURIs are the resources these tests watch. Distinct URIs rather than one,
 // because a second subscription to a watched URI joins instead of taking a slot,
@@ -2372,8 +2375,10 @@ func TestWatcherGate_ARefusalAtTheCeiling_CostsTheCredentialNothing(t *testing.T
 //
 // This is the guard on a remedy that keeps looking attractive and is not one.
 // A per-credential share reads as fairness and is not, because the share key is
-// something an attacker mints: a personal access token is one API call, and a
-// project or group access token creates a distinct bot user, so a reserve
+// something an attacker mints: since GitLab 19.2 a fine-grained personal
+// access token is one API call, a classic one is a form in the UI with no cap,
+// and a project or group access token, one call for a project's Maintainer or
+// a group's Owner, creates a distinct bot user, so a reserve
 // guarantees the honest tenant one slot and the attacker one per credential
 // they care to create. That reasoning is recorded on issue 540 and issue 561
 // rules the remedy out; a change that adds a reserve fails here.

@@ -284,8 +284,11 @@ different codes: the process one says the server cannot watch another resource
 now, `server-wide`, with `-50300`, and the per-credential one says the caller
 holds too many, with that credential's own count and `-42900`, so a client's
 error says which number it met. A
-credential is one API call to mint, so a per-credential number multiplies by
-however many a caller holds and only the process-wide one bounds the process:
+credential is cheap to mint (since GitLab 19.2 a fine-grained personal access
+token is one API call, and a project access token is one for a Maintainer of the
+project, which on GitLab.com needs a Premium or Ultimate subscription), so a
+per-credential number multiplies by however many a caller holds and only the
+process-wide one bounds the process:
 52 credentials at their cap of ten are enough to reach it. Holding it is cheap
 under `--stateless=false`, where a watcher needs no held connection, and a
 deployment whose subscribers crowd each other out this way says so with a
