@@ -13,7 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
 )
 
-// The four truths, put to values a model might really send.
+// The five truths, put to values a model might really send.
 
 // noProduced is the resolver for a comparison that binds nothing to an earlier
 // answer. It fails rather than returning nothing, so a test that accidentally
@@ -278,6 +278,34 @@ func TestCompareArgument_ATruthThatIsNoneOfTheFour_IsReported(t *testing.T) {
 	if verdicts[0].Matched || verdicts[0].Reason == "" {
 		t.Errorf("matched=%v reason=%q, want a miss that says the case declares no truth",
 			verdicts[0].Matched, verdicts[0].Reason)
+	}
+}
+
+// TestCompareArgument_AnImpliedTruth_IsReportedAndNeverCompared holds the
+// truth for a value a verb of the prompt asks for to the authored rule: what
+// was sent is reported, sent or not, and nothing is compared or counted, since
+// the recipe's verification is what sees whether the verb was done.
+func TestCompareArgument_AnImpliedTruth_IsReportedAndNeverCompared(t *testing.T) {
+	cases := []struct {
+		name string
+		sent map[string]json.RawMessage
+		want string
+	}{
+		{name: "sent as the verb asks", sent: map[string]json.RawMessage{"resolved": mustJSON(true)}, want: "true"},
+		{name: "sent the other way", sent: map[string]json.RawMessage{"resolved": mustJSON(false)}, want: "false"},
+		{name: "not sent", sent: map[string]json.RawMessage{}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			step := modelcorpus.Step{Args: []modelcorpus.Arg{
+				{Name: "resolved", Truth: modelcorpus.Truth{Implied: "true"}, Required: true},
+			}}
+			verdicts := compareArguments(step, testCase.sent, defaultFacts(), noProduced)
+			got := verdicts[0]
+			if got.Truth != TruthImplied || got.Compared || got.Matched || got.Sent != testCase.want || got.Reason != "" {
+				t.Errorf("verdict = %+v, want an implied argument reported with %q and never compared", got, testCase.want)
+			}
+		})
 	}
 }
 

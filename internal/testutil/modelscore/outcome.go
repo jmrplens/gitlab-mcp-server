@@ -141,14 +141,13 @@ func answerOf(mode string, mutating bool, event Event) Answer {
 		}
 		return AnswerWrong
 	}
-	switch {
-	case event.Outcome == modelrecord.OutcomeOK:
+	if event.Outcome == modelrecord.OutcomeOK {
 		return AnswerAccepted
-	case gitLabRefused(event.Outcome):
-		return AnswerGitLabRefused
-	default:
-		return AnswerWrong
 	}
+	if gitLabRefused(event.Outcome) {
+		return AnswerGitLabRefused
+	}
+	return AnswerWrong
 }
 
 // declinedByRefusal reports whether one call is the server withholding the
@@ -158,17 +157,20 @@ func answerOf(mode string, mutating bool, event Event) Answer {
 // here is the individual surface's unregistered tool and not some unrelated
 // transport failure: a call that named the step's own tool and was refused by
 // JSON-RPC is a tool the session did not register.
+//
+// Like [answerOf], it is a chain of ifs rather than a tagless switch, whose
+// case expressions the coverage profile gremlins reads gives no block.
 func declinedByRefusal(event Event) bool {
-	switch {
-	case refusedFor(event.Outcome, toolutil.RefusalUnknownAction):
+	if refusedFor(event.Outcome, toolutil.RefusalUnknownAction) {
 		return true
-	case event.Outcome == modelrecord.OutcomeProtocolError:
-		return true
-	case refusedFor(event.Outcome, toolutil.RefusalInvalidParams):
-		return strings.Contains(event.Text, metaActionEnumMarker)
-	default:
-		return false
 	}
+	if event.Outcome == modelrecord.OutcomeProtocolError {
+		return true
+	}
+	if refusedFor(event.Outcome, toolutil.RefusalInvalidParams) {
+		return strings.Contains(event.Text, metaActionEnumMarker)
+	}
+	return false
 }
 
 // retried reports whether the server refused this call expecting the model to

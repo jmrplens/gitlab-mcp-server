@@ -18,11 +18,14 @@ package modelcorpus
 // still come from a fact.
 //
 // Where the prompt states a value as a verb rather than as a value ("pause the
-// runner", "resolve the discussion"), no argument truth is declared: a Literal
-// the prompt never spells is a value the model was never given, and the corpus
-// gate refuses one. What the model did with that argument is checked by the
-// recipe's own verification against GitLab after the attempt, which is the
-// only oracle that can see it.
+// runner", "resolve the discussion"), the truth is implied, never a Literal: a
+// Literal the prompt never spells is a value the model was never given, and
+// the corpus gate refuses one. An implied value is never compared; what the
+// model did with that argument is checked by the recipe's own verification
+// against GitLab after the attempt, which is the only oracle that can see it.
+// It is declared so that the fake provider sends what the verb asks: MT-061
+// declared none, the action requires resolved, and every replay of it was
+// refused before it reached GitLab.
 //
 // Two texts changed beyond the four kinds of rewrite read.go lists, and both
 // are changes to what the model is asked:
@@ -255,7 +258,8 @@ func mutatingCases() []Case {
 			key: Key{Steps: []Step{
 				step("mr_review.discussion_resolve", project(),
 					req("merge_request_iid", fact(FactMergeRequestIID)),
-					req("discussion_id", fact(FactDiscussionID))),
+					req("discussion_id", fact(FactDiscussionID)),
+					req("resolved", implied("true"))),
 			}},
 		},
 		{

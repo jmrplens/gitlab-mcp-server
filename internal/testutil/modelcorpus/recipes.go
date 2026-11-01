@@ -333,6 +333,7 @@ const (
 	FactGroupAccessTokenID      = "group_access_token_id"
 	FactHookID                  = "hook_id"
 	FactJobTokenTargetProjectID = "job_token_target_project_id"
+	FactLDAPCommonName          = "ldap_common_name"
 	FactLDAPProvider            = "ldap_provider"
 	FactMemberRoleID            = "member_role_id"
 	FactMilestoneIID            = "milestone_iid"
@@ -452,7 +453,7 @@ var recipeFacts = map[Recipe][]string{
 	RecipeGeoSiteName:               {FactGeoSiteName, FactGeoSiteURL},
 	RecipeServiceAccountName:        {FactServiceAccountUsername},
 	RecipeScimIdentity:              withGroupFacts(FactScimUID),
-	RecipeLDAPLink:                  withGroupFacts(FactLDAPProvider),
+	RecipeLDAPLink:                  withGroupFacts(FactLDAPProvider, FactLDAPCommonName),
 	RecipeSAMLLink:                  withGroupFacts(FactSAMLGroupName),
 	RecipeGroupSSHCertificate:       withGroupFacts(FactSSHCertificateID),
 	RecipeGroupWikiPage:             withGroupFacts(FactWikiSlug),

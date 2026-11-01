@@ -220,9 +220,9 @@ func writeCaseDigest(sum io.Writer, one Case) {
 		_, _ = fmt.Fprintf(sum, "step\x00%s\x00%s\x00%t\x00%v\n",
 			step.Action, step.Standalone, step.Optional, step.Produces)
 		for _, arg := range step.Args {
-			_, _ = fmt.Fprintf(sum, "arg\x00%s\x00%t\x00%s\x00%s\x00%d\x00%s\x00%t\n",
+			_, _ = fmt.Fprintf(sum, "arg\x00%s\x00%t\x00%s\x00%s\x00%d\x00%s\x00%t\x00%s\n",
 				arg.Name, arg.Required, arg.Truth.Fact, arg.Truth.Literal,
-				arg.Truth.Produced.Step, arg.Truth.Produced.Field, arg.Truth.Authored)
+				arg.Truth.Produced.Step, arg.Truth.Produced.Field, arg.Truth.Authored, arg.Truth.Implied)
 		}
 	}
 }

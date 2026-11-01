@@ -394,7 +394,7 @@ func TestFake_GivesAFactTheTypeAModelWouldHaveWritten(t *testing.T) {
 	}
 }
 
-func TestFake_ResolvesEachOfTheFourTruthsOrOmitsTheArgument(t *testing.T) {
+func TestFake_ResolvesEachOfTheFiveTruthsOrOmitsTheArgument(t *testing.T) {
 	replay := Replay{
 		Facts:    map[string]string{"project_id": "42"},
 		Produced: []json.RawMessage{json.RawMessage(`{"iid":7}`)},
@@ -409,6 +409,9 @@ func TestFake_ResolvesEachOfTheFourTruthsOrOmitsTheArgument(t *testing.T) {
 		{"a fact it did not", modelcorpus.Truth{Fact: "group_id"}, nil, false},
 		{"a literal the prompt states", modelcorpus.Truth{Literal: "closed"}, "closed", true},
 		{"a value the model authors", modelcorpus.Truth{Authored: true}, authoredValue, true},
+		{"a verb implying true", modelcorpus.Truth{Implied: "true"}, true, true},
+		{"a verb implying false", modelcorpus.Truth{Implied: "false"}, false, true},
+		{"a verb implying a number", modelcorpus.Truth{Implied: "30"}, int64(30), true},
 		{
 			"a field an earlier step produced",
 			modelcorpus.Truth{Produced: modelcorpus.Ref{Step: 1, Field: "iid"}},

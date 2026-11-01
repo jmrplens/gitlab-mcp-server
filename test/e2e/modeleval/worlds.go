@@ -1048,7 +1048,8 @@ func licensedWorlds() map[modelcorpus.Recipe]builder {
 			link := fixture.NewGroupLDAPLink(e, group)
 			return World{
 				Facts: with(groupFacts(group), map[string][]string{
-					modelcorpus.FactLDAPProvider: {link.Provider},
+					modelcorpus.FactLDAPProvider:   {link.Provider},
+					modelcorpus.FactLDAPCommonName: {link.CN},
 				}),
 				Verify: func(e *harness.Env) error {
 					present, err := fixture.GroupHasLDAPLink(e.Ctx, e.Client(), group.ID, link.Provider)

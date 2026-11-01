@@ -1,7 +1,7 @@
 // Copyright (c) 2026 José M. Requena Plens
 // SPDX-License-Identifier: MIT
 
-// args.go compares the values a model sent against the four truths a case
+// args.go compares the values a model sent against the five truths a case
 // declares.
 //
 // This is the whole of what replaced the old evaluator's parameter-name list.
@@ -10,8 +10,10 @@
 // project passed; the column that reported it was called argument fidelity.
 // Here a case says where each right value comes from, and nothing about a value
 // is inferred from the prompt: a recipe fact, a value the prompt states
-// verbatim, a field of an earlier answer, or a value the model composes and
-// nobody compares.
+// verbatim, a field of an earlier answer, a value the model composes, or a
+// value a verb of the prompt implies. The last two are reported and nobody
+// compares them; what an implied value did is the recipe's verification's to
+// judge.
 
 package modelscore
 
@@ -37,7 +39,11 @@ const (
 	// TruthAuthored is a value the model writes, which is reported and never
 	// compared.
 	TruthAuthored TruthKind = "authored"
-	// TruthNone is a truth that is none of the four. The corpus gate refuses
+	// TruthImplied is a value a verb of the prompt asks for, which is reported
+	// and never compared: the recipe's verification against GitLab is what
+	// sees whether the model did what the verb said.
+	TruthImplied TruthKind = "implied"
+	// TruthNone is a truth that is none of the five. The corpus gate refuses
 	// one, so it cannot arrive from a corpus in this tree; it is a kind of its
 	// own so that a hand-written key in a test is reported rather than
 	// silently compared against the empty string.
@@ -117,7 +123,7 @@ func compareArgument(
 	produced producedValue,
 ) ArgumentVerdict {
 	verdict := ArgumentVerdict{Name: arg.Name, Truth: truthKind(arg.Truth), Required: arg.Required}
-	if verdict.Truth == TruthAuthored {
+	if verdict.Truth == TruthAuthored || verdict.Truth == TruthImplied {
 		verdict.Sent, _ = canonical(sent[arg.Name])
 		return verdict
 	}
@@ -151,20 +157,28 @@ func compareArgument(
 	return verdict
 }
 
-// truthKind names which of the four a truth is.
+// truthKind names which of the five a truth is.
+//
+// It is a chain of ifs rather than a tagless switch because the coverage
+// profile gremlins reads gives a case expression no block of its own, so every
+// mutant of one is reported as not covered however many tests reach it.
 func truthKind(truth modelcorpus.Truth) TruthKind {
-	switch {
-	case truth.Authored:
+	if truth.Authored {
 		return TruthAuthored
-	case truth.Fact != "":
-		return TruthFact
-	case truth.Literal != "":
-		return TruthLiteral
-	case !truth.Produced.IsZero():
-		return TruthProduced
-	default:
-		return TruthNone
 	}
+	if truth.Implied != "" {
+		return TruthImplied
+	}
+	if truth.Fact != "" {
+		return TruthFact
+	}
+	if truth.Literal != "" {
+		return TruthLiteral
+	}
+	if !truth.Produced.IsZero() {
+		return TruthProduced
+	}
+	return TruthNone
 }
 
 // resolveWant returns the values a truth accepts, or the reason it resolves to

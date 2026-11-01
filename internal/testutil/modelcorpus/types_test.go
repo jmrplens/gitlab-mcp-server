@@ -190,10 +190,10 @@ func TestCases_EveryArgumentIsAPropertyOfItsSchema(t *testing.T) {
 	}
 }
 
-// TestCases_EveryTruthIsExactlyOneOfFour checks the closed sum: a truth that
+// TestCases_EveryTruthIsExactlyOneOfFive checks the closed sum: a truth that
 // sets two sources is ambiguous to the scorer, and one that sets none compares
 // a value against nothing while still counting in the fidelity denominator.
-func TestCases_EveryTruthIsExactlyOneOfFour(t *testing.T) {
+func TestCases_EveryTruthIsExactlyOneOfFive(t *testing.T) {
 	for _, one := range cases() {
 		t.Run(one.ID, func(t *testing.T) {
 			for index, declared := range one.key.Steps {
@@ -230,7 +230,7 @@ func checkTruth(t *testing.T, key Key, index int, arg Arg) {
 // truthSources counts how many of the four sources a truth sets.
 func truthSources(truth Truth) int {
 	count := 0
-	for _, set := range []bool{truth.Fact != "", truth.Literal != "", !truth.Produced.IsZero(), truth.Authored} {
+	for _, set := range []bool{truth.Fact != "", truth.Literal != "", !truth.Produced.IsZero(), truth.Authored, truth.Implied != ""} {
 		if set {
 			count++
 		}
@@ -357,10 +357,16 @@ func TestCases_EveryBoundValueFitsItsArgumentsType(t *testing.T) {
 // scalarTypeFinding complains about an argument whose bound value its schema's
 // declared type refuses, and says nothing about every other one.
 //
-// Only a numeric type is judged. A string takes any value a corpus binds, and
-// an argument that declares no single type takes whichever spellings the server
-// accepts for it, which is the server's own question and not this one.
+// A numeric type and a boolean are judged. A string takes any value a corpus
+// binds, and an argument that declares no single type takes whichever
+// spellings the server accepts for it, which is the server's own question and
+// not this one. A boolean takes true or false alone, and an authored value is
+// text the fake provider writes there, which the schema refuses: what a verb
+// of the prompt asks for ("turn it on") is implied, as true or false.
 func scalarTypeFinding(arg Arg, declaredType string, values map[string]string) string {
+	if declaredType == "boolean" {
+		return booleanFinding(arg, values)
+	}
 	if declaredType != "integer" && declaredType != "number" {
 		return ""
 	}
@@ -370,6 +376,19 @@ func scalarTypeFinding(arg Arg, declaredType string, values map[string]string) s
 	}
 	return fmt.Sprintf("argument %q is typed %s and binds to %q, which the schema refuses: "+
 		"that value is what the prompt gives the model and it has no other", arg.Name, declaredType, value)
+}
+
+// booleanFinding is scalarTypeFinding for an argument typed boolean.
+func booleanFinding(arg Arg, values map[string]string) string {
+	if arg.Truth.Authored {
+		return fmt.Sprintf("argument %q is typed boolean and is authored, which the fake provider writes as "+
+			"text the schema refuses: a value a verb of the prompt asks for is implied(\"true\") or implied(\"false\")", arg.Name)
+	}
+	value, bound := boundValue(arg, values)
+	if !bound || value == "true" || value == "false" {
+		return ""
+	}
+	return fmt.Sprintf("argument %q is typed boolean and binds to %q, which the schema refuses", arg.Name, value)
 }
 
 // boundValue returns the value a bound argument would carry offline, and
@@ -382,6 +401,8 @@ func boundValue(arg Arg, values map[string]string) (string, bool) {
 		return value, known
 	case arg.Truth.Literal != "":
 		return arg.Truth.Literal, true
+	case arg.Truth.Implied != "":
+		return arg.Truth.Implied, true
 	default:
 		return "", false
 	}
@@ -434,6 +455,27 @@ func TestScalarTypeFinding_ReportsTheBindingMT007Had(t *testing.T) {
 			arg:          req("parent_id", fact("no_such_fact")),
 			declaredType: "integer",
 		},
+		{
+			name:         "an authored value where the schema takes a boolean",
+			arg:          req("secret_push_protection_enabled", authored()),
+			declaredType: "boolean",
+			want:         true,
+		},
+		{name: "a verb implying true", arg: req("resolved", implied("true")), declaredType: "boolean"},
+		{name: "a verb implying false", arg: req("resolved", implied("false")), declaredType: "boolean"},
+		{
+			name:         "an implied value that is no boolean",
+			arg:          req("resolved", implied("yes")),
+			declaredType: "boolean",
+			want:         true,
+		},
+		{
+			name:         "an implied value that is no number",
+			arg:          req("weight", implied("heavy")),
+			declaredType: "integer",
+			want:         true,
+		},
+		{name: "a boolean argument nothing binds", arg: Arg{Name: "resolved"}, declaredType: "boolean"},
 	}
 	values := auditFacts()
 	for _, tc := range tests {

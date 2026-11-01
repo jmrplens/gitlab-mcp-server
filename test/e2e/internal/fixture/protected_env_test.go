@@ -11,7 +11,9 @@
 package fixture
 
 import (
+	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 )
 
@@ -107,6 +109,67 @@ func TestProtectGroupEnvironment_Created_SendsTheDeployAccess(t *testing.T) {
 	requests := stub.recordedRequests()
 	if len(requests) != 1 || requests[0].Body["deploy_access_levels"] == nil {
 		t.Errorf("protectGroupEnvironment() sent %v, want a deploy access level", requests)
+	}
+}
+
+// TestNewGroupProtectedEnvironment_Detached_ProtectsADeploymentTier drives the
+// builder whole and holds the name it protects to what a group protection
+// takes: a deployment tier, which GitLab 19.5 refuses anything else for with
+// 400 "name does not have a valid value". The builder protected a generated
+// name until 2026-11-01, and the model evaluation's world for the group
+// unprotect case stopped on that refusal.
+func TestNewGroupProtectedEnvironment_Detached_ProtectsADeploymentTier(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodPost, "/api/v4/groups/2/protected_environments", stubCreated(map[string]any{"name": "staging"}))
+	stub.answers(http.MethodDelete, "/api/v4/groups/2/protected_environments/staging", stubNoContent())
+
+	got := NewGroupProtectedEnvironment(e, Group{ID: 2})
+	tiers := []string{"production", "staging", "testing", "development", "other"}
+	requests := stub.recordedRequests()
+	if len(requests) != 1 || !slices.Contains(tiers, fmt.Sprint(requests[0].Body["name"])) || got.Name != "staging" {
+		t.Errorf("NewGroupProtectedEnvironment() = %+v after sending %v, want one protection of a deployment tier (%v)", got, requests, tiers)
+	}
+}
+
+// TestNewProtectedEnvironment_Detached_ProtectsTheEnvironmentForItsApprover
+// drives the project builder whole: the environment it was given is
+// protected with the deploy access level and the approver's rule, handed back
+// as GitLab answered, and unprotected when the test ends.
+func TestNewProtectedEnvironment_Detached_ProtectsTheEnvironmentForItsApprover(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/protected_environments", stubCreated(map[string]any{"name": "env-run"}))
+	stub.answers(http.MethodDelete, "/api/v4/projects/2/protected_environments/env-run", stubNoContent())
+
+	got := NewProtectedEnvironment(e, Project{ID: 2}, Environment{ID: 5, Name: "env-run"}, 17)
+
+	sent := requestTo(t, stub, http.MethodPost, "/api/v4/projects/2/protected_environments").Body
+	if got.Name != "env-run" || sent["name"] != "env-run" || sent["deploy_access_levels"] == nil || sent["approval_rules"] == nil {
+		t.Errorf("NewProtectedEnvironment() = %+v after sending %v, want env-run protected with its deploy access and approval rule", got, sent)
+	}
+}
+
+// TestNewDeploymentApproval_Detached_BuildsTheWholeApprovalWorld drives the
+// approval builder whole: an environment, its protection, a commit and a
+// deployment of that commit into the environment, each asked for in the
+// project it was given and handed back together.
+func TestNewDeploymentApproval_Detached_BuildsTheWholeApprovalWorld(t *testing.T) {
+	stub, e := detachedStub(t)
+	stub.answers(http.MethodPost, "/api/v4/projects/2/environments", stubCreated(map[string]any{"id": 5, "name": "approval-run"}))
+	stub.answers(http.MethodPost, "/api/v4/projects/2/protected_environments", stubCreated(map[string]any{"name": "approval-run"}))
+	stub.answers(http.MethodDelete, "/api/v4/projects/2/protected_environments/approval-run", stubNoContent())
+	stub.answers(http.MethodPost, "/api/v4/projects/2/repository/commits", stubCreated(map[string]any{"id": "abc123", "short_id": "abc123"}))
+	stub.answers(http.MethodPost, "/api/v4/projects/2/deployments", stubCreated(map[string]any{"id": 6, "sha": "abc123", "status": "running"}))
+
+	got := NewDeploymentApproval(e, Project{ID: 2, DefaultBranch: "main"})
+
+	environment := Environment{ID: 5, Name: "approval-run"}
+	want := DeploymentApproval{
+		Environment: environment,
+		Protected:   ProtectedEnvironment{Name: "approval-run"},
+		Deployment:  Deployment{ID: 6, Environment: environment, SHA: "abc123", Status: "running"},
+	}
+	if got != want {
+		t.Errorf("NewDeploymentApproval() = %+v, want %+v", got, want)
 	}
 }
 
