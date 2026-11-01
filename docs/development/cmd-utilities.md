@@ -1401,10 +1401,11 @@ go run ./cmd/godoc_tool/ fix --move-package-doc ./internal/
 
 #### Flags (fix)
 
-| Flag         | Type       | Default | Description                                   |
-| ------------ | ---------- | ------- | --------------------------------------------- |
-| `--dry-run`  | `bool`     | `false` | Print what would change without writing files |
-| `<paths...>` | positional | —       | File or directory paths to fix                |
+| Flag                 | Type       | Default | Description                                                                         |
+| -------------------- | ---------- | ------- | ----------------------------------------------------------------------------------- |
+| `--dry-run`          | `bool`     | `false` | Print what would change without writing files                                       |
+| `--move-package-doc` | `bool`     | `false` | Move each package comment into a `doc.go` of its own instead of documenting symbols |
+| `<paths...>`         | positional | (none)  | File or directory paths to fix                                                      |
 
 #### Output
 

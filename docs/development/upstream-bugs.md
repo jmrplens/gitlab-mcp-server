@@ -176,6 +176,9 @@ for the fork, branch, fix, test and MR workflow.
   - [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does)
   - [The service account token list examples sort by a value their pages do not list](#the-service-account-token-list-examples-sort-by-a-value-their-pages-do-not-list)
   - [A merge request creation can be refused for a branch that exists, from a stale branch name cache](#a-merge-request-creation-can-be-refused-for-a-branch-that-exists-from-a-stale-branch-name-cache)
+  - [A release update with an empty `released_at` answers 500 from a not-null violation](#a-release-update-with-an-empty-released_at-answers-500-from-a-not-null-violation)
+  - [A project update that sends only `mirror_branch_regex` is refused as sending nothing](#a-project-update-that-sends-only-mirror_branch_regex-is-refused-as-sending-nothing)
+  - [A service account update with an empty email answers 200 and keeps the address](#a-service-account-update-with-an-empty-email-answers-200-and-keeps-the-address)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -416,6 +419,9 @@ readable without opening the tracker:
 | 151 | client-go | [`UploadRequest` writes only the first value of each field](#uploadrequest-writes-only-the-first-value-of-each-field) | No | No | No | No | Yes, the project and group creates send a list beside an avatar as one comma-separated value, and the group create refuses its alert list beside one; a unit test pins the behaviour |
 | 152 | gitlab-org/gitlab | [A merge request creation can be refused for a branch that exists](#a-merge-request-creation-can-be-refused-for-a-branch-that-exists-from-a-stale-branch-name-cache) | Yes, by GitLab, [gitlab-org/gitlab#506430](https://gitlab.com/gitlab-org/gitlab/-/issues/506430), open | No | No | No; it failed the e2e suite, not a tool | Yes, in the e2e fixture: `fixture.NewMergeRequest` tries the refusal again once the branch name cache lists the branch |
 | 153 | gobco | [gobco drops `GOPATH` from the `go test` it runs](#gobco-drops-gopath-from-its-go-test-which-then-reads-another-module-cache) | No | No | No | No; where `GOPATH` is not the default, that `go test` reads another module cache and needs the network to fill it | Yes, `scripts/coverage-conditions.sh` hands gobco `GOMODCACHE` as `go env` reports it, until a gobco release passes `GOPATH` on |
+| 154 | gitlab-org/gitlab | [A release update with an empty `released_at` answers 500](#a-release-update-with-an-empty-released_at-answers-500-from-a-not-null-violation) | No; a fix is being prepared, and its merge request is linked here when opened | No | No | No | None needed: `release.update` sends `released_at` only when it is set |
+| 155 | gitlab-org/gitlab | [A project update with only `mirror_branch_regex` is refused as sending nothing](#a-project-update-that-sends-only-mirror_branch_regex-is-refused-as-sending-nothing) | No; a fix is being prepared, and its merge request is linked here when opened | No | No | No | None yet; refusing the field alone before the request is part of issue 1306 |
+| 156 | gitlab-org/gitlab | [A service account update with an empty email answers 200 and keeps the address](#a-service-account-update-with-an-empty-email-answers-200-and-keeps-the-address) | No; a fix is being prepared, and its merge request is linked here when opened | No | No | No | None needed: the three service account updates send `email` only when it is set |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -6237,14 +6243,22 @@ route.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes. `orbit.GraphStatus` (`internal/tools/orbit/orbit.go`)
-  reads `projects.gaps` from the captured response
-  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
-  into `GraphStatusProjects.Gaps`, and the graph status card shows it as the
-  projects out of indexing attempts. R-PATH holds the field to the Orbit
-  response record, which carries the key. `TestGraphStatus_Success_ByFullPath` holds the read and
-  `TestGraphStatus_CapturedBodyThatDoesNotDecode_ReturnsAnError` its failure.
-  It retires when the SDK models the field.
+- **Workaround**: none since 3.4.0, and none needed by this server.
+  `orbit.GraphStatus` (`internal/tools/orbit/graphql.go`) reads the index
+  through GraphQL, whose `OrbitIndexingProjects` carries `gaps`: each of the
+  four graph status documents selects it beside the other counts
+  (`graphql.go:453`, `:500`, `:555` and `:611`), the test mock validates
+  every document against the pinned schema, and the value lands in
+  `GraphStatusProjects.Gaps`, which the graph status card shows as the
+  projects out of indexing attempts. The answers GitLab.com gave on
+  2026-10-29 that `TestGraphStatus_EachScope_AsksTheMatchingDocument` and
+  `TestGraphStatus_TopLevelGroup_PublishesAccessAndTrial` replay carry the
+  key (`internal/tools/orbit/graphql_test.go:430` and `:568`). Until 3.4.0
+  the field was read from the captured response of `GET /orbit/graph_status`
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  and that read and its two tests went with the route in
+  [pull request 1585](https://github.com/jmrplens/gitlab-mcp-server/pull/1585);
+  what is left is the gap in client-go below.
 
 **Where**: `OrbitGraphStatusProjects` in client-go v3.15.0's `orbit.go`, which
 models `indexed` and `total_known`.
@@ -11170,8 +11184,14 @@ markdown. We keep emitting both.
   `licensedFeatureAvailability` of each group, which by GitLab's source
   (`load_feature_available` in `ee/app/models/ee/namespace.rb`) answers from
   the instance license wherever namespace plans are not checked, so it could
-  answer this caller without the merge request; it is kept to gitlab.com until
-  that is measured on a licensed self-managed instance. From 19.6, the first
+  answer this caller without the merge request, and it does: measured on
+  2026-11-01 against a licensed GitLab EE 19.5.0-ee, a non-administrator's
+  `read_api` token that `/license` refuses was told Ultimate by every
+  top-level group it is a member of, the answer an administrator gets, so the
+  step can answer that caller on a self-managed instance before 19.6 too,
+  where [issue 1491](https://github.com/jmrplens/gitlab-mcp-server/issues/1491)
+  takes it; a caller who is a member of no top-level group still gets no
+  answer from it. From 19.6, the first
   release to carry the merge request, a step reading `plan` from
   `GET /metadata` answers that caller on a self-managed instance; GitLab.com
   answers it `null`, so the namespace and membership steps stay there, and an
@@ -16953,6 +16973,147 @@ rebuild queue behind `ref_cache_with_rebuild_queue`, or
 
 **How we found it**: the e2e gate of the release rehearsal of 2026-10-31,
 whose failure was read against GitLab's source at `v19.5.3-ee`.
+
+### A release update with an empty `released_at` answers 500 from a not-null violation
+
+- **Reported**: no. A fix with its request spec is being prepared from the
+  community fork; its merge request is linked here when it is opened.
+- **In review**: no.
+- **Merged**: no. Read at GitLab master `e0f678adfc1c` (2026-11-01).
+- **Blocking**: no. The release keeps its date. What breaks is the answer: a
+  value the caller may not send arrives as a fault of the instance, which a
+  client retries or reports as an outage.
+- **Workaround**: none needed today. `release.update`
+  (`internal/tools/releases/releases.go`) reads `released_at` with
+  `toolutil.ParseTimeField`, which sends nothing for an empty value, so the
+  server never sends the request that fails. The field is one of the
+  `clearUnverified` entries of
+  [issue 1306](https://github.com/jmrplens/gitlab-mcp-server/issues/1306),
+  where it moves to `clearRequired` with this answer as its reason.
+
+**Where**: `PUT /projects/:id/releases/:tag_name` in `lib/api/releases.rb`
+declares `optional :released_at, type: DateTime` (line 325) and hands
+`declared_params(include_missing: false)` to `Releases::UpdateService`, whose
+`execute` runs `release.update(params)` and rescues only
+`ActiveRecord::RecordInvalid` (`app/services/releases/update_service.rb:20-30`).
+`Release` sets `released_at` in a `before_create` callback and validates
+nothing about it on update (`app/models/release.rb:29`), and the
+`releases.released_at` column is `NOT NULL`.
+
+**What**: Grape coerces an empty `released_at` to `nil`, and an explicit `null`
+arrives as one, so the update writes `NULL` into a column that refuses it and
+the database raises a `NotNullViolation` nothing rescues. Measured on
+2026-11-01 against `gitlab/gitlab-ee:19.5.0-ee.0` (revision `883b289c40e`)
+with the administrator's token, on a release whose `released_at` was
+`2026-01-01T00:00:00.000Z`: `PUT /projects/5/releases/v-probe` with
+`{"released_at": ""}` and with `{"released_at": null}` each answered
+`500 {"message":"500 Internal Server Error"}`, the release kept its date, and
+GitLab's exceptions log recorded `ActiveRecord::NotNullViolation:
+PG::NotNullViolation: ERROR: null value in column "released_at" of relation
+"releases" violates not-null constraint` for both. A `400` naming the param is
+what the route's own failure list promises for a bad request.
+
+**What it costs this server**: nothing at run time. A caller cannot clear a
+release date through any client, and this server says so rather than sending
+the request.
+
+**How we found it**: the probes of the 44 `clearUnverified` fields of issue
+1306, run against a licensed GitLab EE 19.5.0 on 2026-11-01, which sent each
+field's empty value straight to the route and read the stored value back.
+
+### A project update that sends only `mirror_branch_regex` is refused as sending nothing
+
+- **Reported**: no. A fix with its request spec is being prepared from the
+  community fork; its merge request is linked here when it is opened.
+- **In review**: no.
+- **Merged**: no. Read at GitLab master `e0f678adfc1c` (2026-11-01).
+- **Blocking**: no. Sent beside `description`, the one other param it was
+  measured with, the regex is stored, or cleared with `""`. Beside
+  `mirror: true` alone, on a project whose pull mirror could not be set up,
+  the update was refused for another reason,
+  `{"message":{"import_url":["can't be blank"]}}`.
+- **Workaround**: none yet. `project.update`
+  (`internal/tools/projects/projects.go`, `applyUpdateMirrorOpts`) sends the
+  regex as the caller gives it, so a call carrying nothing else is refused by
+  GitLab with the message below. Refusing the field alone before the request,
+  with a sentence that says which parameter to send beside it, is part of
+  [issue 1306](https://github.com/jmrplens/gitlab-mcp-server/issues/1306), and
+  it retires when a release that carries the fix is the oldest this server
+  serves.
+
+**Where**: `PUT /projects/:id` declares `mirror_branch_regex` among the EE
+update params (`ee/lib/ee/api/helpers/projects_helpers.rb:48`) and requires
+`at_least_one_of(*Helpers::ProjectsHelpers.update_params_at_least_one_of)`
+(`lib/api/projects.rb:768`). The EE override of that list
+(`ee/lib/ee/api/helpers/projects_helpers.rb:91-124`) adds `mirror`,
+`mirror_trigger_builds` and `import_url` and leaves out `mirror_branch_regex`,
+as it leaves out the three other pull mirror params it declares beside it
+(`mirror_user_id`, `only_mirror_protected_branches` and
+`mirror_overwrites_diverged_branches`).
+
+**What**: a body whose only param is `mirror_branch_regex`, empty or not,
+fails the at-least-one-of check although the route declares the param.
+Measured on 2026-11-01 against `gitlab/gitlab-ee:19.5.0-ee.0` (revision
+`883b289c40e`) with the administrator's token: `PUT /projects/5` with
+`{"mirror_branch_regex": "^main$"}`, `{"mirror_branch_regex": ""}` and
+`{"mirror_branch_regex": null}` each answered `400` with
+`{"error":"allow_merge_on_skipped_pipeline, analytics_access_level, ... are missing, at least one parameter must be provided"}`,
+a list of 122 names that does not hold the param it refused, while
+`{"description": "probe", "mirror_branch_regex": ""}` answered `200` and left
+the stored regex empty. Only `mirror_branch_regex` was measured; the other
+three are left out of the list by the same reading.
+
+**What it costs this server**: a caller that changes only the branch filter
+of a pull mirror is refused with GitLab's list of 122 names, which does not
+say that a body carrying another listed param beside the regex, as
+`description` did in the measurement, is accepted.
+
+**How we found it**: the probes of the 44 `clearUnverified` fields of issue
+1306, on 2026-11-01, where seeding the regex alone was refused before the
+empty value could be tried.
+
+### A service account update with an empty email answers 200 and keeps the address
+
+- **Reported**: no. A fix with its spec is being prepared from the community
+  fork; its merge request is linked here when it is opened.
+- **In review**: no.
+- **Merged**: no. Read at GitLab master `e0f678adfc1c` (2026-11-01).
+- **Blocking**: no. A user account always has an address, so there is
+  nothing to clear; what is wrong is that the refusal is silent.
+- **Workaround**: none needed today. The three service account updates
+  (`group.service_account_update`, `project.service_account_update` and
+  `user.update_service_account`) send `email` only when it is set, so the
+  server never sends the empty value. The three fields are `clearUnverified`
+  entries of [issue 1306](https://github.com/jmrplens/gitlab-mcp-server/issues/1306),
+  where they move to `clearRequired` with this answer as their reason.
+
+**Where**: `Users::ServiceAccounts::UpdateService#initialize`
+(`app/services/users/service_accounts/update_service.rb:13-16`) keeps only the
+params whose value is `present?` (and an `external` of `false`), so an empty
+or null `email`, `name` or `username` is dropped before the update runs. The
+instance route `PATCH /service_accounts/:user_id` (`lib/api/service_accounts.rb:104`
+and `:114`) hands it `declared_params(include_missing: false)`, and the group
+and project routes reach the same service through
+`Namespaces::ServiceAccounts::BaseUpdateService`
+(`app/services/namespaces/service_accounts/base_update_service.rb`).
+
+**What**: the update answers `200` with the account as it was. Measured on
+2026-11-01 against `gitlab/gitlab-ee:19.5.0-ee.0` (revision `883b289c40e`)
+with the administrator's token, on one service account of each kind:
+`PATCH /groups/15/service_accounts/14`, `PATCH /projects/5/service_accounts/15`
+and `PATCH /service_accounts/16`, each with `{"email": ""}` and with
+`{"email": null}`, answered `200` with the account's address in the body, and
+the `users` row kept it. On the same accounts, an update to a new address a
+moment before was applied, so the route itself works; only the empty value is
+swallowed. A `400` saying the address cannot be empty would tell the caller
+what happened.
+
+**What it costs this server**: nothing at run time, since it does not send the
+empty value. A client that does is told the update succeeded.
+
+**How we found it**: the probes of the 44 `clearUnverified` fields of issue
+1306, on 2026-11-01, which read each account's address back from the
+database after the request.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 
