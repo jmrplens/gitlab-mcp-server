@@ -7,7 +7,7 @@
 // testdata/check_openplugin.json is the record. Each case laid out the
 // tree's plugin.json, .plugin/plugin.json, .plugin/plugin.schema.json and
 // mcp.json in a scratch directory, with one change to one of them, ran the
-// script at d03f4b2f0 (unchanged since #1563) under jq 1.6, and kept its exit
+// script at fe8773534 (unchanged since #1563) under jq 1.6, and kept its exit
 // status and output beside the four files it read. The cases are every check
 // the script made, each passing and each refused, plus three shapes its key
 // sets let through and the schemas refuse.
