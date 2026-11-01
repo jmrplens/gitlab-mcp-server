@@ -4,37 +4,20 @@
 
 # GitLab MCP Server
 
-<!-- One paragraph per group, by what a reader is checking, inside a div: a
-     <p align="center"> closes before the Markdown paragraph it wraps, so
-     GitHub never centered the rows it held. The LobeHub ?v= is a cache key
-     for GitHub's image proxy, not a LobeHub parameter: the proxy keyed a red
-     "not listed" badge for a day, and only a changed URL evicts it. Bump the
-     number if the badge ever goes stale again. -->
+<!-- The badges at the top answer what a reader checks first: the release,
+     whether main builds, how much of it the tests reach, and the two OpenSSF
+     assessments. The packages and the directory listings are under Packages
+     and listings, near the end. Inside a div because a <p align="center">
+     closes before the Markdown paragraph it wraps, so GitHub never centered
+     the rows it held. -->
 <div align="center">
 
-**Releases and packages**
 [![GitHub Release](https://img.shields.io/github/v/release/jmrplens/gitlab-mcp-server?style=flat&logo=github&label=Release)](https://github.com/jmrplens/gitlab-mcp-server/releases/latest)
-[![npm](https://img.shields.io/npm/v/@jmrp.io/gitlab-mcp-server?style=flat&logo=npm&label=npm)](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server)
-[![npm downloads](https://img.shields.io/npm/dm/@jmrp.io/gitlab-mcp-server?style=flat&logo=npm&label=npm%20downloads)](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server)
-[![PyPI](https://img.shields.io/pypi/v/jmrplens-gitlab-mcp-server?style=flat&logo=pypi&label=PyPI)](https://pypi.org/project/jmrplens-gitlab-mcp-server/)
-[![PyPI downloads](https://img.shields.io/pypi/dm/jmrplens-gitlab-mcp-server?style=flat&logo=pypi&label=PyPI%20downloads)](https://pypistats.org/packages/jmrplens-gitlab-mcp-server)
-[![NuGet](https://img.shields.io/nuget/v/gitlab-mcp-server?style=flat&logo=nuget&label=NuGet)](https://www.nuget.org/packages/gitlab-mcp-server)
-[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server/v3.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v3)
-[![Hosted endpoint](https://img.shields.io/badge/Hosted-mcp.jmrp.io%2Fgitlab-6d28d9?style=flat&logo=icloud&logoColor=white)](https://mcp.jmrp.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
-**Build and quality**
 [![CI](https://img.shields.io/github/actions/workflow/status/jmrplens/gitlab-mcp-server/ci.yml?branch=main&style=flat&logo=githubactions&logoColor=white&label=CI)](https://github.com/jmrplens/gitlab-mcp-server/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/sonar/coverage/jmrplens_gitlab-mcp-server?server=https%3A%2F%2Fsonarcloud.io&style=flat&logo=sonarcloud&logoColor=white&label=coverage)](https://sonarcloud.io/component_measures?id=jmrplens_gitlab-mcp-server&metric=coverage)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
-
-**Security**
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jmrplens/gitlab-mcp-server/badge)](https://scorecard.dev/viewer/?uri=github.com/jmrplens/gitlab-mcp-server)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15879/badge)](https://www.bestpractices.dev/projects/15879)
-
-**Directories**
-[![Glama MCP Score](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server)
-[![MCP Badge](https://lobehub.com/badge/mcp/jmrplens-gitlab-mcp-server?v=2)](https://lobehub.com/mcp/jmrplens-gitlab-mcp-server)
-[![MCP Toplist](https://mcptoplist.com/badge/io.github.jmrplens%2Fgitlab-mcp-server.svg)](https://mcptoplist.com/server/io.github.jmrplens%2Fgitlab-mcp-server)
+[![OpenSSF Baseline](https://www.bestpractices.dev/projects/15879/baseline)](https://www.bestpractices.dev/projects/15879)
 
 </div>
 
@@ -119,6 +102,37 @@ For a self-managed instance, set `GITLAB_URL=https://gitlab.example.com` beside 
 ## Documentation
 
 Everything else is at **[docs.jmrp.io/gitlab-mcp-server](https://docs.jmrp.io/gitlab-mcp-server)**, in English and Spanish: [getting started](https://docs.jmrp.io/gitlab-mcp-server/getting-started/), [configuration](https://docs.jmrp.io/gitlab-mcp-server/configuration/), [tool surfaces](https://docs.jmrp.io/gitlab-mcp-server/tools/overview/), [HTTP server mode](https://docs.jmrp.io/gitlab-mcp-server/operations/http-server/), [security](https://docs.jmrp.io/gitlab-mcp-server/operations/security/), [privacy](https://docs.jmrp.io/gitlab-mcp-server/operations/privacy/) and [troubleshooting](https://docs.jmrp.io/gitlab-mcp-server/operations/troubleshooting/).
+
+## Packages and listings
+
+<!-- One paragraph per group, inside a div as at the top. Each group's title
+     ends in a <br>: without it the title is the first word of its paragraph,
+     and on a narrow screen it wraps in among the badges instead of standing
+     above them. The LobeHub ?v= is a cache key for GitHub's image proxy, not
+     a LobeHub parameter: the proxy keyed a red "not listed" badge for a day,
+     and only a changed URL evicts it. Bump the number if the badge ever goes
+     stale again. -->
+<div align="center">
+
+**Packages**<br>
+[![npm](https://img.shields.io/npm/v/@jmrp.io/gitlab-mcp-server?style=flat&logo=npm&label=npm)](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server)
+[![npm downloads](https://img.shields.io/npm/dm/@jmrp.io/gitlab-mcp-server?style=flat&logo=npm&label=npm%20downloads)](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server)
+[![PyPI](https://img.shields.io/pypi/v/jmrplens-gitlab-mcp-server?style=flat&logo=pypi&label=PyPI)](https://pypi.org/project/jmrplens-gitlab-mcp-server/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/jmrplens-gitlab-mcp-server?style=flat&logo=pypi&label=PyPI%20downloads)](https://pypistats.org/packages/jmrplens-gitlab-mcp-server)
+[![NuGet](https://img.shields.io/nuget/v/gitlab-mcp-server?style=flat&logo=nuget&label=NuGet)](https://www.nuget.org/packages/gitlab-mcp-server)
+[![GitHub Container Registry](https://img.shields.io/badge/ghcr.io-jmrplens%2Fgitlab--mcp--server-2496ED?style=flat&logo=github&logoColor=white)](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server)
+[![Docker Hub](https://img.shields.io/docker/v/jmrplens/gitlab-mcp-server?sort=semver&style=flat&logo=docker&logoColor=white&label=Docker%20Hub)](https://hub.docker.com/r/jmrplens/gitlab-mcp-server)
+[![Docker pulls](https://img.shields.io/docker/pulls/jmrplens/gitlab-mcp-server?style=flat&logo=docker&logoColor=white&label=Docker%20pulls)](https://hub.docker.com/r/jmrplens/gitlab-mcp-server)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server/v3.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v3)
+[![Hosted endpoint](https://img.shields.io/badge/Hosted-mcp.jmrp.io%2Fgitlab-6d28d9?style=flat&logo=icloud&logoColor=white)](https://mcp.jmrp.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**Directories**<br>
+[![Glama MCP Score](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server)
+[![MCP Badge](https://lobehub.com/badge/mcp/jmrplens-gitlab-mcp-server?v=2)](https://lobehub.com/mcp/jmrplens-gitlab-mcp-server)
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.jmrplens%2Fgitlab-mcp-server.svg)](https://mcptoplist.com/server/io.github.jmrplens%2Fgitlab-mcp-server)
+
+</div>
 
 ## Contributing, security and licence
 
