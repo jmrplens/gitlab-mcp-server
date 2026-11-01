@@ -160,17 +160,16 @@ condition step twice in two days that way without measuring anything
 the pinned release, up to three attempts with `GOBCO_INSTALL_PAUSE` seconds
 between them (10 unless set), and fails when `PATH` does not then find that
 release, so an install that left it where `PATH` does not look fails there
-rather than in every run after it. CI's cross-platform legs and each job of
-`conditions.yml` run it once before they measure, and locally it spares
+rather than in every run after it. CI's cross-platform legs and each measure
+job of `conditions.yml` run it once before they measure, and locally it spares
 `make coverage-conditions-tree` the proxy for every package. A failure of gobco
 run from `PATH` exits 1, as one through `go run` does, so the statuses above
 hold either way. gobco runs its own `go test` without `GOPATH`, so where
 `GOPATH` names a directory other than the default that `go test` would read
 another module cache and download every dependency into it; the script hands
 gobco `GOMODCACHE` as `go env` reports it, and the `go test` reads the cache
-`go mod download` filled. Measured that way on linux/amd64 with the module
-proxy unreachable, `internal/config` reports 402/402 and `cmd/server`
-2392/2392.
+`go mod download` filled until gobco passes `GOPATH` on
+([upstream-bugs entry 153](../upstream-bugs.md#gobco-drops-gopath-from-its-go-test-which-then-reads-another-module-cache)).
 
 **The platform halves the copy leaves out are measured where they build.**
 The Windows and non-Linux halves of `cmd/server` (four source files:

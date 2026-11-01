@@ -555,7 +555,8 @@ fi
 # that go test reads another module cache and downloads every dependency into
 # it, which needs the network as much as go run does. GOMODCACHE, which gobco
 # passes on, names the cache go uses here, so its go test reads the one go mod
-# download filled.
+# download filled. That goes when a gobco release passes GOPATH on
+# (docs/development/upstream-bugs.md, entry 153).
 from_path=""
 if pinned_on_path; then
   from_path=yes
