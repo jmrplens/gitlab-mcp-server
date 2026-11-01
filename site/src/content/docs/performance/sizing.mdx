@@ -177,7 +177,10 @@ a second instance for headroom rather than for memory.
 
 **Reach for a second instance for availability first.** A single instance holds
 a large population cheaply. The ceiling that usually binds a busy deployment is
-GitLab's own rate limit against one token, which no number of instances raises.
+GitLab's own rate limit on each user, whose every token spends it, and on
+GitLab.com its limit on the address the deployment's requests leave from; more
+instances behind one egress address raise neither
+([What GitLab counts](/gitlab-mcp-server/operations/http-server/#what-gitlab-counts)).
 
 ## What counts as a client
 

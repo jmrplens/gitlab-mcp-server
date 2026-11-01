@@ -961,8 +961,10 @@ así que la clave de enrutado también debería estarlo. Ninguna de las otras do
 está mal, y ambas van bien allí donde una sola instancia atiende a toda la
 población de clientes, que es la mayoría de los despliegues. Ve a por una
 segunda instancia por disponibilidad, no por rendimiento: el techo que suele
-apretar es el propio límite de tasa de GitLab contra un token, que no sube por
-muchas instancias que pongas.
+apretar es el propio límite de tasa de GitLab por usuario, que gastan todos sus
+tokens, y en GitLab.com su límite sobre la dirección de salida del despliegue,
+y ninguno de los dos sube por muchas instancias que pongas tras esa dirección
+([Qué cuenta GitLab](/gitlab-mcp-server/es/operations/http-server/#qué-cuenta-gitlab)).
 
 ### Resumir el token sin enrutar por él
 

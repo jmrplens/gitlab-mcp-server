@@ -36,10 +36,10 @@ var (
 	// polling with a token whose access was deliberately revoked.
 	ErrInaccessible = errors.New("subscriptions: resource inaccessible")
 
-	// ErrRateLimited means GitLab refused the read for rate-limiting
-	// reasons. It pauses every watcher on this manager, not just the one
-	// that hit it: the limit is enforced per user, so the others are
-	// about to hit it too.
+	// ErrRateLimited means GitLab refused a read for rate-limiting reasons,
+	// which pauses every watcher on this manager: the pause holds back what
+	// this credential's watchers send, since GitLab throttles the user. The
+	// user's other credentials have managers of their own and keep polling.
 	ErrRateLimited = errors.New("subscriptions: rate limited")
 )
 
@@ -116,11 +116,11 @@ type Notifier interface {
 }
 
 // Defaults for [Options]. The interval numbers come from GitLab's rate
-// limits rather than from taste: a self-managed instance that enables the
-// optional authenticated-API throttle gets 120 requests a minute by
-// default (the throttle itself ships disabled — see ADR-0017), so ten
-// watchers at a five-second interval would consume such a user's entire
-// budget while that same user is making tool calls through it.
+// limits, not taste: a self-managed instance that enables the optional
+// authenticated-API throttle gives a user 120 requests a minute (it ships
+// disabled, see ADR-0017), which ten watchers at the five-second floor send
+// before the user makes a tool call. The watcher cap bounds what one
+// credential's watchers send: a user with two credentials can hold twenty.
 const (
 	DefaultBaseInterval = tenancy.WatchBaseInterval     // register row HLD-007
 	DefaultMinInterval  = tenancy.WatchMinInterval      // register row HLD-007
@@ -331,10 +331,10 @@ func (g *WatcherGate) count() int64 {
 	return g.held.Load()
 }
 
-// Manager owns the watchers for one MCP server, which in HTTP mode means
-// one GitLab token: the server pool keys an *mcp.Server by token and URL,
-// so a manager never spans two identities and a rate-limit pause or an
-// access revocation applies cleanly to everything it owns.
+// Manager owns the watchers of one credential: in HTTP mode one pool entry,
+// a token on one instance, whose credential state builds it, and on stdio
+// the process. A manager never spans two credentials, so a rate-limit pause
+// or an access revocation applies to everything it owns and to nothing else.
 type Manager[S comparable] struct {
 	reader   Reader
 	notifier Notifier

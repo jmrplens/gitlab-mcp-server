@@ -3343,10 +3343,10 @@ func newUserStub(t *testing.T, answers map[string]userAnswer) *userStub {
 // (tenant-policy-spec.md, The tenant). The pool keys an entry on the credential
 // and the instance, so each token is an entry of its own, with its own owner
 // and, on the server, its own bucket, listen counter and watchers. Nothing is
-// keyed on the tenant (F-01, issue 955). This test holds that at the pool's
-// grain, beside the server's own half in cmd/server, and it pins the behavior
-// as it is, not a target: a change that keys an allowance on the tenant is the
-// change that must break it, and say so.
+// keyed on the tenant, which issue 955 decided to keep (F-01). This test holds
+// that at the pool's grain, beside the server's own half in cmd/server: a
+// change that keys an allowance on the tenant is a change of that decision,
+// and is the change that must break it, and say so.
 func TestEntry_TwoTokensOfOneUser_AreTwoEntriesOfOneTenant(t *testing.T) {
 	const (
 		firstToken  = "glpat-first-token-of-user-42"

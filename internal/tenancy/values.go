@@ -55,7 +55,7 @@ const (
 	// WatchBaseInterval is the poll a watch starts at (HLD-007).
 	WatchBaseInterval = 15 * time.Second
 	// WatchMinInterval is the fastest poll a watch may run at (HLD-007; the
-	// five-second floor HLD-003's own reason is sized against).
+	// five-second floor HLD-003's cap is sized against).
 	WatchMinInterval = 5 * time.Second
 	// WatchRateLimitPause is the first pause of every watcher of a manager
 	// that saw a GitLab 429 (RTC-005).

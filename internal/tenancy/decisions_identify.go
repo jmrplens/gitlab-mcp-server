@@ -9,9 +9,11 @@ package tenancy
 // and how the tenant itself is resolved.
 //
 // The tenant is resolved and read for attribution only: no allowance is keyed
-// on it (F-01, issue 955), and no Tenant type exists, because nothing would
-// consume one. IDN-008 names the code home of the rule that a zero or missing
-// user id is unknown (spec: The tenant), so that it cannot move unnoticed.
+// on it, which issue 955 decided, keeping on the entry the three allowances
+// whose reasons were about a GitLab user and stating each reason as what the
+// entry bounds (F-01). No Tenant type exists, because nothing would consume
+// one. IDN-008 names the code home of the rule that a zero or missing user id
+// is unknown (spec: The tenant), so that it cannot move unnoticed.
 func identifyDecisions() []Decision {
 	return []Decision{
 		{
@@ -47,7 +49,7 @@ func identifyDecisions() []Decision {
 			ID: "IDN-002", Question: Identify, Kind: Rule, Class: ClassR, Disposition: Ruled,
 			Resource: "the pool entry, one per credential per instance",
 			Key:      KeyEntry, StdioKey: KeyNone,
-			Findings: []string{"F-01"},
+			Decided: []string{"issue 955"},
 			Sites: []Site{
 				derive(pkgPool, "sessionKey"),
 				derive(pkgPool, "canonicalHost"),
@@ -137,7 +139,8 @@ func identifyDecisions() []Decision {
 			ID: "IDN-008", Question: Identify, Kind: Rule, Class: ClassT, Disposition: Ruled,
 			Resource: "the tenant: (canonical instance URL, GitLab user id), or unknown",
 			Key:      KeyTenant, StdioKey: KeyProcess,
-			Findings: []string{"F-01", "F-28"},
+			Decided:  []string{"issue 955"},
+			Findings: []string{"F-28"},
 			Sites: []Site{
 				enforce(pkgPool, "resolveIdentity"),
 				enforce(pkgPool, "ServerPool.IdentityFor"),

@@ -12,11 +12,13 @@ import (
 
 // TestDecision_Disagrees_IsExactlyTheClassDSet holds the two declared facts a
 // row carries, the unit of what its reason cites and its key, to reproducing
-// the specification's class D set exactly: the tool-call bucket on HTTP, the
-// watcher pause on a GitLab 429 and the watcher cap. HLD-001 is class R, with
-// HLD-002 as its partner: its stated unit is the entry's own, and the word
-// "fairness" it used until issue 960 was a vocabulary departure, never a unit
-// mismatch.
+// the specification's class D set exactly, which is empty. The tool-call
+// bucket on HTTP, the watcher pause on a GitLab 429 and the watcher cap were
+// its three rows until issue 955 kept them on the entry and stated each
+// reason in the entry's unit, so they are class R, the cap with HLD-004 as its
+// partner. HLD-001 is class R, with HLD-002 as its partner: its stated unit is
+// the entry's own, and the word "fairness" it used until issue 960 was a
+// vocabulary departure, never a unit mismatch.
 // RTC-003 left the set when RTC-007 gave it a process partner: its reason is
 // still the processor, and the partner is what now meets it.
 func TestDecision_Disagrees_IsExactlyTheClassDSet(t *testing.T) {
@@ -27,10 +29,12 @@ func TestDecision_Disagrees_IsExactlyTheClassDSet(t *testing.T) {
 		}
 	}
 	slices.Sort(disagree)
-	if got, want := strings.Join(disagree, ","), "HLD-003,RTC-001,RTC-005"; got != want {
+	if got, want := strings.Join(disagree, ","), ""; got != want {
 		t.Errorf("rows that disagree = %s, want %s", got, want)
 	}
-	for _, tc := range []struct{ id, partner string }{{"HLD-001", "HLD-002"}, {"RTC-003", "RTC-007"}} {
+	for _, tc := range []struct{ id, partner string }{
+		{"HLD-001", "HLD-002"}, {"RTC-003", "RTC-007"}, {"RTC-001", ""}, {"RTC-005", ""}, {"HLD-003", "HLD-004"},
+	} {
 		t.Run(tc.id, func(t *testing.T) {
 			d, _ := Lookup(tc.id)
 			if d.Class != ClassR || d.Partner != tc.partner || d.Disagrees() {
