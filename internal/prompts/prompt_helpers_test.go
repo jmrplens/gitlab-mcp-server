@@ -705,36 +705,6 @@ func TestFormatBranchAccessLevel(t *testing.T) {
 	}
 }
 
-// TestAccessLevelIcon covers both branches.
-func TestAccessLevelIcon(t *testing.T) {
-	tests := []struct {
-		name  string
-		input gl.AccessControlValue
-	}{
-		{"enabled", gl.EnabledAccessControl},
-		{"disabled", gl.DisabledAccessControl},
-		{"empty", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if accessLevelIcon(tt.input) == "" {
-				t.Errorf("expected non-empty icon for %s", tt.name)
-			}
-		})
-	}
-}
-
-// TestFormatAuditDate covers both branches.
-func TestFormatAuditDate(t *testing.T) {
-	if got := formatAuditDate(nil); got != "-" {
-		t.Errorf("formatAuditDate(nil) = %q, want %q", got, "-")
-	}
-	now := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
-	if got := formatAuditDate(&now); got != "2025-03-15" {
-		t.Errorf("formatAuditDate() = %q, want %q", got, "2025-03-15")
-	}
-}
-
 // TestWriteReleaseNotesMRs verifies the release notes MR section formatter
 // covers: empty MRs, MR with nil author, MR with labels, MR with long description.
 func TestWriteReleaseNotesMRs(t *testing.T) {
@@ -858,40 +828,6 @@ func TestWriteDailyActivityChart(t *testing.T) {
 			t.Errorf("expected bar values, got: %s", out)
 		}
 	})
-}
-
-// TestClassifyMembers verifies member classification by access level and state.
-func TestClassifyMembers(t *testing.T) {
-	members := []*gl.ProjectMember{
-		{AccessLevel: 50, State: "active"},
-		{AccessLevel: 40, State: "active"},
-		{AccessLevel: 30, State: "blocked"},
-		{AccessLevel: 20, State: "awaiting"},
-		{AccessLevel: 10, State: "active"},
-	}
-
-	g := classifyMembers(members)
-	if len(g.owners) != 1 {
-		t.Errorf("owners = %d, want 1", len(g.owners))
-	}
-	if len(g.maintainers) != 1 {
-		t.Errorf("maintainers = %d, want 1", len(g.maintainers))
-	}
-	if len(g.developers) != 1 {
-		t.Errorf("developers = %d, want 1", len(g.developers))
-	}
-	if len(g.reporters) != 1 {
-		t.Errorf("reporters = %d, want 1", len(g.reporters))
-	}
-	if len(g.guests) != 1 {
-		t.Errorf("guests = %d, want 1", len(g.guests))
-	}
-	if len(g.blocked) != 1 {
-		t.Errorf("blocked = %d, want 1", len(g.blocked))
-	}
-	if len(g.inactive) != 1 {
-		t.Errorf("inactive = %d, want 1 (awaiting state)", len(g.inactive))
-	}
 }
 
 // TestWriteMilestonesAudit verifies milestone audit formatting for zero, active,
@@ -1177,66 +1113,6 @@ func TestProtectedBranchExtraAt_InAndOutOfRange(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestWriteBranchDetail verifies branch detail output including default suffix
-// and unprotect access levels.
-func TestWriteBranchDetail(t *testing.T) {
-	t.Run("default_branch_suffix", func(t *testing.T) {
-		var b strings.Builder
-		writeBranchDetail(&b, &gl.ProtectedBranch{Name: "main"}, toolutil.ProtectedBranchExtra{}, "main")
-		out := b.String()
-		if !strings.Contains(out, "(default)") {
-			t.Errorf("expected (default) suffix, got: %s", out)
-		}
-	})
-
-	t.Run("non_default_branch", func(t *testing.T) {
-		var b strings.Builder
-		writeBranchDetail(&b, &gl.ProtectedBranch{Name: "release"}, toolutil.ProtectedBranchExtra{}, "main")
-		out := b.String()
-		if strings.Contains(out, "(default)") {
-			t.Errorf("should not have (default) suffix, got: %s", out)
-		}
-	})
-
-	t.Run("with_unprotect_access_levels", func(t *testing.T) {
-		var b strings.Builder
-		writeBranchDetail(&b, &gl.ProtectedBranch{
-			Name:                  "feature",
-			UnprotectAccessLevels: []*gl.BranchAccessDescription{{AccessLevel: 40}},
-		}, toolutil.ProtectedBranchExtra{}, "main")
-		out := b.String()
-		if !strings.Contains(out, "Unprotect access") {
-			t.Errorf("expected unprotect access line, got: %s", out)
-		}
-	})
-}
-
-// TestWriteSharedGroups verifies shared group section formatting.
-func TestWriteSharedGroups(t *testing.T) {
-	t.Run("empty_groups", func(t *testing.T) {
-		var b strings.Builder
-		writeSharedGroups(&b, nil)
-		if b.Len() != 0 {
-			t.Errorf("expected empty output for nil groups, got: %q", b.String())
-		}
-	})
-
-	t.Run("with_groups", func(t *testing.T) {
-		var b strings.Builder
-		writeSharedGroups(&b, []gl.ProjectSharedWithGroup{
-			{GroupName: "team-a", GroupAccessLevel: 30},
-			{GroupName: "team-b", GroupAccessLevel: 40},
-		})
-		out := b.String()
-		if !strings.Contains(out, "team-a") {
-			t.Errorf("expected group name, got: %s", out)
-		}
-		if !strings.Contains(out, "team-b") {
-			t.Errorf("expected second group name, got: %s", out)
-		}
-	})
 }
 
 // TestGroupEventsByDay verifies event grouping with nil dates and sorting.

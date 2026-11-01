@@ -315,11 +315,14 @@ func (f changedFiles) partial() bool {
 // count is the number of changed files read, said as mr_review.changes_get
 // says it: "N" for the whole diff, "N of total" when GitLab counted more, and
 // "N shown, more available" when it only announced a next page.
+//
+// It is a chain of early returns rather than a tagless switch for the reason
+// [writeMermaidRune] gives.
 func (f changedFiles) count() string {
-	switch {
-	case f.page.TotalItems > int64(len(f.diffs)):
+	if f.page.TotalItems > int64(len(f.diffs)) {
 		return fmt.Sprintf("%d of %d", len(f.diffs), f.page.TotalItems)
-	case f.page.HasMore:
+	}
+	if f.page.HasMore {
 		return fmt.Sprintf("%d shown, more available", len(f.diffs))
 	}
 	return strconv.Itoa(len(f.diffs))
