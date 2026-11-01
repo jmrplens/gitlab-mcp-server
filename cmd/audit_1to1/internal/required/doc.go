@@ -54,10 +54,12 @@
 // (a member added by user_id or username, a project created with a name or a
 // path) are not in the record, which writes each of those params as optional;
 // the schemas say them with an anyOf a toolutil.SchemaAnyOfRequired override
-// adds, and nothing here holds it to GitLab. The one exactly_one_of published
-// as the oneOf a toolutil.SchemaOneOfRequired override adds is an LDAP group
-// link's cn or filter; the others, such as a snippet's files or content, are
-// still an anyOf or not stated at all, and this scope does not find them. The
+// adds, and nothing here holds it to GitLab. Two exactly_one_of are published
+// as a oneOf: an LDAP group link's cn or filter, which a
+// toolutil.SchemaOneOfRequired override adds, and a snippet created from files
+// or from file_name with content, which the snippets package writes by hand
+// because a content brings its file_name with it. The others are still an
+// anyOf or not stated at all, and this scope does not find them. The
 // rules an element of a list is held to, such as a protected environment's
 // deploy access level naming exactly one of a role, a user or a group, are
 // stated in the item schema by a toolutil.SchemaItemsOneOfRequired override or

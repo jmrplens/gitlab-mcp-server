@@ -478,7 +478,9 @@ func TestExplore_APIError(t *testing.T) {
 // Create/Update with full options
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithAllOptions verifies Create when with all options.
+// TestCreate_WithAllOptions verifies Create when with all options of a
+// snippet created from files, which leaves out the single-file content
+// GitLab refuses beside them.
 func TestCreate_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -495,7 +497,6 @@ func TestCreate_WithAllOptions(t *testing.T) {
 		Title:       "Test",
 		FileName:    "test.rb",
 		Description: "desc",
-		ContentBody: "puts 'hi'",
 		Visibility:  "private",
 		Files:       []CreateFileInput{{FilePath: "test.rb", Content: "puts 'hi'"}},
 	})
@@ -588,7 +589,9 @@ func TestProjectContent_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_AllOptions verifies ProjectCreate when all options.
+// TestProjectCreate_AllOptions verifies ProjectCreate when all options of a
+// snippet created from files, which leaves out the single-file content
+// GitLab refuses beside them.
 func TestProjectCreate_AllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, covSnippetJSON)
@@ -599,7 +602,6 @@ func TestProjectCreate_AllOptions(t *testing.T) {
 		Description: "desc",
 		Visibility:  "internal",
 		FileName:    "a.rb",
-		ContentBody: "x",
 		Files:       []CreateFileInput{{FilePath: "a.rb", Content: "x"}},
 	})
 	if err != nil {

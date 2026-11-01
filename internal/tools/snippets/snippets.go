@@ -200,15 +200,22 @@ func createSnippetFiles(files []CreateFileInput) *[]*gl.CreateSnippetFileOptions
 // validateCreateSnippetContent validates the two supported snippet creation
 // modes: single-file snippets require fileName and content when files is empty,
 // while multi-file snippets require FilePath and Content on every file entry.
-// A call with no file at all is told both ways of giving one; a single-file
-// call missing one of its two fields returns [toolutil.ErrFieldRequired]; and
-// invalid multi-file entries include the offending files[index] field in the
-// error.
+// A call with no file at all is told both ways of giving one, and so is a call
+// giving both, files beside a content; a single-file call missing one of its
+// two fields returns [toolutil.ErrFieldRequired]; and invalid multi-file
+// entries include the offending files[index] field in the error.
 //
-// The catalog's anyOf states the choice as data, and no tool's served input
-// schema may carry it at its root, which the Anthropic Messages API refuses
-// for a whole tool list, so this is what tells every surface.
+// GitLab holds both create routes to exactly_one_of :files, :content and
+// answers files beside a content with a 400, while the project create, which
+// sends the single file as files, would send the files alone and drop the
+// content. A field counts here only with a value, which is when the handlers
+// send it. The catalog's oneOf states the choice as data, and no tool's served
+// input schema may carry it at its root, which the Anthropic Messages API
+// refuses for a whole tool list, so this is what tells every surface.
 func validateCreateSnippetContent(fileName, content string, files []CreateFileInput) error {
+	if len(files) > 0 && content != "" {
+		return errors.New("files and content are mutually exclusive: give the snippet a list of files, or the one file of a single-file snippet as file_name with content, not both")
+	}
 	if len(files) == 0 {
 		if fileName == "" && content == "" {
 			return errors.New("files, or file_name with content, is required: give the snippet a list of files, or the one file of a single-file snippet")

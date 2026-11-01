@@ -165,7 +165,7 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 		description: "Read one file from a multi-file personal snippet at a ref. Returns: the snippet ID, ref, file name, and raw content. See also: gitlab_snippet_content, gitlab_snippet_get.",
 	},
 	"gitlab_snippet_create": {
-		usage:       "Create a personal snippet. Provide title plus either files[] (multi-file) or file_name and content (single-file). Set visibility to private, internal, or public.",
+		usage:       "Create a personal snippet. Provide title plus either files[] (multi-file) or file_name and content (single-file), not both. Set visibility to private, internal, or public.",
 		aliases:     []string{"create snippet", "new snippet", "add personal snippet"},
 		related:     []string{actionSnippetGet, "snippet.update", actionSnippetList},
 		description: "Create a personal snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: gitlab_snippet_get, gitlab_snippet_update, gitlab_snippet_list.",
@@ -207,7 +207,7 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 		description: "Read a project snippet's raw content. Returns: the snippet ID and raw text content. See also: gitlab_project_snippet_get, gitlab_project_snippet_list.",
 	},
 	"gitlab_project_snippet_create": {
-		usage:       "Create a project snippet. Provide project_id and title plus either files[] (multi-file) or file_name and content (single-file). Set visibility to private, internal, or public.",
+		usage:       "Create a project snippet. Provide project_id and title plus either files[] (multi-file) or file_name and content (single-file), not both. Set visibility to private, internal, or public.",
 		aliases:     []string{"create project snippet", "new project snippet", "add snippet to project"},
 		related:     []string{actionSnippetProjectGet, "snippet.project_update", actionSnippetProjectList},
 		description: "Create a project snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: gitlab_project_snippet_get, gitlab_project_snippet_update, gitlab_project_snippet_list.",

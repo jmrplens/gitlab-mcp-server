@@ -3413,7 +3413,7 @@ func TestExecute_MissingAlternativesAreNamedAsFindNamesThem(t *testing.T) {
 			name:    "groups of several names",
 			action:  "snippet.create",
 			params:  map[string]any{"title": "t"},
-			want:    "invalid params. Missing one of file_name + content or files. Valid params:",
+			want:    "invalid params. Missing exactly one of file_name + content or files. Valid params:",
 			without: "Missing required params",
 		},
 		{

@@ -299,6 +299,54 @@ func TestCreate_NoContentAtAll_IsRefusedNamingBothWays(t *testing.T) {
 	}
 }
 
+// TestCreate_FilesBesideContent_IsRefusedBeforeAnyRequest verifies that a
+// personal or project snippet created with files beside a content, the
+// single-file field, with or without its file_name, is refused before
+// anything is sent, in words that name both and say not both.
+//
+// GitLab holds both create routes to exactly_one_of :files, :content
+// (create_file_params in lib/api/helpers/snippets_helpers.rb). The personal
+// create sent the two and GitLab refused them with a 400 this handler hinted
+// was a missing title or content; the project create, which sends the single
+// file as files, sent the files alone and dropped the content without a word.
+func TestCreate_FilesBesideContent_IsRefusedBeforeAnyRequest(t *testing.T) {
+	files := []CreateFileInput{{FilePath: "notes.md", Content: "# notes"}}
+	calls := []struct {
+		name string
+		call func(*gitlabclient.Client) error
+	}{
+		{name: "personal, with a file name", call: func(client *gitlabclient.Client) error {
+			_, err := Create(t.Context(), client, CreateInput{Title: "notes", Files: files, FileName: "notes.md", ContentBody: "# notes"})
+			return err
+		}},
+		{name: "personal, without a file name", call: func(client *gitlabclient.Client) error {
+			_, err := Create(t.Context(), client, CreateInput{Title: "notes", Files: files, ContentBody: "# notes"})
+			return err
+		}},
+		{name: "project, with a file name", call: func(client *gitlabclient.Client) error {
+			_, err := ProjectCreate(t.Context(), client, ProjectCreateInput{ProjectID: "42", Title: "notes", Files: files, FileName: "notes.md", ContentBody: "# notes"})
+			return err
+		}},
+		{name: "project, without a file name", call: func(client *gitlabclient.Client) error {
+			_, err := ProjectCreate(t.Context(), client, ProjectCreateInput{ProjectID: "42", Title: "notes", Files: files, ContentBody: "# notes"})
+			return err
+		}},
+	}
+	for _, tc := range calls {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+			if err == nil {
+				t.Fatal("error = nil, want the snippet refused")
+			}
+			for _, words := range []string{"files", "content", "not both"} {
+				if !strings.Contains(err.Error(), words) {
+					t.Errorf("refusal %q does not say %q", err, words)
+				}
+			}
+		})
+	}
+}
+
 // TestValidateCreateSnippetContent_MultiFileErrors verifies per-file validation.
 func TestValidateCreateSnippetContent_MultiFileErrors(t *testing.T) {
 	tests := []struct {
@@ -494,8 +542,8 @@ func TestAddSnippetCreateFileRequirement_EdgeCases(t *testing.T) {
 	if schema.Properties == nil {
 		t.Fatal("expected properties map to be initialized")
 	}
-	if len(schema.AnyOf) != 2 {
-		t.Fatalf("AnyOf length = %d, want 2", len(schema.AnyOf))
+	if len(schema.OneOf) != 2 || schema.AnyOf != nil {
+		t.Fatalf("OneOf length = %d and AnyOf = %v, want two oneOf branches and no anyOf", len(schema.OneOf), schema.AnyOf)
 	}
 
 	filesSchema := &jsonschema.Schema{}
@@ -516,8 +564,8 @@ func TestCreateInputSchemaMaps(t *testing.T) {
 			if len(schema) == 0 {
 				t.Fatal("expected non-empty schema map")
 			}
-			if _, ok := schema["anyOf"]; !ok {
-				t.Fatalf("schema missing anyOf: %#v", schema)
+			if _, ok := schema["oneOf"]; !ok {
+				t.Fatalf("schema missing oneOf: %#v", schema)
 			}
 		})
 	}
@@ -570,8 +618,8 @@ func TestSnippetCreateInputSchemaMap_DeadBranches(t *testing.T) {
 			if unmarshalErr := json.Unmarshal(raw, &roundTrip); unmarshalErr != nil {
 				t.Fatalf("re-unmarshal failed: %v", unmarshalErr)
 			}
-			if _, ok := roundTrip["anyOf"]; !ok {
-				t.Fatalf("round-trip lost anyOf key: %#v", roundTrip)
+			if _, ok := roundTrip["oneOf"]; !ok {
+				t.Fatalf("round-trip lost oneOf key: %#v", roundTrip)
 			}
 		})
 	}
