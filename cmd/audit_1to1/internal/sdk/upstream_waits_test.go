@@ -1625,7 +1625,7 @@ func TestRun_Repository_EveryWorkaroundIsAnsweredAndEveryEntryHolds(t *testing.T
 				found.Form, found.Site, found.AnsweredBy, found.UnansweredKeys, found.UnansweredNeeds, found.UnansweredMethods, found.KeysUnread)
 		}
 	}
-	want := map[string]int{formRawRequest: 28, formRequestOption: 12, formBodyEdit: 9, formFixtureRawRequest: 5, formScenarioRawRequest: 1}
+	want := map[string]int{formRawRequest: 28, formRequestOption: 13, formBodyEdit: 9, formFixtureRawRequest: 5, formScenarioRawRequest: 1}
 	if !reflect.DeepEqual(forms, want) {
 		t.Errorf("forms = %v, want %v", forms, want)
 	}

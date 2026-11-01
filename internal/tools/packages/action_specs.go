@@ -23,6 +23,7 @@ const (
 	actionNameList         = "list"
 	actionNameGroupList    = "group_list"
 	actionNameGet          = "get"
+	actionNameDownload     = "download"
 	actionNamePublishDir   = "publish_directory"
 	actionNamePublishLink  = "publish_and_link"
 	actionNameFileList     = "file_list"
@@ -48,7 +49,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// protective mode keys on that flag rather than on what the handler
 		// does. Read-only removes it, safe mode previews it, and a client that
 		// auto-approves readOnlyHint:true no longer auto-approves a file write.
-		packageWriteSpec("download", toolutil.RouteActionWithRequest(client, Download), "gitlab_package_download"),
+		packageWriteSpec(actionNameDownload, toolutil.RouteActionWithRequest(client, Download), "gitlab_package_download"),
 		// gitlab_package_list — list project packages with optional filters and ordering.
 		packageReadSpec(actionNameList, toolutil.RouteAction(client, List), "gitlab_package_list"),
 		// gitlab_list_group_packages — list packages across a group and its descendant projects.
@@ -150,8 +151,8 @@ var packageActionMetadata = map[string]packageActionMeta{
 		related:     []string{"package.publish_and_link", "package.publish_directory", actionPackageList, actionPackageFileList},
 		description: "Publish a single file to the Generic Package Registry. Returns: the published file's id, package id, name, size, checksums (md5/sha1/sha256), and download URL. See also: gitlab_package_publish_and_link, gitlab_package_publish_directory, gitlab_package_list.",
 	},
-	"download": {
-		usage:       "Download one Generic Package Registry file to a local path. Provide project_id, package_name, package_version, file_name, and the output_path to write. The file is streamed and checksummed locally.",
+	actionNameDownload: {
+		usage:       "Download one Generic Package Registry file to a local path. Provide project_id, package_name, package_version, file_name, and the output_path to write. The file is streamed and checksummed locally. Optional download_mode asks GitLab to stream a file kept in object storage through itself (proxy) or to redirect to object storage or a CDN (direct), which GitLab honors only where its configuration allows that mode.",
 		aliases:     []string{"download generic package file", "fetch package asset", "pull file from package registry", "retrieve package version file"},
 		related:     []string{actionPackageFileList, actionPackageList, actionPackagePublish},
 		description: "Download a single file from the Generic Package Registry to a local path. Returns: the local output path, byte size, and SHA256 checksum. See also: gitlab_package_file_list, gitlab_package_list.",
@@ -206,9 +207,10 @@ var packageActionMetadata = map[string]packageActionMeta{
 }
 
 // packageOptions returns the base [toolutil.ActionSpecOptions] for a
-// Generic Package Registry action and customizes the Usage,
-// ParameterGuidance, and InputSchemaOverrides for the list, file_list,
-// publish, publish_and_link, and publish_directory individual tools.
+// Generic Package Registry action, takes its usage, aliases, related actions
+// and description from packageActionMetadata, and customizes the Usage,
+// ParameterGuidance and InputSchemaOverrides of the actions that need more
+// than that entry holds.
 func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute packages domain action.", Tags: []string{"package"},
@@ -304,6 +306,12 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 				schemaEnum:        []any{"package_file"},
 				schemaDescription: "Response detail selector. Use package_file to receive the published file metadata (id, size, checksums).",
 			}),
+		}
+	}
+	if actionName == actionNameDownload {
+		// download_mode: lib/api/generic_packages.rb declares values proxy and direct.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride(paramDownloadMode, "proxy", "direct"),
 		}
 	}
 	if actionName == actionNameFileList {

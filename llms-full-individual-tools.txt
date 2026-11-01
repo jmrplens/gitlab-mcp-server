@@ -10318,6 +10318,7 @@ Download a single file from the Generic Package Registry to a local path. Return
 
 **Parameters:**
 
+- `download_mode` (string): How GitLab hands over a file kept in object storage: proxy streams it through GitLab, direct redirects to object storage or a CDN, which the server follows without the credential headers once the redirect leaves the instance's host and its subdomains. GitLab honors it only when its object storage configuration allows that mode, and otherwise uses its default. Leave it out to keep that default
 - `file_name` (string) (required): File name to download. May include / to describe a directory structure (segments must not be empty or . or ..)
 - `output_path` (string) (required): Absolute path where the file will be saved on the local filesystem, confined to the current working directory, the OS temp directory, or a directory listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. Symlinks are resolved and destinations outside those roots are rejected
 - `package_name` (string) (required): Package name

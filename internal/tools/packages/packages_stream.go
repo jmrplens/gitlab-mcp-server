@@ -20,18 +20,36 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// paramDownloadMode is the query parameter the generic package download
+// route declares for the transfer mode (lib/api/generic_packages.rb).
+const paramDownloadMode = "download_mode"
+
 // newDownloadRequest builds the package file GET. The request is built here
 // rather than through a service method, so the context goes in as the same
 // option every service call takes: without it client-go builds the request
 // from context.Background(), and neither the action deadline nor an abandoned
 // call would end a transfer nothing else bounds.
 //
+// downloadMode, when set, is added to the query as download_mode. The
+// request is handed no client-go options struct that could carry it, so it
+// is written by a request option of its own, which client-go runs after it
+// built the query; left empty, the request goes out with no query at all.
+//
 // It is a package variable so a test can reach the construction failure,
 // which no input reaches: FormatPackageURL escapes every segment it
-// interpolates, so the path always unescapes, and the one option passed
-// never fails.
-var newDownloadRequest = func(ctx context.Context, client *gitlabclient.Client, path string) (*retryablehttp.Request, error) {
-	return client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+// interpolates, so the path always unescapes, and neither option passed
+// ever fails.
+var newDownloadRequest = func(ctx context.Context, client *gitlabclient.Client, path, downloadMode string) (*retryablehttp.Request, error) {
+	options := []gl.RequestOptionFunc{gl.WithContext(ctx)}
+	if downloadMode != "" {
+		options = append(options, func(req *retryablehttp.Request) error {
+			query := req.URL.Query()
+			query.Set(paramDownloadMode, downloadMode)
+			req.URL.RawQuery = query.Encode()
+			return nil
+		})
+	}
+	return client.GL().NewRequest(http.MethodGet, path, nil, options)
 }
 
 // streamDownloadPackageFile downloads a package file by streaming the HTTP
@@ -64,7 +82,7 @@ func streamDownloadPackageFile(
 		return 0, "", fmt.Errorf("format package URL: %w (%s)", err, hintFileNameSegments)
 	}
 
-	httpReq, err := newDownloadRequest(ctx, client, apiPath)
+	httpReq, err := newDownloadRequest(ctx, client, apiPath, input.DownloadMode)
 	if err != nil {
 		return 0, "", fmt.Errorf("create download request: %w", err)
 	}

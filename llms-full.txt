@@ -6690,7 +6690,7 @@ Use {"action":"list","params":{...}}. The only top-level keys are action and par
 Action params schema: gitlab://tools/gitlab_package.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so package.list is {"action":"list"} on this one.
 Action guidance:
 - delete: Permanently delete an entire package and all of its files. Provide project_id and the package_id from package.list. This is irreversible and removes every version asset.
-- download: Download one Generic Package Registry file to a local path. Provide project_id, package_name, package_version, file_name, and the output_path to write. The file is streamed and checksummed locally.
+- download: Download one Generic Package Registry file to a local path. Provide project_id, package_name, package_version, file_name, and the output_path to write. The file is streamed and checksummed locally. Optional download_mode asks GitLab to stream a file kept in object storage through itself (proxy) or to redirect to object storage or a CDN (direct), which GitLab honors only where its configuration allows that mode.
 - file_delete: Permanently delete a single file from a package while keeping the package itself. Provide project_id, package_id, and as package_file_id the id package.file_list returns for the file.
 - file_list: List the individual files belonging to one package. Provide project_id and the package_id returned by package.list to enumerate every asset, its size, and checksums.
 - get: Get one package of a project by the package_id package.list or package.group_list returns. GitLab reads only a package whose status is default or deprecated here, so one listed with another status (error, hidden, processing or pending_destruction) answers 404 while it still exists. The answer carries every field package.list does plus the package's other versions, each with its tags and the pipeline that built it, which no listing sends. To read the files inside the package, use package.file_list.
@@ -23794,6 +23794,7 @@ Download a single file from the Generic Package Registry to a local path. Return
 
 **Parameters:**
 
+- `download_mode` (string): How GitLab hands over a file kept in object storage: proxy streams it through GitLab, direct redirects to object storage or a CDN, which the server follows without the credential headers once the redirect leaves the instance's host and its subdomains. GitLab honors it only when its object storage configuration allows that mode, and otherwise uses its default. Leave it out to keep that default
 - `file_name` (string) (required): File name to download. May include / to describe a directory structure (segments must not be empty or . or ..)
 - `output_path` (string) (required): Absolute path where the file will be saved on the local filesystem, confined to the current working directory, the OS temp directory, or a directory listed in GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS. Symlinks are resolved and destinations outside those roots are rejected
 - `package_name` (string) (required): Package name

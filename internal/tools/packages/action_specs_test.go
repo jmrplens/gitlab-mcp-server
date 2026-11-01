@@ -161,6 +161,24 @@ func TestActionSpecs_ListOrderingGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DownloadMode_OffersTheTwoModesGitLabDeclares verifies the
+// download publishes download_mode with the two values its route declares
+// (lib/api/generic_packages.rb, values proxy and direct), and a description
+// that says GitLab honors it only where the object storage configuration
+// allows the mode, so a caller does not read the answer of an instance that
+// ignored it as the mode it asked for.
+func TestActionSpecs_DownloadMode_OffersTheTwoModesGitLabDeclares(t *testing.T) {
+	byTool := packageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, packageActionHandler())))
+	schema := byTool["gitlab_package_download"].Route.InputSchema
+
+	if got := schemaPropertyEnum(t, schema, "download_mode"); !sameStringSet(got, []string{"proxy", "direct"}) {
+		t.Errorf("download_mode enum = %v, want proxy and direct", got)
+	}
+	if description := schemaPropertyDescription(t, schema, "download_mode"); !strings.Contains(description, "object storage configuration allows") {
+		t.Errorf("download_mode description = %q, want it to say when GitLab honors the mode", description)
+	}
+}
+
 // TestActionSpecs_GroupListVersionFilter_SaysHowItMeetsIncludeVersionless
 // verifies that the group list's package_version describes what GitLab does
 // with it beside include_versionless: a version filter matches the packages
