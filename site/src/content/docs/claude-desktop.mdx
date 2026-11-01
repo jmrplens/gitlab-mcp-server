@@ -139,7 +139,12 @@ gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server
 Use the name of the bundle you downloaded. `--signer-workflow` holds the
 attestation to the release workflow, since `-R` alone accepts one minted by
 any workflow of the repository; `--source-ref refs/tags/v<version>` holds it
-to one release as well. The SHA-256 of each bundle the MCP Registry entry
+to one release as well. From the first release after 3.4.0 the attestation
+is attached to the release too, in `gitlab-mcp-server.intoto.jsonl`:
+download it beside the bundle and add
+`--bundle gitlab-mcp-server.intoto.jsonl` to the command above, and `gh`
+reads it from that file instead of asking GitHub, without `gh auth login`.
+The SHA-256 of each bundle the MCP Registry entry
 declares is also the `fileSha256` that release's `server.json` records. The
 v2.7.5 bundle has no attestation: compare its SHA-256 with
 `c224f7dca31ca5b3e53d450413ea46155798f82f9cada8c4e34e01642f60e4fe`.

@@ -200,10 +200,11 @@ release:
     owner: jmrplens
     name: gitlab-mcp-server
   # Draft first: every asset (binaries, checksums.txt + signature, SBOMs, the
-  # OpenVEX document, and the .mcpb attached by the workflow) is in place
-  # before the release becomes visible, so no installer or updater observes a
-  # partial release. The workflow's "Publish release" step flips the draft
-  # after the last upload.
+  # OpenVEX document, and the .mcpb and gitlab-mcp-server.intoto.jsonl attached
+  # by the workflow) is in place before the release becomes visible, so no
+  # installer or updater observes a partial release, and an immutable release
+  # takes no asset once it is published. The workflow's "Publish release" step
+  # flips the draft after the last upload.
   draft: true
   replace_existing_draft: true
   prerelease: auto
@@ -230,4 +231,13 @@ release:
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       checksums.txt
     sha256sum --check --ignore-missing checksums.txt
+    ```
+
+    Every file in `checksums.txt` and every Claude Desktop bundle also carries SLSA build provenance, attached as `gitlab-mcp-server.intoto.jsonl`. Verify a file against it, without signing in to GitHub:
+
+    ```console
+    gh attestation verify gitlab-mcp-server-linux-amd64 \
+      --bundle gitlab-mcp-server.intoto.jsonl \
+      --repo jmrplens/gitlab-mcp-server \
+      --cert-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/{{ .Tag }}"
     ```

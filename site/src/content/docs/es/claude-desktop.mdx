@@ -149,7 +149,11 @@ gh attestation verify gitlab-mcp-server-linux.mcpb -R jmrplens/gitlab-mcp-server
 Usa el nombre del paquete que hayas descargado. `--signer-workflow` exige que
 la atestación venga del workflow de release, porque `-R` por sí solo acepta
 una emitida por cualquier workflow del repositorio;
-`--source-ref refs/tags/v<versión>` la ata además a una release concreta. El SHA-256 de cada
+`--source-ref refs/tags/v<versión>` la ata además a una release concreta. Desde
+la primera release posterior a la 3.4.0 la atestación va adjunta también a la
+release, en `gitlab-mcp-server.intoto.jsonl`: descárgalo junto al paquete y
+añade `--bundle gitlab-mcp-server.intoto.jsonl` al comando de arriba, y `gh`
+la lee de ese archivo en lugar de preguntar a GitHub, sin `gh auth login`. El SHA-256 de cada
 paquete que declara la entrada del MCP Registry es también el `fileSha256` que
 registra el `server.json` de esa release. El paquete de v2.7.5 no tiene
 atestación: compara su SHA-256 con

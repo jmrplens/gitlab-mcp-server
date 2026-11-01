@@ -3870,6 +3870,145 @@ func TestLoadWorkflows_ReleaseEnvironment_IsNamedOnlyForATagPush(t *testing.T) {
 	}
 }
 
+// TestLoadWorkflows_ReleaseWorkflow_AttachesItsProvenanceToTheDraft verifies
+// that every release carries its SLSA provenance as an asset of its own,
+// gitlab-mcp-server.intoto.jsonl, made of every build-provenance attestation
+// the release job makes and attached while the release is still a draft.
+//
+// OpenSSF Scorecard's Signed-Releases counts a release as having provenance
+// only when an asset's name ends in .intoto.jsonl, and
+// scripts/fetch-release-assets.sh verifies the Claude Desktop bundles against
+// that asset and refuses a release after 3.4.0 that publishes none. A release
+// is immutable once published, so an upload after the publish step fails a
+// release that is already public, and a release GoReleaser did not create as
+// a draft is public before any step of the job runs. An attestation step the
+// writing step does not read leaves the files it names out of the asset. And
+// the step runs in a rehearsal too, writing the statements unsigned into the
+// archive the publisher jobs unpack, which is the only run that exercises it
+// before a tag does.
+func TestLoadWorkflows_ReleaseWorkflow_AttachesItsProvenanceToTheDraft(t *testing.T) {
+	t.Parallel()
+
+	const asset = "gitlab-mcp-server.intoto.jsonl"
+	root := repositoryRoot(t)
+	goreleaser, err := readYAMLMapping(filepath.Join(root, ".goreleaser.yml"))
+	if err != nil {
+		t.Fatalf("readYAMLMapping: %v", err)
+	}
+	if section, _ := goreleaser["release"].(map[string]any); section["draft"] != true {
+		t.Errorf(".goreleaser.yml creates the release with draft: %s, want True", pythonStr(section["draft"]))
+	}
+
+	steps, _ := releaseJob(t, releaseWorkflow(t, root), "release")["steps"].([]any)
+	publish, _ := onlyReleaseStep(t, steps, "publishes the draft", runsAll("gh release edit", "--draft=false"))
+	attach, attaching := onlyReleaseStep(t, steps, "uploads "+asset, runsAll("gh release upload", asset))
+	handoff, packing := onlyReleaseStep(t, steps, "packs the rehearsal's archive", runsAll("rehearsal-assets.tar", "tar -cf"))
+	if attach > publish {
+		t.Errorf("%s is uploaded by step %d, after step %d publishes the release", asset, attach, publish)
+	}
+	if condition, set := attaching["if"]; set {
+		t.Errorf("the step writing %s runs if %q; a rehearsal has to write it too", asset, pythonStr(condition))
+	}
+	if run, _ := packing["run"].(string); handoff < attach || !strings.Contains(run, asset) {
+		t.Errorf("the rehearsal's archive (step %d) does not carry the %s step %d writes", handoff, asset, attach)
+	}
+	assertEveryAttestationReaches(t, steps, attach, attaching, asset)
+	assertEveryExtraChecksumFileIsFound(t, goreleaser, attaching, asset)
+}
+
+// assertEveryExtraChecksumFileIsFound holds the step attaching, which writes
+// asset and verifies every file checksums.txt lists against it, to naming
+// where each of checksum.extra_files in goreleaser is. GoReleaser hashes such
+// a file where its glob finds it and lists it under its name_template without
+// copying it into dist/, so it is the one kind of line in checksums.txt whose
+// file dist/ does not hold under the name the line gives, and a step that
+// looks for it there fails at the tag, which no rehearsal reaches.
+func assertEveryExtraChecksumFileIsFound(t *testing.T, goreleaser, attaching map[string]any, asset string) {
+	t.Helper()
+
+	run, _ := attaching["run"].(string)
+	checksum, _ := goreleaser["checksum"].(map[string]any)
+	extras, _ := checksum["extra_files"].([]any)
+	for _, raw := range extras {
+		extra, _ := raw.(map[string]any)
+		path := strings.TrimPrefix(pythonStr(extra["glob"]), "./")
+		name := pythonStr(extra["name_template"])
+		if !strings.Contains(run, path) || !strings.Contains(run, name) {
+			t.Errorf("the step writing %s does not look for %s, which checksums.txt lists through checksum.extra_files, at %s: dist/%s does not exist", asset, name, path, name)
+		}
+	}
+}
+
+// onlyReleaseStep returns the index and the step of the one step among steps
+// that match selects, failing the test when none or more than one does; what
+// says what the step does, for the failure.
+func onlyReleaseStep(t *testing.T, steps []any, what string, match func(map[string]any) bool) (int, map[string]any) {
+	t.Helper()
+
+	found := -1
+	for index, raw := range steps {
+		if step, ok := raw.(map[string]any); ok && match(step) {
+			if found >= 0 {
+				t.Fatalf("more than one step of the release job %s", what)
+			}
+			found = index
+		}
+	}
+	if found < 0 {
+		t.Fatalf("no step of the release job %s", what)
+	}
+	step, _ := steps[found].(map[string]any)
+	return found, step
+}
+
+// runsAll selects a step whose run block holds every one of words.
+func runsAll(words ...string) func(map[string]any) bool {
+	return func(step map[string]any) bool {
+		run, _ := step["run"].(string)
+		for _, word := range words {
+			if !strings.Contains(run, word) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// assertEveryAttestationReaches holds every build-provenance attestation step
+// among steps to having an id, to running before the step at index attach,
+// which writes asset, and to that step reading its bundle-path output; and
+// steps to holding at least one.
+func assertEveryAttestationReaches(t *testing.T, steps []any, attach int, attaching map[string]any, asset string) {
+	t.Helper()
+
+	read := map[string]bool{}
+	env, _ := attaching["env"].(map[string]any)
+	for _, value := range env {
+		read[pythonStr(value)] = true
+	}
+	attestations := 0
+	for index, raw := range steps {
+		step, _ := raw.(map[string]any)
+		uses := pythonStr(step["uses"])
+		if !strings.HasPrefix(uses, "actions/attest-build-provenance@") && !strings.HasPrefix(uses, "actions/attest@") {
+			continue
+		}
+		attestations++
+		id, _ := step["id"].(string)
+		switch {
+		case id == "":
+			t.Errorf("attestation step %d has no id, so its bundle cannot reach %s", index, asset)
+		case index > attach:
+			t.Errorf("attestation step %d (%s) runs after the step that writes %s", index, id, asset)
+		case !read["${{ steps."+id+".outputs.bundle-path }}"]:
+			t.Errorf("the step writing %s reads no bundle-path of attestation step %s, so the files it names are left out", asset, id)
+		}
+	}
+	if attestations == 0 {
+		t.Errorf("the release job makes no build-provenance attestation for %s to carry", asset)
+	}
+}
+
 // The committed lock the PyPI upload installs from, the file it is compiled
 // from, and the shape of each of its requirements once a continuation is
 // joined: a name pinned to one version and at least one SHA-256 of a file of
