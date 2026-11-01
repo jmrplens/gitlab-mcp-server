@@ -954,6 +954,7 @@ func Clear(c *gl.Client, key string) error {
 func Built(c *gl.Client) error {
 	nulls := map[string]any{}
 	nulls["shade"] = nil
+	delete(nulls, "gone")
 	unset := []string{}
 	unset = append(unset, "hue")
 	if slices.Contains(unset, "gone") || len(unset) == 0 {
@@ -988,7 +989,7 @@ func Seeded(c *gl.Client) error {
 // through another variable sets the keys the map was filled with. A key
 // that is no constant adds nothing, and neither does a name written over an
 // element of the Drop or one a call other than append is handed beside a
-// list the edit takes.
+// list or a map the edit takes, a call of another builtin included.
 func TestWalkToolWorkarounds_KeysABodyEditIsAssigned_AreEachRead(t *testing.T) {
 	fixture := newWaitsFixtureWith(t, nil, map[string]string{"internal/tools/editors/editors.go": editorsTool})
 
