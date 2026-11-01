@@ -19,8 +19,9 @@ import (
 // request can still have its labels or title edited. A watcher that retired
 // itself on "success" would therefore go permanently blind to a real change
 // its subscriber asked to hear about. Backing off instead keeps the
-// guarantee intact and only costs latency, and the subscription lease
-// already bounds how long an abandoned watcher can live.
+// guarantee intact and only costs latency: the lease already slows an
+// abandoned watcher to the background poll, and [Options.MaxLifetime] bounds
+// how long it can live.
 type activity uint8
 
 const (

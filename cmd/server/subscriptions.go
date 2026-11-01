@@ -133,8 +133,9 @@ func (n *serverNotifier) ResourceUpdated(ctx context.Context, update subscriptio
 // ownerMetaKey carries the pool entry a resource-updated notification belongs
 // to, from this notifier to the sending middleware that filters delivery.
 //
-// It never reaches a client: the middleware removes it from the `_meta` it
-// forwards and puts it back afterwards, for the next session's turn. It is a
+// It never reaches a client: the middleware forwards a copy of the params
+// whose `_meta` is a new map without it, and never writes to the params it was
+// handed or to their `_meta`, which other sessions' sends may share. It is a
 // random per-entry token rather than anything derived from the credential,
 // precisely because a key that does leak one day should leak nothing (see
 // [github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool.Entry.Owner]).
