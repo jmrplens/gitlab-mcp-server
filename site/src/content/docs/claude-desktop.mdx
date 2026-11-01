@@ -185,7 +185,7 @@ make mcpb          # the three per-OS bundles and the universal one, in dist/
 make check-mcpb    # validates mcpb/manifest.json and the three manifests derived from it with the official MCPB CLI
 ```
 
-`make mcpb` needs macOS, for `lipo`, plus `zip`, `unzip` and `jq`, and
+`make mcpb` needs macOS, for `lipo`, and Go, which packs the bundles too, and
 builds the four bundles a release attaches. What each bundle carries, how
 the per-OS manifests are derived, and what the build checks and refuses
 before it keeps a bundle are described for contributors in
