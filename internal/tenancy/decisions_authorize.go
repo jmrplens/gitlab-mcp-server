@@ -18,7 +18,12 @@ package tenancy
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func authorizeDecisions() []Decision {
-	withheld := refuse(pkgDynamic, "Registry.withheldActionMessage")
+	// One sentence for every surface that answers a withheld call: the
+	// dynamic registry in execute, and the meta surface before the SDK
+	// validates the action argument (issue 1282), which the call middleware
+	// enforces.
+	withheld := refuse(pkgActionCatalog, "Withheld.Message")
+	metaWithheld := enforce(pkgVisibility, "NarrowedCallMiddleware")
 	filter := refuse(pkgTools, "FilterActionCatalog")
 	narrowed := func(answer Answer) []Refusal {
 		return []Refusal{
@@ -59,6 +64,7 @@ func authorizeDecisions() []Decision {
 				enforce(pkgTools, "FilterActionCatalog"),
 				enforce(pkgActionCatalog, "Catalog.FilterReachableWith"),
 				enforce(pkgVisibility, "Apply"),
+				metaWithheld,
 				withheld,
 			},
 		},
@@ -74,6 +80,7 @@ func authorizeDecisions() []Decision {
 			Sites: []Site{
 				enforce(pkgGitLab, "CatalogScopes"),
 				enforce(pkgTools, "FilterScopeFilteredCatalog"),
+				metaWithheld,
 				withheld,
 			},
 		},
@@ -140,6 +147,7 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "Client.DetectTier"),
 				enforce(pkgTools, "TierWithheld"),
 				refuse(pkgTools, "filterActionSpecGroupsByTier"),
+				metaWithheld,
 				withheld,
 			},
 		},
@@ -154,6 +162,7 @@ func authorizeDecisions() []Decision {
 			Sites: []Site{
 				enforce(pkgTools, "FilterActionCatalog"),
 				enforce(pkgVisibility, "Apply"),
+				metaWithheld,
 				withheld,
 			},
 		},

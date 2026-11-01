@@ -10258,7 +10258,7 @@ func TestExecute_WithheldByScope_NamesEveryScopeTheCredentialLacks(t *testing.T)
 			if !strings.Contains(text, tc.want) || tc.absent != "" && strings.Contains(text, tc.absent) {
 				t.Errorf("Execute() error text = %q, want it to contain %q and not %q", text, tc.want, tc.absent)
 			}
-			if _, blank := registry.withheldByScope[""]; blank {
+			if registry.withheld.Holds("") {
 				t.Error("an entry with no key was recorded as withheld")
 			}
 		})
@@ -10313,7 +10313,7 @@ func TestExecute_WithheldByTier_NamesTheTierAndAsksTheOperator(t *testing.T) {
 					t.Errorf("Execute() error text = %q, must not contain %q", text, unwanted)
 				}
 			}
-			if _, blank := registry.withheldByTier[""]; blank {
+			if registry.withheld.Holds("") {
 				t.Error("an entry with no key was recorded as withheld")
 			}
 		})
@@ -10608,28 +10608,6 @@ func TestSearch_RelatedActions_AreTheSameOnesDescribeWouldPublish(t *testing.T) 
 		return
 	}
 	t.Fatalf("Search() results = %+v, want widget.inspect among them", output.Results)
-}
-
-// TestWithheldKeySet_NormalizesKeysAndDropsBlankOnes verifies how the withheld
-// list is indexed: each key is lowercased and trimmed, and a key that is blank
-// or only spaces is not indexed at all.
-//
-// The set is looked up with the lowercased action a caller asked for, so an
-// untrimmed key would never be found. A blank one is worse than useless: it
-// would answer a caller who sent an empty action with the withheld explanation
-// instead of the "action is required" refusal.
-func TestWithheldKeySet_NormalizesKeysAndDropsBlankOnes(t *testing.T) {
-	set := withheldKeySet([]string{"  Project.Hook_Add ", "", "   "})
-
-	if _, ok := set["project.hook_add"]; !ok {
-		t.Errorf("withheldKeySet() = %v, want the normalized key indexed", set)
-	}
-	if len(set) != 1 {
-		t.Errorf("withheldKeySet() = %v, want the blank keys dropped", set)
-	}
-	if got := withheldKeySet(nil); got != nil {
-		t.Errorf("withheldKeySet(nil) = %v, want nil", got)
-	}
 }
 
 // TestRegistryShapeFor_SharedCatalogReusesOneShape verifies the split the

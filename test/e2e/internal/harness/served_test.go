@@ -257,6 +257,28 @@ func TestCompletionReferences_PromptsAndTemplates_ListEveryArgumentOnce(t *testi
 	}
 }
 
+// TestActionIDSet_IsTheExcludedActionsASessionDeclinesUnnamed checks the set
+// a session keeps of the actions the operator excluded by name: every ID once,
+// nothing for no list, and the lookup [Withheld] asks it, which accepts the
+// meta surface's enum refusal for those actions alone (issue 1282).
+func TestActionIDSet_IsTheExcludedActionsASessionDeclinesUnnamed(t *testing.T) {
+	if got := actionIDSet(nil); got != nil {
+		t.Errorf("actionIDSet(nil) = %v, want nil", got)
+	}
+	set := actionIDSet([]string{"issue.list", "issue.create", "issue.list"})
+	if len(set) != 2 {
+		t.Errorf("actionIDSet() = %v, want two IDs", set)
+	}
+	s := &Session{conn: &sessionConn{served: servedSets{excluded: set}}}
+	for id, want := range map[ActionID]bool{"issue.list": true, "issue.create": true, "issue.get": false} {
+		t.Run(string(id), func(t *testing.T) {
+			if got := s.excludedByName(id); got != want {
+				t.Errorf("excludedByName(%s) = %t, want %t", id, got, want)
+			}
+		})
+	}
+}
+
 // TestDifference_ReportsOnlyWhatIsMissingAndDeduplicates pins the set helper
 // the report is built on.
 func TestDifference_ReportsOnlyWhatIsMissingAndDeduplicates(t *testing.T) {

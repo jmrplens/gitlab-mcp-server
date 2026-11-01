@@ -374,6 +374,42 @@ func TestFineGrainedCalls_WaitsForTheGateOnAGatedConnection(t *testing.T) {
 	}
 }
 
+// TestCreateServer_Meta_WithheldActionIsAnsweredWithItsCauseAndSpendsItsToken
+// verifies, on a registered meta server, that a call naming an action its
+// tool's group withheld is answered with the dynamic surface's cause rather
+// than the SDK's refusal of a value outside the tool's enum (issue 1282),
+// arguments the SDK's validation would refuse included, and that it spends
+// its token of the credential's rate bucket like every other refused call: a
+// pinned Free tier withholds a Premium action, two such calls drain a bucket
+// of two, and the next call is refused for the rate.
+func TestCreateServer_Meta_WithheldActionIsAnsweredWithItsCauseAndSpendsItsToken(t *testing.T) {
+	client := newMockGitLabClient(t)
+	cfg := &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, Tier: edition.Free, TierExplicit: true, RateLimitRPS: 0.0001, RateLimitBurst: 2}
+	shell, err := newServerShell(t.Context(), client, cfg)
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	if err = shell.register(t.Context()); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	shell.gate.markReady()
+	session := newInMemorySession(t, shell.server)
+
+	const want = `gitlab_project: action "approval_config_get" exists but is not available: it needs GitLab Premium or Ultimate, and this deployment is configured for GitLab Free`
+	// sequential: each call spends one token of a bucket of two.
+	for _, arguments := range []map[string]any{
+		{"action": "approval_config_get", "params": map[string]any{"project_id": "1"}},
+		{"action": "approval_config_get", "unexpected": true},
+	} {
+		if text := callText(t, session, "gitlab_project", arguments); !strings.HasPrefix(text, want) {
+			t.Errorf("call gitlab_project(%v) = %q, want it to begin %q", arguments, text, want)
+		}
+	}
+	if text := callText(t, session, "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "1"}}); !strings.Contains(text, "rate limit exceeded") {
+		t.Errorf("third call = %q, want it refused for the rate: the two withheld calls should have spent the bucket", text)
+	}
+}
+
 // TestBindProcessClient_BindsTheServersOneClient verifies a server built for
 // one client binds it to every request, which is where the layers holding no
 // client of their own read a fine-grained token's authority on stdio.

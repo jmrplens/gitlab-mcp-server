@@ -200,6 +200,13 @@ func SharedBaseCatalog(dotcom bool, opts ActionCatalogOptions) (*actioncatalog.C
 // narrowed by [FilterActionCatalog] and bound to client, together with what
 // the narrowing withheld. One filtered catalog is built per distinct
 // narrowing and shared by every server that needs it.
+//
+// What the licensing tier removed is recorded beside it, as the dynamic
+// catalog records it (issue 956), so a meta call naming one is answered with
+// the tier it needs rather than as a value outside its tool's action enum
+// (issue 1282). It depends on nothing the key does not already name: the
+// tier and instance class, the exclusions, read-only mode and the scopes
+// [TierWithheld] reads.
 func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, WithheldActions, error) {
 	dotcom := client.IsGitLabDotCom()
 	key := "meta|" + BaseCatalogKey(cfg.Tier, dotcom, true) + "|" + CatalogFilterKey(cfg)
@@ -212,6 +219,11 @@ func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*
 		if filterErr != nil {
 			return nil, WithheldActions{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
 		}
+		byTier, tierErr := TierWithheld(dotcom, cfg)
+		if tierErr != nil {
+			return nil, WithheldActions{}, fmt.Errorf("record what the tier withheld from the meta catalog: %w", tierErr)
+		}
+		filteredWithheld.ByTier = byTier
 		return filtered, filteredWithheld, nil
 	})
 	if err != nil {
