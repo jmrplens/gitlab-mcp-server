@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Withheld records the actions a catalog carries but one session may not run,
@@ -41,6 +42,7 @@ type Withheld struct {
 	byTier     map[string]TierWithheld
 	tier       edition.Tier
 	tierPinned bool
+	tierKnown  bool
 	// byCredentialKind names the actions GitLab refuses to the session's
 	// kind of credential whatever its scopes, an OAuth access token's
 	// (issue 1238). The caller can resolve it, by authenticating with a
@@ -74,6 +76,15 @@ func (w *Withheld) RecordTier(byTier []TierWithheld, tier edition.Tier, pinned b
 	w.byTier = withheldTiers(byTier)
 	w.tier = tier
 	w.tierPinned = pinned
+	w.tierKnown = true
+}
+
+// SessionTier is the tier the session was built for and whether an operator
+// pinned it, as [Withheld.RecordTier] recorded them, and known false when
+// nothing recorded one. A refusal of a param the tier left out of an
+// action's schema is worded with it (issue 1239).
+func (w *Withheld) SessionTier() (tier edition.Tier, pinned, known bool) {
+	return w.tier, w.tierPinned, w.tierKnown
 }
 
 // Holds reports whether the catalog carried the action key and one of the
@@ -145,17 +156,13 @@ func (w *Withheld) Message(toolName, action, key string) (string, bool) {
 // may be wrong, since a tier nothing answered for resolves to Free and pinning
 // it is how an operator corrects that. What would still withhold the action
 // once the tier served it is said in the same answer ([tierAlsoWithheld]).
+//
+// The tier it needs, the tier the session was built for and the way out are
+// the words every tier refusal shares, a param a tier left out of an action's
+// schema among them (issue 1239), so they are toolutil's.
 func (w *Withheld) tierWithheldMessage(toolName, action string, withheld TierWithheld) string {
-	required := "GitLab Premium or Ultimate"
-	if edition.TierFromEdition(withheld.Edition) == edition.Ultimate {
-		required = "GitLab Ultimate"
-	}
-	var message string
-	if w.tierPinned {
-		message = fmt.Sprintf("%s: action %q exists but is not available: it needs %s, and this deployment is configured for GitLab %s, so a narrowed action surface was built. If the instance is licensed for it, ask the operator to configure the tier it has with GITLAB_MCP_TIER or --tier.", toolName, action, required, tierName(w.tier))
-	} else {
-		message = fmt.Sprintf("%s: action %q exists but is not available: it needs %s, and this instance's tier was detected as GitLab %s, so a narrowed action surface was built. If the instance is licensed for it, the detection was wrong: ask the operator to pin the tier with GITLAB_MCP_TIER or --tier.", toolName, action, required, tierName(w.tier))
-	}
+	message := fmt.Sprintf("%s: action %q exists but is not available: it needs %s, and %s, so a narrowed action surface was built. %s",
+		toolName, action, toolutil.TierRequired(withheld.Edition), toolutil.SessionTierClause(w.tier, w.tierPinned), toolutil.TierWayOut(w.tierPinned))
 	return message + tierAlsoWithheld(withheld) + " Do not report the capability as missing."
 }
 
@@ -178,18 +185,6 @@ func tierAlsoWithheld(withheld TierWithheld) string {
 	}
 	scopes, _ := scopeWords(missing)
 	return " Once the tier serves it, " + scopeCauses(scope) + ": reauthorize with " + scopes + " as well."
-}
-
-// tierName spells a tier as GitLab names it in prose.
-func tierName(tier edition.Tier) string {
-	switch tier {
-	case edition.Premium:
-		return "Premium"
-	case edition.Ultimate:
-		return "Ultimate"
-	default:
-		return "Free"
-	}
 }
 
 // scopeCauses says who asks for each scope a credential lacks for an action,

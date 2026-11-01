@@ -281,6 +281,26 @@ answers stay as they were: an action the operator excluded by name is never
 recorded, so its tool's enum refuses it (AUT-004), and a group withheld whole
 is a tool never registered, which the SDK answers `unknown tool`.
 
+A param the tier pruned from a served action's schema is refused the same
+way, with its tier, rather than sent or refused as unknown (issue 1239,
+register row AUT-003). `pruneSpecFieldsByTier` records what it pruned from
+the input on the route (`ActionRoute.TierPruned`, from
+`toolutil.TierPrunedFields`), and `toolutil.TierPrunedParams` reads a call's
+params against it after the compatibility aliases resolve, so an alias of a
+served param is never refused. The meta dispatcher refuses before
+`UnmarshalParams`, which would decode the param into the input type, where
+the field still exists, and send it; the guarded handler of the full and
+compact modes refuses before the action's definition calls it unknown;
+dynamic execute refuses before its "Unknown params" list; and
+`NarrowedCallMiddleware` answers an individual or meta call before the SDK
+validates it, reading the call's names with a streaming decoder and decoding
+the params only when one is pruned. All four word it with
+`toolutil.TierPrunedParamsRefusal`, which shares the tier clauses with the
+withheld action's answer (`toolutil.TierRequired`, `SessionTierClause`,
+`TierWayOut`); the session's tier reaches the dispatcher through
+`toolutil.WithSessionTier`, which the middleware installs from
+`ToolActions.ServedAt`.
+
 Every filter above but one is applied to the catalog, before anything is
 registered, and keyed on what the configuration shape holds. The fine-grained
 narrowing cannot be: a fine-grained token's grant is a value its caller mints,

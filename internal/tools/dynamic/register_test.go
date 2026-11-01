@@ -10265,6 +10265,42 @@ func TestExecute_WithheldByScope_NamesEveryScopeTheCredentialLacks(t *testing.T)
 	}
 }
 
+// TestExecute_TierPrunedParam_IsToldApartFromAnUnknownOne pins issue 1239 on
+// the dynamic surface: a param the action's tier left out of its schema is
+// answered with the tier it needs and the tier the session was built for,
+// rather than listed among "Unknown params" with near misses, which read as a
+// typo of a param this session can never send; a registry no tier was
+// recorded for answers without naming one, and a call sending a truly
+// unknown param still gets the unknown-param answer.
+func TestExecute_TierPrunedParam_IsToldApartFromAnUnknownOne(t *testing.T) {
+	routes := testRoutes(t)
+	route := routes["gitlab_project"]["hook_add"]
+	route.TierPruned = map[string]string{"weight": "premium"}
+	routes["gitlab_project"]["hook_add"] = route
+	catalog := actioncatalog.FromActionMaps(routes)
+	execute := func(t *testing.T, registry *Registry, params map[string]any) string {
+		t.Helper()
+		result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.hook_add", Params: params})
+		if err != nil || result == nil || !result.IsError {
+			t.Fatalf("Execute() = %+v, %v; want a tool error", result, err)
+		}
+		return textContent(result)
+	}
+
+	detected := newCatalogRegistry(catalog, WithTierWithheld(nil, edition.Free, false))
+	const want = `gitlab_execute_action/project.hook_add: param "weight" needs GitLab Premium or Ultimate, and this instance's tier was detected as GitLab Free`
+	if text := execute(t, detected, map[string]any{"project_id": "1", "url": "https://example.com", "weight": 3}); !strings.HasPrefix(text, want) || strings.Contains(text, "Unknown params") {
+		t.Errorf("Execute() text = %q, want it to begin %q and list no unknown params", text, want)
+	}
+	untold := newCatalogRegistry(catalog)
+	if text := execute(t, untold, map[string]any{"project_id": "1", "url": "https://example.com", "weight": 3}); !strings.Contains(text, "this session's tier does not serve it") {
+		t.Errorf("Execute() text = %q, want the answer of a tier nothing recorded", text)
+	}
+	if text := execute(t, detected, map[string]any{"project_id": "1", "url": "https://example.com", "nonsense": 3}); !strings.Contains(text, "Unknown params: nonsense") {
+		t.Errorf("Execute() text = %q, want an unknown param still answered as unknown", text)
+	}
+}
+
 // TestExecute_WithheldByCredentialKind_NamesThePersonalAccessToken pins the
 // answer to a call for an action GitLab refuses to an OAuth access token on
 // every way (issue 1238): it exists, the credential in use is an OAuth token,

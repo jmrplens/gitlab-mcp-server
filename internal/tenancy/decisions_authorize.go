@@ -131,12 +131,23 @@ func authorizeDecisions() []Decision {
 			// the answer says where the tier was detected rather than pinned.
 			// An action the operator excluded by name is never recorded, so
 			// no answer names one (AUT-004).
-			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956"},
+			// Issue 1239: a param of a served action that the tier pruned
+			// from its schema is refused with the tier it needs before
+			// anything is sent, by every dispatcher and, ahead of the SDK's
+			// validation, by the call middleware, rather than sent through
+			// the meta surface or refused as unknown. The answer is the
+			// tier's, Ask the operator, and allows a detected tier may be
+			// wrong.
+			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239"},
 			Refusals: []Refusal{
 				{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld},
 				{
 					Methods: []string{"tools/list"}, Channel: Absent, Answer: AskOperator,
 					At: refuse(pkgTools, "filterActionSpecGroupsByTier"),
+				},
+				{
+					Methods: []string{"tools/call"}, Channel: ToolError, Answer: AskOperator,
+					At: refuse(pkgToolutil, "TierPrunedParamsRefusal"),
 				},
 			},
 			Sites: []Site{
@@ -147,6 +158,11 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "Client.DetectTier"),
 				enforce(pkgTools, "TierWithheld"),
 				refuse(pkgTools, "filterActionSpecGroupsByTier"),
+				enforce(pkgTools, "pruneSpecFieldsByTier"),
+				enforce(pkgToolutil, "TierPrunedFields"),
+				enforce(pkgToolutil, "TierPrunedParams"),
+				enforce(pkgVisibility, "ToolActions.TierPrunedRefusal"),
+				refuse(pkgToolutil, "TierPrunedParamsRefusal"),
 				metaWithheld,
 				withheld,
 			},

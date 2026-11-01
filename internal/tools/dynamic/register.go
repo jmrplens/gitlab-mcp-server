@@ -918,6 +918,15 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	if len(commonParamExplanations)+len(actionParamExplanations) > 0 {
 		slog.DebugContext(ctx, "normalized dynamic action params", "action", entry.ID, "normalizations", len(commonParamExplanations)+len(actionParamExplanations))
 	}
+	// A param the action's tier left out of its schema is told apart from an
+	// unknown one and answered with the tier it needs, before the unknown
+	// params are listed with their near misses, which read as a typo of a
+	// param this session can never send (issue 1239).
+	if pruned := toolutil.TierPrunedParams(entry.Route, params); len(pruned) > 0 {
+		tier, pinned, known := r.withheld.SessionTier()
+		toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalInvalidParams)
+		return toolutil.TierPrunedParamsRefusal(executeCallName(entry.ID), entry.Route, pruned, tier, pinned, known), nil, nil
+	}
 	if result := validateDynamicExecuteParams(entry, params); result != nil {
 		toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalInvalidParams)
 		return result, nil, nil

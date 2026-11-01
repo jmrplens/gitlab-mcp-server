@@ -2618,9 +2618,11 @@ func (sh *serverShell) register(ctx context.Context) error {
 	// check and listing filter (register row AUT-007) and by the manifest
 	// below, so the three can never disagree about a tool, and on meta what
 	// was withheld from each tool's group, which the narrowed call check
-	// answers from (issue 1282).
+	// answers from (issue 1282), with the tier the server was built for,
+	// which it words a tier-pruned param's refusal with (issue 1239).
 	toolActions := toolvisibility.NewToolActions(sh.toolSurface, surfaceCatalog).
-		Withhold(surfaceRegistration.metaActionKeys, surfaceRegistration.withheld)
+		Withhold(surfaceRegistration.metaActionKeys, surfaceRegistration.withheld).
+		ServedAt(cfg.Tier, cfg.TierExplicit)
 	sh.toolActions.Store(toolActions)
 
 	// One listing serves both the count logged here and the gitlab://tools

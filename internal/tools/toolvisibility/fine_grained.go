@@ -15,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
@@ -51,6 +52,15 @@ type ToolActions struct {
 	// surface.
 	withheldKeys map[string]map[string]string
 	withheld     *actioncatalog.Withheld
+	// singleRoutes are the routes of the individual surface's tools, by tool
+	// name, which a call's params are held to the served schema of before the
+	// SDK validates them (issue 1239); tier and tierPinned are the tier the
+	// server was built for and whether an operator pinned it, which
+	// [ToolActions.ServedAt] records, tierKnown false until it does.
+	singleRoutes map[string]toolutil.ActionRoute
+	tier         edition.Tier
+	tierPinned   bool
+	tierKnown    bool
 }
 
 // toolGroup is one meta tool: the routes its action argument names, and the
@@ -71,7 +81,7 @@ type toolGroup struct {
 // nothing is mapped, since a call names its action through gitlab_execute_action,
 // which decides in its own handler.
 func NewToolActions(surface string, catalog *actioncatalog.Catalog) *ToolActions {
-	actions := &ToolActions{single: map[string]string{}, groups: map[string]toolGroup{}}
+	actions := &ToolActions{single: map[string]string{}, groups: map[string]toolGroup{}, singleRoutes: map[string]toolutil.ActionRoute{}}
 	switch surface {
 	case config.ToolSurfaceIndividual:
 		identifier := gitlabtools.NewServedCallIdentifier(catalog, surface)
@@ -81,6 +91,9 @@ func NewToolActions(surface string, catalog *actioncatalog.Catalog) *ToolActions
 			name := strings.TrimSpace(action.IndividualTool.Name)
 			if identity, known := identifier.Identify(name, nil); known {
 				actions.single[name] = identity.ActionID
+				if identity.ActionID == string(action.ID) {
+					actions.singleRoutes[name] = action.Route
+				}
 			}
 		}
 	case config.ToolSurfaceMeta:

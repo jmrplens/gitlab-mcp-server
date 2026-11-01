@@ -134,6 +134,20 @@ func TestWithheld_Message_CredentialKind_NamesTheTokenTheActionNeeds(t *testing.
 	}
 }
 
+// TestWithheld_SessionTier_IsWhatRecordTierRecorded verifies the session tier
+// a tier-pruned param's refusal is worded with (issue 1239): unknown until a
+// tier is recorded, then the tier and whether it was pinned.
+func TestWithheld_SessionTier_IsWhatRecordTierRecorded(t *testing.T) {
+	var withheld Withheld
+	if _, _, known := withheld.SessionTier(); known {
+		t.Error("SessionTier() is known before any tier was recorded")
+	}
+	withheld.RecordTier(nil, edition.Premium, true)
+	if tier, pinned, known := withheld.SessionTier(); tier != edition.Premium || !pinned || !known {
+		t.Errorf("SessionTier() = %s, %t, %t; want premium, pinned, known", tier, pinned, known)
+	}
+}
+
 // TestWithheld_Record_DropsBlankKeysAndNamesAScopeForAnEntryNamingNone
 // verifies how the records are indexed: each key is lowercased and trimmed, a
 // key that is blank or only spaces is not indexed at all, and a scope entry

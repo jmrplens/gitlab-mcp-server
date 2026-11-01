@@ -243,6 +243,14 @@ Los argumentos se comprueban antes de enviar nada a GitLab, en hasta tres lugare
 2. **La comprobación propia de la superficie.** En la superficie dinámica: `gitlab_execute_action/<action>: invalid params.`, seguido de `Unknown params: ...`, una sugerencia `Did you mean ...?`, `Missing required params: ...`, `Missing one of ...` en una acción cuya llamada necesita uno de varios grupos, y los `Valid params: ...` (consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/)). En la superficie meta: `gitlab_issue/get: missing required params: issue_iid. Put action-specific fields under params.`, `'params' is required for this action. Required params: ...` o, para una acción que la herramienta no tiene, `gitlab_issue: unknown action "x". Valid actions: ...`.
 3. **La decodificación propia de la acción.** Cada clave debe ser un parámetro de la acción, y cualquier otra se rechaza en lugar de descartarse: `invalid params for this action: json: unknown field "foo"`, que la superficie meta abre con la herramienta y la acción (`gitlab_issue/get: ...`). La clave reservada `confirm` se retira antes. Donde el esquema está abierto, unos pocos alias documentados se traducen a sus nombres canónicos antes de esta comprobación (`mr_iid` a `merge_request_iid`, `commit_id` a `commit_sha`), y un número enviado como cadena se convierte; un esquema cerrado rechaza un alias en el primer paso.
 
+Un parámetro que el tier de la instancia no sirve se rechaza en todas las superficies antes de enviar nada, con el tier que necesita, y no como un parámetro que la acción no conoce. Los esquemas de un tier inferior dejan fuera los parámetros que añade uno superior, como el asignado, el hito, las etiquetas y el peso con que se acota un tablero Premium, y una llamada que envía uno recibe esta respuesta, aquí en la superficie meta de una instancia Free:
+
+```text
+gitlab_project/board_update: param "assignee_id" needs GitLab Premium or Ultimate, and this instance's tier was detected as GitLab Free, so the action's schema at this tier leaves it out and nothing was sent. If the instance is licensed for it, the detection was wrong: ask the operator to pin the tier with GITLAB_MCP_TIER or --tier. Send the call without it to run the action at this tier.
+```
+
+La superficie dinámica abre la misma respuesta con `gitlab_execute_action/project.board_update`, y la individual con el nombre de la herramienta. Donde el tier se fijó con `GITLAB_MCP_TIER` (`--tier`), la respuesta dice `this deployment is configured for GitLab Free` y pide al operador que configure el tier que tiene la instancia. Un alias documentado de un parámetro que el tier sí sirve no se rechaza.
+
 Un valor obligatorio que llega vacío o a cero se rechaza con un mensaje que nombra el parámetro exacto, pensado para los nombres que los modelos confunden (`milestone_id` por `milestone_iid`, `branch` por `branch_name`, `iid` por `merge_request_iid`):
 
 ```text
