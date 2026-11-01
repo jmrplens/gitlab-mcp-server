@@ -4244,10 +4244,18 @@ func TestLoadWorkflows_ReleaseWorkflow_HoldsTheLinuxBinariesToTheirLoader(t *tes
 			at[name] = index
 		}
 	}
-	index, found := at[check]
-	if !found {
-		t.Fatalf("the release job has no step named %q", check)
+	// Each of the three is looked up by name, so one renamed would otherwise
+	// read as step 0 and the order below would hold against nothing.
+	var missing []string
+	for _, name := range []string{check, stage, pack} {
+		if _, found := at[name]; !found {
+			missing = append(missing, name)
+		}
 	}
+	if len(missing) != 0 {
+		t.Fatalf("the release job has no step named %q", missing)
+	}
+	index := at[check]
 	step, _ := steps[index].(map[string]any)
 	if run := pythonStr(step["run"]); run != runner {
 		t.Errorf("the release job's ELF check runs %q, want %q", run, runner)

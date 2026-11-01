@@ -180,9 +180,10 @@ func TestOrder_AnEmptyRemoteMakesTheFirstReleaseTheNewest(t *testing.T) {
 
 // TestOrder_ReadsEachLineOfTheList covers how a line names a tag: its last
 // field, a refs/tags/ prefix dropped, whatever whitespace surrounds it (a
-// carriage return included, which the script read as part of the name and so
-// passed the tag over), the last line read without a newline after it, and a
-// line naming no stable tag (a branch, a peeled tag, nothing) passed over.
+// carriage return included, which the script took for the space before the
+// last field, so it read an empty name and passed the tag over), the last
+// line read without a newline after it, and a line naming no stable tag (a
+// branch, a peeled tag, nothing) passed over.
 func TestOrder_ReadsEachLineOfTheList(t *testing.T) {
 	t.Parallel()
 

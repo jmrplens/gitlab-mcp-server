@@ -333,9 +333,10 @@ workflow.
 
 Only a plain `vX.Y.Z` tag is released, and only the newest of them moves a
 pointer to the newest release (issue 1323). The release workflow's preflight
-asks `scripts/release-order.sh`, which reads the tags the repository holds
-(`git ls-remote --tags`), compares them with `sort -V` and answers three
-outputs before anything publishes:
+asks the order check of
+[`cmd/release_checks`](cmd-utilities.md#release_checks), which reads the tags
+the repository holds (`git ls-remote --tags`), compares them number by number
+and answers three outputs before anything publishes:
 
 - **`stable`**: a prerelease or a build suffix (`v3.3.0-rc.1`,
   `v3.3.0+build.5`) is refused there, so preflight fails and no job runs. A
@@ -360,9 +361,9 @@ outputs before anything publishes:
 PyPI and NuGet need nothing of this: both resolve the highest version, not the
 one published last. A rehearsal computes the three outputs from the version
 `VERSION` carries, the same way, so a rehearsal of an older line skips the
-same jobs a release of it would. `scripts/release_order_sh_test.py`,
+same jobs a release of it would. The tests of `cmd/release_checks`,
 `scripts/publish_npm_sh_test.py` and `scripts/update_homebrew_tap_sh_test.py`
-hold the three scripts to it, and
+hold the check and the two scripts to it, and
 `TestLoadWorkflows_ReleaseWorkflow_OnlyTheNewestReleaseMovesAPointer` in
 `cmd/audit_supply_chain` holds `release.yml` to reading the answer at every
 step and job listed above.

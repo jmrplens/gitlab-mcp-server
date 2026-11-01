@@ -12,8 +12,8 @@
 #   scripts/publish-npm.sh <binaries-dir> <version> [--dry-run] [--no-assemble] [--tag <dist-tag>]
 #
 # --tag publishes every package under that dist-tag instead of npm's default,
-# which is `latest`. The release workflow passes the one
-# scripts/release-order.sh decides: latest for the newest release, and
+# which is `latest`. The release workflow passes the one the order check of
+# cmd/release_checks decides in preflight: latest for the newest release, and
 # release-X.Y for a backport, so `npm install` keeps resolving the newest
 # release when an older line ships a fix (issue 1323).
 #

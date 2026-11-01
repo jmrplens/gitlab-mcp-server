@@ -8,9 +8,9 @@ The script publishes the six platform packages and then the launcher that
 pins them. Without a dist-tag npm moves `latest` to whatever it publishes, so
 a backport released after a newer version rolled every `npm install` back to
 it (issue 1323). The release workflow now hands the script the dist-tag
-scripts/release-order.sh decides, and these cases hold the script to passing
-it to every publish, the launcher's included, and to publishing under npm's
-default when it is given none.
+the order check of cmd/release_checks decides, and these cases hold the
+script to passing it to every publish, the launcher's included, and to
+publishing under npm's default when it is given none.
 
 They run a copy of the script in a scratch tree holding the seven
 package.json files --no-assemble expects, with a stand-in for npm first on
