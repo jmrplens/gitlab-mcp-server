@@ -244,11 +244,9 @@ go test ./internal/tools/ -run TestBranch -count=1    # Run specific tests
 
 #### Test pattern (sub-package style)
 
-Each sub-package has its own `*_test.go` with table-driven tests:
+Each sub-package has its own `*_test.go` with table-driven tests. A case of `internal/tools/branches/branches_test.go`:
 
 ```go
-// internal/tools/branches/branches_test.go
-
 func TestCreate_Success(t *testing.T) {
     mux := http.NewServeMux()
     mux.HandleFunc("/api/v4/projects/1/repository/branches", func(w http.ResponseWriter, r *http.Request) {
@@ -435,8 +433,13 @@ GITLAB_COM_TOKEN=glpat-... \
 
 ### Example: Adding a tools sub-package
 
+Each new file opens with the copyright and license header and a blank line, which `make check-file-headers` requires and `make fix-file-headers` writes ([Copyright and License Headers](file-headers.md)).
+
+In `internal/tools/branches/branches.go`:
+
 ```go
-// internal/tools/branches/branches.go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
 
 package branches
 
@@ -461,8 +464,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 }
 ```
 
+In `internal/tools/branches/action_specs.go`:
+
 ```go
-// internal/tools/branches/action_specs.go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
 
 package branches
 

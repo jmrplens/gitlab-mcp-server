@@ -44,6 +44,16 @@ BASE_URL="https://github.com/jmrplens/gitlab-mcp-server/releases/download/v${VER
 LICENSE_URL="https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/v${VERSION}/LICENSE"
 LICENSE_FILE="$(cd "$(dirname "$0")/.." && pwd)/LICENSE"
 
+# The copyright and license header the formula opens with: the tap publishes
+# it as Ruby source, and every source file of the project carries the header
+# (cmd/internal/fileheader). It comes first, where the gate puts it in a Ruby
+# file with no shebang and no encoding declaration, and the magic comments
+# follow it, since Ruby reads one in any comment before the first token. It is
+# one line here because make check-file-headers reads each line of this script
+# alone, so a line of the heredoc below that opened with the notice would
+# count as a second copy of this file's own header.
+FILE_HEADER=$'# Copyright (c) 2026 José M. Requena Plens\n# SPDX-License-Identifier: MIT'
+
 sha_for() {
   local name="$1" sha
   sha=$(awk -v n="$name" '$2 == n {print $1}' "$CHECKSUMS_FILE")
@@ -86,6 +96,8 @@ fi
 
 mkdir -p "$TAP_DIR/Formula"
 cat > "$TAP_DIR/Formula/gitlab-mcp-server.rb" <<EOF
+${FILE_HEADER}
+
 # typed: false
 # frozen_string_literal: true
 

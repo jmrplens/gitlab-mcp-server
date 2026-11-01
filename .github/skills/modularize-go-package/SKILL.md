@@ -134,6 +134,9 @@ mkdir -p ${sourcePackage}/{domain}
 Create `${sourcePackage}/{domain}/action_specs.go`:
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package {domain}
 
 import (

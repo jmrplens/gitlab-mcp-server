@@ -75,6 +75,9 @@ mkdir -p ${dstDir}
 Create minimal `doc.go` if this is a new package:
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 // Package branches implements MCP tool handlers for GitLab branch operations.
 package branches
 ```
@@ -99,10 +102,12 @@ Verify: `go build ./...` (empty package is fine)
 
 ### Step 5: Create Forwarding Stubs (Bridge)
 
-In the **original** package, replace the moved code with forwarding stubs:
+In the **original** package, replace the moved code with forwarding stubs, which are temporary and go once every consumer is updated. The file keeps the header it opens with, and no comment sits directly above its `package` clause, where Go would read it as the package comment that belongs in `doc.go` alone. `branches.go` becomes:
 
 ```go
-// branches.go — forwarding stubs (temporary, remove after all consumers updated)
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package tools
 
 import "module/path/internal/tools/branches"
@@ -163,6 +168,9 @@ Verify after each consumer update: `go build ./...`
 Create or update `${dstDir}/action_specs.go` with canonical `ActionSpecs()` metadata:
 
 ```go
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
 package branches
 
 import (

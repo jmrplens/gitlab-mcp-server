@@ -13,7 +13,9 @@ License-File for each text the wheel carries under .dist-info/licenses/,
 and those texts byte for byte the repository's own, beside the release's
 THIRD_PARTY_NOTICES, held to the generator's header and to the digest the
 builder verified against checksums.txt. They also hold the well-known
-Issues and Security project URLs and the file type of every archive entry.
+Issues and Security project URLs, the file type of every archive entry, and
+the copyright and license header the two Python modules of the package open
+with, since the wheel publishes them as source.
 
 The binaries carry the header bytes the validator inspects, so a case fails
 for the reason it names and not for a header the fixture never had; the
@@ -25,6 +27,7 @@ Run with:
     python3 -m unittest discover -s scripts -p 'validate_pypi_test.py'
 """
 
+import ast
 import hashlib
 import importlib.util
 import io
@@ -242,6 +245,31 @@ class BuiltWheelTest(WheelTestCase):
         self.assertIsNone(notices)
         self.assertTrue(any("records no digest for THIRD_PARTY_NOTICES" in f for f in validate_pypi.failures),
                         validate_pypi.failures)
+
+    def test_the_package_modules_open_with_the_file_header(self):
+        # The header this script opens with below its shebang, which make
+        # check-file-headers holds to cmd/internal/fileheader, so a change of
+        # holder or year rewrites the oracle along with the tree.
+        with open(BUILDER, encoding="utf-8") as fh:
+            header = "".join(fh.readlines()[1:3])
+        self.assertTrue(header.startswith("# Copyright (c) "), header)
+        for tag in validate_pypi.EXPECTED_TAGS:
+            path, _ = self.wheel(tag)
+            with zipfile.ZipFile(path) as zf:
+                sources = {module: zf.read(build_pypi.PKG_NAME + "/" + module).decode("utf-8")
+                           for module in ("__init__.py", "__main__.py")}
+            for module, source in sources.items():
+                with self.subTest(tag=tag, module=module):
+                    self.assertTrue(source.startswith(header + "\n"), source[:200])
+                    # The header stays a comment of its own: both modules
+                    # still compile, and the launcher's docstring is still
+                    # the module's.
+                    compile(source, module, "exec")
+            with self.subTest(tag=tag, module="__init__.py docstring"):
+                launcher = sources["__init__.py"]
+                docstring = ast.get_docstring(ast.parse(launcher)) or ""
+                self.assertTrue(docstring.startswith("Locator for the gitlab-mcp-server binary"), docstring)
+                self.assertIn('__version__ = "{}"'.format(VERSION), launcher)
 
     def test_every_entry_is_a_regular_file(self):
         path, _ = self.wheel()

@@ -11,7 +11,9 @@ is cloned or pushed, and read the formula it wrote. They hold the parts the
 release depends on: each binary pinned to its own checksum, and the licence
 and the third-party notices installed beside the binary, the notices pinned to
 the checksum the release signed and the licence to the hash of this
-repository's LICENSE, fetched from the tag's tree.
+repository's LICENSE, fetched from the tag's tree. They also hold the
+copyright and license header the formula opens with, since the tap publishes
+it as source, with its magic comments still read below it.
 
 Run with:
 
@@ -107,6 +109,34 @@ class UpdateHomebrewTapTest(unittest.TestCase):
         for fragment in expected:
             with self.subTest(fragment.splitlines()[0]):
                 self.assertIn(fragment, formula)
+
+    def test_the_formula_opens_with_the_file_header(self):
+        # The header this script opens with below its shebang, which make
+        # check-file-headers holds to cmd/internal/fileheader, so a change of
+        # holder or year rewrites the oracle along with the tree.
+        with open(SCRIPT, encoding="utf-8") as fh:
+            header = "".join(fh.readlines()[1:3])
+        self.assertTrue(header.startswith("# Copyright (c) "), header)
+        result = self.run_script(ASSETS)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        formula = self.formula()
+        # First and followed by a blank line, where the gate puts it in a Ruby
+        # file of the tree with no shebang and no encoding declaration.
+        self.assertTrue(formula.startswith(header + "\n"), formula[:300])
+
+        # The magic comments below it still hold: Ruby reads one in any
+        # comment before the first token, so the lines above the class are
+        # comments alone, and run with a probe they freeze its literal.
+        leading = formula.split("class GitlabMcpServer < Formula\n", 1)[0]
+        for line in leading.splitlines():
+            with self.subTest(line):
+                self.assertTrue(line == "" or line.startswith("#"), line)
+        self.assertIn("\n# typed: false\n# frozen_string_literal: true\n", leading)
+        probe = os.path.join(self.work, "probe.rb")
+        with open(probe, "w", encoding="utf-8") as fh:
+            fh.write(leading + 'print "".frozen?\n')
+        ran = subprocess.run(["ruby", probe], env=self.env, capture_output=True, text=True, timeout=60, check=False)
+        self.assertEqual((ran.returncode, ran.stdout), (0, "true"), ran.stderr)
 
     def seed_formula(self, version):
         """Commits a formula at version to the stand-in tap, as an earlier release left it."""
