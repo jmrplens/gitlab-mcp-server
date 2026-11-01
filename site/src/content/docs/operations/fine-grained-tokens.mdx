@@ -214,6 +214,16 @@ new release decides. A re-read that fails keeps what the session was shown rathe
 narrowing it, so what an assistant sees never changes with a GitLab outage. The server
 reads at most 1 MiB and 1000 scopes of a grant; a larger grant is not evaluated.
 
+When a session starts with its grant read, the server writes one line at `INFO` saying
+so and what the grant decides, on stdio and when the HTTP pool builds the session's
+entry. The line carries `phase=B`, the major.minor the instance reported (`bucket`),
+the one the permission table was recorded from (`recorded_bucket`) and `listing_only`,
+which is `true` only on the prerelease [below](#gitlabcom-and-other-releases), where the
+grant decides the listing alone. Like the line of the fallback below, it never names the
+token, its id or its projects and groups. A re-read that finds the verdict the session
+already has writes nothing, and one that moves it to another writes a line with the
+same pairs.
+
 ### When the grant is not evaluated
 
 The session falls back to withholding only what no fine-grained token can reach

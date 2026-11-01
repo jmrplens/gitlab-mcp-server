@@ -255,8 +255,9 @@ func (o Options) withDefaults() Options {
 // credential, and since GitLab 19.2 a fine-grained token is one API call to
 // mint, as is a project access token for its Maintainer (on GitLab.com, with
 // a paid plan): the per-credential number multiplies by however many a caller
-// holds and only a shared one bounds the process. Like the listen ceiling it
-// is not configurable: an operator who could raise it could undo the bound.
+// holds and only a shared one bounds the process. Like the process-wide listen
+// ceiling it is not configurable: an operator who could raise it could undo
+// the bound.
 //
 // The gate is injected rather than declared here because this package owns no
 // process-wide state and knows nothing about the server that runs it. A nil

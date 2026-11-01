@@ -30,6 +30,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/toolvisibility"
@@ -579,6 +580,114 @@ func TestStdioAuthority_JudgesTheGrantAtTheVersionAlreadyRead(t *testing.T) {
 	if got := stdioAuthority(t.Context(), degraded, gitlabclient.TokenFacts{Scopes: []string{"api"}}); got != nil {
 		t.Errorf("classic token authority = %+v, want nil", got)
 	}
+}
+
+// TestStdioAuthority_WritesOneStartLineNamingWhatTheGrantDecides verifies the
+// line a stdio start writes about its fine-grained token (issue 1417): one at
+// INFO in either phase, carrying the phase, the major.minor the instance
+// reported and the one the table was recorded at. In phase B it says the grant
+// was read and what it decides, the listing and the calls at the recorded
+// release and the listing alone on the prerelease past the table, with
+// listing_only saying which; in phase A it is the line it was, with its reason
+// and no listing_only. A classic token writes none, and the re-reads after the
+// start that find the verdict it judged write nothing more.
+func TestStdioAuthority_WritesOneStartLineNamingWhatTheGrantDecides(t *testing.T) {
+	recorded := actiongrants.Table().Bucket
+	next := e2erelease.NextPrerelease(recorded)
+	const (
+		phaseB      = "the fine-grained token's grant was read; it decides the listing and the calls"
+		listingOnly = "the fine-grained token's grant was read; it decides the listing alone, and every call phase A allows is handed to GitLab"
+		phaseA      = "the fine-grained token's grant was not evaluated; withholding what no grant reaches"
+	)
+	cases := []struct {
+		name, token, version string
+		// line is the start line from its level on, every pair it carries
+		// and in order, or "" for a token that writes none.
+		line string
+	}{
+		{
+			name: "the recorded release", token: phaseBProjectReader, version: phaseBRelease,
+			line: `level=INFO msg="` + phaseB + `" phase=B reason="" bucket=` + recorded + ` recorded_bucket=` + recorded + ` listing_only=false`,
+		},
+		{
+			name: "the prerelease past the table", token: phaseBProjectReader, version: next,
+			line: `level=INFO msg="` + listingOnly + `" phase=B reason="" bucket=` + finegrained.Bucket(next) +
+				` recorded_bucket=` + recorded + ` listing_only=true`,
+		},
+		{
+			name: "a release outside the record", token: phaseBProjectReader, version: releaseOutsideTheTable,
+			line: `level=INFO msg="` + phaseA + `" phase=A reason=` + string(finegrained.FallbackVersionOutside) +
+				` bucket=` + finegrained.Bucket(releaseOutsideTheTable) + ` recorded_bucket=` + recorded,
+		},
+		{name: "a classic token", token: phaseBClassicAPI, version: phaseBRelease},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newPhaseBGitLab(t)
+			g.setVersion(tc.version)
+			client, err := gitlabclient.NewClientWithTokenRetries(g.url, tc.token, false, true)
+			if err != nil {
+				t.Fatalf("NewClientWithTokenRetries: %v", err)
+			}
+			if _, err = client.Initialize(t.Context()); err != nil {
+				t.Fatalf("Initialize: %v", err)
+			}
+			facts := gitlabclient.DetectToken(t.Context(), client.GL())
+			logs := captureFineGrainedLogs(t)
+			client.SetAuthority(stdioAuthority(t.Context(), client, facts))
+			if facts.FineGrained {
+				rereadOnce(t, client, facts)
+			}
+
+			starts := linesContaining(logs.String(), "the fine-grained token's grant was")
+			if tc.line == "" {
+				if len(starts) != 0 {
+					t.Errorf("a classic token wrote %q", starts)
+				}
+				return
+			}
+			if len(starts) != 1 || !strings.HasSuffix(starts[0], tc.line+"\n") {
+				t.Errorf("start lines = %q, want one ending %q", starts, tc.line)
+			}
+			if rereads := linesContaining(logs.String(), "re-read"); len(rereads) != 0 {
+				t.Errorf("a re-read that found the verdict the start judged wrote %q", rereads)
+			}
+		})
+	}
+}
+
+// rereadOnce runs one stdio re-read of a fine-grained token's grant and the
+// instance version ([refreshStdioAuthority]): no timer, and the recovery a
+// degraded start's client signals, which asks once. A re-read that answered
+// replaces the authority the client carries, so the round is over once the
+// client carries another one, and ending the goroutine then cancels no read
+// in flight.
+func rereadOnce(t *testing.T, client *gitlabclient.Client, facts gitlabclient.TokenFacts) {
+	t.Helper()
+	started := client.Authority()
+	recovered := make(chan struct{})
+	close(recovered)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		refreshStdioAuthority(ctx, client, facts, 0, recovered, nil)
+	}()
+	waitFor(t, func() bool { return client.Authority() != started })
+	cancel()
+	<-done
+}
+
+// linesContaining returns the lines of text that contain substr, each with its
+// line break.
+func linesContaining(text, substr string) []string {
+	var lines []string
+	for line := range strings.Lines(text) {
+		if strings.Contains(line, substr) {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 // captureFineGrainedLogs records the default logger's lines as text for the
