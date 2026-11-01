@@ -39,7 +39,12 @@ const legacyProtocolVersion = "2025-11-25"
 // fail that test, it stops the whole binary and takes every assertion after it
 // unrun. Reporting a handshake that did not happen is worth ten seconds of
 // waiting on the one run where it happens.
-const handshakeTimeout = 10 * time.Second
+//
+// It is written as nanoseconds rather than as a product of time.Second, as
+// serveExitTimeout is: a product at package level is an arithmetic mutant no
+// coverage profile reaches, so gremlins reports it as never covered although
+// every handshake reads it.
+const handshakeTimeout time.Duration = 10e9
 
 // LegacyClientOptions configures the fake legacy client's advertised
 // capabilities.
@@ -71,7 +76,8 @@ type legacyReporter interface {
 // connect, a map of strings does not fail to marshal, an id made from a string
 // literal is always valid, and a serve goroutine reading a closed connection
 // always returns. Each failure is still handled, so each is reachable only by
-// replacing the call that cannot fail.
+// replacing the call that cannot fail. The wait, five seconds, is written as
+// nanoseconds for the reason [handshakeTimeout] is.
 var (
 	connectSession = func(ctx context.Context, server *mcp.Server, transport mcp.Transport) (*mcp.ServerSession, error) {
 		return server.Connect(ctx, transport, nil)
@@ -79,9 +85,9 @@ var (
 	connectClient = func(ctx context.Context, transport mcp.Transport) (mcp.Connection, error) {
 		return transport.Connect(ctx)
 	}
-	marshalInitParams = json.Marshal
-	makeRequestID     = jsonrpc.MakeID
-	serveExitTimeout  = 5 * time.Second
+	marshalInitParams               = json.Marshal
+	makeRequestID                   = jsonrpc.MakeID
+	serveExitTimeout  time.Duration = 5e9
 )
 
 // ConnectLegacyElicitationClient connects a minimal legacy MCP client

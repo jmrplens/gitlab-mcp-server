@@ -122,6 +122,9 @@ func TestScanGFM_Blocks_ReadsTheSeparationRules(t *testing.T) {
 		{name: "an indented continuation", md: "- a\n  more of a\n"},
 		{name: "a nested item", md: "- a\n  - b\n"},
 		{name: "labels as list rows", md: "- **Action**: x\n- **Target**: y\n"},
+		// Inside a fence two label lines are code, not a paragraph, and the
+		// kind of the line above is what tells the rule so.
+		{name: "labels inside a fence", md: "```\n**Action**: x\n**Target**: y\n```\n"},
 		// Two ordinary prose lines are one paragraph and that is what they are
 		// for, so the run-on rule has to read the labels as well as the kinds:
 		// reporting every second text line would condemn every wrapped
@@ -358,6 +361,13 @@ func TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes(t *testing.T) {
 		{name: "a longer run does not close a shorter one", md: "- ``a` <b>\n", want: "- ``a` <b>"},
 		{name: "a double-backtick span closes", md: "- ``<a>`` <b>\n", want: "- " + gfmCodeSpanPlaceholder + " <b>"},
 		{name: "a span cannot cross a cell", md: "| `a | <b>` |\n| --- | --- |\n", want: "| `a | <b>` |"},
+		// The pipe here is the seventh character of the row rather than the
+		// sixth: a split that read every other character as escaped would
+		// skip it and close the span across the cells.
+		{name: "a span cannot cross a cell at any pipe", md: "| `ab | <c>` |\n| --- | --- |\n", want: "| `ab | <c>` |"},
+		// A second span on the line is read after the first one ends, not
+		// from inside it.
+		{name: "two spans on one line are both elided", md: "- `<a>` and `<b>` <c>\n", want: "- " + gfmCodeSpanPlaceholder + " and " + gfmCodeSpanPlaceholder + " <c>"},
 		{name: "a span inside one cell is elided", md: "| `<a>` | x |\n| --- | --- |\n", want: "| " + gfmCodeSpanPlaceholder + " | x |"},
 		// An escaped pipe is content of its cell, so the row is tokenized
 		// around it and the span beside it still closes. Splitting on it would

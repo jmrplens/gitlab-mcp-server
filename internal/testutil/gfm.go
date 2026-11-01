@@ -182,14 +182,17 @@ type gfmScanner struct {
 
 // classify decides what block each line opens, following fences so that a
 // row, a heading or a bullet inside a code block is content.
+//
+// The scanner is written in ifs rather than tagless switches throughout: a
+// case expression carries no statement counter, so the mutation gate reports
+// every mutant of one as not covered whatever the tests assert.
 func (s *gfmScanner) classify() {
 	fence := 0
 	for i, line := range s.doc.Lines {
 		if run, ok := fenceRun(line); ok {
-			switch {
-			case fence == 0:
+			if fence == 0 {
 				fence = run
-			case run >= fence:
+			} else if run >= fence {
 				fence = 0
 			}
 			s.kinds[i] = gfmFence
@@ -206,24 +209,28 @@ func (s *gfmScanner) classify() {
 // classifyLine reads the block one line opens outside a fence.
 func classifyLine(line string) gfmKind {
 	trimmed := strings.TrimLeft(line, " \t")
-	switch {
-	case strings.TrimSpace(line) == "":
+	if strings.TrimSpace(line) == "" {
 		return gfmBlank
-	case strings.HasPrefix(trimmed, ">") && leadingSpaces(line) <= 3:
-		return gfmQuote
-	case gfmHeadingRe.MatchString(line):
-		return gfmHeading
-	case gfmBreakRe.MatchString(line):
-		return gfmBreak
-	case gfmItemRe.MatchString(line):
-		return gfmItem
-	case strings.HasPrefix(trimmed, "|") && leadingSpaces(line) <= 3:
-		return gfmPipe
-	case leadingSpaces(line) >= 2:
-		return gfmIndented
-	default:
-		return gfmText
 	}
+	if strings.HasPrefix(trimmed, ">") && leadingSpaces(line) <= 3 {
+		return gfmQuote
+	}
+	if gfmHeadingRe.MatchString(line) {
+		return gfmHeading
+	}
+	if gfmBreakRe.MatchString(line) {
+		return gfmBreak
+	}
+	if gfmItemRe.MatchString(line) {
+		return gfmItem
+	}
+	if strings.HasPrefix(trimmed, "|") && leadingSpaces(line) <= 3 {
+		return gfmPipe
+	}
+	if leadingSpaces(line) >= 2 {
+		return gfmIndented
+	}
+	return gfmText
 }
 
 // leadingSpaces counts the spaces a line opens with.
@@ -257,19 +264,18 @@ func GFMCells(line string) []string {
 	var cell strings.Builder
 	escaped := false
 	for _, r := range strings.TrimSpace(line) {
-		switch {
-		case escaped:
+		if escaped {
 			cell.WriteRune(r)
 			escaped = false
-		case r == '\\':
-			cell.WriteRune(r)
-			escaped = true
-		case r == '|':
+			continue
+		}
+		if r == '|' {
 			cells = append(cells, strings.TrimSpace(cell.String()))
 			cell.Reset()
-		default:
-			cell.WriteRune(r)
+			continue
 		}
+		cell.WriteRune(r)
+		escaped = r == '\\'
 	}
 	// The last cell is appended whatever the line held, so there is always a
 	// first cell to look at; and a leading pipe has already closed one cell
@@ -374,12 +380,19 @@ func (s *gfmScanner) blocks() {
 	lines := s.doc.Lines
 	for i := 1; i < len(lines); i++ {
 		previous := s.kinds[i-1]
-		switch {
-		case previous == gfmText && gfmSetextRe.MatchString(lines[i]):
+		if previous == gfmText && gfmSetextRe.MatchString(lines[i]) {
 			s.finding("B1", i, "a rule directly under a paragraph line turns that line into a setext heading")
-		case previous == gfmItem && s.kinds[i] == gfmText:
+			continue
+		}
+		if previous == gfmItem && s.kinds[i] == gfmText {
 			s.finding("B2", i, "a line directly after a list item lazily continues that item")
-		case previous == gfmText && s.kinds[i] == gfmText && gfmLabelRe.MatchString(lines[i]) && gfmLabelRe.MatchString(lines[i-1]):
+			continue
+		}
+		// A label line is a text line unless a fence holds it, and a line
+		// after a text line is outside any fence, so the kind of the line
+		// above is the one kind this rule needs to read: asking for the
+		// current line's as well asked nothing a test could tell apart.
+		if previous == gfmText && gfmLabelRe.MatchString(lines[i]) && gfmLabelRe.MatchString(lines[i-1]) {
 			s.finding("B3", i, "consecutive bullet-less label lines render as one run-on paragraph")
 		}
 	}
@@ -474,54 +487,69 @@ func (s *gfmScanner) bareLine(i int, line string) string {
 // construction: a "<" written before the first backtick is outside every span
 // the walk recognizes, so a raw tag cannot be hidden by a code span opened
 // after it.
+//
+// The runs are listed first and walked with range, so no loop here advances by
+// an amount it computed: a mutant that inverts a condition then gives a wrong
+// answer, which a test sees, rather than a walk that never ends, which the
+// mutation gate can only report as timed out.
 func elideCodeSpans(line string) string {
-	if !strings.Contains(line, "`") {
-		return line
-	}
+	runs := backtickRuns(line)
 	var b strings.Builder
-	for i := 0; i < len(line); {
-		if line[i] != '`' {
-			b.WriteByte(line[i])
-			i++
+	at, next := 0, 0
+	for k, open := range runs {
+		if k < next {
 			continue
 		}
-		open := backtickRun(line, i)
-		if closer := nextBacktickRun(line, i+open, open); closer != -1 {
-			b.WriteString(gfmCodeSpanPlaceholder)
-			i = closer + open
+		m, ok := closingRun(runs, k)
+		if !ok {
 			continue
 		}
-		b.WriteString(line[i : i+open])
-		i += open
+		b.WriteString(line[at:open.start])
+		b.WriteString(gfmCodeSpanPlaceholder)
+		at = runs[m].end()
+		next = m + 1
 	}
+	b.WriteString(line[at:])
 	return b.String()
 }
 
-// backtickRun returns the length of the run of backticks at i.
-func backtickRun(line string, i int) int {
-	run := 0
-	for i+run < len(line) && line[i+run] == '`' {
-		run++
-	}
-	return run
+// backtickSpan is one maximal run of backticks: where it starts and how many
+// backticks it holds.
+type backtickSpan struct {
+	start, length int
 }
 
-// nextBacktickRun returns the index of the first run of exactly n backticks
-// at or after i, or -1 when the line holds none: a longer or a shorter run
-// does not close a span and is stepped over whole.
-func nextBacktickRun(line string, i, n int) int {
-	for j := i; j < len(line); {
-		if line[j] != '`' {
-			j++
+// end returns the index just past the run.
+func (r backtickSpan) end() int {
+	return r.start + r.length
+}
+
+// backtickRuns lists the maximal runs of backticks in line, left to right.
+func backtickRuns(line string) []backtickSpan {
+	var runs []backtickSpan
+	for i := range len(line) {
+		if line[i] != '`' {
 			continue
 		}
-		run := backtickRun(line, j)
-		if run == n {
-			return j
+		if i > 0 && line[i-1] == '`' {
+			runs[len(runs)-1].length++
+			continue
 		}
-		j += run
+		runs = append(runs, backtickSpan{start: i, length: 1})
 	}
-	return -1
+	return runs
+}
+
+// closingRun returns the index of the first run after runs[k] that holds
+// exactly as many backticks, and false when there is none: a longer or a
+// shorter run does not close a span.
+func closingRun(runs []backtickSpan, k int) (int, bool) {
+	for m := k + 1; m < len(runs); m++ {
+		if runs[m].length == runs[k].length {
+			return m, true
+		}
+	}
+	return 0, false
 }
 
 // gfmPipeSegments splits a line on the pipes GFM splits a row on: the same
@@ -533,19 +561,18 @@ func gfmPipeSegments(line string) []string {
 	var segment strings.Builder
 	escaped := false
 	for _, r := range line {
-		switch {
-		case escaped:
+		if escaped {
 			segment.WriteRune(r)
 			escaped = false
-		case r == '\\':
-			segment.WriteRune(r)
-			escaped = true
-		case r == '|':
+			continue
+		}
+		if r == '|' {
 			segments = append(segments, segment.String())
 			segment.Reset()
-		default:
-			segment.WriteRune(r)
+			continue
 		}
+		segment.WriteRune(r)
+		escaped = r == '\\'
 	}
 	return append(segments, segment.String())
 }

@@ -214,20 +214,24 @@ func placeholderFor(parent string) string {
 // cmd/audit_1to1/internal/paths matches a documented placeholder against
 // whatever we put in that position, and every placeholder here begins with a
 // colon that no path segment can.
+//
+// The rules here are ifs and returns rather than tagless switches: a case
+// expression carries no statement counter, so the mutation gate reports every
+// mutant of one as not covered whatever the tests assert.
 func singular(word string) string {
 	if !isCollectionWord(word) {
 		return ""
 	}
-	switch {
-	case len(word) > len("ies") && strings.HasSuffix(word, "ies"):
+	if len(word) > len("ies") && strings.HasSuffix(word, "ies") {
 		return word[:len(word)-len("ies")] + "y"
-	case hasAnySuffix(word, "sses", "shes", "ches", "xes", "zes"):
-		return word[:len(word)-len("es")]
-	case strings.HasSuffix(word, "s") && !strings.HasSuffix(word, "ss"):
-		return word[:len(word)-1]
-	default:
-		return word
 	}
+	if hasAnySuffix(word, "sses", "shes", "ches", "xes", "zes") {
+		return word[:len(word)-len("es")]
+	}
+	if strings.HasSuffix(word, "s") && !strings.HasSuffix(word, "ss") {
+		return word[:len(word)-1]
+	}
+	return word
 }
 
 // isCollectionWord reports whether a segment reads as the name of a collection:
@@ -239,14 +243,17 @@ func isCollectionWord(segment string) bool {
 		return false
 	}
 	for i := range len(segment) {
-		c := segment[i]
-		switch {
-		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '_':
-		default:
+		if !isCollectionByte(segment[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+// isCollectionByte reports whether c may appear in a collection word: a
+// lowercase letter, a digit or an underscore.
+func isCollectionByte(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_'
 }
 
 // hasAnySuffix reports whether word ends with any of the suffixes and is longer
@@ -317,15 +324,22 @@ func isSHAShaped(segment string) bool {
 	}
 	digits := 0
 	for i := range len(segment) {
-		switch c := segment[i]; {
-		case c >= '0' && c <= '9':
+		c := segment[i]
+		if c >= '0' && c <= '9' {
 			digits++
-		case c >= 'a' && c <= 'f', c >= 'A' && c <= 'F':
-		default:
+			continue
+		}
+		if !isHexLetter(c) {
 			return false
 		}
 	}
 	return digits > 0
+}
+
+// isHexLetter reports whether c is one of the letters a hexadecimal digit is
+// written with, in either case.
+func isHexLetter(c byte) bool {
+	return c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
 
 // isUUIDShaped reports whether segment is the canonical 8-4-4-4-12 hyphenated
