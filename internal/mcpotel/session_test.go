@@ -9,7 +9,6 @@ import (
 	"net"
 	"testing"
 	"testing/synctest"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	noopmetric "go.opentelemetry.io/otel/metric/noop"
@@ -57,9 +56,10 @@ func driveSession(t *testing.T, transport string) {
 
 // collectMetric looks for an instrument in one collection of the reader.
 //
-// Separate from the polling below so that both waiting policies here ask the
-// same question of the same reader: a test that waits for a measurement and a
-// test that proves one was never taken must agree on what "recorded" means.
+// Every session test calls it once, after synctest.Wait has let the recording
+// goroutine finish, so a test that expects a measurement and a test that
+// proves one was never taken ask the same question of the same reader, and
+// neither collects while a Record is half done.
 func collectMetric(t *testing.T, reader *metric.ManualReader, name string) (metricdata.Metrics, bool) {
 	t.Helper()
 
@@ -75,33 +75,6 @@ func collectMetric(t *testing.T, reader *metric.ManualReader, name string) (metr
 		}
 	}
 	return metricdata.Metrics{}, false
-}
-
-// awaitMetric polls for an instrument, because the measurement is recorded on a
-// goroutine that unblocks when the session ends rather than inside the request.
-//
-// A single Collect right after Close is a race this test would lose most of the
-// time and win occasionally, which is the worst kind of flake: it would pass in
-// development and fail in CI.
-//
-// Only the tests that expect a measurement poll, and each of them returns on
-// the first or second collection. The test that expects none cannot be written
-// this way at all: waiting for something that must never happen spends the
-// whole deadline on every green run and still only makes the false pass less
-// likely. It uses synctest instead, which answers the question exactly.
-func awaitMetric(t *testing.T, reader *metric.ManualReader, name string) (metricdata.Metrics, bool) {
-	t.Helper()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		if m, found := collectMetric(t, reader, name); found {
-			return m, true
-		}
-		if time.Now().After(deadline) {
-			return metricdata.Metrics{}, false
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 }
 
 // TestSessionDuration_IsRecordedOnStdio covers the convention's second
@@ -231,7 +204,25 @@ func TestSessionTracker_NothingToObserve_IsANoOp(t *testing.T) {
 // another goroutine on the same session's Wait and each would record its own
 // data point when it ended. The instrument would then read as a count of
 // requests with the session's lifetime as its value, which is wrong twice over.
+//
+// It runs in a synctest bubble and collects once, after synctest.Wait, which
+// returns only when the goroutine that records the measurement has finished.
+// It used to poll until the instrument appeared, and that raced the SDK: a
+// histogram's Record publishes the point for its attribute set before it
+// counts the value (cumulativeHistogram.measure in go.opentelemetry.io/otel/sdk/metric
+// v1.47.0, LoadOrStoreAttr before the counter's Add), so a collection between
+// the two finds one data point whose Count is 0. That is the failure the macOS
+// leg of CI met on pull request 1702 (issue 1703). Waiting for the bubble to
+// settle also makes the test's own claim exact: no later measurement can land
+// after the one it reads, since nothing in the bubble is left to record one.
 func TestSessionDuration_ASessionWithManyRequests_IsMeasuredOnce(t *testing.T) {
+	synctest.Test(t, measureManyRequests)
+}
+
+// measureManyRequests is the body of
+// [TestSessionDuration_ASessionWithManyRequests_IsMeasuredOnce], inside its
+// bubble.
+func measureManyRequests(t *testing.T) {
 	reader, restore := newMetricRecorder(t)
 	defer restore()
 
@@ -266,8 +257,9 @@ func TestSessionDuration_ASessionWithManyRequests_IsMeasuredOnce(t *testing.T) {
 		t.Fatalf("client close: %v", closeErr)
 	}
 	_ = serverSession.Wait()
+	synctest.Wait()
 
-	recorded, ok := awaitMetric(t, reader, "mcp.server.session.duration")
+	recorded, ok := collectMetric(t, reader, "mcp.server.session.duration")
 	if !ok {
 		t.Fatal("mcp.server.session.duration was never recorded")
 	}
@@ -302,8 +294,17 @@ func TestSessionDuration_ASessionWithManyRequests_IsMeasuredOnce(t *testing.T) {
 //
 // Driven over a raw pipe rather than the in-memory transports, because a
 // malformed frame is the thing being tested and the SDK's own client cannot
-// send one.
+// send one. net.Pipe is channels inside the bubble, so it settles there, and
+// the measurement is read once the bubble has, for the reason
+// [TestSessionDuration_ASessionWithManyRequests_IsMeasuredOnce] gives.
 func TestSessionDuration_ASessionThatEndsBadly_CarriesAnErrorType(t *testing.T) {
+	synctest.Test(t, measureABadEnd)
+}
+
+// measureABadEnd is the body of
+// [TestSessionDuration_ASessionThatEndsBadly_CarriesAnErrorType], inside its
+// bubble.
+func measureABadEnd(t *testing.T) {
 	reader, restore := newMetricRecorder(t)
 	defer restore()
 
@@ -337,8 +338,9 @@ func TestSessionDuration_ASessionThatEndsBadly_CarriesAnErrorType(t *testing.T) 
 		t.Fatal("the session ended cleanly after a malformed frame, so this test drives the wrong branch")
 	}
 	_ = clientConn.Close()
+	synctest.Wait()
 
-	recorded, ok := awaitMetric(t, reader, "mcp.server.session.duration")
+	recorded, ok := collectMetric(t, reader, "mcp.server.session.duration")
 	if !ok {
 		t.Fatal("no session duration was recorded for a session that ended badly")
 	}
