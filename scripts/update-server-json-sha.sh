@@ -9,7 +9,7 @@
 # Usage: update-server-json-sha.sh <checksums-file> <version> [mcpb-files] [oci-digest]
 #
 #   [mcpb-files]  The Claude Desktop bundles to declare, comma-separated: in a
-#                 release, the three per-OS bundles scripts/build-mcpb.sh
+#                 release, the three per-OS bundles cmd/release_packages
 #                 packs (gitlab-mcp-server-darwin.mcpb, -windows.mcpb and
 #                 -linux.mcpb). Empty leaves the declared bundles as they are.
 #
