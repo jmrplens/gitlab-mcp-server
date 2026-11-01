@@ -161619,6 +161619,14 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "download_mode": {
+          "description": "How GitLab hands over a file kept in object storage: proxy streams it through GitLab, direct redirects to object storage or a CDN, which the server follows without the credential headers once the redirect leaves the instance's host and its subdomains. GitLab honors it only when its object storage configuration allows that mode, and otherwise uses its default. Leave it out to keep that default",
+          "enum": [
+            "proxy",
+            "direct"
+          ],
+          "type": "string"
+        },
         "file_name": {
           "description": "File name to download. May include / to describe a directory structure (segments must not be empty or . or ..)",
           "type": "string"

@@ -14518,6 +14518,9 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/packages/generic/my-pkg/1.0.0/app.bin",
+      "query": [
+        "download_mode"
+      ],
       "identifiers": {
         ":project_id": 1
       }
