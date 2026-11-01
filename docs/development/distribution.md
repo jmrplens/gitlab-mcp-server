@@ -29,19 +29,20 @@ make check-mcpb    # validates mcpb/manifest.json and the three manifests derive
 ```
 
 `make mcpb` needs macOS, because it merges the two darwin binaries with
-`lipo` and stops at once without it; `scripts/build-mcpb.sh` then needs `jq`,
-`zip` and `unzip`. The target cross-compiles the darwin arm64 and amd64
-binaries and merges them, cross-compiles the Windows amd64 binary and the
-Linux amd64 and arm64 binaries, each into a `dist/local_<goos>_<goarch>/`
-directory, writes their `dist/THIRD_PARTY_NOTICES` with
-`cmd/gen_third_party_notices` (from the module cache), and packs the four
-bundles with `scripts/build-mcpb.sh`.
+`lipo` and stops at once without it; packing needs nothing beyond Go. The
+target cross-compiles the darwin arm64 and amd64 binaries and merges them,
+cross-compiles the Windows amd64 binary and the Linux amd64 and arm64
+binaries, each into a `dist/local_<goos>_<goarch>/` directory, writes their
+`dist/THIRD_PARTY_NOTICES` with `cmd/gen_third_party_notices` (from the
+module cache), and packs the four bundles with the `mcpb` subcommand of
+[`cmd/release_packages`](cmd-utilities.md#release_packages).
 
 `make check-mcpb` runs `npx @anthropic-ai/mcpb@$(MCPB_CLI_VERSION) validate`
-over `mcpb/manifest.json`, then over the manifest `mcpb/platform.jq` derives
-for each of `darwin`, `win32` and `linux`, each in a temporary directory with
-a copy of the icon, since the CLI looks for the icon beside the manifest it
-validates. CI runs it in the Markdown job.
+over `mcpb/manifest.json`, then over the manifest `release_packages
+mcpb-manifest` derives for each of `darwin`, `win32` and `linux`, each in a
+temporary directory with a copy of the icon, since the CLI looks for the icon
+beside the manifest it validates. CI runs it in the Markdown job, which sets
+Go up for it.
 
 ### What a bundle carries
 
@@ -61,27 +62,32 @@ server/linux/gitlab-mcp-server-linux-arm64    linux, universal
 ```
 
 `manifest.json` comes first, so a reader that streams the archive finds it
-before the binaries. The entries are named to `zip` one by one rather than
-recursed into, so their order is the list's and not the filesystem's.
+before the binaries. The entries are written in this order, each recorded as
+a Unix file with its mode set (0755 for the servers, 0644 for the rest), at
+1980-01-01 00:00:00, deflated, with no extra field and no directory entry,
+which is what `zip -X -D` wrote when a script packed them: the same inputs
+make the same bytes on every run, so the SHA-256 `server.json` declares for a
+bundle depends on what it packs and on nothing else.
 
-The script finds each binary under the distribution directory by pattern
-(`*darwin_all*`, `*windows_amd64*`, `*linux_amd64*`, `*linux_arm64*`), which
-matches both the `dist/<id>_<goos>_<goarch>[_<variant>]/` directories
-GoReleaser writes and the `dist/local_<goos>_<goarch>/` ones `make mcpb`
-writes. Exactly one match is accepted for each: with two, which one `find`
-lists first is up to the filesystem, so the script names them and stops.
+The command finds each binary under the distribution directory by the part
+of its path that names its build (`darwin_all`, `windows_amd64`,
+`linux_amd64`, `linux_arm64`), which matches both the
+`dist/<id>_<goos>_<goarch>[_<variant>]/` directories GoReleaser writes and
+the `dist/local_<goos>_<goarch>/` ones `make mcpb` writes. Exactly one match
+is accepted for each: with two, the bundle would carry whichever a walk of
+the directory found first, so the command names them and stops.
 
 ### The per-OS manifests
 
 The universal bundle packs `mcpb/manifest.json` as it is: its base command is
 the macOS universal binary, with overrides for `win32` and `linux`. A per-OS
-bundle packs the manifest `mcpb/platform.jq` derives from it, which lists only
-that platform in `compatibility.platforms`, makes that platform's command the
-base command, carries no override, and names as the server's `entry_point` the
-first path that command line names inside the bundle (the binary, or the
-launcher `/bin/sh` runs). Nothing else differs, the extension name above all,
-so any of the four installs over any other. The script stamps the packed
-manifest's `version` with the version it was given.
+bundle packs the manifest `release_packages mcpb-manifest` derives from it,
+which lists only that platform in `compatibility.platforms`, makes that
+platform's command the base command, carries no override, and names as the
+server's `entry_point` the first path that command line names inside the
+bundle (the binary, or the launcher `/bin/sh` runs). Nothing else differs,
+the extension name above all, so any of the four installs over any other. The
+command stamps the packed manifest's `version` with the version it was given.
 
 ### What the build refuses
 
@@ -91,7 +97,7 @@ leaves a bundle behind for a later step or a developer to take for this
 version. They go as a set: a release declares three of them, and a later step
 handed two would publish a registry entry short of a system.
 
-After packing, the script reads each archive back and refuses the whole set
+After packing, the command reads each archive back and refuses the whole set
 unless:
 
 - each archive carries exactly its list of entries, in order;
@@ -121,7 +127,7 @@ override's `args` replace the base `args` the same way.
 
 ### Size limits
 
-The script prints each bundle's download size, unpacked size, entry count,
+The command prints each bundle's download size, unpacked size, entry count,
 largest entry and compression ratio, and in GitHub Actions writes the sizes to
 the job summary. It fails on Claude Desktop's own limits, read from its
 extension runtime (2.7032.0), since Claude Desktop refuses to install a bundle
@@ -156,11 +162,11 @@ covers an archive that lost those bits.
 
 ### Tests
 
-| Script                           | What it holds                                                                                                                                                                                                        |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/mcpb_launch_sh_test.py` | Drives the launcher with stub binaries under `/bin/sh`, `dash`, `busybox sh` and `bash --posix`, whichever the machine has, and runs `shellcheck` on it                                                              |
-| `scripts/mcpb_manifest_test.py`  | Pins the manifest values the bundle layout depends on, and what `mcpb/platform.jq` derives from them                                                                                                                 |
-| `scripts/build_mcpb_sh_test.py`  | Runs the build script over stand-in binaries, checks that it refuses, and removes, each bundle its rules and size limits exist for, and that each server entry is packed from the right file of both `dist/` layouts |
+| Test                             | What it holds                                                                                                                                                                                                                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/mcpb_launch_sh_test.py` | Drives the launcher with stub binaries under `/bin/sh`, `dash`, `busybox sh` and `bash --posix`, whichever the machine has, and runs `shellcheck` on it                                                                                                                                                  |
+| `scripts/mcpb_manifest_test.py`  | Pins the manifest values the bundle layout depends on                                                                                                                                                                                                                                                    |
+| `cmd/release_packages`           | Holds the build to a record of what `scripts/build-mcpb.sh` packed and said from stand-in binaries, entry for entry, every refusal its rules and size limits exist for, both `dist/` layouts, and two runs to the same bytes; and the per-OS manifests to what `mcpb/platform.jq` derived, byte for byte |
 
 A busybox built with standalone applets, like the `busybox-static` on GitHub's
 runner, runs its own `uname` and `chmod` whatever `PATH` says, so under it the
@@ -168,32 +174,38 @@ cases that need a stub check the binary for the real machine instead, and the
 two that cannot (an unsupported machine type, a failing `chmod`) are skipped
 with the reason.
 
-All three run in CI's supply-chain job, in the step that runs every
-`scripts/*_test.py` (`python3 -m unittest discover -s scripts -p "*_test.py"`).
-On a machine without `shellcheck`, or without the `bash`, `jq`, `zip` and
-`unzip` the build script needs, the cases that need them skip; in CI, where
-GitHub sets `CI`, they fail instead, so the job cannot pass with them unrun.
+The two Python suites run in CI's supply-chain job, in the step that runs
+every `scripts/*_test.py` (`python3 -m unittest discover -s scripts -p
+"*_test.py"`). On a machine without `shellcheck` or one of the shells, the
+cases that need it skip; in CI, where GitHub sets `CI`, they fail instead, so
+the job cannot pass with them unrun. The command's tests run with every Go
+package.
 
-### Why `zip`, with fixed timestamps
+### Why a Go command, with fixed timestamps
 
-A `.mcpb` is a plain zip with `manifest.json` at its root, so the script
-builds it with `zip` and sets every entry's timestamp to the zip epoch
-(`touch -t 198001010000`, a form both GNU and BSD `touch` accept, since
-`make mcpb` runs on macOS). The same inputs produce the same bytes, which
-matters because `server.json` records each declared bundle's SHA-256, and a
-hash that changes because the clock moved tells a verifier nothing.
+A `.mcpb` is a plain zip with `manifest.json` at its root, so the command
+writes it with `archive/zip` and records every entry at the zip epoch. The
+same inputs produce the same bytes, which matters because `server.json`
+records each declared bundle's SHA-256, and a hash that changes because the
+clock moved tells a verifier nothing. The entries are deflated at the best
+level `compress/flate` has: the bytes are not Info-ZIP's, so the bundles'
+hashes changed once when the build moved from `zip` to Go, and the release
+stamp computes them again on every release anyway.
 
 It used to shell out to `npx --yes @anthropic-ai/mcpb@<pin>`, which pinned the
 CLI but resolved its dependency tree fresh from the registry on every release,
-inside the job that holds this project's signing and publishing identities.
+inside the job that holds this project's signing and publishing identities,
+and then to `zip`, `unzip` and `jq`. The command imports the standard library
+and this module and nothing else, which rule 2 of
+[`audit_supply_chain`](cmd-utilities.md#audit_supply_chain) holds it to there.
 The pinned CLI (`MCPB_CLI_VERSION` in the Makefile) is now run only by
 `make check-mcpb`, which validates and packs nothing.
 
 ### In a release
 
 The release job builds the four bundles from the GoReleaser artifacts (the
-`universal_binaries` darwin build included) with `scripts/build-mcpb.sh`,
-uploads them as release assets and attests each one with
+`universal_binaries` darwin build included) with
+`go run ./cmd/release_packages/ mcpb`, uploads them as release assets and attests each one with
 `actions/attest-build-provenance`, the universal one included. A rehearsal
 builds them and uploads nothing. They are built before the stamp because
 GoReleaser does not produce them, so they are absent from the signed
@@ -212,17 +224,15 @@ stamps the version of `mcpb/manifest.json`, the flow that versions
 
 ### Files
 
-| Path                             | Purpose                                                                                             |
-| -------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `mcpb/manifest.json`             | MCPB manifest (source of truth; version stamped per release)                                        |
-| `mcpb/platform.jq`               | Derives the manifest of each per-OS bundle from `mcpb/manifest.json`                                |
-| `mcpb/icon.png`                  | 512×512 icon rendered from `site/public/favicon.svg` by `make brand-rasters`                        |
-| `mcpb/linux/launch.sh`           | Linux entry point: picks the amd64 or arm64 binary by `uname -m`                                    |
-| `scripts/build-mcpb.sh`          | Bundle assembly, deterministic `zip` packing, the size report, and the checks on each archive       |
-| `scripts/mcpb_launch_sh_test.py` | Tests of the Linux launcher, run in CI                                                              |
-| `scripts/mcpb_manifest_test.py`  | Tests of the manifest values the bundle layout depends on and of their per-OS derivation, run in CI |
-| `scripts/build_mcpb_sh_test.py`  | Tests of the build script's checks, its size limits and its removal of a refused set                |
-| `PRIVACY.md`                     | Privacy policy referenced by the manifest                                                           |
+| Path                             | Purpose                                                                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `mcpb/manifest.json`             | MCPB manifest (source of truth; version stamped per release)                                                                         |
+| `mcpb/icon.png`                  | 512×512 icon rendered from `site/public/favicon.svg` by `make brand-rasters`                                                         |
+| `mcpb/linux/launch.sh`           | Linux entry point: picks the amd64 or arm64 binary by `uname -m`                                                                     |
+| `cmd/release_packages`           | Bundle assembly, the per-OS manifest derivation, deterministic packing, the size report, the checks on each archive, and their tests |
+| `scripts/mcpb_launch_sh_test.py` | Tests of the Linux launcher, run in CI                                                                                               |
+| `scripts/mcpb_manifest_test.py`  | Tests of the manifest values the bundle layout depends on, run in CI                                                                 |
+| `PRIVACY.md`                     | Privacy policy referenced by the manifest                                                                                            |
 
 ### Privacy policy and directory submission
 
@@ -376,8 +386,11 @@ Two details that the per-channel pages on the site do not carry:
   in `scripts/build_pypi.py` and `scripts/validate_pypi.py`, the PyPI
   identifier in `server.json`, and the documentation.
 - **The Agent Plugins manifests are checked by `make check-openplugin`**
-  (`scripts/check-openplugin.sh`), which validates the root `plugin.json` and
-  `mcp.json` and the legacy Open Plugins manifest `.plugin/plugin.json`. CI
-  runs it in the generated-artifacts job, beside `make check-server-json`;
-  `make check-server-json-packages` runs only on a push to `main`, since it
-  downloads every declared artifact.
+  ([`cmd/audit_plugin_manifests`](cmd-utilities.md#audit_plugin_manifests)),
+  which validates the root `plugin.json` and `mcp.json` against the Agent
+  Plugins 1.0.0 schemas it carries and the legacy Open Plugins manifest
+  `.plugin/plugin.json` against `.plugin/plugin.schema.json`, and holds them
+  to what no schema says. CI runs it in the generated-artifacts job, beside
+  `make check-server-json`; `make check-server-json-packages`
+  ([`cmd/release_packages`](cmd-utilities.md#release_packages)) runs only on a
+  push to `main`, since it downloads every declared artifact.

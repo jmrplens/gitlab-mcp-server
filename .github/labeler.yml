@@ -100,6 +100,8 @@ distribution:
           - .goreleaser.yml
           - .github/workflows/release.yml
           - cmd/release_checks/**
+          - cmd/release_packages/**
+          - cmd/audit_plugin_manifests/**
           - Dockerfile
           - .dockerignore
           - docker-compose.yml
@@ -115,7 +117,6 @@ distribution:
           - npm/**
           - pypi/**
           - nuget/**
-          - scripts/build-mcpb.sh
           - scripts/build-npm.mjs
           - scripts/build_pypi.py
           - scripts/build_nuget.py
@@ -123,8 +124,6 @@ distribution:
           - scripts/validate-npm.mjs
           - scripts/validate_pypi.py
           - scripts/validate_nuget.py
-          - scripts/validate-server-json-packages.sh
-          - scripts/check-openplugin.sh
           - scripts/update-homebrew-tap.sh
           - scripts/update-server-json-sha.sh
           - scripts/fetch-release-assets.sh
