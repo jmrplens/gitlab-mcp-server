@@ -2359,6 +2359,10 @@ func TestCreate_NoInputs_SendsNoInputsKey(t *testing.T) {
 	}
 }
 
+// TestDetailedStatusOutput_Illustration verifies that a pipeline get mirrors
+// the illustration inside detailed_status and the whole user GitLab sent,
+// creation time included, rather than dropping the nested objects the
+// formatter does not render.
 func TestDetailedStatusOutput_Illustration(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
