@@ -11,7 +11,7 @@ superseded_by: ""
 
 ## Status
 
-**Accepted.** The unified resolution API exists and every transport populates it: stdio at startup, HTTP OAuth through `req.Extra.TokenInfo`, and HTTP legacy through the identity the gate attaches to the request context (see the Superseded note under Decision). What remains is [issue 953](https://github.com/jmrplens/gitlab-mcp-server/issues/953)'s attribution work, the first part of which is that an HTTP OAuth tool call resolves its user without the instance.
+**Accepted.** The unified resolution API exists and every transport populates it: stdio at startup, HTTP OAuth through `req.Extra.TokenInfo`, and HTTP legacy through the identity the gate attaches to the request context (see the Superseded note under Decision). Both HTTP modes resolve the instance with the user since [issue 953](https://github.com/jmrplens/gitlab-mcp-server/issues/953), which also bound multi-round-trip request state to the caller it was issued to and left a request no credential was bound to with no budget to share (see the amendment of 2026-10 under Identity Types).
 
 ## Context
 
@@ -77,6 +77,29 @@ Implement Option 4 with the following architecture:
 > JSON-RPC id cannot serve: `idContextKey` is unexported with no accessor, and
 > the id is client-chosen, so two clients routinely both send `1`. Minting one
 > server-side is the only viable form and is not done here.
+>
+> **Amended (2026-10)**: issue 953 closed the three gaps the amendment above
+> left between this decision and the tenant the tenant policy specification
+> defines, the pair (canonical instance URL, GitLab user id).
+>
+> The OAuth admission carries the instance the verifier checked the token
+> against (`oauth.InstanceKey`), so `ResolveIdentity` returns it in oauth mode
+> as it already did in legacy mode, and the telemetry identity policy records
+> the pair: `gitlab_mcp.instance` beside the user under `full`, and the
+> instance inside the digest under `pseudonymous`, which changed every such
+> digest once.
+>
+> Multi-round-trip request state is bound to the principal its request ran
+> under, the pool entry's random owner token, inside its MACs rather than as a
+> readable claim, so state issued under one credential yields no answers under
+> another.
+>
+> A request no credential was bound to resolves no identity, and on a server
+> shared by a configuration shape it now runs under no credential state either:
+> the shell holds no default bucket or listen counter for it, and the two
+> methods no handler refuses, `tools/list` and `subscriptions/listen`, are
+> refused right after the binding (`refuseUnattributed`, register row
+> `IDN-007`).
 
 - `IdentityToContext(ctx, identity)` / `IdentityFromContext(ctx)` — context storage for stdio mode.
 - `ResolveIdentity(ctx, req)` — unified resolution: TokenInfo priority, context fallback.
@@ -119,7 +142,7 @@ Implement Option 4 with the following architecture:
 
 ### Positive
 
-- **POS-001**: ~~All tool handlers can access user identity via `ResolveIdentity(ctx, req)` regardless of transport mode.~~ Narrowed, then restored: the call is uniform, and so is the coverage now. It resolves an identity in every mode; in HTTP legacy mode, where nothing populates `req.Extra.TokenInfo`, it reads the identity the gate put on the context, which carries the instance, while in HTTP OAuth mode the identity it reads from `TokenInfo` carries none, the gap [issue 953](https://github.com/jmrplens/gitlab-mcp-server/issues/953) tracks. Its consumers are log enrichment in `toolutil/logging.go` and the telemetry identity of a tool call in `cmd/server/telemetry_identity.go`.
+- **POS-001**: ~~All tool handlers can access user identity via `ResolveIdentity(ctx, req)` regardless of transport mode.~~ Narrowed, then restored: the call is uniform, and so is the coverage now. It resolves an identity in every mode; in HTTP legacy mode, where nothing populates `req.Extra.TokenInfo`, it reads the identity the gate put on the context, and in HTTP OAuth mode the one it reads from `TokenInfo`, both with the instance since [issue 953](https://github.com/jmrplens/gitlab-mcp-server/issues/953). Its consumers are log enrichment in `toolutil/logging.go` and the telemetry identity of a tool call in `cmd/server/telemetry_identity.go`.
 - **POS-002**: HTTP legacy mode now validates tokens against GitLab (was previously unvalidated).
 - **POS-003**: Caching prevents redundant GitLab API calls — single validation per token per TTL period.
 - **POS-004**: ~~The `NormalizeAuthHeader` adapter enables legacy clients to work without code changes.~~ Withdrawn: the adapter was removed. Legacy clients keep working because the legacy gate reads `PRIVATE-TOKEN` directly.

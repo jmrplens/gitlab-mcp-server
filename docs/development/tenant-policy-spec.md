@@ -1197,7 +1197,20 @@ credential travels at all, and state issued under another credential yields no a
 and the flow asks again (`decodeState`). The token is random and minted per entry, so a rebuilt
 entry asks again too, which is the answer the flow already gave state it cannot use; on
 stdio the principal is empty for everyone the process serves. `IDN-011` records the issue,
-keeps its lifetime and carries the finding no longer. Three more have been carried by no row since the register landed,
+keeps its lifetime and carries the finding no longer. F-15 is answered by issue 953 as
+well, which left a request no credential was bound to with no budget to share
+(`INV-002`): on a server the credentials of one shape share, such a request used to run
+under the shell's default state, which failed closed towards GitLab but held a bucket and
+a listen counter of its own, so every unattributed request drew on one budget, and a
+`tools/list` or a `subscriptions/listen` asking only for list-changed notifications, which
+no handler refuses, was charged there and held open there. A shared shell now has no
+default state (`serverShell.defaultCredentialState`, `serverShell.stateFor`), so such a
+request holds no bucket, no listen slot and no watcher, and `refuseUnattributed`, which
+runs right after the binding (`IDN-006`), refuses a `tools/list` with the internal error
+the resource and prompt methods answer it with and every `subscriptions/listen` with the
+subscription's. Stdio keeps its one credential as the state every request finds. `IDN-007`
+records the issue, declares the listing among its refusals and carries the finding no
+longer. Three more have been carried by no row since the register landed,
 because each records something no row decides: F-24 a message the SDK gives the server no
 way to send, and F-23 and F-27 stale statements, which issue 960 corrected in the comments
 and documents that made them. `TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue`

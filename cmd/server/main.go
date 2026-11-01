@@ -2084,9 +2084,10 @@ type serverShell struct {
 	//
 	// On stdio it is the process's one credential, with its watchers, its
 	// bucket and its listen ceiling, and every request finds it. On a server
-	// shared by a configuration shape it is the fail-closed default: the client
-	// is the unbound one, there are no watchers, and a request that reaches it
-	// is a request this server could not attribute to anybody.
+	// shared by a configuration shape it is nil: a request that bound none is a
+	// request this server could not attribute to anybody, and it runs under no
+	// credential's state and draws on no budget (issue 953, register row
+	// IDN-007).
 	state *credentialState
 	// shared records that this server answers for many credentials, which is
 	// what makes an unattributed request an error rather than the normal case.
@@ -2107,7 +2108,10 @@ type serverShell struct {
 }
 
 // stateFor returns the credential a request runs under: the one bound to its
-// context, or this server's default.
+// context, or this server's default, which only a server serving one
+// credential has. On a shared server a request nothing bound resolves to nil,
+// so each resolver below answers nil for it: no watchers, no bucket and no
+// listen counter of anybody's.
 func (sh *serverShell) stateFor(ctx context.Context) *credentialState {
 	if state := credentialStateFrom(ctx); state != nil {
 		return state
@@ -2125,7 +2129,8 @@ func (sh *serverShell) subscriptionRuntimeFor(ctx context.Context) *subscription
 	return state.subs
 }
 
-// rateLimiterFor returns the token bucket a request's credential owns.
+// rateLimiterFor returns the token bucket a request's credential owns, or nil
+// when this server could not attribute the request to one.
 func (sh *serverShell) rateLimiterFor(ctx context.Context) *toolutil.RateLimiter {
 	state := sh.stateFor(ctx)
 	if state == nil {
@@ -2134,7 +2139,8 @@ func (sh *serverShell) rateLimiterFor(ctx context.Context) *toolutil.RateLimiter
 	return state.limiter
 }
 
-// listenCounterFor returns the open-stream counter a request's credential owns.
+// listenCounterFor returns the open-stream counter a request's credential owns,
+// or nil when this server could not attribute the request to one.
 func (sh *serverShell) listenCounterFor(ctx context.Context) *listenCounter {
 	state := sh.stateFor(ctx)
 	if state == nil {
@@ -2503,7 +2509,12 @@ func attachIdentityMiddlewares(server *mcp.Server, settings serverSettings, tool
 	// the request's client through the context rather than through a handler's
 	// captured one reads it on stdio too: the layers that decide what a
 	// fine-grained session is shown hold no client of their own.
+	//
+	// On a shared server, the unattributed requests that no handler refuses
+	// are refused next, before anything below counts them: added just before
+	// the binding, the refusal runs just after it. See [refuseUnattributed].
 	if settings.credentials != nil {
+		server.AddReceivingMiddleware(refuseUnattributed)
 		server.AddReceivingMiddleware(settings.credentials.bindCredential)
 	} else {
 		server.AddReceivingMiddleware(bindProcessClient(client))
@@ -2529,21 +2540,26 @@ func attachIdentityMiddlewares(server *mcp.Server, settings serverSettings, tool
 }
 
 // defaultCredentialState builds the credential a request that bound none runs
-// under.
+// under, which only a server serving one credential has.
 //
 // On stdio that is the process's one credential, and it owns the watchers, the
-// bucket and the ceiling exactly as the server used to. On a shared server it
-// is the fail-closed default: the client is the unbound one, and there are no
-// watchers, so a subscription that could not be attributed is refused rather
-// than accepted and polled with a client that refuses every read.
+// bucket and the ceiling exactly as the server used to. A shared server has
+// none (issue 953, register row IDN-007). The default it used to build there
+// failed closed towards GitLab, with the unbound client and no watchers, but it
+// held a bucket and a listen counter of its own, so every request the server
+// could not attribute drew on one budget, and a tools/list or a list-changed
+// listen, which no handler refuses, was charged and held there. Now such a
+// request resolves no state: a subscription is refused by its handler, a
+// tools/list and a listen by [refuseUnattributed], and a call that does reach
+// a handler is refused there by the unbound client, charged to nobody.
 func (sh *serverShell) defaultCredentialState() *credentialState {
+	if sh.shared {
+		return nil
+	}
 	state := &credentialState{
 		client:  sh.client,
 		limiter: toolutil.NewRateLimiter(sh.cfg.RateLimitRPS, sh.cfg.RateLimitBurst),
 		listen:  &listenCounter{},
-	}
-	if sh.shared {
-		return state
 	}
 	state.subs = sh.subs.newRuntime("", sh.client)
 	if state.subs != nil {

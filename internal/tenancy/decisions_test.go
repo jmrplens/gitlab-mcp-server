@@ -877,6 +877,62 @@ func TestDecisions_TheRequestStatesPrincipal_IsAnsweredByIssue953(t *testing.T) 
 	}
 }
 
+// TestDecisions_TheUnattributedRequest_IsAnsweredByIssue953 pins what issue
+// 953 changed in the row that decides what a request no credential was bound
+// to runs under (IDN-007). On a server shared by a configuration shape it used
+// to run under the shell's default state, which held a bucket and a listen
+// counter of its own, so every such request drew on one budget, and a
+// tools/list or a listen asking only for list-changed notifications, which no
+// handler refuses, was answered and held there (F-15). The shared shell now
+// holds no default state, and a middleware right after the binding refuses
+// those two, so the row records the issue and carries the finding no longer,
+// names the middleware among its sites, and declares tools/list beside the
+// resource and prompt methods on the internal error they share. F-15 stays
+// filed as issue 953's.
+func TestDecisions_TheUnattributedRequest_IsAnsweredByIssue953(t *testing.T) {
+	unbound, _ := Lookup("IDN-007")
+	if !slices.Contains(unbound.Decided, "issue 953") || unbound.Carries("F-15") || len(unbound.Findings) != 0 {
+		t.Errorf("IDN-007: decided %v, findings %v; want issue 953 recorded and F-15 no longer carried", unbound.Decided, unbound.Findings)
+	}
+	if FindingIssue("F-15") != 953 {
+		t.Errorf("F-15 is filed as issue %d, want it kept as issue 953's", FindingIssue("F-15"))
+	}
+	for _, site := range []Site{
+		enforce(pkgServer, "serverShell.defaultCredentialState"),
+		enforce(pkgServer, "serverShell.stateFor"),
+		enforce(pkgServer, "refuseUnattributed"),
+	} {
+		t.Run(site.Name, func(t *testing.T) {
+			if !slices.Contains(unbound.Sites, site) {
+				t.Errorf("IDN-007's sites %v do not name %s.%s", unbound.Sites, site.Pkg, site.Name)
+			}
+		})
+	}
+	refusalOf := func(method string) (Refusal, bool) {
+		for _, r := range unbound.Refusals {
+			if slices.Contains(r.Methods, method) {
+				return r, true
+			}
+		}
+		return Refusal{}, false
+	}
+	for _, tc := range []struct {
+		method string
+		at     Site
+	}{
+		{"tools/list", refuse(pkgToolutil, "UnattributedRequestError")},
+		{"subscriptions/listen", refuse(pkgServer, "errUnboundSubscribe")},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			r, declared := refusalOf(tc.method)
+			if !declared || r.Channel != RPC || r.Code != codeInternalError || r.Answer != RetryLater || r.At != tc.at {
+				t.Errorf("IDN-007's refusal of %s = %+v (declared %v); want the internal error held at %s.%s",
+					tc.method, r, declared, tc.at.Pkg, tc.at.Name)
+			}
+		})
+	}
+}
+
 // TestDecisions_UpstreamRetries_StateTheirCostUnderIssue955 pins what issue
 // 955 decided for the upstream retries (RTC-006): they keep their values, and
 // the row states what they cost, at most three upstream requests for each
@@ -1045,7 +1101,7 @@ func TestDecisions_AFindingNoRowCarries_IsAnsweredByItsIssue(t *testing.T) {
 			}
 		})
 	}
-	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-12,F-13,F-14,F-16,F-17,F-18,F-19,F-20,F-25,F-26,F-28,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
+	if got, want := strings.Join(answered, ","), "F-01,F-02,F-03,F-04,F-05,F-06,F-07,F-08,F-09,F-10,F-11,F-12,F-13,F-14,F-15,F-16,F-17,F-18,F-19,F-20,F-25,F-26,F-28,F-29,F-30,F-31,F-32,F-33,F-34,F-35"; got != want {
 		t.Errorf("findings answered and carried by no row = %s, want %s", got, want)
 	}
 }
@@ -1532,7 +1588,7 @@ func rowPins() map[string]rowPin {
 		"IDN-007": {Identify, Rule, ClassP, Ruled, KeyUnbound, KeyNone, KeyNone, KeyNone, []refusalPin{
 			{methods: "tools/call", channel: ToolError, answer: RetryLater},
 			{
-				methods: "resources/read,prompts/get", channel: RPC, code: -32603,
+				methods: "tools/list,resources/read,prompts/get", channel: RPC, code: -32603,
 				prefix: "this request could not be attributed to a credential", answer: RetryLater,
 			},
 			{

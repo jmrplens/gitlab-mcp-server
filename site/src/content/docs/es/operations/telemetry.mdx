@@ -817,6 +817,12 @@ que lleva un identificador de usuario cuesta un span; una dimensión de métrica
 que lo lleva es una serie temporal por persona, que crece sin límite con el
 número de personas que usan el despliegue.
 
+Una petición que un servidor HTTP no pudo atribuir a ninguna credencial es rara,
+un POST cuyo cliente se fue o una credencial que el pool descartó mientras la
+servía. Un `tools/list` o un `subscriptions/listen` así se rechaza antes de que
+la telemetría lo vea y no deja ningún span; una llamada a una herramienta, una
+lectura de un recurso o un prompt la rechaza su manejador, dentro de su span.
+
 ## Cómo desactivarlo
 
 ```bash

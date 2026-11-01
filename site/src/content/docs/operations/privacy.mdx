@@ -50,8 +50,10 @@ setting that would include them.
 Who made a call is recorded only if you ask for it, through
 `--telemetry-identity`. The default records nobody. A middle setting records a
 per-process digest that lets you tell one caller's traffic from another's
-without naming anyone. Full identity is available for an organization auditing
-its own users on its own collector.
+without naming anyone; a caller is one user of one GitLab instance, so the
+digest is taken over the instance and the user id together. Full identity,
+the user and the instance, is available for an organization auditing its own
+users on its own collector.
 
 The full detail, including what each mode exports, is in
 [OpenTelemetry](/gitlab-mcp-server/operations/telemetry/).
