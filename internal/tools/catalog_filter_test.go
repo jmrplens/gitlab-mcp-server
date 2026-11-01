@@ -193,6 +193,47 @@ func TestFilterActionCatalog_ReadAPI_ServesWhatGitLabAcceptsFromIt(t *testing.T)
 	}
 }
 
+// TestFilterActionCatalog_OAuthCredential_WithholdsWhatNoWayRunsByItsKind pins
+// the credential-kind narrowing (issue 1238, register row AUT-009): for a
+// credential known to be an OAuth access token, the actions GitLab refuses to
+// one on every way are removed and filed under the credential's kind, every
+// name a caller may ask for one by included, the personal token read stays
+// served since a call by id reaches a route GitLab serves an OAuth token, and
+// a credential whose kind is unknown is served all of them. A write a
+// read-only deployment already removed is filed under the operator.
+func TestFilterActionCatalog_OAuthCredential_WithholdsWhatNoWayRunsByItsKind(t *testing.T) {
+	t.Parallel()
+	refused := []string{
+		"access.token_group_rotate_self", "access.token_personal_revoke_self", "access.token_personal_rotate_self",
+		"access.token_project_rotate_self", "model_registry.download",
+	}
+	filtered, withheld := mustFilterCatalog(t, freeCatalogWithMCP(t), &config.ServerConfig{Tier: edition.Free, OAuthCredential: true})
+	for _, id := range refused {
+		t.Run(id, func(t *testing.T) {
+			t.Parallel()
+			if _, served := filtered.Action(actioncatalog.ActionID(id)); served {
+				t.Errorf("an OAuth session is served %s, which GitLab refuses to it on every way", id)
+			}
+			if !slices.Contains(withheld.ByCredentialKind, id) {
+				t.Errorf("ByCredentialKind = %v, want %s filed under the credential's kind", withheld.ByCredentialKind, id)
+			}
+		})
+	}
+	if _, served := filtered.Action("access.token_personal_get"); !served {
+		t.Error("an OAuth session lost access.token_personal_get, whose call by id GitLab serves it")
+	}
+
+	unknown, unknownWithheld := mustFilterCatalog(t, freeCatalogWithMCP(t), &config.ServerConfig{Tier: edition.Free})
+	if _, served := unknown.Action("access.token_personal_rotate_self"); !served || len(unknownWithheld.ByCredentialKind) != 0 {
+		t.Errorf("a credential of unknown kind was narrowed: served %t, withheld %v", served, unknownWithheld.ByCredentialKind)
+	}
+
+	_, readOnly := mustFilterCatalog(t, freeCatalogWithMCP(t), &config.ServerConfig{Tier: edition.Free, OAuthCredential: true, ReadOnly: true})
+	if slices.Contains(readOnly.ByCredentialKind, "access.token_personal_rotate_self") || !slices.Contains(readOnly.ByOperator, "access.token_personal_rotate_self") {
+		t.Errorf("a read-only deployment filed a self rotation under the credential's kind %v rather than the operator", readOnly.ByCredentialKind)
+	}
+}
+
 // TestFilterActionCatalog_ReadAPIUnderReadOnly_FilesEveryWriteUnderTheOperator
 // pins the two narrowings together: with the operator's read-only mode on as
 // well as a read_api token, every write is filed under the operator, which

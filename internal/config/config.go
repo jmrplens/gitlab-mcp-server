@@ -433,7 +433,16 @@ type ServerConfig struct {
 	// asked for, "reauthorize with a wider scope" versus "this deployment does
 	// not write", and only the first is something the caller can act on, and
 	// because read_api reaches some actions the catalog classifies as writes.
-	ReadAPIOnly     bool
+	ReadAPIOnly bool
+	// OAuthCredential records that the credential is known to be an OAuth
+	// access token, which GitLab refuses on the routes that act on the
+	// calling token itself and on the model registry's package files
+	// whatever scopes it carries, so the surface leaves out every action all
+	// of whose ways send one (issue 1238, register row AUT-009). It is set
+	// only in HTTP mode, from the OAuth verifier's admission, and a kind
+	// nothing described leaves it unset: an unknown kind is served
+	// everything.
+	OAuthCredential bool
 	SafeMode        bool
 	ExcludeTools    []string
 	TokenScopes     []string

@@ -29,6 +29,7 @@
 //   - cmd/audit_1to1/internal/routes
 //   - cmd/audit_metrics
 //   - cmd/audit_tokens
+//   - cmd/gen_action_grants
 //   - cmd/gen_lhm_manifest
 //   - cmd/gen_llms
 //   - cmd/gen_model_corpus

@@ -147,14 +147,21 @@ func BaseCatalogKey(tier edition.Tier, dotcom, includeMCP bool) string {
 // would want here would only make two configurations that differ collide less
 // legibly.
 //
+// The credential's kind is one bit, as the read_api narrowing is: an OAuth
+// access token is served a catalog without what GitLab refuses to it on every
+// way (issue 1238), so a deployment serving OAuth tokens and personal access
+// tokens alike holds at most two catalogs per narrowing, and only in OAuth
+// mode, the one place the kind is learned.
+//
 //gitlab:allow-raw cfg.ReadOnly: a cache key component, compared and never read
 //gitlab:allow-raw cfg.ReadAPIOnly: a cache key component, compared and never read
+//gitlab:allow-raw cfg.OAuthCredential: a cache key component, compared and never read
 //gitlab:allow-raw cfg.SafeMode: a cache key component, compared and never read
 func CatalogFilterKey(cfg *config.ServerConfig) string {
-	return fmt.Sprintf("exclude=%s|%s|readonly=%t|readAPIOnly=%t|safe=%t",
+	return fmt.Sprintf("exclude=%s|%s|readonly=%t|readAPIOnly=%t|oauth=%t|safe=%t",
 		strings.Join(cfg.ExcludeTools, ","),
 		scopeCatalogKey(cfg.TokenScopes),
-		cfg.ReadOnly, cfg.ReadAPIOnly, cfg.SafeMode)
+		cfg.ReadOnly, cfg.ReadAPIOnly, cfg.OAuthCredential, cfg.SafeMode)
 }
 
 // scopeCatalogKey names the part of a token's scopes that changes a catalog:
@@ -261,12 +268,17 @@ func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*
 // action needs no such treatment, since the credential that cannot call it
 // cannot read it either, and the two filtered surfaces make the same split.
 //
+// What GitLab refuses to an OAuth access token on every way is left out for a
+// credential known to be one, after the scopes, as the other two surfaces
+// leave it out (issue 1238): a tool it could never run is not listed.
+//
 //gitlab:allow-raw cfg.ReadAPIOnly: a cache key component, compared and never read
+//gitlab:allow-raw cfg.OAuthCredential: a cache key component, compared and never read
 func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, []string, error) {
 	dotcom := client.IsGitLabDotCom()
 	key := "individual|" + BaseCatalogKey(cfg.Tier, dotcom, true) +
 		"|exclude=" + strings.Join(cfg.ExcludeTools, ",") + "|" + scopeCatalogKey(cfg.TokenScopes) +
-		"|readAPIOnly=" + strconv.FormatBool(cfg.ReadAPIOnly)
+		"|readAPIOnly=" + strconv.FormatBool(cfg.ReadAPIOnly) + "|oauth=" + strconv.FormatBool(cfg.OAuthCredential)
 	catalog, withheld, err := ShareCatalog(key, func() (*actioncatalog.Catalog, WithheldActions, error) {
 		base, baseErr := sharedBaseCatalog(dotcom, ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
 		if baseErr != nil {
@@ -285,6 +297,7 @@ func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConf
 		if cfg.ReadAPIOnly {
 			scoped = scoped.FilterReachableWith(finegrained.ClassicReadAPI)
 		}
+		scoped, _ = narrowForCredentialKind(scoped, cfg)
 		return scoped, WithheldActions{ExcludedByName: excluded}, nil
 	})
 	if err != nil {

@@ -1022,9 +1022,19 @@ func TestVerifiedFacts_CarriesTheVerifiersIDBesideTheScopes(t *testing.T) {
 			want: &gitlabclient.TokenFacts{Scopes: []string{gitlabclient.ScopeGranular}, ID: 11, FineGrained: true, GrantReadable: true},
 		},
 		{
-			name: "an OAuth token with no id",
+			name: "a token of unknown kind with no id",
 			info: &auth.TokenInfo{UserID: "5", Scopes: []string{"api"}, Expiration: time.Now().Add(time.Hour)},
 			want: &gitlabclient.TokenFacts{Scopes: []string{"api"}},
+		},
+		{
+			// The verifier said the token is an OAuth access token (issue
+			// 1238), which the entry is then narrowed by.
+			name: "an OAuth access token",
+			info: &auth.TokenInfo{
+				UserID: "5", Scopes: []string{"api"}, Expiration: time.Now().Add(time.Hour),
+				Extra: map[string]any{oauth.IssuedByOAuthKey: true},
+			},
+			want: &gitlabclient.TokenFacts{Scopes: []string{"api"}, OAuth: true},
 		},
 		{
 			name: "scopes the verifier assumed",
@@ -1046,7 +1056,7 @@ func TestVerifiedFacts_CarriesTheVerifiersIDBesideTheScopes(t *testing.T) {
 			req.Header.Set("Authorization", "Bearer token")
 			handler.ServeHTTP(httptest.NewRecorder(), req)
 			if (got == nil) != (tc.want == nil) || got != nil && (got.ID != tc.want.ID || got.GrantReadable != tc.want.GrantReadable ||
-				got.FineGrained != tc.want.FineGrained || got.KindUnknown != tc.want.KindUnknown || !slices.Equal(got.Scopes, tc.want.Scopes)) {
+				got.FineGrained != tc.want.FineGrained || got.KindUnknown != tc.want.KindUnknown || got.OAuth != tc.want.OAuth || !slices.Equal(got.Scopes, tc.want.Scopes)) {
 				t.Errorf("verifiedFacts = %+v, want %+v", got, tc.want)
 			}
 		})

@@ -720,6 +720,116 @@ func TestOAuth_ReadAPITokenIsServedWhatReadAPIReaches(t *testing.T) {
 	}
 }
 
+// startTokenKindFakeGitLab is an instance that answers the way GitLab answers
+// the two kinds of token a client of an OAuth deployment can send as Bearer
+// (issue 1238): a personal access token is described by its own self
+// endpoint, and an OAuth access token is refused there with GitLab's 400 and
+// described by /oauth/token/info instead. Both carry api.
+func startTokenKindFakeGitLab(t *testing.T, oauthToken, personalToken string) *fakeGitLab {
+	t.Helper()
+	bearer := func(r *http.Request) string {
+		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		return token
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"19.5.0","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		if token := bearer(r); token != oauthToken && token != personalToken {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"username":"kind"}`))
+	})
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if bearer(r) != personalToken {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"message":"400 Bad request - This endpoint requires token type to be a personal access token"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":3,"scopes":["api"],"active":true}`))
+	})
+	mux.HandleFunc("/oauth/token/info", func(w http.ResponseWriter, r *http.Request) {
+		if bearer(r) != oauthToken {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"scope":["api"],"expires_in":7200,"application":{"uid":"app"}}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return &fakeGitLab{url: srv.URL, calls: func() int { return 0 }}
+}
+
+// TestOAuth_AnOAuthTokenIsNotServedWhatGitLabRefusesItsKind drives the
+// credential kind on the real binary (issue 1238, register row AUT-009): an
+// OAuth access token is not listed the calling token's own rotations and
+// revocation on the individual surface, the personal token read stays
+// listed, since a call naming the token by id is served to an OAuth token,
+// and a call for a withheld one on the dynamic surface is answered with the
+// credential's kind and the way out, before anything reaches GitLab; a
+// personal access token sent as Bearer to the same deployment is served them.
+func TestOAuth_AnOAuthTokenIsNotServedWhatGitLabRefusesItsKind(t *testing.T) {
+	const oauthToken, personalToken = "gloas-kind", "glpat-kind"
+	gitlab := startTokenKindFakeGitLab(t, oauthToken, personalToken)
+	call := func(t *testing.T, srv *server, token, method, body string) string {
+		t.Helper()
+		headers := map[string]string{"Authorization": "Bearer " + token}
+		if method == "tools/call" {
+			headers["Mcp-Param-Action"] = "access.token_personal_rotate_self"
+		}
+		got := srv.do(t, request{method: http.MethodPost, path: "/mcp", body: body, headers: headers})
+		if got.status != http.StatusOK {
+			t.Fatalf("%s for %s = %d: %s", method, token, got.status, truncate(got.body))
+		}
+		return got.body
+	}
+
+	t.Run("individual listing", func(t *testing.T) {
+		srv := startServer(t, map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual"},
+			"--auth-mode=oauth", "--gitlab-url="+gitlab.url, "--public-url="+publicURL)
+		oauthList := call(t, srv, oauthToken, "tools/list", toolsListBody)
+		personalList := call(t, srv, personalToken, "tools/list", toolsListBody)
+		for _, name := range []string{"gitlab_personal_access_token_rotate_self", "gitlab_personal_access_token_revoke_self", "gitlab_project_access_token_rotate_self", "gitlab_group_access_token_rotate_self"} {
+			t.Run(name, func(t *testing.T) {
+				if strings.Contains(oauthList, `"name":"`+name+`"`) {
+					t.Errorf("an OAuth token is listed %s, which GitLab refuses it", name)
+				}
+				if !strings.Contains(personalList, `"name":"`+name+`"`) {
+					t.Errorf("a personal access token sent as Bearer is not listed %s", name)
+				}
+			})
+		}
+		if !strings.Contains(oauthList, `"name":"gitlab_personal_access_token_get"`) {
+			t.Error("an OAuth token lost gitlab_personal_access_token_get, whose call by id GitLab serves it")
+		}
+	})
+
+	t.Run("dynamic execute", func(t *testing.T) {
+		srv := oauthServer(t, gitlab.url)
+		body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"access.token_personal_rotate_self","params":{}},"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
+		got := call(t, srv, oauthToken, "tools/call", body)
+		for _, want := range []string{
+			`action \"access.token_personal_rotate_self\" exists but is not available to this session`,
+			"the credential in use is an OAuth access token", "Authenticate with a personal access token",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(got, want) {
+					t.Errorf("the answer does not say %q:\n%s", want, truncate(got))
+				}
+			})
+		}
+		if served := call(t, srv, personalToken, "tools/call", body); strings.Contains(served, "the credential in use is an OAuth access token") {
+			t.Errorf("a personal access token sent as Bearer was answered as an OAuth token:\n%s", truncate(served))
+		}
+	})
+}
+
 // TestOAuth_TokenFoundBelowTheMinimumBehindTheGuard_GetsTheGuardsChallenge
 // covers the one way a token below the minimum passes the OAuth bearer guard
 // (issue 952): neither introspection endpoint answers, so the verifier admits

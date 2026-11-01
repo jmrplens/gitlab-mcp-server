@@ -337,6 +337,38 @@ func authorizeDecisions() []Decision {
 			},
 		},
 		{
+			// Issue 1238: GitLab refuses an OAuth access token, whatever
+			// scopes it carries, on the routes that act on the calling token
+			// itself and on the model registry's package files, which the
+			// generated table marks from the generator's declarations. A
+			// session the OAuth verifier knows to be authenticated by one is
+			// not served an action every way of which sends such a route,
+			// and a call for one is answered with the credential's kind and
+			// the way out, a personal access token, which is the caller's to
+			// use. The kind is one bit of the entry's configuration and so of
+			// the shape and catalog keys, as AUT-001's read_api narrowing is:
+			// at most two catalogs per narrowing, and only in OAuth mode. A
+			// kind nothing described is served everything (INV-008), and the
+			// personal token read keeps its no-id way and GitLab's 400 with
+			// it. stdio sends PRIVATE-TOKEN, which GitLab reads as a personal
+			// access token only, so the decision does not exist there.
+			ID: "AUT-009", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
+			Resource: "the actions GitLab refuses to an OAuth access token on every way: the calling token's own revocation and rotations, and the model registry's package file download",
+			Key:      KeyEntry, StdioKey: KeyNone,
+			Decided:  []string{"issue 1238"},
+			Refusals: narrowed(Reauthorize),
+			Sites: []Site{
+				enforce(pkgOAuth, "admitToken"),
+				enforce(pkgServer, "verifiedFacts"),
+				enforce(pkgPool, "ServerPool.entryConfig"),
+				enforce(pkgTools, "narrowForCredentialKind"),
+				enforce(pkgActionCatalog, "Action.OAuthRefused"),
+				enforce(pkgFinegrained, "Table.OAuthRefusal"),
+				metaWithheld,
+				withheld,
+			},
+		},
+		{
 			ID: "POL-007", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			// The scope half is class C, the tier half class E (spec:
 			// Alignment classes); the row carries the stricter of the two.

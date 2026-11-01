@@ -391,6 +391,18 @@ func WithTierWithheld(byTier []actioncatalog.TierWithheld, tier edition.Tier, pi
 	}
 }
 
+// WithCredentialKindWithheld tells the registry which action keys were
+// filtered out because GitLab refuses them to the session's kind of
+// credential, an OAuth access token, on every way whatever its scopes (issue
+// 1238). A call for one is answered that it exists and needs a personal
+// access token, rather than as unknown, and a cross-link to one is published
+// like any withheld action's.
+func WithCredentialKindWithheld(byCredentialKind []string) RegistryOption {
+	return func(r *Registry) {
+		r.withheld.RecordCredentialKind(byCredentialKind)
+	}
+}
+
 // RegisterCatalogFindExecuteTools registers the dynamic find and execute tools
 // from the canonical action catalog.
 func RegisterCatalogFindExecuteTools(server *mcp.Server, catalog *actioncatalog.Catalog, opts ...RegistryOption) {

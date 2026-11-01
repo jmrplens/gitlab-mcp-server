@@ -254,7 +254,13 @@ manifest for accepted call shapes and input schemas.
 What the filters withheld is recorded, so a call naming one of those actions
 is answered with its cause rather than as unknown. The record is
 `actioncatalog.Withheld`, which holds the token-scope, operator and tier
-causes and writes the one sentence every surface answers with
+causes, and the credential kind of a session the OAuth verifier knows to be
+authenticated by an OAuth access token, which GitLab refuses the calling
+token's own revocation and rotations and the model registry's package files
+whatever its scopes (issue 1238, `WithheldActions.ByCredentialKind`, register
+row AUT-009; the routes are marked in the generated table from
+`cmd/gen_action_grants`' declarations), and writes the one sentence every
+surface answers with
 (`Withheld.Message`); `tools.WithheldActions` carries the lists out of the
 catalog builders. The dynamic registry answers from it in execute. The meta
 surface answers from it too (issue 1282), and before the SDK refuses the

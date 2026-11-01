@@ -33,7 +33,7 @@ var specRequirementIDs = []string{
 	"POL-001", "POL-002", "POL-003", "POL-004", "POL-005", "POL-006", "POL-007",
 	"POL-008", "POL-009",
 	"AUT-001", "AUT-002", "AUT-003", "AUT-004", "AUT-005", "AUT-006", "AUT-007",
-	"AUT-008",
+	"AUT-008", "AUT-009",
 	"DST-001", "DST-002", "DST-003",
 	"END-001", "END-002", "END-003", "END-004", "END-005",
 	"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
@@ -109,7 +109,9 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // dimensions of telemetry's metrics, which issue 957 gave a row so that its
 // variable and its malformed value are held as every setting's are, is the
 // thirty-seventh ruled row. RQB-013 bounds advisory merge request diff searches
-// and is the thirteenth request bound.
+// and is the thirteenth request bound. AUT-009, the actions GitLab refuses to
+// an OAuth access token on every way (issue 1238), is the thirty-ninth ruled
+// row.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -121,7 +123,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 33},
-		{"ruled", Ruled, 38},
+		{"ruled", Ruled, 39},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 13},
@@ -1757,6 +1759,7 @@ func rowPins() map[string]rowPin {
 			},
 			{methods: "tools/list", channel: Absent, answer: WidenScope},
 		}},
+		"AUT-009": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyNone, KeyNone, KeyNone, pinNarrowed(Reauthorize)},
 		"POL-007": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, nil},
 		"DST-003": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			{
