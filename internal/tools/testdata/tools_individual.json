@@ -92225,11 +92225,10 @@
           "type": "string"
         },
         "order_by": {
-          "description": "Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)",
+          "description": "Field to order by: created_at (the default), due_date, label_priority, milestone_due, popularity, priority, relative_position, title, updated_at, or weight, which only GitLab Enterprise Edition accepts",
           "enum": [
             "created_at",
             "due_date",
-            "id",
             "label_priority",
             "milestone_due",
             "popularity",
@@ -93269,11 +93268,10 @@
           "type": "string"
         },
         "order_by": {
-          "description": "Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)",
+          "description": "Field to order by: created_at (the default), due_date, label_priority, milestone_due, popularity, priority, relative_position, title, updated_at, or weight, which only GitLab Enterprise Edition accepts",
           "enum": [
             "created_at",
             "due_date",
-            "id",
             "label_priority",
             "milestone_due",
             "popularity",
@@ -94290,11 +94288,10 @@
           "type": "string"
         },
         "order_by": {
-          "description": "Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)",
+          "description": "Field to order by: created_at (the default), due_date, label_priority, milestone_due, popularity, priority, relative_position, title, updated_at, or weight, which only GitLab Enterprise Edition accepts",
           "enum": [
             "created_at",
             "due_date",
-            "id",
             "label_priority",
             "milestone_due",
             "popularity",

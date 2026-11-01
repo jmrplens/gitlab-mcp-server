@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -378,6 +379,148 @@ func TestActionSpecs_IssueLists_PublishDueDateAsTheKeywordsGitLabMatches(t *test
 			}
 			if !slices.Equal(got, dueDateFilterKeywords) {
 				t.Errorf("%s due_date enum = %v, want %v", name, got, dueDateFilterKeywords)
+			}
+		})
+	}
+}
+
+// gitlabIssueOrderByFields is every value GitLab's three issue list routes
+// accept for order_by, written out from GitLab's source rather than read from
+// the package: the sort_options of lib/api/helpers/issues_helpers.rb, which
+// GET /issues, GET /groups/:id/issues and GET /projects/:id/issues all
+// declare as the values of order_by through the issues_params block of
+// lib/api/issues.rb, and weight, which the Enterprise Edition override in
+// ee/lib/ee/api/helpers/issues_helpers.rb appends. Grape answers any other
+// value with a 400 before the finder runs.
+var gitlabIssueOrderByFields = []string{
+	"created_at", "due_date", "label_priority", "milestone_due", "popularity",
+	"priority", "relative_position", "title", "updated_at", "weight",
+}
+
+// TestActionSpecs_IssueLists_PublishOrderByAsTheFieldsGitLabSortsBy holds the
+// order_by of every issue listing to the values GitLab's routes accept, in
+// the enum and in the description a model reads beside it. The description
+// listed every value but title, the one alphabetical order needs, and the
+// enum offered id, which GitLab refuses (issue 1688, P6).
+func TestActionSpecs_IssueLists_PublishOrderByAsTheFieldsGitLabSortsBy(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	specs := map[string]toolutil.ActionSpec{}
+	for _, spec := range append(ActionSpecs(client), GroupActionSpecs(client)...) {
+		specs[spec.Name] = spec
+	}
+	for _, name := range []string{specList, specListAll, specListGroup, specGroupIssues} {
+		t.Run(name, func(t *testing.T) {
+			spec, ok := specs[name]
+			if !ok {
+				t.Fatalf("no spec named %q", name)
+			}
+			orderBy := servedProperty(t, spec, "order_by")
+			if got := stringEnum(orderBy); !slices.Equal(got, gitlabIssueOrderByFields) {
+				t.Errorf("%s order_by enum = %v, want %v", name, got, gitlabIssueOrderByFields)
+			}
+			description, _ := orderBy["description"].(string)
+			named := snakeCaseWords(description)
+			for _, field := range gitlabIssueOrderByFields {
+				if !named[field] {
+					t.Errorf("%s order_by description = %q, want it to name %s", name, description, field)
+				}
+			}
+			if !strings.Contains(description, "weight, which only GitLab Enterprise Edition accepts") {
+				t.Errorf("%s order_by description = %q, want it to say only GitLab Enterprise Edition accepts weight", name, description)
+			}
+		})
+	}
+	t.Run("list guidance", func(t *testing.T) {
+		guidance := specs[specList].ParameterGuidance["order_by"]
+		if !strings.Contains(guidance.ValueSource, "title for alphabetical order") {
+			t.Errorf("list order_by guidance value source = %q, want it to offer title for alphabetical order", guidance.ValueSource)
+		}
+	})
+}
+
+// stringEnum returns the enum a served schema property carries, as strings.
+func stringEnum(property map[string]any) []string {
+	enum, _ := property["enum"].([]any)
+	values := make([]string, 0, len(enum))
+	for _, value := range enum {
+		values = append(values, value.(string))
+	}
+	return values
+}
+
+// snakeCaseWords returns the set of lowercase snake_case words text carries,
+// so a field name is matched as a whole word and not inside a longer one.
+func snakeCaseWords(text string) map[string]bool {
+	words := map[string]bool{}
+	for _, word := range strings.FieldsFunc(text, func(r rune) bool { return r != '_' && (r < 'a' || r > 'z') }) {
+		words[word] = true
+	}
+	return words
+}
+
+// TestCatalogSurface_IssueListOrderBy_SendsTitleAndRefusesID calls the
+// individual issue list tool as a model does. order_by=title reaches GitLab
+// as it was asked, and order_by=id, which GitLab answers with a 400, is
+// refused by the served schema before any request is sent.
+func TestCatalogSurface_IssueListOrderBy_SendsTitleAndRefusesID(t *testing.T) {
+	tests := []struct {
+		name     string
+		orderBy  string
+		wantSent bool
+	}{
+		{name: "title reaches GitLab", orderBy: "title", wantSent: true},
+		{name: "id is refused before any request", orderBy: "id", wantSent: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sent atomic.Pointer[string]
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				orderBy := r.URL.Query().Get("order_by")
+				sent.Store(&orderBy)
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			toolutil.RegisterSurfaceToolFromSpec(server, issueSpecsByTool(t, ActionSpecs(client))["gitlab_issue_list"], toolutil.SurfaceToolRegisterOptions{
+				Description: "Test issue list ordering.",
+				Icons:       toolutil.IconIssue,
+			})
+			st, ct := mcp.NewInMemoryTransports()
+			serverSession, err := server.Connect(t.Context(), st, nil)
+			if err != nil {
+				t.Fatalf("server connect: %v", err)
+			}
+			session, err := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil).Connect(t.Context(), ct, nil)
+			if err != nil {
+				t.Fatalf("client connect: %v", err)
+			}
+			t.Cleanup(func() {
+				session.Close()
+				_ = serverSession.Wait()
+			})
+
+			result, callErr := session.CallTool(t.Context(), &mcp.CallToolParams{
+				Name:      "gitlab_issue_list",
+				Arguments: map[string]any{"project_id": testProjectID, "order_by": tt.orderBy},
+			})
+			refused := callErr != nil || result.IsError
+			got := sent.Load()
+			if tt.wantSent {
+				if refused {
+					t.Fatalf("CallTool(order_by=%s) refused: err %v, result %+v", tt.orderBy, callErr, result)
+				}
+				switch {
+				case got == nil:
+					t.Errorf("order_by=%s sent no request, want one carrying it", tt.orderBy)
+				case *got != tt.orderBy:
+					t.Errorf("order_by sent = %q, want %q", *got, tt.orderBy)
+				}
+				return
+			}
+			if !refused {
+				t.Errorf("CallTool(order_by=%s) = %+v, want it refused by the schema", tt.orderBy, result)
+			}
+			if got != nil {
+				t.Errorf("order_by=%s reached GitLab as %q, want no request", tt.orderBy, *got)
 			}
 		})
 	}

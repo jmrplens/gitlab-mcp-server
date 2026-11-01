@@ -4617,7 +4617,7 @@ Parameter guidance:
 - link_get.project_id: project. Source: Project that owns the issue holding the link.
 - link_list.issue_iid: source_issue. Source: IID of the issue whose links are listed. Avoid: Use the issue IID, not its global ID.
 - link_list.project_id: project. Source: Project that owns the source issue.
-- list.order_by: issue_list_sort_field. Source: Field requested for sorting recent or oldest issues, such as created_at or updated_at. Avoid: Combine order_by with sort. Do not pass natural-language phrases like newest first as the field value.
+- list.order_by: issue_list_sort_field. Source: Field requested for sorting, such as created_at or updated_at for recent or oldest issues, or title for alphabetical order. Avoid: Combine order_by with sort. Do not pass natural-language phrases like newest first as the field value.
 - list.project_id: scope_project. Source: Project ID or namespace path whose issues should be listed. Avoid: Use project_id for the project scope. Use group_id only with issue.list_group.
 - list.search. Source: Keywords from the user's issue title or description request. Avoid: search narrows within the selected project. It does not replace project_id.
 - list_group.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
