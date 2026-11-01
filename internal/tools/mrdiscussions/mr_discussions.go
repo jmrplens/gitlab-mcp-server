@@ -34,6 +34,11 @@ type DiffLinePositionInput struct {
 // DiffPosition defines the location of an inline diff comment. It mirrors
 // gl.PositionOptions in full, supporting both text (line) positions and image
 // (coordinate) positions.
+//
+// The four image fields are pointers, as gl.PositionOptions has them, because
+// GitLab takes 0 as a value of each: an x or a y of 0 is a point on the
+// image's edge, and a plain number could not tell it from a field left out,
+// so the coordinate was dropped from the request.
 type DiffPosition struct {
 	BaseSHA      string              `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
 	StartSHA     string              `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
@@ -44,10 +49,10 @@ type DiffPosition struct {
 	NewLine      int                 `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
 	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment."`
 	LineRange    *DiffLineRangeInput `json:"line_range,omitempty"    jsonschema:"Start/end line range for a multi-line text diff comment."`
-	Width        int                 `json:"width,omitempty"  jsonschema:"Image width in pixels (position_type=image)."`
-	Height       int                 `json:"height,omitempty" jsonschema:"Image height in pixels (position_type=image)."`
-	X            float64             `json:"x,omitempty"      jsonschema:"X coordinate of the comment on the image (position_type=image)."`
-	Y            float64             `json:"y,omitempty"      jsonschema:"Y coordinate of the comment on the image (position_type=image)."`
+	Width        *int64              `json:"width,omitempty"  jsonschema:"Image width in pixels (position_type=image)."`
+	Height       *int64              `json:"height,omitempty" jsonschema:"Image height in pixels (position_type=image)."`
+	X            *float64            `json:"x,omitempty"      jsonschema:"X coordinate of the comment on the image (position_type=image)."`
+	Y            *float64            `json:"y,omitempty"      jsonschema:"Y coordinate of the comment on the image (position_type=image)."`
 }
 
 // CreateInput defines parameters for creating a discussion (inline or general).
@@ -412,22 +417,7 @@ func buildPositionOptions(p *DiffPosition) *gl.PositionOptions {
 	if p.LineRange != nil {
 		pos.LineRange = buildLineRangeOptions(p.LineRange)
 	}
-	if p.Width != 0 {
-		v := int64(p.Width)
-		pos.Width = &v
-	}
-	if p.Height != 0 {
-		v := int64(p.Height)
-		pos.Height = &v
-	}
-	if p.X != 0 {
-		v := p.X
-		pos.X = &v
-	}
-	if p.Y != 0 {
-		v := p.Y
-		pos.Y = &v
-	}
+	pos.Width, pos.Height, pos.X, pos.Y = p.Width, p.Height, p.X, p.Y
 	return pos
 }
 

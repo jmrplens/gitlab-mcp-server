@@ -12,10 +12,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1232,10 +1234,10 @@ func TestCreate_FullImagePosition(t *testing.T) {
 			NewPath:      "design.png",
 			OldPath:      "design.png",
 			PositionType: "image",
-			Width:        100,
-			Height:       200,
-			X:            10.5,
-			Y:            20.5,
+			Width:        new(int64(100)),
+			Height:       new(int64(200)),
+			X:            new(10.5),
+			Y:            new(20.5),
 		},
 	})
 	if err != nil {
@@ -1664,7 +1666,7 @@ func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 	base := DiffPosition{BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222", NewPath: "design.png"}
 	full := base
 	full.OldPath, full.OldLine, full.NewLine = "old.png", 7, 42
-	full.PositionType, full.Width, full.Height, full.X, full.Y = "image", 100, 200, 10.5, 20.5
+	full.PositionType, full.Width, full.Height, full.X, full.Y = "image", new(int64(100)), new(int64(200)), new(10.5), new(20.5)
 
 	for _, tc := range []struct {
 		name     string
@@ -1707,6 +1709,63 @@ func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 			})
 		})
 	}
+}
+
+// discussionCreateRoute returns the handler every surface reaches
+// mr_review.discussion_create through, bound to client, so a test can call
+// it with the arguments a caller spells rather than with a typed input.
+func discussionCreateRoute(t *testing.T, client *gitlabclient.Client) toolutil.ActionFunc {
+	t.Helper()
+	for _, spec := range ActionSpecs(client) {
+		if spec.IndividualTool.Name == "gitlab_mr_discussion_create" {
+			return spec.Route.Handler
+		}
+	}
+	t.Fatal("no ActionSpec projects gitlab_mr_discussion_create")
+	return nil
+}
+
+// TestCreate_ImageCoordinateOfZero_IsSent asserts that an image position on
+// the image's edge reaches GitLab with its coordinate. GitLab takes 0 as a
+// value of width, height, x and y, and keeps an image position only with all
+// four, so the x and the y of 0 a plain number dropped turned a comment on
+// the image's corner into a position GitLab answers as incomplete. The call
+// goes through the action route with the arguments as a caller spells them,
+// and on the parent the request carried neither x nor y.
+func TestCreate_ImageCoordinateOfZero_IsSent(t *testing.T) {
+	var mu sync.Mutex
+	var sent map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathMR1Discussions {
+			http.NotFound(w, r)
+			return
+		}
+		position, _ := decodedBody(t, r)["position"].(map[string]any)
+		mu.Lock()
+		sent = position
+		mu.Unlock()
+		testutil.RespondJSON(w, http.StatusCreated, discussionCreatedBody)
+	}))
+
+	_, err := discussionCreateRoute(t, client)(t.Context(), map[string]any{
+		"project_id": testProjectID, "merge_request_iid": 1, "body": testRefactoringComment,
+		"position": map[string]any{
+			"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": "assets/logo.png",
+			"position_type": "image", "width": 64, "height": 32, "x": 0, "y": 0,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if sent == nil {
+		t.Fatal("no position reached GitLab")
+	}
+	assertJSONField(t, sent, "width", float64(64))
+	assertJSONField(t, sent, "height", float64(32))
+	assertJSONField(t, sent, "x", float64(0))
+	assertJSONField(t, sent, "y", float64(0))
 }
 
 // TestCreate_LineRange_SentWheneverEitherEndpointIsGiven asserts that a

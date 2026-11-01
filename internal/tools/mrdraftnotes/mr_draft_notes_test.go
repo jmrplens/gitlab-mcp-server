@@ -10,13 +10,16 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1296,10 +1299,10 @@ func TestToDiffPositionOptions_FullImageAndRange(t *testing.T) {
 		NewPath:      "img.png",
 		OldPath:      "img.png",
 		PositionType: "image",
-		Width:        800,
-		Height:       600,
-		X:            12.5,
-		Y:            34.5,
+		Width:        new(int64(800)),
+		Height:       new(int64(600)),
+		X:            new(12.5),
+		Y:            new(34.5),
 		LineRange: &DiffLineRange{
 			Start: &DiffLinePosition{LineCode: "lc1", Type: "new", OldLine: 0, NewLine: 10},
 			End:   &DiffLinePosition{LineCode: "lc2", Type: "new", OldLine: 0, NewLine: 12},
@@ -1538,5 +1541,116 @@ func TestFormatListMarkdown_NoteOfExactlyTheCellWidth(t *testing.T) {
 		"| 1 | 10 |  | " + note + " |\n" + draftListHints
 	if got := FormatListMarkdown(out); got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// draftNoteWrittenBody is the draft note GitLab answers both writes with, for
+// the tests whose assertions are all about the request.
+const draftNoteWrittenBody = `{"id":10,"author_id":1,"merge_request_id":1,"note":"see here"}`
+
+// draftNoteWrite is one of the two draft note writes that carry a position,
+// as a caller reaches it: the individual tool every surface projects it
+// from, the request GitLab receives and the arguments beside the position.
+type draftNoteWrite struct {
+	tool   string
+	method string
+	path   string
+	args   map[string]any
+}
+
+// draftNoteWrites lists the writes a draft note's position reaches GitLab
+// through, mr_review.draft_note_create and mr_review.draft_note_update.
+func draftNoteWrites() []draftNoteWrite {
+	return []draftNoteWrite{
+		{tool: "gitlab_mr_draft_note_create", method: http.MethodPost, path: pathDraftNotes, args: map[string]any{"note": "see here"}},
+		{tool: "gitlab_mr_draft_note_update", method: http.MethodPut, path: pathDraftNoteByID, args: map[string]any{"note_id": 10, "note": "see here"}},
+	}
+}
+
+// call runs the write through its action route, with the arguments a caller
+// spells, and position beside its own.
+func (w draftNoteWrite) call(t *testing.T, client *gitlabclient.Client, position map[string]any) error {
+	t.Helper()
+	spec, ok := mrDraftNoteSpecsByTool(t, ActionSpecs(client))[w.tool]
+	if !ok {
+		t.Fatalf("no ActionSpec projects %s", w.tool)
+	}
+	args := map[string]any{"project_id": "42", "merge_request_iid": 1, "position": position}
+	maps.Copy(args, w.args)
+	_, err := spec.Route.Handler(t.Context(), args)
+	return err
+}
+
+// sentPosition decodes the position of a mocked write's body. It reports
+// rather than aborting, because it runs on the httptest server's goroutine,
+// and answers nil for a body that carries none.
+func sentPosition(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decoding the request body: %v", err)
+	}
+	position, _ := body["position"].(map[string]any)
+	return position
+}
+
+// assertSentField asserts one key of the position a write carried: a nil want
+// means the key must be absent.
+func assertSentField(t *testing.T, position map[string]any, key string, want any) {
+	t.Helper()
+	got, present := position[key]
+	switch {
+	case want == nil && present:
+		t.Errorf("%q = %v, want it absent from %v", key, got, position)
+	case want == nil:
+	case !present:
+		t.Errorf("%q missing from %v, want %v", key, position, want)
+	case got != want:
+		t.Errorf("%q = %v, want %v", key, got, want)
+	}
+}
+
+// TestWrites_ImageCoordinateOfZero_IsSent asserts that a draft note's image
+// position on the image's edge reaches GitLab with its coordinate, on the
+// create and on the update alike. GitLab takes 0 as a value of width, height,
+// x and y, and keeps a draft note's position only when all four are there, so
+// the x and the y of 0 a plain number dropped published the note as a
+// general comment with its position gone. The merge request answers 404 here,
+// so the position pre-check steps aside and the position reaching GitLab is
+// the one the caller spelled; on the parent neither request carried x or y.
+func TestWrites_ImageCoordinateOfZero_IsSent(t *testing.T) {
+	for _, write := range draftNoteWrites() {
+		t.Run(write.tool, func(t *testing.T) {
+			var mu sync.Mutex
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != write.method || r.URL.Path != write.path {
+					http.NotFound(w, r)
+					return
+				}
+				position := sentPosition(t, r)
+				mu.Lock()
+				sent = position
+				mu.Unlock()
+				testutil.RespondJSON(w, http.StatusOK, draftNoteWrittenBody)
+			}))
+
+			err := write.call(t, client, map[string]any{
+				"base_sha": "aaa", "start_sha": "ccc", "head_sha": "bbb", "new_path": "assets/logo.png",
+				"position_type": "image", "width": 64, "height": 32, "x": 0, "y": 0,
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if sent == nil {
+				t.Fatal("no position reached GitLab")
+			}
+			assertSentField(t, sent, "width", float64(64))
+			assertSentField(t, sent, "height", float64(32))
+			assertSentField(t, sent, "x", float64(0))
+			assertSentField(t, sent, "y", float64(0))
+		})
 	}
 }

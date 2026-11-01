@@ -38,6 +38,11 @@ type GetInput struct {
 // DiffPosition defines the location of an inline diff comment on a merge
 // request. Use this to place a draft note on a specific line in the diff.
 // It mirrors the GitLab client-go PositionOptions (discussions.go) one-to-one.
+//
+// The four image fields are pointers, as PositionOptions has them, because
+// GitLab takes 0 as a value of each: an x or a y of 0 is a point on the
+// image's edge, and a plain number could not tell it from a field left out,
+// so the coordinate was dropped from the request.
 type DiffPosition struct {
 	BaseSHA      string         `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
 	StartSHA     string         `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
@@ -48,10 +53,10 @@ type DiffPosition struct {
 	OldLine      int            `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
 	NewLine      int            `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
 	LineRange    *DiffLineRange `json:"line_range,omitempty" jsonschema:"Line range for multi-line text comments. Set start and end line positions to span more than one line."`
-	Width        int            `json:"width,omitempty" jsonschema:"Image width in pixels. Only for position_type 'image'."`
-	Height       int            `json:"height,omitempty" jsonschema:"Image height in pixels. Only for position_type 'image'."`
-	X            float64        `json:"x,omitempty" jsonschema:"X coordinate of the comment on an image diff. Only for position_type 'image'."`
-	Y            float64        `json:"y,omitempty" jsonschema:"Y coordinate of the comment on an image diff. Only for position_type 'image'."`
+	Width        *int64         `json:"width,omitempty" jsonschema:"Image width in pixels. Only for position_type 'image'."`
+	Height       *int64         `json:"height,omitempty" jsonschema:"Image height in pixels. Only for position_type 'image'."`
+	X            *float64       `json:"x,omitempty" jsonschema:"X coordinate of the comment on an image diff. Only for position_type 'image'."`
+	Y            *float64       `json:"y,omitempty" jsonschema:"Y coordinate of the comment on an image diff. Only for position_type 'image'."`
 }
 
 // DiffLineRange describes the start and end line positions of a multi-line
@@ -217,22 +222,7 @@ func toDiffPositionOptions(p *DiffPosition) *gl.PositionOptions {
 		v := int64(p.OldLine)
 		pos.OldLine = &v
 	}
-	if p.Width != 0 {
-		v := int64(p.Width)
-		pos.Width = &v
-	}
-	if p.Height != 0 {
-		v := int64(p.Height)
-		pos.Height = &v
-	}
-	if p.X != 0 {
-		v := p.X
-		pos.X = &v
-	}
-	if p.Y != 0 {
-		v := p.Y
-		pos.Y = &v
-	}
+	pos.Width, pos.Height, pos.X, pos.Y = p.Width, p.Height, p.X, p.Y
 	if lr := p.LineRange; lr != nil {
 		pos.LineRange = &gl.LineRangeOptions{
 			Start: toLinePositionOptions(lr.Start),
