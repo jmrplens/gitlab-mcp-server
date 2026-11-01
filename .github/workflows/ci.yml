@@ -759,10 +759,11 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       # No version here on purpose: govulncheck is a `tool` directive in go.mod,
-      # so `go install` without @version installs the version go.mod names and
-      # Dependabot bumps it with the other modules. A scanner that changed under
-      # us would change what "no known vulnerability" meant last week.
-      - run: go install golang.org/x/vuln/cmd/govulncheck
+      # so `go install tool` installs the version go.mod names, gotestsum with
+      # it, and Dependabot bumps it with the other modules. A scanner that
+      # changed under us would change what "no known vulnerability" meant last
+      # week.
+      - run: go install tool
       - run: make govulncheck
       # The source scan asks whether our code calls a vulnerable symbol. This
       # asks what the release binaries carry, at module grain, which is what
@@ -1448,7 +1449,9 @@ jobs:
       # Flags carry their value in the same word, which is how the runner
       # tells them from packages.
       - name: Install gotestsum
-        run: go install gotest.tools/gotestsum
+        # The tools go.mod's tool directive names, gotestsum and govulncheck,
+        # at the versions go.mod requires and go.sum pins by hash.
+        run: go install tool
       - name: Unit suite
         shell: bash
         # The same freshness answer the coverage job passes. This job asks the

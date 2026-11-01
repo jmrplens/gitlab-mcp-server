@@ -82,7 +82,9 @@ jobs:
           go-version-file: go.mod
 
       - name: Install gotestsum
-        run: go install gotest.tools/gotestsum
+        # The tools go.mod's tool directive names, gotestsum and govulncheck,
+        # at the versions go.mod requires and go.sum pins by hash.
+        run: go install tool
 
       # Built once and handed to every package through E2E_SERVER_BINARY, so
       # the three test binaries do not each build cmd/server.

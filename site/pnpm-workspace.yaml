@@ -67,6 +67,31 @@ overrides:
   # on, and pinning 5.x onto it is a major bump an advisory fix should not drag
   # in.
   "js-yaml@>=4.0.0 <4.3.2": 4.3.2
+  # KaTeX prototype pollution that bypasses its trust restrictions
+  # (GHSA-238p-pmpm-9mq7), fixed in 0.18.2 and in no 0.16 release.
+  # rehype-mermaid reaches 0.16 through mermaid-isomorphic, which asks for
+  # ^0.16.0 itself and again through mermaid 11, so both move to the 0.18 line
+  # mermaid 12 already uses: mermaid-isomorphic only adds KaTeX's stylesheet to
+  # the page it renders diagrams in, and mermaid 11 runs there from its own
+  # bundle. Reached at build time only. Pinned to 0.18.10, the newest release
+  # of that line npm does not mark deprecated: 0.18.11 was published with
+  # breaking changes and deprecated for them.
+  "katex@<0.18.2": 0.18.10
+  # glob's AbortSignal cancellation bypass (GHSA-3g3m-2fjr-6pw4), fixed in
+  # 14.0.2 and in no 13.x release. htmlhint asks for ^13.0.6 and calls only
+  # globSync and globStream, which 14 keeps; dev deps only. glob 14 also moves
+  # its matching to minimatch 11, the only line with the fix for the globParts
+  # amplification (GHSA-g3hv-75wg-m249), which only glob reached here, through
+  # the optimizationLevel 2 it sets. The advisory lists every earlier minimatch
+  # as well, so site/osv-scanner.toml sets it aside for two that are not
+  # pinned: the 10.2.6 eslint, @eslint/config-array and
+  # @typescript-eslint/typescript-estree match with at the default level 1,
+  # which never runs that code, and the 3.1.5 pa11y-ci reaches through globby 7
+  # and glob 7, which has no such code.
+  # glob 7 calls the module as a function, the trap brace-expansion's entry
+  # describes, and forcing 11 onto eslint's three would drag a major in for
+  # code they do not run.
+  "glob@>=9.0.0 <14.0.2": 14.0.3
 
 auditConfig:
   ignoreGhsas:
