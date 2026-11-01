@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,238 |
-| Unit test functions                                   | 21,543 |
+| Total test functions                                  | 23,244 |
+| Unit test functions                                   | 21,549 |
 | E2E test functions                                    |  1,695 |
 | cmd test functions                                    |  5,688 |
 | Test files (internal/)                                |    750 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,697 | 58.9% |
 | `TestFunc` (no underscore)             |    903 |  3.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,638 | 37.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,644 | 37.2% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,211 |        259 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            437 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Core packages           |          4,215 |        259 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            439 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,207 |        475 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,695 |        438 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,688 |        461 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,238** |  **1,649** |                                                                                                 |
+| **Total**               |     **23,244** |  **1,649** |                                                                                                 |
 
 ### Core Packages
 
@@ -82,7 +82,7 @@
 | subscriptions            |       114 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
 | telemetry                |       152 |   100.0% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                                                                                  |
 | tenancy                  |       125 |   100.0% | Package tenancy is the register of every decision this server makes about who a caller is and what it may hold, spend or be told.                                                                                                                                                                                                   |
-| testutil                 |       182 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
+| testutil                 |       184 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
 | testutil/e2ecalls        |        24 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                                                                                          |
 | testutil/e2erelease      |         8 |   100.0% | Package e2erelease decides what an end-to-end run does on the GitLab release it found, measured against the release the fine-grained action table was recorded from (issue 1155).                                                                                                                                                   |
 | testutil/hints           |         7 |   100.0% | Package hints collects the canonical action IDs a package's Markdown invites a model to call, by rendering the package's own formatters rather than by reading its constants: a hint spelled as a literal at the call site is published exactly like one behind a constant, and a test that reads only the constants cannot see it. |
@@ -92,8 +92,8 @@
 | testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,373 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,211** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,375 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,215** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
