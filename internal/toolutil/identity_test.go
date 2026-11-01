@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -83,6 +84,42 @@ func TestResolveIdentity_TokenInfoPriority(t *testing.T) {
 	got := toolutil.ResolveIdentity(ctx, req)
 	if got.UserID != "99" || got.Username != "oauth-user" {
 		t.Errorf("expected TokenInfo identity, got %+v", got)
+	}
+}
+
+// TestResolveIdentity_TokenInfo_KeepsTheInstanceItWasVerifiedAgainst pins the
+// tenant of an OAuth tool call as the pair (instance, user id), which issue 953
+// found it was not (F-28). The verifier's admission carries the instance it was
+// verified against under oauth.InstanceKey, and ResolveIdentity used to return
+// the id and the name alone from it, so user 7 of two published instances
+// resolved to one identity while the gate's context identity beside it named
+// the instance. An admission that carries no instance resolves to none, rather
+// than borrowing the context's.
+func TestResolveIdentity_TokenInfo_KeepsTheInstanceItWasVerifiedAgainst(t *testing.T) {
+	admitted := func(instance any) *mcp.CallToolRequest {
+		extra := map[string]any{"username": "seven"}
+		if instance != nil {
+			extra[oauth.InstanceKey] = instance
+		}
+		return &mcp.CallToolRequest{Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID: "7", Extra: extra}}}
+	}
+	ctx := toolutil.IdentityToContext(context.Background(),
+		toolutil.UserIdentity{UserID: "7", Username: "seven", Instance: "https://context.example.com"})
+
+	first := toolutil.ResolveIdentity(ctx, admitted("https://gitlab-a.example.com"))
+	second := toolutil.ResolveIdentity(ctx, admitted("https://gitlab-b.example.com"))
+	if want := (toolutil.UserIdentity{UserID: "7", Username: "seven", Instance: "https://gitlab-a.example.com"}); first != want {
+		t.Errorf("ResolveIdentity() = %+v, want %+v", first, want)
+	}
+	if first == second {
+		t.Errorf("user 7 of two instances resolved to one identity %+v", first)
+	}
+	for name, instance := range map[string]any{"absent": nil, "not a string": 7} {
+		t.Run(name, func(t *testing.T) {
+			if got := toolutil.ResolveIdentity(ctx, admitted(instance)); got.Instance != "" || got.UserID != "7" {
+				t.Errorf("ResolveIdentity() = %+v, want user 7 with no instance", got)
+			}
+		})
 	}
 }
 

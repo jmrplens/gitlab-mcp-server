@@ -37,7 +37,7 @@ func TestKeyring_AConfiguredSecretGivesEveryReplicaTheSameKeys(t *testing.T) {
 	const secret = "a deployment-wide secret"
 	first, second := keyringFrom(t, secret, 0), keyringFrom(t, secret, 0)
 
-	if a, b := first.IdentityPseudonym("42"), second.IdentityPseudonym("42"); a != b {
+	if a, b := first.IdentityPseudonym(testInstance, "42"), second.IdentityPseudonym(testInstance, "42"); a != b {
 		t.Errorf("two replicas gave one caller two digests (%q, %q)", a, b)
 	}
 	if a, b := first.ResourcePseudonym("gitlab://project/7"),
@@ -53,7 +53,7 @@ func TestKeyring_GeneratedKeysDifferPerProcess(t *testing.T) {
 
 	first, second := keyringFrom(t, "", 0), keyringFrom(t, "", 0)
 
-	if a, b := first.IdentityPseudonym("42"), second.IdentityPseudonym("42"); a == b {
+	if a, b := first.IdentityPseudonym(testInstance, "42"), second.IdentityPseudonym(testInstance, "42"); a == b {
 		t.Errorf("two processes produced the same digest %q from generated keys; the key is not per process", a)
 	}
 }
@@ -70,10 +70,10 @@ func TestKeyring_OneSecretYieldsTwoIndependentKeys(t *testing.T) {
 
 	ring := keyringFrom(t, "one secret", 0)
 
-	// The same input through both, which is the only way to see the keys are
-	// not the same key.
-	const value = "42"
-	if a, b := ring.IdentityPseudonym(value), ring.ResourcePseudonym(value); a == b {
+	// The same bytes into both HMACs, which is the only way to see the keys
+	// are not the same key: the identity pseudonym digests the instance, a
+	// NUL and the user id, so the resource pseudonym is handed exactly that.
+	if a, b := ring.IdentityPseudonym(testInstance, "42"), ring.ResourcePseudonym(testInstance+"\x0042"); a == b {
 		t.Errorf("the identity and resource keys are the same key: both gave %q", a)
 	}
 }
@@ -96,17 +96,17 @@ func TestKeyring_AGeneratedKeyRotatesOnItsInterval(t *testing.T) {
 	ring.now = func() time.Time { return clock }
 	ring.rotatedAt = clock
 
-	before := ring.IdentityPseudonym("42")
+	before := ring.IdentityPseudonym(testInstance, "42")
 
 	// Inside the interval, nothing changes: a pseudonym that moved on every
 	// call would correlate nothing at all.
 	clock = clock.Add(59 * time.Minute)
-	if during := ring.IdentityPseudonym("42"); during != before {
+	if during := ring.IdentityPseudonym(testInstance, "42"); during != before {
 		t.Errorf("the digest changed inside the interval (%q then %q)", before, during)
 	}
 
 	clock = clock.Add(2 * time.Minute)
-	if after := ring.IdentityPseudonym("42"); after == before {
+	if after := ring.IdentityPseudonym(testInstance, "42"); after == before {
 		t.Errorf("the digest %q survived its rotation interval", after)
 	}
 }
@@ -126,10 +126,10 @@ func TestKeyring_AConfiguredKeyIgnoresRotation(t *testing.T) {
 	ring.now = func() time.Time { return clock }
 	ring.rotatedAt = clock
 
-	before := ring.IdentityPseudonym("42")
+	before := ring.IdentityPseudonym(testInstance, "42")
 	clock = clock.Add(72 * time.Hour)
 
-	if after := ring.IdentityPseudonym("42"); after != before {
+	if after := ring.IdentityPseudonym(testInstance, "42"); after != before {
 		t.Errorf("a configured key rotated (%q then %q)", before, after)
 	}
 	if ring.Rotation() != 0 {
@@ -196,8 +196,13 @@ func TestKeyring_EmptyInputIsNotADigest(t *testing.T) {
 	t.Parallel()
 
 	ring := keyringFrom(t, "", 0)
-	if got := ring.IdentityPseudonym(""); got != "" {
-		t.Errorf("an absent user produced the digest %q", got)
+	for _, instance := range []string{"", testInstance} {
+		t.Run("instance "+instance, func(t *testing.T) {
+			t.Parallel()
+			if got := ring.IdentityPseudonym(instance, ""); got != "" {
+				t.Errorf("an absent user produced the digest %q", got)
+			}
+		})
 	}
 	if got := ring.ResourcePseudonym(""); got != "" {
 		t.Errorf("an absent resource produced the digest %q", got)
@@ -210,7 +215,7 @@ func TestKeyring_NilRecordsNothing(t *testing.T) {
 	t.Parallel()
 
 	var ring *Keyring
-	if got := ring.IdentityPseudonym("42"); got != "" {
+	if got := ring.IdentityPseudonym(testInstance, "42"); got != "" {
 		t.Errorf("a nil keyring produced %q", got)
 	}
 	if ring.Configured() || ring.Rotation() != 0 {
@@ -291,18 +296,18 @@ func TestKeyring_ARotationRestartsTheInterval(t *testing.T) {
 	ring.now = func() time.Time { return clock }
 	ring.rotatedAt = clock
 
-	before := ring.IdentityPseudonym("42")
+	before := ring.IdentityPseudonym(testInstance, "42")
 
 	// Exactly the interval, not a minute past it.
 	clock = clock.Add(time.Hour)
-	rotated := ring.IdentityPseudonym("42")
+	rotated := ring.IdentityPseudonym(testInstance, "42")
 	if rotated == before {
 		t.Errorf("the digest %q survived an interval that had exactly elapsed", rotated)
 	}
 
 	// Well inside the interval that the rotation above started.
 	clock = clock.Add(time.Minute)
-	if again := ring.IdentityPseudonym("42"); again != rotated {
+	if again := ring.IdentityPseudonym(testInstance, "42"); again != rotated {
 		t.Errorf("the digest moved again one minute after rotating (%q then %q): the rotation did not restart the interval",
 			rotated, again)
 	}
@@ -414,6 +419,13 @@ func derivationInputs() [][]byte {
 // on every one of them. The values were computed by the golang.org/x/crypto
 // derivation on the commit before this change and agree with an independent
 // HMAC-SHA256 implementation.
+//
+// The identity pseudonym moved once since, with the keys left as they were:
+// issue 953 made it digest the tenant, the instance, a NUL and the user id,
+// rather than the user id alone, so user 7 of two instances stopped sharing
+// one. The new value agrees with OpenSSL's HMAC-SHA256 under the identity key
+// above, and the old one, cd9ba365d6d5556a for the user id alone, is the value
+// a pseudonym recorded before that change still carries in a dashboard.
 func TestKeyring_AConfiguredSecretKeepsTheSameKeysAndPseudonyms(t *testing.T) {
 	t.Parallel()
 
@@ -439,8 +451,8 @@ func TestKeyring_AConfiguredSecretKeepsTheSameKeysAndPseudonyms(t *testing.T) {
 	}
 
 	ring := keyringFrom(t, secret, 0)
-	if got, want := ring.IdentityPseudonym("42"), "cd9ba365d6d5556a"; got != want {
-		t.Errorf("IdentityPseudonym(42) = %q, want %q", got, want)
+	if got, want := ring.IdentityPseudonym(testInstance, "42"), "5005851f175c9eb1"; got != want {
+		t.Errorf("IdentityPseudonym(%s, 42) = %q, want %q", testInstance, got, want)
 	}
 	if got, want := ring.ResourcePseudonym("gitlab://project/7"), "fa61d7ea8d9101fa"; got != want {
 		t.Errorf("ResourcePseudonym(gitlab://project/7) = %q, want %q", got, want)
@@ -590,7 +602,7 @@ func TestKeyring_ARotationThatFails_RecordsNothingUntilOneSucceeds(t *testing.T)
 	clock := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	ring.now = func() time.Time { return clock }
 	ring.rotatedAt = clock
-	before := ring.IdentityPseudonym("42")
+	before := ring.IdentityPseudonym(testInstance, "42")
 
 	clock = clock.Add(2 * time.Hour)
 	failing := true
@@ -601,7 +613,7 @@ func TestKeyring_ARotationThatFails_RecordsNothingUntilOneSucceeds(t *testing.T)
 		return rand.Read(b)
 	})
 
-	if got := ring.IdentityPseudonym("42"); got != "" {
+	if got := ring.IdentityPseudonym(testInstance, "42"); got != "" {
 		t.Errorf("IdentityPseudonym after a failed rotation = %q, want nothing", got)
 	}
 	if got := ring.ResourcePseudonym("gitlab://project/7"); got != "" {
@@ -609,7 +621,7 @@ func TestKeyring_ARotationThatFails_RecordsNothingUntilOneSucceeds(t *testing.T)
 	}
 
 	failing = false
-	after := ring.IdentityPseudonym("42")
+	after := ring.IdentityPseudonym(testInstance, "42")
 	if after == "" || after == before {
 		t.Errorf("IdentityPseudonym once randomness returned = %q (before the rotation %q), want a new pseudonym", after, before)
 	}

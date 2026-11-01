@@ -101,6 +101,11 @@ var (
 		"user.id",
 		"user.name",
 		"user.hash",
+		// The instance half of the tenant the full policy records beside the
+		// user keys (issue 953). Bounded on a deployment that publishes its
+		// instances and not under --allow-any-gitlab-url, where a caller names
+		// the instance, so it is a span attribute and never a dimension.
+		"gitlab_mcp.instance",
 		"mcp.session.id",
 		"jsonrpc.request.id",
 		"mcp.resource.uri",
@@ -388,7 +393,7 @@ func TestRealCollector_IdentityReachesSpansAndNeverMetrics(t *testing.T) {
 		if digest == "" {
 			t.Error("user.hash is present but empty, which correlates nothing while still claiming to")
 		}
-		for _, readable := range []string{"user.id", "user.name"} {
+		for _, readable := range []string{"user.id", "user.name", "gitlab_mcp.instance"} {
 			t.Run(readable, func(t *testing.T) {
 				if value, leaked := attr(span.Attributes, readable); leaked {
 					t.Errorf("%s = %q under the pseudonymous policy; the whole point of the policy is that this key is not exported", readable, value)
@@ -404,7 +409,7 @@ func TestRealCollector_IdentityReachesSpansAndNeverMetrics(t *testing.T) {
 		if _, _, found := c.awaitMetric(t, exportDeadline, durationMetric); !found {
 			t.Fatalf("the collector parsed no %s metric, so this assertion would pass vacuously", durationMetric)
 		}
-		for _, key := range []string{"user.hash", "user.id", "user.name"} {
+		for _, key := range []string{"user.hash", "user.id", "user.name", "gitlab_mcp.instance"} {
 			t.Run(key, func(t *testing.T) {
 				if instrument := metricDimensionExists(t, c, key); instrument != "" {
 					t.Errorf("%q is a dimension of %s; identity must never reach a metric under any policy", key, instrument)

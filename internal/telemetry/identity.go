@@ -39,16 +39,18 @@ const (
 	// because it is the only value that is safe for an operator who has not
 	// thought about the question.
 	IdentityNone IdentityPolicy = "none"
-	// IdentityPseudonymous exports a stable per-user digest and no readable
+	// IdentityPseudonymous exports a stable per-caller digest and no readable
 	// identity. It keeps the one thing a shared endpoint genuinely needs,
 	// telling one caller's traffic from another's so a burst can be attributed
 	// and a session followed, without naming anyone. It is also the nearest
 	// thing this server has to the per-call correlation ADR-0008 records as
-	// missing.
+	// missing. The caller is the tenant, the instance and the user id
+	// together, so user 7 of two instances carries two digests.
 	IdentityPseudonymous IdentityPolicy = "pseudonymous"
-	// IdentityFull exports the user id and username already present in the
-	// stderr log line. What an enterprise auditing its own users wants, and
-	// what it is entitled to: those are its employees and its collector.
+	// IdentityFull exports the instance, the user id and the username already
+	// present in the stderr log line. What an enterprise auditing its own
+	// users wants, and what it is entitled to: those are its employees and its
+	// collector.
 	IdentityFull IdentityPolicy = "full"
 )
 
@@ -69,7 +71,7 @@ const EnvIdentityName = "GITLAB_MCP_TELEMETRY_IDENTITY"
 func PolicyDescription(policy IdentityPolicy) string {
 	switch policy {
 	case IdentityFull:
-		return "the GitLab user id and username"
+		return "the GitLab instance, user id and username"
 	case IdentityPseudonymous:
 		return "a per-process digest, with no readable identity"
 	case IdentityNone:
@@ -112,6 +114,13 @@ func ParseIdentityPolicy(value string) (IdentityPolicy, error) {
 const (
 	LogFieldUser   = "user"
 	LogFieldUserID = "user_id"
+	// LogFieldInstance is the instance the caller was resolved against, the
+	// other half of the tenant beside the user id. The exported copy collects
+	// it with the two above and records it only as the policy allows: under
+	// AttrInstance in full, inside the digest in pseudonymous, and not at all
+	// in none. It used to go out as written under every policy, the one field
+	// of the identity the policy did not govern.
+	LogFieldInstance = "instance"
 	// LogFieldCredentialHash is the handle the pool and the refusal paths name
 	// a client credential by: a keyed per-process digest of it
 	// (serverpool.CredentialHash), never any of its characters. It is declared
@@ -166,24 +175,50 @@ func (r *Redactor) Policy() IdentityPolicy {
 	return r.policy
 }
 
+// Identity is a caller as a signal may describe it: the tenant, which is the
+// pair of the instance the caller was resolved against and the user id GitLab
+// gave them there, and the username beside it. The three are the fields the
+// stderr log line already carries.
+//
+// It is the redactor's own type rather than the one the tool handlers resolve,
+// because this package must not know where an identity comes from; the server
+// is the one place that knows both and converts.
+type Identity struct {
+	// Instance is the canonical URL of the GitLab instance, or empty where
+	// the caller knows none, which is stdio, serving one.
+	Instance string
+	// UserID is GitLab's numeric user id, as a string. Empty means an
+	// unauthenticated call.
+	UserID string
+	// Username is the user's login name. It takes no part in the digest, since
+	// GitLab lets a user rename themselves.
+	Username string
+}
+
 // Attributes returns what may be recorded about a caller.
 //
-// userID and username are the fields the stderr log line already carries. An
-// empty userID means an unauthenticated call and yields nothing under every
-// policy: there is no identity to redact or to publish.
-func (r *Redactor) Attributes(userID, username string) []attribute.KeyValue {
-	if userID == "" {
+// The redactor takes the whole identity rather than the user alone (issue
+// 953): a GitLab user id is unique only within one instance, so user 7 of two
+// published instances are two people, and recording the user id alone made
+// them one under every policy. An empty user id means an unauthenticated call
+// and yields nothing under every policy: there is no identity to redact or to
+// publish.
+func (r *Redactor) Attributes(id Identity) []attribute.KeyValue {
+	if id.UserID == "" {
 		return nil
 	}
 	switch r.Policy() {
 	case IdentityFull:
-		attrs := []attribute.KeyValue{attribute.String(AttrUserID, userID)}
-		if username != "" {
-			attrs = append(attrs, attribute.String(AttrUserName, username))
+		attrs := []attribute.KeyValue{attribute.String(AttrUserID, id.UserID)}
+		if id.Username != "" {
+			attrs = append(attrs, attribute.String(AttrUserName, id.Username))
+		}
+		if id.Instance != "" {
+			attrs = append(attrs, attribute.String(AttrInstance, id.Instance))
 		}
 		return attrs
 	case IdentityPseudonymous:
-		digest := r.pseudonym(userID)
+		digest := r.pseudonym(id.Instance, id.UserID)
 		if digest == "" {
 			// A keyring that failed to build yields no digest, and an empty
 			// user.hash would read as one anonymous person while meaning "the
@@ -230,10 +265,30 @@ const (
 	// pseudonymity rather than to the construction: somebody who can correlate a
 	// known user's activity with a digest can link the two, which is why the
 	// mode is called pseudonymous and not anonymous.
+	//
+	// Since issue 953 the digest names the tenant, the instance and the user
+	// id together, so one value that already sat in a dashboard changed once:
+	// the same user on the same instance carries a different digest than a
+	// release before that one gave them.
 	AttrUserHash = "user.hash"
 )
 
-// pseudonym derives the stable per-process digest for a user id.
+// AttrInstance is the GitLab instance the caller was resolved against, which
+// the full policy records beside the user keys (issue 953). A user id means
+// nothing across instances, so the span naming user 7 has to say of which.
+//
+// Outside the user.* namespace because the registry defines no key there for
+// it and a key invented inside a namespace OpenTelemetry owns can be given
+// another meaning by a future release. Not server.address either: on this
+// server's span that convention names this server, the endpoint the client
+// called, and the GitLab client span already carries the instance's host under
+// it. A span attribute only, like the user keys: under --allow-any-gitlab-url
+// a caller names the instance, so as a metric dimension it would be one series
+// per name.
+const AttrInstance = "gitlab_mcp.instance"
+
+// pseudonym derives the stable per-process digest for a caller, the instance
+// and the user id together.
 //
 // HMAC rather than a plain hash of salt and id concatenated: the construction
 // is the one designed for keyed digests, and it removes any question about
@@ -241,6 +296,6 @@ const (
 // Truncated to 16 hex characters, which is 64 bits: far past collision concern
 // for the number of users one deployment sees, and short enough to read in a
 // trace viewer.
-func (r *Redactor) pseudonym(userID string) string {
-	return r.keys.IdentityPseudonym(userID)
+func (r *Redactor) pseudonym(instance, userID string) string {
+	return r.keys.IdentityPseudonym(instance, userID)
 }

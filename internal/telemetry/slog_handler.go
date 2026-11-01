@@ -193,9 +193,13 @@ var exportStrippedFields = map[string]bool{
 // slog.Group is an ordinary value a caller can pass and a group was enough to
 // smuggle user and user_id past the previous field check. What the policy
 // allows is re-added at the top level under the registry's user.* names, which
-// is what a backend already knows how to join on.
+// is what a backend already knows how to join on, and the instance under
+// [AttrInstance]. The three fields are one identity, so the redactor sees them
+// together, as a span's would: an instance written apart from the user id it
+// qualifies, on a record or a derived logger of its own, names nobody and is
+// dropped.
 func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
-	var userID, username string
+	var caller Identity
 	var strip func(attrs []slog.Attr) []slog.Attr
 	strip = func(attrs []slog.Attr) []slog.Attr {
 		out := make([]slog.Attr, 0, len(attrs))
@@ -209,11 +213,15 @@ func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
 			// records no block for a case expression, so mutation testing
 			// reads every mutant of one as never reached.
 			if attr.Key == LogFieldUserID {
-				userID = attr.Value.String()
+				caller.UserID = attr.Value.String()
 				continue
 			}
 			if attr.Key == LogFieldUser {
-				username = attr.Value.String()
+				caller.Username = attr.Value.String()
+				continue
+			}
+			if attr.Key == LogFieldInstance {
+				caller.Instance = attr.Value.String()
 				continue
 			}
 			if exportStrippedFields[attr.Key] {
@@ -233,7 +241,7 @@ func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
 	}
 
 	out := strip(attrs)
-	for _, attr := range identity.Attributes(userID, username) {
+	for _, attr := range identity.Attributes(caller) {
 		out = append(out, slog.String(string(attr.Key), attr.Value.AsString()))
 	}
 	return out

@@ -377,8 +377,8 @@ machine wants that `tls` block whichever scheme you use.
 The Compose file leaves `GITLAB_MCP_TELEMETRY_IDENTITY` at `none`, so the
 traces say what was done and nothing about who did it. With the backend on
 your own machine, `pseudonymous` lets Tempo tell one caller's traffic from
-another's without naming anybody, and `full` puts `user.id` and `user.name` on
-every span. Choose before you start it:
+another's without naming anybody, and `full` puts `user.id`, `user.name` and
+`gitlab_mcp.instance` on every span. Choose before you start it:
 
 ```bash
 GITLAB_MCP_TELEMETRY_IDENTITY=pseudonymous docker compose -f examples/telemetry/compose.yaml up -d
@@ -608,10 +608,11 @@ written inside it. Startup, shutdown and background records carry none, because
 there is no span to belong to.
 
 The identity policy governs these records as well, and the two legs differ on
-purpose. Your terminal keeps `user` and `user_id` whatever the policy says: you
-are reading your own server's output, and a setting about what leaves the
-process has no business editing that. The exported copy carries what the policy
-allows and under the same `user.*` names the spans use, so one query joins them.
+purpose. Your terminal keeps `user`, `user_id` and `instance` whatever the
+policy says: you are reading your own server's output, and a setting about what
+leaves the process has no business editing that. The exported copy carries what
+the policy allows and under the same names the spans use, `user.*` and
+`gitlab_mcp.instance`, so one query joins them.
 
 That last paragraph was untrue until recently, and a live deployment is what
 showed it: running on `pseudonymous`, which names nobody, its spans carried a
@@ -721,7 +722,7 @@ Off by default, in three steps:
 ```bash
 --telemetry-identity none          # the default: nothing about the caller
 --telemetry-identity pseudonymous  # a per-process digest: correlatable, not readable
---telemetry-identity full          # user.id and user.name
+--telemetry-identity full          # user.id, user.name and gitlab_mcp.instance
 ```
 
 or `GITLAB_MCP_TELEMETRY_IDENTITY`.
@@ -759,6 +760,12 @@ comes from 32 random bytes generated at startup and never written anywhere; with
 one thing it genuinely needs, telling one caller's traffic from another's, so a
 burst can be attributed and a session followed, without naming anybody.
 
+The digest is taken over the GitLab instance and the user id together, because
+a user id names one person only within one instance: on a deployment that
+publishes two instances, user 7 of each carries a digest of their own. Releases
+before 3.5.0 took it over the user id alone, so the same person carries a
+different digest after the upgrade, once.
+
 <Aside type="note" title="Two properties of the digest">
 By default it is **stable within a process and different after a restart**,
 deliberately: a digest stable across processes would let anyone holding two
@@ -773,8 +780,10 @@ activity with a digest can link the two. That is inherent to the technique, not
 to this implementation.
 </Aside>
 
-**`full`** emits `user.id` and `user.name`. What an organization auditing its own
-users wants, and what it is entitled to: those are its people and its collector.
+**`full`** emits `user.id` and `user.name`, and `gitlab_mcp.instance`, the
+GitLab instance the call was answered by, which tells user 7 of one published
+instance from user 7 of another. What an organization auditing its own users
+wants, and what it is entitled to: those are its people and its collector.
 
 None of these ever reach a **metric**, under any policy. A span carrying a user
 id costs one span; a metric dimension carrying one is a time series per person,

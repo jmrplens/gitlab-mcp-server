@@ -50,6 +50,19 @@ func TestResourcePseudonym_DoesNotContainTheURI(t *testing.T) {
 	}
 }
 
+// TestIdentityPseudonym_TheNULKeepsTheInstanceAndTheUserApart pins why the
+// tenant is digested with a NUL between its two halves rather than joined
+// end to end: concatenated, user 7 of an instance ending in 1 and user 17 of
+// the same instance without it are one input. No canonical instance URL holds
+// a NUL, so the NUL marks where the instance ends.
+func TestIdentityPseudonym_TheNULKeepsTheInstanceAndTheUserApart(t *testing.T) {
+	keys := testKeyring(t)
+
+	if a, b := keys.IdentityPseudonym("https://gitlab.example.com:8081", "7"), keys.IdentityPseudonym("https://gitlab.example.com:808", "17"); a == b {
+		t.Errorf("two tenants whose halves join to one string share the digest %q", a)
+	}
+}
+
 // TestResourcePseudonym_IsStableWithinAProcess pins the property that makes the
 // digest useful rather than merely safe: one watcher's polls have to be
 // recognizable as one watcher's polls, or an operator cannot tell a single
@@ -133,14 +146,14 @@ func TestIdentityPseudonym_AcrossARotation_StillAnswers(t *testing.T) {
 	ring.now = func() time.Time { return clock }
 	ring.rotatedAt = clock
 
-	before := ring.IdentityPseudonym("42")
+	before := ring.IdentityPseudonym(testInstance, "42")
 	if before == "" {
 		t.Fatal("a fresh keyring produced no pseudonym")
 	}
 
 	clock = clock.Add(2 * time.Hour)
 
-	identity := ring.IdentityPseudonym("42")
+	identity := ring.IdentityPseudonym(testInstance, "42")
 	if identity == "" {
 		t.Error("the identity pseudonym is empty after a rotation, so identity recording stopped rather than rotated")
 	}
@@ -164,7 +177,7 @@ func TestKeyring_WithoutDerivedKeys_RecordsNothing(t *testing.T) {
 
 	var ring Keyring
 
-	if got := ring.IdentityPseudonym("42"); got != "" {
+	if got := ring.IdentityPseudonym(testInstance, "42"); got != "" {
 		t.Errorf("IdentityPseudonym on a keyring holding no keys = %q, want nothing", got)
 	}
 	if got := ring.ResourcePseudonym("gitlab://project/42"); got != "" {

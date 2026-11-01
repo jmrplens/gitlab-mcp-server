@@ -101,14 +101,18 @@ func LogToolRefusal(ctx context.Context, req *mcp.CallToolRequest, tool, reason 
 
 // identityAttrs are the log fields naming who made a call.
 //
-// The instance is included only when the caller knows one, which is when the
-// deployment publishes several. A pinned deployment and stdio each serve one,
-// so the field would be a constant repeated on every line rather than
-// something to group by. See [UserIdentity.Instance].
+// The instance is included only when the caller knows one, which every HTTP
+// request does: the gate and the OAuth verifier each record the instance the
+// request selected. stdio resolves its one identity against its one instance
+// and records none, so the field would be a constant repeated on every line
+// rather than something to group by. See [UserIdentity.Instance].
+//
+// The field names are the telemetry package's, because the exported copy of
+// the line is rewritten by the identity policy, which finds them by name.
 func identityAttrs(user UserIdentity) []any {
 	attrs := []any{telemetry.LogFieldUser, user.Username, telemetry.LogFieldUserID, user.UserID}
 	if user.Instance != "" {
-		attrs = append(attrs, "instance", user.Instance)
+		attrs = append(attrs, telemetry.LogFieldInstance, user.Instance)
 	}
 	return attrs
 }

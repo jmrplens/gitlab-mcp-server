@@ -7,6 +7,8 @@ import (
 	"context"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
 )
 
 // UserIdentity holds the authenticated user's identity.
@@ -26,10 +28,12 @@ type UserIdentity struct {
 	// place it matters.
 	//
 	// Empty where there is nothing to say: stdio resolves one identity at
-	// startup against one instance, and a deployment that pins --gitlab-url has
-	// only the one. The field is filled where it is already known rather than
-	// resolved again: the HTTP gate computes the instance per request to pick a
-	// pool entry and used to throw it away.
+	// startup against one instance. The field is filled where it is already
+	// known rather than resolved again: the HTTP gate computes the instance per
+	// request to pick a pool entry and used to throw it away, and the OAuth
+	// verifier records the instance it verified the token against in the
+	// admission (oauth.InstanceKey), which an OAuth tool call's identity is
+	// read from and used to drop (issue 953).
 	Instance string
 }
 
@@ -61,13 +65,21 @@ func IdentityFromContext(ctx context.Context) UserIdentity {
 //  2. Context-stored identity (populated at startup in stdio mode)
 //
 // Returns a zero-value UserIdentity if neither source has identity.
+//
+// An identity read from the token info keeps the instance the verifier
+// recorded beside the user (oauth.InstanceKey), and one recorded without it
+// resolves to no instance rather than to the context's: the two sources are
+// never mixed, so an identity cannot name one instance's user under another
+// instance.
 func ResolveIdentity(ctx context.Context, req *mcp.CallToolRequest) UserIdentity {
 	if req != nil && req.Extra != nil && req.Extra.TokenInfo != nil {
 		info := req.Extra.TokenInfo
 		username, _ := info.Extra["username"].(string)
+		instance, _ := info.Extra[oauth.InstanceKey].(string)
 		return UserIdentity{
 			UserID:   info.UserID,
 			Username: username,
+			Instance: instance,
 		}
 	}
 	return IdentityFromContext(ctx)

@@ -861,6 +861,151 @@ func TestOAuth_MultiInstanceAllowList(t *testing.T) {
 	})
 }
 
+// TestOAuth_OneUserIDOnTwoInstances_IsTwoCallers is the measure issue 953 set
+// for the instance an OAuth tool call lost (F-28).
+//
+// A GitLab user id is unique only within one instance, so a deployment that
+// publishes two of them can be called by user 7 of each, who are two people.
+// In oauth mode the handlers resolve a tool call's caller from the verifier's
+// admission, which carried the user id and the name and no instance, so both
+// calls below were logged as user 7 and nothing else, and the telemetry
+// identity policy recorded the user id alone whatever the mode. Each instance
+// here answers the same token as user 7 with the same name, so the instance is
+// the only thing that can tell the two callers apart: on the stderr line of
+// each tool call, on its span under the full policy, and on the exported copy
+// of its log line, which has to name the caller as the span does.
+func TestOAuth_OneUserIDOnTwoInstances_IsTwoCallers(t *testing.T) {
+	const project = "group/project"
+	issues := "/api/v4/projects/" + url.PathEscape(project) + "/issues"
+	routes := map[string]http.HandlerFunc{issues: func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}}
+	instances := []*privacyGitLab{startPrivacyGitLab(t, routes), startPrivacyGitLab(t, routes)}
+
+	c := startCollector(t)
+	env := collectorEnv(c)
+	env["GITLAB_MCP_TELEMETRY_IDENTITY"] = "full"
+	env["OTEL_BLRP_SCHEDULE_DELAY"] = "100"
+	srv := startServer(t, env,
+		"--auth-mode=oauth",
+		"--gitlab-url="+instances[0].url,
+		"--gitlab-url="+instances[1].url,
+		"--public-url="+publicURL,
+	)
+
+	// sequential: the two calls are the traffic the subtests below read, not cases of their own
+	for i, instance := range instances {
+		call := executeAction(i+1, "issue.list", `{"project_id":"`+project+`"}`)
+		call.headers = map[string]string{
+			"Authorization":    "Bearer gloas-user-seven",
+			"GITLAB-URL":       instance.url,
+			"Mcp-Param-Action": "issue.list",
+		}
+		got := srv.do(t, call)
+		if got.status != http.StatusOK {
+			t.Fatalf("the tool call on %s answered %d: %s", instance.url, got.status, got.body)
+		}
+		assertReached(t, "the tool call on "+instance.url, got)
+		instance.assertCalled(t, issues)
+	}
+	want := []string{instances[0].url, instances[1].url}
+	slices.Sort(want)
+
+	t.Run("each stderr line names its instance", func(t *testing.T) {
+		if got := loggedInstancesOfUserSeven(srv.logs()); !slices.Equal(got, want) {
+			t.Errorf("the tool calls of user 7 were logged under instances %v, want %v:\n%s", got, want, srv.logs())
+		}
+	})
+
+	t.Run("each span names its instance", func(t *testing.T) {
+		got := awaitInstances(func() []string { return spannedInstancesOfUserSeven(t, c) }, want)
+		if !slices.Equal(got, want) {
+			t.Errorf("the tools/call spans of user 7 carry gitlab_mcp.instance %v, want %v", got, want)
+		}
+	})
+
+	t.Run("each exported log record names its instance as the span does", func(t *testing.T) {
+		got := awaitInstances(func() []string { return exportedInstancesOfUserSeven(t, c) }, want)
+		if !slices.Equal(got, want) {
+			t.Errorf("the exported tool-call records of user 7 carry gitlab_mcp.instance %v, want %v", got, want)
+		}
+	})
+}
+
+// spannedInstancesOfUserSeven returns the gitlab_mcp.instance of every
+// tools/call span of user 7 the collector has received.
+func spannedInstancesOfUserSeven(t *testing.T, c *collector) []string {
+	t.Helper()
+	var seen []string
+	for _, span := range c.spans(t) {
+		if id, _ := stringAttribute(span.GetAttributes(), "user.id"); id != "7" || !strings.HasPrefix(span.GetName(), "tools/call") {
+			continue
+		}
+		if instance, carried := stringAttribute(span.GetAttributes(), "gitlab_mcp.instance"); carried {
+			seen = append(seen, instance)
+		}
+	}
+	return seen
+}
+
+// exportedInstancesOfUserSeven returns the gitlab_mcp.instance of every
+// exported tool-call record of user 7, and fails on one that still carries
+// the stderr field instance: the policy names the instance gitlab_mcp.instance
+// on the exported copy, as on the span.
+func exportedInstancesOfUserSeven(t *testing.T, c *collector) []string {
+	t.Helper()
+	var seen []string
+	for _, record := range c.logRecords(t) {
+		if id, _ := stringAttribute(record.GetAttributes(), "user.id"); id != "7" || !strings.HasPrefix(record.GetBody().GetStringValue(), "tool call ") {
+			continue
+		}
+		if _, raw := stringAttribute(record.GetAttributes(), "instance"); raw {
+			t.Errorf("an exported tool-call record carries the stderr field instance: %v", record.GetAttributes())
+		}
+		if instance, carried := stringAttribute(record.GetAttributes(), "gitlab_mcp.instance"); carried {
+			seen = append(seen, instance)
+		}
+	}
+	return seen
+}
+
+// awaitInstances polls collect until it reports every instance of want, for
+// as long as the exporters take to send a batch, and returns the distinct
+// instances it last reported, sorted.
+func awaitInstances(collect func() []string, want []string) []string {
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		got := slices.Compact(slices.Sorted(slices.Values(collect())))
+		if slices.Equal(got, want) || time.Now().After(deadline) {
+			return got
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// loggedInstancesOfUserSeven reads the server's stderr for the tool-call lines
+// of user 7 and returns the distinct instances they name, sorted. A line with
+// no instance names none, which is what an OAuth tool call wrote before issue
+// 953.
+func loggedInstancesOfUserSeven(logs string) []string {
+	var seen []string
+	for line := range strings.Lines(logs) {
+		var record struct {
+			Msg      string `json:"msg"`
+			UserID   string `json:"user_id"`
+			Instance string `json:"instance"`
+		}
+		if json.Unmarshal([]byte(line), &record) != nil || record.UserID != "7" || !strings.HasPrefix(record.Msg, "tool call ") {
+			continue
+		}
+		if record.Instance != "" {
+			seen = append(seen, record.Instance)
+		}
+	}
+	return slices.Compact(slices.Sorted(slices.Values(seen)))
+}
+
 // TestOAuth_PlaintextInstanceIsRefusedAtStartup verifies that the https-only
 // rule covers EVERY published instance, not just the first.
 //

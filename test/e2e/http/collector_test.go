@@ -13,6 +13,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // export is one OTLP payload the server sent us.
@@ -104,6 +111,69 @@ func (c *collector) received() []export {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]export(nil), c.exports...)
+}
+
+// spans decodes every trace payload that has arrived so far.
+//
+// Decoded rather than searched, unlike the leak assertions: those prove a
+// value is absent from every field at once, while a test that needs a value
+// present on one attribute of one kind of span has to know which span carried
+// it. A payload that does not decode is reported and skipped.
+func (c *collector) spans(t *testing.T) []*tracepb.Span {
+	t.Helper()
+
+	var spans []*tracepb.Span
+	for _, e := range c.received() {
+		if e.path != "/v1/traces" {
+			continue
+		}
+		var payload coltracepb.ExportTraceServiceRequest
+		if err := proto.Unmarshal(e.body, &payload); err != nil {
+			t.Errorf("a trace payload does not decode: %v", err)
+			continue
+		}
+		for _, resource := range payload.GetResourceSpans() {
+			for _, scope := range resource.GetScopeSpans() {
+				spans = append(spans, scope.GetSpans()...)
+			}
+		}
+	}
+	return spans
+}
+
+// logRecords decodes every log payload that has arrived so far, as [spans]
+// decodes the traces.
+func (c *collector) logRecords(t *testing.T) []*logspb.LogRecord {
+	t.Helper()
+
+	var records []*logspb.LogRecord
+	for _, e := range c.received() {
+		if e.path != "/v1/logs" {
+			continue
+		}
+		var payload collogspb.ExportLogsServiceRequest
+		if err := proto.Unmarshal(e.body, &payload); err != nil {
+			t.Errorf("a log payload does not decode: %v", err)
+			continue
+		}
+		for _, resource := range payload.GetResourceLogs() {
+			for _, scope := range resource.GetScopeLogs() {
+				records = append(records, scope.GetLogRecords()...)
+			}
+		}
+	}
+	return records
+}
+
+// stringAttribute is the string value key carries among attrs, and whether it
+// carries one at all.
+func stringAttribute(attrs []*commonpb.KeyValue, key string) (string, bool) {
+	for _, attr := range attrs {
+		if attr.GetKey() == key {
+			return attr.GetValue().GetStringValue(), true
+		}
+	}
+	return "", false
 }
 
 // assertNoPayloadContains fails when any exported payload carries a value that
