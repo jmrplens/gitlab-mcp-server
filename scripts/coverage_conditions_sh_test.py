@@ -1332,6 +1332,8 @@ class CoverageConditionsTest(unittest.TestCase):
              "GOBCO_INSTALL_PAUSE=-1 is not a whole number of seconds"),
             ("a fractional pause", ("--install",), {"GOBCO_INSTALL_PAUSE": "1.5"},
              "GOBCO_INSTALL_PAUSE=1.5 is not a whole number of seconds"),
+            ("an empty pause", ("--install",), {"GOBCO_INSTALL_PAUSE": ""},
+             "GOBCO_INSTALL_PAUSE= is not a whole number of seconds"),
             ("a package beside it", ("--install", "./internal/plain"), {}, "--install takes no other argument"),
         ]
         for name, args, env, said in cases:

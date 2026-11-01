@@ -150,13 +150,15 @@ taken one way in the words it uses for a condition. The two modes measure
 different things: `return a == b || c` is two conditions and no branch, and
 `if a && b` is two conditions and one branch.
 
-**gobco runs from `PATH` once it is installed, so a run needs no network.**
-The script runs the gobco `PATH` finds when it reports the release the script
-pins (`gobco -version`), and `go run` of that release otherwise. `go run` asks
-the module proxy for the module's versions on every run, even with the module
-in the cache, and a macOS runner that lost name resolution failed CI's
-condition step twice in two days that way without measuring anything
-(issue 1515). `scripts/coverage-conditions.sh --install` runs `go install` of
+**gobco runs from `PATH` once it is installed, so a run asks the module proxy
+for nothing about gobco.** The script runs the gobco `PATH` finds when it
+reports the release the script pins (`gobco -version`), and `go run` of that
+release otherwise. `go run` asks the module proxy for the module's versions on
+every run, even with the module in the cache, and a macOS runner that lost
+name resolution failed CI's condition step twice in two days that way without
+measuring anything (issue 1515). The package's own dependencies still come
+from the module cache, as for any `go test`, so on a cold cache run
+`go mod download` first. `scripts/coverage-conditions.sh --install` runs `go install` of
 the pinned release, up to three attempts with `GOBCO_INSTALL_PAUSE` seconds
 between them (10 unless set), and fails when `PATH` does not then find that
 release, so an install that left it where `PATH` does not look fails there

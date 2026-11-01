@@ -184,13 +184,14 @@
 # `coverage-conditions.sh --install` puts it there, and measures nothing: go
 # install of the pinned release, in at most three attempts with
 # GOBCO_INSTALL_PAUSE seconds between them (10 unless set; anything but a
-# whole number is refused before anything runs), skipped when PATH already
-# finds the pinned release. The gobco PATH finds is then held to that release,
-# so an install that left it where PATH does not look, or behind another
-# release, fails there rather than leaving every measurement after it to go
-# run. It exits 0 once PATH finds the pinned release, 1 when it does not, and 2
-# for a pause or an argument it cannot read. Every workflow job that runs this
-# script runs it once first, so each measurement of the job needs no network.
+# whole number, an empty value included, is refused before anything runs),
+# skipped when PATH already finds the pinned release. The gobco PATH finds is
+# then held to that release, so an install that left it where PATH does not
+# look, or behind another release, fails there rather than leaving every
+# measurement after it to go run. It exits 0 once PATH finds the pinned
+# release, 1 when it does not, and 2 for a pause or an argument it cannot read. Every workflow job that runs this
+# script runs it once first, so no measurement of the job asks the module proxy
+# for gobco; the package's own dependencies still come from the module cache.
 set -euo pipefail
 
 # The files a run leaves out are listed in the order a glob returns them,
@@ -211,7 +212,7 @@ if [ "${1:-}" = --install ]; then
     echo "usage: coverage-conditions.sh --install, and --install takes no other argument" >&2
     exit 2
   fi
-  pause=${GOBCO_INSTALL_PAUSE:-10}
+  pause=${GOBCO_INSTALL_PAUSE-10}
   if ! [[ $pause =~ ^[0-9]+$ ]]; then
     echo "gobco: GOBCO_INSTALL_PAUSE=$pause is not a whole number of seconds; refusing to install" >&2
     exit 2
