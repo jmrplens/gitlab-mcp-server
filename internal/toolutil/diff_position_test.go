@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -892,4 +893,73 @@ func searchSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestValidateImagePosition_EachMissingField_IsNamed holds the image check to
+// GitLab's rule for an image position: width, height, x and y all present,
+// where a 0 is present. A complete position passes, the four at 0 included,
+// and the refusal names exactly the fields left out, in that order.
+func TestValidateImagePosition_EachMissingField_IsNamed(t *testing.T) {
+	width, height, x, y := new(int64(64)), new(int64(32)), new(12.5), new(8.0)
+	zero, origin := new(int64(0)), new(0.0)
+	for _, tc := range []struct {
+		name          string
+		width, height *int64
+		x, y          *float64
+		wantMissing   string
+	}{
+		{name: "all four", width: width, height: height, x: x, y: y},
+		{name: "all four at zero", width: zero, height: zero, x: origin, y: origin},
+		{name: "no width", height: height, x: x, y: y, wantMissing: "width"},
+		{name: "no height", width: width, x: x, y: y, wantMissing: "height"},
+		{name: "no x", width: width, height: height, y: y, wantMissing: "x"},
+		{name: "no y", width: width, height: height, x: x, wantMissing: "y"},
+		{name: "none of them", wantMissing: "width, height, x, y"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateImagePosition(tc.width, tc.height, tc.x, tc.y)
+			if tc.wantMissing == "" {
+				if err != nil {
+					t.Errorf("ValidateImagePosition() = %v, want nil for a complete image position", err)
+				}
+				return
+			}
+			want := "an image position needs width, height, x and y (missing: " + tc.wantMissing + "): "
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("ValidateImagePosition() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
+}
+
+// TestValidateFilePosition_EachMissingPath_IsNamed holds the file check to
+// GitLab's rule for a file position: old_path and new_path both present,
+// where a path of blanks is not. A renamed file passes as well as an
+// unchanged one, and the refusal names exactly the paths left out.
+func TestValidateFilePosition_EachMissingPath_IsNamed(t *testing.T) {
+	for _, tc := range []struct {
+		name, oldPath, newPath, wantMissing string
+	}{
+		{name: "the same path in both", oldPath: "docs/a.md", newPath: "docs/a.md"},
+		{name: "a renamed file", oldPath: "docs/old.md", newPath: "docs/new.md"},
+		{name: "no old path", newPath: "docs/a.md", wantMissing: "old_path"},
+		{name: "no new path", oldPath: "docs/a.md", wantMissing: "new_path"},
+		{name: "a blank old path", oldPath: " \t", newPath: "docs/a.md", wantMissing: "old_path"},
+		{name: "a blank new path", oldPath: "docs/a.md", newPath: "\n", wantMissing: "new_path"},
+		{name: "neither", wantMissing: "old_path, new_path"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateFilePosition(tc.oldPath, tc.newPath)
+			if tc.wantMissing == "" {
+				if err != nil {
+					t.Errorf("ValidateFilePosition() = %v, want nil for a complete file position", err)
+				}
+				return
+			}
+			want := "a file position needs both old_path and new_path (missing: " + tc.wantMissing + "): "
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("ValidateFilePosition() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
 }
