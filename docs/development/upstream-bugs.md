@@ -175,6 +175,7 @@ for the fork, branch, fix, test and MR workflow.
   - [The custom role and broadcast message pages list a level the API refuses](#the-custom-role-and-broadcast-message-pages-list-a-level-the-api-refuses)
   - [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does)
   - [The service account token list examples sort by a value their pages do not list](#the-service-account-token-list-examples-sort-by-a-value-their-pages-do-not-list)
+  - [A merge request creation can be refused for a branch that exists, from a stale branch name cache](#a-merge-request-creation-can-be-refused-for-a-branch-that-exists-from-a-stale-branch-name-cache)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -412,6 +413,7 @@ readable without opening the tracker:
 | 149 | client-go | [Five response structs miss keys this server reads through a raw request instead](#five-response-structs-miss-keys-this-server-reads-through-a-raw-request-instead) | No | No | No | No | Yes, the deployment, job, approval rule, commit signature and epic board reads decode into structs of their own |
 | 150 | client-go | [Routes this server or its e2e suite sends have no client-go method, or one that takes no options](#routes-this-server-or-its-e2e-suite-sends-have-no-client-go-method-or-one-that-takes-no-options) | No | No | No | No | Yes, the Orbit reads of the MCP endpoint, the e2e fixture and the model registry scenario send their own request, and eighteen paginated lists write their query through a request option |
 | 151 | client-go | [`UploadRequest` writes only the first value of each field](#uploadrequest-writes-only-the-first-value-of-each-field) | No | No | No | No | Yes, the project and group creates send a list beside an avatar as one comma-separated value, and the group create refuses its alert list beside one; a unit test pins the behaviour |
+| 152 | gitlab-org/gitlab | [A merge request creation can be refused for a branch that exists](#a-merge-request-creation-can-be-refused-for-a-branch-that-exists-from-a-stale-branch-name-cache) | Yes, by GitLab, [gitlab-org/gitlab#506430](https://gitlab.com/gitlab-org/gitlab/-/issues/506430), open | No | No | No; it failed the e2e suite, not a tool | Yes, in the e2e fixture: `fixture.NewMergeRequest` tries the refusal again once the branch name cache lists the branch |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -16033,6 +16035,90 @@ refuse `asc` and `desc` as the schema here does.
 [issue 1165](https://github.com/jmrplens/gitlab-mcp-server/issues/1165)'s
 first layer, which replaced the two lists' `asc` and `desc` enum with the
 documented orders and read the finder to see which values GitLab applies.
+
+### A merge request creation can be refused for a branch that exists, from a stale branch name cache
+
+- **Reported**: yes, by GitLab,
+  [gitlab-org/gitlab#506430](https://gitlab.com/gitlab-org/gitlab/-/issues/506430)
+  ("`Gitlab::RepositorySetCache#fetch` is not atomic"), opened on 2024-11-26
+  with a spec that reproduces the race and names `branch_names_include?` as a
+  check it makes answer wrongly. Read at 21:55 UTC on 2026-10-31: open,
+  `type::bug` and `severity::4`, no assignee, milestone 19.6 after
+  `missed:19.2` to `missed:19.5`. We have written nothing on it.
+- **In review**: no.
+- **Merged**: no. Read at `v19.5.3-ee`, the release the run below tested.
+  Two flags would each take the merge request validation off the racing
+  cache, and both are off by default there: `ref_existence_check_gitaly`
+  (beta, since 18.4), which answers `Repository#branch_exists?` from Gitaly,
+  and `ref_cache_with_rebuild_queue` (work in progress, since 18.9).
+- **Blocking**: no. The tools send the creation and report GitLab's refusal;
+  what it failed was the e2e suite, twice.
+- **Workaround**: yes, in the e2e fixture only. `fixture.NewMergeRequest`
+  (`test/e2e/internal/fixture/merge_request.go`) reads a `400` whose
+  validation errors say a branch "does not exist", drains Sidekiq, asks
+  `HEAD /projects/:id/repository/branches/:branch` until it answers a success,
+  and tries the creation again; a branch the cache does not list within 30
+  seconds (60 on a licensed instance) fails the test with GitLab's refusal
+  after one wait. The two scenarios that create a merge request through the
+  server right after a branch and a commit of their own
+  (`TestMergeRequest_Create_FromABranchWithACommit` and the merge request of
+  `b7_issue_relations_test.go`) do not retry it. What retires the workaround
+  is a release the suite runs against that carries a fix, or either flag on
+  by default.
+
+**Where**: `MergeRequest#validate_branch_existence`
+(`app/models/merge_request.rb`, `validate ... on: :create`) adds
+`does not exist` for each branch `nonexistent_branches` names, which asks
+`Repository#branch_exists?` (`app/models/repository.rb`). With
+`ref_existence_check_gitaly` off that is `branch_names_include?`
+(`lib/gitlab/repository_cache_adapter.rb`), a membership test of the Redis set
+`Gitlab::RepositorySetCache#fetch` (`lib/gitlab/repository_set_cache.rb`)
+fills, reading Gitaly only when the set does not exist. `lib/api/helpers/merge_requests_helpers.rb`
+answers the error as `400 {"message":{"source_branch":["does not exist"]}}`.
+The commits API checks the same cache before a write
+(`Commits::CreateService`, "You can only create or edit files when you are
+on a branch"), and so does `HEAD /projects/:id/repository/branches/:branch`
+(`lib/api/branches.rb`), while the `GET` of the same path reads the branch
+from Gitaly.
+
+**What**: `fetch` reads the set, and when it is missing lists the branches
+from Gitaly and writes the list back, with no check that the set was not
+emptied in between. Creating a branch empties the set synchronously
+(`Repository#after_create_branch`), and every push's PostReceive job empties
+and refills it under a lease (`Repositories::PostReceiveWorker#expire_branch_cache`,
+whose comment describes the race between two such jobs). A request or a job
+that started listing before the branch was created and writes after the set
+was emptied leaves a list without the branch, and every check that reads the
+cache says the branch does not exist until the next PostReceive refills it.
+`MergeRequests::BuildService#ref_exists_in_gitaly?` covers that mismatch for
+the web form ("fallback if there is a mismatch between the cache and
+repository state"), and the API creation does not go through it. On the
+release rehearsal of 2026-10-31, against GitLab 19.5.3,
+`TestCommit_Rewrite_CherryPicksRevertsAndFindsMergeRequests/individual`
+created a branch, committed to it on the first attempt and was refused the
+merge request from it 1.8 seconds after the subtest began, project 58
+answering `400 {message: {source_branch: [does not exist]}}`; the commit had
+passed the same cache check moments before, so the stale list landed between
+the two. The weekly e2e run of 2026-10-26 failed the same test the same way
+on its meta subtest. Both failures came on the second or third surface of a
+project the scenario shares across surfaces, where the previous surface's
+pushes, pipelines and merge request are still being processed. In the same
+rehearsal `TestMergeRequest_Create_FromABranchWithACommit/individual` met the
+commits API's form of the refusal, which its retry waited out in under two
+seconds.
+
+**What it costs this server**: nothing at run time it can avoid. A client that
+creates a merge request right after creating its branch can be refused for a
+branch that exists, and is told GitLab's refusal as it came; asking again a
+few seconds later works.
+
+**Proposal**: none of ours. The issue carries the reproduction, and the fix
+is GitLab's choice among a write that cannot overwrite a newer emptying, the
+rebuild queue behind `ref_cache_with_rebuild_queue`, or
+`ref_existence_check_gitaly` on by default.
+
+**How we found it**: the e2e gate of the release rehearsal of 2026-10-31,
+whose failure was read against GitLab's source at `v19.5.3-ee`.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

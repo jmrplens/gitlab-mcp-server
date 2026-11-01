@@ -99,6 +99,9 @@ type stubGitLab struct {
 	// branchMisses is how many branch reads answer 404 before the branch
 	// appears, which is how a stub says "not yet".
 	branchMisses int
+	// branchReads records the method of every branch read, since GitLab
+	// answers a HEAD and a GET of a branch from different sources.
+	branchReads []string
 	// mergeStatuses and pipelineStatuses are answered one per read, the
 	// last repeating.
 	mergeStatuses    []string
@@ -584,11 +587,15 @@ func (s *stubGitLab) listRunners(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.runners)
 }
 
-// branch answers 404 until the configured misses are spent, then the
-// branch.
+// branch answers the refusal a test asked for on the branch's path, or 404
+// until the configured misses are spent, then the branch.
 func (s *stubGitLab) branch(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.branchReads = append(s.branchReads, r.Method)
+	if s.refuse(w, r) {
+		return
+	}
 	name, _ := url.PathUnescape(r.PathValue("branch"))
 	if s.branchMisses > 0 {
 		s.branchMisses--
@@ -714,6 +721,13 @@ func (s *stubGitLab) recordedRequests() []stubRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]stubRequest(nil), s.requests...)
+}
+
+// recordedBranchReads returns the method of every branch read, in order.
+func (s *stubGitLab) recordedBranchReads() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.branchReads...)
 }
 
 // The three shapes an answer takes: a body, an empty success, and a refusal.
@@ -1037,6 +1051,14 @@ var builderFatalCases = map[string]func(t *testing.T){
 		scriptVulnerableProject(stub, "success", `{"errors":[{"message":"Field 'vulnerabilities' doesn't exist"}]}`)
 		NewVulnerableProject(e)
 	},
+	"merge request branch never listed": func(t *testing.T) {
+		t.Helper()
+		shortBranchListedWait(t, 200*time.Millisecond)
+		stub, e := detachedStub(t)
+		stub.configure(func() { stub.branchMisses = 1 << 20 })
+		stub.answers(http.MethodPost, "/api/v4/projects/2/merge_requests", branchMissingRefusal("source_branch"))
+		NewMergeRequest(e, Project{ID: 2}, "feature", "main", "t")
+	},
 }
 
 // TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking checks the
@@ -1075,6 +1097,11 @@ func TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking(t *testing.T) {
 		{name: "vulnerable project report", want: []string{
 			"pipeline 77 published a SAST report and GitLab's own vulnerability report of " + vulnerableProjectPath + " holds nothing after ",
 			"GitLab refused the document: Field 'vulnerabilities' doesn't exist",
+		}},
+		{name: "merge request branch never listed", want: []string{
+			`creating a merge request "feature" -> "main" in project 2: create merge request failed after 1 attempt(s): `,
+			"source_branch: [does not exist]",
+			`HEAD of branch "feature" in project 2: HTTP 404`,
 		}},
 	}
 	for _, testCase := range cases {

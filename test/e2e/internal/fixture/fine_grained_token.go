@@ -201,6 +201,10 @@ func mergeScopes(scopes []GranularScope) []GranularScope {
 // request 404, for a boundary the user cannot see, and only afterwards the 403
 // that names the permission the grant lacks, which is the answer the scenario
 // is about.
+//
+// So does a scenario that creates an issue assigned to a user it has just made
+// a member of a private project: until the same job has run, the create drops
+// that assignee as one who cannot read the issue, and answers 201 all the same.
 func AwaitProjectAccess(e *harness.Env, user User, projects ...Project) {
 	e.T.Helper()
 	reader := NewToken(e, user)

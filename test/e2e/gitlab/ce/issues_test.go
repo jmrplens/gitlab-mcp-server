@@ -58,7 +58,18 @@ func TestIssueCreate_TwoAssignees_OnTheFreeTier_KeepsOnlyTheFirst(t *testing.T) 
 }
 
 // buildAssigneePair creates the project and its two members once on the
-// parent Env, since GitLab assigns an issue only to a user who can read it.
+// parent Env, and waits until both can read the project, since GitLab assigns
+// an issue only to a user who can read it.
+//
+// The membership is written at once and the authorization it grants by a
+// background job (ProjectRecalculatePerUserWorker), and until that job has
+// run IssuableBaseService drops the first assignee as one who cannot read the
+// issue, which leaves the issue with none: on a GitLab 19.5.3 under the
+// suite's load the dynamic and meta surfaces created their issues so, and the
+// individual one, created half a second after the dynamic one, kept the
+// first. The second user is waited
+// for too, so that a second assignee GitLab drops is dropped for the license
+// and not for a membership it could not see yet.
 func buildAssigneePair(e *harness.Env) assigneePair {
 	e.T.Helper()
 
@@ -69,5 +80,7 @@ func buildAssigneePair(e *harness.Env) assigneePair {
 	}
 	fixture.AddProjectMember(e, pair.project, pair.first, gl.DeveloperPermissions)
 	fixture.AddProjectMember(e, pair.project, pair.second, gl.DeveloperPermissions)
+	fixture.AwaitProjectAccess(e, pair.first, pair.project)
+	fixture.AwaitProjectAccess(e, pair.second, pair.project)
 	return pair
 }

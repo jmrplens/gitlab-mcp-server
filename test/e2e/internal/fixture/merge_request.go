@@ -12,13 +12,23 @@
 // the commits, diff versions and mergeability endpoints answer with nothing.
 // Every test that reads any of those would be flaky on a slow Docker GitLab
 // without the wait below, and none of them should have to know why.
+//
+// The creation itself can be refused for a branch that exists. GitLab checks
+// both branches against a Redis cache of the project's branch names, and a
+// read that listed the branches from Gitaly before the source branch was
+// created can write its list back after the creation emptied the cache
+// (upstream-bugs row 152). The cache then answers that the branch does not
+// exist until a push job refreshes it, a few seconds later.
 
 package fixture
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -48,20 +58,29 @@ type MergeRequest struct {
 // until GitLab has finished preparing it. The source branch needs at least
 // one commit the target does not have, or GitLab creates nothing to merge.
 //
+// A creation refused because a branch "does not exist" is tried again once
+// GitLab's branch name cache lists that branch ([awaitBranchesListed]), and
+// failed with GitLab's refusal when the cache does not list it within the
+// wait, which is what a branch that really is missing looks like. The refusal
+// is a validation error, so the attempt it answers saved nothing.
+//
 // The merge request goes with the project, so nothing is registered.
 func NewMergeRequest(e *harness.Env, project Project, source, target, title string) MergeRequest {
 	e.T.Helper()
 
-	mr, err := retryTransient(e, "create merge request", createRetries, func() (MergeRequest, error) {
+	mr, err := harness.Retry(e.Ctx, e.T, "create merge request", createRetries, retryBaseDelay, func(int) (MergeRequest, bool, string, error) {
 		created, _, err := e.Client().GL().MergeRequests.CreateMergeRequest(project.ID, &gl.CreateMergeRequestOptions{
 			Title:        new(title),
 			SourceBranch: new(source),
 			TargetBranch: new(target),
 		}, gl.WithContext(e.Ctx))
-		if err != nil {
-			return MergeRequest{}, err
+		if err == nil {
+			return mergeRequestOf(created), false, "", nil
 		}
-		return mergeRequestOf(created), nil
+		if unlisted := unlistedBranches(err, source, target); len(unlisted) > 0 {
+			return MergeRequest{}, awaitBranchesListed(e, project, unlisted), branchUnlistedReason, err
+		}
+		return MergeRequest{}, IsRetryable(err), describeRetry(err), err
 	})
 	if err != nil {
 		e.T.Fatalf("creating a merge request %q -> %q in project %d: %v", source, target, project.ID, err)
@@ -69,6 +88,111 @@ func NewMergeRequest(e *harness.Env, project Project, source, target, title stri
 
 	mr.Status = WaitForMergeRequest(e, project, mr.IID)
 	return mr
+}
+
+// branchUnlistedReason is how a retried refusal of an existing branch reads in
+// the log.
+const branchUnlistedReason = "branch missing from GitLab's branch name cache"
+
+// branchMissingMessage is the validation error GitLab gives a merge request
+// branch its branch name cache does not list.
+const branchMissingMessage = "does not exist"
+
+// unlistedBranches returns the branches a merge request creation was refused
+// for as not existing, the source before the target, and none for any other
+// failure.
+//
+// GitLab answers that refusal 400 with the validation errors keyed by
+// attribute, {"message":{"source_branch":["does not exist"]}}, so the body is
+// read rather than the text client-go renders from it.
+func unlistedBranches(err error, source, target string) []string {
+	refusal, isRefusal := errors.AsType[*gl.ErrorResponse](err)
+	if !isRefusal || statusOf(err) != http.StatusBadRequest {
+		return nil
+	}
+	var body struct {
+		Message map[string][]string `json:"message"`
+	}
+	if json.Unmarshal(refusal.Body, &body) != nil {
+		return nil
+	}
+	var unlisted []string
+	if slices.Contains(body.Message["source_branch"], branchMissingMessage) {
+		unlisted = append(unlisted, source)
+	}
+	if slices.Contains(body.Message["target_branch"], branchMissingMessage) {
+		unlisted = append(unlisted, target)
+	}
+	return unlisted
+}
+
+// The wait for GitLab's branch name cache to list a branch again, larger on a
+// licensed instance like every wait here, and how often it is asked.
+// Variables so the package's own tests can bound a wait that never ends.
+var (
+	branchListedWait           = 30 * time.Second
+	enterpriseBranchListedWait = 60 * time.Second
+	branchListedPollInterval   = 250 * time.Millisecond
+)
+
+// branchListedRequestGrace is how long a HEAD still in flight when the wait
+// runs out may take to be answered, beyond the wait itself.
+const branchListedRequestGrace = 5 * time.Second
+
+// awaitBranchesListed holds until GitLab's branch name cache lists every
+// branch named, and reports whether it did within the wait. It never fails the
+// test itself: a branch the cache does not list in time is logged with what
+// was last seen, and the caller fails with GitLab's own refusal.
+//
+// Sidekiq is drained first, since what puts a branch back into the cache is
+// the PostReceive job of a push to the project.
+func awaitBranchesListed(e *harness.Env, project Project, branches []string) bool {
+	e.T.Helper()
+
+	DrainSidekiq(e.Ctx, e.Client())
+	wait := budget(e, branchListedWait, enterpriseBranchListedWait)
+	for _, branch := range branches {
+		if err := waitForBranchListed(e.Ctx, e.Client(), project.ID, branch, wait); err != nil {
+			e.T.Logf("branch %q of project %d: %v", branch, project.ID, err)
+			return false
+		}
+	}
+	return true
+}
+
+// waitForBranchListed polls until GitLab answers HEAD on the branch with a
+// success, or the wait is spent. A failure to get any answer, a 404 and the
+// answers a converging GitLab gives keep it polling; any other answer ends it.
+//
+// It asks with HEAD because GitLab answers HEAD from the branch name cache
+// (Repository#branch_exists?), the one the merge request validation reads,
+// while GET reads the branch from Gitaly, which held it all along and would
+// end the wait at once.
+//
+// The wait ends on Poll's own timer, and its requests are bounded
+// [branchListedRequestGrace] later. Were they bounded by the wait itself, the
+// HEAD in flight when it ran out would be cut short, and the timeout would
+// name a request GitLab seemed never to answer rather than the 404 it kept
+// answering.
+func waitForBranchListed(ctx context.Context, client *gitlabclient.Client, projectID int64, branch string, wait time.Duration) error {
+	requestCtx, cancel := context.WithTimeout(ctx, wait+branchListedRequestGrace)
+	defer cancel()
+
+	path := fmt.Sprintf("projects/%d/repository/branches/%s", projectID, gl.PathEscape(branch))
+	return harness.Poll(requestCtx, branchListedPollInterval, wait, func() (bool, string, error) {
+		answer, err := probeREST(requestCtx, client, http.MethodHead, path, nil)
+		if err != nil {
+			return harness.WaitThrough(fmt.Sprintf("HEAD of branch %q in project %d", branch, projectID), err)
+		}
+		state := fmt.Sprintf("HEAD of branch %q in project %d: HTTP %d", branch, projectID, answer.Status)
+		if answer.Status >= http.StatusOK && answer.Status < http.StatusMultipleChoices {
+			return true, state, nil
+		}
+		if !convergingStatus(answer.Status) {
+			return false, state, fmt.Errorf("asking whether project %d lists branch %q: HTTP %d", projectID, branch, answer.Status)
+		}
+		return false, state, nil
+	})
 }
 
 // EnableMergeTrains turns merged results pipelines and merge trains on for
