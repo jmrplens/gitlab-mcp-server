@@ -1,5 +1,5 @@
 {
-  "recorded_from": "scripts/check-openplugin.sh at d03f4b2f0, with jq-1.6",
+  "recorded_from": "scripts/check-openplugin.sh at fe8773534, with jq-1.6",
   "cases": [
     {
       "name": "the committed manifests",

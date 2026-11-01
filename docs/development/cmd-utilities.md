@@ -2118,7 +2118,7 @@ go run ./cmd/release_packages/ server-json-packages
 
 `mcpb` prints a size line per bundle, then `Built 4 bundles (version V)` and each bundle's entries with their modes and sizes; a refusal is one `ERROR:` line per check on stderr, with the count per bundle and in all. `mcpb-manifest` prints the manifest on stdout and a refusal on stderr. `server-json-packages` prints a line per package and what passed on stdout, and `FAIL:` and `WARNING:` lines and a failed request's reason on stderr, ending in `All N declared package(s) validated` or `F of N declared package(s) failed validation`. Each exits `0` when everything passes, `1` when something does not or could not be checked, and `2` for arguments it cannot use.
 
-The tests hold each subcommand to a record of what the script did at fe8773534, kept in `testdata`: the derivation's 26 cases byte for byte, the build's 54 runs over the scratch trees its suite laid out entry for entry, with the archive's size masked where it was not faked, and the package check's 23 scenarios line for line and request for request against a stand-in for every host it asks.
+The tests hold each subcommand to a record of what the script did at fe8773534, kept in `testdata`: the derivation's 23 cases byte for byte, the build's 49 runs over the scratch trees its suite laid out entry for entry, with the archive's size masked where it was not faked, and the package check's 23 scenarios line for line and request for request against a stand-in for every host it asks.
 
 #### Make targets
 
