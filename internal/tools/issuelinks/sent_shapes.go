@@ -87,6 +87,11 @@ type relationExtra struct {
 	TimeStats            *TimeStatsOutput            `json:"time_stats"`
 	Type                 string                      `json:"type"`
 	Upvotes              int64                       `json:"upvotes"`
+	// Weight is one IssueRelation models, as an int64, and is read here as a
+	// pointer for the reason of register row 116 ("A measure GitLab sends
+	// as null decodes as 0"): an issue without a weight is sent null, which
+	// the SDK reads as the weight 0, a weight of its own (issue 1390).
+	Weight *int64 `json:"weight"`
 }
 
 // linkExtra is what lib/api/entities/issue_link.rb sends on the two issues of

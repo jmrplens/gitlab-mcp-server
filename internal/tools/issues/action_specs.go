@@ -16,12 +16,14 @@ import (
 //
 // A spec is registered under its bare name and the catalog publishes it under
 // the group it is aggregated into, so the ID a model calls is domainIssue plus
-// that name. Every ID naming an action of this package is concatenated from
-// the constant its spec is built from, so the two cannot drift apart; the ones
-// naming another package's action are written out, with the domain constant
-// where the action sits on this same catalog group. markdown.go used to keep a
-// second block of its own, and the two disagreed: it had issue.note_list while
-// the RelatedActions here said issue.notes_list, which resolves to no action.
+// that name. Every ID naming an action of this package is written out, and
+// TestActionIDs_AreTheDomainPlusTheSpecName holds each to the domain and the
+// constant its spec is built from, so the two cannot drift apart. They used to
+// be concatenated here, which held them as well but left a constant
+// expression mutation testing reports as never covered, since nothing runs
+// it. markdown.go used to keep a second block of its own, and the two
+// disagreed: it had issue.note_list while the RelatedActions here said
+// issue.notes_list, which resolves to no action.
 const (
 	// domainIssue is the catalog group these specs are aggregated into, by
 	// buildIssueActionSpecs in internal/tools/action_specs.go.
@@ -52,27 +54,27 @@ const (
 	// gitlab_group catalog group rather than on gitlab_issue.
 	specGroupIssues = "issues"
 
-	actionIssueCreate         = domainIssue + specCreate
-	actionIssueGet            = domainIssue + specGet
-	actionIssueList           = domainIssue + specList
-	actionIssueListGroup      = domainIssue + specListGroup
-	actionIssueUpdate         = domainIssue + specUpdate
-	actionIssueDelete         = domainIssue + specDelete
-	actionIssueSubscribe      = domainIssue + specSubscribe
-	actionIssueUnsubscribe    = domainIssue + specUnsubscribe
-	actionIssueTimeEstSet     = domainIssue + specTimeEstimateSet
-	actionIssueTimeEstReset   = domainIssue + specTimeEstimateReset
-	actionIssueSpentTimeAdd   = domainIssue + specSpentTimeAdd
-	actionIssueSpentTimeReset = domainIssue + specSpentTimeReset
-	actionIssueTimeStatsGet   = domainIssue + specTimeStatsGet
-	actionIssueMRsClosing     = domainIssue + specMRsClosing
-	actionIssueMRsRelated     = domainIssue + specMRsRelated
+	actionIssueCreate         = "issue.create"
+	actionIssueGet            = "issue.get"
+	actionIssueList           = "issue.list"
+	actionIssueListGroup      = "issue.list_group"
+	actionIssueUpdate         = "issue.update"
+	actionIssueDelete         = "issue.delete"
+	actionIssueSubscribe      = "issue.subscribe"
+	actionIssueUnsubscribe    = "issue.unsubscribe"
+	actionIssueTimeEstSet     = "issue.time_estimate_set"
+	actionIssueTimeEstReset   = "issue.time_estimate_reset"
+	actionIssueSpentTimeAdd   = "issue.spent_time_add"
+	actionIssueSpentTimeReset = "issue.spent_time_reset"
+	actionIssueTimeStatsGet   = "issue.time_stats_get"
+	actionIssueMRsClosing     = "issue.mrs_closing"
+	actionIssueMRsRelated     = "issue.mrs_related"
 
 	// Actions of other packages. The two note actions are routes the
 	// issuenotes package registers on this same catalog group; the rest
 	// belong to other groups entirely.
-	actionIssueNoteList   = domainIssue + "note_list"
-	actionIssueNoteCreate = domainIssue + "note_create"
+	actionIssueNoteList   = "issue.note_list"
+	actionIssueNoteCreate = "issue.note_create"
 	actionGroupGet        = "group.get"
 	actionSearchIssues    = "search.issues"
 	actionTodoMarkDone    = "user.todo_mark_done"

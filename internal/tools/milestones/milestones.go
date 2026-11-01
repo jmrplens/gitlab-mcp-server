@@ -210,12 +210,14 @@ type IssueItem struct {
 	Author       *toolutil.IssueUserOutput   `json:"author,omitempty"`
 	Assignees    []*toolutil.IssueUserOutput `json:"assignees,omitempty"`
 	Confidential bool                        `json:"confidential,omitempty"`
-	Weight       int64                       `json:"weight,omitempty" tier:"premium"`
-	DueDate      string                      `json:"due_date,omitempty"`
-	WebURL       string                      `json:"web_url"`
-	CreatedAt    string                      `json:"created_at"`
-	UpdatedAt    string                      `json:"updated_at,omitempty"`
-	ClosedAt     string                      `json:"closed_at,omitempty"`
+	// Weight is a pointer because 0 is a weight GitLab stores and null is an
+	// issue without one (issue 1390).
+	Weight    *int64 `json:"weight,omitempty" tier:"premium"`
+	DueDate   string `json:"due_date,omitempty"`
+	WebURL    string `json:"web_url"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+	ClosedAt  string `json:"closed_at,omitempty"`
 }
 
 // MilestoneIssuesOutput holds a paginated list of issues for a milestone.
@@ -446,10 +448,17 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 		opts.Sort = input.Sort
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issues, resp, err := client.GL().Milestones.GetMilestoneIssues(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return MilestoneIssuesOutput{}, toolutil.WrapErrWithStatusHint("milestoneGetIssues", err, http.StatusNotFound,
 			"verify milestone_iid with project.milestone_list")
+	}
+	// The weight is read off the captured answer, since client-go reads the
+	// null of an issue without one as the weight 0 (issue 1390).
+	extras, err := toolutil.CapturedIssueBasics(captured, len(issues))
+	if err != nil {
+		return MilestoneIssuesOutput{}, toolutil.WrapErr("milestoneGetIssues", err)
 	}
 
 	items := make([]IssueItem, len(issues))
@@ -464,7 +473,7 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 			Author:       toolutil.NewIssueUserOutputFromIssueAuthor(issue.Author),
 			Assignees:    toolutil.NewIssueUserOutputsFromIssueAssignees(issue.Assignees),
 			Confidential: issue.Confidential,
-			Weight:       issue.Weight,
+			Weight:       extras[i].Weight,
 			DueDate:      toolutil.FormatISOTimePtr(issue.DueDate),
 			WebURL:       issue.WebURL,
 			CreatedAt:    toolutil.RFC3339Ptr(issue.CreatedAt),

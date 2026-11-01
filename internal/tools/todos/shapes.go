@@ -182,7 +182,9 @@ type TodoTargetOut struct {
 	Links        *IssueLinksOut `json:"_links,omitempty"`
 	MovedToID    int64          `json:"moved_to_id,omitempty"`
 	TimeStats    *TimeStatsOut  `json:"time_stats,omitempty"`
-	Weight       int64          `json:"weight,omitempty" tier:"premium"`
+	// Weight is a pointer because 0 is a weight GitLab stores and null is an
+	// issue without one (issue 1390).
+	Weight *int64 `json:"weight,omitempty" tier:"premium"`
 
 	// Only available for type MergeRequest.
 	MergedAt                  string          `json:"merged_at,omitempty"`
@@ -207,7 +209,9 @@ type TodoTargetOut struct {
 	ImageURL string `json:"image_url,omitempty"`
 }
 
-func todoTargetOut(t *gl.TodoTarget) *TodoTargetOut {
+// todoTargetOut converts a to-do's target, taking its weight from the
+// captured answer rather than from the SDK's int64.
+func todoTargetOut(t *gl.TodoTarget, weight *int64) *TodoTargetOut {
 	if t == nil {
 		return nil
 	}
@@ -238,7 +242,7 @@ func todoTargetOut(t *gl.TodoTarget) *TodoTargetOut {
 		Links:        issueLinksOut(t.Links),
 		MovedToID:    t.MovedToID,
 		TimeStats:    timeStatsOut(t.TimeStats),
-		Weight:       t.Weight,
+		Weight:       weight,
 
 		MergedAt:                  toolutil.FormatTimePtr(t.MergedAt),
 		ApprovalsBeforeMerge:      t.ApprovalsBeforeMerge,

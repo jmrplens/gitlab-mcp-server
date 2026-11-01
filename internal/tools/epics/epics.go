@@ -565,8 +565,10 @@ type UpdateInput struct {
 	RemoveLabelIDs []int64 `json:"remove_label_ids,omitempty" jsonschema:"Global IDs of labels to remove"`
 	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees (empty array to remove all)"`
 	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone to assign to the epic. Pass 0 to remove the epic from its milestone. Omit the field to leave it untouched"`
-	Weight         *int64  `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the epic"`
-	HealthStatus   *string `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched"`
+	// Weight tells null from absence, which a pointer cannot: null removes
+	// the weight, 0 is a weight of its own (issue 1390).
+	Weight       toolutil.Nullable[int64] `json:"weight,omitzero" tier:"premium" jsonschema:"Weight of the epic, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched"`
+	HealthStatus *string                  `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched"`
 }
 
 // DeleteInput defines parameters for deleting an epic.
@@ -1384,18 +1386,17 @@ func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, gl.Reques
 	if input.AssigneeIDs != nil {
 		opts.AssigneeIDs = input.AssigneeIDs
 	}
-	if input.Weight != nil {
-		opts.Weight = input.Weight
-	}
 	// A date that does not parse refuses the call. It used to be dropped, and
 	// the unchanged epic came back as the answer to an update that had asked
-	// to move it (issue 1302).
+	// to move it (issue 1302). A null weight removes the epic's weight, which
+	// GitLab does only for weightWidget {weight: null} (issue 1390).
 	removals, err := toolutil.ApplyWorkItemWidgets(opts, toolutil.WorkItemWidgetInputs{
 		MilestoneID:  input.MilestoneID,
 		ParentID:     input.ParentID,
 		StartDate:    input.StartDate,
 		DueDate:      input.DueDate,
 		HealthStatus: input.HealthStatus,
+		Weight:       input.Weight,
 	})
 	if err != nil {
 		return nil, nil, err

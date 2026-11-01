@@ -125,6 +125,38 @@ func TestEpics_Update_RefusesAnImpossibleDateAndRemovesDatesAndHealthStatus(t *t
 	})
 }
 
+// TestEpics_Update_WeightNullRemovesTheWeight gives an epic of its own on
+// every surface a weight of 5, sends 0 and reads the weight 0, then sends
+// null and reads no weight. The update could set any weight and remove none:
+// 0 is stored as the weight 0, and GitLab removes an epic's weight only for
+// weightWidget {weight: null}, which client-go's omitempty cannot send
+// (measured on 19.5.0-ee, issue 1390).
+func TestEpics_Update_WeightNullRemovesTheWeight(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Group {
+		return fixture.NewGroup(e, fixture.WithGroupNamePrefix("epicweight"))
+	}, func(e *harness.Env, surface harness.Surface, group fixture.Group) {
+		s := e.On(surface)
+		created := harness.Do[epics.Output](s, actionEpicCreate, map[string]any{
+			"full_path": group.Path, "title": e.Name("epic"), "weight": 5,
+		})
+		if created.Weight == nil || *created.Weight != 5 {
+			e.T.Fatalf("epic_create answered weight %v, want 5", created.Weight)
+		}
+		params := epicParams(fixture.Epic{IID: created.IID, GroupPath: group.Path})
+
+		zeroed := harness.Do[epics.Output](s, actionEpicUpdate, withParams(params, map[string]any{"weight": 0}))
+		if zeroed.Weight == nil || *zeroed.Weight != 0 {
+			e.T.Errorf("epic_update answered weight %v for 0, want the weight 0", zeroed.Weight)
+		}
+		removed := harness.Do[epics.Output](s, actionEpicUpdate, withParams(params, map[string]any{"weight": nil}))
+		if removed.Weight != nil {
+			e.T.Errorf("epic_update answered weight %d for null, want no weight", *removed.Weight)
+		}
+	})
+}
+
 // TestEpicBoards_FreshGroup_ListsAndRefusesAMissingBoard lists the epic
 // boards of a fresh group on every surface, reads the first one back when
 // the instance seeded one, and asks for a board number nothing has, which

@@ -260,6 +260,11 @@ func FormatMarkdown(i Output) string {
 	if i.Milestone != nil {
 		c.Field("Milestone", i.Milestone.Title)
 	}
+	// A weight of 0 is one GitLab stores, so it is shown; an issue without
+	// a weight has none to show.
+	if i.Weight != nil {
+		c.Int("Weight", *i.Weight)
+	}
 	c.Time("Due Date", i.DueDate)
 	c.Time("Created", i.CreatedAt)
 	c.Markdown("Closed By", toolutil.MdUserHandle(closerName(i)))

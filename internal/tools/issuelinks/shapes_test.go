@@ -166,14 +166,17 @@ func TestIssueRefOutput_Full(t *testing.T) {
 		Links:                &gl.IssueLinks{Self: "self", Notes: "notes", AwardEmoji: "ae", Project: "proj"},
 		Iteration:            &gl.GroupIteration{ID: 30, Title: "Sprint 1"},
 		Epic:                 &gl.Epic{ID: 60, IID: 6, Title: "Epic"},
-	}, toolutil.IssueBasicExtra{BlockingIssuesCount: &blocking, StartDate: "2026-01-05", Type: "INCIDENT"})
+	}, toolutil.IssueBasicExtra{BlockingIssuesCount: &blocking, StartDate: "2026-01-05", Type: "INCIDENT", Weight: new(int64(0))})
+	// The weight is the captured 0, not the SDK's 4: 0 is a weight GitLab
+	// stores, and the SDK's int64 cannot tell it from the null of an issue
+	// without one (issue 1390).
 	want := &IssueRefOutput{
 		ID: 50, IID: 10, ProjectID: 42, Title: "Source",
 		Description: "desc", State: "opened",
 		Confidential: true, Labels: []string{"bug", "urgent"}, WebURL: "w",
 		CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z",
 		ClosedAt: "2026-01-03T00:00:00Z", DueDate: "2026-02-01",
-		Weight: 4, Upvotes: 5, Downvotes: 1, DiscussionLocked: true,
+		Weight: new(int64(0)), Upvotes: 5, Downvotes: 1, DiscussionLocked: true,
 		UserNotesCount: 9, MergeRequestCount: 2, IssueType: "incident",
 		Author:               &UserOutput{ID: 1, Username: "ann"},
 		Assignees:            []*UserOutput{{ID: 2, Username: "bob"}},
@@ -278,14 +281,16 @@ func TestToRelationOutput_AllNestedObjects(t *testing.T) {
 		DueDate:        "2026-02-01",
 		WebURL:         "w",
 		References:     &ReferencesOutput{Short: "s", Relative: "r", Full: "f"},
-		Weight:         3,
+		Weight:         new(int64(0)),
 		UserNotesCount: 7,
 		IssueLinkID:    99,
 		LinkType:       "relates_to",
 		LinkCreatedAt:  "2026-01-04T00:00:00Z",
 		LinkUpdatedAt:  "2026-01-05T00:00:00Z",
 	}
-	if out := toRelationOutput(r, relationExtra{}); !reflect.DeepEqual(out, want) {
+	// The weight is the captured 0 rather than the SDK's 3, for the reason
+	// TestIssueRefOutput_Full gives.
+	if out := toRelationOutput(r, relationExtra{Weight: new(int64(0))}); !reflect.DeepEqual(out, want) {
 		t.Errorf("toRelationOutput = %+v, want %+v", out, want)
 	}
 }

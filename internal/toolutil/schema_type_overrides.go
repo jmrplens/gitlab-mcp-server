@@ -26,10 +26,17 @@ import (
 // The same call therefore worked on the default surface and failed on
 // individual. Declaring both types is what makes the published schema say what
 // every path already does.
+//
+// A [Nullable] needs an entry per instantiation, since reflection would
+// otherwise publish it as the struct it is. Each publishes what a pointer to
+// the type it holds published before it, so moving a field from the pointer
+// to the [Nullable] changes what the handler is told and not what the caller
+// is offered.
 var schemaForOptions = sync.OnceValue(func() *jsonschema.ForOptions {
 	return &jsonschema.ForOptions{
 		TypeSchemas: map[reflect.Type]*jsonschema.Schema{
-			reflect.TypeFor[StringOrInt](): {Types: []string{"string", "integer"}},
+			reflect.TypeFor[StringOrInt]():     {Types: []string{"string", "integer"}},
+			reflect.TypeFor[Nullable[int64]](): {Types: []string{"null", "integer"}},
 		},
 	}
 })

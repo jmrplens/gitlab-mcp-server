@@ -19,11 +19,14 @@ import (
 
 // WorkItemWidgetInputs are the inputs of a work item update that set a value
 // GitLab can also be asked to remove: the milestone, parent and iteration a
-// work item references, its start and due dates, and its health status.
+// work item references, its start and due dates, its health status and its
+// weight.
 //
 // Each follows the clearing convention every update here follows (issue
 // 1303): nil leaves the value alone, 0 removes a reference, "" removes a date
-// or the health status, and anything else sets it.
+// or the health status, and anything else sets it. The weight is the one
+// whose zero is a value: 0 is a weight of its own, so it is removed by null
+// and an absent key leaves it alone (issue 1390).
 type WorkItemWidgetInputs struct {
 	MilestoneID  *int64
 	ParentID     *int64
@@ -31,6 +34,7 @@ type WorkItemWidgetInputs struct {
 	StartDate    *string
 	DueDate      *string
 	HealthStatus *string
+	Weight       Nullable[int64]
 }
 
 // workItemNull names one field of one widget of the workItemUpdate input that
@@ -46,13 +50,15 @@ type workItemNull struct {
 // ask for none.
 //
 // The option exists because client-go's UpdateWorkItemOptions cannot express
-// a removal (register row 119): it wraps any reference, 0 included, into a
-// global ID, so 0 reached GitLab as gid://gitlab/Milestone/0 and was refused
-// as "No object found", and its widget fields are omitted when unset, so an
-// empty date or health status sent nothing and the update answered success
-// with the value still in place. GitLab removes each of these when the
-// widget's field is null, which the option writes into the input client-go
-// built, beside whatever else the update sets.
+// a removal (register row 119, "UpdateWorkItemOptions cannot remove a
+// reference, a date or the health status", whose weight is the same gap): it
+// wraps any reference, 0 included, into a global ID, so 0 reached GitLab as
+// gid://gitlab/Milestone/0 and was refused as "No object found", and its
+// widget fields are omitted when unset, so an empty date or health status sent
+// nothing and the update answered success with the value still in place, and
+// a weight could be set to 0 but never removed. GitLab removes each of these
+// when the widget's field is null, which the option writes into the input
+// client-go built, beside whatever else the update sets.
 func ApplyWorkItemWidgets(opts *gl.UpdateWorkItemOptions, in WorkItemWidgetInputs) (gl.RequestOptionFunc, error) {
 	var nulls []workItemNull
 	references := []struct {
@@ -110,6 +116,19 @@ func ApplyWorkItemWidgets(opts *gl.UpdateWorkItemOptions, in WorkItemWidgetInput
 		} else {
 			opts.HealthStatus = in.HealthStatus
 		}
+	}
+	// GitLab refuses a weight widget whose weight key is left out, which is
+	// what client-go's omitempty makes of a nil weight, so a removal is the
+	// null the option writes and never an empty widget (measured on 19.5.0-ee
+	// for an epic and an issue, issue 1390).
+	if in.Weight.IsNull() {
+		nulls = append(nulls, workItemNull{"weightWidget", "weight"})
+	}
+	if weight := in.Weight.Ptr(); weight != nil {
+		if *weight < 0 {
+			return nil, fmt.Errorf("weight must be 0 or higher, or null to remove it, got %d", *weight)
+		}
+		opts.Weight = weight
 	}
 	if len(nulls) == 0 {
 		return nil, nil //nolint:nilnil // no removal asked for: the update goes out as client-go builds it

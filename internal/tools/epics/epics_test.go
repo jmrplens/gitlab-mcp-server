@@ -1526,7 +1526,7 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 		AddLabelIDs:    []int64{100},
 		RemoveLabelIDs: []int64{200},
 		AssigneeIDs:    []int64{1, 2, 3},
-		Weight:         &weight,
+		Weight:         toolutil.NullableOf(weight),
 		HealthStatus:   new("needsAttention"),
 	})
 	if err != nil {
@@ -2548,6 +2548,11 @@ func TestUpdate_Removals_ReachTheWire(t *testing.T) {
 		{"parent_id", UpdateInput{ParentID: &zero}, "hierarchyWidget", "parentId", nil},
 		{"milestone_id", UpdateInput{MilestoneID: &zero}, "milestoneWidget", "milestoneId", nil},
 		{"description", UpdateInput{Description: &empty}, "descriptionWidget", "description", ""},
+		// An epic's weight is removed by weightWidget {weight: null} and by
+		// nothing else: 0 is stored as the weight 0, and a widget without the
+		// key is refused (measured on GitLab EE 19.5.0, issue 1390).
+		{"weight", UpdateInput{Weight: toolutil.NullableNull[int64]()}, "weightWidget", "weight", nil},
+		{"weight zero", UpdateInput{Weight: toolutil.NullableOf[int64](0)}, "weightWidget", "weight", float64(0)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2565,6 +2570,31 @@ func TestUpdate_Removals_ReachTheWire(t *testing.T) {
 				t.Errorf("%s.%s = %#v (present %v), want %#v", tc.widget, tc.field, value, present, tc.want)
 			}
 		})
+	}
+}
+
+// TestUpdate_WeightNullThroughTheMetaDecoder_ReachesTheWire drives a null
+// weight through toolutil.UnmarshalParams, the decoder every surface's
+// arguments go through, and asserts the mutation removes the epic's weight. A
+// pointer read the null as a weight left out, so the update went out without
+// a weight widget and the weight stayed (issue 1390).
+func TestUpdate_WeightNullThroughTheMetaDecoder_ReachesTheWire(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"full_path": testFullPath, "epic_iid": 1, "weight": nil,
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	handler, sent := recordEpicUpdate(t)
+	if _, err = Update(t.Context(), testutil.NewTestClient(t, handler), input); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	widget, ok := sent()["weightWidget"].(map[string]any)
+	if !ok {
+		t.Fatalf("mutation input carries no weightWidget: %v", sent())
+	}
+	if value, present := widget["weight"]; !present || value != nil {
+		t.Errorf("weightWidget.weight = %#v (present %v), want null", value, present)
 	}
 }
 
