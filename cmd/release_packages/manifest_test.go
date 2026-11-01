@@ -6,10 +6,10 @@
 // what each per-OS bundle needs from it.
 //
 // testdata/platform_jq.json is the record: every case below was run through
-// `jq --arg platform P -f mcpb/platform.jq` at fe8773534, the revision that
-// removed that file, and its exit status, the bytes jq wrote and the message
-// of its error were kept. The inputs are testdata/manifests: a copy of
-// mcpb/manifest.json as that revision held it, the mutations
+// `jq --arg platform P -f mcpb/platform.jq` at fe8773534, the revision of
+// main this port started from, and its exit status, the bytes jq wrote and
+// the message of its error were kept. The inputs are testdata/manifests: a
+// copy of mcpb/manifest.json as that revision held it, the mutations
 // scripts/build_mcpb_sh_test.py and scripts/mcpb_manifest_test.py made of it,
 // and escapes.json, which spells every non-ASCII character as an escape so
 // that the record holds jq's own spelling of each.

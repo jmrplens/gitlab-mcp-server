@@ -6,24 +6,26 @@
 // testdata/build_mcpb.json is the record. Each run laid out a scratch tree
 // the way scripts/build_mcpb_sh_test.py did, the repository root with mcpb/,
 // LICENSE and a dist/ of per-target builds, every file holding stand-in
-// bytes, and ran the script at fe8773534, the revision that removed it, with
-// version 9.8.7, under jq 1.6, Info-ZIP's zip 3.0 and unzip 6.00. The runs
-// are the suite's cases: both dist/ layouts, each refusal before packing,
-// each manifest rule, an entry zip left out (through the suite's stand-in
-// for zip) and every size limit and warning (through its stand-in for
-// zipinfo, which reports figures no stand-in could reach). For each run the
-// record keeps the exit status, stdout up to the last line the script wrote
-// itself, stderr, the job summary, which bundles were left, and, for the runs
-// that pack something no other run does, every entry of every bundle: name,
-// order, external attributes, creator system, time, extra field, size, CRC
-// and the SHA-256 of its bytes, and the packed manifest's text.
+// bytes, and ran the script at fe8773534, the revision of main this port
+// started from, with version 9.8.7, under jq 1.6, Info-ZIP's zip 3.0 and
+// unzip 6.00. The runs are the suite's cases: both dist/ layouts, each
+// refusal before packing, each manifest rule, an entry zip left out (through
+// the suite's stand-in for zip) and every size limit and warning (through
+// its stand-in for zipinfo, which reports figures no stand-in could reach).
+// For each run the record keeps the exit status, stdout up to the last line
+// the script wrote itself, stderr, the job summary, which bundles were left,
+// and, for the runs that pack something no other run does, every entry of
+// every bundle: name, order, external attributes, creator system, time,
+// extra field, size, CRC and the SHA-256 of its bytes, and the packed
+// manifest's text.
 //
 // Each run is repeated here over the same tree, with the size reader and the
 // archive writer replaced where the script's stand-ins replaced zipinfo and
 // zip. The bundles are equal entry for entry to the script's, which is what
-// F4-D6 asks of the port: only the deflated bytes differ, since Go's deflate
-// is not Info-ZIP's, and so the archive's size, which every size line and
-// summary row of an unfaked run prints, is compared with that figure masked.
+// the port is held to: the archive around the entries is archive/zip's rather
+// than Info-ZIP's, as writeBundle says, and so the archive's size, which
+// every size line and summary row of an unfaked run prints, is compared with
+// that figure masked.
 package main
 
 import (
@@ -504,11 +506,11 @@ func TestMcpbBuild_ABinaryIsARegularFileOfItsName(t *testing.T) {
 	}
 }
 
-// TestMcpbBuild_TheSameInputs_PackTheSameBytes verifies the half of F4-D6
-// the script could not be held to, since Info-ZIP's bytes are not Go's: two
-// runs over the same inputs write identical bundles, whether into two trees
-// or twice into one, so the SHA-256 server.json declares for a bundle is a
-// function of what it packs and of nothing else.
+// TestMcpbBuild_TheSameInputs_PackTheSameBytes verifies the half of what the
+// port is held to that the script could not be, since Info-ZIP's bytes are
+// not Go's: two runs over the same inputs write identical bundles, whether
+// into two trees or twice into one, so the SHA-256 server.json declares for a
+// bundle is a function of what it packs and of nothing else.
 func TestMcpbBuild_TheSameInputs_PackTheSameBytes(t *testing.T) {
 	t.Parallel()
 

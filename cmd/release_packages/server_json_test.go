@@ -7,13 +7,13 @@
 // testdata/server_json_packages.json is the record. Each scenario laid out a
 // server.json, and whatever else it reads (a Dockerfile beside it, the npm
 // launcher's package.json), and ran the script at fe8773534, the revision
-// that removed it, with jq 1.6 and curl 7.88.1. A stand-in for curl first on
-// PATH rewrote every https:// URL to one stand-in HTTP server, which answered
-// each request from the scenario's routes, keyed by the method and the
-// original URL, and recorded the method, URL, Authorization and Accept of
-// every request. The bundles and NuGet packages the routes serve are the
-// files in testdata/server_json_files, so a hash the script printed is the
-// hash the command prints. The scenarios are scripts/
+// of main this port started from, with jq 1.6 and curl 7.88.1. A stand-in
+// for curl first on PATH rewrote every https:// URL to one stand-in HTTP
+// server, which answered each request from the scenario's routes, keyed by
+// the method and the original URL, and recorded the method, URL,
+// Authorization and Accept of every request. The bundles and NuGet packages
+// the routes serve are the files in testdata/server_json_files, so a hash the
+// script printed is the hash the command prints. The scenarios are scripts/
 // validate_server_json_packages_sh_test.py's cases and, for every branch of
 // the script that suite never reached, at least one more.
 //

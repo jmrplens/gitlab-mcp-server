@@ -9,7 +9,7 @@
 // scripts/validate-server-json-packages.sh, moved into Go, each held by its
 // tests to a record of what the script did (testdata/build_mcpb.json,
 // testdata/platform_jq.json and testdata/server_json_packages.json, taken at
-// fe8773534, the revision that removed them).
+// fe8773534, the revision of main this port started from).
 //
 // # mcpb
 //
@@ -61,8 +61,10 @@
 // directory entry. server.json carries each declared bundle's SHA-256, and a
 // hash that changes because the clock moved tells a verifier nothing. That is
 // what zip -X -D wrote from the files the script touched to the zip epoch,
-// entry for entry; only the deflated bytes differ, since Go's deflate is not
-// Info-ZIP's, so the bundles' hashes changed once, with this port.
+// entry for entry. The archive around the entries is archive/zip's rather
+// than Info-ZIP's (other deflated bytes, a data descriptor after each entry,
+// zip 2.0 rather than 3.0 as the version that made them, no text flag, and
+// no entry left stored), so the bundles' hashes changed once, with this port.
 //
 // Each archive is read back after it is written, because the archive is what
 // ships: exactly the expected entries in order, the servers recorded 0755,

@@ -35,8 +35,13 @@ const (
 // path. The same files make the same bytes: the entries are written in the
 // order given, each recorded as a Unix file with its mode and the zip epoch
 // as its time, deflated, with no extra field and no directory entry, which is
-// what zip -X -D wrote. Only the deflated bytes differ from zip's, since Go's
-// deflate is not Info-ZIP's.
+// what zip -X -D wrote of each entry. The archive around the entries is
+// archive/zip's rather than Info-ZIP's: the deflated bytes differ, each
+// entry's CRC and sizes follow its data in a data descriptor rather than
+// sitting in its local header, the entries name zip 2.0 rather than 3.0 as
+// the version that made them, none carries the text flag zip set on a file it
+// read as text, and every entry is deflated, where zip left some small ones
+// stored.
 func writeBundle(path string, files []bundleFile) error {
 	out, err := os.Create(path) //#nosec G304,G703 -- a bundle under the dist directory the operator named
 	if err != nil {
