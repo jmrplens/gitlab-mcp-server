@@ -69,20 +69,20 @@ nesting level (zero for a root card). The label goes through `cardInline`
 (below). The value goes through the helper named for each method. A row whose
 rendered value is blank is not written.
 
-| Method                                 | Value written                                                                                                                         | Absent when                                    |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `Field(label, value string)`           | `cardInline(value)`                                                                                                                   | value blank, or nothing visible survives       |
-| `FieldOr(label, value, absent string)` | `cardInline(value)`, or `cardInline(absent)` when value is blank                                                                      | both blank                                     |
-| `Int(label string, v int64)`           | `strconv.FormatInt(v, 10)`                                                                                                            | never: zero is an answer (an ID, a sent count) |
-| `Count(label string, v int64)`         | as `Int`                                                                                                                              | `v == 0`: zero means GitLab did not say        |
-| `Bool(label string, v bool)`           | `BoolEmoji(v)`: `✅` or `❌`                                                                                                            | never                                          |
-| `BoolPtr(label string, v *bool)`       | as `Bool`                                                                                                                             | `v == nil`                                     |
-| `Time(label, rfc3339 string)`          | `FormatTime(rfc3339)`: `20 Mar 2026 15:45 UTC`, date-only `21 Mar 2026`, or the escaped input                                         | empty                                          |
-| `Link(label, text, url string)`        | `MdTitleLink(text, url)`: `[text](url)`, or the escaped text when url is empty; a blank text with a url links the url to itself       | text and url both blank                        |
-| `URL(url string)`                      | `Link("URL", url, url)`                                                                                                               | empty                                          |
-| `Code(label, value string)`            | `MdCodeSpan(value)`: a code span whose fence is one backtick longer than the longest run inside, no entities                          | blank                                          |
-| `Secret(label, secret string)`         | as `Code`, and the root card remembers the label so `End` adds `Store the <label, lowercased> securely. It cannot be retrieved later` | blank (and then no hint)                       |
-| `Markdown(label, composed string)`     | `composed`, written as given                                                                                                          | blank                                          |
+| Method                                 | Value written                                                                                                                           | Absent when                                    |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `Field(label, value string)`           | `cardInline(value)`                                                                                                                     | value blank, or nothing visible survives       |
+| `FieldOr(label, value, absent string)` | `cardInline(value)`, or `cardInline(absent)` when value is blank                                                                        | both blank                                     |
+| `Int(label string, v int64)`           | `strconv.FormatInt(v, 10)`                                                                                                              | never: zero is an answer (an ID, a sent count) |
+| `Count(label string, v int64)`         | as `Int`                                                                                                                                | `v == 0`: zero means GitLab did not say        |
+| `Bool(label string, v bool)`           | `BoolEmoji(v)`: `✅` or `❌`                                                                                                              | never                                          |
+| `BoolPtr(label string, v *bool)`       | as `Bool`                                                                                                                               | `v == nil`                                     |
+| `Time(label, rfc3339 string)`          | `FormatTime(rfc3339)`: `20 Mar 2026 15:45 UTC`, date-only `21 Mar 2026`, or the escaped input                                           | empty                                          |
+| `Link(label, text, url string)`        | `MdTitleLink(text, url)`: `[text](url)`, or the escaped text when url is empty; a blank text, or a text that is the url, writes `<url>` | text and url both blank                        |
+| `URL(url string)`                      | `MdAutolink(url)`: the address once, `<url>`                                                                                            | empty                                          |
+| `Code(label, value string)`            | `MdCodeSpan(value)`: a code span whose fence is one backtick longer than the longest run inside, no entities                            | blank                                          |
+| `Secret(label, secret string)`         | as `Code`, and the root card remembers the label so `End` adds `Store the <label, lowercased> securely. It cannot be retrieved later`   | blank (and then no hint)                       |
+| `Markdown(label, composed string)`     | `composed`, written as given                                                                                                            | blank                                          |
 
 Two presence-only rows, `<indent>- <emoji> **<label>**\n`, written only when
 `on` is true:
@@ -248,6 +248,7 @@ its quote, or between table rows.
 | Card, Section, Table and Fence headings                                         | `EscapeMdHeading`                                                                                         | leading `#`, line breaks, `<`, `[`, control bytes                          |
 | Labels, Field, FieldOr, Flag emoji and label, one-line Text, table column names | `cardInline`                                                                                              | `\|`, `<`, `[`, line breaks, control bytes, the guidance heading           |
 | Link text and URL                                                               | `MdTitleLink` (cell escaper, then `EscapeMdLinkLabel` on the label, `EscapeMdLinkDestination` on the URL) | a label closing the link, a destination ending early or splitting the cell |
+| URL, and a link whose text is its own address                                   | `MdAutolink` (`<url>` for an http or https address; the `MdTitleLink` long form for one it cannot hold)   | a space, a line break, `<`, `>` or a pipe ending the autolink or the cell  |
 | Code, Secret                                                                    | `MdCodeSpan`                                                                                              | a backtick run closing the span; line breaks; control bytes. No entities   |
 | Multi-line Text                                                                 | `WrapGFMBody`                                                                                             | any block structure, by quoting every line; the guidance heading           |
 | Fence body                                                                      | `MarkdownFencedBlock`                                                                                     | a backtick run closing the fence; the info string                          |
@@ -347,7 +348,7 @@ c.End(toolutil.HintAction("issue.update", "change this issue"))
 - **Confidential**: ❌
 - **Created**: 20 Mar 2026 15:45 UTC
 - **Author**: [@alice](https://gitlab.example.com/alice)
-- **URL**: [https://gitlab.example.com/g/p/-/issues/42](https://gitlab.example.com/g/p/-/issues/42)
+- **URL**: <https://gitlab.example.com/g/p/-/issues/42>
 
 ---
 💡 **Next steps:**
@@ -454,7 +455,17 @@ These are the places the implementation departs, each with its reason.
   the row it sits in, and the escaper is now total for a cell.
 - **`Link` with blank text and a url links the url to itself** rather than
   writing `[](url)`, which the absent-value gate lists as a glyph that reads
-  as data.
+  as data. Since issue 1396 the address is written once, as the autolink
+  `<url>`, rather than as `[url](url)`, and `MdTitleLink` does the same for
+  any title that is its own address, so the rule lives in the link helper
+  and reaches every formatter. The second copy of the address was 3.6% of
+  the Markdown a text-reading client was handed, and
+  `TestMarkdownRegistry_EveryFormatter_WritesEachAddressOnce` fails on a
+  formatter that brings it back. The avatar rows went with it:
+  `structuredContent` keeps `avatar_url`, and
+  `TestMarkdownRegistry_EveryFormatter_LeavesTheAvatarOut` fails on a card
+  or a table that renders one, outside the answers that are nothing but the
+  avatar.
 - **`Section` with a blank title opens no heading** and continues the list,
   rather than writing a heading with nothing in it; `Table` with a blank
   title writes no heading; `Fence` with an empty body writes nothing, heading
