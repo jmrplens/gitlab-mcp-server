@@ -1,0 +1,2023 @@
+{
+  "recorded_from": "scripts/validate-server-json-packages.sh at fe8773534, with jq-1.6 and curl 7.88.1",
+  "runs": [
+    {
+      "name": "accepts one bundle per system",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "f28931d084a2d3474b1eb50c14ff28eed0d888f45319a86e697b188bce65762e"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "cf5075cb28d4f7f877a9444c37782929d6816804f91670baa28094301ef438e7"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "7d33ec9cb5086d5801fbd3f80a6c351af3a8040f3d7b9537f17673ec3232c76c"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb": {
+          "file": "gitlab-mcp-server-darwin.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb": {
+          "file": "gitlab-mcp-server-windows.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb": {
+          "file": "gitlab-mcp-server-linux.mcpb"
+        }
+      },
+      "exit": 0,
+      "stdout": "mcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: f28931d084a2d347..., valid bundle for darwin\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: cf5075cb28d4f7f8..., valid bundle for win32\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb\n  3 entries; every path the manifest names is in the archive\n  OK: 7d33ec9cb5086d58..., valid bundle for linux\nmcpb: platforms served\n  OK: darwin, win32 and linux are each served by exactly one declared bundle\nAll 3 declared package(s) validated\n",
+      "stderr": "",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "accepts the universal bundle alone",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "4d9bd764ff00c690c5e80b11ce75e8e4447358d10a11866c7a1fcf226af60dc5"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb": {
+          "file": "gitlab-mcp-server.mcpb"
+        }
+      },
+      "exit": 0,
+      "stdout": "mcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb\n  5 entries; every path the manifest names is in the archive\n  OK: 4d9bd764ff00c690..., valid bundle for darwin win32 linux\nmcpb: platforms served\n  OK: darwin, win32 and linux are each served by exactly one declared bundle\nAll 1 declared package(s) validated\n",
+      "stderr": "",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "refuses the universal bundle beside the per-OS ones",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "f28931d084a2d3474b1eb50c14ff28eed0d888f45319a86e697b188bce65762e"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "cf5075cb28d4f7f877a9444c37782929d6816804f91670baa28094301ef438e7"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "7d33ec9cb5086d5801fbd3f80a6c351af3a8040f3d7b9537f17673ec3232c76c"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "4d9bd764ff00c690c5e80b11ce75e8e4447358d10a11866c7a1fcf226af60dc5"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb": {
+          "file": "gitlab-mcp-server-darwin.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb": {
+          "file": "gitlab-mcp-server-windows.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb": {
+          "file": "gitlab-mcp-server-linux.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb": {
+          "file": "gitlab-mcp-server.mcpb"
+        }
+      },
+      "exit": 1,
+      "stdout": "mcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: f28931d084a2d347..., valid bundle for darwin\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: cf5075cb28d4f7f8..., valid bundle for win32\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb\n  3 entries; every path the manifest names is in the archive\n  OK: 7d33ec9cb5086d58..., valid bundle for linux\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb\n  5 entries; every path the manifest names is in the archive\n  OK: 4d9bd764ff00c690..., valid bundle for darwin win32 linux\nmcpb: platforms served\n",
+      "stderr": "  FAIL: darwin is served by 2 declared bundles (https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb), and a registry entry has no platform field to choose between them\n  FAIL: win32 is served by 2 declared bundles (https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb), and a registry entry has no platform field to choose between them\n  FAIL: linux is served by 2 declared bundles (https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb), and a registry entry has no platform field to choose between them\n3 of 4 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "refuses a system no bundle serves",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "f28931d084a2d3474b1eb50c14ff28eed0d888f45319a86e697b188bce65762e"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "cf5075cb28d4f7f877a9444c37782929d6816804f91670baa28094301ef438e7"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb": {
+          "file": "gitlab-mcp-server-darwin.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb": {
+          "file": "gitlab-mcp-server-windows.mcpb"
+        }
+      },
+      "exit": 1,
+      "stdout": "mcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: f28931d084a2d347..., valid bundle for darwin\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: cf5075cb28d4f7f8..., valid bundle for win32\nmcpb: platforms served\n",
+      "stderr": "  FAIL: no declared bundle serves linux, so a client there is offered nothing it can install\n1 of 2 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "refuses a platform Claude Desktop does not report",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "f28931d084a2d3474b1eb50c14ff28eed0d888f45319a86e697b188bce65762e"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "cf5075cb28d4f7f877a9444c37782929d6816804f91670baa28094301ef438e7"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "7d33ec9cb5086d5801fbd3f80a6c351af3a8040f3d7b9537f17673ec3232c76c"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-freebsd.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "6f0521155fb45c9960465900c10f8304b04d360c6a341cb784d504787696d4b2"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb": {
+          "file": "gitlab-mcp-server-darwin.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb": {
+          "file": "gitlab-mcp-server-windows.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb": {
+          "file": "gitlab-mcp-server-linux.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-freebsd.mcpb": {
+          "file": "gitlab-mcp-server-freebsd.mcpb"
+        }
+      },
+      "exit": 1,
+      "stdout": "mcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: f28931d084a2d347..., valid bundle for darwin\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: cf5075cb28d4f7f8..., valid bundle for win32\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb\n  3 entries; every path the manifest names is in the archive\n  OK: 7d33ec9cb5086d58..., valid bundle for linux\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-freebsd.mcpb\n  3 entries; every path the manifest names is in the archive\n  OK: 6f0521155fb45c99..., valid bundle for freebsd\nmcpb: platforms served\n",
+      "stderr": "  FAIL: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-freebsd.mcpb lists freebsd, which is not a platform Claude Desktop reports\n1 of 4 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-freebsd.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "judges coverage only once every bundle passed",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "f28931d084a2d3474b1eb50c14ff28eed0d888f45319a86e697b188bce65762e"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "cf5075cb28d4f7f877a9444c37782929d6816804f91670baa28094301ef438e7"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb": {
+          "file": "gitlab-mcp-server-darwin.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb": {
+          "file": "gitlab-mcp-server-windows.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb": {
+          "file": "gitlab-mcp-server-linux.mcpb"
+        }
+      },
+      "exit": 1,
+      "stdout": "mcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: f28931d084a2d347..., valid bundle for darwin\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: cf5075cb28d4f7f8..., valid bundle for win32\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb\n",
+      "stderr": "  FAIL: fileSha256 mismatch: declared 0000000000000000..., actual 7d33ec9cb5086d58...\n1 of 3 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-windows.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "refuses a per-OS bundle that names a server it does not carry",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "f28931d084a2d3474b1eb50c14ff28eed0d888f45319a86e697b188bce65762e"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/windows-names-darwin.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "c583fbbc55be4a699e08e361fac60ef2558047dba5bdeb37898bafea394e03fd"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "7d33ec9cb5086d5801fbd3f80a6c351af3a8040f3d7b9537f17673ec3232c76c"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb": {
+          "file": "gitlab-mcp-server-darwin.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/windows-names-darwin.mcpb": {
+          "file": "windows-names-darwin.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb": {
+          "file": "gitlab-mcp-server-linux.mcpb"
+        }
+      },
+      "exit": 1,
+      "stdout": "mcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb\n  2 entries; every path the manifest names is in the archive\n  OK: f28931d084a2d347..., valid bundle for darwin\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/windows-names-darwin.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb\n  3 entries; every path the manifest names is in the archive\n  OK: 7d33ec9cb5086d58..., valid bundle for linux\n",
+      "stderr": "the manifest names paths the bundle does not carry: mcp_config: server/gitlab-mcp-server is not in the archive\n  FAIL: not a valid MCP bundle\n1 of 3 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/windows-names-darwin.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "mcpb refusals of every kind",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "version": "9.8.7"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.zip",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "f28931d084a2d3474b1eb50c14ff28eed0d888f45319a86e697b188bce65762e"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/no-hash.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/missing.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/not-a-zip.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "dc05d39b3c92dfcaa1e9e91a4da7b04bc30ad510530cd3a8d750a38a195b671c"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/short.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "9b8db510ef42b8ed54a3712636fda55a4f8cfcd5493e20b74ab00cd4f3979f2d"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/no-manifest.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "1266dd292a7c3f54c0b29d5366224e9aa4a6968ca031f36dcd3d52fc0bf52cee"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/manifest-not-json.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "677abe0413f200f5761953368d18a2d9fbf6600bb462f35c0f8a900bd3defab3"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/dirname-not-leading.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "3cebaa2aba17b34dbb01a49238822ab8bd66ed4cfc54671157fa25ed0fdcd514"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/entry-point-missing.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "0af7fc7621a27054ee43c960812d96cbe1ab9b84858d0e38d0d771ca48321f38"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/platforms-not-a-list.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "14ea32c7ab44cd2d87e6fe73bd7bebaca74d330e05ded7a84a0ceab1c1a4b380"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/platforms-mixed.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "aa301bccaecc6c4702b2f7848787e28a55db191c450e3df9516ba7db4533c84c"
+          },
+          {
+            "registryType": "mcpb",
+            "identifier": "https://downloads.example.com/redirected/linux.mcpb",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            },
+            "fileSha256": "7d33ec9cb5086d5801fbd3f80a6c351af3a8040f3d7b9537f17673ec3232c76c"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/not-a-zip.mcpb": {
+          "file": "not-a-zip.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/short.mcpb": {
+          "file": "short.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/no-manifest.mcpb": {
+          "file": "no-manifest.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/manifest-not-json.mcpb": {
+          "file": "manifest-not-json.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/dirname-not-leading.mcpb": {
+          "file": "dirname-not-leading.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/entry-point-missing.mcpb": {
+          "file": "entry-point-missing.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/platforms-not-a-list.mcpb": {
+          "file": "platforms-not-a-list.mcpb"
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/platforms-mixed.mcpb": {
+          "file": "platforms-mixed.mcpb"
+        },
+        "GET https://downloads.example.com/redirected/linux.mcpb": {
+          "status": 302,
+          "headers": {
+            "Location": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb"
+          }
+        },
+        "GET https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb": {
+          "file": "gitlab-mcp-server-linux.mcpb"
+        }
+      },
+      "exit": 1,
+      "stdout": "mcpb: null\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-darwin.zip\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/no-hash.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/missing.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/not-a-zip.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/short.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/no-manifest.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/manifest-not-json.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/dirname-not-leading.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/entry-point-missing.mcpb\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/platforms-not-a-list.mcpb\n  5 entries; every path the manifest names is in the archive\n  OK: 14ea32c7ab44cd2d..., valid bundle for no platform\nmcpb: https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/platforms-mixed.mcpb\n  5 entries; every path the manifest names is in the archive\n  OK: aa301bccaecc6c47..., valid bundle for darwin win32 linux\nmcpb: https://downloads.example.com/redirected/linux.mcpb\n  3 entries; every path the manifest names is in the archive\n  OK: 7d33ec9cb5086d58..., valid bundle for linux\n",
+      "stderr": "  FAIL: identifier does not name a .mcpb bundle\n  FAIL: identifier does not name a .mcpb bundle\n  FAIL: no fileSha256 declared\ncurl: (22) The requested URL returned error: 404\n  FAIL: not downloadable\nnot a zip archive (magic bytes: 7f 45 4c 46)\n  FAIL: not a valid MCP bundle\nnot a zip archive (magic bytes: 4d 5a)\n  FAIL: not a valid MCP bundle\nzip archive carries no manifest.json\n  FAIL: not a valid MCP bundle\nmanifest.json is not JSON: Expecting value: line 1 column 12 (char 11)\n  FAIL: not a valid MCP bundle\nthe manifest names paths the bundle does not carry: mcp_config: x${__dirname}/server/gitlab-mcp-server uses ${__dirname} other than as a leading path component; mcp_config: server/missing is not in the archive; win32: server/gone.exe is not in the archive\n  FAIL: not a valid MCP bundle\nthe manifest names paths the bundle does not carry: server.entry_point: server/nowhere is not in the archive\n  FAIL: not a valid MCP bundle\n10 of 13 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/missing.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/not-a-zip.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/short.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/no-manifest.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/manifest-not-json.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/dirname-not-leading.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/entry-point-missing.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/platforms-not-a-list.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/platforms-mixed.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://downloads.example.com/redirected/linux.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v9.8.7/gitlab-mcp-server-linux.mcpb",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "oci images that pass, on ghcr.io and Docker Hub",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:9.8.7@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "docker.io/jmrplens/gitlab-mcp-server:9.8.7",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "routes": {
+        "GET https://ghcr.io/token?scope=repository:jmrplens/gitlab-mcp-server:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-gitlab-mcp-server>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+          "body": "{\"manifests\": [{\"digest\": \"sha256:1111111111111111111111111111111111111111111111111111111111111111\", \"platform\": {\"os\": \"linux\", \"architecture\": \"amd64\"}}, {\"digest\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\", \"platform\": {\"os\": \"linux\", \"architecture\": \"arm64\"}}, {\"digest\": \"sha256:3333333333333333333333333333333333333333333333333333333333333333\", \"platform\": {\"os\": \"unknown\", \"architecture\": \"unknown\"}}]}"
+        },
+        "HEAD https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/9.8.7": {
+          "headers": {
+            "docker-content-digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        "GET https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/sha256:1111111111111111111111111111111111111111111111111111111111111111": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/sha256:2222222222222222222222222222222222222222222222222222222222222222": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.jmrplens/gitlab-mcp-server\"}, \"Cmd\": [\"--transport\", \"auto\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        },
+        "GET https://auth.docker.io/token?service=registry.docker.io&scope=repository:jmrplens/gitlab-mcp-server:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-gitlab-mcp-server>\"}"
+        },
+        "GET https://registry-1.docker.io/v2/jmrplens/gitlab-mcp-server/manifests/9.8.7": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://registry-1.docker.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.jmrplens/gitlab-mcp-server\"}, \"Cmd\": [\"--transport\", \"auto\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        }
+      },
+      "exit": 0,
+      "stdout": "oci: ghcr.io/jmrplens/gitlab-mcp-server:9.8.7@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  checked 2 platform manifest(s)\n  OK: digest resolves, tag agrees, ownership label matches, CMD infers the transport\noci: docker.io/jmrplens/gitlab-mcp-server:9.8.7\n  checked 1 platform manifest(s)\n  OK: ownership label matches, CMD infers the transport\nAll 2 declared package(s) validated\n",
+      "stderr": "",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/gitlab-mcp-server:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "HEAD",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/9.8.7",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://auth.docker.io/token?service=registry.docker.io&scope=repository:jmrplens/gitlab-mcp-server:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://registry-1.docker.io/v2/jmrplens/gitlab-mcp-server/manifests/9.8.7",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://registry-1.docker.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "oci refusals of every kind",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "oci",
+            "identifier": "quay.io/jmrplens/gitlab-mcp-server:9.8.7",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/notag",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/baddigest:1@sha256:XYZ",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/absent:1.0.0",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/banned:1",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "1",
+            "fileSha256": "x"
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/untagged:2@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/moved:3@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/label:4",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/noconfig:5",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/blob:6",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/empty:7",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/args:8",
+            "transport": {
+              "type": "stdio"
+            },
+            "packageArguments": [
+              {
+                "type": "positional",
+                "value": "--http=false"
+              }
+            ]
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/argsbad:9",
+            "transport": {
+              "type": "stdio"
+            },
+            "packageArguments": [
+              {
+                "type": "positional",
+                "value": "--http"
+              },
+              {
+                "type": "named",
+                "value": "--http-addr=:8080"
+              }
+            ]
+          },
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/oldcmd:10",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "routes": {
+        "GET https://ghcr.io/token?scope=repository:jmrplens/absent:pull": {
+          "body": "{\"token\": \"<credential t-absent>\"}"
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/banned:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-banned>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/banned/manifests/1": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/banned/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.jmrplens/gitlab-mcp-server\"}, \"Cmd\": [\"--transport\", \"auto\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/untagged:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-untagged>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/untagged/manifests/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "HEAD https://ghcr.io/v2/jmrplens/untagged/manifests/2": {
+          "headers": {}
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/moved:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-moved>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/moved/manifests/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "HEAD https://ghcr.io/v2/jmrplens/moved/manifests/3": {
+          "headers": {
+            "docker-content-digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/label:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-label>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/label/manifests/4": {
+          "body": "{\"manifests\": [{\"digest\": \"sha256:1111111111111111111111111111111111111111111111111111111111111111\", \"platform\": {\"os\": \"linux\", \"architecture\": \"amd64\"}}, {\"digest\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\", \"platform\": {\"os\": \"linux\", \"architecture\": \"arm64\"}}, {\"digest\": \"sha256:3333333333333333333333333333333333333333333333333333333333333333\", \"platform\": {\"os\": \"unknown\", \"architecture\": \"unknown\"}}]}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/label/manifests/sha256:1111111111111111111111111111111111111111111111111111111111111111": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/label/manifests/sha256:2222222222222222222222222222222222222222222222222222222222222222": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/label/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.someone/else\"}, \"Cmd\": [\"--transport\", \"auto\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/noconfig:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-noconfig>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/noconfig/manifests/5": {
+          "body": "{\"schemaVersion\": 2}"
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/blob:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-blob>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/blob/manifests/6": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/empty:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-empty>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/empty/manifests/7": {
+          "body": "{\"manifests\": [{\"digest\": \"\", \"platform\": {\"os\": \"linux\", \"architecture\": \"amd64\"}}]}"
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/args:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-args>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/args/manifests/8": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/args/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.jmrplens/gitlab-mcp-server\"}, \"Cmd\": [\"--transport\", \"auto\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/argsbad:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-argsbad>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/argsbad/manifests/9": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/argsbad/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.jmrplens/gitlab-mcp-server\"}, \"Cmd\": [\"--transport\", \"auto\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        },
+        "GET https://ghcr.io/token?scope=repository:jmrplens/oldcmd:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-oldcmd>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/oldcmd/manifests/10": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/oldcmd/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.jmrplens/gitlab-mcp-server\"}, \"Cmd\": [\"--http\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        }
+      },
+      "files": {
+        "Dockerfile": "FROM scratch\nCMD [\"--transport\", \"auto\", \"--http-addr\", \"0.0.0.0:8080\"]\n"
+      },
+      "exit": 1,
+      "stdout": "oci: quay.io/jmrplens/gitlab-mcp-server:9.8.7\n  NOTE: quay.io is neither ghcr.io nor Docker Hub, skipping the image inspection\noci: ghcr.io/jmrplens/notag\noci: ghcr.io/jmrplens/baddigest:1@sha256:XYZ\noci: ghcr.io/jmrplens/absent:1.0.0\noci: ghcr.io/jmrplens/banned:1\n  checked 1 platform manifest(s)\n  OK: ownership label matches, CMD infers the transport\noci: ghcr.io/jmrplens/untagged:2@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\noci: ghcr.io/jmrplens/moved:3@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\noci: ghcr.io/jmrplens/label:4\noci: ghcr.io/jmrplens/noconfig:5\noci: ghcr.io/jmrplens/blob:6\noci: ghcr.io/jmrplens/empty:7\noci: ghcr.io/jmrplens/args:8\n  checked 1 platform manifest(s)\n  OK: ownership label matches, package arguments name the transport\noci: ghcr.io/jmrplens/argsbad:9\n  checked 1 platform manifest(s)\noci: ghcr.io/jmrplens/oldcmd:10\n  checked 1 platform manifest(s)\n  NOTE: published CMD is \"--http --http-addr 0.0.0.0:8080\"; the argument-free entry is correct from the next release, whose image infers the transport\n  OK: ownership label matches, the next release's CMD infers the transport\n",
+      "stderr": "  FAIL: identifier carries neither a tag nor a digest\n  FAIL: digest is not a sha256:<64 hex> reference: sha256:XYZ\ncurl: (22) The requested URL returned error: 404\n  FAIL: image 1.0.0 not found in the registry\n  FAIL: carries field(s) the registry rejects for OCI packages: version, fileSha256\n  FAIL: tag 2 does not resolve in the registry\n  FAIL: tag 3 resolves to sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb but the manifest pins sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  FAIL: linux/amd64: ownership label is \"io.github.someone/else\", expected \"io.github.jmrplens/gitlab-mcp-server\"\n  FAIL: linux/arm64: ownership label is \"io.github.someone/else\", expected \"io.github.jmrplens/gitlab-mcp-server\"\n  FAIL: single: the image manifest declares no config digest\ncurl: (22) The requested URL returned error: 404\n  FAIL: single: image config blob sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc could not be fetched\n  FAIL: the index declares no runnable platform manifest\n  FAIL: package arguments \"--http --http-addr=:8080\" replace CMD but name no stdio transport\n12 of 14 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/absent:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/absent/manifests/1.0.0",
+          "authorization": "Bearer <credential t-absent>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/banned:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/banned/manifests/1",
+          "authorization": "Bearer <credential t-jmrplens-banned>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/banned/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-banned>",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/untagged:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/untagged/manifests/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "authorization": "Bearer <credential t-jmrplens-untagged>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "HEAD",
+          "url": "https://ghcr.io/v2/jmrplens/untagged/manifests/2",
+          "authorization": "Bearer <credential t-jmrplens-untagged>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/moved:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/moved/manifests/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "authorization": "Bearer <credential t-jmrplens-moved>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "HEAD",
+          "url": "https://ghcr.io/v2/jmrplens/moved/manifests/3",
+          "authorization": "Bearer <credential t-jmrplens-moved>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/label:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/label/manifests/4",
+          "authorization": "Bearer <credential t-jmrplens-label>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/label/manifests/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "authorization": "Bearer <credential t-jmrplens-label>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/label/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-label>",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/label/manifests/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "authorization": "Bearer <credential t-jmrplens-label>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/label/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-label>",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/noconfig:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/noconfig/manifests/5",
+          "authorization": "Bearer <credential t-jmrplens-noconfig>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/blob:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/blob/manifests/6",
+          "authorization": "Bearer <credential t-jmrplens-blob>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/blob/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-blob>",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/empty:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/empty/manifests/7",
+          "authorization": "Bearer <credential t-jmrplens-empty>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/args:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/args/manifests/8",
+          "authorization": "Bearer <credential t-jmrplens-args>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/args/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-args>",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/argsbad:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/argsbad/manifests/9",
+          "authorization": "Bearer <credential t-jmrplens-argsbad>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/argsbad/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-argsbad>",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/oldcmd:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/oldcmd/manifests/10",
+          "authorization": "Bearer <credential t-jmrplens-oldcmd>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/oldcmd/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-oldcmd>",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "an argument-free entry on an image whose CMD predates the inference, with no Dockerfile",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:9.8.7",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "routes": {
+        "GET https://ghcr.io/token?scope=repository:jmrplens/gitlab-mcp-server:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-gitlab-mcp-server>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/9.8.7": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.jmrplens/gitlab-mcp-server\"}, \"Cmd\": [\"--http\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        }
+      },
+      "exit": 1,
+      "stdout": "oci: ghcr.io/jmrplens/gitlab-mcp-server:9.8.7\n  checked 1 platform manifest(s)\n",
+      "stderr": "  FAIL: image CMD is \"--http --http-addr 0.0.0.0:8080\", the package names no transport, and ./Dockerfile could not be read to check the next release's\n1 of 1 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/gitlab-mcp-server:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/9.8.7",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "an argument-free entry on an image whose CMD predates the inference, and a Dockerfile that does not infer",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "oci",
+            "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:9.8.7",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "routes": {
+        "GET https://ghcr.io/token?scope=repository:jmrplens/gitlab-mcp-server:pull": {
+          "body": "{\"token\": \"<credential t-jmrplens-gitlab-mcp-server>\"}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/9.8.7": {
+          "body": "{\"config\": {\"digest\": \"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}}"
+        },
+        "GET https://ghcr.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc": {
+          "body": "{\"config\": {\"Labels\": {\"io.modelcontextprotocol.server.name\": \"io.github.jmrplens/gitlab-mcp-server\"}, \"Cmd\": [\"--http\", \"--http-addr\", \"0.0.0.0:8080\"]}}"
+        }
+      },
+      "files": {
+        "Dockerfile": "FROM scratch\nCMD [\"--http\"]\n"
+      },
+      "exit": 1,
+      "stdout": "oci: ghcr.io/jmrplens/gitlab-mcp-server:9.8.7\n  checked 1 platform manifest(s)\n",
+      "stderr": "  FAIL: image CMD is \"--http --http-addr 0.0.0.0:8080\", which never reaches stdio, and neither the package nor ./Dockerfile names one\n1 of 1 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/token?scope=repository:jmrplens/gitlab-mcp-server:pull",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/manifests/9.8.7",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json"
+        },
+        {
+          "method": "GET",
+          "url": "https://ghcr.io/v2/jmrplens/gitlab-mcp-server/blobs/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "authorization": "Bearer <credential t-jmrplens-gitlab-mcp-server>",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "npm in lockstep, on an immutable release",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.7"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7": {
+          "body": "{\"name\": \"@jmrplens/gitlab-mcp-server\", \"version\": \"9.8.7\", \"mcpName\": \"io.github.jmrplens/gitlab-mcp-server\"}"
+        },
+        "GET https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7": {
+          "body": "{\"tag_name\": \"v9.8.7\", \"immutable\": true}"
+        }
+      },
+      "files": {
+        "npm/gitlab-mcp-server/package.json": "{\n  \"name\": \"@jmrplens/gitlab-mcp-server\",\n  \"version\": \"9.8.7\",\n  \"mcpName\": \"io.github.jmrplens/gitlab-mcp-server\"\n}\n"
+      },
+      "exit": 0,
+      "stdout": "npm: @jmrplens/gitlab-mcp-server@9.8.7\n  OK: name, mcpName and version in lockstep; published mcpName matches\nrelease: v9.8.7\n  OK: release v9.8.7 is immutable\nAll 1 declared package(s) validated\n",
+      "stderr": "",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7",
+          "authorization": "",
+          "accept": "application/vnd.github+json"
+        }
+      ]
+    },
+    {
+      "name": "npm published before mcpName, on a mutable release, with a token",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.7"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7": {
+          "body": "{\"name\": \"@jmrplens/gitlab-mcp-server\", \"version\": \"9.8.7\"}"
+        },
+        "GET https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7": {
+          "body": "{\"tag_name\": \"v9.8.7\", \"immutable\": false}"
+        }
+      },
+      "files": {
+        "npm/gitlab-mcp-server/package.json": "{\n  \"name\": \"@jmrplens/gitlab-mcp-server\",\n  \"version\": \"9.8.7\",\n  \"mcpName\": \"io.github.jmrplens/gitlab-mcp-server\"\n}\n"
+      },
+      "env": {
+        "GH_TOKEN": "<credential gh-token>",
+        "GITHUB_REPOSITORY": "jmrplens/gitlab-mcp-server"
+      },
+      "exit": 0,
+      "stdout": "npm: @jmrplens/gitlab-mcp-server@9.8.7\n  NOTE: published 9.8.7 predates mcpName; the registry accepts this entry starting with the release that publishes it\nrelease: v9.8.7\nAll 1 declared package(s) validated\n",
+      "stderr": "  WARNING: release v9.8.7 is mutable \u2014 its assets and checksums.txt can be replaced together. Enable immutable releases in the repository settings; the workflow already publishes drafts, which the feature requires.\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7",
+          "authorization": "Bearer <credential gh-token>",
+          "accept": "application/vnd.github+json"
+        }
+      ]
+    },
+    {
+      "name": "npm published under another mcpName, with release metadata nobody can read",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.7"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7": {
+          "body": "{\"mcpName\": \"io.github.someone/else\"}"
+        }
+      },
+      "files": {
+        "npm/gitlab-mcp-server/package.json": "{\n  \"name\": \"@jmrplens/gitlab-mcp-server\",\n  \"version\": \"9.8.7\",\n  \"mcpName\": \"io.github.jmrplens/gitlab-mcp-server\"\n}\n"
+      },
+      "exit": 1,
+      "stdout": "npm: @jmrplens/gitlab-mcp-server@9.8.7\nrelease: v9.8.7\n",
+      "stderr": "  FAIL: published mcpName is \"io.github.someone/else\", expected \"io.github.jmrplens/gitlab-mcp-server\"\ncurl: (22) The requested URL returned error: 404\n  WARNING: could not read the v9.8.7 release metadata; immutability not checked\n1 of 1 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7",
+          "authorization": "",
+          "accept": "application/vnd.github+json"
+        }
+      ]
+    },
+    {
+      "name": "npm not published",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.7"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7": {
+          "body": "{\"tag_name\": \"v9.8.7\", \"immutable\": true}"
+        }
+      },
+      "files": {
+        "npm/gitlab-mcp-server/package.json": "{\n  \"name\": \"@jmrplens/gitlab-mcp-server\",\n  \"version\": \"9.8.7\",\n  \"mcpName\": \"io.github.jmrplens/gitlab-mcp-server\"\n}\n"
+      },
+      "exit": 1,
+      "stdout": "npm: @jmrplens/gitlab-mcp-server@9.8.7\nrelease: v9.8.7\n  OK: release v9.8.7 is immutable\n",
+      "stderr": "curl: (22) The requested URL returned error: 404\n  FAIL: version 9.8.7 not found on registry.npmjs.org\n1 of 1 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7",
+          "authorization": "",
+          "accept": "application/vnd.github+json"
+        }
+      ]
+    },
+    {
+      "name": "npm entries the registry would refuse",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.7",
+            "fileSha256": "x"
+          },
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "npm",
+            "identifier": "gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.7"
+          },
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.6"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7": {
+          "body": "{\"name\": \"@jmrplens/gitlab-mcp-server\", \"version\": \"9.8.7\", \"mcpName\": \"io.github.jmrplens/gitlab-mcp-server\"}"
+        },
+        "GET https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7": {
+          "body": "{\"tag_name\": \"v9.8.7\", \"immutable\": true}"
+        }
+      },
+      "files": {
+        "npm/gitlab-mcp-server/package.json": "{\n  \"name\": \"@jmrplens/gitlab-mcp-server\",\n  \"version\": \"9.8.7\",\n  \"mcpName\": \"io.github.jmrplens/gitlab-mcp-server\"\n}\n"
+      },
+      "exit": 1,
+      "stdout": "npm: @jmrplens/gitlab-mcp-server@9.8.7\n  OK: name, mcpName and version in lockstep; published mcpName matches\nnpm: @jmrplens/gitlab-mcp-server@null\nnpm: gitlab-mcp-server@9.8.7\nnpm: @jmrplens/gitlab-mcp-server@9.8.6\nrelease: v9.8.7\n  OK: release v9.8.7 is immutable\n",
+      "stderr": "  FAIL: carries field(s) the registry rejects for npm packages: fileSha256\n  FAIL: carries field(s) the registry rejects for npm packages: fileSha256\n  FAIL: declares no version (the registry requires one for npm entries)\n  FAIL: identifier is \"gitlab-mcp-server\" but the committed launcher is \"@jmrplens/gitlab-mcp-server\"\n  FAIL: carries field(s) the registry rejects for npm packages: fileSha256\n  FAIL: declared version 9.8.6 does not match the committed launcher version 9.8.7\n6 of 4 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://registry.npmjs.org/@jmrplens%2Fgitlab-mcp-server/9.8.7",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7",
+          "authorization": "",
+          "accept": "application/vnd.github+json"
+        }
+      ]
+    },
+    {
+      "name": "an npm launcher without mcpName",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.7"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7": {
+          "body": "{\"tag_name\": \"v9.8.7\", \"immutable\": true}"
+        }
+      },
+      "files": {
+        "npm/gitlab-mcp-server/package.json": "{\n  \"name\": \"@jmrplens/gitlab-mcp-server\",\n  \"version\": \"9.8.7\"\n}\n"
+      },
+      "exit": 1,
+      "stdout": "npm: @jmrplens/gitlab-mcp-server@9.8.7\nrelease: v9.8.7\n  OK: release v9.8.7 is immutable\n",
+      "stderr": "  FAIL: launcher mcpName is \"\", expected \"io.github.jmrplens/gitlab-mcp-server\" (the registry's npm ownership check fails without it)\n1 of 1 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7",
+          "authorization": "",
+          "accept": "application/vnd.github+json"
+        }
+      ]
+    },
+    {
+      "name": "no npm launcher in the tree",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@jmrplens/gitlab-mcp-server",
+            "transport": {
+              "type": "stdio"
+            },
+            "version": "9.8.7"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7": {
+          "body": "{\"tag_name\": \"v9.8.7\", \"immutable\": true}"
+        }
+      },
+      "exit": 1,
+      "stdout": "npm: @jmrplens/gitlab-mcp-server@9.8.7\nrelease: v9.8.7\n  OK: release v9.8.7 is immutable\n",
+      "stderr": "  FAIL: npm/gitlab-mcp-server/package.json not found\n1 of 1 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://api.github.com/repos/jmrplens/gitlab-mcp-server/releases/tags/v9.8.7",
+          "authorization": "",
+          "accept": "application/vnd.github+json"
+        }
+      ]
+    },
+    {
+      "name": "pypi packages of every kind",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "pypi",
+            "identifier": "gitlab-mcp-server",
+            "version": "9.8.7",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "pypi",
+            "identifier": "gitlab-mcp-server-tokenless",
+            "version": "9.8.7"
+          },
+          {
+            "registryType": "pypi",
+            "identifier": "gitlab-mcp-server-absent",
+            "version": "9.8.7"
+          },
+          {
+            "registryType": "pypi",
+            "identifier": "gitlab-mcp-server-banned",
+            "version": "9.8.7",
+            "fileSha256": "x"
+          },
+          {
+            "registryType": "pypi",
+            "identifier": "gitlab-mcp-server-unversioned"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://pypi.org/pypi/gitlab-mcp-server/9.8.7/json": {
+          "body": "{\"info\": {\"description\": \"# GitLab MCP\\n\\nmcp-name: io.github.jmrplens/gitlab-mcp-server\\n\"}}"
+        },
+        "GET https://pypi.org/pypi/gitlab-mcp-server-tokenless/9.8.7/json": {
+          "body": "{\"info\": {\"description\": \"mcp-name: io.github.jmrplens/gitlab-mcp-server-other\\n\"}}"
+        },
+        "GET https://pypi.org/pypi/gitlab-mcp-server-banned/9.8.7/json": {
+          "body": "{\"info\": {\"description\": \"x mcp-name: io.github.jmrplens/gitlab-mcp-server\"}}"
+        }
+      },
+      "exit": 1,
+      "stdout": "pypi package: gitlab-mcp-server@9.8.7\n  OK: published version carries the mcp-name ownership token\npypi package: gitlab-mcp-server-tokenless@9.8.7\npypi package: gitlab-mcp-server-absent@9.8.7\npypi package: gitlab-mcp-server-banned@9.8.7\n  OK: published version carries the mcp-name ownership token\npypi package: gitlab-mcp-server-unversioned@null\n",
+      "stderr": "  FAIL: published README lacks the \"mcp-name: io.github.jmrplens/gitlab-mcp-server\" ownership token the registry validates\ncurl: (22) The requested URL returned error: 404\n  FAIL: version 9.8.7 not found on pypi.org\n  FAIL: carries field(s) the registry rejects for pypi packages: fileSha256\n  FAIL: declares no version (the registry requires one for pypi entries)\n4 of 5 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://pypi.org/pypi/gitlab-mcp-server/9.8.7/json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://pypi.org/pypi/gitlab-mcp-server-tokenless/9.8.7/json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://pypi.org/pypi/gitlab-mcp-server-absent/9.8.7/json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://pypi.org/pypi/gitlab-mcp-server-banned/9.8.7/json",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "nuget packages of every kind",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "nuget",
+            "identifier": "Example.Ok",
+            "version": "9.8.7-RC1",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.Banned",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json",
+            "fileSha256": "x"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.WrongBase",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://www.nuget.org/api/v2"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.NoBase",
+            "version": "9.8.7"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.Unversioned",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.Unpublished",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.Unlisted",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.NoReadme",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.Tokenless",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.NoPackage",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.NotZip",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          },
+          {
+            "registryType": "nuget",
+            "identifier": "Example.NoMcp",
+            "version": "9.8.7",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json"
+          }
+        ]
+      },
+      "routes": {
+        "GET https://api.nuget.org/v3-flatcontainer/example.ok/index.json": {
+          "body": "{\"versions\": [\"9.8.6\", \"9.8.7-rc1\"]}"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.ok/9.8.7-rc1/readme": {
+          "body": "<!-- mcp-name: io.github.jmrplens/gitlab-mcp-server -->\n# Example\n"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.ok/9.8.7-rc1/example.ok.9.8.7-rc1.nupkg": {
+          "file": "nuget-ok.nupkg"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.banned/index.json": {
+          "body": "{\"versions\": [\"9.8.7\"]}"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.banned/9.8.7/readme": {
+          "body": "mcp-name: io.github.jmrplens/gitlab-mcp-server\n"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.banned/9.8.7/example.banned.9.8.7.nupkg": {
+          "file": "nuget-ok.nupkg"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.unlisted/index.json": {
+          "body": "{\"versions\": [\"9.8.6\"]}"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.noreadme/index.json": {
+          "body": "{\"versions\": [\"9.8.7\"]}"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.tokenless/index.json": {
+          "body": "{\"versions\": [\"9.8.7\"]}"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.tokenless/9.8.7/readme": {
+          "body": "mcp-name: io.github.someone/else\n"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.nopackage/index.json": {
+          "body": "{\"versions\": [\"9.8.7\"]}"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.nopackage/9.8.7/readme": {
+          "body": "mcp-name: io.github.jmrplens/gitlab-mcp-server-->"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.notzip/index.json": {
+          "body": "{\"versions\": [\"9.8.7\"]}"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.notzip/9.8.7/readme": {
+          "body": "mcp-name: io.github.jmrplens/gitlab-mcp-server<br>"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.notzip/9.8.7/example.notzip.9.8.7.nupkg": {
+          "file": "nuget-not-zip.nupkg"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.nomcp/index.json": {
+          "body": "{\"versions\": [\"9.8.7\"]}"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.nomcp/9.8.7/readme": {
+          "body": "mcp-name: io.github.jmrplens/gitlab-mcp-server"
+        },
+        "GET https://api.nuget.org/v3-flatcontainer/example.nomcp/9.8.7/example.nomcp.9.8.7.nupkg": {
+          "file": "nuget-no-mcp.nupkg"
+        }
+      },
+      "exit": 1,
+      "stdout": "nuget package: Example.Ok@9.8.7-RC1\n  OK: published version carries the mcp-name ownership token, the tool manifest and .mcp/server.json\nnuget package: Example.Banned@9.8.7\nnuget package: Example.WrongBase@9.8.7\nnuget package: Example.NoBase@9.8.7\nnuget package: Example.Unversioned@null\nnuget package: Example.Unpublished@9.8.7\n  NOTE: Example.Unpublished is not on nuget.org yet; the registry accepts this entry starting with the release that publishes it\nnuget package: Example.Unlisted@9.8.7\n  NOTE: nuget.org lists Example.Unlisted but not 9.8.7 yet; the registry accepts this entry starting with the release that publishes it\nnuget package: Example.NoReadme@9.8.7\nnuget package: Example.Tokenless@9.8.7\nnuget package: Example.NoPackage@9.8.7\nnuget package: Example.NotZip@9.8.7\nnuget package: Example.NoMcp@9.8.7\n",
+      "stderr": "  FAIL: carries field(s) the registry rejects for nuget packages: fileSha256\npackage carries no Example.Banned.nuspec\n  FAIL: not a valid .NET tool package with an MCP manifest\n  FAIL: registryBaseUrl is \"https://www.nuget.org/api/v2\"; the registry accepts only https://api.nuget.org/v3/index.json for nuget entries\n  FAIL: registryBaseUrl is \"\"; the registry accepts only https://api.nuget.org/v3/index.json for nuget entries\n  FAIL: declares no version (the registry requires one for nuget entries)\ncurl: (22) The requested URL returned error: 404\n  FAIL: published version 9.8.7 carries no README (the registry's ownership check reads it)\n  FAIL: published README lacks the \"mcp-name: io.github.jmrplens/gitlab-mcp-server\" ownership token the registry validates\ncurl: (22) The requested URL returned error: 404\n  FAIL: version 9.8.7 is listed but its package could not be downloaded\nnot a zip archive\n  FAIL: not a valid .NET tool package with an MCP manifest\npackage carries no .mcp/server.json\n  FAIL: not a valid .NET tool package with an MCP manifest\n10 of 12 declared package(s) failed validation\n",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.ok/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.ok/9.8.7-rc1/readme",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.ok/9.8.7-rc1/example.ok.9.8.7-rc1.nupkg",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.banned/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.banned/9.8.7/readme",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.banned/9.8.7/example.banned.9.8.7.nupkg",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.unpublished/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.unlisted/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.noreadme/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.noreadme/9.8.7/readme",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.tokenless/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.tokenless/9.8.7/readme",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.nopackage/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.nopackage/9.8.7/readme",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.nopackage/9.8.7/example.nopackage.9.8.7.nupkg",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.notzip/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.notzip/9.8.7/readme",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.notzip/9.8.7/example.notzip.9.8.7.nupkg",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.nomcp/index.json",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.nomcp/9.8.7/readme",
+          "authorization": "",
+          "accept": "*/*"
+        },
+        {
+          "method": "GET",
+          "url": "https://api.nuget.org/v3-flatcontainer/example.nomcp/9.8.7/example.nomcp.9.8.7.nupkg",
+          "authorization": "",
+          "accept": "*/*"
+        }
+      ]
+    },
+    {
+      "name": "a server.json that declares nothing",
+      "server_json": {
+        "name": "io.github.jmrplens/gitlab-mcp-server",
+        "packages": [
+          {
+            "registryType": "cargo",
+            "identifier": "x"
+          }
+        ]
+      },
+      "routes": {},
+      "exit": 1,
+      "stdout": "",
+      "stderr": "ERROR: no mcpb, oci, npm, pypi or nuget packages found in server.json\n",
+      "requests": []
+    },
+    {
+      "name": "no server.json",
+      "server_json": null,
+      "routes": {},
+      "exit": 1,
+      "stdout": "",
+      "stderr": "ERROR: server.json not found\n",
+      "requests": []
+    }
+  ]
+}
