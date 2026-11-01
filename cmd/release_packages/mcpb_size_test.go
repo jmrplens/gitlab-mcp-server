@@ -42,6 +42,59 @@ func TestMibText_ByteCounts_RoundHalfUp(t *testing.T) {
 	}
 }
 
+// TestSizes_AreTheirMebibytes holds the sizes written as numbers to the
+// mebibytes they stand for.
+func TestSizes_AreTheirMebibytes(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct{ got, mebibytes int64 }{
+		"a mebibyte":          {got: mib, mebibytes: 1},
+		"one entry":           {got: desktopMaxEntryBytes, mebibytes: 512},
+		"unpacked in all":     {got: desktopMaxUnpackedBytes, mebibytes: 2048},
+		"download, warned at": {got: directoryWarnDownloadBytes, mebibytes: 50},
+		"unpacked, warned at": {got: directoryWarnUnpackedBytes, mebibytes: 256},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if tc.got != tc.mebibytes*1024*1024 {
+				t.Errorf("%s = %d, want %d MiB", name, tc.got, tc.mebibytes)
+			}
+		})
+	}
+}
+
+// TestCheckSize_TheSizesDirectoriesStopAt_AreWarnedOnlyPastThem verifies
+// that a declared bundle exactly at 50 MiB to download and 256 MiB unpacked
+// is not warned about, and one byte past either is.
+func TestCheckSize_TheSizesDirectoriesStopAt_AreWarnedOnlyPastThem(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name              string
+		archive, unpacked int64
+		warnings          int
+	}{
+		{name: "at both", archive: directoryWarnDownloadBytes, unpacked: directoryWarnUnpackedBytes},
+		{name: "past the download", archive: directoryWarnDownloadBytes + 1, unpacked: directoryWarnUnpackedBytes, warnings: 1},
+		{name: "past the unpacked size", archive: directoryWarnDownloadBytes, unpacked: directoryWarnUnpackedBytes + 1, warnings: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var stdout, stderr bytes.Buffer
+			b := newMcpbBuild(t.TempDir(), "dist", "9.8.7", &stdout, &stderr, noEnv)
+			b.measure = func(string) (bundleSizes, error) {
+				return bundleSizes{archive: tc.archive, entries: []entrySize{{name: "server/x", size: tc.unpacked}}}, nil
+			}
+			b.checkSize(bundleTargets()[0])
+			if got := strings.Count(stderr.String(), "WARNING: "); got != tc.warnings || b.failures != 0 {
+				t.Errorf("%d warnings and %d failures, want %d and none:\n%s", got, b.failures, tc.warnings, stderr.String())
+			}
+		})
+	}
+}
+
 // TestMeasureBundle_AnArchiveThatCannotBeRead_IsAnError covers the size
 // reader on a file that is missing and on one that is not a zip.
 func TestMeasureBundle_AnArchiveThatCannotBeRead_IsAnError(t *testing.T) {

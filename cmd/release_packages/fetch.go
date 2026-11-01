@@ -19,10 +19,13 @@ import (
 // workflow's own timeout fires, with no indication of which host went quiet.
 // A download is given a longer window than a metadata call, since a bundle is
 // tens of megabytes.
+// The bounds are written without arithmetic, since a constant expression is
+// not code a test can cover; TestBounds_AreCurlsBounds holds each to its
+// value in seconds.
 const (
-	connectTimeout  = 10 * time.Second
-	metadataTimeout = 60 * time.Second
-	downloadTimeout = 300 * time.Second
+	connectTimeout  time.Duration = 10e9
+	metadataTimeout time.Duration = 60e9
+	downloadTimeout time.Duration = 300e9
 	// fetchRetries is how many times a request that failed in a way that may
 	// pass is sent again, the two curl's --retry 2 gave every request.
 	fetchRetries = 2

@@ -30,7 +30,7 @@ type servedPlatform struct {
 // passed its own checks.
 func (c *serverJSONCheck) checkMCPB() {
 	packages := c.declared("mcpb")
-	failed := 0
+	allPassed := true
 	var served []servedPlatform
 	for _, pkg := range packages {
 		identifier := text(pkg, "identifier")
@@ -41,14 +41,14 @@ func (c *serverJSONCheck) checkMCPB() {
 		c.sayf("mcpb: %s", identifier)
 		platforms, ok := c.checkBundle(pkg, identifier)
 		if !ok {
-			failed++
+			allPassed = false
 			continue
 		}
 		for _, platform := range platforms {
 			served = append(served, servedPlatform{platform: platform, identifier: identifier})
 		}
 	}
-	if len(packages) > 0 && failed == 0 {
+	if len(packages) > 0 && allPassed {
 		c.checkCoverage(served)
 	}
 }
@@ -141,7 +141,7 @@ func magicBytes(data []byte) string {
 // orEmpty is Python's `value or {}` for the object a manifest holds: a value
 // that is null, false, empty or not an object reads as an empty one.
 func orEmpty(v *jsonValue) *jsonValue {
-	if v == nil || v.kind != jsonObject {
+	if v.kind != jsonObject {
 		return &jsonValue{kind: jsonObject}
 	}
 	return v

@@ -40,6 +40,52 @@ func quickFetcher(diagnostics *bytes.Buffer) *fetcher {
 	return f
 }
 
+// fetched is what one bounded fetch returned.
+type fetched struct {
+	got response
+	err error
+}
+
+// fetchWithin sends a request and fails the test when the fetcher has not
+// given up within ten seconds, so a fetcher that never stops retrying is a
+// failure rather than a test that never ends.
+func fetchWithin(t *testing.T, f *fetcher, req request) (response, error) {
+	t.Helper()
+	done := make(chan fetched, 1)
+	go func() {
+		got, err := f.fetch(req)
+		done <- fetched{got: got, err: err}
+	}()
+	select {
+	case result := <-done:
+		return result.got, result.err
+	case <-time.After(10 * time.Second):
+		t.Errorf("%s %s was still being retried after ten seconds", req.method, req.url)
+		return response{}, errNotAnswered
+	}
+}
+
+// TestBounds_AreCurlsBounds holds the bounds written as numbers to the
+// seconds curl was given and to the two retries.
+func TestBounds_AreCurlsBounds(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct{ got, want time.Duration }{
+		"connect":  {got: connectTimeout, want: 10 * time.Second},
+		"metadata": {got: metadataTimeout, want: 60 * time.Second},
+		"download": {got: downloadTimeout, want: 300 * time.Second},
+		"retries":  {got: fetchRetries, want: 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if tc.got != tc.want {
+				t.Errorf("%s = %v, want %v", name, tc.got, tc.want)
+			}
+		})
+	}
+}
+
 // TestFetcher_Answers_AreRetriedAndJudgedAsCurlJudgedThem covers each kind of
 // answer: one that passes at once, a transient one that passes on a retry,
 // one that never passes after two retries, and one that is not retried.
@@ -53,16 +99,20 @@ func TestFetcher_Answers_AreRetriedAndJudgedAsCurlJudgedThem(t *testing.T) {
 		ok       bool
 	}{
 		{name: "an answer", statuses: []int{200}, sent: 1, ok: true},
+		{name: "a redirect, which is an answer", statuses: []int{399}, sent: 1, ok: true},
 		{name: "a transient failure, then an answer", statuses: []int{503, 502, 200}, sent: 3, ok: true},
-		{name: "a transient failure every time", statuses: []int{429}, sent: 3},
+		// A fourth request would be answered, so a fetcher that retried once
+		// more than twice would pass where this one fails.
+		{name: "a transient failure every time", statuses: []int{429, 429, 429, 200}, sent: 3},
 		{name: "a refusal", statuses: []int{404}, sent: 1},
+		{name: "the lowest refusal", statuses: []int{400}, sent: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			server, sent := countingServer(t, tc.statuses...)
 			var diagnostics bytes.Buffer
-			got, err := quickFetcher(&diagnostics).get(server.URL+"/x", false, nil)
+			got, err := fetchWithin(t, quickFetcher(&diagnostics), request{method: http.MethodGet, url: server.URL + "/x", timeout: 5 * time.Second})
 			if (err == nil) != tc.ok || sent.Load() != tc.sent {
 				t.Errorf("err %v after %d requests, want ok=%v after %d", err, sent.Load(), tc.ok, tc.sent)
 			}
@@ -134,7 +184,7 @@ func TestFetcher_RequestsThatCannotBeSent_AreDescribed(t *testing.T) {
 			t.Parallel()
 
 			var diagnostics bytes.Buffer
-			if _, err := quickFetcher(&diagnostics).fetch(tc.req); err == nil || !strings.Contains(diagnostics.String(), tc.wantErr) {
+			if _, err := fetchWithin(t, quickFetcher(&diagnostics), tc.req); err == nil || !strings.Contains(diagnostics.String(), tc.wantErr) {
 				t.Errorf("err %v and diagnostics %q, want a failure naming %q", err, diagnostics.String(), tc.wantErr)
 			}
 		})

@@ -31,6 +31,8 @@ func TestParseImageReference_Identifiers_SplitAsTheScriptSplitThem(t *testing.T)
 		{identifier: "ghcr.io/a/b@sha256:x", want: imageReference{host: "ghcr.io", repo: "a/b", digest: "sha256:x"}},
 		{identifier: "docker.io/a/b:c:d", want: imageReference{host: "docker.io", repo: "a/b", tag: "d"}},
 		{identifier: "image", want: imageReference{host: "image", repo: "image"}},
+		{identifier: "ghcr.io/@sha256:x", want: imageReference{host: "ghcr.io", digest: "sha256:x"}},
+		{identifier: "ghcr.io/:1", want: imageReference{host: "ghcr.io", tag: "1"}},
 		{identifier: "image:1", want: imageReference{host: "image:1", repo: "image", tag: "1"}},
 	} {
 		t.Run(tc.identifier, func(t *testing.T) {

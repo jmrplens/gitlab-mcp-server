@@ -11,7 +11,10 @@ import (
 	"strings"
 )
 
-const mib = 1024 * 1024
+// mib is a mebibyte. It and the sizes below are written as the numbers they
+// are, since a constant expression is not code a test can cover;
+// TestSizes_AreTheirMebibytes holds each to its count of mebibytes.
+const mib = 1048576
 
 // Claude Desktop's own limits, read from its extension runtime (2.7032.0,
 // the extraction policy it applies to an extension): it refuses an archive
@@ -21,8 +24,8 @@ const mib = 1024 * 1024
 // so each one fails the build.
 const (
 	desktopMaxEntries       = 100000
-	desktopMaxEntryBytes    = 512 * mib
-	desktopMaxUnpackedBytes = 2048 * mib
+	desktopMaxEntryBytes    = 536870912  // 512 MiB
+	desktopMaxUnpackedBytes = 2147483648 // 2048 MiB
 	desktopMaxRatio         = 50
 )
 
@@ -35,8 +38,8 @@ const (
 // not declared anywhere a directory reads, and carries all three systems'
 // servers by design, so it is measured and not warned about.
 const (
-	directoryWarnDownloadBytes = 50 * mib
-	directoryWarnUnpackedBytes = 256 * mib
+	directoryWarnDownloadBytes = 52428800  // 50 MiB
+	directoryWarnUnpackedBytes = 268435456 // 256 MiB
 )
 
 // bundleSizes is what one bundle measures: the archive's size in bytes and

@@ -485,6 +485,25 @@ func readEntry(t *testing.T, file *zip.File) []byte {
 	return data
 }
 
+// TestMcpbBuild_ABinaryIsARegularFileOfItsName verifies that a binary is
+// looked for as a regular file of its name only: a directory of that name
+// under another build of the same target, and another file in a build's
+// directory, are neither counted as a second binary nor packed.
+func TestMcpbBuild_ABinaryIsARegularFileOfItsName(t *testing.T) {
+	t.Parallel()
+
+	var record buildRecord
+	readRecord(t, "build_mcpb.json", &record)
+	root := layOutTree(t, &record, buildRun{})
+	if err := os.MkdirAll(filepath.Join(root, "dist", "stale_linux_amd64", "gitlab-mcp-server"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, "dist/local_linux_amd64/gitlab-mcp-server.sbom.json", []byte("{}"))
+	if got := runBuild(t, root, record.Version, buildRun{}); got.code != 0 {
+		t.Errorf("exit %d, want the bundles built\nstderr:\n%s", got.code, got.stderr)
+	}
+}
+
 // TestMcpbBuild_TheSameInputs_PackTheSameBytes verifies the half of F4-D6
 // the script could not be held to, since Info-ZIP's bytes are not Go's: two
 // runs over the same inputs write identical bundles, whether into two trees

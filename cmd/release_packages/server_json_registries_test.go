@@ -134,7 +134,7 @@ func TestOwnershipToken_TheServerName_IsMatchedLiterally(t *testing.T) {
 func TestASCIILower_LowersOnlyASCIILetters(t *testing.T) {
 	t.Parallel()
 
-	if got := asciiLower("Example.NoMcp-RC1.Ä"); got != "example.nomcp-rc1.Ä" {
+	if got := asciiLower("@AZ[`az{Example.NoMcp-RC1.Ä"); got != "@az[`az{example.nomcp-rc1.Ä" {
 		t.Errorf("asciiLower = %q", got)
 	}
 }

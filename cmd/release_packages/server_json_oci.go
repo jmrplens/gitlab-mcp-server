@@ -317,14 +317,14 @@ func (c *serverJSONCheck) transportSource(pkg, config *jsonValue) (string, bool)
 	}
 	args := strings.Join(values, " ")
 	dockerfile := c.sibling("Dockerfile")
-	switch {
-	case args != "":
+	if args != "" {
 		if !containsAny(args, "--http=false", "--transport stdio", "--transport auto") {
 			c.failf("package arguments \"%s\" replace CMD but name no stdio transport", args)
 			return "", false
 		}
 		return "package arguments name the transport", true
-	case containsAny(cmd, "--transport auto", "--transport stdio"):
+	}
+	if containsAny(cmd, "--transport auto", "--transport stdio") {
 		return "CMD infers the transport", true
 	}
 	data, err := os.ReadFile(c.local(dockerfile)) //#nosec G304,G703 -- the Dockerfile beside the server.json the operator named, read and never written
