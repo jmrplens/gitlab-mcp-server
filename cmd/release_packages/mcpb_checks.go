@@ -239,6 +239,10 @@ func pathProblems(manifest *jsonValue, l launch, version string, t bundleTarget)
 	return problems
 }
 
+// overridePrefix is how a problem names one entry of the manifest's
+// platform_overrides, by its key.
+const overridePrefix = "platform_overrides."
+
 // platformProblems holds the overrides and the platform list to each other
 // and to the platforms the archive carries a server for.
 func platformProblems(l launch, t bundleTarget) []string {
@@ -246,12 +250,12 @@ func platformProblems(l launch, t bundleTarget) []string {
 	keys := l.overrideKeys()
 	for _, key := range keys {
 		if !slices.Contains(desktopPlatforms, key) {
-			problems = append(problems, "platform_overrides."+key+" is not a platform Claude Desktop reports (darwin, win32 or linux)")
+			problems = append(problems, overridePrefix+key+" is not a platform Claude Desktop reports (darwin, win32 or linux)")
 		}
 	}
 	for _, key := range keys {
 		if !l.lists(key) {
-			problems = append(problems, "platform_overrides."+key+" is not listed in compatibility.platforms")
+			problems = append(problems, overridePrefix+key+" is not listed in compatibility.platforms")
 		}
 	}
 	base := jsonText(t.basePlatform())
@@ -281,7 +285,7 @@ func overrideProblems(l launch) []string {
 	var problems []string
 	for _, member := range l.overrides.members {
 		if member.value.has("env") {
-			problems = append(problems, "platform_overrides."+member.key+" declares env, which would replace the base env")
+			problems = append(problems, overridePrefix+member.key+" declares env, which would replace the base env")
 		}
 	}
 	// The base args were iterated by readLaunch, so they are an array or an
@@ -289,7 +293,7 @@ func overrideProblems(l launch) []string {
 	if baseArgs := l.config.field("args"); len(baseArgs.items)+len(baseArgs.members) > 0 {
 		for _, member := range l.overrides.members {
 			if member.value.has("args") {
-				problems = append(problems, "platform_overrides."+member.key+" declares args, which would replace the non-empty base args")
+				problems = append(problems, overridePrefix+member.key+" declares args, which would replace the non-empty base args")
 			}
 		}
 	}
