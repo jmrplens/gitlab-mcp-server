@@ -64,7 +64,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **2FA Enabled**: ✅\n" +
 				"- **External**: ❌\n" +
 				"- **Bot**: ❌\n" +
-				"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+				"- **URL**: <https://gitlab.example.com/alice>\n" +
 				"- **Created**: 1 Jan 2026 00:00 UTC\n" +
 				"\n---\n💡 **Next steps:**\n" +
 				"- Use action 'enterprise_user.disable_2fa' to reset two-factor authentication\n" +

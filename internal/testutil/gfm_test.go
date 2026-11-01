@@ -221,11 +221,54 @@ func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 		{name: "a code span in a cell beside a real link", md: "| `[x](http://attacker.invalid/y)` | [T](https://gitlab.example/T/7) |\n", want: "https://gitlab.example/T/7"},
 		{name: "a code span in a paragraph", md: "See `[x](http://attacker.invalid/y)` here.\n"},
 		{name: "an unclosed backtick opens no span", md: "| `[x](http://attacker.invalid/y) |\n", want: "http://attacker.invalid/y"},
+		// An autolink is a link a client follows exactly as it follows an
+		// inline one, so its address is read in line order beside them.
+		{name: "an autolink", md: "| <https://gitlab.example/T/7> |\n", want: "https://gitlab.example/T/7"},
+		{name: "an autolink after a link", md: "- **A**: [T](https://gitlab.example/A/7) and <https://gitlab.example/B/7>\n", want: "https://gitlab.example/A/7|https://gitlab.example/B/7"},
+		{name: "an autolink before a link", md: "- **A**: <https://gitlab.example/B/7> and [T](https://gitlab.example/A/7)\n", want: "https://gitlab.example/B/7|https://gitlab.example/A/7"},
+		{name: "a scheme of two letters", md: "<ab:x>\n", want: "ab:x"},
+		{name: "a scheme of one letter is no autolink", md: "<a:x>\n"},
+		{name: "a scheme of thirty-two characters", md: "<" + strings.Repeat("s", 32) + ":x>\n", want: strings.Repeat("s", 32) + ":x"},
+		{name: "a scheme of thirty-three characters is no autolink", md: "<" + strings.Repeat("s", 33) + ":x>\n"},
+		{name: "a space ends no autolink", md: "<https://gitlab.example/a b>\n"},
+		{name: "a raw tag is no autolink", md: `<a href="https://gitlab.example/T/7">x</a>` + "\n"},
+		{name: "an escaped angle bracket is text", md: "| &lt;https://gitlab.example/T/7> |\n"},
+		{name: "an autolink inside a code span is text", md: "| `<https://gitlab.example/T/7>` |\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := strings.Join(ScanGFM(tc.md).Links, "|"); got != tc.want {
 				t.Errorf("links = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestScanGFM_SelfLinks_RecordsALabelThatIsItsDestination checks the record
+// the address rule of issue 1396 reads: an inline link whose label is its own
+// destination is recorded, wherever the line model reads links, and nothing
+// else is, an autolink, a link with a real label, and a label that is only
+// close to its destination included.
+func TestScanGFM_SelfLinks_RecordsALabelThatIsItsDestination(t *testing.T) {
+	cases := []struct {
+		name string
+		md   string
+		want string
+	}{
+		{name: "a link labeled with its destination", md: "- **URL**: [https://gitlab.example/T/7](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "one in a table cell", md: "| A |\n| --- |\n| [https://gitlab.example/T/7](https://gitlab.example/T/7) |\n", want: "https://gitlab.example/T/7"},
+		{name: "two on one line", md: "[https://a.example/1](https://a.example/1) [https://b.example/2](https://b.example/2)\n", want: "https://a.example/1|https://b.example/2"},
+		{name: "the autolink is not one", md: "- **URL**: <https://gitlab.example/T/7>\n"},
+		{name: "a real label is not one", md: "| [!7](https://gitlab.example/T/7) |\n"},
+		{name: "a label close to its destination is not one", md: "[https://gitlab.example/T/7/](https://gitlab.example/T/7)\n"},
+		{name: "one inside a code span is text", md: "`[https://gitlab.example/T/7](https://gitlab.example/T/7)`\n"},
+		{name: "one inside a quote is GitLab's", md: "> [https://gitlab.example/T/7](https://gitlab.example/T/7)\n"},
+		{name: "one inside a fence is content", md: "```\n[https://gitlab.example/T/7](https://gitlab.example/T/7)\n```\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := strings.Join(ScanGFM(tc.md).SelfLinks, "|"); got != tc.want {
+				t.Errorf("self links = %q, want %q", got, tc.want)
 			}
 		})
 	}

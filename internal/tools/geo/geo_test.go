@@ -713,8 +713,8 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	assertGeoMarkdown(t, FormatOutputMarkdown(out), "## Geo Site: primary-site\n\n"+
 		"- **ID**: 1\n"+
 		"- **Name**: primary-site\n"+
-		"- **URL**: [https://primary.example.com](https://primary.example.com)\n"+
-		"- **Internal URL**: [https://primary.internal](https://primary.internal)\n"+
+		"- **URL**: <https://primary.example.com>\n"+
+		"- **Internal URL**: <https://primary.internal>\n"+
 		"- **Primary**: ✅\n"+
 		"- **Enabled**: ✅\n"+
 		"- **Current**: ✅\n"+
@@ -728,8 +728,8 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"- **Selective Sync Type**: namespaces\n"+
 		"- **Selective Sync Shards**: default, nvme\n"+
 		"- **Selective Sync Namespace IDs**: 7, 9\n"+
-		"- **Web Edit URL**: [https://primary.example.com/admin/geo/sites/1/edit](https://primary.example.com/admin/geo/sites/1/edit)\n"+
-		"- **Replication Details**: [https://primary.example.com/admin/geo/replication](https://primary.example.com/admin/geo/replication)\n"+
+		"- **Web Edit URL**: <https://primary.example.com/admin/geo/sites/1/edit>\n"+
+		"- **Replication Details**: <https://primary.example.com/admin/geo/replication>\n"+
 		geoSiteHints)
 }
 
@@ -748,7 +748,7 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	assertGeoMarkdown(t, FormatOutputMarkdown(out), "## Geo Site: secondary\n\n"+
 		"- **ID**: 2\n"+
 		"- **Name**: secondary\n"+
-		"- **URL**: [https://secondary.example.com](https://secondary.example.com)\n"+
+		"- **URL**: <https://secondary.example.com>\n"+
 		"- **Primary**: ❌\n"+
 		"- **Enabled**: ✅\n"+
 		"- **Current**: ❌\n"+
@@ -790,8 +790,8 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 
 	assertGeoMarkdown(t, FormatListMarkdown(out), "## Geo Sites (2)\n\n"+
 		geoSiteTableHead+
-		"| 1 | primary | [https://primary.example.com](https://primary.example.com) | ✅ | ✅ |\n"+
-		"| 2 | secondary | [https://secondary.example.com](https://secondary.example.com) | ❌ | ❌ |\n"+
+		"| 1 | primary | <https://primary.example.com> | ✅ | ✅ |\n"+
+		"| 2 | secondary | <https://secondary.example.com> | ❌ | ❌ |\n"+
 		geoSiteListHints)
 }
 
@@ -814,7 +814,7 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 
 	assertGeoMarkdown(t, FormatListMarkdown(out), "## Geo Sites (1)\n\n"+
 		geoSiteTableHead+
-		"| 1 | primary | [https://primary.example.com](https://primary.example.com) | ✅ | ✅ |\n"+
+		"| 1 | primary | <https://primary.example.com> | ✅ | ✅ |\n"+
 		"\nPage 1 | no more pages\n"+
 		geoSiteListHints)
 }

@@ -608,8 +608,8 @@ func TestFormatGitHubImport_WithImportWarning(t *testing.T) {
 		"- **Import Source**: github.com/user/repo\n"+
 		"- **Import Status**: scheduled\n"+
 		"- **Relation Type**: fork\n"+
-		"- **Provider Link**: [https://github.com/user/repo](https://github.com/user/repo)\n"+
-		"- **Refs URL**: [https://gitlab.example.com/ns/my-repo/refs](https://gitlab.example.com/ns/my-repo/refs)\n"+
+		"- **Provider Link**: <https://github.com/user/repo>\n"+
+		"- **Refs URL**: <https://gitlab.example.com/ns/my-repo/refs>\n"+
 		"- **Import Warning**: partial import\n"+
 		gitHubImportHints)
 }
@@ -632,7 +632,7 @@ func TestFormatCancelledImport(t *testing.T) {
 		"- **Import Source**: github.com/user/repo\n"+
 		"- **Import Status**: canceled\n"+
 		"- **Status Name**: canceled\n"+
-		"- **Provider Link**: [https://github.com/user/repo](https://github.com/user/repo)\n"+
+		"- **Provider Link**: <https://github.com/user/repo>\n"+
 		cancelledImportHints)
 }
 
@@ -654,7 +654,7 @@ func TestFormatBitbucketCloudImport(t *testing.T) {
 		"- **Import Source**: bitbucket.org/user/repo\n"+
 		"- **Import Status**: scheduled\n"+
 		"- **Status Name**: scheduled\n"+
-		"- **Provider Link**: [https://bitbucket.org/user/repo](https://bitbucket.org/user/repo)\n"+
+		"- **Provider Link**: <https://bitbucket.org/user/repo>\n"+
 		pollImportHints)
 }
 

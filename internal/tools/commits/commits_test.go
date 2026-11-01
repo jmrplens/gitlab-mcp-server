@@ -2198,7 +2198,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		"- **Title**: feat: init\n" +
 		"- **Author**: Alice (a@t.com)\n" +
 		"- **Date**: 1 Jan 2026\n" +
-		"- **URL**: [https://example.com](https://example.com)\n" +
+		"- **URL**: <https://example.com>\n" +
 		commitCardHints
 
 	if got != want {
@@ -2398,7 +2398,7 @@ func TestFormatDetailMarkdown(t *testing.T) {
 		"- **Author**: Bob (b@t.com)\n" +
 		"- **Parents**: `p1, p2`\n" +
 		"- **Stats**: +10 -3 (13 total)\n" +
-		"- **URL**: [https://example.com](https://example.com)\n" +
+		"- **URL**: <https://example.com>\n" +
 		"- **Message**:\n" +
 		"  > feat: test\n" +
 		"  >\n" +
@@ -2417,7 +2417,7 @@ func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 
 	want := "## Commit x\n\n" +
 		"- **Title**: t\n" +
-		"- **URL**: [https://gitlab.example.com/c/x](https://gitlab.example.com/c/x)\n" +
+		"- **URL**: <https://gitlab.example.com/c/x>\n" +
 		commitDetailHints
 
 	if got != want {
@@ -2624,7 +2624,7 @@ func TestFormatStatusMarkdown(t *testing.T) {
 		"- **Allow Failure**: ❌\n" +
 		"- **Pipeline ID**: 9\n" +
 		"- **Created**: 20 Mar 2026 15:45 UTC\n" +
-		"- **Target**: [" + testCIURL + "](" + testCIURL + ")\n" +
+		"- **Target**: <" + testCIURL + ">\n" +
 		"- **Description**: Passed\n" +
 		commitStatusHints
 

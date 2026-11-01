@@ -1207,7 +1207,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		"  - **Title**: Fix login\n" +
 		"  - **Author**: Alice\n" +
 		"  - **Committed**: 20 Mar 2026 15:45 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/-/tree/main](https://gitlab.example.com/-/tree/main)\n" +
+		"- **URL**: <https://gitlab.example.com/-/tree/main>\n" +
 		branchCardHints
 
 	if got != want {

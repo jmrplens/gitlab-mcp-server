@@ -679,7 +679,7 @@ func TestFormatShareMarkdown_SharedWithGroups(t *testing.T) {
 		"- **Path**: mygroup\n" +
 		"- **Full Path**: parent/mygroup\n" +
 		"- **Visibility**: internal\n" +
-		"- **URL**: [https://gl/groups/mygroup](https://gl/groups/mygroup)\n" +
+		"- **URL**: <https://gl/groups/mygroup>\n" +
 		"\n### Shared With\n\n" +
 		"| Group | Group ID | Access Level | Expires |\n" +
 		"| --- | --- | --- | --- |\n" +
@@ -1407,7 +1407,7 @@ func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 		"- **Access Level**: Developer (30)\n" +
 		"- **Member Role**: Custom Role\n" +
 		"- **Expires**: 31 Dec 2026\n" +
-		"- **URL**: [https://gl/dev](https://gl/dev)\n" +
+		"- **URL**: <https://gl/dev>\n" +
 		memberHints
 	if got != want {
 		t.Errorf("FormatMemberMarkdown =\n%q\nwant\n%q", got, want)
@@ -1469,7 +1469,7 @@ func TestFormatShareMarkdown_WithAllFields(t *testing.T) {
 		"- **Name**: Shared Group\n" +
 		"- **Path**: shared-group\n" +
 		"- **Description**: The group we share with\n" +
-		"- **URL**: [https://gl/groups/shared-group](https://gl/groups/shared-group)\n" +
+		"- **URL**: <https://gl/groups/shared-group>\n" +
 		shareHints
 	if got != want {
 		t.Errorf("FormatShareMarkdown =\n%q\nwant\n%q", got, want)

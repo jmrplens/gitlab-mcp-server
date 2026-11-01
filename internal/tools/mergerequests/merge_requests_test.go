@@ -3215,7 +3215,7 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		"- 🔄 **Auto-merge set (merges when the pipeline succeeds)**\n" +
 		"- 🔄 **Rebase in progress**\n" +
 		"- **Merge Error**: Merge conflict\n" +
-		"- **URL**: [" + testMRWebURL + "](" + testMRWebURL + ")\n" +
+		"- **URL**: <" + testMRWebURL + ">\n" +
 		"- **Description**: Full description here\n" + cardHints
 	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
@@ -3651,7 +3651,7 @@ func TestFormatCreatePipelineMarkdown(t *testing.T) {
 		"- **Source**: merge_request_event\n" +
 		"- **Ref**: feature/login\n" +
 		"- **SHA**: `abc123`\n" +
-		"- **URL**: [https://gitlab.example.com/pipelines/500](https://gitlab.example.com/pipelines/500)\n" +
+		"- **URL**: <https://gitlab.example.com/pipelines/500>\n" +
 		createPipelineHints
 	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
@@ -3778,7 +3778,7 @@ func TestFormatCreateTodoMarkdown_Populated(t *testing.T) {
 		"- **Body**: Review this\n" +
 		"- **State**: pending\n" +
 		"- **Updated**: 2 Jan 2026 03:04 UTC\n" +
-		"- **URL**: [" + testMRWebURL + "](" + testMRWebURL + ")\n" + todoHints
+		"- **URL**: <" + testMRWebURL + ">\n" + todoHints
 	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
@@ -3817,7 +3817,7 @@ func TestFormatMarkdown_ClickableURL(t *testing.T) {
 		IID: 3, Title: "test", State: testStateOpened,
 		WebURL: "https://gitlab.example.com/mr/3",
 	})
-	if !strings.Contains(md, "[https://gitlab.example.com/mr/3](https://gitlab.example.com/mr/3)") {
+	if !strings.Contains(md, "<https://gitlab.example.com/mr/3>") {
 		t.Errorf("expected clickable URL in detail, got:\n%s", md)
 	}
 }
@@ -3829,7 +3829,7 @@ func TestFormatCreatePipelineMarkdown_ClickableURL(t *testing.T) {
 		ID: 500, Status: testStatePending,
 		WebURL: "https://gitlab.example.com/pipelines/500",
 	})
-	if !strings.Contains(md, "[https://gitlab.example.com/pipelines/500](https://gitlab.example.com/pipelines/500)") {
+	if !strings.Contains(md, "<https://gitlab.example.com/pipelines/500>") {
 		t.Errorf("expected clickable pipeline URL, got:\n%s", md)
 	}
 }
@@ -3842,7 +3842,7 @@ func TestFormatCreateTodoMarkdown_ClickableURL(t *testing.T) {
 		TargetTitle: testMRTitle, TargetURL: "https://gitlab.example.com/todo/42",
 		State: testStatePending,
 	})
-	if !strings.Contains(md, "[https://gitlab.example.com/todo/42](https://gitlab.example.com/todo/42)") {
+	if !strings.Contains(md, "<https://gitlab.example.com/todo/42>") {
 		t.Errorf("expected clickable todo URL, got:\n%s", md)
 	}
 }

@@ -54,7 +54,7 @@ func TestFormatListMarkdown(t *testing.T) {
 				"| ID | Filename | File Path | Metric Link |\n"+
 				"| --- | --- | --- | --- |\n"+
 				"| 1 | img.png | /uploads/-/system/alert_metric_image/file/1/img.png | [CPU saturation](https://example.com/img.png) |\n"+
-				"| 2 | second.png | /uploads/-/system/alert_metric_image/file/2/second.png | [https://example.com/second.png](https://example.com/second.png) |\n"+
+				"| 2 | second.png | /uploads/-/system/alert_metric_image/file/2/second.png | <https://example.com/second.png> |\n"+
 				"\n---\n💡 **Next steps:**\n"+
 				"- "+toolutil.HintPreserveLinks+"\n"+
 				"- Use action 'admin.alert_metric_image_upload' to add another metric image to the alert\n")

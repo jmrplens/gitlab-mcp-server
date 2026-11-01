@@ -3218,7 +3218,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"- **Coverage**: 85.5%\n" +
 		"- **User**: @testuser\n" +
 		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/-/jobs/100](https://gitlab.example.com/-/jobs/100)\n" +
+		"- **URL**: <https://gitlab.example.com/-/jobs/100>\n" +
 		jobCardHints
 	if md != want {
 		t.Errorf("FormatOutputMarkdown(all fields)\n got %q\nwant %q", md, want)

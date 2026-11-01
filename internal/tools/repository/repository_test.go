@@ -1328,7 +1328,7 @@ func TestFormatCompareMarkdown(t *testing.T) {
 	want := "## Repository Compare\n\n" +
 		"- **Commits**: 1\n" +
 		"- **Changed Files**: 1\n" +
-		"- **URL**: [https://gitlab.example.com/-/compare/main...develop](https://gitlab.example.com/-/compare/main...develop)\n" +
+		"- **URL**: <https://gitlab.example.com/-/compare/main...develop>\n" +
 		"\n### Commits\n\n" +
 		"| Short ID | Title | Author |\n" +
 		"| --- | --- | --- |\n" +
@@ -1359,7 +1359,7 @@ func TestFormatCompareMarkdown_CommitsWithoutDiffs(t *testing.T) {
 	want := "## Repository Compare\n\n" +
 		"- **Commits**: 1\n" +
 		"- **Changed Files**: 0\n" +
-		"- **URL**: [https://gitlab.example.com/-/compare/main...develop](https://gitlab.example.com/-/compare/main...develop)\n" +
+		"- **URL**: <https://gitlab.example.com/-/compare/main...develop>\n" +
 		"\n### Commits\n\n" +
 		"| Short ID | Title | Author |\n" +
 		"| --- | --- | --- |\n" +
@@ -1635,7 +1635,7 @@ func TestFormatArchiveMarkdown(t *testing.T) {
 		"- **Format**: zip\n" +
 		"- **SHA/Ref**: main\n" +
 		"- **Path**: src\n" +
-		"- **URL**: [https://example.com/archive.zip?path=src](https://example.com/archive.zip?path=src)\n" +
+		"- **URL**: <https://example.com/archive.zip?path=src>\n" +
 		archiveHints
 
 	if got != want {
@@ -1653,7 +1653,7 @@ func TestFormatArchiveMarkdown_NoSHA(t *testing.T) {
 	want := "## Repository Archive\n\n" +
 		"- **Project**: 42\n" +
 		"- **Format**: tar.gz\n" +
-		"- **URL**: [https://example.com/archive.tar.gz](https://example.com/archive.tar.gz)\n" +
+		"- **URL**: <https://example.com/archive.tar.gz>\n" +
 		archiveHints
 
 	if got != want {

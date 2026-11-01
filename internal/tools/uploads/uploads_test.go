@@ -807,7 +807,7 @@ func TestFormatUploadMarkdown(t *testing.T) {
 		"- **ID**: 12\n" +
 		"- **Alt**: screenshot.png\n" +
 		"- **Path**: /uploads/a1b2/screenshot.png\n" +
-		"- **URL**: [https://gitlab.example.com/uploads/a1b2/screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
+		"- **URL**: <https://gitlab.example.com/uploads/a1b2/screenshot.png>\n" +
 		"- **Markdown**: `![screenshot.png](/uploads/a1b2/screenshot.png)`\n" +
 		uploadCardHints
 	if got != want {
@@ -863,7 +863,7 @@ func TestUploadToolResult_Image(t *testing.T) {
 	want := "## File Uploaded\n\n" +
 		"- **Alt**: screenshot\n" +
 		"- **Path**: /uploads/a1b2/screenshot.png\n" +
-		"- **URL**: [https://gitlab.example.com/uploads/a1b2/screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
+		"- **URL**: <https://gitlab.example.com/uploads/a1b2/screenshot.png>\n" +
 		"- **Markdown**: `![screenshot](/uploads/a1b2/screenshot.png)`\n\n" +
 		"![screenshot](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
 		uploadCardHints
@@ -898,7 +898,7 @@ func TestUploadToolResult_NonImage(t *testing.T) {
 	want := "## File Uploaded\n\n" +
 		"- **Alt**: report.pdf\n" +
 		"- **Path**: /uploads/a1b2/report.pdf\n" +
-		"- **URL**: [https://gitlab.example.com/uploads/a1b2/report.pdf](https://gitlab.example.com/uploads/a1b2/report.pdf)\n" +
+		"- **URL**: <https://gitlab.example.com/uploads/a1b2/report.pdf>\n" +
 		"- **Markdown**: `![report.pdf](/uploads/a1b2/report.pdf)`\n" +
 		uploadCardHints
 	if tc.Text != want {

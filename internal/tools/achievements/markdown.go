@@ -34,7 +34,8 @@ const (
 )
 
 // writeAchievementRows writes the fields shared by every single-achievement
-// card, so the detail and delete views cannot drift apart.
+// card, so the detail and delete views cannot drift apart. The avatar is left
+// to structuredContent, which carries it as avatar_url (issue 1396).
 func writeAchievementRows(c *toolutil.Card, a Achievement) {
 	c.Int("ID", a.ID)
 	c.Field("Name", a.Name)
@@ -43,9 +44,6 @@ func writeAchievementRows(c *toolutil.Card, a Achievement) {
 	// when it runs to more than one line rather than written as Markdown of the
 	// response.
 	c.Text("Description", a.Description)
-	if a.AvatarURL != "" {
-		c.Link("Avatar", "image", a.AvatarURL)
-	}
 	c.Time("Created", a.CreatedAt)
 	c.Time("Updated", a.UpdatedAt)
 }
@@ -178,6 +176,10 @@ func FormatUserAchievementMutationOutputMarkdown(out UserAchievementMutationOutp
 // the table header, which both continued the guidance paragraph — so the table
 // never rendered — and left the section neither leading nor trailing, where
 // ExtractHints finds nothing and next_steps came back empty.
+//
+// The table has no avatar column: an achievement's avatar was the one link a
+// row carried, and it is left to structuredContent (issue 1396), so a page of
+// achievements carries no link and does not ask the model to keep one.
 func FormatListMarkdown(out ListOutput) string {
 	var sb strings.Builder
 	if len(out.Achievements) == 0 {
@@ -186,27 +188,20 @@ func FormatListMarkdown(out ListOutput) string {
 		return sb.String()
 	}
 	toolutil.WriteListHeading(&sb, "Achievements", len(out.Achievements), toolutil.PaginationOutput{})
-	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Namespace ID", "Description", "Avatar"))
-	linked := false
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Namespace ID", "Description"))
 	for _, achievement := range out.Achievements {
 		description := toolutil.EscapeMdTableCell(achievement.Description)
 		if description == "" {
 			description = dash
-		}
-		avatar := dash
-		if achievement.AvatarURL != "" {
-			avatar = toolutil.MdTitleLink("image", achievement.AvatarURL)
-			linked = true
 		}
 		sb.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(achievement.ID, 10),
 			toolutil.EscapeMdTableCell(achievement.Name),
 			strconv.FormatInt(achievement.NamespaceID, 10),
 			description,
-			avatar,
 		))
 	}
-	writeCursorFooter(&sb, out.Pagination, len(out.Achievements), linked,
+	writeCursorFooter(&sb, out.Pagination, len(out.Achievements), false,
 		toolutil.HintAction(actionAward, "hand one of these achievements to a user"),
 		hintCursorNext,
 	)

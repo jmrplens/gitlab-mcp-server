@@ -1006,13 +1006,13 @@ func TestFormatPagesMarkdown(t *testing.T) {
 	})
 
 	assertPagesMarkdown(t, md, "## Pages Settings\n\n"+
-		"- **URL**: ["+testPagesURL+"]("+testPagesURL+")\n"+
+		"- **URL**: <"+testPagesURL+">\n"+
 		"- **Unique Domain**: ❌\n"+
 		"- **Force HTTPS**: ✅\n"+
 		"\n### Deployments\n\n"+
 		"| URL | Created | Path Prefix | Root Dir |\n"+
 		"| --- | --- | --- | --- |\n"+
-		"| ["+testPagesURL+"]("+testPagesURL+") | 15 Jan 2026 10:00 UTC |  | public |\n"+
+		"| <"+testPagesURL+"> | 15 Jan 2026 10:00 UTC |  | public |\n"+
 		pagesSettingsHints)
 }
 
@@ -1020,7 +1020,7 @@ func TestFormatPagesMarkdown(t *testing.T) {
 // deployments opens no collection heading.
 func TestFormatPagesMarkdown_NoDeployments(t *testing.T) {
 	assertPagesMarkdown(t, FormatPagesMarkdown(Output{URL: testPagesURL}), "## Pages Settings\n\n"+
-		"- **URL**: ["+testPagesURL+"]("+testPagesURL+")\n"+
+		"- **URL**: <"+testPagesURL+">\n"+
 		"- **Unique Domain**: ❌\n"+
 		"- **Force HTTPS**: ❌\n"+
 		pagesSettingsHints)
@@ -1040,7 +1040,7 @@ func TestFormatDomainMarkdown_WithOptionalFields(t *testing.T) {
 	})
 
 	assertPagesMarkdown(t, md, "## Pages Domain: "+testDomain+"\n\n"+
-		"- **URL**: ["+testExampleURL+"]("+testExampleURL+")\n"+
+		"- **URL**: <"+testExampleURL+">\n"+
 		"- **Verified**: ✅\n"+
 		"- **Auto SSL**: ❌\n"+
 		"- **Enabled Until**: 1 Jan 2026 00:00 UTC\n"+
@@ -1063,7 +1063,7 @@ func TestFormatDomainMarkdown_Unverified(t *testing.T) {
 	})
 
 	assertPagesMarkdown(t, md, "## Pages Domain: "+testDomain+"\n\n"+
-		"- **URL**: ["+testExampleURL+"]("+testExampleURL+")\n"+
+		"- **URL**: <"+testExampleURL+">\n"+
 		"- **Verified**: ❌\n"+
 		"- **Verification Code**: `abc123`\n"+
 		"- **Auto SSL**: ❌\n"+
@@ -1094,7 +1094,7 @@ func TestFormatAllDomainsMarkdown_NonEmpty(t *testing.T) {
 
 	assertPagesMarkdown(t, md, "## All Pages Domains (1)\n\n"+
 		pagesDomainTableHead+
-		"| "+testDomainA+" | ["+testDomainAURL+"]("+testDomainAURL+") | ❌ | ❌ | 1 |\n"+
+		"| "+testDomainA+" | <"+testDomainAURL+"> | ❌ | ❌ | 1 |\n"+
 		"\n---\n\U0001F4A1 **Next steps:**\n"+
 		"- "+toolutil.HintPreserveLinks+"\n"+
 		"- Use action 'project.pages_domain_get' to read one domain in full\n"+
@@ -1113,7 +1113,7 @@ func TestFormatAllDomainsMarkdown_APageOfALongerList(t *testing.T) {
 	assertPagesMarkdown(t, md, "## All Pages Domains (2)\n\n"+
 		"Showing 1 of 2 results (page 1 of 2)\n\n"+
 		pagesDomainTableHead+
-		"| "+testDomainA+" | ["+testDomainAURL+"]("+testDomainAURL+") | ❌ | ❌ | 1 |\n"+
+		"| "+testDomainA+" | <"+testDomainAURL+"> | ❌ | ❌ | 1 |\n"+
 		"\nPage 1 of 2 | 2 items total | 1 per page\n"+
 		"\n---\n\U0001F4A1 **Next steps:**\n"+
 		"- "+toolutil.HintPreserveLinks+"\n"+
@@ -1158,7 +1158,7 @@ func TestFormatDomainMarkdown_NumericProject(t *testing.T) {
 	})
 
 	assertPagesMarkdown(t, md, "## Pages Domain: "+testDomain+"\n\n"+
-		"- **URL**: ["+testExampleURL+"]("+testExampleURL+")\n"+
+		"- **URL**: <"+testExampleURL+">\n"+
 		"- **Project ID**: 99\n"+
 		"- **Verified**: ✅\n"+
 		"- **Auto SSL**: ❌\n"+
@@ -1176,7 +1176,7 @@ func TestFormatDomainMarkdown_ProjectScoped(t *testing.T) {
 	})
 
 	assertPagesMarkdown(t, md, "## Pages Domain: "+testDomain+"\n\n"+
-		"- **URL**: ["+testExampleURL+"]("+testExampleURL+")\n"+
+		"- **URL**: <"+testExampleURL+">\n"+
 		"- **Verified**: ✅\n"+
 		"- **Auto SSL**: ❌\n"+
 		pagesDomainHints)
@@ -1194,8 +1194,8 @@ func TestFormatDomainListMarkdown_NumericProject(t *testing.T) {
 
 	assertPagesMarkdown(t, md, "## Pages Domains (2)\n\n"+
 		pagesDomainTableHead+
-		"| "+testDomainA+" | ["+testDomainAURL+"]("+testDomainAURL+") | ❌ | ❌ | 1 |\n"+
-		"| b.com | [https://b.com](https://b.com) | ❌ | ❌ | 2 |\n"+
+		"| "+testDomainA+" | <"+testDomainAURL+"> | ❌ | ❌ | 1 |\n"+
+		"| b.com | <https://b.com> | ❌ | ❌ | 2 |\n"+
 		"\n---\n\U0001F4A1 **Next steps:**\n"+
 		"- "+toolutil.HintPreserveLinks+"\n"+
 		"- Use action 'project.pages_domain_get' to read one domain in full\n")

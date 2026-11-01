@@ -71,12 +71,21 @@ type GFMDocument struct {
 	// the table body rows and their cells, and the link destinations, all
 	// outside fences and quotes. Content is every line outside a fence or a
 	// quote.
+	//
+	// Links holds an autolink's address as well as an inline link's
+	// destination, in the order they appear on each line: <url> is a link a
+	// client renders and follows exactly as it does [text](url).
 	Headings []string
 	Items    []string
 	Rows     int
 	Cells    int
 	Links    []string
 	Content  []string
+	// SelfLinks are the inline links, outside fences, quotes and code spans,
+	// whose label is their own destination, [url](url): the address written
+	// twice where the autolink <url> writes it once (issue 1396). Each is
+	// recorded as the destination.
+	SelfLinks []string
 	// Bare is where a raw tag is a live tag rather than text: every line
 	// outside a fence, its code spans elided. It carries quote lines, which
 	// Content does not, because a blockquote contains structure and not tags
@@ -120,7 +129,13 @@ var (
 	// the escaped "]" of a label EscapeMdLinkLabel wrote as the end of the
 	// label, and reports every link this server builds as a link to whatever
 	// destination the value inside it names.
-	gfmLinkRe = regexp.MustCompile(`\[(?:[^\[\]\\\n]|\\.)*\]\(([^)\s]+)\)`)
+	//
+	// The second alternative reads an autolink, CommonMark's absolute URI
+	// between angle brackets: a scheme of two to thirty-two characters, a
+	// colon, and anything but a space, a control character, '<' or '>'. Its
+	// address is the second group. The label of an inline link is the first
+	// group, which is what tells a link whose label is its own destination.
+	gfmLinkRe = regexp.MustCompile(`\[((?:[^\[\]\\\n]|\\.)*)\]\(([^)\s]+)\)|<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\x00-\x20<>\x7f]*)>`)
 )
 
 // gfmCodeSpanPlaceholder stands in for an elided code span: the object
@@ -419,7 +434,14 @@ func (s *gfmScanner) structure() {
 		// link the page does not have, against exactly the value that had
 		// been contained.
 		for _, m := range gfmLinkRe.FindAllStringSubmatch(bare, -1) {
-			s.doc.Links = append(s.doc.Links, m[1])
+			if m[2] == "" {
+				s.doc.Links = append(s.doc.Links, m[3])
+				continue
+			}
+			s.doc.Links = append(s.doc.Links, m[2])
+			if m[1] == m[2] {
+				s.doc.SelfLinks = append(s.doc.SelfLinks, m[2])
+			}
 		}
 	}
 }

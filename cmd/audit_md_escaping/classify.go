@@ -41,12 +41,19 @@ const (
 // span is its own containment, and each sizes its fence past the longest
 // backtick run in the value, so nothing inside can end the span or open a
 // construct of its own.
+//
+// MdAutolink writes no entity either. It writes an address between angle
+// brackets only when the address holds none of the characters that would end
+// the autolink or the cell it sits in, and the long form MdTitleLink writes,
+// both halves escaped, for any other value (issue 1396), so its result is as
+// safe in a cell as MdTitleLink's.
 var escapers = map[string]bool{
 	"EscapeMdTableCell":       true,
 	"EscapeMdHeading":         true,
 	"EscapeMdLinkLabel":       true,
 	"EscapeMdLinkDestination": true,
 	"MdTitleLink":             true,
+	"MdAutolink":              true,
 	"FormatTarget":            true,
 	"WrapGFMBody":             true,
 	"MdCodeSpan":              true,

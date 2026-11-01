@@ -346,7 +346,7 @@ func TestEscapers_Set_RefusesStripControlBytes(t *testing.T) {
 	if escapers["StripControlBytes"] {
 		t.Error("StripControlBytes is accepted as an escaper")
 	}
-	for _, name := range []string{"EscapeMdTableCell", "EscapeMdHeading", "MdTitleLink"} {
+	for _, name := range []string{"EscapeMdTableCell", "EscapeMdHeading", "MdTitleLink", "MdAutolink"} {
 		t.Run(name, func(t *testing.T) {
 			if !escapers[name] {
 				t.Errorf("%s is not accepted as an escaper", name)

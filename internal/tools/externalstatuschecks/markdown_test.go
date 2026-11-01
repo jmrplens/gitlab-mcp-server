@@ -59,7 +59,7 @@ func TestFormatMergeCheckMarkdown(t *testing.T) {
 				"- **ID**: 1\n" +
 				"- **Name**: CI Check\n" +
 				"- **Status**: passed\n" +
-				"- **External URL**: [https://ci.example.com](https://ci.example.com)\n" +
+				"- **External URL**: <https://ci.example.com>\n" +
 				mergeCheckHints,
 		},
 		{
@@ -74,7 +74,7 @@ func TestFormatMergeCheckMarkdown(t *testing.T) {
 				"- **ID**: 99\n" +
 				"- **Name**: Security Scan\n" +
 				"- **Status**: failed\n" +
-				"- **External URL**: [https://scan.example.com](https://scan.example.com)\n" +
+				"- **External URL**: <https://scan.example.com>\n" +
 				mergeCheckHints,
 		},
 		{
@@ -158,7 +158,7 @@ func TestFormatProjectCheckMarkdown(t *testing.T) {
 				"- **ID**: 42\n" +
 				"- **Name**: Security Scan\n" +
 				"- **Project ID**: 1\n" +
-				"- **External URL**: [https://scan.example.com](https://scan.example.com)\n" +
+				"- **External URL**: <https://scan.example.com>\n" +
 				"- **HMAC**: ✅\n\n" +
 				"### Protected Branches\n\n" +
 				"| ID | Name | Code Owner Approval |\n" +
@@ -180,7 +180,7 @@ func TestFormatProjectCheckMarkdown(t *testing.T) {
 				"- **ID**: 10\n" +
 				"- **Name**: Lint Check\n" +
 				"- **Project ID**: 5\n" +
-				"- **External URL**: [https://lint.example.com](https://lint.example.com)\n" +
+				"- **External URL**: <https://lint.example.com>\n" +
 				"- **HMAC**: ❌\n" +
 				"- **Protected Branches**: All branches\n" +
 				projectCheckHints,
@@ -247,8 +247,8 @@ func TestFormatListMergeMarkdown(t *testing.T) {
 		want := "## Merge Status Checks (2)\n\n" +
 			"| ID | Name | External URL | Status |\n" +
 			"| --- | --- | --- | --- |\n" +
-			"| 1 | CI | [https://ci.example.com](https://ci.example.com) | passed |\n" +
-			"| 2 | Security | [https://sec.example.com](https://sec.example.com) | failed |\n\n" +
+			"| 1 | CI | <https://ci.example.com> | passed |\n" +
+			"| 2 | Security | <https://sec.example.com> | failed |\n\n" +
 			"Page 1 of 1 | 2 items total\n" +
 			mergeListHints
 
@@ -299,8 +299,8 @@ func TestFormatListProjectMarkdown(t *testing.T) {
 		want := "## Project External Status Checks (2)\n\n" +
 			"| ID | Name | External URL | HMAC | Protected Branches |\n" +
 			"| --- | --- | --- | --- | --- |\n" +
-			"| 1 | CI | [https://ci.example.com](https://ci.example.com) | ✅ | 1 |\n" +
-			"| 2 | Lint | [https://lint.example.com](https://lint.example.com) | ❌ | All branches |\n\n" +
+			"| 1 | CI | <https://ci.example.com> | ✅ | 1 |\n" +
+			"| 2 | Lint | <https://lint.example.com> | ❌ | All branches |\n\n" +
 			"Page 1 of 1 | 2 items total\n" +
 			projectListHints
 

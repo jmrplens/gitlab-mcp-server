@@ -167,18 +167,17 @@ func (c *Card) Time(label, rfc3339 string) {
 
 // Link writes [MdTitleLink] of text and url: a link when url is set, the
 // escaped text alone when it is not, and nothing when both are blank. A blank
-// text with a url links the url itself, so a link never has an empty label.
+// text with a url, or a text that is the url, writes the address once, as the
+// autolink [MdAutolink] writes, so a link never has an empty label and never
+// spells its address twice.
 func (c *Card) Link(label, text, url string) {
-	if blank(text) {
-		text = url
-	}
 	c.row(label, MdTitleLink(text, url))
 }
 
-// URL writes the "URL" row, the address linked to itself, or nothing when it
-// is empty.
+// URL writes the "URL" row, the address as the autolink [MdAutolink] writes,
+// or nothing when it is empty.
 func (c *Card) URL(url string) {
-	c.Link("URL", url, url)
+	c.row("URL", MdAutolink(url))
 }
 
 // Code writes the value as a code span through [MdCodeSpan], for a value the

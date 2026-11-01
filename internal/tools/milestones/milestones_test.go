@@ -1307,7 +1307,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		"- **State**: active\n" +
 		"- **Start Date**: 1 Jan 2026\n" +
 		"- **Due Date**: 31 Mar 2026\n" +
-		"- **URL**: [https://example.com/-/milestones/1](https://example.com/-/milestones/1)\n" +
+		"- **URL**: <https://example.com/-/milestones/1>\n" +
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
 		"- **Updated**: 15 Jan 2026 10:00 UTC\n" +
 		"- **Description**: First release\n\n" +

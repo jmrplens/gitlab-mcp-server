@@ -371,7 +371,7 @@ func TestFormatCurrentJobMarkdown(t *testing.T) {
 				"- **Allowed to fail**\n" +
 				"- **Pipeline**: [#77](https://gitlab.example.com/g/p/-/pipelines/77)\n" +
 				"- **Created**: 5 Jan 2026 00:00 UTC\n" +
-				"- **URL**: [https://gitlab.example.com/-/jobs/10](https://gitlab.example.com/-/jobs/10)\n" +
+				"- **URL**: <https://gitlab.example.com/-/jobs/10>\n" +
 				"\n---\n💡 **Next steps:**\n" +
 				"- Use action 'job.get' to read this job in full, with when it started and who ran it\n" +
 				"- Use action 'job.trace' to read its log\n" +

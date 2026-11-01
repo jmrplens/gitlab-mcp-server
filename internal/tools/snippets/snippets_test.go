@@ -475,7 +475,7 @@ func TestFormatMarkdown(t *testing.T) {
 		"- **Title**: Test\n" +
 		"- **Visibility**: private\n" +
 		"- **Author**: Admin (@admin)\n" +
-		"- **URL**: [" + webURL + "](" + webURL + ")\n" +
+		"- **URL**: <" + webURL + ">\n" +
 		snippetCardHints(false, true)
 	if got != want {
 		t.Errorf("personal snippet card:\n got %q\nwant %q", got, want)
@@ -1300,7 +1300,7 @@ func TestFormatMarkdown_FilesAndHintsFollowTheSnippet(t *testing.T) {
 		"- **ID**: 42\n" +
 		"- **Title**: Test Snippet\n" +
 		"- **Project ID**: 7\n" +
-		"\n### Files\n\n| Path | Raw URL |\n| --- | --- |\n| test.go | [" + rawURL + "](" + rawURL + ") |\n" +
+		"\n### Files\n\n| Path | Raw URL |\n| --- | --- |\n| test.go | <" + rawURL + "> |\n" +
 		snippetCardHints(true, true)
 	if withFiles != wantFiles {
 		t.Errorf("project snippet with files:\n got %q\nwant %q", withFiles, wantFiles)

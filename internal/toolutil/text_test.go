@@ -333,10 +333,12 @@ func TestMdTitleLink(t *testing.T) {
 			want:  "[line1 line2](https://example.com)",
 		},
 		{
+			// A link with no text renders as nothing to click, so a blank
+			// title writes the address once instead.
 			name:  "empty title with URL",
 			title: "",
 			url:   "https://example.com",
-			want:  "[](https://example.com)",
+			want:  "<https://example.com>",
 		},
 		{
 			name:  "empty title and URL",
@@ -349,6 +351,98 @@ func TestMdTitleLink(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := MdTitleLink(tt.title, tt.url)
 			if got != tt.want {
+				t.Errorf("MdTitleLink(%q, %q) = %q, want %q", tt.title, tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdAutolink_Cases_WritesTheAddressOnce verifies whole output for an
+// address written as its own text (issue 1396): an http or https address is
+// written once between angle brackets, a control character the escapers drop
+// is dropped from it as it was from the long form, and one carrying a
+// character that cannot stand inside an autolink falls back to the long form
+// MdTitleLink wrote before, both halves escaped, or to a code span for an
+// address that is not linked at all. Each refused character has a case of its
+// own, and the boundaries of the control ranges have one each, so a rule that
+// drifted by one character would fail here rather than write an autolink a
+// client reads as something else.
+func TestMdAutolink_Cases_WritesTheAddressOnce(t *testing.T) {
+	// The no-break space is spelled by its code point so the source carries
+	// no character a reader cannot see.
+	nbsp := string(rune(0xA0))
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{name: "https address", url: "https://gitlab.example.com/g/p/-/issues/42", want: "<https://gitlab.example.com/g/p/-/issues/42>"},
+		{name: "plain http address", url: "http://gitlab.local/g/p", want: "<http://gitlab.local/g/p>"},
+		{name: "query string kept as it is", url: "https://gitlab.example.com/g/p/-/jobs?scope=failed&page=2", want: "<https://gitlab.example.com/g/p/-/jobs?scope=failed&page=2>"},
+		{name: "characters a link label escapes need nothing here", url: "https://gitlab.example.com/g/p/-/blob/main/a_[b]`c`*d*", want: "<https://gitlab.example.com/g/p/-/blob/main/a_[b]`c`*d*>"},
+		{name: "non-ASCII path", url: "https://gitlab.example.com/g/señal", want: "<https://gitlab.example.com/g/señal>"},
+		{name: "surrounding whitespace dropped", url: "  https://gitlab.example.com/g/p \n", want: "<https://gitlab.example.com/g/p>"},
+		{name: "space inside falls back", url: "https://gitlab.example.com/a b", want: "[https://gitlab.example.com/a b](https://gitlab.example.com/a%20b)"},
+		{name: "opening angle bracket falls back", url: "https://gitlab.example.com/a<b", want: `[https://gitlab.example.com/a&lt;b](https://gitlab.example.com/a%3Cb)`},
+		{name: "closing angle bracket falls back", url: "https://gitlab.example.com/a>b", want: `[https://gitlab.example.com/a\>b](https://gitlab.example.com/a%3Eb)`},
+		{name: "pipe falls back", url: "https://gitlab.example.com/a|b", want: "[https://gitlab.example.com/a&#124;b](https://gitlab.example.com/a%7Cb)"},
+		{name: "tab falls back", url: "https://gitlab.example.com/a\tb", want: "[https://gitlab.example.com/a\tb](https://gitlab.example.com/a%09b)"},
+		{name: "line feed falls back", url: "https://gitlab.example.com/a\nb", want: "[https://gitlab.example.com/a b](https://gitlab.example.com/a%0Ab)"},
+		// A control character the escapers drop is dropped here too, so the
+		// autolink names the address the long form linked to.
+		{name: "first C0 byte is dropped", url: "https://gitlab.example.com/a\x00b", want: "<https://gitlab.example.com/ab>"},
+		{name: "escape byte is dropped", url: "https://gitlab.example.com/a\x1bb", want: "<https://gitlab.example.com/ab>"},
+		{name: "last C0 byte before the space is dropped", url: "https://gitlab.example.com/a\x1fb", want: "<https://gitlab.example.com/ab>"},
+		{name: "DEL is dropped", url: "https://gitlab.example.com/a\x7fb", want: "<https://gitlab.example.com/ab>"},
+		{name: "first C1 character is dropped", url: "https://gitlab.example.com/a\u0080b", want: "<https://gitlab.example.com/ab>"},
+		{name: "last C1 character is dropped", url: "https://gitlab.example.com/a\u009fb", want: "<https://gitlab.example.com/ab>"},
+		{name: "carriage return falls back", url: "https://gitlab.example.com/a\rb", want: "[https://gitlab.example.com/a b](https://gitlab.example.com/a%0Db)"},
+		{name: "first character past the C1 range is kept", url: "https://gitlab.example.com/a" + nbsp + "b", want: "<https://gitlab.example.com/a" + nbsp + "b>"},
+		{name: "tilde, the last character before DEL, is kept", url: "https://gitlab.example.com/~user", want: "<https://gitlab.example.com/~user>"},
+		{name: "exclamation mark, the first character past the space, is kept", url: "https://gitlab.example.com/g/p/-/merge_requests/!1", want: "<https://gitlab.example.com/g/p/-/merge_requests/!1>"},
+		{name: "address that is not http stays a code span", url: "wss://kas.example.com", want: "`wss://kas.example.com`"},
+		{name: "javascript address stays a code span", url: "javascript:alert(1)", want: "`javascript:alert(1)`"},
+		{name: "scheme with nothing after it stays a code span", url: "https://", want: "`https://`"},
+		{name: "empty address writes nothing", url: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MdAutolink(tt.url); got != tt.want {
+				t.Errorf("MdAutolink(%q) = %q, want %q", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdTitleLink_TitleSaysOnlyTheAddress_WritesItOnce verifies whole output
+// for a title that adds nothing to the address: the address itself, the
+// address with whitespace around it, or a blank title. Each is the autolink,
+// and a title that says anything else keeps the long form, so the two halves
+// of the condition are each held: a title equal to the address and a blank
+// one both shorten, and a title that is neither does not.
+func TestMdTitleLink_TitleSaysOnlyTheAddress_WritesItOnce(t *testing.T) {
+	const address = "https://gitlab.example.com/g/p/-/releases/v1.0.0"
+	tests := []struct {
+		name  string
+		title string
+		url   string
+		want  string
+	}{
+		{name: "title is the address", title: address, url: address, want: "<" + address + ">"},
+		{name: "title is the address with whitespace around it", title: " " + address + "\t", url: address, want: "<" + address + ">"},
+		{name: "address has whitespace around it", title: address, url: address + " ", want: "<" + address + ">"},
+		{name: "blank title", title: "  ", url: address, want: "<" + address + ">"},
+		{name: "title says something else", title: "v1.0.0", url: address, want: "[v1.0.0](" + address + ")"},
+		{name: "title is a longer address", title: address + "/x", url: address, want: "[" + address + "/x](" + address + ")"},
+		{name: "title is the address but the address cannot be an autolink", title: "https://gitlab.example.com/a b", url: "https://gitlab.example.com/a b", want: "[https://gitlab.example.com/a b](https://gitlab.example.com/a%20b)"},
+		{name: "blank title without an address", title: "  ", url: "", want: ""},
+		{name: "blank title with an address that cannot be an autolink", title: "", url: "https://gitlab.example.com/a|b", want: "[https://gitlab.example.com/a&#124;b](https://gitlab.example.com/a%7Cb)"},
+		{name: "blank title with an address that is not linked", title: " ", url: "wss://kas.example.com", want: "`wss://kas.example.com`"},
+		{name: "an address of whitespace alone is no address", title: "Docs", url: " \t ", want: "Docs"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MdTitleLink(tt.title, tt.url); got != tt.want {
 				t.Errorf("MdTitleLink(%q, %q) = %q, want %q", tt.title, tt.url, got, tt.want)
 			}
 		})

@@ -829,7 +829,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"- " + toolutil.EmojiWarning + " **Locked**\n" +
 		"- **Public Email**: alice@public.example.com\n" +
 		"- **Requested At**: 16 Jun 2026 08:00 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		"- **URL**: <https://gitlab.example.com/alice>\n" +
 		cardHints
 
 	if got := FormatOutputMarkdown(out); got != want {
@@ -897,7 +897,7 @@ func TestFormatMemberOutputMarkdown_AllFields(t *testing.T) {
 		"  - **Username**: [@carol](https://gitlab.example.com/carol)\n" +
 		"- **Created At**: 15 Jun 2026 10:30 UTC\n" +
 		"- **Expires At**: 31 Jan 2027 00:00 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		"- **URL**: <https://gitlab.example.com/alice>\n" +
 		memberCardHints
 
 	if got := FormatMemberOutputMarkdown(out); got != want {

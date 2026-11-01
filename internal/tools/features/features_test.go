@@ -306,9 +306,9 @@ func TestFormatFeatureMarkdown_FullDefinition(t *testing.T) {
 		"  - **Milestone**: 16.0\n" +
 		"  - **Default Enabled**: ✅\n" +
 		"  - **Log State Changes**: ✅\n" +
-		"  - **Introduced By**: [https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1)\n" +
-		"  - **Rollout Issue**: [https://gitlab.com/gitlab-org/gitlab/-/issues/2](https://gitlab.com/gitlab-org/gitlab/-/issues/2)\n" +
-		"  - **Feature Issue**: [https://gitlab.com/gitlab-org/gitlab/-/issues/3](https://gitlab.com/gitlab-org/gitlab/-/issues/3)\n" +
+		"  - **Introduced By**: <https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1>\n" +
+		"  - **Rollout Issue**: <https://gitlab.com/gitlab-org/gitlab/-/issues/2>\n" +
+		"  - **Feature Issue**: <https://gitlab.com/gitlab-org/gitlab/-/issues/3>\n" +
 		"  - **Intended To Roll Out By**: 16.5\n" +
 		featureHints
 	if got != want {

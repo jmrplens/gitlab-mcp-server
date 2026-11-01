@@ -222,8 +222,8 @@ func TestFormatGetMarkdown_Full_Coverage(t *testing.T) {
 		"- **KAS**:\n" +
 		"  - **Enabled**: ✅\n" +
 		"  - **Version**: 17.0.0\n" +
-		"  - **External URL**: [https://kas.example.com](https://kas.example.com)\n" +
-		"  - **Kubernetes Proxy URL**: [https://k8s.example.com](https://k8s.example.com)\n" +
+		"  - **External URL**: <https://kas.example.com>\n" +
+		"  - **Kubernetes Proxy URL**: <https://k8s.example.com>\n" +
 		metadataHints
 	if got != want {
 		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)

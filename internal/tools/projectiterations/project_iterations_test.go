@@ -527,7 +527,7 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 		"- **Group ID**: 10\n" +
 		"- **Start**: 1 Mar 2026\n" +
 		"- **Due**: 14 Mar 2026\n" +
-		"- **URL**: [https://gitlab.example.com/iterations/42](https://gitlab.example.com/iterations/42)\n" +
+		"- **URL**: <https://gitlab.example.com/iterations/42>\n" +
 		"- **Created**: 1 Mar 2026 00:00 UTC\n" +
 		"- **Description**: This is the iteration description.\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +

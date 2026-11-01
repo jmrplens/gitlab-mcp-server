@@ -482,7 +482,7 @@ func waitJobRows(status string) string {
 		"- **Status**: " + status + "\n" +
 		"- **Allow Failure**: ❌\n" +
 		"- **Tag**: ❌\n" +
-		"- **URL**: [https://gitlab.example.com/-/jobs/100](https://gitlab.example.com/-/jobs/100)\n"
+		"- **URL**: <https://gitlab.example.com/-/jobs/100>\n"
 }
 
 // TestFormatWaitMarkdown_Success checks the whole rendering of a wait that

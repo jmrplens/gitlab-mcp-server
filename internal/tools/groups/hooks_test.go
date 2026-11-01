@@ -472,7 +472,7 @@ func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
 
 	want := "## Group Hook: Deploy hook\n\n" +
 		"- **ID**: 10\n" +
-		"- **URL**: [" + testHookURL + "](" + testHookURL + ")\n" +
+		"- **URL**: <" + testHookURL + ">\n" +
 		"- **Name**: Deploy hook\n" +
 		"- **Description**: Deploy events\n" +
 		"- **Group ID**: 99\n" +

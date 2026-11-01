@@ -1085,7 +1085,7 @@ func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 		"- **Author**: @alice\n" +
 		"- **Assignees**: @bob, @carol\n" +
 		"- **Labels**: bug, urgent\n" +
-		"- **URL**: [https://gitlab.example.com/work_items/42](https://gitlab.example.com/work_items/42)\n" +
+		"- **URL**: <https://gitlab.example.com/work_items/42>\n" +
 		"- **Description**: A very detailed description.\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'issue.work_item_update' to modify this work item\n"
@@ -1169,7 +1169,7 @@ func TestFormatGetMarkdown_OneFieldAtATime(t *testing.T) {
 		{
 			name: "web url",
 			item: WorkItemItem{IID: 1, Title: "URL only", Type: testTypeIssue, State: testStateOpen, WebURL: "https://example.com/wi/1"},
-			want: head("URL only") + "- **URL**: [https://example.com/wi/1](https://example.com/wi/1)\n" + hints,
+			want: head("URL only") + "- **URL**: <https://example.com/wi/1>\n" + hints,
 		},
 		{
 			name: "description",

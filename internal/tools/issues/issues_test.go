@@ -1858,7 +1858,7 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
 		"- **Tasks**: 3/5 completed\n" +
 		"- **Comments**: 7\n" +
-		"- **URL**: [https://gitlab.example.com/issue/10](https://gitlab.example.com/issue/10)\n" +
+		"- **URL**: <https://gitlab.example.com/issue/10>\n" +
 		"- **Description**: Details here\n" +
 		issueCardHints
 	if md != want {
@@ -2173,7 +2173,7 @@ func TestFormatTodoMarkdown_Populated(t *testing.T) {
 		"- **State**: pending\n" +
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
 		"- **Updated**: 2 Jan 2026 03:04 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/todo/1](https://gitlab.example.com/todo/1)\n" +
+		"- **URL**: <https://gitlab.example.com/todo/1>\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'user.todo_mark_done' to mark this todo as completed\n" +
 		"- Use action 'issue.get' to view the referenced issue\n"
@@ -2862,7 +2862,7 @@ func TestFormatMarkdown_ObjectDerivedFields(t *testing.T) {
 		"- **Author**: @obj-author\n" +
 		"- **Assignees**: @obj-assignee\n" +
 		"- **Closed By**: @obj-closer\n" +
-		"- **URL**: [https://example.com/7](https://example.com/7)\n" +
+		"- **URL**: <https://example.com/7>\n" +
 		issueCardHints
 	if md != want {
 		t.Errorf("FormatMarkdown(objects)\n got %q\nwant %q", md, want)
@@ -2875,7 +2875,7 @@ func TestFormatMarkdown_ObjectDerivedFields(t *testing.T) {
 func TestFormatMarkdown_ClosedNoCloser(t *testing.T) {
 	want := "## 🔴 Issue #8: Closed\n\n" +
 		"- **State**: 🔴 closed\n" +
-		"- **URL**: [https://example.com/8](https://example.com/8)\n" +
+		"- **URL**: <https://example.com/8>\n" +
 		issueCardHints
 	if got := FormatMarkdown(Output{IID: 8, Title: "Closed", State: "closed", WebURL: "https://example.com/8"}); got != want {
 		t.Errorf("FormatMarkdown(no closer)\n got %q\nwant %q", got, want)

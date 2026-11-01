@@ -376,7 +376,7 @@ func TestFormatOutputMarkdown_OptionalBranches(t *testing.T) {
 		"- **Coverage**: 85.5%\n" +
 		"- **User**: @admin\n" +
 		"- **Created**: 1 Jan 2024 00:00 UTC\n" +
-		"- **URL**: [https://gitlab.com/job/1](https://gitlab.com/job/1)\n" +
+		"- **URL**: <https://gitlab.com/job/1>\n" +
 		jobCardHints
 	if md := FormatOutputMarkdown(out); md != want {
 		t.Errorf("FormatOutputMarkdown(optional branches)\n got %q\nwant %q", md, want)

@@ -746,8 +746,8 @@ func TestFormatExportStatusMarkdown_AllFields(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Path**: group/project\n" +
 		"- **Status**: finished\n" +
-		"- **API URL**: [https://api.example.com](https://api.example.com)\n" +
-		"- **Web URL**: [https://web.example.com](https://web.example.com)\n\n" +
+		"- **API URL**: <https://api.example.com>\n" +
+		"- **Web URL**: <https://web.example.com>\n\n" +
 		"---\n💡 **Next steps:**\n" +
 		"- Use action 'project.export_download' to download the archive once the export status is 'finished'\n"
 	if md != want {

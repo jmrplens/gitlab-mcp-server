@@ -207,7 +207,7 @@ func TestFormatStartMigrationMarkdown(t *testing.T) {
 		"- **ID**: 1\n"+
 		"- **Status**: created\n"+
 		"- **Source Type**: gitlab\n"+
-		"- **Source URL**: [https://src.example.com](https://src.example.com)\n"+
+		"- **Source URL**: <https://src.example.com>\n"+
 		"- **Created**: 1 Jan 2026\n"+
 		"- **Updated**: 1 Jan 2026\n"+
 		"- **Has Failures**: ❌\n"+
@@ -608,7 +608,7 @@ func TestFormatMigrationList(t *testing.T) {
 	assertBulkImportMarkdown(t, FormatListMarkdown(out), "## Bulk Import Migrations (1)\n\n"+
 		"| ID | Status | Source Type | Source URL | Has Failures | Created |\n"+
 		"| --- | --- | --- | --- | --- | --- |\n"+
-		"| 1 | started | gitlab | [https://src](https://src) | ❌ |  |\n"+
+		"| 1 | started | gitlab | <https://src> | ❌ |  |\n"+
 		"\n---\n\U0001F4A1 **Next steps:**\n"+
 		"- "+toolutil.HintPreserveLinks+"\n"+
 		"- Use action 'admin.bulk_import_get' to read one migration in full\n"+

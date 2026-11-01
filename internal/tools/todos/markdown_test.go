@@ -84,7 +84,7 @@ func TestFormatOutputMarkdownString_TargetURLWithoutATarget(t *testing.T) {
 	got := FormatOutputMarkdownString(Output{ID: 3, ActionName: "assigned", State: "pending", TargetURL: url})
 	want := "## To-Do #3\n\n" +
 		"- **Action**: assigned\n" +
-		"- **URL**: [" + url + "](" + url + ")\n" +
+		"- **URL**: <" + url + ">\n" +
 		"- **State**: pending\n" +
 		cardHints
 	if got != want {

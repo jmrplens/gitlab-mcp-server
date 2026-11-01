@@ -954,7 +954,7 @@ func TestToOutput_AllTimestampFields(t *testing.T) {
 		"- **State**: available\n" +
 		"- **Tier**: production\n" +
 		"- **Description**: Main prod environment\n" +
-		"- **External URL**: [https://prod.example.com](https://prod.example.com)\n" +
+		"- **External URL**: <https://prod.example.com>\n" +
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
 		"- **Updated**: 15 Jun 2026 12:00 UTC\n" +
 		"- **Auto-Stop At**: 31 Dec 2026 23:59 UTC\n" +
@@ -1097,7 +1097,7 @@ func TestFormatOutputMarkdown_FullCard(t *testing.T) {
 		"- **State**: available\n" +
 		"- **Tier**: production\n" +
 		"- **Description**: Customer-facing\n" +
-		"- **External URL**: [https://prod.example.com](https://prod.example.com)\n" +
+		"- **External URL**: <https://prod.example.com>\n" +
 		"- **Auto-Stop Setting**: with_action\n" +
 		"- **Kubernetes Namespace**: `prod`\n" +
 		"- **Flux Resource Path**: `kustomization/prod`\n" +
@@ -1107,7 +1107,7 @@ func TestFormatOutputMarkdown_FullCard(t *testing.T) {
 		"- **Project**:\n" +
 		"  - **ID**: 3\n" +
 		"  - **Path**: acme/web\n" +
-		"  - **URL**: [https://gitlab.example.com/acme/web](https://gitlab.example.com/acme/web)\n" +
+		"  - **URL**: <https://gitlab.example.com/acme/web>\n" +
 		"- **Cluster Agent**:\n" +
 		"  - **ID**: 4\n" +
 		"  - **Name**: prod-agent\n" +
@@ -1163,8 +1163,8 @@ func TestFormatListMarkdown_WithEnvironments(t *testing.T) {
 
 	want := "## Environments (3)\n\n" +
 		"| ID | Name | State | Tier | External URL |\n| --- | --- | --- | --- | --- |\n" +
-		"| 1 | production | available | production | [https://prod.example.com](https://prod.example.com) |\n" +
-		"| 2 | staging | available | staging | [https://staging.example.com](https://staging.example.com) |\n" +
+		"| 1 | production | available | production | <https://prod.example.com> |\n" +
+		"| 2 | staging | available | staging | <https://staging.example.com> |\n" +
 		"| 3 | dev | stopped | development |  |\n" +
 		"\nPage 1 of 1 | 3 items total | 20 per page\n" +
 		listHints

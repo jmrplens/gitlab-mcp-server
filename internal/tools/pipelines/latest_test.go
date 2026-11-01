@@ -946,7 +946,7 @@ func TestFormatLatestMarkdown_Fallback_ShowsTheHeadAndTheNote(t *testing.T) {
 		"- **Tag**: ❌\n" +
 		"- **SHA**: `" + latestEarlierSHA + "`\n" +
 		"- **Head SHA**: `" + latestHeadSHA + "`\n" +
-		"- **URL**: [https://gitlab.example.com/-/pipelines/99](https://gitlab.example.com/-/pipelines/99)\n" +
+		"- **URL**: <https://gitlab.example.com/-/pipelines/99>\n" +
 		"\n" + noteHeadWithoutPipeline + "\n" +
 		detailHints
 	if got := FormatLatestMarkdown(fallbackOutput(detail, latestHeadSHA)); got != want {
