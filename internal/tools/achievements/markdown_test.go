@@ -62,7 +62,6 @@ const (
 		"- **Name**: First Commit\n" +
 		"- **Namespace ID**: 10\n" +
 		"- **Description**: Awarded for the first commit\n" +
-		"- **Avatar**: [image](https://example.com/badge.png)\n" +
 		"- **Created**: 25 May 2025 13:47 UTC\n" +
 		"- **Updated**: 26 May 2025 09:00 UTC\n"
 
@@ -187,7 +186,9 @@ func TestFormatUserAchievementMutationOutputMarkdown(t *testing.T) {
 
 // TestFormatListMarkdown verifies the achievement table, the cursor footer, and
 // that the guidance section closes the response rather than sitting between the
-// heading and the table header, where it used to swallow the table.
+// heading and the table header, where it used to swallow the table. The table
+// leaves the avatar to structuredContent (issue 1396), so a row carries no
+// link and the footer does not ask the model to keep one.
 func TestFormatListMarkdown(t *testing.T) {
 	t.Run("with achievements", func(t *testing.T) {
 		assertRendered(t, FormatListMarkdown(ListOutput{
@@ -195,13 +196,12 @@ func TestFormatListMarkdown(t *testing.T) {
 			Pagination:   toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor123"},
 		}),
 			"## Achievements (2)\n\n"+
-				"| ID | Name | Namespace ID | Description | Avatar |\n"+
-				"| --- | --- | --- | --- | --- |\n"+
-				"| 1 | First Commit | 10 | Awarded for the first commit | [image](https://example.com/badge.png) |\n"+
-				"| 2 | Second Commit | 10 | - | - |\n"+
+				"| ID | Name | Namespace ID | Description |\n"+
+				"| --- | --- | --- | --- |\n"+
+				"| 1 | First Commit | 10 | Awarded for the first commit |\n"+
+				"| 2 | Second Commit | 10 | - |\n"+
 				"\nShowing 2 items | next page cursor: `cursor123`\n"+
 				"\n---\n💡 **Next steps:**\n"+
-				"- "+toolutil.HintPreserveLinks+"\n"+
 				"- Use action 'achievement.award' to hand one of these achievements to a user\n"+
 				"- Pass the `end_cursor` above as `after` to fetch the next page\n")
 	})
@@ -270,7 +270,7 @@ func TestFormatReorderOutputMarkdown(t *testing.T) {
 // a nil entry is skipped rather than counted in the heading.
 //
 // Two of the subtests are about the preserve-links hint rather than the table.
-// That hint asks the reading model to keep the `[text](url)` cells intact, and
+// That hint asks the reading model to keep the linked cells intact, and
 // it is written only when some cell really carried one, so a page whose rows
 // are all plain handles must not ask for it: a hint that names something not
 // in the document teaches the model to invent links for later answers. The

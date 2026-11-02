@@ -1002,7 +1002,7 @@ func TestFormatMarkdown_WithWebURL(t *testing.T) {
 	want := "## Release: Release v1.0.0\n\n" +
 		"- **Tag**: v1.0.0\n" +
 		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/-/releases/v1.0.0](https://gitlab.example.com/-/releases/v1.0.0)\n" +
+		"- **URL**: <https://gitlab.example.com/-/releases/v1.0.0>\n" +
 		cardHints
 
 	if selfCard != want {

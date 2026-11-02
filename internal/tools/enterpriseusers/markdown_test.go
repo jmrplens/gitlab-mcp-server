@@ -64,7 +64,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **2FA Enabled**: ✅\n" +
 				"- **External**: ❌\n" +
 				"- **Bot**: ❌\n" +
-				"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+				"- **URL**: <https://gitlab.example.com/alice>\n" +
 				"- **Created**: 1 Jan 2026 00:00 UTC\n" +
 				"\n---\n💡 **Next steps:**\n" +
 				"- Use action 'enterprise_user.disable_2fa' to reset two-factor authentication\n" +
@@ -157,7 +157,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // the words Yes and No.
 func TestFormatListMarkdown(t *testing.T) {
 	const listHints = "\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'enterprise_user.get' to read one enterprise user in full\n"
 
 	tests := []struct {

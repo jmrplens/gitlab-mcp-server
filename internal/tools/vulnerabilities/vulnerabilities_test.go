@@ -830,7 +830,7 @@ func TestGet_EveryAddressLandsInItsOwnFieldAndTheCardLinksTheVulnerability(t *te
 	}
 
 	card := FormatGetMarkdown(out)
-	wantRow := "- **URL**: [" + webURL + "](" + webURL + ")\n"
+	wantRow := "- **URL**: <" + webURL + ">\n"
 	if !strings.Contains(card, wantRow) {
 		t.Errorf("card is missing the URL row %q:\n%s", wantRow, card)
 	}
@@ -1419,7 +1419,7 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
-	if contains(got, "clickable [text](url) links") {
+	if contains(got, toolutil.HintPreserveLinks) {
 		t.Error("the list tells the model to keep links a table without links cannot have")
 	}
 }
@@ -1459,7 +1459,7 @@ func TestFormatListMarkdown_LinksTheTitleAndAsksForTheLinksToBeKept(t *testing.T
 		"| `gid://gitlab/Vulnerability/1` | 🔴 CRITICAL | [SQL Injection (CWE-89)](" + webURL + ") | DETECTED | semgrep | SAST | 15 Jan 2026 10:00 UTC |\n\n" +
 		"Showing 1 items | no more pages\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'vulnerability.get' to read one vulnerability in full, naming the ID above\n" +
 		"- Use action 'vulnerability.severity_count' to see how many vulnerabilities the project has at each severity\n" +
 		"- Use action 'security_finding.list' to read the findings one pipeline's scanners reported\n"
@@ -1635,8 +1635,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 		"- **Has Remediations**: ❌\n" +
 		"- **Project**:\n" +
 		"  - **Full Path**: my-group/my-project\n" +
-		"- **URL**: [https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42]" +
-		"(https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42)\n" +
+		"- **URL**: <https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42>\n" +
 		"- **Solution**: Use prepared statements\n" +
 		"- **Description**: A serious vulnerability\n\n" +
 		"### Identifiers\n\n" +
@@ -2600,7 +2599,7 @@ func TestFormatGetMarkdown_TriageRowsAndCollections(t *testing.T) {
 		"  - **ID**: `gid://gitlab/Project/1`\n" +
 		"  - **Name**: p\n" +
 		"  - **Full Path**: g/p\n" +
-		"- **URL**: [https://gitlab.example.com/g/p/-/security/vulnerabilities/90](https://gitlab.example.com/g/p/-/security/vulnerabilities/90)\n" +
+		"- **URL**: <https://gitlab.example.com/g/p/-/security/vulnerabilities/90>\n" +
 		"- **State Comment**: only reachable by administrators\n" +
 		"- **Solution**: Encode the output.\n" +
 		"- **Description**: User input is reflected into the page.\n\n" +
@@ -2613,7 +2612,7 @@ func TestFormatGetMarkdown_TriageRowsAndCollections(t *testing.T) {
 		"| Name | URL |\n" +
 		"| --- | --- |\n" +
 		"| [OWASP XSS](https://owasp.org/www-community/attacks/xss/) | https://owasp.org/www-community/attacks/xss/ |\n" +
-		"| [https://example.com/advisory](https://example.com/advisory) | https://example.com/advisory |\n\n" +
+		"| <https://example.com/advisory> | https://example.com/advisory |\n\n" +
 		"### Linked Issues\n\n" +
 		"| Issue | State | Link Type |\n" +
 		"| --- | --- | --- |\n" +

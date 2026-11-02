@@ -42,7 +42,9 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
-// FormatTopicMarkdown formats a single topic as its card.
+// FormatTopicMarkdown formats a single topic as its card. The topic's avatar
+// is left to structuredContent, which carries it as avatar_url: a picture's
+// address beside the topic says nothing a model can act on (issue 1396).
 func FormatTopicMarkdown(t TopicItem) *mcp.CallToolResult {
 	var sb strings.Builder
 	// A topic's name and title are both free text an administrator types.
@@ -52,7 +54,6 @@ func FormatTopicMarkdown(t TopicItem) *mcp.CallToolResult {
 	c.Text("Description", t.Description)
 	c.Field("Projects", strconv.FormatUint(t.TotalProjectsCount, 10))
 	c.Count("Organization ID", t.OrganizationID)
-	c.Link("Avatar", t.AvatarURL, t.AvatarURL)
 	c.End(toolutil.HintAction(actionTopicUpdate, "modify this topic"))
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }

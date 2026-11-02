@@ -54,7 +54,7 @@ func TestFormatOutputMarkdown_RendersTheWholeCard(t *testing.T) {
 		"- **Visibility**: private\n" +
 		"- 📦 **Archived**\n" +
 		"- **Description**: The platform group\n" +
-		"- **URL**: [https://gl/acme/platform](https://gl/acme/platform)\n" +
+		"- **URL**: <https://gl/acme/platform>\n" +
 		"- **Parent ID**: 3\n" +
 		"- **Created**: 20 Mar 2026 15:45 UTC\n" +
 		"- **⚠️ Marked for deletion**: 1 Apr 2026\n" +
@@ -103,7 +103,7 @@ func TestFormatDetailOutputMarkdown_DetailRowsCloseBeforeTheHints(t *testing.T) 
 		"- **ID**: 7\n" +
 		"- **Path**: acme/platform\n" +
 		"- **Visibility**: private\n" +
-		"- **URL**: [https://gl/acme/platform](https://gl/acme/platform)\n" +
+		"- **URL**: <https://gl/acme/platform>\n" +
 		"- **Git Access Protocol**: ssh\n" +
 		"- **Step-up Auth Provider**: okta\n" +
 		"- **Shared With Groups**: 1\n" +
@@ -276,7 +276,7 @@ func TestFormatHookMarkdown_RendersTheWholeCard(t *testing.T) {
 
 	want := "## Group Hook: deploys\n\n" +
 		"- **ID**: 1\n" +
-		"- **URL**: [https://example.com/hook](https://example.com/hook)\n" +
+		"- **URL**: <https://example.com/hook>\n" +
 		"- **Name**: deploys\n" +
 		"- **Group ID**: 7\n" +
 		"- **SSL Verification**: ✅\n" +
@@ -319,7 +319,7 @@ func TestFormatHookMarkdown_WithoutName(t *testing.T) {
 
 	want := "## Group Hook: https://hooks.example.com/plain\n\n" +
 		"- **ID**: 5\n" +
-		"- **URL**: [https://hooks.example.com/plain](https://hooks.example.com/plain)\n" +
+		"- **URL**: <https://hooks.example.com/plain>\n" +
 		"- **Group ID**: 0\n" +
 		"- **SSL Verification**: ❌\n" +
 		"- **Token Present**: ❌\n" +
@@ -343,7 +343,7 @@ func TestFormatHookListMarkdown_RendersTheWholeTable(t *testing.T) {
 
 	want := "## Group Hooks (1)\n\n" +
 		"| ID | URL | Events | SSL |\n| --- | --- | --- | --- |\n" +
-		"| 1 | [https://example.com/hook](https://example.com/hook) | push | ❌ |\n" +
+		"| 1 | <https://example.com/hook> | push | ❌ |\n" +
 		"\nPage 1 of 1 | 1 items total\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +

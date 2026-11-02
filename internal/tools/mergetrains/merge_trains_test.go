@@ -1095,7 +1095,7 @@ const (
 	listTableHead = "| ID | MR | Title | Target Branch | Status | Pipeline | User | Duration |\n" +
 		"| --- | --- | --- | --- | --- | --- | --- | --- |\n"
 	listHints = "\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'merge_train.get' to read one merge request's position on the train\n" +
 		"- Use action 'merge_train.add' to add another merge request to the train\n"
 )

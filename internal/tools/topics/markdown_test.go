@@ -63,7 +63,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatTopicMarkdown verifies the whole topic card.
+// TestFormatTopicMarkdown verifies the whole topic card, which leaves the
+// avatar GitLab sent to structuredContent (issue 1396).
 func TestFormatTopicMarkdown(t *testing.T) {
 	md := topicText(t, FormatTopicMarkdown(TopicItem{
 		ID: 1, Name: "go", Title: "Go", Description: "The Go language",
@@ -76,7 +77,6 @@ func TestFormatTopicMarkdown(t *testing.T) {
 		"- **Description**: The Go language\n" +
 		"- **Projects**: 42\n" +
 		"- **Organization ID**: 3\n" +
-		"- **Avatar**: [https://example.com/go.png](https://example.com/go.png)\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'admin.topic_update' to modify this topic\n"
 	if md != want {

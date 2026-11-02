@@ -1429,7 +1429,7 @@ func TestFormatSignatureMarkdownString(t *testing.T) {
 		"- **Serial Number**: `12345`\n" +
 		"\n### Issuer\n\n" +
 		"- **Subject**: CN=Issuer\n" +
-		"- **CRL URL**: [https://example.com/crl](https://example.com/crl)\n" +
+		"- **CRL URL**: <https://example.com/crl>\n" +
 		tagSignatureHints
 
 	if got != want {

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -112,7 +113,7 @@ func TestFormatProject_Markdown(t *testing.T) {
 	checks := []string{
 		"## Project: my-project", "**ID**: 42", "**Path**: group/my-project",
 		"**Visibility**: private", "**Default Branch**: main",
-		"**Description**: A test project", "**URL**: [https://gitlab.example.com/group/my-project](https://gitlab.example.com/group/my-project)",
+		"**Description**: A test project", "**URL**: <https://gitlab.example.com/group/my-project>",
 	}
 	for _, c := range checks {
 		t.Run(c, func(t *testing.T) {
@@ -197,7 +198,7 @@ func TestFormatBranch_ListMarkdown(t *testing.T) {
 		"| main | ✅ | ✅ | ❌ |\n" +
 		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'branch.get' to see one branch in full\n" +
 		"- Use action 'branch.create' to create a new branch\n" +
 		"- Use action 'branch.protect' to protect a branch\n"
@@ -557,7 +558,7 @@ func TestFormatCommit_Markdown(t *testing.T) {
 		"- **Title**: " + testTitleFixBug + "\n" +
 		"- **Author**: Dev (dev@example.com)\n" +
 		"- **Date**: 1 Jan 2026\n" +
-		"- **URL**: [https://gitlab.example.com/commit/abc123](https://gitlab.example.com/commit/abc123)\n" +
+		"- **URL**: <https://gitlab.example.com/commit/abc123>\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'repository.commit_get' to see this commit's full details and stats\n" +
 		"- Use action 'repository.commit_diff' to see the file changes for this commit\n" +
@@ -1001,7 +1002,7 @@ func TestFormatCommit_DetailMarkdown(t *testing.T) {
 		"- **Date**: 1 Jan 2026\n" +
 		"- **Parents**: `parent1, parent2`\n" +
 		"- **Stats**: +10 -3 (13 total)\n" +
-		"- **URL**: [https://gl.example.com/commit/abc](https://gl.example.com/commit/abc)\n" +
+		"- **URL**: <https://gl.example.com/commit/abc>\n" +
 		"- **Message**:\n" +
 		"  > feat: add feature\n" +
 		"  >\n" +
@@ -2372,12 +2373,37 @@ func (c mdGateCase) optionalFields() []testutil.FixtureField {
 
 // mdGateReport is one run over every case, built once and read by every
 // rule's test.
+//
+// The link and avatar rules of issue 1396 are kept apart from findings,
+// which are about the structure a client renders: selfLinks are the links
+// written as [url](url), and avatars the renders that carry an avatar
+// address. avatarAnswers are the cases of [mdGateAvatarAnswers] that did
+// render one, which is what keeps that declaration from going stale.
 type mdGateReport struct {
-	cases    []mdGateCase
-	findings []mdGateFinding
-	rendered int
-	silent   int
+	cases         []mdGateCase
+	findings      []mdGateFinding
+	selfLinks     []mdGateFinding
+	avatars       []mdGateFinding
+	avatarAnswers map[string]bool
+	rendered      int
+	silent        int
 }
+
+// mdGateAvatarAnswers are the cases whose answer is the avatar itself, each
+// with the reason: the decision of issue 1396 drops the avatar line from a
+// card about a user, a topic or an achievement, where the address is one
+// field beside the object's identity, and an answer that is nothing but the
+// address keeps it, written once. A case named here that renders no avatar
+// fails, so a declaration cannot outlive the formatter it excuses.
+var mdGateAvatarAnswers = map[string]string{
+	"avatar.GetOutput": "user.avatar_get looks an avatar up by email address, and the address is the whole answer",
+}
+
+// mdGateAvatarRe finds the sentinel a fixture writes into a field whose name
+// says it holds an avatar (AvatarURL, AuthorGravatarURL, AvatarPath): the
+// address testutil.FixtureText builds for a URL-shaped name, and the name
+// and digit it writes for any other.
+var mdGateAvatarRe = regexp.MustCompile(`(?i)avatar[a-z]*(?:/7|7)\b`)
 
 var (
 	mdGateOnce   sync.Once
@@ -2392,7 +2418,7 @@ var (
 func mdGateScan(t *testing.T) *mdGateReport {
 	t.Helper()
 	mdGateOnce.Do(func() {
-		report := &mdGateReport{cases: mdGateCases(t)}
+		report := &mdGateReport{cases: mdGateCases(t), avatarAnswers: map[string]bool{}}
 		for _, c := range report.cases {
 			for _, state := range mdGateStates {
 				report.scan(c, state)
@@ -2441,6 +2467,33 @@ func (r *mdGateReport) scan(c mdGateCase, state testutil.FixtureState) {
 				break
 			}
 		}
+	}
+	r.scanLinks(c, state, doc)
+}
+
+// scanLinks applies the two rules of issue 1396 to one render: a link whose
+// label is its own address is written once, as toolutil.MdAutolink writes
+// it, and an avatar address is not written at all unless the case is one
+// whose answer is the avatar.
+func (r *mdGateReport) scanLinks(c mdGateCase, state testutil.FixtureState, doc *testutil.GFMDocument) {
+	for _, link := range doc.SelfLinks {
+		r.selfLinks = append(r.selfLinks, mdGateFinding{
+			kase: c, state: state.String(), rule: "U1",
+			detail: "the link [" + link + "](" + link + ") spells its address twice; toolutil.MdAutolink writes it once",
+		})
+	}
+	for i, line := range doc.Lines {
+		if !mdGateAvatarRe.MatchString(line) {
+			continue
+		}
+		if _, answer := mdGateAvatarAnswers[c.name]; answer {
+			r.avatarAnswers[c.name] = true
+			return
+		}
+		r.avatars = append(r.avatars, mdGateFinding{
+			kase: c, state: state.String(), rule: "A1", line: i + 1, text: line,
+			detail: "an avatar address is rendered; the Markdown leaves it to structuredContent",
+		})
 	}
 }
 
@@ -2615,6 +2668,60 @@ func TestMarkdownRegistry_Exceptions_NameACaseEach(t *testing.T) {
 			}
 			if !names[name] {
 				t.Errorf("the exception for %s names no case the gate renders", name)
+			}
+		})
+	}
+}
+
+// TestMarkdownRegistry_EveryFormatter_WritesEachAddressOnce drives every
+// registered formatter and the renderers outside the registry, in every
+// fixture state, and fails on a link whose label is its own address,
+// [url](url). Issue 1396 measured that second copy of the address at 3.6% of
+// every Markdown token a text-reading client pays for, and decided it is
+// written once, as the autolink <url>, which is still a link: toolutil's
+// MdTitleLink writes that form whenever its title says nothing but the
+// address, so a formatter reaches it through any link helper, and the one
+// way back to the long form is a link written by hand, which the escaping
+// gate refuses on its own.
+func TestMarkdownRegistry_EveryFormatter_WritesEachAddressOnce(t *testing.T) {
+	report := mdGateScan(t)
+
+	mdGateLog(t, "self-labeled links", report.selfLinks)
+	for _, f := range report.selfLinks {
+		t.Errorf("%s", f)
+	}
+}
+
+// TestMarkdownRegistry_EveryFormatter_LeavesTheAvatarOut drives every
+// registered formatter and the renderers outside the registry, in every
+// fixture state, and fails on a render that carries an avatar address. Issue
+// 1396 decided the avatar line leaves the Markdown: structuredContent keeps
+// every field GitLab sent, avatar_url included, and the card a model reads
+// has no use for a picture's address beside the object it belongs to. A case
+// whose answer is the avatar is declared in mdGateAvatarAnswers with its
+// reason, and a declaration whose case renders no avatar fails, so a stale
+// one cannot stay behind.
+func TestMarkdownRegistry_EveryFormatter_LeavesTheAvatarOut(t *testing.T) {
+	report := mdGateScan(t)
+	names := map[string]bool{}
+	for _, c := range report.cases {
+		names[c.name] = true
+	}
+
+	mdGateLog(t, "avatar lines", report.avatars)
+	for _, f := range report.avatars {
+		t.Errorf("%s", f)
+	}
+	for name, reason := range mdGateAvatarAnswers {
+		t.Run(name, func(t *testing.T) {
+			if reason == "" {
+				t.Errorf("the declaration for %s gives no reason", name)
+			}
+			if !names[name] {
+				t.Errorf("the declaration for %s names no case the gate renders", name)
+			}
+			if !report.avatarAnswers[name] {
+				t.Errorf("%s renders no avatar, so its declaration excuses nothing; remove it", name)
 			}
 		})
 	}
@@ -2903,17 +3010,19 @@ func mdGateHostileText(exempt map[string]bool, payload string) func(string) stri
 // mdGateCompare reports every way a hostile render's structure differs from
 // the benign one.
 //
-// X2, the raw-tag rule, reads the bare lines of the render rather than its
-// content, which settles two questions the rule used to inherit rather than
-// decide. A code span is not judged, because CommonMark makes its contents
-// literal and HTML-escaped, so a value a formatter deliberately moved into
-// one is contained and reporting it would condemn the fix. A blockquote line
-// is judged, and that is the decision: the quote is containment against
-// structure, so a heading or a bullet inside one cannot reach the document,
-// and it is no containment at all against a tag, which a client renders as a
-// live anchor wherever it sits. Every offending line is reported rather than
-// the first, since stopping at one hid two findings of the class the rule
-// exists to find.
+// X2, the raw-tag rule, reads the raw HTML the line model lists on each bare
+// line of the render rather than its content, which settles two questions the
+// rule used to inherit rather than decide. A code span is not judged, because
+// CommonMark makes its contents literal and HTML-escaped, so a value a
+// formatter deliberately moved into one is contained and reporting it would
+// condemn the fix; nor is a tag the model reads as text for another reason,
+// an escaped "<" or an image's alt text. A blockquote line is judged, and
+// that is the decision: the quote is containment against structure, so a
+// heading or a bullet inside one cannot reach the document, and it is no
+// containment at all against a tag, which a client renders as a live anchor
+// wherever it sits. Every offending line is reported rather than the first,
+// since stopping at one hid two findings of the class the rule exists to
+// find.
 func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, baseHints []string, md string) []mdGateFinding {
 	doc := testutil.ScanGFM(md)
 	state := "hostile " + hostile
@@ -2942,7 +3051,7 @@ func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, bas
 	}
 	if hostile == "html" {
 		for _, line := range doc.Bare {
-			if strings.Contains(line.Bare, `<a href="http://attacker.invalid">`) {
+			if slices.Contains(line.RawHTML, `<a href="http://attacker.invalid">`) {
 				findings = append(findings, mdGateFinding{kase: c, state: state, rule: "X2", line: line.Line, text: line.Text, detail: "the value reaches the page as a raw tag"})
 			}
 		}

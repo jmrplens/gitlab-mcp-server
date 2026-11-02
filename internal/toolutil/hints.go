@@ -77,9 +77,11 @@ func WithHints[O any](result *mcp.CallToolResult, out O, err error) (*mcp.CallTo
 	return result, out, err
 }
 
-// HintPreserveLinks reminds the LLM to keep the clickable [text](url)
-// markdown links when presenting list results to the user.
-const HintPreserveLinks = "When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab"
+// HintPreserveLinks reminds the LLM to keep the clickable links of a list
+// result, [text](url) and <url> alike, when presenting it to the user. It
+// names neither form: a table writes an address that is its own text as an
+// autolink and every other link inline, and the model sees both in the rows.
+const HintPreserveLinks = "When presenting these results, always include the clickable links from the table so the user can navigate to GitLab"
 
 // ListHints prepends HintPreserveLinks to list-result next-step hints, once:
 // an empty hint or a copy of HintPreserveLinks among the arguments is dropped,

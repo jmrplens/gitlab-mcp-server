@@ -1508,7 +1508,7 @@ func TestCreate_NoVariables_SendsNoVariablesKey(t *testing.T) {
 
 // listHints is the guidance section every pipeline list closes with.
 const listHints = "\n---\n💡 **Next steps:**\n" +
-	"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+	"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 	"- Use action 'pipeline.get' to see one pipeline in full\n" +
 	"- Use action 'job.list' to see the jobs of a pipeline\n"
 
@@ -1637,7 +1637,7 @@ func TestFormatDetailMarkdown_Full(t *testing.T) {
 		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
 		"- **Started**: 1 Mar 2026 10:00 UTC\n" +
 		"- **Finished**: 1 Mar 2026 10:05 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/-/pipelines/99](https://gitlab.example.com/-/pipelines/99)\n" +
+		"- **URL**: <https://gitlab.example.com/-/pipelines/99>\n" +
 		detailHints
 	if got := FormatDetailMarkdown(out); got != want {
 		t.Errorf("FormatDetailMarkdown(full)\n got %q\nwant %q", got, want)
@@ -1667,7 +1667,7 @@ func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 		"- **Ref**: dev\n" +
 		"- **Tag**: ❌\n" +
 		"- **SHA**: `xyz`\n" +
-		"- **URL**: [https://gitlab.example.com/-/pipelines/1](https://gitlab.example.com/-/pipelines/1)\n" +
+		"- **URL**: <https://gitlab.example.com/-/pipelines/1>\n" +
 		detailHints
 	if got := FormatDetailMarkdown(out); got != want {
 		t.Errorf("FormatDetailMarkdown(minimal)\n got %q\nwant %q", got, want)
@@ -1693,7 +1693,7 @@ func TestFormatDetailMarkdown_ArchivedIsMarked(t *testing.T) {
 		"- **Tag**: ❌\n" +
 		"- **SHA**: `abc`\n" +
 		"- 📦 **Archived**\n" +
-		"- **URL**: [https://gitlab.example.com/-/pipelines/7](https://gitlab.example.com/-/pipelines/7)\n" +
+		"- **URL**: <https://gitlab.example.com/-/pipelines/7>\n" +
 		detailHints
 	if got := FormatDetailMarkdown(out); got != want {
 		t.Errorf("FormatDetailMarkdown(archived)\n got %q\nwant %q", got, want)
@@ -1725,7 +1725,7 @@ func TestFormatDetailMarkdown_HostileValuesStayInTheirRow(t *testing.T) {
 		"- **Tag**: ❌\n" +
 		"- **SHA**: `<a href=\"http://attacker.invalid\">click</a>`\n" +
 		"- **Name**: x ## injected heading\n" +
-		"- **URL**: [https://gitlab.example.com/-/pipelines/4](https://gitlab.example.com/-/pipelines/4)\n" +
+		"- **URL**: <https://gitlab.example.com/-/pipelines/4>\n" +
 		detailHints
 	if got := FormatDetailMarkdown(out); got != want {
 		t.Errorf("FormatDetailMarkdown(hostile)\n got %q\nwant %q", got, want)
@@ -2359,6 +2359,10 @@ func TestCreate_NoInputs_SendsNoInputsKey(t *testing.T) {
 	}
 }
 
+// TestDetailedStatusOutput_Illustration verifies that a pipeline get mirrors
+// the illustration inside detailed_status and the whole user GitLab sent,
+// creation time included, rather than dropping the nested objects the
+// formatter does not render.
 func TestDetailedStatusOutput_Illustration(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{

@@ -149,7 +149,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **Predicate Kind**: slsa_provenance\n" +
 				"- **Predicate Type**: https://slsa.dev/provenance/v0.2\n" +
 				"- **Subject Digest**: `sha256:deadbeef`\n" +
-				"- **Download URL**: [https://gitlab.example.com/download](https://gitlab.example.com/download)\n" +
+				"- **Download URL**: <https://gitlab.example.com/download>\n" +
 				"- **Created**: 15 Jun 2026 12:00 UTC\n" +
 				"- **Expires**: 15 Jul 2026 12:00 UTC\n" +
 				attestationCardHints,

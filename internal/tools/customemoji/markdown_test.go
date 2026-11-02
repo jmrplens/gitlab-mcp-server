@@ -177,7 +177,7 @@ func TestFormatCreateMarkdown(t *testing.T) {
 			"## "+toolutil.EmojiSuccess+" Custom Emoji Created\n\n"+
 				"- **ID**: `gid://gitlab/CustomEmoji/1`\n"+
 				"- **Name**: :party_parrot:\n"+
-				"- **URL**: [https://example.com/party_parrot.gif](https://example.com/party_parrot.gif)\n"+
+				"- **URL**: <https://example.com/party_parrot.gif>\n"+
 				"- **External**: ❌\n"+
 				"- **Created**: 1 Jun 2026 10:00 UTC\n"+
 				hints)
@@ -187,7 +187,7 @@ func TestFormatCreateMarkdown(t *testing.T) {
 			"## "+toolutil.EmojiSuccess+" Custom Emoji Created\n\n"+
 				"- **ID**: `gid://gitlab/CustomEmoji/2`\n"+
 				"- **Name**: :shipit:\n"+
-				"- **URL**: [https://example.com/shipit.png](https://example.com/shipit.png)\n"+
+				"- **URL**: <https://example.com/shipit.png>\n"+
 				"- **External**: ✅\n"+
 				"- **Created**: 15 Jun 2026 14:30 UTC\n"+
 				hints)

@@ -576,7 +576,7 @@ func TestWait_ContextCanceledDuringPoll(t *testing.T) {
 const waitPipelineRows = "\n### Pipeline Details\n\n" +
 	"- **IID**: 0\n" +
 	"- **Tag**: ❌\n" +
-	"- **URL**: [https://gitlab.example.com/-/pipelines/10](https://gitlab.example.com/-/pipelines/10)\n"
+	"- **URL**: <https://gitlab.example.com/-/pipelines/10>\n"
 
 // TestFormatWaitMarkdown_Success checks the whole rendering of a wait that
 // ended well: the wait's own rows, the pipeline under one H3, and no guidance

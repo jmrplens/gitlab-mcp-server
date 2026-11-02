@@ -229,7 +229,7 @@ func TestAccessLevelDescription_Mapping(t *testing.T) {
 				"- **Username**: u\n" +
 				"- **State**: active\n" +
 				"- **Access Level**: " + tc.want + "\n" +
-				"- **URL**: [https://gitlab.example.com/u](https://gitlab.example.com/u)\n" +
+				"- **URL**: <https://gitlab.example.com/u>\n" +
 				memberCardHints
 			if got := FormatMarkdown(out.Members[0]); got != want {
 				t.Errorf("FormatMarkdown =\n%q\nwant\n%q", got, want)
@@ -1262,7 +1262,7 @@ func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 		"- **Membership State**: awaiting\n" +
 		"- " + toolutil.EmojiWarning + " **Locked**\n" +
 		"- **Access Level**: Maintainer (40)\n" +
-		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		"- **URL**: <https://gitlab.example.com/alice>\n" +
 		"- **Email**: alice@example.com\n" +
 		"- **Member Role**: Security Lead (3)\n" +
 		"- **Created By**:\n" +
@@ -1293,7 +1293,7 @@ func TestFormatMarkdown_NoOptionalFields(t *testing.T) {
 		"- **Username**: alice\n" +
 		"- **State**: active\n" +
 		"- **Access Level**: Developer (30)\n" +
-		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		"- **URL**: <https://gitlab.example.com/alice>\n" +
 		memberCardHints
 	if got := FormatMarkdown(out); got != want {
 		t.Errorf("FormatMarkdown =\n%q\nwant\n%q", got, want)
@@ -1386,7 +1386,7 @@ func TestFormatMarkdown_ClickableURL(t *testing.T) {
 		"- **Username**: alice\n" +
 		"- **State**: active\n" +
 		"- **Access Level**: Maintainer (40)\n" +
-		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		"- **URL**: <https://gitlab.example.com/alice>\n" +
 		memberCardHints
 	got := FormatMarkdown(Output{
 		ID: 10, Username: "alice", Name: "Alice", State: "active",

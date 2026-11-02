@@ -641,6 +641,7 @@ func FormatItem(item Item, opts Options) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s\n", toolutil.EscapeMdHeading(item.Title))
 	fmt.Fprintf(&b, rowTemplate, toolutil.EscapeMdTableCell(item.Title), toolutil.MdTitleLink(item.Title, item.URL))
+	fmt.Fprintf(&b, rowTemplate, toolutil.EscapeMdTableCell(item.Title), toolutil.MdAutolink(item.URL))
 	fmt.Fprintf(&b, "| %v | %v |\n", item.Count, item.When)
 	fmt.Fprintf(&b, "| %s |\n", strconv.Itoa(item.Count))
 	fmt.Fprintf(&b, "- %s\n", strings.TrimSpace(toolutil.EscapeMdTableCell(item.Title)))

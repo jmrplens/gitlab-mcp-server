@@ -459,7 +459,7 @@ func TestFormatMarkdownString_AllFields(t *testing.T) {
 		"- **Full Path**: `grp/test`\n" +
 		"- **Kind**: group\n" +
 		"- **Parent ID**: 5\n" +
-		"- **URL**: [https://x](https://x)\n" +
+		"- **URL**: <https://x>\n" +
 		"- **Plan**: gold\n" +
 		"- ℹ️ **Trial**\n" +
 		"- **Trial Ends On**: 31 Dec 2026\n" +

@@ -475,7 +475,7 @@ const (
 	cardHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use the selected tool surface's matching award emoji delete action with award_id, the same resource identifiers, and explicit confirm=true\n"
 	linkedListHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use the selected tool surface's matching award emoji delete action with award_id, the same resource identifiers, and explicit confirm=true\n"
 	plainListHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use the selected tool surface's matching award emoji delete action with award_id, the same resource identifiers, and explicit confirm=true\n"

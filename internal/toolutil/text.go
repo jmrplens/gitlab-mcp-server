@@ -397,9 +397,86 @@ func LinkableDestination(url string) bool {
 // is live. A websocket endpoint or a wiki attachment's relative path lands
 // here as well as a hostile value, and a code span is the honest rendering of
 // an address a client could not have opened anyway.
+//
+// A blank title is the address itself, so a link never has an empty label: it
+// used to write a link with no text at all, which renders as nothing to click.
+// A title that says nothing but the address, because it is the address or
+// because it is blank, is the link [MdAutolink] writes: the address once,
+// between angle brackets, rather than twice as [url](url), and the long form
+// with the address as its label when the address cannot be an autolink.
 func MdTitleLink(title, url string) string {
+	if blank(title) {
+		title = url
+	}
+	if strings.TrimSpace(title) == strings.TrimSpace(url) {
+		if link, ok := autolink(url); ok {
+			return link
+		}
+	}
+	return titleLink(title, url)
+}
+
+// MdAutolink writes an address that is its own text as a CommonMark autolink,
+// <url>: one copy of the address where [url](url) spelled it twice, and still
+// a link a client renders as one. Every card's URL row and every cell that
+// shows an address as it is takes this form, and that second copy was a few
+// percent of every Markdown result, paid for by every client that reads the
+// text (issue 1396).
+//
+// Nothing inside an autolink is escaped, since CommonMark reads its content as
+// it is and a backslash there is a backslash, so the address is written this
+// way only when it can be read back exactly: an http or https address, as
+// [LinkableDestination] judges it, with none of the characters that end an
+// autolink or split the cell it sits in. The control characters
+// [StripControlBytes] drops are dropped first, as the long form drops them
+// from both of its halves, so the autolink names the address that form linked
+// to; whitespace around the address goes too, as the destination escaper
+// drops it. What is left that cannot stand there, a space, a tab or a line
+// break, a '<', a '>' and the pipe, which ends a table cell before any inline
+// parsing, is refused rather than encoded, and the address is then written in
+// the form [MdTitleLink] gave it before, a link with both halves escaped, or a
+// code span for a destination that is not linked at all. GitLab builds every
+// address it sends from its own origin and percent-encodes what it puts in a
+// path, so the fallback is for a value nobody should have sent.
+func MdAutolink(url string) string {
+	if link, ok := autolink(url); ok {
+		return link
+	}
+	return titleLink(url, url)
+}
+
+// autolink returns <url> and true when url can be written as an autolink, and
+// false when it cannot, for the caller to fall back to the long form.
+func autolink(url string) (string, bool) {
+	address := strings.TrimSpace(StripControlBytes(url))
+	if !LinkableDestination(address) || strings.ContainsFunc(address, endsAutolink) {
+		return "", false
+	}
+	return "<" + address + ">", true
+}
+
+// endsAutolink reports whether r cannot stand inside an autolink once
+// [StripControlBytes] has run: the space and the three controls it keeps
+// (tab, line feed, carriage return), which CommonMark refuses there with the
+// rest of the ASCII controls, '<' and '>', which end the autolink, and the
+// pipe, which GFM reads as the end of a table cell before it parses the
+// autolink the cell holds.
+func endsAutolink(r rune) bool {
+	switch r {
+	case '<', '>', '|':
+		return true
+	}
+	return r <= ' '
+}
+
+// titleLink is the long form of a link: the title and the address escaped
+// apart, [title](url), a code span for an address that is not linked, and the
+// escaped title alone when there is no address. An address of whitespace alone
+// is no address: it used to be written as a code span holding the spaces,
+// which gave a card's URL row a value a reader sees nothing in.
+func titleLink(title, url string) string {
 	escaped := EscapeMdTableCell(title)
-	if url == "" {
+	if blank(url) {
 		return escaped
 	}
 	if !LinkableDestination(url) {

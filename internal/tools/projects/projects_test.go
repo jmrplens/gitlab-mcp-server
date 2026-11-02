@@ -3242,7 +3242,7 @@ func TestFormatMarkdown(t *testing.T) {
 		"- **Open Issues**: 3\n" +
 		"- **Topics**: go, mcp\n" +
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/group/test-project](https://gitlab.example.com/group/test-project)\n" +
+		"- **URL**: <https://gitlab.example.com/group/test-project>\n" +
 		"- **HTTP Clone**: `https://gitlab.example.com/group/test-project.git`\n" +
 		"- **SSH Clone**: `git@gitlab.example.com:group/test-project.git`\n" +
 		"- **MR Title Regex**: `^(feat|fix):`\n" +
@@ -3910,7 +3910,7 @@ func TestFormatMarkdown_FullFields(t *testing.T) {
 		"- **Open Issues**: 3\n" +
 		"- **Topics**: go, mcp\n" +
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/ns/my-project](https://gitlab.example.com/ns/my-project)\n" +
+		"- **URL**: <https://gitlab.example.com/ns/my-project>\n" +
 		"- **HTTP Clone**: `https://gitlab.example.com/ns/my-project.git`\n" +
 		"- **SSH Clone**: `git@gitlab.example.com:ns/my-project.git`\n\n" +
 		projectCardHints
@@ -3936,7 +3936,7 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 		"- **Path**: ns/bare\n" +
 		"- **Visibility**: private\n" +
 		"- **Default Branch**: main\n" +
-		"- **URL**: [https://gitlab.example.com/ns/bare](https://gitlab.example.com/ns/bare)\n\n" +
+		"- **URL**: <https://gitlab.example.com/ns/bare>\n\n" +
 		projectCardHints
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got: %q\nwant: %q", md, want)

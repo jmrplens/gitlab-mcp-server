@@ -114,7 +114,7 @@ func assertMarkdown(t *testing.T, got, want string) {
 func TestFormatMarkdown(t *testing.T) {
 	assertMarkdown(t, FormatMarkdown(GetOutput{AvatarURL: "https://example.com/avatar.png"}),
 		"## Avatar\n\n"+
-			"- **URL**: [https://example.com/avatar.png](https://example.com/avatar.png)\n"+
+			"- **URL**: <https://example.com/avatar.png>\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use the avatar URL directly in your application\n")
 }
@@ -165,7 +165,7 @@ func TestGet_Success_Coverage(t *testing.T) {
 func TestFormatMarkdown_Coverage(t *testing.T) {
 	assertMarkdown(t, FormatMarkdown(GetOutput{AvatarURL: "https://img.example.com/a.png"}),
 		"## Avatar\n\n"+
-			"- **URL**: [https://img.example.com/a.png](https://img.example.com/a.png)\n"+
+			"- **URL**: <https://img.example.com/a.png>\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use the avatar URL directly in your application\n")
 }

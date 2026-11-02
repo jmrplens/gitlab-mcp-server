@@ -394,7 +394,7 @@ func TestFormatUpdateMarkdown_PipelineAndURL(t *testing.T) {
 		"- **Full SHA**: `abc123def456`\n" +
 		"- **Title**: Update lib\n" +
 		"- **Pipeline**: [#77](https://gitlab.example.com/g/p/-/pipelines/77)\n" +
-		"- **URL**: [https://gitlab.example.com/g/p/-/commit/abc123def456](https://gitlab.example.com/g/p/-/commit/abc123def456)\n" +
+		"- **URL**: <https://gitlab.example.com/g/p/-/commit/abc123def456>\n" +
 		submoduleUpdateHints
 
 	if got != want {

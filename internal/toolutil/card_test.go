@@ -44,7 +44,7 @@ func TestNewCard_SmallCard_WholeOutput(t *testing.T) {
 		"- **Confidential**: " + EmojiCross + "\n" +
 		"- **Created**: 20 Mar 2026 15:45 UTC\n" +
 		"- **Author**: [@alice](https://gitlab.example.com/alice)\n" +
-		"- **URL**: [https://gitlab.example.com/g/p/-/issues/42](https://gitlab.example.com/g/p/-/issues/42)\n" +
+		"- **URL**: <https://gitlab.example.com/g/p/-/issues/42>\n" +
 		hintsSection("Use action 'update' to change this issue")
 	if got := b.String(); got != want {
 		t.Errorf("small card:\n got %q\nwant %q", got, want)
@@ -138,7 +138,9 @@ func TestCard_AbsentValuesWriteNothing(t *testing.T) {
 		{name: "Warn off", write: func(c *Card) { c.Warn("X", false) }},
 		{name: "Time empty", write: func(c *Card) { c.Time("X", "") }},
 		{name: "Link both empty", write: func(c *Card) { c.Link("X", "", "") }},
+		{name: "Link blank text without an address", write: func(c *Card) { c.Link("X", " \t ", "") }},
 		{name: "URL empty", write: func(c *Card) { c.URL("") }},
+		{name: "URL blank", write: func(c *Card) { c.URL(" \n ") }},
 		{name: "Code empty", write: func(c *Card) { c.Code("X", "") }},
 		{name: "Secret empty", write: func(c *Card) { c.Secret("X", ""); c.End() }},
 		{name: "Text blank lines", write: func(c *Card) { c.Text("X", " \n\r\n ") }},
@@ -198,6 +200,7 @@ func TestCard_EveryRowShape_WholeOutput(t *testing.T) {
 	c.Link("Project", "group/app", "https://gitlab.example.com/group/app")
 	c.Link("Milestone", "v1.0 <x>", "")
 	c.Link("Page", "", "https://gitlab.example.com/page")
+	c.Link("Asset", "https://gitlab.example.com/asset", "https://gitlab.example.com/asset")
 	c.URL("https://gitlab.example.com/runners/7")
 	c.Code("Tag list", "docker, a`b")
 	c.Markdown("Pipeline", MdTitleLink("#1", "https://gitlab.example.com/p/1")+" "+EmojiSuccess+" success")
@@ -218,8 +221,9 @@ func TestCard_EveryRowShape_WholeOutput(t *testing.T) {
 		"- **Due**: 21 Mar 2026\n" +
 		"- **Project**: [group/app](https://gitlab.example.com/group/app)\n" +
 		"- **Milestone**: v1.0 &lt;x>\n" +
-		"- **Page**: [https://gitlab.example.com/page](https://gitlab.example.com/page)\n" +
-		"- **URL**: [https://gitlab.example.com/runners/7](https://gitlab.example.com/runners/7)\n" +
+		"- **Page**: <https://gitlab.example.com/page>\n" +
+		"- **Asset**: <https://gitlab.example.com/asset>\n" +
+		"- **URL**: <https://gitlab.example.com/runners/7>\n" +
 		"- **Tag list**: ``docker, a`b``\n" +
 		"- **Pipeline**: [#1](https://gitlab.example.com/p/1) " + EmojiSuccess + " success\n"
 	if got := b.String(); got != want {

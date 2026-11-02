@@ -1805,8 +1805,7 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 			"- **Admin**: ✅\n"+
 			"- **Bot**: ❌\n"+
 			"- **External**: ❌\n"+
-			"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n"+
-			"- **Avatar**: [https://gitlab.example.com/alice/avatar.png](https://gitlab.example.com/alice/avatar.png)\n"+
+			"- **URL**: <https://gitlab.example.com/alice>\n"+
 			"\n### SCIM Identities\n\n"+
 			"| Extern UID | Group ID | Active |\n"+
 			"| --- | --- | --- |\n"+
@@ -1841,7 +1840,7 @@ func TestFormatMarkdownString_AvatarOnly(t *testing.T) {
 
 	assertMarkdown(t, FormatMarkdownString(out),
 		"## Avatar Updated\n\n"+
-			"- **Avatar**: [https://gitlab.example.com/uploads/avatar.png](https://gitlab.example.com/uploads/avatar.png)\n"+
+			"- **Avatar**: <https://gitlab.example.com/uploads/avatar.png>\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- The avatar was updated; use gitlab_user_current to fetch the profile\n")
 }
@@ -1849,7 +1848,8 @@ func TestFormatMarkdownString_AvatarOnly(t *testing.T) {
 // TestFormatMarkdownString_NamedWithoutAnID verifies the other side of the
 // avatar condition: a user GitLab named is rendered as a user even when its ID
 // arrives at zero, because the avatar card is the answer to an upload and not
-// to any response that happens to lack an identifier.
+// to any response that happens to lack an identifier. The user card leaves
+// the avatar out, as every user card does (issue 1396).
 func TestFormatMarkdownString_NamedWithoutAnID(t *testing.T) {
 	out := Output{
 		Username:  "dana",
@@ -1864,7 +1864,6 @@ func TestFormatMarkdownString_NamedWithoutAnID(t *testing.T) {
 			"- **Admin**: ❌\n"+
 			"- **Bot**: ❌\n"+
 			"- **External**: ❌\n"+
-			"- **Avatar**: [https://gitlab.example.com/uploads/avatar.png](https://gitlab.example.com/uploads/avatar.png)\n"+
 			userCardHints)
 }
 
@@ -1914,7 +1913,7 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 			"| 2 | [@bob](https://gitlab.example.com/bob) | Bob | bob@example.com | blocked |\n"+
 			"\nPage 1 of 1 | 2 items total | 20 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
-			"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n"+
+			"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n"+
 			"- Use action 'user.get' to see full user details\n")
 }
 
@@ -1936,7 +1935,7 @@ func TestFormatListMarkdownString_HeadingCountsTheTotal(t *testing.T) {
 			"| 1 | [@alice](https://gitlab.example.com/alice) | Alice |  |  |\n"+
 			"\nPage 1 of 45 | 45 items total | 1 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
-			"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n"+
+			"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n"+
 			"- Use action 'user.get' to see full user details\n")
 }
 
@@ -2157,7 +2156,7 @@ func TestFormatContributionEventsMarkdownString_Linked(t *testing.T) {
 			"| 100 | opened | Issue | [Fix bug](https://gitlab.example.com/g/p/-/issues/7) | 1 Jun 2026 12:00 UTC |\n"+
 			"\nPage 1 of 1 | 1 items total | 20 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
-			"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n"+
+			"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n"+
 			"- Use action 'user.get' to view the user's profile\n")
 }
 

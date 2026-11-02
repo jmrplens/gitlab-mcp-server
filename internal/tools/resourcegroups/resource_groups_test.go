@@ -371,7 +371,7 @@ func TestFormatCurrentJobMarkdown(t *testing.T) {
 				"- **Allowed to fail**\n" +
 				"- **Pipeline**: [#77](https://gitlab.example.com/g/p/-/pipelines/77)\n" +
 				"- **Created**: 5 Jan 2026 00:00 UTC\n" +
-				"- **URL**: [https://gitlab.example.com/-/jobs/10](https://gitlab.example.com/-/jobs/10)\n" +
+				"- **URL**: <https://gitlab.example.com/-/jobs/10>\n" +
 				"\n---\n💡 **Next steps:**\n" +
 				"- Use action 'job.get' to read this job in full, with when it started and who ran it\n" +
 				"- Use action 'job.trace' to read its log\n" +
@@ -636,7 +636,7 @@ func TestFormatLists_APageOfALongerList(t *testing.T) {
 				"| 10 | deploy | 🟡 pending | deploy |  |  |  |\n" +
 				footerLine +
 				"\n---\n💡 **Next steps:**\n" +
-				"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+				"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 				"- Use action 'job.get' to see one of these jobs in full\n" +
 				"- Use action 'job.trace' to read a job's log\n" +
 				"- Use action 'pipeline.resource_group_list' to see the other resource groups of this project\n",

@@ -893,8 +893,8 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 	want := "## Release Link: Binary amd64\n\n" +
 		"- **ID**: 10\n" +
 		"- **Type**: package\n" +
-		"- **URL**: [https://example.com/bin/amd64](https://example.com/bin/amd64)\n" +
-		"- **Direct Asset URL**: [https://direct.example.com](https://direct.example.com)\n" +
+		"- **URL**: <https://example.com/bin/amd64>\n" +
+		"- **Direct Asset URL**: <https://direct.example.com>\n" +
 		cardHints
 
 	if got != want {
@@ -930,7 +930,7 @@ func TestFormatOutputMarkdown_LinkType(t *testing.T) {
 	want := "## Release Link: Runbook\n\n" +
 		"- **ID**: 5\n" +
 		"- **Type**: runbook\n" +
-		"- **URL**: [https://example.com/runbook](https://example.com/runbook)\n" +
+		"- **URL**: <https://example.com/runbook>\n" +
 		cardHints
 
 	if got != want {
@@ -953,7 +953,7 @@ func TestFormatDeletedMarkdown(t *testing.T) {
 	want := "## Release Link Deleted: Binary amd64\n\n" +
 		"- **ID**: 10\n" +
 		"- **Type**: package\n" +
-		"- **URL**: [https://example.com/bin/amd64](https://example.com/bin/amd64)\n" +
+		"- **URL**: <https://example.com/bin/amd64>\n" +
 		"\nThe link is removed from the release. The file or package it pointed at is untouched.\n" +
 		deletedHints
 
@@ -980,8 +980,8 @@ func TestFormatListMarkdown_WithLinks(t *testing.T) {
 
 	want := "## Release Links (2)\n\n" +
 		linkHeader +
-		"| 10 | Binary amd64 | package | [https://example.com/amd64](https://example.com/amd64) |\n" +
-		"| 11 | Binary arm64 | package | [https://example.com/arm64](https://example.com/arm64) |\n" +
+		"| 10 | Binary amd64 | package | <https://example.com/amd64> |\n" +
+		"| 11 | Binary arm64 | package | <https://example.com/arm64> |\n" +
 		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
 		listHints
 
@@ -1005,8 +1005,8 @@ func TestFormatListMarkdown_HeadingCountsTheResponseTotal(t *testing.T) {
 	want := "## Release Links (45)\n\n" +
 		"Showing 2 of 45 results (page 1 of 23)\n\n" +
 		linkHeader +
-		"| 10 | Binary amd64 | package | [https://example.com/amd64](https://example.com/amd64) |\n" +
-		"| 11 | Binary arm64 | package | [https://example.com/arm64](https://example.com/arm64) |\n" +
+		"| 10 | Binary amd64 | package | <https://example.com/amd64> |\n" +
+		"| 11 | Binary arm64 | package | <https://example.com/arm64> |\n" +
 		"\nPage 1 of 23 | 45 items total | 2 per page\n" +
 		listHints
 
@@ -1035,7 +1035,7 @@ func TestFormatListMarkdown_SingleLink(t *testing.T) {
 
 	want := "## Release Links (1)\n\n" +
 		linkHeader +
-		"| 1 | Image | image | [https://example.com/img](https://example.com/img) |\n" +
+		"| 1 | Image | image | <https://example.com/img> |\n" +
 		listHints
 
 	if got != want {
@@ -1061,8 +1061,8 @@ func TestFormatBatchMarkdown_WithCreatedAndFailed(t *testing.T) {
 
 	want := "## Release Links Created (2)\n\n" +
 		linkHeader +
-		"| 1 | Binary amd64 | package | [https://example.com/amd64](https://example.com/amd64) |\n" +
-		"| 2 | Binary arm64 | package | [https://example.com/arm64](https://example.com/arm64) |\n" +
+		"| 1 | Binary amd64 | package | <https://example.com/amd64> |\n" +
+		"| 2 | Binary arm64 | package | <https://example.com/arm64> |\n" +
 		"\n### Failures (1)\n\n" +
 		"- checksum.txt: 409 Conflict\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
@@ -1083,7 +1083,7 @@ func TestFormatBatchMarkdown_AllCreated(t *testing.T) {
 
 	want := "## Release Links Created (1)\n\n" +
 		linkHeader +
-		"| 5 | Source | other | [https://example.com/src](https://example.com/src) |\n" +
+		"| 5 | Source | other | <https://example.com/src> |\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'release.link_list' to see every link the release now has\n"

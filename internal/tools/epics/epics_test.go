@@ -1651,7 +1651,7 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 		"  - **Path**: group\n" +
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
 		"- **Closed**: 1 Mar 2026 00:00 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/groups/g/-/epics/1](https://gitlab.example.com/groups/g/-/epics/1)\n" +
+		"- **URL**: <https://gitlab.example.com/groups/g/-/epics/1>\n" +
 		"- **Description**: Epic description body\n" +
 		"\n### Linked Items\n\n" +
 		"| IID | Link Type | Path |\n" +

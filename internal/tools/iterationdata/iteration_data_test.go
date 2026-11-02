@@ -54,10 +54,11 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 // TestFormatListMarkdown_IterationWithoutTitle_LinksItsOwnAddress pins the cell
 // an untitled iteration renders. GitLab lets an iteration carry no title, and a
 // row whose link text is empty gives a reader nothing to click and no way to
-// tell two such rows apart, so the address — the one identity such an iteration
-// still has — becomes the text. A title of nothing but whitespace reads the
-// same to anyone looking at the table, which is why the fallback trims before
-// deciding rather than comparing against the empty string.
+// tell two such rows apart, so the address, the one identity such an iteration
+// still has, becomes the text, written once as an autolink (issue 1396). A
+// title of nothing but whitespace reads the same to anyone looking at the
+// table, which is why the fallback trims before deciding rather than comparing
+// against the empty string.
 func TestFormatListMarkdown_IterationWithoutTitle_LinksItsOwnAddress(t *testing.T) {
 	const webURL = "https://gitlab.example.com/-/iterations/7"
 	tests := []struct {
@@ -73,7 +74,7 @@ func TestFormatListMarkdown_IterationWithoutTitle_LinksItsOwnAddress(t *testing.
 
 			out := FormatListMarkdown("Iterations", toolutil.EmptyMessage("iterations"), iterations, toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1})
 
-			wantRow := "| 7 | 3 | [" + webURL + "](" + webURL + ") | current |  |  |\n"
+			wantRow := "| 7 | 3 | <" + webURL + "> | current |  |  |\n"
 			if !strings.Contains(out, wantRow) {
 				t.Errorf("FormatListMarkdown() = %q, want it to contain the row %q", out, wantRow)
 			}
@@ -110,7 +111,7 @@ func TestFormatOutputMarkdown_WithAllFields(t *testing.T) {
 		"- **Group ID**: 100\n" +
 		"- **Start**: 1 Mar 2026\n" +
 		"- **Due**: 14 Mar 2026\n" +
-		"- **URL**: [https://gitlab.example.com/-/iterations/5](https://gitlab.example.com/-/iterations/5)\n" +
+		"- **URL**: <https://gitlab.example.com/-/iterations/5>\n" +
 		"- **Created**: 1 Feb 2026 09:00 UTC\n" +
 		"- **Updated**: 2 Feb 2026 10:30 UTC\n" +
 		"- **Description**: A description with **markdown**\n"

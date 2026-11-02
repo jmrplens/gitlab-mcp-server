@@ -81,7 +81,7 @@ func TestFormatPublishMarkdown_WithChecksumAndURL(t *testing.T) {
 		"- **File Name**: app.tar.gz\n" +
 		"- **Size**: 4096 bytes\n" +
 		"- **SHA256**: `0123456789abcdef`\n" +
-		"- **URL**: [" + url + "](" + url + ")\n" +
+		"- **URL**: <" + url + ">\n" +
 		publishHints
 	if got != want {
 		t.Errorf("FormatPublishMarkdown() =\n%q\nwant:\n%q", got, want)
@@ -120,11 +120,11 @@ func TestFormatPublishAndLinkMarkdown_RendersBothSections(t *testing.T) {
 		"- **Package File ID**: 11\n" +
 		"- **File Name**: app.tar.gz\n" +
 		"- **Size**: 1024 bytes\n" +
-		"- **URL**: [https://gitlab.example.com/package/app.tar.gz](https://gitlab.example.com/package/app.tar.gz)\n\n" +
+		"- **URL**: <https://gitlab.example.com/package/app.tar.gz>\n\n" +
 		"### Release Link\n\n" +
 		"- **ID**: 22\n" +
 		"- **Name**: app.tar.gz\n" +
-		"- **URL**: [https://gitlab.example.com/release/app.tar.gz](https://gitlab.example.com/release/app.tar.gz)\n" +
+		"- **URL**: <https://gitlab.example.com/release/app.tar.gz>\n" +
 		publishAndLinkHints
 	if got != want {
 		t.Errorf("FormatPublishAndLinkMarkdown() =\n%q\nwant:\n%q", got, want)

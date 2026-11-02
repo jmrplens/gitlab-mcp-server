@@ -673,7 +673,7 @@ func TestWriteStatusCheckSection_HMACNotAsked(t *testing.T) {
 	want := "\n### External Status Checks for main\n\n" +
 		"| Name | URL | HMAC |\n" +
 		"| --- | --- | --- |\n" +
-		"| SonarQube | [https://sonar.example.com/check](https://sonar.example.com/check) | - |\n"
+		"| SonarQube | <https://sonar.example.com/check> | - |\n"
 
 	if got := b.String(); got != want {
 		t.Errorf("status check section mismatch:\ngot:\n%s\nwant:\n%s", got, want)
@@ -1133,7 +1133,7 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 		"\n### External Status Checks for main\n\n" +
 		"| Name | URL | HMAC |\n" +
 		"| --- | --- | --- |\n" +
-		"| SonarQube | [https://sonar.example.com/check](https://sonar.example.com/check) | ✅ |\n" +
+		"| SonarQube | <https://sonar.example.com/check> | ✅ |\n" +
 		"\nShowing 2 items | no more pages\n" +
 		branchRuleLinkedHints
 

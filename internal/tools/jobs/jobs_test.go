@@ -3218,7 +3218,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"- **Coverage**: 85.5%\n" +
 		"- **User**: @testuser\n" +
 		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
-		"- **URL**: [https://gitlab.example.com/-/jobs/100](https://gitlab.example.com/-/jobs/100)\n" +
+		"- **URL**: <https://gitlab.example.com/-/jobs/100>\n" +
 		jobCardHints
 	if md != want {
 		t.Errorf("FormatOutputMarkdown(all fields)\n got %q\nwant %q", md, want)
@@ -3399,7 +3399,7 @@ func TestFormatListMarkdown_WithJobs(t *testing.T) {
 
 // jobListHints is the guidance section a job list closes with.
 const jobListHints = "\n---\n💡 **Next steps:**\n" +
-	"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+	"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 	"- Use action 'job.get' to see one job in full\n" +
 	"- Use action 'job.trace' to read a job's log\n"
 
@@ -3689,7 +3689,7 @@ func TestFormatBridgeListMarkdown_WithData(t *testing.T) {
 		"| #201 | trigger-other | deploy | ❌ failed | 5.0s |  |\n" +
 		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'pipeline.get' to open the downstream pipeline\n"
 	if got := FormatBridgeListMarkdown(out); got != want {
 		t.Errorf("FormatBridgeListMarkdown()\n got %q\nwant %q", got, want)

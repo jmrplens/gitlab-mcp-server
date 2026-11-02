@@ -1387,7 +1387,7 @@ func TestFormatMarkdown_WithAllFields(t *testing.T) {
 		"- **Start Date**: 1 Jan 2026\n" +
 		"- **Due Date**: 30 Jun 2026\n" +
 		"- " + toolutil.EmojiWarning + " **Expired**\n" +
-		"- **URL**: [https://gitlab.example.com/groups/g/-/milestones/1](https://gitlab.example.com/groups/g/-/milestones/1)\n" +
+		"- **URL**: <https://gitlab.example.com/groups/g/-/milestones/1>\n" +
 		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
 		"- **Updated**: 15 Jan 2026 00:00 UTC\n" +
 		"- **Description**: Release milestone\n\n" +

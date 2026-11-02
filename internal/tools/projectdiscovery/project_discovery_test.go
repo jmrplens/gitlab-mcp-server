@@ -379,7 +379,7 @@ func TestFormatMarkdown_OutputContainsProjectInfo(t *testing.T) {
 		"- **ID**: 42\n" +
 		"- **Name**: my-project\n" +
 		"- **Path**: group/my-project\n" +
-		"- **URL**: [https://gitlab.example.com/group/my-project](https://gitlab.example.com/group/my-project)\n" +
+		"- **URL**: <https://gitlab.example.com/group/my-project>\n" +
 		"- **Default Branch**: main\n" +
 		"- **Description**: Test desc\n" +
 		"- **Visibility**: private\n\n" +
@@ -411,7 +411,7 @@ func TestFormatMarkdown_NoDescription(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Name**: test\n" +
 		"- **Path**: g/test\n" +
-		"- **URL**: [https://example.com/g/test](https://example.com/g/test)\n" +
+		"- **URL**: <https://example.com/g/test>\n" +
 		"- **Default Branch**: main\n" +
 		"- **Visibility**: public\n\n" +
 		"Use `project_id: 1` or `project_id: \"g/test\"` for subsequent operations.\n\n" +

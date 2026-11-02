@@ -50,7 +50,10 @@ func formatUserNotFound(out userNotFoundOutput) *mcp.CallToolResult {
 // so a response carrying no identity is rendered as the avatar result it is:
 // the user card used to print an ID of zero, an empty email and an empty
 // address for it, which reads as a user whose profile GitLab lost rather than
-// as the narrow answer it is.
+// as the narrow answer it is. That answer is the one card that shows the
+// avatar: on the user card it is a picture's address beside the identity,
+// which structuredContent carries as avatar_url and the Markdown leaves out
+// (issue 1396).
 func FormatMarkdownString(u Output) string {
 	var b strings.Builder
 	if u.ID == 0 && u.Username == "" && u.AvatarURL != "" {
@@ -73,7 +76,6 @@ func FormatMarkdownString(u Output) string {
 	card.Bool("External", u.External)
 	card.Warn("Locked", u.Locked)
 	card.URL(u.WebURL)
-	card.Link("Avatar", u.AvatarURL, u.AvatarURL)
 	writeSCIMIdentities(card, u.SCIMIdentities)
 	card.End(hintUserStatus, hintListSSHKeys)
 	return b.String()

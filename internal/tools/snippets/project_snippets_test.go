@@ -709,8 +709,8 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		"- **Visibility**: private\n" +
 		"- **Author**: User (@user)\n" +
 		"- **Project ID**: 42\n" +
-		"- **URL**: [" + testWebURL + "](" + testWebURL + ")\n" +
-		"\n### Files\n\n| Path | Raw URL |\n| --- | --- |\n| f.rb | [https://r](https://r) |\n" +
+		"- **URL**: <" + testWebURL + ">\n" +
+		"\n### Files\n\n| Path | Raw URL |\n| --- | --- |\n| f.rb | <https://r> |\n" +
 		snippetCardHints(true, true)
 	if got != want {
 		t.Errorf("snippet card:\n got %q\nwant %q", got, want)
@@ -791,7 +791,7 @@ func TestFormatMarkdown_WithProjectPath(t *testing.T) {
 		"- **Visibility**: internal\n" +
 		"- **Author**: Dev (@dev)\n" +
 		"- **Project**: my-group/my-project\n" +
-		"- **URL**: [" + webURL + "](" + webURL + ")\n" +
+		"- **URL**: <" + webURL + ">\n" +
 		snippetCardHints(true, true)
 	if got != want {
 		t.Errorf("project snippet card:\n got %q\nwant %q", got, want)
@@ -812,7 +812,7 @@ func TestFormatMarkdown_FallbackProjectID(t *testing.T) {
 		"- **Visibility**: private\n" +
 		"- **Author**: U (@u)\n" +
 		"- **Project ID**: 99\n" +
-		"- **URL**: [" + testWebURL + "](" + testWebURL + ")\n" +
+		"- **URL**: <" + testWebURL + ">\n" +
 		snippetCardHints(true, true)
 	if got != want {
 		t.Errorf("project snippet card without a path:\n got %q\nwant %q", got, want)

@@ -909,7 +909,7 @@ func TestFormatRunOutputMarkdown(t *testing.T) {
 		"- **SHA**: `abc`\n" +
 		"- **Ref**: main\n" +
 		"- **Status**: " + toolutil.PipelineStatusEmoji("created") + " created\n" +
-		"- **URL**: [https://gl/p/1](https://gl/p/1)\n" +
+		"- **URL**: <https://gl/p/1>\n" +
 		ptRunCardHints
 
 	if got != want {
@@ -1347,7 +1347,7 @@ func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 		"- **SHA**: `abc`\n" +
 		"- **Ref**: main\n" +
 		"- **Status**: " + toolutil.PipelineStatusEmoji("created") + " created\n" +
-		"- **URL**: [" + url + "](" + url + ")\n" +
+		"- **URL**: <" + url + ">\n" +
 		ptRunCardHints
 
 	if got != want {

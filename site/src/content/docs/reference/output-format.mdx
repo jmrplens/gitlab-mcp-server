@@ -51,7 +51,7 @@ When GitLab reports more than one page, a summary line follows the heading: `Sho
 
 ### Clickable links
 
-Where GitLab sent a web URL, the cell or the row links to it: the IID of a merge request in a list, a branch name to its tree, a pipeline number to the pipeline, and the `URL` row of a card to the address itself.
+Where GitLab sent a web URL, the cell or the row links to it: the IID of a merge request in a list, a branch name to its tree, a pipeline number to the pipeline.
 
 ```markdown
 | IID | Title | State | Author | Project | Source -> Target |
@@ -59,11 +59,19 @@ Where GitLab sent a web URL, the cell or the row links to it: the IID of a merge
 | [!243](https://gitlab.example.com/group/project/-/merge_requests/243) | Fix login bug | 🟢 opened | @alice | group/project | feature/fix-login -> main |
 ```
 
-Both halves of a link are escaped, so a title cannot close the link or open one of its own, and an address that is not `http` or `https` is shown as code instead of being linked. A list whose table carries links opens its next steps with one more line, written for the model:
+An address shown as itself, such as the `URL` row of a card, is written once, as an autolink, rather than twice as `[url](url)`. It is still a link, and a client renders it as one:
+
+```markdown
+- **URL**: <https://gitlab.example.com/group/project/-/issues/42>
+```
+
+Both halves of a link are escaped, so a title cannot close the link or open one of its own, and an address that is not `http` or `https` is shown as code instead of being linked. An address carrying a character an autolink cannot hold (a space, a tab, a line break, `<`, `>` or a pipe) is written in the long form instead, with both halves escaped. A list whose table carries links opens its next steps with one more line, written for the model:
 
 ```text
-When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab
+When presenting these results, always include the clickable links from the table so the user can navigate to GitLab
 ```
+
+The Markdown leaves avatars out: a card about a user, a topic or an achievement does not show the picture's address, and `structuredContent` carries it as `avatar_url`, as GitLab sent it. An answer that is nothing but the avatar keeps it: `user.avatar_get`, and `user.upload_avatar`, which GitLab answers with the avatar alone.
 
 ### Next steps
 
@@ -164,9 +172,23 @@ The server sends both parts on every successful call and leaves the choice to th
 | Both, and honours `audience` | Both, with the Markdown kept for the model and out of the user's view | Both                                       |
 | Both, and ignores `audience` | Both, with the Markdown shown as raw text beside the formatted data   | Both                                       |
 
-The next steps are written into both parts so that a client reading either one gets them. Two client behaviours are known and handled:
+The next steps are written into both parts so that a client reading either one gets them. Which part a client hands its model when a result carries both was read from each client's code, or from what its maintainers said, on 1 November 2026:
 
-- When a result carries `structuredContent`, Codex hands its model only that JSON and drops the Markdown ([openai/codex#10334](https://github.com/openai/codex/issues/10334)), which is one more reason the next steps are in the JSON too ([OpenAI Codex](/gitlab-mcp-server/install/clients/#openai-codex)).
+| Client                                         | Its model reads                                                                                   | Source                                                                                                                                                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAI Codex (CLI, IDE extension, ChatGPT.app) | `structuredContent` only, as compact JSON; the Markdown is dropped                                | [models.rs](https://github.com/openai/codex/blob/2546265e3ee71b02b13fa10b3058282211f7ce50/codex-rs/protocol/src/models.rs#L2484-L2509), [openai/codex#10334](https://github.com/openai/codex/issues/10334) |
+| Claude Code                                    | `structuredContent`, the default since 2.0.21                                                     | [anthropics/claude-code#9962](https://github.com/anthropics/claude-code/issues/9962)                                                                                                                       |
+| VS Code with GitHub Copilot                    | `structuredContent` only, as compact JSON; a text block reaches the model only when there is none | [mcpLanguageModelToolContribution.ts](https://github.com/microsoft/vscode/blob/63ba2ff5250c9bff0324fd49845eedec375a0361/src/vs/workbench/contrib/mcp/common/mcpLanguageModelToolContribution.ts#L331-L392) |
+| Cursor                                         | The Markdown only                                                                                 | [Cursor staff, forum thread 167346](https://forum.cursor.com/t/mcp-tool-results-containing-only-structuredcontent-are-silently-dropped/167346)                                                             |
+| Gemini CLI                                     | The Markdown only                                                                                 | [mcp-tool.ts](https://github.com/google-gemini/gemini-cli/blob/49cc3b340828379d8a8cf951d0df2a27ce82b69c/packages/core/src/tools/mcp-tool.ts#L644-L670)                                                     |
+| Zed                                            | The Markdown only                                                                                 | [context_server_registry.rs](https://github.com/zed-industries/zed/blob/7fb155e9a26d1abeced06916e64714127235db4d/crates/agent/src/tools/context_server_registry.rs#L402-L460)                              |
+| Continue                                       | The Markdown only                                                                                 | [callTool.ts](https://github.com/continuedev/continue/blob/ff89a882995c6d7eb61f8b3df1fd1b8761d6ef27/core/tools/callTool.ts#L145-L176)                                                                      |
+| Crush                                          | The Markdown only                                                                                 | [tools.go](https://github.com/charmbracelet/crush/blob/d65d6850ca4ed4971e4cb1a3bebd960a79cc167b/internal/agent/tools/mcp/tools.go#L65-L92)                                                                 |
+
+What the others do is not established. Claude Desktop is closed source and the reports of what it reads disagree; the code of opencode, Goose and Cline was not followed as far as the request each sends its model; and Windsurf, JetBrains AI Assistant, Kiro and GitHub Copilot CLI publish neither code nor a statement.
+
+The `audience` annotation does not change what Codex, Claude Code and VS Code read, which is why the next steps are in the JSON too ([OpenAI Codex](/gitlab-mcp-server/install/clients/#openai-codex)). A client that reads `structuredContent` is handed every field GitLab sent; a client that reads the Markdown is handed the card or the table, which writes an address once and leaves avatars out ([Clickable links](#clickable-links)). One more client behaviour is known and handled:
+
 - The Codex builds bundled with ChatGPT.app refuse a fractional `priority`, so for a session that identifies itself as Codex the server rounds every priority to `0` or `1`, which puts a list's text at `0` and every other preset at `1`; `GITLAB_MCP_CLIENT_COMPAT=off` turns that off.
 
 ## Content annotations
@@ -232,7 +254,7 @@ Page 1 of 15 | 45 items total | 3 per page
 
 ---
 💡 **Next steps:**
-- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab
+- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab
 - Use action 'branch.get' to see one branch in full
 - Use action 'branch.create' to create a new branch
 - Use action 'branch.protect' to protect a branch
@@ -243,7 +265,7 @@ The `structuredContent` of the same call, with each branch's head `commit` left 
 ```json
 {
   "next_steps": [
-    "When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab",
+    "When presenting these results, always include the clickable links from the table so the user can navigate to GitLab",
     "Use action 'branch.get' to see one branch in full",
     "Use action 'branch.create' to create a new branch",
     "Use action 'branch.protect' to protect a branch"
@@ -276,7 +298,7 @@ The `structuredContent` of the same call, with each branch's head `commit` left 
 - **Changes**: 3 files
 - **Created**: 15 Mar 2025 10:30 UTC
 - **Comments**: 2
-- **URL**: [https://gitlab.example.com/group/project/-/merge_requests/243](https://gitlab.example.com/group/project/-/merge_requests/243)
+- **URL**: <https://gitlab.example.com/group/project/-/merge_requests/243>
 
 ---
 💡 **Next steps:**
@@ -300,7 +322,7 @@ A write answers with the object as it now stands. `issue.create` answers with th
 - **State**: 🟢 opened
 - **Author**: @alice
 - **Created**: 21 Mar 2025 09:00 UTC
-- **URL**: [https://gitlab.example.com/group/project/-/issues/42](https://gitlab.example.com/group/project/-/issues/42)
+- **URL**: <https://gitlab.example.com/group/project/-/issues/42>
 
 ---
 💡 **Next steps:**
