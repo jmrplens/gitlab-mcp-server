@@ -771,8 +771,10 @@ func (m *Manager[S]) DemotedCount() int {
 	return n
 }
 
-// watch polls one URI until its lease expires, its last subscriber leaves,
-// or the manager closes.
+// watch polls one URI until its last subscriber leaves, a read finds the
+// resource inaccessible, it is evicted, it reaches [Options.MaxLifetime], or
+// the manager closes. Its lease running out only slows it to
+// [Options.SlowInterval].
 func (m *Manager[S]) watch(ctx context.Context, w *watcher[S], first time.Duration) {
 	defer m.wg.Done()
 	// Releasing the context is not housekeeping: it carries the absolute
@@ -929,11 +931,11 @@ func (m *Manager[S]) Lease() time.Duration {
 // RenewAll extends the lease on every watch one subscriber holds, and
 // reports how many of them that revived from a demoted state.
 //
-// This is what ties a subscription's lifetime to its subscriber being
-// present: any request on a session renews everything that session could be
-// waiting on, and nothing else. Renewing per-URI on reads of that URI would
-// be worse than useless — a watcher only notifies on a real change, so a
-// quiet resource produces no notification, no re-read, and would expire
+// This is what ties a subscription's full-speed polling to its subscriber
+// being present: any request on a session renews everything that session
+// could be waiting on, and nothing else. Renewing per-URI on reads of that URI
+// would be worse than useless: a watcher only notifies on a real change, so a
+// quiet resource produces no notification, no re-read, and would slow down
 // during exactly the wait its subscriber cared about. Renewing every watch
 // on the manager would be wrong in the other direction: one busy session
 // would keep another session's abandoned watches at full speed forever.
@@ -1036,10 +1038,12 @@ func (m *Manager[S]) poll(ctx context.Context, w *watcher[S]) (next time.Duratio
 		return wait, nil
 
 	case ctx.Err() != nil:
-		// The lease expired or the manager closed mid-read. Reporting no
-		// stop reason here is deliberate: the select at the top of the
-		// loop sees the same cancellation and retires the watcher with the
-		// cause, where this branch could only guess at it.
+		// The watch ended mid-read: its last subscriber left, it was
+		// evicted, it reached its lifetime, or the manager closed. The lease
+		// cancels nothing; it only slows the poll. Reporting no stop reason
+		// here is deliberate: the select at the top of the loop sees the same
+		// cancellation and retires the watcher with the cause, where this
+		// branch could only guess at it.
 		//
 		// The ctx here is the poll span's, derived from the watcher's, so it
 		// reports the same cancellation. That derivation is also why the

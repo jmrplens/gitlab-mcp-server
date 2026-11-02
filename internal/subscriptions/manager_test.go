@@ -571,7 +571,8 @@ func TestUnsubscribe_LastSubscriberLeaves_StopsWatcher(t *testing.T) {
 }
 
 // TestUnsubscribe_UnknownURI_IsNotAnError verifies a late unsubscribe is
-// tolerated, since a lease may already have retired the watcher.
+// tolerated, since the watch may already have ended on its own (a read that
+// found the resource inaccessible, an eviction, or its lifetime).
 func TestUnsubscribe_UnknownURI_IsNotAnError(t *testing.T) {
 	m, _, _ := newTestManager(t, Options{})
 	if err := m.Unsubscribe(subA, testURI); err != nil {
@@ -1988,7 +1989,8 @@ func TestUpdateDigest_AfterWatcherRemoved_DoesNotNotify(t *testing.T) {
 }
 
 // TestPoll_ContextCancelledMidRead_DoesNotRetire verifies a read that fails
-// because the lease expired is not mistaken for a resource-level failure.
+// because the watch's context ended is not mistaken for a resource-level
+// failure.
 //
 // Retiring here would be harmless but wrong; the watcher's own select
 // reports the cancellation, and conflating the two would hide a genuine
@@ -2010,10 +2012,11 @@ func TestPoll_ContextCancelledMidRead_DoesNotRetire(t *testing.T) {
 	if next <= 0 {
 		t.Errorf("poll() next = %v, want a positive interval", next)
 	}
-	// The cancellation is the lease ending or the manager closing, which the
-	// loop is about to report with the cause it actually knows. Logging it
-	// here as a read that failed and will be retried says two untrue things
-	// about a watcher that is already unwinding, once per stopped watch.
+	// The cancellation is the last subscriber leaving, an eviction, the
+	// lifetime ending or the manager closing, which the loop is about to
+	// report with the cause it actually knows. Logging it here as a read that
+	// failed and will be retried says two untrue things about a watcher that
+	// is already unwinding, once per stopped watch.
 	if strings.Contains(logs.String(), "watcher read failed") {
 		t.Errorf("a read cancelled by the watch itself was logged as a transient failure: %s", logs.String())
 	}
