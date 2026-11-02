@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,244 |
-| Unit test functions                                   | 21,549 |
-| E2E test functions                                    |  1,695 |
-| cmd test functions                                    |  5,688 |
+| Total test functions                                  | 23,271 |
+| Unit test functions                                   | 21,566 |
+| E2E test functions                                    |  1,705 |
+| cmd test functions                                    |  5,701 |
 | Test files (internal/)                                |    750 |
-| Test files (cmd/)                                     |    461 |
+| Test files (cmd/)                                     |    462 |
 | Test files (test/e2e/)                                |    438 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     35 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,697 | 58.9% |
+| `TestFunc_Scenario` (2-part)           | 13,699 | 58.9% |
 | `TestFunc` (no underscore)             |    903 |  3.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,644 | 37.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,669 | 37.3% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,215 |        259 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,216 |        259 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            439 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,207 |        475 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,695 |        438 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,688 |        461 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,244** |  **1,649** |                                                                                                 |
+| Tool sub-packages (181) |         11,210 |        475 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,705 |        438 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          5,701 |        462 | server entry point and developer command utilities                                              |
+| **Total**               |     **23,271** |  **1,650** |                                                                                                 |
 
 ### Core Packages
 
@@ -88,12 +88,12 @@
 | testutil/hints           |         7 |   100.0% | Package hints collects the canonical action IDs a package's Markdown invites a model to call, by rendering the package's own formatters rather than by reading its constants: a hint spelled as a literal at the call site is published exactly like one behind a constant, and a test that reads only the constants cannot see it. |
 | testutil/modelcorpus     |        58 |   100.0% | Package modelcorpus is the model evaluation corpus: for each case, the stimulus a model is given and the key that stimulus is scored against, held apart so that no code which produces a stimulus can read a key.                                                                                                                  |
 | testutil/modelrecord     |        55 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                                                                                         |
-| testutil/modelscore      |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
+| testutil/modelscore      |        97 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
 | toolutil                 |     1,375 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,215** |          |                                                                                                                                                                                                                                                                                                                                     |
+| **Subtotal**             | **4,216** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -230,7 +230,7 @@
 | issuestatistics         |         54 |          2 |   100.0% |         3 |
 | iterationdata           |         12 |          1 |   100.0% |         0 |
 | jobs                    |        185 |          8 |   100.0% |        17 |
-| jobtokenscope           |         46 |          2 |   100.0% |         8 |
+| jobtokenscope           |         48 |          2 |   100.0% |         8 |
 | keys                    |         32 |          3 |   100.0% |         2 |
 | labeldata               |         17 |          1 |   100.0% |         0 |
 | labels                  |         79 |          3 |   100.0% |         8 |
@@ -253,7 +253,7 @@
 | mrnotes                 |         51 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
 | notifications           |         40 |          2 |   100.0% |         6 |
-| orbit                   |         90 |          5 |   100.0% |         6 |
+| orbit                   |         91 |          5 |   100.0% |         6 |
 | packages                |        179 |          6 |   100.0% |        10 |
 | pages                   |         66 |          2 |   100.0% |         9 |
 | pipelines               |        150 |          5 |   100.0% |        12 |
@@ -313,7 +313,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,207** |    **475** |          | **1,195** |
+| **Total**               | **11,210** |    **475** |          | **1,195** |
 
 </details>
 

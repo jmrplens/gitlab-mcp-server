@@ -20320,10 +20320,7 @@
           "additionalProperties": true,
           "properties": {
             "project_id": {
-              "type": [
-                "string",
-                "integer"
-              ]
+              "type": "integer"
             },
             "target_group_id": {
               "type": "integer"
@@ -20335,10 +20332,7 @@
           "additionalProperties": true,
           "properties": {
             "project_id": {
-              "type": [
-                "string",
-                "integer"
-              ]
+              "type": "integer"
             },
             "target_project_id": {
               "type": "integer"
@@ -20436,10 +20430,7 @@
               "type": "boolean"
             },
             "project_id": {
-              "type": [
-                "string",
-                "integer"
-              ]
+              "type": "integer"
             },
             "target_group_id": {
               "type": "integer"
@@ -20454,10 +20445,7 @@
               "type": "boolean"
             },
             "project_id": {
-              "type": [
-                "string",
-                "integer"
-              ]
+              "type": "integer"
             },
             "target_project_id": {
               "type": "integer"

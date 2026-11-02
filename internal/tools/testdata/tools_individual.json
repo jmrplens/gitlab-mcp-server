@@ -3411,11 +3411,8 @@
       "additionalProperties": false,
       "properties": {
         "project_id": {
-          "description": "Project ID or URL-encoded path",
-          "type": [
-            "string",
-            "integer"
-          ]
+          "description": "Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first",
+          "type": "integer"
         },
         "target_group_id": {
           "description": "ID of the group to add to the allowlist",
@@ -4453,11 +4450,8 @@
       "additionalProperties": false,
       "properties": {
         "project_id": {
-          "description": "Project ID or URL-encoded path",
-          "type": [
-            "string",
-            "integer"
-          ]
+          "description": "Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first",
+          "type": "integer"
         },
         "target_project_id": {
           "description": "ID of the project to add to the allowlist",
@@ -213108,11 +213102,8 @@
           "type": "boolean"
         },
         "project_id": {
-          "description": "Project ID or URL-encoded path",
-          "type": [
-            "string",
-            "integer"
-          ]
+          "description": "Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first",
+          "type": "integer"
         },
         "target_group_id": {
           "description": "ID of the group to remove from the allowlist",
@@ -213169,11 +213160,8 @@
           "type": "boolean"
         },
         "project_id": {
-          "description": "Project ID or URL-encoded path",
-          "type": [
-            "string",
-            "integer"
-          ]
+          "description": "Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first",
+          "type": "integer"
         },
         "target_project_id": {
           "description": "ID of the project to remove from the allowlist",
