@@ -11745,15 +11745,22 @@ func TestTransportRejections_AreJSONRPCErrorsNotPlainText(t *testing.T) {
 	}
 }
 
-// TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire pins the heartbeat on
-// long-lived SSE responses.
+// TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire pins the heartbeat on the
+// SSE stream go-sdk commits as it opens it, driven through the SDK's own
+// handler rather than one written for the test.
 //
 // Clearing the write deadline stops this end of the connection from timing out
 // and does nothing about the hops in between: nginx closes an idle upstream
 // response at proxy_read_timeout (60s by default), and carrier NATs are
-// tighter. The two streams this transport depends on are silent by design — the
-// standalone GET carrying server-initiated messages, and a POST held open for
-// the length of a tool call — so they are precisely what an idle timer collects.
+// tighter. The standalone GET that carries server-initiated messages is silent
+// by design between them, so it is precisely what an idle timer collects.
+//
+// The heartbeat starts when a response commits to text/event-stream, and this
+// test used to commit it by calling WriteHeader itself, which no streamed POST
+// of go-sdk v1.8.0 does: the SDK commits the standalone GET as it opens it,
+// writing ": ok", and a streamed POST only with its first event, so a tool call
+// that sends nothing before its result never starts the heartbeat (see
+// TestSSEKeepAlive_ASilentToolCall_GetsNoByteBeforeItsResult).
 //
 // A comment frame is the cheapest legal thing to send: a line starting with ':'
 // carries no field, so a conforming reader discards it without producing an
@@ -11763,44 +11770,236 @@ func TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire(t *testing.T) {
 	sseKeepAliveInterval = 10 * time.Millisecond
 	t.Cleanup(func() { sseKeepAliveInterval = restore })
 
-	release := make(chan struct{})
-	handler := sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		// A stream that says nothing at all, which is the ordinary state of a
-		// standalone GET between server-initiated messages.
-		<-release
-	}))
+	server := mcp.NewServer(&mcp.Implementation{Name: "keep-alive", Version: "1"}, nil)
+	ts := httptest.NewServer(sseWriteDeadlineMiddleware(mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server }, nil,
+	)))
+	t.Cleanup(ts.Close)
+	session := openKeepAliveSession(t, ts.URL)
 
-	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
-	// Released on every exit path, and before the cleanup that waits for the
-	// handler: a defer runs ahead of t.Cleanup, so a failed assertion reports
-	// itself instead of deadlocking Close.
-	defer close(release)
-
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL, http.NoBody)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	// A bounded request: with no heartbeat this stream is so silent that even
-	// the response header never reaches the wire, so an unbounded Do would
-	// report a missing feature as a stuck suite.
-	client := server.Client()
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set(hdrMCPSessionID, session)
+	req.Header.Set("Mcp-Protocol-Version", "2025-11-25")
+	// A bounded request, so a stream that never commits fails the test
+	// rather than stalling the suite.
+	client := ts.Client()
 	client.Timeout = 5 * time.Second
 	resp, err := client.Do(req)
 	if err != nil {
-		t.Fatalf("GET: %v — an idle SSE response never flushed, so a proxy's read timeout would sever it", err)
+		t.Fatalf("GET: %v: the standalone stream never flushed, so a proxy's read timeout would sever it", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if !isEventStream(resp.Header.Get(hdrContentType)) {
+		t.Fatalf("GET answered %d %q, want the SDK's standalone event stream", resp.StatusCode, resp.Header.Get(hdrContentType))
+	}
+
+	// The SDK's ": ok" comes first, and the server may announce its lists on
+	// the stream; the heartbeat's comment is what has to follow the silence.
+	reader := bufio.NewReader(resp.Body)
+	for {
+		line, readErr := reader.ReadString('\n')
+		if line == string(sseKeepAliveFrame[:len(sseKeepAliveFrame)-1]) {
+			return
+		}
+		if readErr != nil {
+			t.Fatalf("reading the idle stream: %v: the standalone stream went silent with no keep-alive comment", readErr)
+		}
+	}
+}
+
+// openKeepAliveSession initializes a stateful session on the handler at url
+// and returns its id, closing the session when the test ends.
+func openKeepAliveSession(t *testing.T, url string) string {
+	t.Helper()
+	// post sends body on session and answers the session id the response
+	// names, beside its status.
+	post := func(body, session string) (string, int) {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, url, strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set(hdrContentType, mimeJSON)
+		req.Header.Set("Accept", mimeJSONSSE)
+		if session != "" {
+			req.Header.Set(hdrMCPSessionID, session)
+			req.Header.Set("Mcp-Protocol-Version", "2025-11-25")
+		}
+		resp, err := testHTTPClient.Do(req)
+		if err != nil {
+			t.Fatalf("POST %s: %v", body, err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return resp.Header.Get(hdrMCPSessionID), resp.StatusCode
+	}
+	session, status := post(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25",`+
+		`"capabilities":{},"clientInfo":{"name":"keep-alive","version":"1"}}}`, "")
+	if session == "" {
+		t.Fatalf("initialize answered %d with no session id", status)
+	}
+	t.Cleanup(func() { closeMCPSession(t, url, session) })
+	post(`{"jsonrpc":"2.0","method":"notifications/initialized"}`, session)
+	return session
+}
+
+// TestSSEKeepAlive_ASilentToolCall_GetsNoByteBeforeItsResult pins the stream
+// the heartbeat does not reach on go-sdk v1.8.0: a streamed POST whose tool
+// call sends nothing before its result.
+//
+// The SDK sets text/event-stream on such a response and writes nothing, its
+// headers included, until its first event, and the heartbeat starts when the
+// response commits, so a tool call with no progress to report is silent on the
+// wire for as long as it runs: behind nginx's default proxy_read_timeout, a
+// call that outlives sixty seconds is cut, and the client waits for headers
+// rather than for an event. The tool here stands in for one waiting on GitLab,
+// and the request carries no progress token.
+func TestSSEKeepAlive_ASilentToolCall_GetsNoByteBeforeItsResult(t *testing.T) {
+	restore := sseKeepAliveInterval
+	sseKeepAliveInterval = 10 * time.Millisecond
+	t.Cleanup(func() { sseKeepAliveInterval = restore })
+
+	release := make(chan struct{})
+	server := mcp.NewServer(&mcp.Implementation{Name: "keep-alive", Version: "1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "wait"}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "done"}}}, nil, nil
+	})
+	ts := httptest.NewServer(sseWriteDeadlineMiddleware(mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true},
+	)))
+	t.Cleanup(ts.Close)
+	var once sync.Once
+	letGo := func() { once.Do(func() { close(release) }) }
+	// Before the cleanup that waits for the handler, so a failed assertion
+	// reports itself instead of deadlocking Close.
+	defer letGo()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"wait","arguments":{}}}`,
+	))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("Mcp-Protocol-Version", "2025-11-25")
+
+	// The call runs off the test goroutine, which only learns when its
+	// headers arrived and, at the end, what its body held.
+	type answer struct {
+		body string
+		err  error
+	}
+	committed := make(chan struct{})
+	answered := make(chan answer, 1)
+	go func() {
+		resp, doErr := testHTTPClient.Do(req)
+		close(committed)
+		if doErr != nil {
+			answered <- answer{err: doErr}
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+		body, readErr := io.ReadAll(resp.Body)
+		answered <- answer{body: string(body), err: readErr}
+	}()
+
+	select {
+	case <-committed:
+		t.Fatalf("a tool call still running had its response committed before its result. %s", silentToolCallFix)
+	case <-time.After(30 * sseKeepAliveInterval):
+	}
+	letGo()
+
+	got := <-answered
+	if got.err != nil {
+		t.Fatalf("POST: %v", got.err)
+	}
+	if !strings.HasPrefix(got.body, "event: message") || !strings.Contains(got.body, `"done"`) {
+		t.Errorf("the tool call's stream is %q, want its result as its first bytes. %s", got.body, silentToolCallFix)
+	}
+}
+
+// silentToolCallFix is what a failure of the test above asks for: the go-sdk
+// the module is built against commits a streamed POST before its first event,
+// as go-sdk#1477 does with a comment of its own after each interval of
+// silence, and the heartbeat now reaches a silent tool call.
+const silentToolCallFix = "go-sdk now commits a streamed POST before its first event, so the heartbeat reaches a silent tool call: " +
+	"update row 8 of docs/development/upstream-bugs.md, the keep-alive paragraph of site/src/content/docs/operations/http-server.mdx, " +
+	"the read timeout row and the Cloudflare paragraph of site/src/content/docs/operations/remote-deployment.mdx, " +
+	"the proxy row of site/src/content/docs/operations/troubleshooting.mdx, each with its Spanish twin, " +
+	"the comment of sseAwareWriter.Write and this test, in the same pull request."
+
+// TestSSEKeepAlive_ComesOneIntervalAfterTheLastWrite pins how long a stream
+// stays silent after its last event: one interval, not up to two.
+//
+// The heartbeat used to tick on a grid laid down when the response committed
+// and skip a tick that found the stream written less than an interval before,
+// so an event between two ticks pushed the next frame to the tick after: the
+// standalone GET, which go-sdk commits with ": ok" and then writes the
+// server's list announcements to a second later, went 48 seconds without a
+// byte against the binary, and a listen stream alternated gaps of 25 and 50
+// seconds as the ticks' jitter fell. Against nginx's default sixty seconds that
+// left ten, not the two frames the interval was chosen for. The handler writes
+// as go-sdk does, without calling WriteHeader: its first Write commits the
+// stream, and its event a fifth of an interval later is the last byte before
+// the silence.
+func TestSSEKeepAlive_ComesOneIntervalAfterTheLastWrite(t *testing.T) {
+	restore := sseKeepAliveInterval
+	sseKeepAliveInterval = 400 * time.Millisecond
+	t.Cleanup(func() { sseKeepAliveInterval = restore })
+
+	release := make(chan struct{})
+	ts := httptest.NewServer(sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(hdrContentType, "text/event-stream")
+		_, _ = w.Write([]byte(": ok\n\n"))
+		_ = http.NewResponseController(w).Flush()
+		time.Sleep(sseKeepAliveInterval / 5)
+		_, _ = w.Write([]byte("event: message\ndata: {}\n\n"))
+		_ = http.NewResponseController(w).Flush()
+		<-release
+	})))
+	t.Cleanup(ts.Close)
+	// Before the cleanup that waits for the handler, so a failed assertion
+	// reports itself instead of deadlocking Close.
+	defer close(release)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL, http.NoBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	client := ts.Client()
+	client.Timeout = 10 * time.Second
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	buf := make([]byte, len(sseKeepAliveFrame))
-	if _, readErr := io.ReadFull(resp.Body, buf); readErr != nil {
-		t.Fatalf("reading the idle stream: %v — an idle SSE response sent nothing", readErr)
+	reader := bufio.NewReader(resp.Body)
+	var lastEvent time.Time
+	for {
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			t.Fatalf("reading the stream: %v", readErr)
+		}
+		if strings.HasPrefix(line, "data: ") {
+			lastEvent = time.Now()
+		}
+		if line == ": keep-alive\n" && !lastEvent.IsZero() {
+			break
+		}
 	}
-
-	if got := string(buf); got != string(sseKeepAliveFrame) {
-		t.Errorf("idle stream wrote %q, want the keep-alive comment %q", got, sseKeepAliveFrame)
+	if silence := time.Since(lastEvent); silence > sseKeepAliveInterval*3/2 {
+		t.Errorf("the first keep-alive came %v after the last event, want one interval (%v): a proxy's idle timer sees the whole gap",
+			silence.Round(time.Millisecond), sseKeepAliveInterval)
 	}
 }
 
@@ -14747,8 +14946,8 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now()}
 
-		if !writer.writeKeepAlive(time.Now()) {
-			t.Error("the heartbeat stopped on a stream that is alive")
+		if wait, alive := writer.writeKeepAlive(time.Now()); !alive || wait <= 0 || wait > sseKeepAliveInterval {
+			t.Errorf("writeKeepAlive = (%v, %v), want the heartbeat to go on and wait out the rest of the interval", wait, alive)
 		}
 		if rec.Body.Len() != 0 {
 			t.Errorf("body = %q, want no frame written to a stream that just wrote", rec.Body.String())
@@ -14764,8 +14963,8 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now().Add(-time.Hour)}
 
-		if !writer.writeKeepAlive(time.Now()) {
-			t.Error("the heartbeat stopped on a stream that is alive")
+		if wait, alive := writer.writeKeepAlive(time.Now()); !alive || wait != sseKeepAliveInterval {
+			t.Errorf("writeKeepAlive = (%v, %v), want the heartbeat to go on and wait a whole interval after its frame", wait, alive)
 		}
 		if got := rec.Body.String(); got != string(sseKeepAliveFrame) {
 			t.Errorf("body = %q, want the keep-alive comment on a stream idle since its last event", got)
@@ -14778,7 +14977,7 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 		rec := httptest.NewRecorder()
 		writer := &sseAwareWriter{ResponseWriter: rec, stopped: true}
 
-		if writer.writeKeepAlive(time.Now()) {
+		if _, alive := writer.writeKeepAlive(time.Now()); alive {
 			t.Error("the heartbeat continued after the handler returned")
 		}
 		if rec.Body.Len() != 0 {
@@ -14791,7 +14990,7 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 
 		writer := &sseAwareWriter{ResponseWriter: brokenResponseWriter{httptest.NewRecorder()}}
 
-		if writer.writeKeepAlive(time.Now()) {
+		if _, alive := writer.writeKeepAlive(time.Now()); alive {
 			t.Error("the heartbeat continued after the write failed; it would write into a closed socket forever")
 		}
 	})
@@ -14799,10 +14998,12 @@ func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *tes
 
 // TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle pins the
 // boundary between the two answers a live stream gets: a stream that last
-// wrote exactly one interval before the tick has been silent for as long as
-// the heartbeat waits, so it is idle and gets the frame, and one a nanosecond
-// short of that has not and does not. The tick records itself as the last
-// write, so the next tick measures from it.
+// wrote exactly one interval before the timer fired has been silent for as
+// long as the heartbeat waits, so it is idle and gets the frame, and one a
+// nanosecond short of that has not and does not. The frame records itself as
+// the last write, so the wait after it is a whole interval, and a stream not
+// yet idle is waited on for what is left of its interval, so its frame comes
+// one interval after its last byte rather than at a tick after that.
 func TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle(t *testing.T) {
 	t.Parallel()
 
@@ -14811,9 +15012,11 @@ func TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle(t *testing.T
 		name      string
 		silence   time.Duration
 		wantFrame bool
+		wantWait  time.Duration
 	}{
-		{name: "one interval exactly", silence: sseKeepAliveInterval, wantFrame: true},
-		{name: "a nanosecond short of one", silence: sseKeepAliveInterval - time.Nanosecond, wantFrame: false},
+		{name: "one interval exactly", silence: sseKeepAliveInterval, wantFrame: true, wantWait: sseKeepAliveInterval},
+		{name: "a nanosecond short of one", silence: sseKeepAliveInterval - time.Nanosecond, wantFrame: false, wantWait: time.Nanosecond},
+		{name: "a fifth of one", silence: sseKeepAliveInterval / 5, wantFrame: false, wantWait: sseKeepAliveInterval - sseKeepAliveInterval/5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -14821,8 +15024,12 @@ func TestSSEAwareWriter_WriteKeepAlive_AFullIntervalOfSilenceIsIdle(t *testing.T
 			writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: lastWrite}
 			tick := lastWrite.Add(tc.silence)
 
-			if !writer.writeKeepAlive(tick) {
+			wait, alive := writer.writeKeepAlive(tick)
+			if !alive {
 				t.Fatal("the heartbeat stopped on a stream that is alive")
+			}
+			if wait != tc.wantWait {
+				t.Errorf("wait = %v after %v of silence, want %v", wait, tc.silence, tc.wantWait)
 			}
 			if wrote := rec.Body.String() == string(sseKeepAliveFrame); wrote != tc.wantFrame {
 				t.Errorf("frame written = %v after %v of silence, want %v", wrote, tc.silence, tc.wantFrame)

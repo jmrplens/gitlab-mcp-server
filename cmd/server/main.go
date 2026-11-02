@@ -2996,7 +2996,9 @@ func sseWriteDeadlineMiddleware(next http.Handler) http.Handler {
 // mobile carrier NATs are less generous still. A standalone GET stream is silent
 // by design until something happens, and a streamed POST is silent for as long
 // as GitLab takes, so the streams this transport depends on are exactly the ones
-// an idle timer collects. 25 seconds leaves room for two frames inside the
+// an idle timer collects. The heartbeat reaches a stream once it has committed,
+// though, and go-sdk v1.8.0 commits a streamed POST only with its first event
+// (see [sseAwareWriter.Write]). 25 seconds leaves room for two frames inside the
 // tightest of those windows.
 //
 // A var, not a const, only so tests can shorten it; nothing at runtime writes it.
@@ -3065,8 +3067,12 @@ func (w *sseAwareWriter) WriteHeader(code int) {
 	}
 }
 
-// Write covers the streamed POST response, which never calls WriteHeader
-// explicitly — so this is the only hook that fires for a long tool call.
+// Write commits a response nothing has committed yet, which is how go-sdk
+// commits a streamed POST: it never calls WriteHeader, and its first Write is
+// its first event. The heartbeat starts there and not before, so on go-sdk
+// v1.8.0 a tool call that sends nothing before its result puts no byte on the
+// wire, its headers included, until the result ends the stream; row 8 of
+// docs/development/upstream-bugs.md records it.
 func (w *sseAwareWriter) Write(b []byte) (int, error) {
 	if !w.wroteHeader {
 		w.WriteHeader(http.StatusOK)
@@ -3080,49 +3086,63 @@ func (w *sseAwareWriter) Write(b []byte) (int, error) {
 // startKeepAlive runs the idle-stream heartbeat until the handler returns or
 // the client goes away. It is called from the handler goroutine, once, after
 // the header is on the wire.
+//
+// A timer re-armed from the stream's last write, rather than a ticker laid
+// down at the commit: a ticker that skips a tick finding the stream written
+// less than an interval before waits for the next one, so an event between
+// two ticks left the stream silent for up to two intervals, 50 seconds, and
+// with the ticks' jitter even a stream the heartbeat alone kept alive skipped
+// every other frame.
 func (w *sseAwareWriter) startKeepAlive() {
 	w.stop = make(chan struct{})
 	w.done = make(chan struct{})
 	stop, done := w.stop, w.done
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(sseKeepAliveInterval)
-		defer ticker.Stop()
+		timer := time.NewTimer(sseKeepAliveInterval)
+		defer timer.Stop()
 		for {
 			select {
 			case <-stop:
 				return
 			case <-w.disconnected:
 				return
-			case now := <-ticker.C:
-				if !w.writeKeepAlive(now) {
+			case now := <-timer.C:
+				wait, alive := w.writeKeepAlive(now)
+				if !alive {
 					return
 				}
+				timer.Reset(wait)
 			}
 		}
 	}()
 }
 
-// writeKeepAlive emits one comment frame at now, the tick it answers, and
-// reports whether the heartbeat should continue. A stream that has written
-// less than an interval before now is not idle, so it is skipped rather than
-// padded. The instant is a parameter so the boundary between the two can be
-// tested exactly, without a clock shared by concurrent tests.
-func (w *sseAwareWriter) writeKeepAlive(now time.Time) bool {
+// writeKeepAlive emits one comment frame at now, the instant the timer fired,
+// unless the stream wrote less than an interval before now, and reports how
+// long the heartbeat waits before it asks again and whether it continues. A
+// stream that has written recently is not idle, so it is not padded, and the
+// wait is what is left of its interval, so the next frame comes one interval
+// after its last byte; after a frame the wait is a whole interval. The instant
+// is a parameter so the boundary between the two can be tested exactly,
+// without a clock shared by concurrent tests.
+func (w *sseAwareWriter) writeKeepAlive(now time.Time) (wait time.Duration, alive bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.stopped {
-		return false
+		return 0, false
 	}
-	if !w.lastWrite.IsZero() && now.Sub(w.lastWrite) < sseKeepAliveInterval {
-		return true
+	if !w.lastWrite.IsZero() {
+		if silence := now.Sub(w.lastWrite); silence < sseKeepAliveInterval {
+			return sseKeepAliveInterval - silence, true
+		}
 	}
 	if _, err := w.ResponseWriter.Write(sseKeepAliveFrame); err != nil {
-		return false
+		return 0, false
 	}
 	w.lastWrite = now
 	_ = http.NewResponseController(w.ResponseWriter).Flush()
-	return true
+	return sseKeepAliveInterval, true
 }
 
 // stopKeepAlive ends the heartbeat and waits for it, so no write reaches a
