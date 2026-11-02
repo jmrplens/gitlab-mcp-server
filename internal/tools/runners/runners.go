@@ -453,7 +453,7 @@ type UpdateInput struct {
 	// length only (issue 1306).
 	Description     *string  `json:"description,omitempty"        jsonschema:"Runner description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Paused          *bool    `json:"paused,omitempty"             jsonschema:"Pause/unpause the runner"`
-	TagList         []string `json:"tag_list,omitempty"           jsonschema:"List of runner tags"`
+	TagList         []string `json:"tag_list,omitempty"           jsonschema:"List of runner tags. Pass [] to remove every tag. Omit the field to leave them untouched"`
 	RunUntagged     *bool    `json:"run_untagged,omitempty"       jsonschema:"Whether to run untagged jobs"`
 	Locked          *bool    `json:"locked,omitempty"             jsonschema:"Whether runner is locked to current project"`
 	AccessLevel     string   `json:"access_level,omitempty"       jsonschema:"Access level: not_protected, ref_protected"`
@@ -478,7 +478,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Paused != nil {
 		opts.Paused = input.Paused
 	}
-	if len(input.TagList) > 0 {
+	// Presence decides, never emptiness: [] removes every tag, which GitLab
+	// stores (measured on 19.5.0-ee, issue 1306).
+	if input.TagList != nil {
 		opts.TagList = &input.TagList
 	}
 	if input.RunUntagged != nil {

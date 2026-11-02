@@ -188,6 +188,36 @@ func TestUpdateUserList_Success(t *testing.T) {
 	}
 }
 
+// TestUpdateUserList_UserXIDs_ReachTheBodyAsTheCallerSentThem holds the
+// users of a list update to the body: a list of users is sent as written, an
+// empty one is sent as "" through the request option, since client-go tags the
+// field omitempty and GitLab empties the list with "" (measured on 19.5.0-ee,
+// issue 1306), and a call naming no users sends none.
+func TestUpdateUserList_UserXIDs_ReachTheBodyAsTheCallerSentThem(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   UpdateInput
+		want    string
+		present bool
+	}{
+		{name: "users", input: UpdateInput{ProjectID: "42", IID: 10, UserXIDs: new("user1,user2")}, want: `"user1,user2"`, present: true},
+		{name: "users emptied", input: UpdateInput{ProjectID: "42", IID: 10, UserXIDs: new("")}, want: `""`, present: true},
+		{name: "users left alone", input: UpdateInput{ProjectID: "42", IID: 10, Name: testListName}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client, recorder := testutil.RecordWrites(t, userListJSON, userListJSON)
+			if _, err := UpdateUserList(context.Background(), client, tc.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			got, present := recorder.Member("user_xids")
+			if present != tc.present || (present && got != tc.want) {
+				t.Errorf("user_xids = %s (present %v), want %s (present %v)", got, present, tc.want, tc.present)
+			}
+		})
+	}
+}
+
 // TestUpdateUserList_MissingParams verifies that UpdateUserList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

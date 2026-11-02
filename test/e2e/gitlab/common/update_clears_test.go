@@ -20,10 +20,13 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/appearance"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/badges"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/broadcastmessages"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/civariables"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/environments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/ffuserlists"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupmembers"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/labels"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/members"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/milestones"
@@ -35,6 +38,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/snippets"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/systemhooks"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -649,5 +653,174 @@ func TestUpdateClears_PackageProtectionRule_PushLevel(t *testing.T) {
 				rule.ID, rule.MinimumAccessLevelForPush, rule.MinimumAccessLevelForDelete)
 		}
 		harness.DoVoid(s, actionPackageProtectionRuleDelete, byRule)
+	})
+}
+
+// TestUpdateClears_ProjectBadge_Name gives a project's badge a name, then
+// sends the name empty and holds the answer and a fresh read to a badge with
+// none.
+func TestUpdateClears_ProjectBadge_Name(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("badgeclear"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		badge := fixture.NewProjectBadge(e, project)
+		if badge.Name == "" {
+			e.T.Fatalf("the badge fixture answered %+v, want a name to remove", badge)
+		}
+		params := map[string]any{"project_id": project.IDParam(), "badge_id": badge.ID}
+
+		cleared := harness.Do[badges.EditProjectOutput](s, actionProjectBadgeEdit, withParams(params, map[string]any{"name": ""}))
+		read := harness.Do[badges.GetProjectOutput](s, actionProjectBadgeGet, params)
+		if cleared.Badge.Name != "" || read.Badge.Name != "" {
+			e.T.Errorf("after the removal the badge edit answered name %q and the read %q, want none", cleared.Badge.Name, read.Badge.Name)
+		}
+	})
+}
+
+// TestUpdateClears_Wiki_Content writes a wiki page, then sends its content
+// empty and holds the answer and a fresh read to an empty page.
+func TestUpdateClears_Wiki_Content(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("wikiclear"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		page := fixture.NewWikiPage(e, project)
+		if page.Content == "" {
+			e.T.Fatalf("the wiki page fixture answered %+v, want content to remove", page)
+		}
+		params := map[string]any{"project_id": project.IDParam(), "slug": page.Slug}
+
+		cleared := harness.Do[wikis.Output](s, actionWikiUpdate, withParams(params, map[string]any{"content": ""}))
+		read := harness.Do[wikis.Output](s, actionWikiGet, params)
+		if cleared.Content != "" || read.Content != "" {
+			e.T.Errorf("after the removal the wiki update answered content %q and the read %q, want none", cleared.Content, read.Content)
+		}
+	})
+}
+
+// TestUpdateClears_FeatureFlagUserList_UserXIDs creates a user list of two
+// users, then sends the users empty and holds the answer and a fresh read to
+// a list of none. client-go leaves an empty user_xids out of the body, so the
+// empty string reaches GitLab only through the request option that writes it
+// (upstream register row 122).
+func TestUpdateClears_FeatureFlagUserList_UserXIDs(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("ffxidclear"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		base := map[string]any{"project_id": project.IDParam()}
+
+		created := harness.Do[ffuserlists.Output](s, actionFFUserListCreate, withParams(base, map[string]any{
+			"name": e.Name("ffxidclear"), "user_xids": "user1,user2",
+		}))
+		if created.IID == 0 || created.UserXIDs == "" {
+			e.T.Fatalf("ff_user_list_create answered %+v, want a list with users to remove", created)
+		}
+		item := withParams(base, map[string]any{"user_list_iid": created.IID})
+
+		cleared := harness.Do[ffuserlists.Output](s, actionFFUserListUpdate, withParams(item, map[string]any{"user_xids": ""}))
+		read := harness.Do[ffuserlists.Output](s, actionFFUserListGet, item)
+		if cleared.UserXIDs != "" || read.UserXIDs != "" {
+			e.T.Errorf("after the removal the list update answered users %q and the read %q, want none", cleared.UserXIDs, read.UserXIDs)
+		}
+		harness.DoVoid(s, actionFFUserListDelete, item)
+	})
+}
+
+// TestUpdateClears_Group_DefaultBranch gives a group a default branch for
+// its new projects, then sends it empty and holds a fresh read to a group
+// with none, so new projects fall back to the instance default.
+func TestUpdateClears_Group_DefaultBranch(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Group {
+		return fixture.NewGroup(e, fixture.WithGroupNamePrefix("dbclear"))
+	}, func(e *harness.Env, surface harness.Surface, group fixture.Group) {
+		s := e.On(surface)
+		params := map[string]any{"group_id": group.IDParam()}
+
+		set := harness.Do[groups.DetailOutput](s, actionGroupUpdate, withParams(params, map[string]any{"default_branch": "trunk"}))
+		if set.DefaultBranch != "trunk" {
+			e.T.Fatalf("group update answered default branch %q, want trunk before the removal", set.DefaultBranch)
+		}
+		harness.DoVoid(s, actionGroupUpdate, withParams(params, map[string]any{"default_branch": ""}))
+		read := harness.Do[groups.DetailOutput](s, actionGroupGet, params)
+		if read.DefaultBranch != "" {
+			e.T.Errorf("after the removal the group read answered default branch %q, want none", read.DefaultBranch)
+		}
+	})
+}
+
+// TestUpdateClears_User_ProfileTexts gives a user a location, an admin note
+// and two social accounts, then sends all four empty in one modify and holds
+// the answer and a fresh read to a user with none of them.
+func TestUpdateClears_User_ProfileTexts(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		user := fixture.NewUser(e, "profclear")
+		params := map[string]any{"user_id": user.ID}
+
+		set := harness.Do[users.Output](s, actionUserModify, withParams(params, map[string]any{
+			"location": "Granada", "note": "to be removed", "linkedin": "profclear", "twitter": "profclear",
+		}))
+		if set.Location == "" || set.Note == "" || set.Linkedin == "" || set.Twitter == "" {
+			e.T.Fatalf("user modify answered %+v, want a location, a note and two accounts to remove", set)
+		}
+
+		cleared := harness.Do[users.Output](s, actionUserModify, withParams(params, map[string]any{
+			"location": "", "note": "", "linkedin": "", "twitter": "",
+		}))
+		read := harness.Do[users.Output](s, actionUserGet, params)
+		assertCleared := func(call string, out users.Output) {
+			if out.Location != "" || out.Note != "" || out.Linkedin != "" || out.Twitter != "" {
+				e.T.Errorf("user %s after the removal answered location %q, note %q, linkedin %q, twitter %q; want none",
+					call, out.Location, out.Note, out.Linkedin, out.Twitter)
+			}
+		}
+		assertCleared("modify", cleared)
+		assertCleared("get", read)
+	})
+}
+
+// TestUpdateClears_Runner_TagList takes every tag off a project runner with
+// [] and holds the answer and a fresh read to a runner with none, then puts
+// the disposable tag back so the sweep still recognizes the runner. The
+// fixture's runner picks up tagged jobs only, and GitLab refuses an empty tag
+// list for such a runner ("can not be empty when runner is not allowed to
+// pick untagged jobs", measured on 19.5.0-ee), so the removal allows
+// untagged jobs in the same call and the restore takes that back.
+func TestUpdateClears_Runner_TagList(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("tagclear"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		runner := fixture.NewProjectRunner(e, project)
+		params := map[string]any{"runner_id": runner.ID}
+
+		before := harness.Do[runners.DetailsOutput](s, actionRunnerGet, params)
+		if len(before.TagList) == 0 {
+			e.T.Fatalf("the runner fixture answered %+v, want tags to remove", before)
+		}
+		cleared := harness.Do[runners.DetailsOutput](s, actionRunnerUpdate, withParams(params, map[string]any{
+			"tag_list": []string{}, "run_untagged": true,
+		}))
+		read := harness.Do[runners.DetailsOutput](s, actionRunnerGet, params)
+		if len(cleared.TagList) != 0 || len(read.TagList) != 0 {
+			e.T.Errorf("after the removal the runner update answered tags %v and the read %v, want none", cleared.TagList, read.TagList)
+		}
+		harness.DoVoid(s, actionRunnerUpdate, withParams(params, map[string]any{
+			"tag_list": []string{fixture.DisposableRunnerTag}, "run_untagged": false,
+		}))
 	})
 }

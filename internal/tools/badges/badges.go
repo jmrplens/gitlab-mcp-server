@@ -186,7 +186,7 @@ type EditProjectInput struct {
 	BadgeID   int64                `json:"badge_id" jsonschema:"Badge ID,required"`
 	LinkURL   string               `json:"link_url,omitempty" jsonschema:"New badge link URL"`
 	ImageURL  string               `json:"image_url,omitempty" jsonschema:"New badge image URL"`
-	Name      string               `json:"name,omitempty" jsonschema:"New badge name. Use name, not new_name"`
+	Name      *string              `json:"name,omitempty" jsonschema:"New badge name. Use name, not new_name. Pass an empty string to remove it. Omit the field to leave it untouched"`
 }
 
 // EditProjectOutput is the output after editing a project badge.
@@ -200,15 +200,14 @@ func EditProject(ctx context.Context, client *gitlabclient.Client, input EditPro
 	if input.BadgeID <= 0 {
 		return EditProjectOutput{}, toolutil.ErrRequiredInt64("edit_project_badge", "badge_id")
 	}
-	opts := &gl.EditProjectBadgeOptions{}
+	// An empty name is the caller removing it, which GitLab stores (measured
+	// on 19.5.0-ee, issue 1306).
+	opts := &gl.EditProjectBadgeOptions{Name: input.Name}
 	if input.LinkURL != "" {
 		opts.LinkURL = new(input.LinkURL)
 	}
 	if input.ImageURL != "" {
 		opts.ImageURL = new(input.ImageURL)
-	}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
 	}
 	badge, _, err := client.GL().ProjectBadges.EditProjectBadge(string(input.ProjectID), input.BadgeID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -381,7 +380,7 @@ type EditGroupInput struct {
 	BadgeID  int64                `json:"badge_id" jsonschema:"Badge ID,required"`
 	LinkURL  string               `json:"link_url,omitempty" jsonschema:"New badge link URL"`
 	ImageURL string               `json:"image_url,omitempty" jsonschema:"New badge image URL"`
-	Name     string               `json:"name,omitempty" jsonschema:"New badge name. Use name, not new_name"`
+	Name     *string              `json:"name,omitempty" jsonschema:"New badge name. Use name, not new_name. Pass an empty string to remove it. Omit the field to leave it untouched"`
 }
 
 // EditGroupOutput is the output after editing a group badge.
@@ -395,15 +394,14 @@ func EditGroup(ctx context.Context, client *gitlabclient.Client, input EditGroup
 	if input.BadgeID <= 0 {
 		return EditGroupOutput{}, toolutil.ErrRequiredInt64("edit_group_badge", "badge_id")
 	}
-	opts := &gl.EditGroupBadgeOptions{}
+	// An empty name is the caller removing it, which GitLab stores (measured
+	// on 19.5.0-ee, issue 1306).
+	opts := &gl.EditGroupBadgeOptions{Name: input.Name}
 	if input.LinkURL != "" {
 		opts.LinkURL = new(input.LinkURL)
 	}
 	if input.ImageURL != "" {
 		opts.ImageURL = new(input.ImageURL)
-	}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
 	}
 	badge, _, err := client.GL().GroupBadges.EditGroupBadge(string(input.GroupID), input.BadgeID, opts, gl.WithContext(ctx))
 	if err != nil {

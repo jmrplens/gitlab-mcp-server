@@ -1260,11 +1260,13 @@ const (
 	// clearingUnexercised is a field of an action whose write the probe's
 	// generic answers cannot reach; its package's own tests hold its clears.
 	clearingUnexercised clearingCategory = "unexercised"
-	// clearingUnverified is a field whose handling of an empty value by GitLab
-	// has not been established. The guard stays until it is, and the entry is
-	// the record that the question is open.
-	clearingUnverified clearingCategory = "unverified"
 )
+
+// There is deliberately no category for a field nobody has checked either.
+// Issue 1306 parked 85 fields as unverified while GitLab's answer to each was
+// established, by reading its model and routes or by probing 19.5.0-ee, and
+// removed the category once every one had an answer: a new update field is
+// sent empty or declared with the evidence, and never parked.
 
 // clearingDeclaration answers one field the clearing gate would report.
 type clearingDeclaration struct {
@@ -1294,15 +1296,6 @@ func clearUnexercised(reason string) clearingDeclaration {
 	return clearingDeclaration{category: clearingUnexercised, reason: reason}
 }
 
-// clearUnverified declares a field whose answer to an empty value nobody has
-// established against GitLab. Issue 1306 stays open for every field declared
-// so, and settling one, by GitLab's model and validators or by a probe of an
-// instance, moves it to another category or out of the table.
-var clearUnverified = clearingDeclaration{
-	category: clearingUnverified,
-	reason:   "whether GitLab empties this field when sent an empty value has not been checked against an instance, so the guard keeps reading an empty value as unset until it is; issue 1306 stays open for it",
-}
-
 // The reasons several declarations share.
 const (
 	reasonAccessLevelChoice = "one of disabled, private, enabled or public"
@@ -1322,231 +1315,239 @@ const (
 	reasonBroadcastWindow   = "System::BroadcastMessage validates the presence of its start and its end (app/models/system/broadcast_message.rb)"
 	reasonHookHeaders       = "lib/api/helpers/web_hooks_helpers.rb merges the headers given into the stored ones and ignores an empty list, so an empty list changes nothing; a header is removed by the custom header delete route"
 	reasonSnippetContent    = "Snippet validates the presence of its content (app/models/snippet.rb)"
+	// reasonServiceAccountEmail is GitLab's answer to an empty address on
+	// the three service account updates: 200 with the address kept, empty
+	// and null alike, where a 400 would say so (measured on 19.5.0-ee; the
+	// upstream-bugs entry "A service account update with an empty email
+	// answers 200 and keeps the address").
+	reasonServiceAccountEmail = "a user account always has an email; GitLab answers an empty or null one with 200 and keeps the address (measured on 19.5.0-ee)"
+	reasonSnippetFileName     = "a snippet file has a name; GitLab replaces an empty one with snippetfile1.txt and ignores null (measured on 19.5.0-ee)"
+	// reasonReleasedAt is GitLab's answer to an empty date on a release
+	// update, a 500 where a 400 belongs (measured on 19.5.0-ee; the
+	// upstream-bugs entry "A release update with an empty `released_at`
+	// answers 500 from a not-null violation").
+	reasonReleasedAt = "a release has a release date: releases.released_at is NOT NULL, and GitLab answers an empty or null one with 500 PG::NotNullViolation (measured on 19.5.0-ee)"
 )
+
+// clearingCompanions names, by "action.field", the fields GitLab clears only
+// beside another and the parameters the probe sends with each. The handler
+// refuses such a field alone before any request, since GitLab would answer it
+// with a 400, so a probe of it alone sees no write; with its companion it sees
+// the write carry the empty value. An entry no judged field reads fails the
+// gate like a stale declaration.
+var clearingCompanions = map[string]map[string]any{
+	// GitLab validates the key against the certificate, so either emptied
+	// alone is answered "key doesn't match the certificate"; both emptied
+	// are removed (measured on 19.5.0-ee).
+	"project.pages_domain_update.certificate": {"key": ""},
+	"project.pages_domain_update.key":         {"certificate": ""},
+	// PUT /projects/:id leaves mirror_branch_regex out of its at-least-one-of
+	// list, so a body carrying it alone, empty or not, is refused, and beside
+	// any other setting it is stored (measured on 19.5.0-ee; the upstream-bugs
+	// entry "A project update that sends only `mirror_branch_regex` is refused
+	// as sending nothing"). Removing the regex can widen the branches an
+	// overwriting pull mirror reaches, so both calls that send it read the
+	// mirror and ask before they write unless the overwrite goes off with it,
+	// which the probe sends beside it.
+	"project.update.mirror_branch_regex":                {"description": "probe", "mirror_overwrites_diverged_branches": false},
+	"project.pull_mirror_configure.mirror_branch_regex": {"mirror_overwrites_diverged_branches": false},
+}
 
 // clearingDeclarations answers, by "action.field", every optional update field
 // whose empty value does not reach GitLab. A field that starts reaching GitLab
 // makes its entry stale, and a stale entry fails the gate like a missing one.
 var clearingDeclarations = map[string]clearingDeclaration{
-	"access.deploy_key_update.title":                            clearRequired("a deploy key has a title"),
-	"achievement.update.avatar_content_base64":                  clearNotStored(reasonAvatarUpload),
-	"achievement.update.avatar_content_type":                    clearNotStored(reasonAvatarUpload),
-	"achievement.update.avatar_file_path":                       clearNotStored(reasonAvatarUpload),
-	"achievement.update.avatar_filename":                        clearNotStored(reasonAvatarUpload),
-	"achievement.update.name":                                   clearRequired("an achievement has a name"),
-	"admin.appearance_update.favicon":                           clearNotStored(reasonAvatarUpload),
-	"admin.appearance_update.header_logo":                       clearNotStored(reasonAvatarUpload),
-	"admin.appearance_update.logo":                              clearNotStored(reasonAvatarUpload),
-	"admin.appearance_update.pwa_icon":                          clearNotStored(reasonAvatarUpload),
-	"admin.broadcast_message_update.ends_at":                    clearRequired(reasonBroadcastWindow),
-	"admin.broadcast_message_update.message":                    clearRequired("a broadcast message has a message"),
-	"admin.broadcast_message_update.starts_at":                  clearRequired(reasonBroadcastWindow),
-	"admin.system_hook_edit.branch_filter_strategy":             clearOneOf("one of wildcard, regex or all_branches"),
-	"admin.system_hook_edit.signing_token":                      clearNotStored(reasonHookSecret),
-	"admin.system_hook_edit.token":                              clearNotStored(reasonHookSecret),
-	"admin.system_hook_edit.url":                                clearRequired(reasonWebhookURL),
-	"admin.topic_update.name":                                   clearRequired("a topic has a name"),
-	"admin.topic_update.title":                                  clearRequired("a topic has a title"),
-	"branch.update_protected.allowed_to_merge":                  clearNotStored(reasonAccessRuleEntries),
-	"branch.update_protected.allowed_to_push":                   clearNotStored(reasonAccessRuleEntries),
-	"branch.update_protected.allowed_to_unprotect":              clearNotStored(reasonAccessRuleEntries),
-	"branch.update_protected.name":                              clearRequired("a protected branch rule names a branch or a wildcard"),
-	"ci_variable.group_update.environment_scope":                clearRequired("a variable has an environment scope, * for every environment"),
-	"ci_variable.update.environment_scope":                      clearRequired("a variable has an environment scope, * for every environment"),
-	"environment.freeze_update.cron_timezone":                   clearRequired("Ci::FreezePeriod validates the presence of its cron time zone (app/models/ci/freeze_period.rb)"),
-	"environment.freeze_update.freeze_end":                      clearRequired("a freeze period has a cron end"),
-	"environment.freeze_update.freeze_start":                    clearRequired("a freeze period has a cron start"),
-	"environment.protected_update.approval_rules":               clearNotStored(reasonAccessRuleEntries),
-	"environment.protected_update.deploy_access_levels":         clearNotStored(reasonAccessRuleEntries),
-	"environment.protected_update.name":                         clearRequired("a protected environment names an environment"),
-	"environment.update.flux_resource_path":                     clearUnverified,
-	"environment.update.kubernetes_namespace":                   clearUnverified,
-	"environment.update.name":                                   clearRequired("an environment has a name"),
-	"external_status_check.update_project.external_url":         clearRequired("a status check calls its external URL"),
-	"external_status_check.update_project.name":                 clearRequired("a status check has a name"),
-	"external_status_check.update_project.protected_branch_ids": clearUnverified,
-	"external_status_check.update_project.shared_secret":        clearNotStored(reasonHookSecret),
-	"feature_flags.feature_flag_update.new_name":                clearRequired("a feature flag has a name"),
-	"feature_flags.feature_flag_update.strategies":              clearNotStored("each entry changes or removes one strategy by its ID, so an empty list changes nothing"),
-	"feature_flags.ff_user_list_update.name":                    clearRequired("a user list has a name"),
-	"feature_flags.ff_user_list_update.user_xids":               clearUnverified,
-	"group.badge_edit.image_url":                                clearRequired(reasonBadgeURL),
-	"group.badge_edit.link_url":                                 clearRequired(reasonBadgeURL),
-	"group.badge_edit.name":                                     clearUnverified,
-	"group.epic_issue_update.adjacent_id":                       clearNotStored("the issue the moved one is placed beside, not a stored value"),
-	"group.epic_update.add_label_ids":                           clearNotStored(reasonLabelOperation),
-	"group.epic_update.assignee_ids":                            clearUnexercised(reasonEpicLookup),
-	"group.epic_update.color":                                   clearUnexercised(reasonEpicLookup),
-	"group.epic_update.description":                             clearUnexercised(reasonEpicLookup),
-	"group.epic_update.due_date":                                clearUnexercised(reasonEpicLookup),
-	"group.epic_update.milestone_id":                            clearUnexercised(reasonEpicLookup),
-	"group.epic_update.parent_id":                               clearUnexercised(reasonEpicLookup),
-	"group.epic_update.remove_label_ids":                        clearNotStored(reasonLabelOperation),
-	"group.epic_update.start_date":                              clearUnexercised(reasonEpicLookup),
-	"group.epic_update.title":                                   clearRequired("an epic has a title"),
-	"group.epic_update.weight":                                  clearUnexercised(reasonEpicLookup),
-	"group.group_board_update.name":                             clearRequired("a board has a name"),
-	"group.group_label_update.color":                            clearRequired("a label has a color"),
-	"group.group_label_update.new_name":                         clearRequired("a label has a name"),
-	"group.group_milestone_update.title":                        clearRequired("a milestone has a title"),
-	"group.hook_edit.custom_headers":                            clearNotStored(reasonHookHeaders),
-	"group.hook_edit.signing_token":                             clearNotStored(reasonHookSecret),
-	"group.hook_edit.token":                                     clearNotStored(reasonHookSecret),
-	"group.hook_edit.url":                                       clearRequired(reasonWebhookURL),
-	"group.hook_edit.url_variables":                             clearNotStored(reasonHookURLVariables),
-	"group.protected_branch_update.allowed_to_merge":            clearNotStored(reasonAccessRuleEntries),
-	"group.protected_branch_update.allowed_to_push":             clearNotStored(reasonAccessRuleEntries),
-	"group.protected_branch_update.allowed_to_unprotect":        clearNotStored(reasonAccessRuleEntries),
-	"group.protected_branch_update.name":                        clearRequired("a protected branch rule names a branch or a wildcard"),
-	"group.protected_env_update.approval_rules":                 clearNotStored(reasonAccessRuleEntries),
-	"group.protected_env_update.deploy_access_levels":           clearNotStored(reasonAccessRuleEntries),
-	"group.security_settings_update.projects_to_exclude":        clearUnverified,
-	"group.service_account_update.email":                        clearUnverified,
-	"group.service_account_update.name":                         clearRequired(reasonServiceAccount),
-	"group.service_account_update.username":                     clearRequired(reasonServiceAccount),
-	"group.update.allowed_email_domains_list":                   clearUnverified,
-	"group.update.default_branch":                               clearUnverified,
-	"group.update.ip_restriction_ranges":                        clearUnverified,
-	"group.update.name":                                         clearRequired("a group has a name"),
-	"group.update.path":                                         clearRequired("a group has a path"),
-	"group.update.unique_project_download_limit_alertlist":      clearUnverified,
-	"group.update.unique_project_download_limit_allowlist":      clearUnverified,
-	"group.wiki_edit.content":                                   clearUnverified,
-	"group.wiki_edit.title":                                     clearRequired("a wiki page has a title"),
-	"issue.discussion_update_note.created_at":                   clearNotStored(reasonAdminMoment),
-	"issue.update.add_labels":                                   clearNotStored(reasonLabelOperation),
-	"issue.update.milestone":                                    clearNotStored(reasonMilestoneTitle),
-	"issue.update.remove_labels":                                clearNotStored(reasonLabelOperation),
-	"issue.update.title":                                        clearRequired("an issue has a title"),
-	"issue.update.updated_at":                                   clearNotStored(reasonAdminMoment),
-	"issue.work_item_saved_view_update.description":             clearUnverified,
-	"issue.work_item_saved_view_update.name":                    clearRequired("a saved view has a name"),
-	"issue.work_item_update.add_label_ids":                      clearNotStored(reasonLabelOperation),
-	"issue.work_item_update.assignee_ids":                       clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.color":                              clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.crm_contact_ids":                    clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.description":                        clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.due_date":                           clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.iteration_id":                       clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.milestone_id":                       clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.parent_id":                          clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.remove_label_ids":                   clearNotStored(reasonLabelOperation),
-	"issue.work_item_update.start_date":                         clearUnexercised(reasonWorkItemLookup),
-	"issue.work_item_update.title":                              clearRequired("a work item has a title"),
-	"issue.work_item_update.weight":                             clearUnexercised(reasonWorkItemLookup),
-	"merge_request.approval_rule_update.group_ids":              clearUnverified,
-	"merge_request.approval_rule_update.name":                   clearRequired("an approval rule has a name"),
-	"merge_request.approval_rule_update.user_ids":               clearUnverified,
-	"merge_request.update.add_labels":                           clearNotStored(reasonLabelOperation),
-	"merge_request.update.milestone":                            clearNotStored(reasonMilestoneTitle),
-	"merge_request.update.remove_labels":                        clearNotStored(reasonLabelOperation),
-	"merge_request.update.target_branch":                        clearRequired("a merge request targets a branch"),
-	"merge_request.update.title":                                clearRequired("a merge request has a title"),
-	"mr_review.discussion_note_update.body":                     clearRequired("a note has a body"),
-	"mr_review.discussion_note_update.created_at":               clearNotStored(reasonAdminMoment),
-	"package.protection_rule_update.package_name_pattern":       clearRequired("a package protection rule matches a package name pattern (app/models/packages/protection/rule.rb validates its presence)"),
-	"package.protection_rule_update.package_type":               clearRequired("a package protection rule protects one package type (app/models/packages/protection/rule.rb validates its presence)"),
-	"package.registry_rule_update.repository_path_pattern":      clearRequired("a protection rule matches a repository path pattern"),
-	"package.registry_tag_rule_update.tag_name_pattern":         clearRequired("a tag protection rule matches a tag name pattern"),
-	"pipeline.schedule_update.cron":                             clearRequired("a schedule has a cron expression"),
-	"pipeline.schedule_update.cron_timezone":                    clearRequired("Ci::PipelineSchedule validates the presence of its cron time zone (app/models/ci/pipeline_schedule.rb)"),
-	"pipeline.schedule_update.description":                      clearRequired("GitLab validates the presence of a schedule's description (app/models/ci/pipeline_schedule.rb)"),
-	"pipeline.schedule_update.inputs":                           clearUnverified,
-	"pipeline.schedule_update.ref":                              clearRequired("a schedule runs on a ref"),
-	"project.approval_rule_update.group_ids":                    clearUnverified,
-	"project.approval_rule_update.name":                         clearRequired("an approval rule has a name"),
-	"project.approval_rule_update.protected_branch_ids":         clearUnverified,
-	"project.approval_rule_update.user_ids":                     clearUnverified,
-	"project.approval_rule_update.usernames":                    clearUnverified,
-	"project.badge_edit.image_url":                              clearRequired(reasonBadgeURL),
-	"project.badge_edit.link_url":                               clearRequired(reasonBadgeURL),
-	"project.badge_edit.name":                                   clearUnverified,
-	"project.board_update.name":                                 clearRequired("a board has a name"),
-	"project.hook_edit.branch_filter_strategy":                  clearOneOf("one of wildcard, regex or all_branches"),
-	"project.hook_edit.custom_headers":                          clearNotStored(reasonHookHeaders),
-	"project.hook_edit.signing_token":                           clearNotStored(reasonHookSecret),
-	"project.hook_edit.token":                                   clearNotStored(reasonHookSecret),
-	"project.hook_edit.url":                                     clearRequired(reasonWebhookURL),
-	"project.hook_edit.url_variables":                           clearNotStored(reasonHookURLVariables),
-	"project.label_update.color":                                clearRequired("a label has a color"),
-	"project.label_update.new_name":                             clearRequired("a label has a name"),
-	"project.milestone_update.title":                            clearRequired("a milestone has a title"),
-	"project.mirror_edit.host_keys":                             clearUnverified,
-	"project.mirror_edit.mirror_branch_regex":                   clearUnverified,
-	"project.pages_domain_update.certificate":                   clearUnverified,
-	"project.pages_domain_update.key":                           clearUnverified,
-	"project.service_account_update.email":                      clearUnverified,
-	"project.service_account_update.name":                       clearRequired(reasonServiceAccount),
-	"project.service_account_update.username":                   clearRequired(reasonServiceAccount),
-	"project.update.analytics_access_level":                     clearOneOf(reasonAccessLevelChoice),
-	"project.update.builds_access_level":                        clearOneOf(reasonAccessLevelChoice),
-	"project.update.ci_id_token_sub_claim_components":           clearUnverified,
-	"project.update.container_registry_access_level":            clearOneOf(reasonAccessLevelChoice),
-	"project.update.default_branch":                             clearRequired("a project's default branch names a branch"),
-	"project.update.environments_access_level":                  clearOneOf(reasonAccessLevelChoice),
-	"project.update.feature_flags_access_level":                 clearOneOf(reasonAccessLevelChoice),
-	"project.update.forking_access_level":                       clearOneOf(reasonAccessLevelChoice),
-	"project.update.import_url":                                 clearNotStored("starts an import from the address, not a value an update empties"),
-	"project.update.infrastructure_access_level":                clearOneOf(reasonAccessLevelChoice),
-	"project.update.issues_access_level":                        clearOneOf(reasonAccessLevelChoice),
-	"project.update.issues_template":                            clearUnverified,
-	"project.update.merge_requests_access_level":                clearOneOf(reasonAccessLevelChoice),
-	"project.update.merge_requests_template":                    clearUnverified,
-	"project.update.mirror_branch_regex":                        clearUnverified,
-	"project.update.model_experiments_access_level":             clearOneOf(reasonAccessLevelChoice),
-	"project.update.model_registry_access_level":                clearOneOf(reasonAccessLevelChoice),
-	"project.update.monitor_access_level":                       clearOneOf(reasonAccessLevelChoice),
-	"project.update.name":                                       clearRequired("a project has a name"),
-	"project.update.package_registry_access_level":              clearOneOf(reasonAccessLevelChoice),
-	"project.update.pages_access_level":                         clearOneOf(reasonAccessLevelChoice),
-	"project.update.path":                                       clearRequired("a project has a path"),
-	"project.update.releases_access_level":                      clearOneOf(reasonAccessLevelChoice),
-	"project.update.repository_access_level":                    clearOneOf(reasonAccessLevelChoice),
-	"project.update.repository_storage":                         clearNotStored("moves the repository to another storage, not a value an update empties"),
-	"project.update.requirements_access_level":                  clearOneOf(reasonAccessLevelChoice),
-	"project.update.security_and_compliance_access_level":       clearOneOf(reasonAccessLevelChoice),
-	"project.update.snippets_access_level":                      clearOneOf(reasonAccessLevelChoice),
-	"project.update.wiki_access_level":                          clearOneOf(reasonAccessLevelChoice),
-	"release.update.released_at":                                clearUnverified,
-	"repository.commit_discussion_update_note.created_at":       clearNotStored(reasonAdminMoment),
-	"repository.file_update.author_email":                       clearNotStored(reasonCommitMetadata),
-	"repository.file_update.author_name":                        clearNotStored(reasonCommitMetadata),
-	"repository.file_update.last_commit_id":                     clearNotStored(reasonCommitMetadata),
-	"repository.file_update.start_branch":                       clearNotStored(reasonCommitMetadata),
-	"repository.update_submodule.commit_message":                clearNotStored(reasonCommitMetadata),
-	"runner.update.access_level":                                clearOneOf("one of not_protected or ref_protected"),
-	"runner.update.tag_list":                                    clearUnverified,
-	"snippet.discussion_update_note.created_at":                 clearNotStored(reasonAdminMoment),
-	"snippet.project_update.content":                            clearRequired(reasonSnippetContent),
-	"snippet.project_update.file_name":                          clearUnverified,
-	"snippet.project_update.files":                              clearNotStored("each entry is a file action (create, update, delete or move), so an empty list changes nothing"),
-	"snippet.project_update.title":                              clearRequired("a snippet has a title"),
-	"snippet.update.content":                                    clearRequired(reasonSnippetContent),
-	"snippet.update.file_name":                                  clearUnverified,
-	"snippet.update.files":                                      clearNotStored("each entry is a file action (create, update, delete or move), so an empty list changes nothing"),
-	"snippet.update.title":                                      clearRequired("a snippet has a title"),
-	"user.modify.commit_email":                                  clearUnverified,
-	"user.modify.email":                                         clearRequired("a user has a primary email"),
-	"user.modify.extern_uid":                                    clearNotStored("links an external identity, an operation rather than a stored value"),
-	"user.modify.linkedin":                                      clearUnverified,
-	"user.modify.location":                                      clearUnverified,
-	"user.modify.name":                                          clearRequired("a user has a name"),
-	"user.modify.note":                                          clearUnverified,
-	"user.modify.password":                                      clearNotStored(reasonHookSecret),
-	"user.modify.provider":                                      clearNotStored("links an external identity, an operation rather than a stored value"),
-	"user.modify.public_email":                                  clearUnverified,
-	"user.modify.twitter":                                       clearUnverified,
-	"user.modify.username":                                      clearRequired("a user has a username"),
-	"user.notification_global_update.notification_email":        clearUnverified,
-	"user.update_service_account.email":                         clearUnverified,
-	"user.update_service_account.name":                          clearRequired(reasonServiceAccount),
-	"user.update_service_account.username":                      clearRequired(reasonServiceAccount),
-	"wiki.update.content":                                       clearUnverified,
-	"wiki.update.title":                                         clearRequired("a wiki page has a title"),
+	"access.deploy_key_update.title":                       clearRequired("a deploy key has a title"),
+	"achievement.update.avatar_content_base64":             clearNotStored(reasonAvatarUpload),
+	"achievement.update.avatar_content_type":               clearNotStored(reasonAvatarUpload),
+	"achievement.update.avatar_file_path":                  clearNotStored(reasonAvatarUpload),
+	"achievement.update.avatar_filename":                   clearNotStored(reasonAvatarUpload),
+	"achievement.update.name":                              clearRequired("an achievement has a name"),
+	"admin.appearance_update.favicon":                      clearNotStored(reasonAvatarUpload),
+	"admin.appearance_update.header_logo":                  clearNotStored(reasonAvatarUpload),
+	"admin.appearance_update.logo":                         clearNotStored(reasonAvatarUpload),
+	"admin.appearance_update.pwa_icon":                     clearNotStored(reasonAvatarUpload),
+	"admin.broadcast_message_update.ends_at":               clearRequired(reasonBroadcastWindow),
+	"admin.broadcast_message_update.message":               clearRequired("a broadcast message has a message"),
+	"admin.broadcast_message_update.starts_at":             clearRequired(reasonBroadcastWindow),
+	"admin.system_hook_edit.branch_filter_strategy":        clearOneOf("one of wildcard, regex or all_branches"),
+	"admin.system_hook_edit.signing_token":                 clearNotStored(reasonHookSecret),
+	"admin.system_hook_edit.token":                         clearNotStored(reasonHookSecret),
+	"admin.system_hook_edit.url":                           clearRequired(reasonWebhookURL),
+	"admin.topic_update.name":                              clearRequired("a topic has a name"),
+	"admin.topic_update.title":                             clearRequired("a topic has a title"),
+	"branch.update_protected.allowed_to_merge":             clearNotStored(reasonAccessRuleEntries),
+	"branch.update_protected.allowed_to_push":              clearNotStored(reasonAccessRuleEntries),
+	"branch.update_protected.allowed_to_unprotect":         clearNotStored(reasonAccessRuleEntries),
+	"branch.update_protected.name":                         clearRequired("a protected branch rule names a branch or a wildcard"),
+	"ci_variable.group_update.environment_scope":           clearRequired("a variable has an environment scope, * for every environment"),
+	"ci_variable.update.environment_scope":                 clearRequired("a variable has an environment scope, * for every environment"),
+	"environment.freeze_update.cron_timezone":              clearRequired("Ci::FreezePeriod validates the presence of its cron time zone (app/models/ci/freeze_period.rb)"),
+	"environment.freeze_update.freeze_end":                 clearRequired("a freeze period has a cron end"),
+	"environment.freeze_update.freeze_start":               clearRequired("a freeze period has a cron start"),
+	"environment.protected_update.approval_rules":          clearNotStored(reasonAccessRuleEntries),
+	"environment.protected_update.deploy_access_levels":    clearNotStored(reasonAccessRuleEntries),
+	"environment.protected_update.name":                    clearRequired("a protected environment names an environment"),
+	"environment.update.name":                              clearRequired("an environment has a name"),
+	"external_status_check.update_project.external_url":    clearRequired("a status check calls its external URL"),
+	"external_status_check.update_project.name":            clearRequired("a status check has a name"),
+	"external_status_check.update_project.shared_secret":   clearNotStored(reasonHookSecret),
+	"feature_flags.feature_flag_update.new_name":           clearRequired("a feature flag has a name"),
+	"feature_flags.feature_flag_update.strategies":         clearNotStored("each entry changes or removes one strategy by its ID, so an empty list changes nothing"),
+	"feature_flags.ff_user_list_update.name":               clearRequired("a user list has a name"),
+	"group.badge_edit.image_url":                           clearRequired(reasonBadgeURL),
+	"group.badge_edit.link_url":                            clearRequired(reasonBadgeURL),
+	"group.epic_issue_update.adjacent_id":                  clearNotStored("the issue the moved one is placed beside, not a stored value"),
+	"group.epic_update.add_label_ids":                      clearNotStored(reasonLabelOperation),
+	"group.epic_update.assignee_ids":                       clearUnexercised(reasonEpicLookup),
+	"group.epic_update.color":                              clearUnexercised(reasonEpicLookup),
+	"group.epic_update.description":                        clearUnexercised(reasonEpicLookup),
+	"group.epic_update.due_date":                           clearUnexercised(reasonEpicLookup),
+	"group.epic_update.milestone_id":                       clearUnexercised(reasonEpicLookup),
+	"group.epic_update.parent_id":                          clearUnexercised(reasonEpicLookup),
+	"group.epic_update.remove_label_ids":                   clearNotStored(reasonLabelOperation),
+	"group.epic_update.start_date":                         clearUnexercised(reasonEpicLookup),
+	"group.epic_update.title":                              clearRequired("an epic has a title"),
+	"group.epic_update.weight":                             clearUnexercised(reasonEpicLookup),
+	"group.group_board_update.name":                        clearRequired("a board has a name"),
+	"group.group_label_update.color":                       clearRequired("a label has a color"),
+	"group.group_label_update.new_name":                    clearRequired("a label has a name"),
+	"group.group_milestone_update.title":                   clearRequired("a milestone has a title"),
+	"group.hook_edit.custom_headers":                       clearNotStored(reasonHookHeaders),
+	"group.hook_edit.signing_token":                        clearNotStored(reasonHookSecret),
+	"group.hook_edit.token":                                clearNotStored(reasonHookSecret),
+	"group.hook_edit.url":                                  clearRequired(reasonWebhookURL),
+	"group.hook_edit.url_variables":                        clearNotStored(reasonHookURLVariables),
+	"group.protected_branch_update.allowed_to_merge":       clearNotStored(reasonAccessRuleEntries),
+	"group.protected_branch_update.allowed_to_push":        clearNotStored(reasonAccessRuleEntries),
+	"group.protected_branch_update.allowed_to_unprotect":   clearNotStored(reasonAccessRuleEntries),
+	"group.protected_branch_update.name":                   clearRequired("a protected branch rule names a branch or a wildcard"),
+	"group.protected_env_update.approval_rules":            clearNotStored(reasonAccessRuleEntries),
+	"group.protected_env_update.deploy_access_levels":      clearNotStored(reasonAccessRuleEntries),
+	"group.security_settings_update.projects_to_exclude":   clearNotStored("scopes the one write it is sent with, and GitLab keeps nothing of it: [] and null both mean every project, and an empty list sent alone is answered secret_push_protection_enabled is missing (measured on 19.5.0-ee)"),
+	"group.service_account_update.email":                   clearRequired(reasonServiceAccountEmail),
+	"group.service_account_update.name":                    clearRequired(reasonServiceAccount),
+	"group.service_account_update.username":                clearRequired(reasonServiceAccount),
+	"group.update.name":                                    clearRequired("a group has a name"),
+	"group.update.path":                                    clearRequired("a group has a path"),
+	"group.wiki_edit.title":                                clearRequired("a wiki page has a title"),
+	"issue.discussion_update_note.created_at":              clearNotStored(reasonAdminMoment),
+	"issue.update.add_labels":                              clearNotStored(reasonLabelOperation),
+	"issue.update.milestone":                               clearNotStored(reasonMilestoneTitle),
+	"issue.update.remove_labels":                           clearNotStored(reasonLabelOperation),
+	"issue.update.title":                                   clearRequired("an issue has a title"),
+	"issue.update.updated_at":                              clearNotStored(reasonAdminMoment),
+	"issue.work_item_saved_view_update.name":               clearRequired("a saved view has a name"),
+	"issue.work_item_update.add_label_ids":                 clearNotStored(reasonLabelOperation),
+	"issue.work_item_update.assignee_ids":                  clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.color":                         clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.crm_contact_ids":               clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.description":                   clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.due_date":                      clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.iteration_id":                  clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.milestone_id":                  clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.parent_id":                     clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.remove_label_ids":              clearNotStored(reasonLabelOperation),
+	"issue.work_item_update.start_date":                    clearUnexercised(reasonWorkItemLookup),
+	"issue.work_item_update.title":                         clearRequired("a work item has a title"),
+	"issue.work_item_update.weight":                        clearUnexercised(reasonWorkItemLookup),
+	"merge_request.approval_rule_update.name":              clearRequired("an approval rule has a name"),
+	"merge_request.merge.merge_commit_message":             clearNotStored("describes the commit the merge makes, not a value stored on the merge request"),
+	"merge_request.merge.sha":                              clearNotStored("the head the merge must find, a guard on the write rather than a stored value"),
+	"merge_request.merge.squash_commit_message":            clearNotStored("describes the commit the merge makes, not a value stored on the merge request"),
+	"merge_request.update.add_labels":                      clearNotStored(reasonLabelOperation),
+	"merge_request.update.milestone":                       clearNotStored(reasonMilestoneTitle),
+	"merge_request.update.remove_labels":                   clearNotStored(reasonLabelOperation),
+	"merge_request.update.target_branch":                   clearRequired("a merge request targets a branch"),
+	"merge_request.update.title":                           clearRequired("a merge request has a title"),
+	"mr_review.discussion_note_update.body":                clearRequired("a note has a body"),
+	"mr_review.discussion_note_update.created_at":          clearNotStored(reasonAdminMoment),
+	"package.protection_rule_update.package_name_pattern":  clearRequired("a package protection rule matches a package name pattern (app/models/packages/protection/rule.rb validates its presence)"),
+	"package.protection_rule_update.package_type":          clearRequired("a package protection rule protects one package type (app/models/packages/protection/rule.rb validates its presence)"),
+	"package.registry_rule_update.repository_path_pattern": clearRequired("a protection rule matches a repository path pattern"),
+	"package.registry_tag_rule_update.tag_name_pattern":    clearRequired("a tag protection rule matches a tag name pattern"),
+	"pipeline.schedule_update.cron":                        clearRequired("a schedule has a cron expression"),
+	"pipeline.schedule_update.cron_timezone":               clearRequired("Ci::PipelineSchedule validates the presence of its cron time zone (app/models/ci/pipeline_schedule.rb)"),
+	"pipeline.schedule_update.description":                 clearRequired("GitLab validates the presence of a schedule's description (app/models/ci/pipeline_schedule.rb)"),
+	"pipeline.schedule_update.inputs":                      clearNotStored("each entry adds or changes one input, and one is removed by naming it with destroy: true, so an empty list changes nothing: [] and null both leave the inputs as they are (measured on 19.5.0-ee)"),
+	"pipeline.schedule_update.ref":                         clearRequired("a schedule runs on a ref"),
+	"project.approval_rule_update.name":                    clearRequired("an approval rule has a name"),
+	"project.badge_edit.image_url":                         clearRequired(reasonBadgeURL),
+	"project.badge_edit.link_url":                          clearRequired(reasonBadgeURL),
+	"project.board_update.name":                            clearRequired("a board has a name"),
+	"project.hook_edit.branch_filter_strategy":             clearOneOf("one of wildcard, regex or all_branches"),
+	"project.hook_edit.custom_headers":                     clearNotStored(reasonHookHeaders),
+	"project.hook_edit.signing_token":                      clearNotStored(reasonHookSecret),
+	"project.hook_edit.token":                              clearNotStored(reasonHookSecret),
+	"project.hook_edit.url":                                clearRequired(reasonWebhookURL),
+	"project.hook_edit.url_variables":                      clearNotStored(reasonHookURLVariables),
+	"project.label_update.color":                           clearRequired("a label has a color"),
+	"project.label_update.new_name":                        clearRequired("a label has a name"),
+	"project.milestone_update.title":                       clearRequired("a milestone has a title"),
+	"project.pull_mirror_configure.url":                    clearRequired("a pull mirror pulls from its URL: EE::Project validates the presence of import_url while the mirror is on (ee/app/models/ee/project.rb)"),
+	"project.service_account_update.email":                 clearRequired(reasonServiceAccountEmail),
+	"project.service_account_update.name":                  clearRequired(reasonServiceAccount),
+	"project.service_account_update.username":              clearRequired(reasonServiceAccount),
+	"project.update.analytics_access_level":                clearOneOf(reasonAccessLevelChoice),
+	"project.update.builds_access_level":                   clearOneOf(reasonAccessLevelChoice),
+	"project.update.ci_id_token_sub_claim_components":      clearRequired("GitLab refuses an empty list with 400 ci_cd_settings.id_token_sub_claim_components is too short (minimum is 1 character) and the first element of the sub claim must be one of: project_path, project_id, job_project_path, job_project_id, source_project_path, source_project_id (measured on 19.5.0-ee)"),
+	"project.update.container_registry_access_level":       clearOneOf(reasonAccessLevelChoice),
+	"project.update.default_branch":                        clearRequired("a project's default branch names a branch"),
+	"project.update.environments_access_level":             clearOneOf(reasonAccessLevelChoice),
+	"project.update.feature_flags_access_level":            clearOneOf(reasonAccessLevelChoice),
+	"project.update.forking_access_level":                  clearOneOf(reasonAccessLevelChoice),
+	"project.update.import_url":                            clearNotStored("starts an import from the address, not a value an update empties"),
+	"project.update.infrastructure_access_level":           clearOneOf(reasonAccessLevelChoice),
+	"project.update.issues_access_level":                   clearOneOf(reasonAccessLevelChoice),
+	"project.update.merge_requests_access_level":           clearOneOf(reasonAccessLevelChoice),
+	"project.update.model_experiments_access_level":        clearOneOf(reasonAccessLevelChoice),
+	"project.update.model_registry_access_level":           clearOneOf(reasonAccessLevelChoice),
+	"project.update.monitor_access_level":                  clearOneOf(reasonAccessLevelChoice),
+	"project.update.name":                                  clearRequired("a project has a name"),
+	"project.update.package_registry_access_level":         clearOneOf(reasonAccessLevelChoice),
+	"project.update.pages_access_level":                    clearOneOf(reasonAccessLevelChoice),
+	"project.update.path":                                  clearRequired("a project has a path"),
+	"project.update.releases_access_level":                 clearOneOf(reasonAccessLevelChoice),
+	"project.update.repository_access_level":               clearOneOf(reasonAccessLevelChoice),
+	"project.update.repository_storage":                    clearNotStored("moves the repository to another storage, not a value an update empties"),
+	"project.update.requirements_access_level":             clearOneOf(reasonAccessLevelChoice),
+	"project.update.security_and_compliance_access_level":  clearOneOf(reasonAccessLevelChoice),
+	"project.update.snippets_access_level":                 clearOneOf(reasonAccessLevelChoice),
+	"project.update.wiki_access_level":                     clearOneOf(reasonAccessLevelChoice),
+	"release.update.released_at":                           clearRequired(reasonReleasedAt),
+	"repository.commit_discussion_update_note.created_at":  clearNotStored(reasonAdminMoment),
+	"repository.file_update.author_email":                  clearNotStored(reasonCommitMetadata),
+	"repository.file_update.author_name":                   clearNotStored(reasonCommitMetadata),
+	"repository.file_update.last_commit_id":                clearNotStored(reasonCommitMetadata),
+	"repository.file_update.start_branch":                  clearNotStored(reasonCommitMetadata),
+	"repository.update_submodule.commit_message":           clearNotStored(reasonCommitMetadata),
+	"runner.update.access_level":                           clearOneOf("one of not_protected or ref_protected"),
+	"snippet.discussion_update_note.created_at":            clearNotStored(reasonAdminMoment),
+	"snippet.project_update.content":                       clearRequired(reasonSnippetContent),
+	"snippet.project_update.file_name":                     clearRequired(reasonSnippetFileName),
+	"snippet.project_update.files":                         clearNotStored("each entry is a file action (create, update, delete or move), so an empty list changes nothing"),
+	"snippet.project_update.title":                         clearRequired("a snippet has a title"),
+	"snippet.update.content":                               clearRequired(reasonSnippetContent),
+	"snippet.update.file_name":                             clearRequired(reasonSnippetFileName),
+	"snippet.update.files":                                 clearNotStored("each entry is a file action (create, update, delete or move), so an empty list changes nothing"),
+	"snippet.update.title":                                 clearRequired("a snippet has a title"),
+	"user.modify.email":                                    clearRequired("a user has a primary email"),
+	"user.modify.extern_uid":                               clearNotStored("links an external identity, an operation rather than a stored value"),
+	"user.modify.name":                                     clearRequired("a user has a name"),
+	"user.modify.password":                                 clearNotStored(reasonHookSecret),
+	"user.modify.provider":                                 clearNotStored("links an external identity, an operation rather than a stored value"),
+	"user.modify.username":                                 clearRequired("a user has a username"),
+	"user.update_service_account.email":                    clearRequired(reasonServiceAccountEmail),
+	"user.update_service_account.name":                     clearRequired(reasonServiceAccount),
+	"user.update_service_account.username":                 clearRequired(reasonServiceAccount),
+	"wiki.update.title":                                    clearRequired("a wiki page has a title"),
 }
 
-// updateActionName selects the actions the clearing gate judges: the writes
-// that change an object that already exists.
+// updateActionName selects the actions the clearing gate judges by name: the
+// writes that change an object that already exists. A write named otherwise
+// is judged too when its request is a PUT or a PATCH, which is GitLab
+// changing a stored object ([clearingProbe.changesAnObject]):
+// project.pull_mirror_configure was the case that showed a name misses some.
 var updateActionName = regexp.MustCompile(`(^|_)(update|edit|modify)($|_)`)
 
 // graphQLMutation tells a GraphQL write from a read in a request body's query.
@@ -1563,11 +1564,23 @@ var graphQLMutation = regexp.MustCompile(`\bmutation\b`)
 // required fields filled, against a stand-in GitLab that records what it is
 // sent. 0 is the integer's probe because it is the value that clears an ID
 // reference, and the one value a guard reading "set" as "positive" drops. A
+// field whose type is toolutil.Nullable is probed with null instead, since
+// its zero is a value of its own and null is how the caller removes it. A
 // field passes when some write carries it with that empty value or null, as a
 // member at the top of a REST body, anywhere in a GraphQL request's variables
 // (in camel case there), or as a query parameter
 // ([clearingWrite.carriesEmpty]). Any other field must be answered in
-// [clearingDeclarations], and an entry the probe no longer needs fails too.
+// [clearingDeclarations], a field GitLab clears only beside another is probed
+// with that companion emptied too ([clearingCompanions]), and an entry the
+// probe no longer needs fails in either table.
+//
+// A field is cleared by sending its empty value or null, never by a clear_*
+// flag beside it. The one exception issue 1306 admits is clear_health_status,
+// which issue 1508 is to add to the work item and epic updates: health_status
+// is served as an enum, and Gemini's function parameters accept an enum of
+// non-empty strings only, so neither "" nor null can stand there for removing
+// it. The flag is to be refused beside health_status. Until it lands, the
+// enum lists "" and the empty value clears the health status like any other.
 //
 // The stand-in answers with one generic object or list per request, so the
 // probe sees the first write each handler makes and nothing about GitLab's
@@ -1576,6 +1589,10 @@ var graphQLMutation = regexp.MustCompile(`\bmutation\b`)
 // server sends GitLab, and recording them would put every update route in the
 // request inventory under this package.
 func TestUpdateActions_AnEmptyValueReachesGitLabOrIsDeclared(t *testing.T) {
+	// Every write action is called to learn its verb, and one that saves the
+	// stand-in's answer to the path its fill names would write it into the
+	// package directory, so the probe runs from a directory of its own.
+	t.Chdir(t.TempDir())
 	probe := newClearingProbe(t)
 	catalog, err := BuildActionCatalog(probe.client, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
 	if err != nil {
@@ -1585,14 +1602,17 @@ func TestUpdateActions_AnEmptyValueReachesGitLabOrIsDeclared(t *testing.T) {
 	judged := make(map[string]bool)
 	var undeclared, stale []string
 	for _, action := range catalog.Actions() {
-		if action.ReadOnly || !updateActionName.MatchString(action.Name) {
+		if action.ReadOnly {
 			continue
 		}
 		base, fields := clearingProbeInput(action.Route.InputSchema, action.Route.InputType)
+		if !updateActionName.MatchString(action.Name) && !probe.changesAnObject(t, action.Route.Handler, base) {
+			continue
+		}
 		for _, field := range fields {
 			key := string(action.ID) + "." + field.name
 			judged[key] = true
-			outcome := probe.send(t, action.Route.Handler, base, field)
+			outcome := probe.send(t, action.Route.Handler, base, field, clearingCompanions[key])
 			_, declared := clearingDeclarations[key]
 			switch {
 			case outcome.reached && declared:
@@ -1605,6 +1625,11 @@ func TestUpdateActions_AnEmptyValueReachesGitLabOrIsDeclared(t *testing.T) {
 	for key := range clearingDeclarations {
 		if !judged[key] {
 			stale = append(stale, key+": no update action of the catalog has this optional field")
+		}
+	}
+	for key := range clearingCompanions {
+		if !judged[key] {
+			stale = append(stale, key+": a companion for a field no update action of the catalog has")
 		}
 	}
 
@@ -1842,6 +1867,7 @@ type clearingProbe struct {
 
 // clearingWrite is one write request as the probe judges it.
 type clearingWrite struct {
+	method  string
 	query   map[string][]string
 	body    any
 	graphQL bool
@@ -1958,7 +1984,7 @@ func (p *clearingProbe) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if write {
 		p.mu.Lock()
-		p.writes = append(p.writes, clearingWrite{query: r.URL.Query(), body: body, graphQL: graphQL})
+		p.writes = append(p.writes, clearingWrite{method: r.Method, query: r.URL.Query(), body: body, graphQL: graphQL})
 		p.mu.Unlock()
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -1974,12 +2000,33 @@ func (p *clearingProbe) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// send calls the handler with field emptied and reports whether a write
-// carried it.
-func (p *clearingProbe) send(t *testing.T, handler toolutil.ActionFunc, base map[string]any, field clearingField) clearingOutcome {
+// changesAnObject calls the handler with its required fields alone and
+// reports whether a write it sent is a PUT or a PATCH, a REST change to an
+// object that already exists.
+func (p *clearingProbe) changesAnObject(t *testing.T, handler toolutil.ActionFunc, base map[string]any) bool {
 	t.Helper()
-	params := make(map[string]any, len(base)+1)
+	p.mu.Lock()
+	p.writes = nil
+	p.mu.Unlock()
+	_, _ = handler(t.Context(), maps.Clone(base))
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, write := range p.writes {
+		if write.method == http.MethodPut || write.method == http.MethodPatch {
+			return true
+		}
+	}
+	return false
+}
+
+// send calls the handler with field emptied, beside the companions GitLab
+// clears it with when it clears it only beside another, and reports whether a
+// write carried it.
+func (p *clearingProbe) send(t *testing.T, handler toolutil.ActionFunc, base map[string]any, field clearingField, companions map[string]any) clearingOutcome {
+	t.Helper()
+	params := make(map[string]any, len(base)+len(companions)+1)
 	maps.Copy(params, base)
+	maps.Copy(params, companions)
 	params[field.name] = field.empty
 	p.mu.Lock()
 	p.writes = nil

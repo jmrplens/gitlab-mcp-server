@@ -179,6 +179,24 @@ func TestCanonicalIDs_AreTheSpecNamesUnderTheCatalogDomain(t *testing.T) {
 	if len(registered) != len(ids) {
 		t.Errorf("%d specs are registered and %d have an ID constant", len(registered), len(ids))
 	}
+	if domainPrefix != catalogDomain+"." {
+		t.Errorf("domainPrefix = %q, want the catalog domain %q and its separator", domainPrefix, catalogDomain)
+	}
+	deploymentIDs := map[string]string{"deployment_list": actionDeploymentList, "deployment_create": actionDeploymentCreate}
+	deploymentSpecs := map[string]bool{}
+	for _, spec := range deployments.ActionSpecs(client) {
+		deploymentSpecs[spec.Name] = true
+	}
+	for name, id := range deploymentIDs {
+		t.Run(name, func(t *testing.T) {
+			if !deploymentSpecs[name] {
+				t.Errorf("no deployment spec is registered under the name %q", name)
+			}
+			if want := domainPrefix + name; id != want {
+				t.Errorf("the ID for %q is %q, want %q", name, id, want)
+			}
+		})
+	}
 }
 
 // TestActionSpecs_MutationErrors validates the MutationErrors route through the catalog surface.

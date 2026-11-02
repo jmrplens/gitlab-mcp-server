@@ -250,11 +250,11 @@ func TestSetGroupDatadog_Success(t *testing.T) {
 	out, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{
 		GroupID:             testGroupPath,
 		APIKey:              "secret-key",
-		APIURL:              testAPIURL,
-		DatadogEnv:          "prod",
-		DatadogService:      "gitlab",
-		DatadogSite:         testDatadogSite,
-		DatadogTags:         "team:platform",
+		APIURL:              new(testAPIURL),
+		DatadogEnv:          new("prod"),
+		DatadogService:      new("gitlab"),
+		DatadogSite:         new(testDatadogSite),
+		DatadogTags:         new("team:platform"),
 		DatadogCIVisibility: &ciVisibility,
 		ArchiveTraceEvents:  &archive,
 	})
@@ -346,11 +346,17 @@ func TestSetGroupDatadog_OneFieldAtATime_SendsOnlyThatField(t *testing.T) {
 		want  map[string]any
 	}{
 		{"api_key alone", SetGroupDatadogInput{}, map[string]any{}},
-		{"api_url", SetGroupDatadogInput{APIURL: testAPIURL}, map[string]any{"api_url": testAPIURL}},
-		{"datadog_env", SetGroupDatadogInput{DatadogEnv: "prod"}, map[string]any{"datadog_env": "prod"}},
-		{"datadog_service", SetGroupDatadogInput{DatadogService: "gitlab"}, map[string]any{"datadog_service": "gitlab"}},
-		{"datadog_site", SetGroupDatadogInput{DatadogSite: testDatadogSite}, map[string]any{"datadog_site": testDatadogSite}},
-		{"datadog_tags", SetGroupDatadogInput{DatadogTags: "team:platform"}, map[string]any{"datadog_tags": "team:platform"}},
+		{"api_url", SetGroupDatadogInput{APIURL: new(testAPIURL)}, map[string]any{"api_url": testAPIURL}},
+		{"datadog_env", SetGroupDatadogInput{DatadogEnv: new("prod")}, map[string]any{"datadog_env": "prod"}},
+		{"datadog_service", SetGroupDatadogInput{DatadogService: new("gitlab")}, map[string]any{"datadog_service": "gitlab"}},
+		{"datadog_site", SetGroupDatadogInput{DatadogSite: new(testDatadogSite)}, map[string]any{"datadog_site": testDatadogSite}},
+		{"datadog_tags", SetGroupDatadogInput{DatadogTags: new("team:platform")}, map[string]any{"datadog_tags": "team:platform"}},
+		// An empty text is the caller removing it, sent as such (issue 1306).
+		{"api_url emptied", SetGroupDatadogInput{APIURL: new("")}, map[string]any{"api_url": ""}},
+		{"datadog_env emptied", SetGroupDatadogInput{DatadogEnv: new("")}, map[string]any{"datadog_env": ""}},
+		{"datadog_service emptied", SetGroupDatadogInput{DatadogService: new("")}, map[string]any{"datadog_service": ""}},
+		{"datadog_site emptied", SetGroupDatadogInput{DatadogSite: new("")}, map[string]any{"datadog_site": ""}},
+		{"datadog_tags emptied", SetGroupDatadogInput{DatadogTags: new("")}, map[string]any{"datadog_tags": ""}},
 		{"datadog_ci_visibility", SetGroupDatadogInput{DatadogCIVisibility: &ciVisibility}, map[string]any{"datadog_ci_visibility": true}},
 		{"archive_trace_events", SetGroupDatadogInput{ArchiveTraceEvents: &archiveOff}, map[string]any{"archive_trace_events": false}},
 		{"use_inherited_settings", SetGroupDatadogInput{UseInheritedSettings: &inherited}, map[string]any{"use_inherited_settings": true}},
@@ -385,7 +391,7 @@ func TestSetGroupDatadog_NoAPIKey_IsRefusedWithoutReachingGitLab(t *testing.T) {
 		{"nothing", SetGroupDatadogInput{}},
 		{"inherit", SetGroupDatadogInput{UseInheritedSettings: &inherited}},
 		{"do not inherit", SetGroupDatadogInput{UseInheritedSettings: &notInherited}},
-		{"settings", SetGroupDatadogInput{APIURL: testAPIURL, DatadogEnv: "prod"}},
+		{"settings", SetGroupDatadogInput{APIURL: new(testAPIURL), DatadogEnv: new("prod")}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -439,7 +445,7 @@ func TestSetGroupDatadog_Forbidden(t *testing.T) {
 	_, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{
 		GroupID: testGroupPath,
 		APIKey:  "secret-key",
-		APIURL:  testAPIURL,
+		APIURL:  new(testAPIURL),
 	})
 	if err == nil {
 		t.Fatal("expected error for 403")

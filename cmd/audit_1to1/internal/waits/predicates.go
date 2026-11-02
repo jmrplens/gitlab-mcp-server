@@ -396,6 +396,44 @@ func (p NoEmptyList) Holds(sdk SDK) (bool, error) {
 	return encoded.skipped || (isSliceType(t) && encoded.omits), nil
 }
 
+// NoEmptyText holds while the field cannot send an empty JSON string: a
+// string tagged omitempty or omitzero, which encoding/json leaves out when
+// empty. A pointer to a string can send one. It is the reason for every ""
+// a body edit writes.
+type NoEmptyText struct {
+	Type, Field string
+}
+
+// String spells the predicate.
+func (p NoEmptyText) String() string { return "NoEmptyText{" + p.Type + "." + p.Field + "}" }
+
+// Target names the struct and the field.
+func (p NoEmptyText) Target() (typeName, field string) { return p.Type, p.Field }
+
+// Subject names the struct.
+func (p NoEmptyText) Subject() string { return p.Type }
+
+// Holds evaluates the predicate.
+func (p NoEmptyText) Holds(sdk SDK) (bool, error) {
+	field, err := sdk.field(p.Type, p.Field)
+	if err != nil {
+		return false, err
+	}
+	t := field.v.Type()
+	pointer, isPointer := t.Underlying().(*types.Pointer)
+	if !isStringType(t) && (!isPointer || !isStringType(pointer.Elem())) {
+		return false, fmt.Errorf("%s.%s is not a text", p.Type, p.Field)
+	}
+	encoded, _ := field.encoding(EncoderJSON)
+	return encoded.skipped || (isStringType(t) && encoded.omits), nil
+}
+
+// isStringType reports whether t is a string, named or not.
+func isStringType(t types.Type) bool {
+	basic, isBasic := t.Underlying().(*types.Basic)
+	return isBasic && basic.Kind() == types.String
+}
+
 // structField is one field of a client-go struct with its tag.
 type structField struct {
 	v   *types.Var

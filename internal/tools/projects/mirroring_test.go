@@ -297,11 +297,23 @@ func TestConfigurePullMirror_SendsExactlyWhatTheCallerSet(t *testing.T) {
 			name: "every setting",
 			input: ConfigurePullMirrorInput{
 				ProjectID: "42", Enabled: new(true), URL: mirrorSourceURL,
-				AuthUser: "mirror-user", AuthPassword: "mirror-secret", MirrorBranchRegex: "^release/",
+				AuthUser: new("mirror-user"), AuthPassword: new("mirror-secret"), MirrorBranchRegex: new("^release/"),
 				MirrorTriggerBuilds: new(true), OnlyMirrorProtectedBranches: new(false), MirrorOverwritesDivergedBranches: new(false),
 			},
 			want: `{"enabled":true,"url":"` + mirrorSourceURL + `","auth_user":"mirror-user","auth_password":"mirror-secret",` +
 				`"mirror_branch_regex":"^release/","mirror_trigger_builds":true,"only_mirror_protected_branches":false,"mirror_overwrites_diverged_branches":false}`,
+		},
+		{
+			// An empty credential or regex is the caller removing it, sent
+			// as such rather than dropped as unset (issue 1306). Removing the
+			// regex can widen the branches an overwriting mirror reaches, so
+			// the overwrite goes off with it here, which needs no read.
+			name: "credentials and regex emptied",
+			input: ConfigurePullMirrorInput{
+				ProjectID: "42", AuthUser: new(""), AuthPassword: new(""), MirrorBranchRegex: new(""),
+				MirrorOverwritesDivergedBranches: new(false),
+			},
+			want: `{"auth_user":"","auth_password":"","mirror_branch_regex":"","mirror_overwrites_diverged_branches":false}`,
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

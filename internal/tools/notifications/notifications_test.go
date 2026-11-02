@@ -385,7 +385,7 @@ func TestUpdate_NotificationEmail_OnlyTheAccountWideSettingsTakeIt(t *testing.T)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{"level":"custom","notification_email":"n@example.com"}`)
 	}))
-	if _, err := UpdateGlobalSettings(context.Background(), client, UpdateGlobalInput{NotificationEmail: "n@example.com"}); err != nil {
+	if _, err := UpdateGlobalSettings(context.Background(), client, UpdateGlobalInput{NotificationEmail: new("n@example.com")}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if body["notification_email"] != "n@example.com" {

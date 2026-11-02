@@ -218,9 +218,9 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Feature Flag User List: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#feature_flags))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro       | Tipo             | Requerido | Descripción                                                                                  |
-| --------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------- |
-| `project_id`    | `string/integer` | sí        | Project ID or path                                                                           |
-| `user_list_iid` | `integer`        | sí        | Feature flag user list internal ID returned by list or create. Do not use the user list name |
-| `name`          | `string`         | no        | New user list name                                                                           |
-| `user_xids`     | `string`         | no        | Comma-separated list of user external IDs                                                    |
+| Parámetro       | Tipo             | Requerido | Descripción                                                                                                                           |
+| --------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`    | `string/integer` | sí        | Project ID or path                                                                                                                    |
+| `user_list_iid` | `integer`        | sí        | Feature flag user list internal ID returned by list or create. Do not use the user list name                                          |
+| `name`          | `string`         | no        | New user list name                                                                                                                    |
+| `user_xids`     | `string`         | no        | Comma-separated list of user external IDs. Pass an empty string to take every user off the list. Omit the field to leave it untouched |

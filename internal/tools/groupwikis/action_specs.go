@@ -108,38 +108,33 @@ type groupWikiActionMetaEntry struct {
 // so they remain distinct from the project-level gitlab_wiki_* tools.
 var groupWikiActionMeta = map[string]groupWikiActionMetaEntry{
 	"gitlab_group_wiki_list": {
-		usage:   "List the wiki pages of a group (GitLab Premium). Set with_content only when the page bodies are needed, since it returns the full content of every page.",
-		aliases: []string{"list group wiki pages", "show group wiki", "find group wiki pages"},
-		related: []string{actionGroupWikiGet, actionGroupWikiCreate, "group.get"},
-		description: "List a group's wiki pages (GitLab Premium). Returns: each page's title, slug, and format (plus content when with_content is set), with hints to read or create pages. " +
-			"See also: gitlab_group_wiki_get, gitlab_group_wiki_create.",
+		usage:       "List the wiki pages of a group (GitLab Premium). Set with_content only when the page bodies are needed, since it returns the full content of every page.",
+		aliases:     []string{"list group wiki pages", "show group wiki", "find group wiki pages"},
+		related:     []string{actionGroupWikiGet, actionGroupWikiCreate, "group.get"},
+		description: "List a group's wiki pages (GitLab Premium). Returns: each page's title, slug, and format (plus content when with_content is set), with hints to read or create pages. See also: gitlab_group_wiki_get, gitlab_group_wiki_create.",
 	},
 	"gitlab_group_wiki_get": {
-		usage:   "Fetch one group wiki page by its slug. Use after group.wiki_list to read a page's content, optionally rendering HTML or retrieving a specific version SHA.",
-		aliases: []string{"get group wiki page", "read group wiki page", "show group wiki page content"},
-		related: []string{actionGroupWikiList, actionGroupWikiEdit, actionGroupWikiDelete},
-		description: "Get a single group wiki page by slug. Returns: the page title, slug, format, content, and encoding. " +
-			"See also: gitlab_group_wiki_list, gitlab_group_wiki_edit, gitlab_group_wiki_delete.",
+		usage:       "Fetch one group wiki page by its slug. Use after group.wiki_list to read a page's content, optionally rendering HTML or retrieving a specific version SHA.",
+		aliases:     []string{"get group wiki page", "read group wiki page", "show group wiki page content"},
+		related:     []string{actionGroupWikiList, actionGroupWikiEdit, actionGroupWikiDelete},
+		description: "Get a single group wiki page by slug. Returns: the page title, slug, format, content, and encoding. See also: gitlab_group_wiki_list, gitlab_group_wiki_edit, gitlab_group_wiki_delete.",
 	},
 	"gitlab_group_wiki_create": {
-		usage:   "Create a new wiki page in a group (GitLab Premium). Provide a title and content. Set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
-		aliases: []string{"create group wiki page", "add group wiki page", "new group wiki page"},
-		related: []string{actionGroupWikiList, actionGroupWikiGet, actionGroupWikiEdit},
-		description: "Create a new group wiki page. Returns: the created page with title, slug, format, content, and encoding. " +
-			"See also: gitlab_group_wiki_get, gitlab_group_wiki_edit, gitlab_group_wiki_list.",
+		usage:       "Create a new wiki page in a group (GitLab Premium). Provide a title and content. Set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
+		aliases:     []string{"create group wiki page", "add group wiki page", "new group wiki page"},
+		related:     []string{actionGroupWikiList, actionGroupWikiGet, actionGroupWikiEdit},
+		description: "Create a new group wiki page. Returns: the created page with title, slug, format, content, and encoding. See also: gitlab_group_wiki_get, gitlab_group_wiki_edit, gitlab_group_wiki_list.",
 	},
 	"gitlab_group_wiki_edit": {
-		usage:   "Update an existing group wiki page identified by slug. Provide at least one of title, content, or format to change.",
-		aliases: []string{"edit group wiki page", "update group wiki page", "rename group wiki page"},
-		related: []string{actionGroupWikiGet, actionGroupWikiList, actionGroupWikiDelete},
-		description: "Update an existing group wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. " +
-			"See also: gitlab_group_wiki_get, gitlab_group_wiki_delete, gitlab_group_wiki_list.",
+		usage:       "Update an existing group wiki page identified by slug. Provide at least one of title, content, or format to change.",
+		aliases:     []string{"edit group wiki page", "update group wiki page", "rename group wiki page"},
+		related:     []string{actionGroupWikiGet, actionGroupWikiList, actionGroupWikiDelete},
+		description: "Update an existing group wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. See also: gitlab_group_wiki_get, gitlab_group_wiki_delete, gitlab_group_wiki_list.",
 	},
 	"gitlab_group_wiki_delete": {
-		usage:   "Permanently delete a group wiki page by slug. Destructive. Requires Maintainer or Owner role and confirmation of the group and slug.",
-		aliases: []string{"delete group wiki page", "remove group wiki page", "destroy group wiki page", "drop group wiki page"},
-		related: []string{actionGroupWikiGet, actionGroupWikiList, actionGroupWikiEdit},
-		description: "Delete a group wiki page permanently. Returns: a success confirmation for the removed page. " +
-			"See also: gitlab_group_wiki_get, gitlab_group_wiki_list.",
+		usage:       "Permanently delete a group wiki page by slug. Destructive. Requires Maintainer or Owner role and confirmation of the group and slug.",
+		aliases:     []string{"delete group wiki page", "remove group wiki page", "destroy group wiki page", "drop group wiki page"},
+		related:     []string{actionGroupWikiGet, actionGroupWikiList, actionGroupWikiEdit},
+		description: "Delete a group wiki page permanently. Returns: a success confirmation for the removed page. See also: gitlab_group_wiki_get, gitlab_group_wiki_list.",
 	},
 }

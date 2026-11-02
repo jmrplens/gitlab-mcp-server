@@ -7484,6 +7484,18 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/environments/:environment_id",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "environments.checkNamespaceKeepsNoFluxPath"
+          ],
+          "sdk_methods": [
+            "Environments.GetEnvironment"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/environments/:environment_id",
           "placeholders": {
             "environment_id": "environment_id",
@@ -7501,7 +7513,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },

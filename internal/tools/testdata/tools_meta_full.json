@@ -12050,12 +12050,18 @@
               ]
             },
             "flux_resource_path": {
-              "description": "Flux resource path used to track the environment's deployment status",
-              "type": "string"
+              "description": "Flux resource path used to track the environment's deployment status. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "kubernetes_namespace": {
-              "description": "Kubernetes namespace for the cluster agent",
-              "type": "string"
+              "description": "Kubernetes namespace for the cluster agent. Pass an empty string to remove it, together with flux_resource_path as an empty string when the environment has a Flux path, since GitLab keeps no Flux path without a namespace. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "name": {
               "description": "New environment name",
@@ -12537,7 +12543,7 @@
               ]
             },
             "protected_branch_ids": {
-              "description": "Updated protected branch IDs",
+              "description": "Updated protected branch IDs. Pass [] to scope the check to every branch again. Omit the field to leave them untouched",
               "items": {
                 "type": "integer"
               },
@@ -13227,8 +13233,11 @@
               "type": "integer"
             },
             "user_xids": {
-              "description": "Comma-separated list of user external IDs",
-              "type": "string"
+              "description": "Comma-separated list of user external IDs. Pass an empty string to take every user off the list. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             }
           },
           "required": [
@@ -13939,8 +13948,11 @@
               "type": "string"
             },
             "name": {
-              "description": "New badge name. Use name, not new_name",
-              "type": "string"
+              "description": "New badge name. Use name, not new_name. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             }
           },
           "required": [
@@ -23487,8 +23499,11 @@
               ]
             },
             "allowed_email_domains_list": {
-              "description": "Comma-separated list of email domains allowed for members (Premium/Ultimate)",
-              "type": "string"
+              "description": "Comma-separated list of email domains allowed for members (Premium/Ultimate). Pass an empty string to allow every domain again. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "auto_ban_user_on_excessive_projects_download": {
               "description": "Automatically ban users who exceed the unique project download limit (Ultimate)",
@@ -23512,8 +23527,11 @@
               ]
             },
             "default_branch": {
-              "description": "Default branch name",
-              "type": "string"
+              "description": "Default branch name for new projects. Pass an empty string to remove it, so new projects fall back to the instance default. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "default_branch_protection": {
               "description": "Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults",
@@ -23649,8 +23667,11 @@
               ]
             },
             "ip_restriction_ranges": {
-              "description": "Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only",
-              "type": "string"
+              "description": "Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only. Pass an empty string to remove the restriction. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "lfs_enabled": {
               "description": "Enable Git LFS",
@@ -23818,7 +23839,7 @@
               ]
             },
             "unique_project_download_limit_alertlist": {
-              "description": "User IDs notified when the unique project download limit is exceeded (Ultimate)",
+              "description": "User IDs notified when the unique project download limit is exceeded (Ultimate). Pass [] to empty the list, after which GitLab notifies the group's owners. Omit the field to leave the list untouched",
               "items": {
                 "type": "integer"
               },
@@ -23828,7 +23849,7 @@
               ]
             },
             "unique_project_download_limit_allowlist": {
-              "description": "Usernames excluded from the unique project download limit (Ultimate)",
+              "description": "Usernames excluded from the unique project download limit (Ultimate). Pass [] to exclude nobody. Omit the field to leave the list untouched",
               "items": {
                 "type": "string"
               },
@@ -24013,8 +24034,11 @@
           "additionalProperties": false,
           "properties": {
             "content": {
-              "description": "New content",
-              "type": "string"
+              "description": "New content. Pass an empty string to empty the page. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "format": {
               "description": "Content format: markdown, rdoc, asciidoc, or org",
@@ -32856,8 +32880,11 @@
           "additionalProperties": false,
           "properties": {
             "description": {
-              "description": "New description for the saved view",
-              "type": "string"
+              "description": "New description for the saved view. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "display_settings": {
               "additionalProperties": true,
@@ -36011,7 +36038,7 @@
               ]
             },
             "group_ids": {
-              "description": "Group IDs eligible to approve",
+              "description": "Group IDs eligible to approve. Pass [] to take every group off the rule. Omit the field to leave them untouched",
               "items": {
                 "type": "integer"
               },
@@ -36036,7 +36063,7 @@
               ]
             },
             "user_ids": {
-              "description": "User IDs eligible to approve",
+              "description": "User IDs eligible to approve. Pass [] to take every user off the rule. Omit the field to leave them untouched",
               "items": {
                 "type": "integer"
               },
@@ -45791,7 +45818,7 @@
               ]
             },
             "group_ids": {
-              "description": "Updated group IDs to assign as approvers",
+              "description": "Updated group IDs to assign as approvers. Pass [] to take every group off the rule. Omit the field to leave them untouched",
               "items": {
                 "type": "integer"
               },
@@ -45812,7 +45839,7 @@
               ]
             },
             "protected_branch_ids": {
-              "description": "Updated protected branch IDs",
+              "description": "Updated protected branch IDs. Pass [] to scope the rule to no protected branch. Omit the field to leave them untouched",
               "items": {
                 "type": "integer"
               },
@@ -45826,7 +45853,7 @@
               "type": "integer"
             },
             "user_ids": {
-              "description": "Updated user IDs to assign as approvers",
+              "description": "Updated user IDs to assign as approvers. Pass [] to take every user off the rule. Omit the field to leave them untouched",
               "items": {
                 "type": "integer"
               },
@@ -45836,7 +45863,7 @@
               ]
             },
             "usernames": {
-              "description": "Updated usernames to assign as approvers",
+              "description": "Updated usernames to assign as approvers. Pass [] to take every user off the rule. Omit the field to leave them untouched",
               "items": {
                 "type": "string"
               },
@@ -45976,8 +46003,11 @@
               "type": "string"
             },
             "name": {
-              "description": "New badge name. Use name, not new_name",
-              "type": "string"
+              "description": "New badge name. Use name, not new_name. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "project_id": {
               "description": "Project ID or URL-encoded path",
@@ -49635,8 +49665,11 @@
               "type": "string"
             },
             "api_url": {
-              "description": "Datadog API URL (e.g. https://api.datadoghq.com)",
-              "type": "string"
+              "description": "Datadog API URL (e.g. https://api.datadoghq.com). Pass an empty string to remove it, which GitLab accepts while datadog_site is set. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "archive_trace_events": {
               "description": "Forward CI job trace events to Datadog",
@@ -49653,20 +49686,32 @@
               ]
             },
             "datadog_env": {
-              "description": "Datadog env tag forwarded with every log/metric",
-              "type": "string"
+              "description": "Datadog env tag forwarded with every log/metric. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "datadog_service": {
-              "description": "Datadog service tag forwarded with every log/metric",
-              "type": "string"
+              "description": "Datadog service tag forwarded with every log/metric. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "datadog_site": {
-              "description": "Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com)",
-              "type": "string"
+              "description": "Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com). Pass an empty string to remove it, which GitLab accepts while api_url is set. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "datadog_tags": {
-              "description": "Comma-separated Datadog tags forwarded with every log/metric",
-              "type": "string"
+              "description": "Comma-separated Datadog tags forwarded with every log/metric. Pass an empty string to remove them. Omit the field to leave them untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "group_id": {
               "description": "Group ID or URL-encoded path",
@@ -49707,8 +49752,11 @@
               ]
             },
             "api_url": {
-              "description": "Jira API URL (overrides base URL)",
-              "type": "string"
+              "description": "Jira API URL (overrides base URL). Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "comment_on_event_enabled": {
               "description": "Add comments on Jira issues for events",
@@ -49739,8 +49787,11 @@
               ]
             },
             "jira_allowed_statuses_as_string": {
-              "description": "Comma-separated list of allowed Jira statuses (used with jira_status_check_enabled)",
-              "type": "string"
+              "description": "Comma-separated list of allowed Jira statuses (used with jira_status_check_enabled). Pass an empty string to remove them. Omit the field to leave them untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "jira_assignee_check_enabled": {
               "description": "Require the referenced Jira issue to have an assignee",
@@ -49771,12 +49822,18 @@
               ]
             },
             "jira_issue_prefix": {
-              "description": "Jira issue key prefix",
-              "type": "string"
+              "description": "Jira issue key prefix. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "jira_issue_regex": {
-              "description": "Custom regex for Jira issue keys",
-              "type": "string"
+              "description": "Custom regex for Jira issue keys. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "jira_issue_transition_automatic": {
               "description": "Auto-transition Jira issues",
@@ -49786,8 +49843,11 @@
               ]
             },
             "jira_issue_transition_id": {
-              "description": "Jira transition ID",
-              "type": "string"
+              "description": "Jira transition ID. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "jira_status_check_enabled": {
               "description": "Require the referenced Jira issue to be in an allowed status",
@@ -49815,11 +49875,14 @@
               ]
             },
             "project_key": {
-              "description": "Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true)",
-              "type": "string"
+              "description": "Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true). Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "project_keys": {
-              "description": "Jira project keys to restrict (used when issues_enabled is true)",
+              "description": "Jira project keys whose issues GitLab shows and links (used when issues_enabled is true). Pass [] to remove the restriction, so the issues of every Jira project are shown. Omit the field to leave them untouched",
               "items": {
                 "type": "string"
               },
@@ -49841,8 +49904,11 @@
               ]
             },
             "username": {
-              "description": "Jira username",
-              "type": "string"
+              "description": "Jira username. Pass an empty string to remove it, which GitLab refuses under basic authentication. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "vulnerabilities_enabled": {
               "description": "Create Jira issues for vulnerabilities",
@@ -52631,7 +52697,7 @@
               ]
             },
             "host_keys": {
-              "description": "SSH host keys for the remote mirror",
+              "description": "SSH host keys for the remote mirror. Pass [] to remove every host key. Omit the field to leave them untouched",
               "items": {
                 "type": "string"
               },
@@ -52648,8 +52714,11 @@
               ]
             },
             "mirror_branch_regex": {
-              "description": "Regex pattern for branches to mirror",
-              "type": "string"
+              "description": "Regex pattern for branches to mirror. Pass an empty string to remove it, so every branch is mirrored. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "mirror_id": {
               "description": "Remote mirror ID",
@@ -53068,8 +53137,11 @@
               ]
             },
             "certificate": {
-              "description": "PEM-encoded SSL certificate",
-              "type": "string"
+              "description": "PEM-encoded SSL certificate. Pass an empty string, together with key as an empty string, to remove the custom certificate. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "domain": {
               "description": "The Pages domain name to update",
@@ -53077,8 +53149,11 @@
               "type": "string"
             },
             "key": {
-              "description": "PEM-encoded private key for the certificate",
-              "type": "string"
+              "description": "PEM-encoded private key for the certificate. Pass an empty string, together with certificate as an empty string, to remove the custom certificate. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "project_id": {
               "description": "Project ID or URL-encoded path",
@@ -53205,12 +53280,18 @@
           "additionalProperties": false,
           "properties": {
             "auth_password": {
-              "description": "Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors",
-              "type": "string"
+              "description": "Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "auth_user": {
-              "description": "Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password",
-              "type": "string"
+              "description": "Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "confirm": {
               "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
@@ -53224,8 +53305,11 @@
               ]
             },
             "mirror_branch_regex": {
-              "description": "Regex to filter branches to mirror",
-              "type": "string"
+              "description": "Regex to filter branches to mirror. Pass an empty string to remove it, so every branch is mirrored. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "mirror_overwrites_diverged_branches": {
               "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does",
@@ -54803,8 +54887,11 @@
               ]
             },
             "issues_template": {
-              "description": "Default issue description template",
-              "type": "string"
+              "description": "Default issue description template. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "jobs_enabled": {
               "description": "Enable CI/CD jobs",
@@ -54883,8 +54970,11 @@
               ]
             },
             "merge_requests_template": {
-              "description": "Default merge request description template",
-              "type": "string"
+              "description": "Default merge request description template. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "merge_train_enforcement": {
               "description": "Who may merge a merge request around the merge train: allow_bypass, enforce_for_all_users or enforce_with_owner_override. It has no effect unless merge trains are enabled",
@@ -54917,8 +55007,11 @@
               ]
             },
             "mirror_branch_regex": {
-              "description": "Only mirror branches matching this regex",
-              "type": "string"
+              "description": "Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "mirror_overwrites_diverged_branches": {
               "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does",
@@ -60345,7 +60438,7 @@
               "type": "integer"
             },
             "tag_list": {
-              "description": "List of runner tags",
+              "description": "List of runner tags. Pass [] to remove every tag. Omit the field to leave them untouched",
               "items": {
                 "type": "string"
               },
@@ -67658,8 +67751,11 @@
               ]
             },
             "commit_email": {
-              "description": "Email used for commits",
-              "type": "string"
+              "description": "Email used for commits. Pass an empty string to remove it, so commits use the primary email, which GitLab then reports as the commit email. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "email": {
               "description": "New email address",
@@ -67678,20 +67774,29 @@
               ]
             },
             "linkedin": {
-              "description": "LinkedIn account",
-              "type": "string"
+              "description": "LinkedIn account. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "location": {
-              "description": "New location",
-              "type": "string"
+              "description": "New location. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "name": {
               "description": "New display name",
               "type": "string"
             },
             "note": {
-              "description": "New admin note",
-              "type": "string"
+              "description": "New admin note. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "organization": {
               "description": "New organization. Pass an empty string to remove it. Omit the field to leave it untouched",
@@ -67723,8 +67828,11 @@
               "type": "string"
             },
             "public_email": {
-              "description": "Publicly visible email address",
-              "type": "string"
+              "description": "Publicly visible email address. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "skip_reconfirmation": {
               "description": "Skip reconfirmation on email change",
@@ -67741,8 +67849,11 @@
               ]
             },
             "twitter": {
-              "description": "Twitter/X account",
-              "type": "string"
+              "description": "Twitter/X account. Pass an empty string to remove it. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "user_id": {
               "description": "The ID of the user to modify",
@@ -67987,8 +68098,11 @@
               ]
             },
             "notification_email": {
-              "description": "Email address for notifications",
-              "type": "string"
+              "description": "Email address for notifications. Pass an empty string to remove it, so notifications go to the primary email, which GitLab then reports here. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "push_to_merge_request": {
               "description": "Notify on push to MR",
@@ -68474,12 +68588,18 @@
               "type": "string"
             },
             "emoji": {
-              "description": "The emoji to set for the status (e.g. coffee or speech_balloon)",
-              "type": "string"
+              "description": "The emoji to set for the status (e.g. coffee or speech_balloon). This action replaces the whole status: an empty or omitted emoji gets GitLab's default speech_balloon while a message or a busy availability remains, and an empty emoji and message with availability not_set remove the status",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "message": {
-              "description": "The status message text",
-              "type": "string"
+              "description": "The status message text. This action replaces the whole status: pass an empty string, or leave it out, for no message. An empty message and emoji with availability not_set remove the status",
+              "type": [
+                "null",
+                "string"
+              ]
             }
           },
           "type": "object"
@@ -69385,8 +69505,11 @@
           "additionalProperties": false,
           "properties": {
             "content": {
-              "description": "New content for the wiki page",
-              "type": "string"
+              "description": "New content for the wiki page. Pass an empty string to empty the page. Omit the field to leave it untouched",
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "format": {
               "description": "Content format: markdown, rdoc, asciidoc, or org",

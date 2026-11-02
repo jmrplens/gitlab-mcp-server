@@ -188,11 +188,11 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: External Status Check Service: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#external_status_check))
 - **Behavior**: writes, idempotent
 
-| Parameter              | Type             | Mandatory | Description                                 |
-| ---------------------- | ---------------- | --------- | ------------------------------------------- |
-| `check_id`             | `integer`        | yes       | External status check ID to update          |
-| `project_id`           | `string/integer` | yes       | Project ID or URL-encoded path              |
-| `external_url`         | `string`         | no        | Updated external URL                        |
-| `name`                 | `string`         | no        | Updated name                                |
-| `protected_branch_ids` | `integer[]`      | no        | Updated protected branch IDs                |
-| `shared_secret`        | `string`         | no        | Updated shared secret for HMAC verification |
+| Parameter              | Type             | Mandatory | Description                                                                                                              |
+| ---------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `check_id`             | `integer`        | yes       | External status check ID to update                                                                                       |
+| `project_id`           | `string/integer` | yes       | Project ID or URL-encoded path                                                                                           |
+| `external_url`         | `string`         | no        | Updated external URL                                                                                                     |
+| `name`                 | `string`         | no        | Updated name                                                                                                             |
+| `protected_branch_ids` | `integer[]`      | no        | Updated protected branch IDs. Pass \[\] to scope the check to every branch again. Omit the field to leave them untouched |
+| `shared_secret`        | `string`         | no        | Updated shared secret for HMAC verification                                                                              |

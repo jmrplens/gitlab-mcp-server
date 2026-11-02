@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -649,8 +650,8 @@ type UpdateInput struct {
 	PrintingMergeRequestLinkEnabled       *bool   `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Show the create-merge-request link after pushing"`
 	SuggestionCommitMessage               *string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions. Pass an empty string to go back to the default message. Omit the field to leave it untouched"`
 	IssueBranchTemplate                   *string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues. Pass an empty string to go back to the default template. Omit the field to leave it untouched"`
-	IssuesTemplate                        string  `json:"issues_template,omitempty" tier:"premium" jsonschema:"Default issue description template"`
-	MergeRequestsTemplate                 string  `json:"merge_requests_template,omitempty" tier:"premium" jsonschema:"Default merge request description template"`
+	IssuesTemplate                        *string `json:"issues_template,omitempty" tier:"premium" jsonschema:"Default issue description template. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	MergeRequestsTemplate                 *string `json:"merge_requests_template,omitempty" tier:"premium" jsonschema:"Default merge request description template. Pass an empty string to remove it. Omit the field to leave it untouched"`
 
 	// Feature toggles (additive)
 	SnippetsEnabled          *bool  `json:"snippets_enabled,omitempty" jsonschema:"Enable snippets feature (deprecated: use snippets_access_level)"`
@@ -694,12 +695,12 @@ type UpdateInput struct {
 	PublicJobs                             *bool    `json:"public_jobs,omitempty" jsonschema:"Enable public access to pipelines"`
 
 	// Mirroring (additive)
-	Mirror                           *bool  `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url"`
-	MirrorTriggerBuilds              *bool  `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates"`
-	MirrorBranchRegex                string `json:"mirror_branch_regex,omitempty" tier:"premium" jsonschema:"Only mirror branches matching this regex"`
-	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does"`
-	MirrorUserID                     *int64 `json:"mirror_user_id,omitempty" tier:"premium" jsonschema:"User ID used to run mirror updates (admin only)"`
-	OnlyMirrorProtectedBranches      *bool  `json:"only_mirror_protected_branches,omitempty" tier:"premium" jsonschema:"Only mirror protected branches"`
+	Mirror                           *bool   `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url"`
+	MirrorTriggerBuilds              *bool   `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates"`
+	MirrorBranchRegex                *string `json:"mirror_branch_regex,omitempty" tier:"premium" jsonschema:"Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched"`
+	MirrorOverwritesDivergedBranches *bool   `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does"`
+	MirrorUserID                     *int64  `json:"mirror_user_id,omitempty" tier:"premium" jsonschema:"User ID used to run mirror updates (admin only)"`
+	OnlyMirrorProtectedBranches      *bool   `json:"only_mirror_protected_branches,omitempty" tier:"premium" jsonschema:"Only mirror protected branches"`
 	// Confirm is declared so the input schema advertises the reserved confirm
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
@@ -1617,12 +1618,10 @@ func applyUpdateMetadataOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	}
 	opts.SuggestionCommitMessage = input.SuggestionCommitMessage
 	opts.IssueBranchTemplate = input.IssueBranchTemplate
-	if input.IssuesTemplate != "" {
-		opts.IssuesTemplate = new(input.IssuesTemplate)
-	}
-	if input.MergeRequestsTemplate != "" {
-		opts.MergeRequestsTemplate = new(input.MergeRequestsTemplate)
-	}
+	// An empty description template is the caller removing it, which GitLab
+	// stores (measured on 19.5.0-ee, issue 1306).
+	opts.IssuesTemplate = input.IssuesTemplate
+	opts.MergeRequestsTemplate = input.MergeRequestsTemplate
 }
 
 // applyUpdateToggleOpts applies feature-toggle transformations.
@@ -1728,9 +1727,9 @@ func applyUpdateMirrorOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.MirrorTriggerBuilds != nil {
 		opts.MirrorTriggerBuilds = input.MirrorTriggerBuilds
 	}
-	if input.MirrorBranchRegex != "" {
-		opts.MirrorBranchRegex = new(input.MirrorBranchRegex)
-	}
+	// An empty branch regex is the caller removing it, which GitLab stores
+	// (measured on 19.5.0-ee, issue 1306).
+	opts.MirrorBranchRegex = input.MirrorBranchRegex
 	if input.MirrorOverwritesDivergedBranches != nil {
 		opts.MirrorOverwritesDivergedBranches = input.MirrorOverwritesDivergedBranches
 	}
@@ -1885,10 +1884,15 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("projectUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
+	// A call GitLab would refuse is refused before the user is asked to
+	// approve it.
+	opts, nulls := buildUpdateOpts(input)
+	if err := checkMirrorBranchRegexNotAlone(opts, nulls); err != nil {
+		return Output{}, err
+	}
 	if err := confirmDivergedOverwrite(ctx, client, "projectUpdate", input.pullMirrorSettings()); err != nil {
 		return Output{}, err
 	}
-	opts, nulls := buildUpdateOpts(input)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.EditProject(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.EditJSONBody(nulls))
 	if err != nil {
@@ -1902,6 +1906,30 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		}
 	}
 	return projectOutput("projectUpdate", p, captured)
+}
+
+// checkMirrorBranchRegexNotAlone refuses an update whose only setting is the
+// mirror branch regex. PUT /projects/:id declares mirror_branch_regex, and
+// its at-least-one-of list leaves it out, so a body carrying it alone, empty
+// or not, is answered 400 "at least one parameter must be provided" (measured
+// on 19.5.0-ee; ee/lib/ee/api/helpers/projects_helpers.rb; the upstream-bugs
+// entry "A project update that sends only `mirror_branch_regex` is refused as
+// sending nothing"). Beside any other setting it is stored, so the refusal
+// says to send one.
+func checkMirrorBranchRegexNotAlone(opts *gl.EditProjectOptions, nulls toolutil.BodyEdit) error {
+	if opts.MirrorBranchRegex == nil || len(nulls.Set) > 0 {
+		return nil
+	}
+	set := 0
+	for _, field := range reflect.ValueOf(*opts).Fields() {
+		if !field.IsZero() {
+			set++
+		}
+	}
+	if set > 1 {
+		return nil
+	}
+	return errors.New("projectUpdate: GitLab refuses an update whose only setting is mirror_branch_regex; send it beside another setting, for example mirror or mirror_trigger_builds with its current value")
 }
 
 // ---------------------------------------------------------------------------

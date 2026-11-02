@@ -173,7 +173,7 @@ func TestEditProject_Success(t *testing.T) {
 	out, err := EditProject(t.Context(), client, EditProjectInput{
 		ProjectID: "1",
 		BadgeID:   1,
-		Name:      "coverage-updated",
+		Name:      new("coverage-updated"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -334,7 +334,7 @@ func TestEditGroup_Success(t *testing.T) {
 	out, err := EditGroup(t.Context(), client, EditGroupInput{
 		GroupID: "1",
 		BadgeID: 1,
-		Name:    "updated",
+		Name:    new("updated"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -676,7 +676,7 @@ func TestEditProject_AllOptionalFields(t *testing.T) {
 	}))
 	out, err := EditProject(t.Context(), client, EditProjectInput{
 		ProjectID: "1", BadgeID: 1,
-		LinkURL: "https://updated.com", ImageURL: "https://updated-img.com", Name: "updated",
+		LinkURL: "https://updated.com", ImageURL: "https://updated-img.com", Name: new("updated"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -879,7 +879,7 @@ func TestEditGroup_AllOptionalFields(t *testing.T) {
 	}))
 	out, err := EditGroup(t.Context(), client, EditGroupInput{
 		GroupID: "1", BadgeID: 1,
-		LinkURL: "https://up.com", ImageURL: "https://up-img.com", Name: "updated",
+		LinkURL: "https://up.com", ImageURL: "https://up-img.com", Name: new("updated"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1368,7 +1368,10 @@ func TestEditProject_SendsOnlyTheFieldsTheCallerSupplied(t *testing.T) {
 	}{
 		{"link_url alone", EditProjectInput{ProjectID: "1", BadgeID: 1, LinkURL: testLinkURL}, "link_url", testLinkURL},
 		{"image_url alone", EditProjectInput{ProjectID: "1", BadgeID: 1, ImageURL: testImageURL}, "image_url", testImageURL},
-		{"name alone", EditProjectInput{ProjectID: "1", BadgeID: 1, Name: testBadgeName}, "name", testBadgeName},
+		{"name alone", EditProjectInput{ProjectID: "1", BadgeID: 1, Name: new(testBadgeName)}, "name", testBadgeName},
+		// An empty name is the caller removing it, which GitLab stores
+		// (measured on 19.5.0-ee, issue 1306).
+		{"name emptied", EditProjectInput{ProjectID: "1", BadgeID: 1, Name: new("")}, "name", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1398,7 +1401,8 @@ func TestEditGroup_SendsOnlyTheFieldsTheCallerSupplied(t *testing.T) {
 	}{
 		{"link_url alone", EditGroupInput{GroupID: "1", BadgeID: 1, LinkURL: testLinkURL}, "link_url", testLinkURL},
 		{"image_url alone", EditGroupInput{GroupID: "1", BadgeID: 1, ImageURL: testImageURL}, "image_url", testImageURL},
-		{"name alone", EditGroupInput{GroupID: "1", BadgeID: 1, Name: testBadgeName}, "name", testBadgeName},
+		{"name alone", EditGroupInput{GroupID: "1", BadgeID: 1, Name: new(testBadgeName)}, "name", testBadgeName},
+		{"name emptied", EditGroupInput{GroupID: "1", BadgeID: 1, Name: new("")}, "name", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

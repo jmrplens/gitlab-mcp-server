@@ -1118,7 +1118,7 @@ type UpdateInput struct {
 	Visibility                   string               `json:"visibility,omitempty"    jsonschema:"Visibility level (private, internal, public)"`
 	RequestAccessEnabled         *bool                `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
 	LFSEnabled                   *bool                `json:"lfs_enabled,omitempty"   jsonschema:"Enable Git LFS"`
-	DefaultBranch                string               `json:"default_branch,omitempty" jsonschema:"Default branch name"`
+	DefaultBranch                *string              `json:"default_branch,omitempty" jsonschema:"Default branch name for new projects. Pass an empty string to remove it, so new projects fall back to the instance default. Omit the field to leave it untouched"`
 	MathRenderingLimitsEnabled   *bool                `json:"math_rendering_limits_enabled,omitempty"   jsonschema:"Enable math rendering limits"`
 	WebBasedCommitSigningEnabled *bool                `json:"web_based_commit_signing_enabled,omitempty" jsonschema:"Enable web-based commit signing for projects in this group"`
 	AllowPersonalSnippets        *bool                `json:"allow_personal_snippets,omitempty"          jsonschema:"Allow members to create personal snippets"`
@@ -1136,8 +1136,8 @@ type UpdateInput struct {
 	ExperimentFeaturesEnabled       *bool                          `json:"experiment_features_enabled,omitempty"        jsonschema:"Enable experimental features"`
 	ExtraSharedRunnersMinutesLimit  *int64                         `json:"extra_shared_runners_minutes_limit,omitempty" jsonschema:"Extra shared runner compute-minutes (administrators only)"`
 	FileTemplateProjectID           *int64                         `json:"file_template_project_id,omitempty"           tier:"premium" jsonschema:"Project ID providing file templates for this group (Premium/Ultimate)"`
-	IPRestrictionRanges             string                         `json:"ip_restriction_ranges,omitempty"              tier:"premium" jsonschema:"Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only"`
-	AllowedEmailDomainsList         string                         `json:"allowed_email_domains_list,omitempty"         tier:"premium" jsonschema:"Comma-separated list of email domains allowed for members (Premium/Ultimate)"`
+	IPRestrictionRanges             *string                        `json:"ip_restriction_ranges,omitempty"              tier:"premium" jsonschema:"Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only. Pass an empty string to remove the restriction. Omit the field to leave it untouched"`
+	AllowedEmailDomainsList         *string                        `json:"allowed_email_domains_list,omitempty"         tier:"premium" jsonschema:"Comma-separated list of email domains allowed for members (Premium/Ultimate). Pass an empty string to allow every domain again. Omit the field to leave it untouched"`
 	LockMathRenderingLimitsEnabled  *bool                          `json:"lock_math_rendering_limits_enabled,omitempty" jsonschema:"Prevent subgroups from changing the math rendering limits setting"`
 	MaxArtifactsSize                *int64                         `json:"max_artifacts_size,omitempty"                 jsonschema:"Maximum job artifacts size in MB (administrators only)"`
 	MembershipLock                  *bool                          `json:"membership_lock,omitempty"                    jsonschema:"Prevent members from being added to projects in this group"`
@@ -1160,8 +1160,8 @@ type UpdateInput struct {
 
 	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty" tier:"ultimate"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
 	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty" tier:"ultimate"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
-	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
-	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
+	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate). Pass [] to exclude nobody. Omit the field to leave the list untouched"`
+	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate). Pass [] to empty the list, after which GitLab notifies the group's owners. Omit the field to leave the list untouched"`
 	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
 
 	// RemoveAvatar sends avatar as an empty value, which PUT /groups/:id
@@ -1390,8 +1390,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Path = new(input.Path)
 	}
 	// Presence decides, never emptiness: an empty description is the caller
-	// removing it (issue 1306).
+	// removing it (issue 1306), and so is an empty default branch, which
+	// GitLab stores as null (measured on 19.5.0-ee).
 	opts.Description = input.Description
+	opts.DefaultBranch = input.DefaultBranch
 	if input.Visibility != "" {
 		opts.Visibility = new(gl.VisibilityValue(input.Visibility))
 	}
@@ -1400,9 +1402,6 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.LFSEnabled != nil {
 		opts.LFSEnabled = input.LFSEnabled
-	}
-	if input.DefaultBranch != "" {
-		opts.DefaultBranch = new(input.DefaultBranch)
 	}
 	if input.MathRenderingLimitsEnabled != nil {
 		opts.MathRenderingLimitsEnabled = input.MathRenderingLimitsEnabled
@@ -1472,10 +1471,12 @@ func applyUpdateGroupPointers(input UpdateInput, opts *gl.UpdateGroupOptions) {
 	opts.UniqueProjectDownloadLimitIntervalInSeconds = input.UniqueProjectDownloadLimitIntervalInSeconds
 	opts.AutoBanUserOnExcessiveProjectsDownload = input.AutoBanUserOnExcessiveProjectsDownload
 	opts.DefaultBranchProtectionDefaults = input.DefaultBranchProtectionDefaults.toOptions()
-	if len(input.UniqueProjectDownloadLimitAllowlist) > 0 {
+	// Presence decides, never emptiness: [] empties either list, which GitLab
+	// stores (measured on 19.5.0-ee, issue 1306).
+	if input.UniqueProjectDownloadLimitAllowlist != nil {
 		opts.UniqueProjectDownloadLimitAllowlist = &input.UniqueProjectDownloadLimitAllowlist
 	}
-	if len(input.UniqueProjectDownloadLimitAlertlist) > 0 {
+	if input.UniqueProjectDownloadLimitAlertlist != nil {
 		opts.UniqueProjectDownloadLimitAlertlist = &input.UniqueProjectDownloadLimitAlertlist
 	}
 }
@@ -1484,12 +1485,11 @@ func applyUpdateGroupPointers(input UpdateInput, opts *gl.UpdateGroupOptions) {
 // onto the SDK options, converting each non-empty string to its typed value.
 // Split out of Update to keep that handler's cyclomatic complexity flat.
 func applyUpdateGroupEnums(input UpdateInput, opts *gl.UpdateGroupOptions) {
-	if input.IPRestrictionRanges != "" {
-		opts.IPRestrictionRanges = new(input.IPRestrictionRanges)
-	}
-	if input.AllowedEmailDomainsList != "" {
-		opts.AllowedEmailDomainsList = new(input.AllowedEmailDomainsList)
-	}
+	// An empty IP range list or domain list is the caller removing the
+	// restriction, which GitLab stores as null (measured on 19.5.0-ee,
+	// issue 1306).
+	opts.IPRestrictionRanges = input.IPRestrictionRanges
+	opts.AllowedEmailDomainsList = input.AllowedEmailDomainsList
 	// An empty provider is the caller turning step-up authentication off,
 	// which the route's own description says ("Pass empty string to
 	// disable"), so it goes through as given (issue 1306).

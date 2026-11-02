@@ -582,8 +582,12 @@ func TestSetUserStatus_EachOptionReachesTheRequest(t *testing.T) {
 		input SetStatusInput
 		want  map[string]any
 	}{
-		{"emoji", SetStatusInput{Emoji: "coffee"}, map[string]any{"emoji": "coffee"}},
-		{"message", SetStatusInput{Message: "reviewing"}, map[string]any{"message": "reviewing"}},
+		{"emoji", SetStatusInput{Emoji: new("coffee")}, map[string]any{"emoji": "coffee"}},
+		{"message", SetStatusInput{Message: new("reviewing")}, map[string]any{"message": "reviewing"}},
+		// An empty emoji or message is the caller setting none, sent as such
+		// rather than left to PUT /user/status replacing what is missing.
+		{"emoji emptied", SetStatusInput{Emoji: new("")}, map[string]any{"emoji": ""}},
+		{"message emptied", SetStatusInput{Message: new("")}, map[string]any{"message": ""}},
 		{"availability", SetStatusInput{Availability: "busy"}, map[string]any{"availability": "busy"}},
 		{"clear_status_after", SetStatusInput{ClearStatusAfter: "3_hours"}, map[string]any{"clear_status_after": "3_hours"}},
 		{"nothing", SetStatusInput{}, map[string]any{}},
@@ -769,8 +773,8 @@ func TestSetUserStatus_Success(t *testing.T) {
 	}))
 
 	out, err := SetStatus(context.Background(), client, SetStatusInput{
-		Emoji:        "coffee",
-		Message:      "On break",
+		Emoji:        new("coffee"),
+		Message:      new("On break"),
 		Availability: "busy",
 	})
 	if err != nil {
@@ -790,7 +794,7 @@ func TestSetUserStatus_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 
-	_, err := SetStatus(context.Background(), client, SetStatusInput{Emoji: "x"})
+	_, err := SetStatus(context.Background(), client, SetStatusInput{Emoji: new("x")})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
 	}
@@ -1383,7 +1387,7 @@ func TestSetUserStatus_CancelledContext(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := SetStatus(ctx, client, SetStatusInput{Emoji: "coffee"})
+	_, err := SetStatus(ctx, client, SetStatusInput{Emoji: new("coffee")})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
 	}
@@ -1405,8 +1409,8 @@ func TestSetUserStatus_WithClearAfter(t *testing.T) {
 	}))
 
 	out, err := SetStatus(context.Background(), client, SetStatusInput{
-		Emoji:            "coffee",
-		Message:          "BRB",
+		Emoji:            new("coffee"),
+		Message:          new("BRB"),
 		Availability:     "busy",
 		ClearStatusAfter: "3_hours",
 	})
@@ -2316,7 +2320,7 @@ func TestSetStatus_NilResponse(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := SetStatus(context.Background(), client, SetStatusInput{Emoji: "coffee"})
+	out, err := SetStatus(context.Background(), client, SetStatusInput{Emoji: new("coffee")})
 	if err != nil {
 		t.Fatalf("expected no error for null, got: %v", err)
 	}

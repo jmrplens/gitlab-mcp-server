@@ -121,13 +121,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Wiki: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#wiki))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro    | Tipo                                             | Requerido | Descripción                                                               |
-| ------------ | ------------------------------------------------ | --------- | ------------------------------------------------------------------------- |
-| `project_id` | `string/integer`                                 | sí        | Project ID or URL-encoded path                                            |
-| `slug`       | `string`                                         | sí        | Slug of the wiki page to update as wiki.list returns it (e.g. 'dir/page') |
-| `content`    | `string`                                         | no        | New content for the wiki page                                             |
-| `format`     | `string` (`markdown`, `rdoc`, `asciidoc`, `org`) | no        | Content format: markdown, rdoc, asciidoc, or org                          |
-| `title`      | `string`                                         | no        | New title for the wiki page                                               |
+| Parámetro    | Tipo                                             | Requerido | Descripción                                                                                                 |
+| ------------ | ------------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer`                                 | sí        | Project ID or URL-encoded path                                                                              |
+| `slug`       | `string`                                         | sí        | Slug of the wiki page to update as wiki.list returns it (e.g. 'dir/page')                                   |
+| `content`    | `string`                                         | no        | New content for the wiki page. Pass an empty string to empty the page. Omit the field to leave it untouched |
+| `format`     | `string` (`markdown`, `rdoc`, `asciidoc`, `org`) | no        | Content format: markdown, rdoc, asciidoc, or org                                                            |
+| `title`      | `string`                                         | no        | New title for the wiki page                                                                                 |
 
 ### `wiki.upload_attachment`
 

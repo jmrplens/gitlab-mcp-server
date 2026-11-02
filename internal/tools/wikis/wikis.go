@@ -41,7 +41,7 @@ type UpdateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Slug      string               `json:"slug"              jsonschema:"Slug of the wiki page to update as wiki.list returns it (e.g. 'dir/page'),required"`
 	Title     string               `json:"title,omitempty"   jsonschema:"New title for the wiki page"`
-	Content   string               `json:"content,omitempty" jsonschema:"New content for the wiki page"`
+	Content   *string              `json:"content,omitempty" jsonschema:"New content for the wiki page. Pass an empty string to empty the page. Omit the field to leave it untouched"`
 	Format    string               `json:"format,omitempty"  jsonschema:"Content format: markdown, rdoc, asciidoc, or org"`
 }
 
@@ -208,8 +208,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Title != "" {
 		opts.Title = new(input.Title)
 	}
-	if input.Content != "" {
-		opts.Content = new(toolutil.NormalizeText(input.Content))
+	// An empty content is the caller emptying the page, which GitLab stores
+	// (measured on 19.5.0-ee, issue 1306).
+	if input.Content != nil {
+		opts.Content = new(toolutil.NormalizeText(*input.Content))
 	}
 	if input.Format != "" {
 		opts.Format = new(gl.WikiFormatValue(input.Format))

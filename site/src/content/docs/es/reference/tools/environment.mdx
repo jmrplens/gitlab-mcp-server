@@ -537,18 +537,18 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_environment_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Environment: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#environment))
+- **Token de grano fino**: Environment: Update en proyecto. Algunas llamadas también necesitan: Environment: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#environment))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro              | Tipo                                                                  | Requerido | Descripción                                                                                   |
-| ---------------------- | --------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------- |
+| ---------------------- | --------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `environment_id`       | `integer`                                                             | sí        | Environment ID                                                                                |
 | `project_id`           | `string/integer`                                                      | sí        | Project ID or URL-encoded path                                                                |
 | `auto_stop_setting`    | `string` (`always`, `with_action`)                                    | no        | Auto-stop behavior: always or with_action                                                     |
 | `cluster_agent_id`     | `integer`                                                             | no        | ID of the cluster agent to associate with this environment                                    |
 | `description`          | `string`                                                              | no        | Updated description. Pass an empty string to remove it. Omit the field to leave it untouched  |
 | `external_url`         | `string`                                                              | no        | Updated external URL. Pass an empty string to remove it. Omit the field to leave it untouched |
-| `flux_resource_path`   | `string`                                                              | no        | Flux resource path used to track the environment's deployment status                          |
-| `kubernetes_namespace` | `string`                                                              | no        | Kubernetes namespace for the cluster agent                                                    |
+| `flux_resource_path`   | `string`                                                              | no        | Flux resource path used to track the environment's deployment status. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                      |
+| `kubernetes_namespace` | `string`                                                              | no        | Kubernetes namespace for the cluster agent. Pass an empty string to remove it, together with flux_resource_path as an empty string when the environment has a Flux path, since GitLab keeps no Flux path without a namespace. Omit the field to leave it untouched |
 | `name`                 | `string`                                                              | no        | New environment name                                                                          |
 | `tier`                 | `string` (`production`, `staging`, `testing`, `development`, `other`) | no        | Updated tier: production, staging, testing, development, other                                |

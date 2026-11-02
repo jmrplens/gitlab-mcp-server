@@ -74,7 +74,7 @@ type EditInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Slug    string               `json:"slug"              jsonschema:"Slug of the wiki page to edit as group.wiki_list returns it (e.g. 'dir/page'),required"`
 	Title   string               `json:"title,omitempty"   jsonschema:"New title"`
-	Content string               `json:"content,omitempty" jsonschema:"New content"`
+	Content *string              `json:"content,omitempty" jsonschema:"New content. Pass an empty string to empty the page. Omit the field to leave it untouched"`
 	Format  string               `json:"format,omitempty"  jsonschema:"Content format: markdown, rdoc, asciidoc, or org"`
 }
 
@@ -192,12 +192,11 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 	if input.Slug == "" {
 		return Output{}, toolutil.ErrFieldRequired("slug")
 	}
-	opts := &gl.EditGroupWikiPageOptions{}
+	// An empty content is the caller emptying the page, which GitLab stores
+	// (measured on 19.5.0-ee, issue 1306).
+	opts := &gl.EditGroupWikiPageOptions{Content: input.Content}
 	if input.Title != "" {
 		opts.Title = new(input.Title)
-	}
-	if input.Content != "" {
-		opts.Content = new(input.Content)
 	}
 	if input.Format != "" {
 		f := gl.WikiFormatValue(input.Format)

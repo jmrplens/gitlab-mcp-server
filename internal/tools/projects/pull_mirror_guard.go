@@ -203,11 +203,12 @@ func (input UpdateInput) pullMirrorSettings() ConfigurePullMirrorInput {
 // armsOverwrite reports whether this call could put the project into the
 // overwriting state, or widen the branches it reaches, which is what makes
 // reading the current configuration worth a round trip: it sets the flag,
-// enables the mirror, aims it somewhere else, or sends the branch filter.
-// Which of the filter's changes widen it takes the read to say.
+// enables the mirror, aims it somewhere else, or sends the branch filter, an
+// empty regex included, since removing the regex can widen it. Which of the
+// filter's changes widen it takes the read to say.
 func armsOverwrite(input ConfigurePullMirrorInput) bool {
 	return isTrue(input.MirrorOverwritesDivergedBranches) || isTrue(input.Enabled) || input.URL != "" ||
-		input.OnlyMirrorProtectedBranches != nil || input.MirrorBranchRegex != ""
+		input.OnlyMirrorProtectedBranches != nil || input.MirrorBranchRegex != nil
 }
 
 // mirrorAsk is the question, if any, [overwritesAfterCall] decides a call is
@@ -247,19 +248,26 @@ type branchFilter struct {
 // (Repositories::PullMirrors::Attributes#allowed for the dedicated one and
 // EE::Projects::UpdateService#mirror_branch_setting for the project update),
 // so GitLab never holds both. Protected-only sent false leaves the regex as it
-// is. Both routes refuse a call that sends the two together, so a regex winning
+// is, and an empty regex removes the regex and leaves protected-only as it is,
+// since both rules turn protected-only off only for a regex that is present.
+// Both routes refuse a call that sends the two together, so a regex winning
 // here only decides the question asked before that refusal.
 func (current branchFilter) after(input ConfigurePullMirrorInput) branchFilter {
-	if input.MirrorBranchRegex != "" {
-		return branchFilter{regex: input.MirrorBranchRegex}
+	regexSent := input.MirrorBranchRegex != nil
+	if regexSent && *input.MirrorBranchRegex != "" {
+		return branchFilter{regex: *input.MirrorBranchRegex}
 	}
 	if isTrue(input.OnlyMirrorProtectedBranches) {
 		return branchFilter{protectedOnly: true}
 	}
+	next := current
 	if input.OnlyMirrorProtectedBranches != nil {
-		return branchFilter{regex: current.regex}
+		next.protectedOnly = false
 	}
-	return current
+	if regexSent {
+		next.regex = ""
+	}
+	return next
 }
 
 // widenedBy reports whether a mirror pulling through current would pull a

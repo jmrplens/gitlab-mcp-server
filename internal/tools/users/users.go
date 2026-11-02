@@ -329,22 +329,25 @@ func GetStatus(ctx context.Context, client *gitlabclient.Client, input GetStatus
 // Set Status.
 
 // SetStatusInput holds parameters for setting the current user's status.
+//
+// The emoji and the message are pointers so an empty one reaches GitLab as
+// sent. PUT /user/status replaces the whole status (set_user_status with
+// include_missing_params: true, lib/api/users.rb), so a field left out is
+// emptied too; sending the empty value says so in the request rather than
+// leaving it to that rule (issue 1306). An empty emoji is not stored as none:
+// Users::SetStatusService gives it the default speech_balloon while a message
+// or a busy availability remains, and removes the whole status when the
+// emoji and the message are both empty and the availability is not_set.
 type SetStatusInput struct {
-	Emoji            string `json:"emoji,omitempty" jsonschema:"The emoji to set for the status (e.g. coffee or speech_balloon)"`
-	Message          string `json:"message,omitempty" jsonschema:"The status message text"`
-	Availability     string `json:"availability,omitempty" jsonschema:"The availability: not_set or busy"`
-	ClearStatusAfter string `json:"clear_status_after,omitempty" jsonschema:"Duration after which to clear status: 30_minutes | 3_hours | 8_hours | 1_day | 3_days | 7_days | 30_days"`
+	Emoji            *string `json:"emoji,omitempty" jsonschema:"The emoji to set for the status (e.g. coffee or speech_balloon). This action replaces the whole status: an empty or omitted emoji gets GitLab's default speech_balloon while a message or a busy availability remains, and an empty emoji and message with availability not_set remove the status"`
+	Message          *string `json:"message,omitempty" jsonschema:"The status message text. This action replaces the whole status: pass an empty string, or leave it out, for no message. An empty message and emoji with availability not_set remove the status"`
+	Availability     string  `json:"availability,omitempty" jsonschema:"The availability: not_set or busy"`
+	ClearStatusAfter string  `json:"clear_status_after,omitempty" jsonschema:"Duration after which to clear status: 30_minutes | 3_hours | 8_hours | 1_day | 3_days | 7_days | 30_days"`
 }
 
 // SetStatus sets the current user's status.
 func SetStatus(ctx context.Context, client *gitlabclient.Client, input SetStatusInput) (StatusOutput, error) {
-	opts := &gl.UserStatusOptions{}
-	if input.Emoji != "" {
-		opts.Emoji = new(input.Emoji)
-	}
-	if input.Message != "" {
-		opts.Message = new(input.Message)
-	}
+	opts := &gl.UserStatusOptions{Emoji: input.Emoji, Message: input.Message}
 	if input.Availability != "" {
 		av := gl.AvailabilityValue(input.Availability)
 		opts.Availability = &av

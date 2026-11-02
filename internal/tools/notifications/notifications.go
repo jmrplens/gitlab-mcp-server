@@ -78,8 +78,12 @@ type epicEvent struct {
 // declares it, and the group and project routes declare no
 // notification_email, so a caller who set it there changed nothing (issue
 // 1306). client-go's NotificationSettingsOptions carries it for all three.
+//
+// The email is a pointer so the empty string that removes it reaches GitLab:
+// "" empties the setting and null leaves it as it is (measured on
+// 19.5.0-ee), and GitLab then reports the primary email for it.
 type UpdateGlobalInput struct {
-	NotificationEmail string `json:"notification_email,omitempty" jsonschema:"Email address for notifications"`
+	NotificationEmail *string `json:"notification_email,omitempty" jsonschema:"Email address for notifications. Pass an empty string to remove it, so notifications go to the primary email, which GitLab then reports here. Omit the field to leave it untouched"`
 	eventFields
 	epicEvent
 }
@@ -182,9 +186,7 @@ func UpdateGlobalSettings(ctx context.Context, client *gitlabclient.Client, inpu
 		return Output{}, err
 	}
 	opts.NewEpic = input.NewEpic
-	if input.NotificationEmail != "" {
-		opts.NotificationEmail = &input.NotificationEmail
-	}
+	opts.NotificationEmail = input.NotificationEmail
 	settings, _, err := client.GL().NotificationSettings.UpdateGlobalSettings(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("notification_global_update", err, http.StatusBadRequest,

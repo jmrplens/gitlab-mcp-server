@@ -52,16 +52,20 @@ type CreateInput struct {
 
 // UpdateInput defines parameters for updating an environment.
 type UpdateInput struct {
-	ProjectID           toolutil.StringOrInt `json:"project_id"             jsonschema:"Project ID or URL-encoded path,required"`
-	EnvironmentID       int64                `json:"environment_id"         jsonschema:"Environment ID,required"`
-	Name                string               `json:"name,omitempty"         jsonschema:"New environment name"`
-	Description         *string              `json:"description,omitempty"  jsonschema:"Updated description. Pass an empty string to remove it. Omit the field to leave it untouched"`
-	ExternalURL         *string              `json:"external_url,omitempty" jsonschema:"Updated external URL. Pass an empty string to remove it. Omit the field to leave it untouched"`
-	Tier                string               `json:"tier,omitempty"         jsonschema:"Updated tier: production, staging, testing, development, other"`
-	ClusterAgentID      *int64               `json:"cluster_agent_id,omitempty"      jsonschema:"ID of the cluster agent to associate with this environment"`
-	KubernetesNamespace string               `json:"kubernetes_namespace,omitempty"  jsonschema:"Kubernetes namespace for the cluster agent"`
-	FluxResourcePath    string               `json:"flux_resource_path,omitempty"    jsonschema:"Flux resource path used to track the environment's deployment status"`
-	AutoStopSetting     string               `json:"auto_stop_setting,omitempty"     jsonschema:"Auto-stop behavior: always or with_action"`
+	ProjectID      toolutil.StringOrInt `json:"project_id"             jsonschema:"Project ID or URL-encoded path,required"`
+	EnvironmentID  int64                `json:"environment_id"         jsonschema:"Environment ID,required"`
+	Name           string               `json:"name,omitempty"         jsonschema:"New environment name"`
+	Description    *string              `json:"description,omitempty"  jsonschema:"Updated description. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	ExternalURL    *string              `json:"external_url,omitempty" jsonschema:"Updated external URL. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	Tier           string               `json:"tier,omitempty"         jsonschema:"Updated tier: production, staging, testing, development, other"`
+	ClusterAgentID *int64               `json:"cluster_agent_id,omitempty"      jsonschema:"ID of the cluster agent to associate with this environment"`
+	// The namespace and the Flux path are pointers so the empty string that
+	// clears either reaches GitLab, which empties both for "" (measured on
+	// 19.5.0-ee). A Flux path cannot outlive its namespace: GitLab refuses an
+	// empty namespace while a Flux path stays (issue 1306).
+	KubernetesNamespace *string `json:"kubernetes_namespace,omitempty"  jsonschema:"Kubernetes namespace for the cluster agent. Pass an empty string to remove it, together with flux_resource_path as an empty string when the environment has a Flux path, since GitLab keeps no Flux path without a namespace. Omit the field to leave it untouched"`
+	FluxResourcePath    *string `json:"flux_resource_path,omitempty"    jsonschema:"Flux resource path used to track the environment's deployment status. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	AutoStopSetting     string  `json:"auto_stop_setting,omitempty"     jsonschema:"Auto-stop behavior: always or with_action"`
 }
 
 // DeleteInput defines parameters for deleting an environment.
@@ -264,6 +268,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.EnvironmentID == 0 {
 		return Output{}, errors.New("environmentUpdate: environment_id is required")
 	}
+	if err := checkNamespaceKeepsNoFluxPath(ctx, client, input); err != nil {
+		return Output{}, err
+	}
 	opts := &gl.EditEnvironmentOptions{}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
@@ -278,21 +285,47 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ClusterAgentID != nil {
 		opts.ClusterAgentID = input.ClusterAgentID
 	}
-	if input.KubernetesNamespace != "" {
-		opts.KubernetesNamespace = new(input.KubernetesNamespace)
-	}
-	if input.FluxResourcePath != "" {
-		opts.FluxResourcePath = new(input.FluxResourcePath)
-	}
+	opts.KubernetesNamespace = input.KubernetesNamespace
+	opts.FluxResourcePath = input.FluxResourcePath
 	if input.AutoStopSetting != "" {
 		opts.AutoStopSetting = new(input.AutoStopSetting)
 	}
 	env, _, err := client.GL().Environments.EditEnvironment(string(input.ProjectID), input.EnvironmentID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("environmentUpdate", err, http.StatusNotFound,
-			"verify environment_id with environment.list; tier must be one of {production, staging, testing, development, other}; requires Developer role")
+		return Output{}, toolutil.WrapErrWithStatusHint("environmentUpdate", err, http.StatusNotFound, environmentUpdateNotFoundHint)
 	}
 	return toOutput(env), nil
+}
+
+// environmentUpdateNotFoundHint is the hint an update refused with 404 carries,
+// and the read the namespace check makes before it.
+const environmentUpdateNotFoundHint = "verify environment_id with environment.list; tier must be one of {production, staging, testing, development, other}; requires Developer role"
+
+// checkNamespaceKeepsNoFluxPath refuses, before the update is sent, one that
+// removes the Kubernetes namespace while a Flux path remains: one the same
+// call sets, or, when the call leaves the Flux path alone, the one the
+// environment keeps, which it reads. GitLab answers either update with 400
+// "flux_resource_path cannot be set without a kubernetes namespace" (measured
+// on 19.5.0-ee), and the refusal here names the two fields instead. An update
+// that empties both, or that leaves the namespace alone, reads nothing.
+func checkNamespaceKeepsNoFluxPath(ctx context.Context, client *gitlabclient.Client, input UpdateInput) error {
+	if input.KubernetesNamespace == nil || *input.KubernetesNamespace != "" {
+		return nil
+	}
+	if input.FluxResourcePath != nil {
+		if *input.FluxResourcePath == "" {
+			return nil
+		}
+		return errors.New("environmentUpdate: kubernetes_namespace cannot be removed while flux_resource_path is set, since GitLab keeps no Flux path without a namespace; send flux_resource_path as an empty string too, or keep the namespace")
+	}
+	stored, _, err := client.GL().Environments.GetEnvironment(string(input.ProjectID), input.EnvironmentID, gl.WithContext(ctx))
+	if err != nil {
+		return toolutil.WrapErrWithStatusHint("environmentUpdate", err, http.StatusNotFound, environmentUpdateNotFoundHint)
+	}
+	if stored.FluxResourcePath == "" {
+		return nil
+	}
+	return fmt.Errorf("environmentUpdate: kubernetes_namespace cannot be removed while the environment keeps the Flux path %q, since GitLab keeps no Flux path without a namespace; send flux_resource_path as an empty string beside it, or keep the namespace", stored.FluxResourcePath)
 }
 
 // Delete deletes an environment from a project.
