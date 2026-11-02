@@ -55,6 +55,7 @@ func TestDependencyScanNames_Literals_SpellWhatTheyName(t *testing.T) {
 		{name: "the CI workflow", got: ciWorkflow, want: workflowDir + "/ci.yml"},
 		{name: "the scan command", got: scanCommand, want: "make " + dependencyScanTarget},
 		{name: "the assignment pattern", got: strings.TrimPrefix(osvImageAssignment.String(), "(?m)^")[:len(osvImageVariable)], want: osvImageVariable},
+		{name: "the scanner run pattern", got: strings.TrimPrefix(osvScannerRun.String(), `\$\(`)[:len(osvImageVariable)], want: osvImageVariable},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -69,17 +70,23 @@ func TestDependencyScanNames_Literals_SpellWhatTheyName(t *testing.T) {
 
 // TestMakefileScanProblems_Recipe_RunsThePinnedScanner verifies that the
 // Makefile's scan is held to an image named by its digest, assigned once, and
-// run by a recipe that reads the allow list beside each lockfile and scans a
-// second time under --config /dev/null.
+// run by a recipe that scans once without --config, reading the allow list
+// beside each lockfile, and once under --config /dev/null.
 //
 // A tag alone would let whoever moves it decide what the required check
 // accepts, an image the recipe does not run would make the pin decoration, a
 // --config naming a file would put one file in place of every allow list this
-// audit judges, and without the pass that honors no allow list a malicious
-// package an entry sets aside by its GHSA or CVE alias would pass.
+// audit judges, without the pass that reads the allow lists nothing holds the
+// lockfiles to every advisory on their terms, and without the pass that
+// honors no allow list a malicious package an entry sets aside by its GHSA or
+// CVE alias would pass. A pass is one run of the image, up to the end of its
+// shell command, so the cases put two on one line and carry one over a
+// backslash as the Makefile does.
 func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 	t.Parallel()
 
+	const noAllowListPass = "Makefile: the recipe of check-dependency-vulns has no pass without --config, the one that reads the osv-scanner.toml " +
+		"beside each lockfile, so no scan holds the lockfiles to every advisory on the terms the allow lists this audit judges set"
 	const noUnfilteredPass = "Makefile: the recipe of check-dependency-vulns has no pass under --config /dev/null, the one no allow list narrows, " +
 		"so a malicious package an entry sets aside by one of its aliases passes the scan"
 	const namedConfig = "Makefile: the recipe of check-dependency-vulns passes --config naming something other than /dev/null, which puts one file " +
@@ -124,6 +131,24 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 			name: "two passes, both under the empty config",
 			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
 				"\tdocker run $(OSV_SCANNER_IMAGE) scan source --config /dev/null /src\n\tdocker run $(OSV_SCANNER_IMAGE) scan source --config=/dev/null --format json /src\n",
+			want: []string{noAllowListPass},
+		},
+		{
+			name: "both passes on one line, the first ended by &&",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src && docker run $(OSV_SCANNER_IMAGE) scan source --config /dev/null /src\n",
+		},
+		{
+			name: "the empty config on a continuation line, as the Makefile writes it",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\t@status=0; docker run \"$(OSV_SCANNER_IMAGE)\" $$scan /src \\\n\t\t> report.txt || status=$$?; \\\n" +
+				"\tdocker run \"$(OSV_SCANNER_IMAGE)\" $$scan \\\n\t\t--config /dev/null --format json /src > unfiltered.json\n",
+		},
+		{
+			name: "a named config before the empty one in the same pass",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src\n\tdocker run $(OSV_SCANNER_IMAGE) scan source --config ci.toml --config /dev/null /src\n",
+			want: []string{namedConfig},
 		},
 		{
 			name:     "an empty config beside a named one",
@@ -136,6 +161,7 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 			want: []string{
 				"Makefile: the recipe of check-dependency-vulns does not run $(OSV_SCANNER_IMAGE), so the image pinned above is not the scanner that decides",
 				namedConfig,
+				noAllowListPass,
 				noUnfilteredPass,
 			},
 		},

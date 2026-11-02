@@ -104,6 +104,12 @@ const unfilteredConfig = "/dev/null"
 // spelled with a space or an equals sign.
 var osvConfigFlag = regexp.MustCompile(`--config(?:=|[ \t]+)(\S*)`)
 
+// osvScannerRun finds each pass of the scanner in a recipe, a run of
+// $(OSV_SCANNER_IMAGE), and what the recipe hands it: everything after the
+// image up to the end of its shell command, a ;, & or | or a line that does
+// not end in a backslash.
+var osvScannerRun = regexp.MustCompile(`\$\(OSV_SCANNER_IMAGE\)((?:\\\n|[^;&|\n])*)`)
+
 // readConfig is a seam over readTextFile for the osv-scanner.toml files, so a
 // test can drive the branch a file the tests own never produces as root: a
 // regular file that cannot be read.
@@ -139,7 +145,8 @@ func checkDependencyScan(root string) ([]string, error) {
 // makefileScanProblems holds the Makefile's dependency scan to running the
 // scanner image it pins by digest, to reading the allow list beside each
 // lockfile rather than one file a --config would put in all their places, and
-// to a second pass under --config /dev/null, which no allow list narrows.
+// to its two passes: one without --config, which reads those allow lists, and
+// one under --config /dev/null, which no allow list narrows.
 func makefileScanProblems(makefile string) []string {
 	problems := osvImageProblems(osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1))
 	rule := parseMakefile(makefile)[dependencyScanTarget]
@@ -151,17 +158,26 @@ func makefileScanProblems(makefile string) []string {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s does not run $(%s), so the image pinned above is not the scanner that decides",
 			dependencyScanTarget, osvImageVariable))
 	}
-	unfiltered := 0
+	named := strings.Count(recipe, "--config")
 	for _, flag := range osvConfigFlag.FindAllStringSubmatch(recipe, -1) {
 		if flag[1] == unfilteredConfig {
-			unfiltered++
+			named--
 		}
 	}
-	if strings.Count(recipe, "--config") > unfiltered {
+	if named > 0 {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s passes --config naming something other than %s, which puts one file in place of the %s beside each lockfile, the allow lists this audit judges",
 			dependencyScanTarget, unfilteredConfig, osvConfigName))
 	}
-	if unfiltered == 0 {
+	allowListed, unfiltered := false, false
+	for _, run := range osvScannerRun.FindAllStringSubmatch(recipe, -1) {
+		allowListed = allowListed || !strings.Contains(run[1], "--config")
+		unfiltered = unfiltered || slices.ContainsFunc(osvConfigFlag.FindAllStringSubmatch(run[1], -1), func(flag []string) bool { return flag[1] == unfilteredConfig })
+	}
+	if !allowListed {
+		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s has no pass without --config, the one that reads the %s beside each lockfile, so no scan holds the lockfiles to every advisory on the terms the allow lists this audit judges set",
+			dependencyScanTarget, osvConfigName))
+	}
+	if !unfiltered {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s has no pass under --config %s, the one no allow list narrows, so a malicious package an entry sets aside by one of its aliases passes the scan",
 			dependencyScanTarget, unfilteredConfig))
 	}
