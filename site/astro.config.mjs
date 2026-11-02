@@ -99,7 +99,7 @@ const sourceCodeId = `${repositoryUrl}#source-code`;
 const siteDescription =
 	"Open source Model Context Protocol server for GitLab, with dynamic, meta-tool, and individual tool surfaces for AI assistants.";
 const socialImageAlt =
-	"GitLab MCP Server card: the fan-out mark over quiet circuit traces, with the tagline GitLab for your AI assistant — one catalog, three MCP surfaces";
+	"GitLab MCP Server card: the fan-out mark over quiet circuit traces, with the tagline GitLab for your AI assistant: one catalog, three MCP surfaces";
 const socialImage = {
 	"@type": "ImageObject",
 	url: socialImageUrl,
@@ -125,7 +125,7 @@ const dateModified = (() => {
 	}
 })();
 
-// Human-readable capability list and requirements — single-sourced from stats so
+// Human-readable capability list and requirements, single-sourced from stats so
 // they never drift from the rest of the site. These feed AI "what can it do?" and
 // "what do I need?" queries directly from structured data.
 const featureList = [
@@ -152,7 +152,7 @@ const softwareRequirements =
 // purpose: this build runs on a CI runner, and jmrp.io sits behind Cloudflare,
 // CrowdSec and a MikroTik bouncer, where a blocked runner IP would silently
 // degrade this site to a stale snapshot. GitHub serves the same bytes and is
-// already a hard dependency of the build — the checkout comes from it.
+// already a hard dependency of the build: the checkout comes from it.
 const CANONICAL_IDENTITY_URL =
 	"https://raw.githubusercontent.com/jmrplens/jmrp.io/main/public/identity/person.jsonld";
 
@@ -207,7 +207,7 @@ const { "@context": _identityContext, ...canonicalPerson } = await fetch(
 /**
  * Topics specific to this project, kept alongside the canonical expertise list
  * rather than replacing it. `knowsAbout` is multi-valued, so the two sets merge
- * instead of conflicting — which is why these may stay local while the
+ * instead of conflicting, which is why these may stay local while the
  * single-valued properties above may not. The full original set is listed, not
  * just the entries the canonical lacks, so this site keeps asserting its own
  * topics even if the canonical list changes.
@@ -264,8 +264,8 @@ const personNode = (() => {
 const jsonLd = JSON.stringify({
 	"@context": "https://schema.org",
 	"@graph": [
-		// The canonical Person entity, fetched at build time — see the
-		// "Canonical identity" block above. Spliced verbatim so this document
+		// The canonical Person entity, fetched at build time (see the
+		// "Canonical identity" block above). Spliced verbatim so this document
 		// and jmrp.io describe the same node with the same values, instead of
 		// two hand-maintained copies that drift.
 		personNode,
@@ -294,7 +294,7 @@ const jsonLd = JSON.stringify({
 			codeRepository: repositoryUrl,
 			image: socialImage,
 			screenshot: socialImage,
-			license: "https://opensource.org/licenses/MIT",
+			license: "https://opensource.org/license/MIT",
 			isAccessibleForFree: true,
 			datePublished,
 			dateModified,
@@ -326,7 +326,7 @@ const jsonLd = JSON.stringify({
 				url: releasesUrl,
 				seller: { "@id": authorId },
 			},
-			// "Where do I install it / get help / see what changed" — previously
+			// "Where do I install it / get help / see what changed": previously
 			// unanswerable from the graph, so AI answers had nowhere to point.
 			installUrl: `${fullUrl}/getting-started/`,
 			softwareHelp: { "@id": websiteId },
@@ -358,7 +358,7 @@ const jsonLd = JSON.stringify({
 				// so it is the entity to point at.
 				"https://verifymcp.io/servers/jmrplens-gitlab-mcp-server/gitlab",
 				// Package/registry authorities. These outlast individual MCP
-				// directories and carry entity weight of their own — they matter
+				// directories and carry entity weight of their own; they matter
 				// more now that the project has no Wikidata item.
 				// Distribution channels a client installs from; each is a registry
 				// page the project owns, so they anchor the entity as firmly as
@@ -380,7 +380,7 @@ const jsonLd = JSON.stringify({
 			codeRepository: repositoryUrl,
 			programmingLanguage: "Go",
 			runtimePlatform: "Windows, Linux, macOS",
-			license: "https://opensource.org/licenses/MIT",
+			license: "https://opensource.org/license/MIT",
 			isPartOf: { "@id": softwareId },
 			author: { "@id": authorId },
 			// Same three agents jmrp.io/projects/ emits for this @id, so the merged
