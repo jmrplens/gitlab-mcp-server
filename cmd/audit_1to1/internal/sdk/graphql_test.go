@@ -302,7 +302,7 @@ func TestBuildGraphQLOperations_Sites_GroupPerFunctionAndAdjudicate(t *testing.T
 		{pkg: "cicatalog", function: "List", position: "internal/tools/cicatalog/ci_catalog.go:10"},
 	}
 	services := map[string]sdkService{"WorkItems": {Service: "WorkItems", APIMethods: 6}}
-	decisions := map[string]decision{"workitems.List": {decisionMigrate, "the wrapper covers it"}}
+	decisions := map[string]decision{"workitems.List": {Decision: decisionMigrate, Reason: "the wrapper covers it"}}
 
 	got := buildGraphQLOperations(sites, services, nil, decisions)
 	want := []graphqlOperation{
@@ -328,9 +328,9 @@ func TestBuildGraphQLOperations_Sites_GroupPerFunctionAndAdjudicate(t *testing.T
 func TestStaleGraphQLDecisions_Keys_ReportDecisionsWithoutAnOperation(t *testing.T) {
 	operations := []graphqlOperation{{Package: "workitems", Operation: "List"}}
 	decisions := map[string]decision{
-		"workitems.List":   {decisionMigrate, "still there"},
-		"workitems.Gone":   {decisionKeep, "the function was removed"},
-		"removed.Anything": {decisionKeep, "the package was removed"},
+		"workitems.List":   {Decision: decisionMigrate, Reason: "still there"},
+		"workitems.Gone":   {Decision: decisionKeep, Reason: "the function was removed"},
+		"removed.Anything": {Decision: decisionKeep, Reason: "the package was removed"},
 	}
 	want := []string{"graphql removed.Anything", "graphql workitems.Gone"}
 	if got := staleGraphQLDecisions(operations, decisions); !reflect.DeepEqual(got, want) {

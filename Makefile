@@ -13,7 +13,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
 	audit-catalog-first \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs audit-edition-tier \
+	audit-struct-completeness audit-action-coverage audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
@@ -1952,14 +1952,16 @@ audit-catalog-first:
 audit-action-spec-coverage:
 	go run ./cmd/audit_catalog_first/
 
-## audit-1to1: run all four 1:1-audit gap streams (struct/action/metadata/enums), merge
+## audit-1to1: run the three 1:1-audit gap streams (struct/action/enums), merge
 ## into plan/1to1-backlog.json, then gate on SDK parity (audit-1to1-sdk), the request
 ## paths (audit-1to1-paths), the fine-grained grants (audit-1to1-grants), the
 ## parameters each schema requires (audit-1to1-required), the params each reached
 ## route declares (audit-1to1-params) and the routes the live record mounts
 ## (audit-1to1-routes).
 ## Single binary cmd/audit_1to1 consolidates the former audit_struct_completeness,
-## audit_action_coverage, audit_metadata_completeness, and gen_1to1_backlog.
+## audit_action_coverage and gen_1to1_backlog. The discovery metadata stream it
+## also carried (R-META, audit-metadata-completeness) is retired: audit-discovery
+## raises the same four flags with a severity, and audit-discovery-check gates them.
 ## The backlog is written first so a gate failure still leaves the artifact behind.
 audit-1to1:
 	go run ./cmd/audit_1to1/ -gaps-only -output plan/1to1-backlog.json
@@ -2133,11 +2135,6 @@ audit-struct-completeness:
 ## Backward-compat wrapper over audit-1to1 -scope=actions.
 audit-action-coverage:
 	go run ./cmd/audit_1to1/ -scope=actions -gaps-only
-
-## audit-metadata-completeness: report discovery-metadata gaps across the ActionSpec catalog (R-META).
-## Backward-compat wrapper over audit-1to1 -scope=metadata.
-audit-metadata-completeness:
-	go run ./cmd/audit_1to1/ -scope=metadata -gaps-only
 
 ## audit-edition-tier: report each action's doc-grounded licensing tier vs current gating.
 audit-edition-tier:

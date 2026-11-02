@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -59,8 +60,9 @@ func resetFlags(t *testing.T, args ...string) {
 
 // TestMain_Arguments_DispatchToTheModeAndReportFatalErrors runs main itself:
 // a single-scope audit writes its report and exits normally, an invalid scope
-// reaches the fatal path with the parse error, and -validate-docs in offline
-// mode with nothing cached reaches the fatal path with the stale citations.
+// and the retired metadata scope reach the fatal path with the parse error,
+// and -validate-docs in offline mode with nothing cached reaches the fatal
+// path with the stale citations.
 func TestMain_Arguments_DispatchToTheModeAndReportFatalErrors(t *testing.T) {
 	cases := []struct {
 		name string
@@ -72,17 +74,22 @@ func TestMain_Arguments_DispatchToTheModeAndReportFatalErrors(t *testing.T) {
 		wantFatal string
 	}{
 		{
-			name: "metadata_scope_writes_its_report",
+			name: "actions_scope_writes_its_report",
 			args: func(t *testing.T) ([]string, string) {
 				t.Helper()
-				output := filepath.Join(t.TempDir(), "metadata.json")
-				return []string{"-scope=metadata", "-gaps-only", "-output", output}, output
+				output := filepath.Join(t.TempDir(), "actions.json")
+				return []string{"-scope=actions", "-gaps-only", "-output", output}, output
 			},
 		},
 		{
 			name:      "invalid_scope_is_fatal",
 			args:      func(*testing.T) ([]string, string) { return []string{"-scope=bogus"}, "" },
 			wantFatal: `invalid scope "bogus"`,
+		},
+		{
+			name:      "retired_metadata_scope_is_fatal",
+			args:      func(*testing.T) ([]string, string) { return []string{"-scope=metadata"}, "" },
+			wantFatal: `scope "metadata" (R-META) is retired`,
 		},
 		{
 			name: "validate_docs_offline_without_a_cache_is_fatal",
@@ -572,7 +579,8 @@ func TestRunSingle_EnumScope_ReturnsTheGateVerdict(t *testing.T) {
 
 // TestParseScope covers the happy and error paths of -scope parsing in one
 // table: explicit/keyword/empty expansion to all three, single scope,
-// deduplication, whitespace trimming, and rejection of unknown/garbage values.
+// deduplication, whitespace trimming, and rejection of unknown/garbage values
+// and of the retired metadata scope wherever it is named.
 func TestParseScope(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -582,15 +590,17 @@ func TestParseScope(t *testing.T) {
 		wantErr   bool
 		errSubstr string // required error substring when wantErr; "" to skip
 	}{
-		{name: "explicit all four", input: "structs,actions,metadata,enums", wantCount: 4},
-		{name: "keyword all expands", input: "all", wantCount: 4},
-		{name: "empty expands to all", input: "", wantCount: 4},
+		{name: "explicit all three", input: "structs,actions,enums", wantCount: 3},
+		{name: "keyword all expands", input: "all", wantCount: 3},
+		{name: "empty expands to all", input: "", wantCount: 3},
 		{name: "single scope", input: "structs", wantCount: 1, wantFirst: "structs"},
 		{name: "sdk scope", input: "sdk", wantCount: 1, wantFirst: "sdk"},
 		{name: "enums scope", input: "enums", wantCount: 1, wantFirst: "enums"},
 		{name: "grants scope", input: "grants", wantCount: 1, wantFirst: "grants"},
 		{name: "deduplicates repeats", input: "structs,structs,actions,actions", wantCount: 2},
-		{name: "trims whitespace", input: " structs , actions , metadata , enums ", wantCount: 4},
+		{name: "trims whitespace", input: " structs , actions , enums ", wantCount: 3},
+		{name: "rejects the retired metadata scope", input: "metadata", wantErr: true, errSubstr: "audit_discovery_completeness"},
+		{name: "rejects it after a valid scope", input: "structs, metadata", wantErr: true, errSubstr: `scope "metadata" (R-META) is retired`},
 		{name: "rejects unknown token", input: "structs,unknown", wantErr: true, errSubstr: "unknown"},
 		{name: "rejects garbage word", input: "foo", wantErr: true},
 		{name: "rejects mixed garbage", input: "structs,bar", wantErr: true},
@@ -625,7 +635,7 @@ func TestParseScope(t *testing.T) {
 // attributes each analyzer's figures to the summary key that names its stream,
 // driven through the seams with three reports whose numbers share no value.
 //
-// The four reports reach the merge as four byte slices of one type, and each
+// The three reports reach the merge as three byte slices of one type, and each
 // decodes into a report that ignores every key it does not name, so a crossed
 // pair produces a backlog with both streams simply absent rather than a parse
 // failure. The only assertion that ran over this path checked that the summary
@@ -634,7 +644,8 @@ func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
 	originalStructs, originalActions, originalEnums := structsRun, actionsRun, enumsRun
 	t.Cleanup(func() { structsRun, actionsRun, enumsRun = originalStructs, originalActions, originalEnums })
 	structsRun = func(string, bool) ([]byte, error) {
-		return []byte(`{"packages":[{"package":"alpha","missing_input_count":7,` +
+		return []byte(`{"summary":{"packages":31,"missing_input_fields":7,"missing_output_fields":11,` +
+			`"extra_output_fields":13,"type_mismatches":29},"packages":[{"package":"alpha","missing_input_count":7,` +
 			`"missing_output_count":11,"extra_output_count":13}]}`), nil
 	}
 	actionsRun = func(string, bool) ([]byte, error) {
@@ -642,7 +653,8 @@ func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
 			`"api_methods":23,"covered_methods":20,"missing_methods":["One","Two","Three"]}]}`), nil
 	}
 	enumsRun = func(string, bool) ([]byte, bool, error) {
-		return []byte(`{"packages":[{"package":"gamma","missing_values":17,"extra_values":19}]}`), true, nil
+		return []byte(`{"summary":{"missing_values":17,"extra_values":19},` +
+			`"packages":[{"package":"gamma","missing_values":17,"extra_values":19}]}`), true, nil
 	}
 
 	path := filepath.Join(t.TempDir(), "backlog.json")
@@ -655,9 +667,12 @@ func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
 		key  string
 		want float64
 	}{
+		{key: "packages", want: 31},
+		{key: "packages_with_gaps", want: 3},
 		{key: "struct_missing_input", want: 7},
 		{key: "struct_missing_output", want: 11},
 		{key: "struct_extra_output", want: 13},
+		{key: "struct_type_mismatches", want: 29},
 		{key: "action_missing_methods", want: 3},
 		{key: "enum_missing_values", want: 17},
 		{key: "enum_extra_values", want: 19},
@@ -666,6 +681,89 @@ func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
 		t.Run(testCase.key, func(t *testing.T) {
 			if got, _ := summary[testCase.key].(float64); got != testCase.want {
 				t.Errorf("summary[%q] = %v, want %v", testCase.key, summary[testCase.key], testCase.want)
+			}
+		})
+	}
+}
+
+// TestRunMerged_Summary_DescribesTheTreeWhateverGapsOnlySays holds the merged
+// summary to the rule every stream's own summary follows: it counts the tree,
+// so -gaps-only shortens packages[] and changes no count. The three streams
+// are stand-ins that answer the way the real ones do, the same summary in
+// both modes and a list without the clean entries under the flag.
+//
+// It also holds the two counts the measurement of 2026-10-31 found wrong. A
+// client-go method no handler calls is one finding however many packages call
+// its service, so the method BetaService misses, which three packages share,
+// counts once, where the merge used to count it once per package (41 for 18
+// on the tree). And the struct stream's type mismatches reach the summary,
+// which carried no counter for them.
+func TestRunMerged_Summary_DescribesTheTreeWhateverGapsOnlySays(t *testing.T) {
+	originalStructs, originalActions, originalEnums := structsRun, actionsRun, enumsRun
+	t.Cleanup(func() { structsRun, actionsRun, enumsRun = originalStructs, originalActions, originalEnums })
+	structsRun = func(_ string, gapsOnly bool) ([]byte, error) {
+		listed := `{"package":"alpha","missing_input_count":2,"missing_output_count":3,"extra_output_count":5}`
+		if !gapsOnly {
+			listed += `,{"package":"beta"},{"package":"clean"},{"package":"gamma"}`
+		}
+		return []byte(`{"summary":{"packages":4,"packages_with_gaps":1,"missing_input_fields":2,` +
+			`"missing_output_fields":3,"extra_output_fields":5,"type_mismatches":7},"packages":[` + listed + `]}`), nil
+	}
+	actionsRun = func(_ string, gapsOnly bool) ([]byte, error) {
+		listed := `{"service":"BetaServiceInterface","packages":["alpha","beta","gamma"],"api_methods":4,"covered_methods":3,"missing_methods":["One"]}`
+		if !gapsOnly {
+			listed += `,{"service":"CleanServiceInterface","packages":["clean"],"api_methods":2,"covered_methods":2}`
+		}
+		return []byte(`{"services":[` + listed + `]}`), nil
+	}
+	enumsRun = func(string, bool) ([]byte, bool, error) {
+		return []byte(`{"summary":{"missing_values":0,"extra_values":0},"packages":[]}`), true, nil
+	}
+
+	summaries := map[bool]map[string]any{}
+	// sequential: the two runs write the two summaries compared below, not cases of their own
+	for _, gapsOnly := range []bool{false, true} {
+		path := filepath.Join(t.TempDir(), "backlog.json")
+		if err := run(context.Background(), options{scope: "all", gapsOnly: gapsOnly, outputPath: path}); err != nil {
+			t.Fatalf("run(all, gaps-only %t): %v", gapsOnly, err)
+		}
+		summaries[gapsOnly], _ = readJSONFile(t, path)["summary"].(map[string]any)
+	}
+	if !reflect.DeepEqual(summaries[false], summaries[true]) {
+		t.Errorf("the summary changes with -gaps-only:\nfull:      %v\ngaps-only: %v", summaries[false], summaries[true])
+	}
+	for _, testCase := range []struct {
+		key  string
+		want float64
+	}{
+		{key: "packages", want: 4},
+		{key: "packages_with_gaps", want: 3},
+		{key: "struct_type_mismatches", want: 7},
+		{key: "action_missing_methods", want: 1},
+	} {
+		t.Run(testCase.key, func(t *testing.T) {
+			if got, _ := summaries[true][testCase.key].(float64); got != testCase.want {
+				t.Errorf("summary[%q] = %v, want %v", testCase.key, summaries[true][testCase.key], testCase.want)
+			}
+		})
+	}
+}
+
+// TestRun_MetadataScope_IsRefusedNamingTheAuditThatGatesIt verifies R-META is
+// retired rather than left to report: the scope, alone or in the set the
+// merged backlog used to be, is refused before any analyzer runs, and the
+// refusal names the command that gates discovery metadata, so whoever ran it
+// out of habit learns where its four flags went.
+func TestRun_MetadataScope_IsRefusedNamingTheAuditThatGatesIt(t *testing.T) {
+	for _, scope := range []string{"metadata", "structs,actions,metadata,enums"} {
+		t.Run(scope, func(t *testing.T) {
+			output := filepath.Join(t.TempDir(), "out.json")
+			err := runScope(scope, output)
+			if err == nil || !strings.Contains(err.Error(), "audit_discovery_completeness") {
+				t.Fatalf("run(%q) = %v, want a refusal naming audit_discovery_completeness", scope, err)
+			}
+			if _, statErr := os.Stat(output); statErr == nil {
+				t.Errorf("run(%q) wrote a report before refusing", scope)
 			}
 		})
 	}
@@ -821,19 +919,19 @@ func TestRunSingle_UnknownScope(t *testing.T) {
 }
 
 // TestIsMergedScope_Combinations_MatchOnlyTheMergedSet verifies the merged
-// backlog runs for exactly the four merged streams. Adding the sdk scope made
-// a count-based test wrong: structs,actions,metadata,sdk also has four
-// entries and must not be merged.
+// backlog runs for exactly the three merged streams. Adding the sdk scope made
+// a count-based test wrong: structs,actions,sdk also has three entries and
+// must not be merged.
 func TestIsMergedScope_Combinations_MatchOnlyTheMergedSet(t *testing.T) {
 	cases := []struct {
 		name   string
 		scopes []string
 		want   bool
 	}{
-		{name: "the_merged_set", scopes: []string{"actions", "enums", "metadata", "structs"}, want: true},
-		{name: "old_trio_without_enums", scopes: []string{"actions", "metadata", "structs"}, want: false},
-		{name: "set_with_sdk_substituted", scopes: []string{"actions", "metadata", "sdk", "structs"}, want: false},
-		{name: "all_five", scopes: []string{"actions", "enums", "metadata", "sdk", "structs"}, want: false},
+		{name: "the_merged_set", scopes: []string{"actions", "enums", "structs"}, want: true},
+		{name: "pair_without_enums", scopes: []string{"actions", "structs"}, want: false},
+		{name: "set_with_sdk_substituted", scopes: []string{"actions", "sdk", "structs"}, want: false},
+		{name: "all_four", scopes: []string{"actions", "enums", "sdk", "structs"}, want: false},
 		{name: "single", scopes: []string{"sdk"}, want: false},
 		{name: "empty", scopes: nil, want: false},
 	}
@@ -881,8 +979,7 @@ func TestRun_ScopeSelection_RejectsUnsupportedScopes(t *testing.T) {
 	}{
 		{name: "unknown_scope", scope: "bogus", wantErr: `invalid scope "bogus"`},
 		{name: "two_scopes", scope: "structs,actions", wantErr: "other combinations are not supported"},
-		{name: "the_old_trio_without_enums", scope: "structs,actions,metadata", wantErr: "other combinations are not supported"},
-		{name: "four_scopes_that_are_not_the_merged_set", scope: "structs,actions,metadata,sdk", wantErr: "other combinations are not supported"},
+		{name: "three_scopes_that_are_not_the_merged_set", scope: "structs,actions,sdk", wantErr: "other combinations are not supported"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -897,11 +994,12 @@ func TestRun_ScopeSelection_RejectsUnsupportedScopes(t *testing.T) {
 // TestRun_EachScope_WritesItsReportShape runs the single-scope reports and
 // the merged backlog through the seam against the real tree and checks each
 // lands in its file in the analyzer's native shape: the struct report names
-// the client-go path, the action report lists services, the metadata report
-// lists packages, the enum report lists packages under the client-go path,
-// the sdk report carries the enum fields beside its services, and the merged
-// backlog carries the note and the per-stream summary. A write failure
-// surfaces as such.
+// the client-go path, the action report lists services, the enum report
+// lists packages under the client-go path, the sdk report carries the enum
+// fields beside its services, and the merged backlog carries the note and
+// the per-stream summary, which is the same with and without -gaps-only and
+// counts what each stream's own report counts. A write failure surfaces as
+// such.
 func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 	dir := t.TempDir()
 	cases := []struct {
@@ -909,7 +1007,6 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 		scope    string
 		wantKeys []string
 	}{
-		{name: "metadata", scope: "metadata", wantKeys: []string{"schema_version", "summary", "packages"}},
 		{name: "structs", scope: "structs", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
 		{name: "actions", scope: "actions", wantKeys: []string{"schema_version", "client_go_path", "summary", "services"}},
 		{name: "enums", scope: "enums", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
@@ -935,26 +1032,80 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 	}
 
 	t.Run("merged_summary_carries_every_stream", func(t *testing.T) {
-		doc := readJSONFile(t, filepath.Join(dir, "all.json"))
-		summary, _ := doc["summary"].(map[string]any)
-		for _, key := range []string{"struct_missing_input", "action_missing_methods", "meta_generic_usage", "enum_missing_values", "enum_extra_values"} {
-			t.Run(key, func(t *testing.T) {
-				if _, ok := summary[key]; !ok {
-					t.Errorf("merged summary lacks %q (keys %v)", key, keysOf(summary))
-				}
-			})
-		}
-		if note, _ := doc["note"].(string); !strings.HasPrefix(note, "Merged 1:1 audit backlog.") {
-			t.Errorf("merged note = %q, want the backlog note", note)
-		}
+		checkMergedSummaryKeys(t, readJSONFile(t, filepath.Join(dir, "all.json")))
+	})
+
+	t.Run("merged_summary_counts_what_the_streams_count_in_both_modes", func(t *testing.T) {
+		checkMergedSummaryOnTheTree(t, dir)
 	})
 
 	t.Run("write_failure", func(t *testing.T) {
-		err := runScope("metadata", dir)
+		err := runScope("actions", dir)
 		if err == nil || !strings.HasPrefix(err.Error(), "write output: ") {
 			t.Fatalf("run to a directory path = %v, want a write output error", err)
 		}
 	})
+}
+
+// checkMergedSummaryKeys holds a merged backlog to carrying the summary key
+// of each stream, no key of the retired R-META stream, and the backlog note.
+func checkMergedSummaryKeys(t *testing.T, doc map[string]any) {
+	t.Helper()
+	summary, _ := doc["summary"].(map[string]any)
+	for _, key := range []string{"packages", "packages_with_gaps", "struct_missing_input", "struct_type_mismatches", "action_missing_methods", "enum_missing_values", "enum_extra_values"} {
+		t.Run(key, func(t *testing.T) {
+			if _, ok := summary[key]; !ok {
+				t.Errorf("merged summary lacks %q (keys %v)", key, keysOf(summary))
+			}
+		})
+	}
+	for key := range summary {
+		if strings.HasPrefix(key, "meta_") {
+			t.Errorf("merged summary still carries the retired R-META key %q", key)
+		}
+	}
+	if note, _ := doc["note"].(string); !strings.HasPrefix(note, "Merged 1:1 audit backlog.") {
+		t.Errorf("merged note = %q, want the backlog note", note)
+	}
+}
+
+// checkMergedSummaryOnTheTree holds the merged summary dir's gaps-only
+// backlog carries to the one a full run writes, and each of its counts to the
+// count the stream that owns it reports in dir: a summary that summed
+// packages[] would read fewer packages and type mismatches under -gaps-only,
+// and one that summed the actions of every package would count a method once
+// per package that calls its service, 41 for the 18 the actions stream lists
+// on the tree of 2026-10-31.
+func checkMergedSummaryOnTheTree(t *testing.T, dir string) {
+	t.Helper()
+	full := filepath.Join(t.TempDir(), "full.json")
+	if err := run(context.Background(), options{scope: "all", outputPath: full}); err != nil {
+		t.Fatalf("run(all) without -gaps-only: %v", err)
+	}
+	merged, _ := readJSONFile(t, filepath.Join(dir, "all.json"))["summary"].(map[string]any)
+	if fullSummary, _ := readJSONFile(t, full)["summary"].(map[string]any); !reflect.DeepEqual(merged, fullSummary) {
+		t.Errorf("the merged summary changes with -gaps-only:\nfull:      %v\ngaps-only: %v", fullSummary, merged)
+	}
+	streams := map[string]map[string]any{}
+	for _, scope := range []string{"structs", "actions", "enums"} {
+		streams[scope], _ = readJSONFile(t, filepath.Join(dir, scope+".json"))["summary"].(map[string]any)
+	}
+	for _, testCase := range []struct{ key, scope, streamKey string }{
+		{key: "packages", scope: "structs", streamKey: "packages"},
+		{key: "struct_missing_input", scope: "structs", streamKey: "missing_input_fields"},
+		{key: "struct_missing_output", scope: "structs", streamKey: "missing_output_fields"},
+		{key: "struct_extra_output", scope: "structs", streamKey: "extra_output_fields"},
+		{key: "struct_type_mismatches", scope: "structs", streamKey: "type_mismatches"},
+		{key: "action_missing_methods", scope: "actions", streamKey: "missing_methods"},
+		{key: "enum_missing_values", scope: "enums", streamKey: "missing_values"},
+		{key: "enum_extra_values", scope: "enums", streamKey: "extra_values"},
+	} {
+		t.Run(testCase.key, func(t *testing.T) {
+			if got, want := merged[testCase.key], streams[testCase.scope][testCase.streamKey]; got != want || got == nil {
+				t.Errorf("merged %s = %v, want the %v the %s stream reports as %s", testCase.key, got, want, testCase.scope, testCase.streamKey)
+			}
+		})
+	}
 }
 
 // TestValidateDocs_Outcomes_ReportAndGate verifies the -validate-docs seam:

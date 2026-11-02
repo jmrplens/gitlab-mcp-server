@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdk"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/waits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
@@ -65,9 +66,110 @@ func TestSummarize_AggregatesServiceCounts(t *testing.T) {
 // filter does not turn into an assertion about the size of the backlog.
 func withAdjudication(t *testing.T, table map[string]string) {
 	t.Helper()
-	original, originalRaw := acceptedMissingMethods, coveredRaw
-	t.Cleanup(func() { acceptedMissingMethods, coveredRaw = original, originalRaw })
-	acceptedMissingMethods, coveredRaw = table, map[string]string{}
+	withTables(t, table, map[string]string{}, map[string]string{})
+}
+
+// withTables installs all three adjudications for the duration of the test:
+// the table acceptedMissingMethods writes, the COVERED_RAW methods the waits
+// table derives and the COVERED_GRAPHQL ones graphqlDecisions derives.
+func withTables(t *testing.T, accepted, raw, graphql map[string]string) {
+	t.Helper()
+	original, originalRaw, originalGraphQL := acceptedMissingMethods, coveredRaw, coveredGraphQL
+	t.Cleanup(func() { acceptedMissingMethods, coveredRaw, coveredGraphQL = original, originalRaw, originalGraphQL })
+	acceptedMissingMethods, coveredRaw, coveredGraphQL = accepted, raw, graphql
+}
+
+// TestCoveredGraphQL_KeptDecisions_AreTheOnlySourceOfTheDerivedMethods
+// verifies the derivation: every method a KEEP decision of the sdk scope
+// names is adjudicated COVERED_GRAPHQL with the operation and the decision's
+// reason, and nothing else is, so the method returns to the list the day
+// the decision retires. The accessor R-ROUTE reads carries none of them,
+// since the decision is where a reader takes them from.
+func TestCoveredGraphQL_KeptDecisions_AreTheOnlySourceOfTheDerivedMethods(t *testing.T) {
+	derived := sdk.CoveredGraphQLMethods()
+	if len(coveredGraphQL) != len(derived) || len(derived) == 0 {
+		t.Fatalf("coveredGraphQL holds %d methods, the KEEP decisions replace %d", len(coveredGraphQL), len(derived))
+	}
+	accessor := AcceptedMissingMethods()
+	for key, reason := range derived {
+		if coveredGraphQL[key] != coveredGraphQLCategory+reason {
+			t.Errorf("coveredGraphQL[%s] = %q, want %q", key, coveredGraphQL[key], coveredGraphQLCategory+reason)
+		}
+		if _, listed := accessor[key]; listed {
+			t.Errorf("AcceptedMissingMethods carries %s, which a KEEP decision derives", key)
+		}
+	}
+}
+
+// TestCoverageForService_KeptOperation_CoversTheMethodItReplaces is the
+// planted case of the false finding the measurement of 2026-10-31 found: a
+// service whose handlers call one method, and one more method a KEEP
+// operation reads in place of. Without the derived table the method is
+// missing, the way TerraformStates.List was; with it the method is covered,
+// and the method no decision names is still missing.
+func TestCoverageForService_KeptOperation_CoversTheMethodItReplaces(t *testing.T) {
+	use := &shared.ServiceUsage{
+		Named:    endpointInterface("WidgetsServiceInterface", "List", "Get", "Delete"),
+		Called:   map[string]struct{}{"Get": {}},
+		Packages: map[string]struct{}{"widgets": {}},
+	}
+	cases := []struct {
+		name        string
+		graphql     map[string]string
+		wantCovered int
+		wantMissing []string
+	}{
+		{name: "no_decision_names_list", graphql: map[string]string{}, wantCovered: 1, wantMissing: []string{"Delete", "List"}},
+		{name: "a_kept_operation_replaces_list", graphql: map[string]string{"Widgets.List": coveredGraphQLCategory + "widgets.listPage: pages"}, wantCovered: 2, wantMissing: []string{"Delete"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			withTables(t, map[string]string{}, map[string]string{}, tc.graphql)
+			got := coverageForService(use)
+			if got.CoveredMethods != tc.wantCovered || !reflect.DeepEqual(got.MissingMethods, tc.wantMissing) {
+				t.Errorf("coverage = %d covered, missing %v; want %d, missing %v", got.CoveredMethods, got.MissingMethods, tc.wantCovered, tc.wantMissing)
+			}
+		})
+	}
+}
+
+// TestRun_AMethodTwoTablesAnswer_IsReportedAdjudicatedTwice holds the three
+// tables apart. A method one of them answers and another answers too says
+// the same thing twice in two places that can come to disagree, and the
+// first a reader finds decides which reason they read; the waits table and
+// graphqlDecisions exist so that a COVERED_RAW or a COVERED_GRAPHQL is
+// written once, beside the code it is about. Each pair is planted, and one
+// method all three answer, against a method each table answers alone.
+//
+// It reads the report as JSON, so it asks what the published document
+// says rather than what a field of this package holds.
+func TestRun_AMethodTwoTablesAnswer_IsReportedAdjudicatedTwice(t *testing.T) {
+	withTables(t,
+		map[string]string{"Alpha.Accepted": "COVERED_GENERIC. alone", "Alpha.AcceptedRaw": "COVERED_GENERIC. one", "Alpha.AcceptedKept": "COVERED_GENERIC. one", "Alpha.All": "COVERED_GENERIC. one"},
+		map[string]string{"Alpha.Raw": "COVERED_RAW. alone", "Alpha.AcceptedRaw": "COVERED_RAW. two", "Alpha.RawKept": "COVERED_RAW. one", "Alpha.All": "COVERED_RAW. two"},
+		map[string]string{"Alpha.Kept": "COVERED_GRAPHQL. alone", "Alpha.AcceptedKept": "COVERED_GRAPHQL. two", "Alpha.RawKept": "COVERED_GRAPHQL. two", "Alpha.All": "COVERED_GRAPHQL. three"},
+	)
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	content, err := Run(root, true)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var document map[string]any
+	if unmarshalErr := json.Unmarshal(content, &document); unmarshalErr != nil {
+		t.Fatalf("the report is not JSON: %v", unmarshalErr)
+	}
+	want := []any{
+		"Alpha.AcceptedKept (acceptedMissingMethods, graphqlDecisions)",
+		"Alpha.AcceptedRaw (acceptedMissingMethods, the waits table)",
+		"Alpha.All (acceptedMissingMethods, the waits table, graphqlDecisions)",
+		"Alpha.RawKept (the waits table, graphqlDecisions)",
+	}
+	if got, _ := document["adjudicated_twice"].([]any); !reflect.DeepEqual(got, want) {
+		t.Errorf("adjudicated_twice = %v, want %v", document["adjudicated_twice"], want)
+	}
 }
 
 // TestAcceptedMissingMethods_TheAccessor_ReturnsTheTableAsACopy verifies the
@@ -229,6 +331,32 @@ func TestBuildReport_CommittedAdjudication_ReportsNoStaleEntry(t *testing.T) {
 		t.Errorf("acceptedMissingMethods adjudicates %d method(s) a handler calls directly, so each claims a coverage route that is not the one taken: %v",
 			len(rep.StaleAcceptances), rep.StaleAcceptances)
 	}
+	if len(rep.AdjudicatedTwice) != 0 {
+		t.Errorf("%d method(s) are adjudicated by more than one table, which can come to disagree: %v", len(rep.AdjudicatedTwice), rep.AdjudicatedTwice)
+	}
+}
+
+// TestBuildReport_KeptGraphQLOperation_AnswersTheMethodItReadsInPlaceOf is the
+// one false finding the measurement of 2026-10-31 found in this stream:
+// TerraformStates.List, which no handler calls because
+// terraformstates.listPage reads the states over GraphQL in its place, the
+// wrapper being unable to page, and which the sdk scope's KEEP decision for
+// that operation already explains. The stream did not read the decision, so it
+// listed the method as an action to write.
+func TestBuildReport_KeptGraphQLOperation_AnswersTheMethodItReadsInPlaceOf(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	rep, err := buildReport(root, false)
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+	for _, svc := range rep.Services {
+		if svc.Service == "TerraformStatesServiceInterface" && slices.Contains(svc.MissingMethods, "List") {
+			t.Errorf("TerraformStates.List is reported missing (%v), though graphqlDecisions keeps terraformstates.listPage in its place", svc.MissingMethods)
+		}
+	}
 }
 
 // TestBuildReport_ResolvesSDKCoverage runs the auditor against the repository and
@@ -346,6 +474,7 @@ func TestIsAcceptedMissingMethod_Keys_MatchServiceAndMethod(t *testing.T) {
 		{name: "adjudicated_variant", service: "DraftNotes", method: "PublishAllDraftNotes", want: true},
 		{name: "adjudicated_graphql_epic", service: "Epics", method: "GetEpic", want: true},
 		{name: "replaced_by_a_waits_entry", service: "Features", method: "SetFeatureFlag", want: true},
+		{name: "replaced_by_a_kept_graphql_operation", service: "TerraformStates", method: "List", want: true},
 		{name: "unlisted_method", service: "DraftNotes", method: "ListDraftNotes", want: false},
 		{name: "service_suffix_is_not_part_of_the_key", service: "DraftNotesServiceInterface", method: "PublishAllDraftNotes", want: false},
 	}
