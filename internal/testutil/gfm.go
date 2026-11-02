@@ -124,7 +124,10 @@ type GFMDocument struct {
 	// characters, before a renderer percent-encodes the destination into an
 	// href, which the specification leaves to the renderer: the long form an
 	// address keeps when it holds a pipe, [https://h/a&#124;b](https://h/a%7Cb),
-	// is not one.
+	// is not one. Nor is a link whose address no autolink can hold, which
+	// [gfmAutolinkableRe] states: [https://h/a b](<https://h/a b>) renders as
+	// its own address, yet the long form is its only spelling, so it writes
+	// nothing twice that could be written once.
 	//
 	// Three choices are deliberate. Emphasis is not modeled, so a label whose
 	// "*" or "_" form emphasis, which renders without them, is still recorded
@@ -197,6 +200,13 @@ var (
 	// the mutation tool cannot see a package-level declaration and reads the
 	// operator of a joined one as never covered.
 	gfmAngleRe = regexp.MustCompile(`^(?:<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\x01-\x20<>\x7f]*)>|<([A-Za-z0-9.!#$%&'*+/=?^_\x60{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>|<[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^"'=<>\x60 \t\r\n]+|'[^']*'|"[^"]*"))?)*[ \t]*/?>|</[A-Za-z][A-Za-z0-9-]*[ \t]*>|<!-->|<!--->|<!--.*?-->|<\?.*?\?>|<![A-Za-z][^>]*>|<!\[CDATA\[.*?\]\]>)`)
+	// gfmAutolinkableRe matches an address toolutil.MdAutolink writes as the
+	// autolink <url>: an http or https address, its scheme in either case,
+	// with something after "://" and no space, ASCII control character, '<',
+	// '>' or pipe, which would end the autolink or the table cell it sits in.
+	// Only such an address makes a self-labeled link one an autolink could
+	// replace.
+	gfmAutolinkableRe = regexp.MustCompile(`(?i)^https?://[^\x00-\x20<>|\x7f]+$`)
 	// gfmResourceOpenRe reads the opening of an inline link's resource, the
 	// parenthesis right after the label and the whitespace after it.
 	gfmResourceOpenRe = regexp.MustCompile(`^\([ \t]*`)
@@ -767,14 +777,17 @@ func (w *gfmWalk) closeLabel(i int) (int, bool) {
 // text, renders as the link's destination, the way the autolink of that
 // destination renders: a label of plain text, holding no code span, autolink,
 // image or raw HTML, whose characters are the destination's once
-// [gfmResolve] has read both. An image's label is its alt text, which no
-// autolink writes, and an empty destination is no address.
-// [GFMDocument.SelfLinks] says what the comparison leaves out.
+// [gfmResolve] has read both, and whose address an autolink can hold
+// ([gfmAutolinkableRe]), since only then does the autolink write it once. An
+// image's label is its alt text, which no autolink writes, and an empty
+// destination is no address. [GFMDocument.SelfLinks] says what the
+// comparison leaves out.
 func (w *gfmWalk) selfLabel(o gfmOpener, label, dest string) bool {
 	if o.image || dest == "" || w.spans > o.spans || len(w.links) > o.links || len(w.html) > o.html {
 		return false
 	}
-	return gfmResolve(label) == gfmResolve(dest)
+	address := gfmResolve(dest)
+	return gfmResolve(label) == address && gfmAutolinkableRe.MatchString(address)
 }
 
 // gfmResolve returns s as CommonMark renders the characters of text outside a

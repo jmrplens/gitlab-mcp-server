@@ -500,11 +500,24 @@ func TestScanGFM_SelfLinks_RecordsALabelThatIsItsDestination(t *testing.T) {
 		// shows the character.
 		{name: "a label with a space after the address", md: "[https://gitlab.example/T/7 ](https://gitlab.example/T/7)\n"},
 		{name: "the long form of an address holding a pipe", md: "[https://gitlab.example/a&#124;b](https://gitlab.example/a%7Cb)\n"},
+		// A link is one only when an autolink could hold its address, as
+		// toolutil.MdAutolink writes it: an http or https address, its scheme
+		// in either case, with something after the scheme and no space,
+		// control character, "<", ">" or pipe.
+		{name: "an address with a space, which no autolink holds", md: "[https://gitlab.example/a b](<https://gitlab.example/a b>)\n"},
+		{name: "an address with a pipe outside a table", md: "[https://gitlab.example/a|b](https://gitlab.example/a|b)\n"},
+		{name: "an address with a DEL between angle brackets", md: "[https://gitlab.example/T\x7f7](<https://gitlab.example/T\x7f7>)\n"},
+		{name: "an address with an escaped less-than sign", md: "[https://gitlab.example/a\\<b](https://gitlab.example/a\\<b)\n"},
+		{name: "an address with an escaped greater-than sign", md: "[https://gitlab.example/a\\>b](https://gitlab.example/a\\>b)\n"},
+		{name: "an address that is not http or https", md: "[ftp://gitlab.example/T](ftp://gitlab.example/T)\n"},
+		{name: "a scheme with nothing after it", md: "[https://](https://)\n"},
+		{name: "an HTTPS scheme in capitals", md: "[HTTPS://gitlab.example/T](HTTPS://gitlab.example/T)\n", want: "HTTPS://gitlab.example/T"},
 		// A label holding a construct that renders as markup is not one, even
 		// where its characters are the destination's; emphasis is not modeled,
 		// so a label it would format is still one, since it writes the address
 		// a second time all the same.
 		{name: "a label of a span whose placeholder is the destination", md: "[`x`](￼)\n"},
+		{name: "a label ending in a span whose placeholder ends an address", md: "[https://gitlab.example/`x`](https://gitlab.example/￼)\n"},
 		{name: "a label of an autolink", md: "[<https://gitlab.example/T/7>](\\<https://gitlab.example/T/7\\>)\n"},
 		{name: "a label of raw HTML", md: "[<b>](\\<b\\>)\n"},
 		{name: "a label emphasis would format", md: "[https://gitlab.example/_a_](https://gitlab.example/_a_)\n", want: "https://gitlab.example/_a_"},
