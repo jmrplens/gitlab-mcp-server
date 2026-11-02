@@ -55,7 +55,7 @@ func TestDependencyScanNames_Literals_SpellWhatTheyName(t *testing.T) {
 		{name: "the CI workflow", got: ciWorkflow, want: workflowDir + "/ci.yml"},
 		{name: "the scan command", got: scanCommand, want: "make " + dependencyScanTarget},
 		{name: "the assignment pattern", got: strings.TrimPrefix(osvImageAssignment.String(), "(?m)^")[:len(osvImageVariable)], want: osvImageVariable},
-		{name: "the scanner run pattern", got: strings.TrimPrefix(osvScannerRun.String(), `\$\(`)[:len(osvImageVariable)], want: osvImageVariable},
+		{name: "the scanner run pattern", got: strings.SplitN(osvScannerRun.String(), `\$\(`, 2)[1][:len(osvImageVariable)], want: osvImageVariable},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -79,11 +79,18 @@ func TestDependencyScanNames_Literals_SpellWhatTheyName(t *testing.T) {
 // audit judges, without the pass that reads the allow lists nothing holds the
 // lockfiles to every advisory on their terms, and without the pass that
 // honors no allow list a malicious package an entry sets aside by its GHSA or
-// CVE alias would pass. A pass is one run of the image, up to the end of its
-// shell command, so the cases put two on one line and carry one over a
-// backslash as the Makefile does.
+// CVE alias would pass. A pass is one docker run of the image, up to the end
+// of its shell command, so the cases put two on one line, carry one over a
+// backslash as the Makefile does and write a redirection with & inside one;
+// a docker pull or an echo that names the image is no pass, and a --config
+// no pass carries, in the variable the passes expand or anywhere else, is a
+// finding, since which pass it reaches is not written where the rule reads.
 func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 	t.Parallel()
+
+	const notRun = "Makefile: the recipe of check-dependency-vulns does not run $(OSV_SCANNER_IMAGE), so the image pinned above is not the scanner that decides"
+	const configOutsidePass = "Makefile: the recipe of check-dependency-vulns writes --config outside every docker run of $(OSV_SCANNER_IMAGE), " +
+		"in a variable or another command, so this audit cannot tell which pass it reaches nor which pass reads the osv-scanner.toml beside each lockfile"
 
 	const noAllowListPass = "Makefile: the recipe of check-dependency-vulns has no pass without --config, the one that reads the osv-scanner.toml " +
 		"beside each lockfile, so no scan holds the lockfiles to every advisory on the terms the allow lists this audit judges set"
@@ -151,6 +158,36 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 			want: []string{namedConfig},
 		},
 		{
+			name: "the image pulled, then two passes under the empty config",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\tdocker pull $(OSV_SCANNER_IMAGE)\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source --config /dev/null /src\n\tdocker run $(OSV_SCANNER_IMAGE) scan source --config=/dev/null --format json /src\n",
+			want: []string{noAllowListPass},
+		},
+		{
+			name: "the image echoed, then one pass under the empty config",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\t@echo scanning with $(OSV_SCANNER_IMAGE)\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source --config /dev/null /src\n",
+			want: []string{noAllowListPass},
+		},
+		{
+			name: "the image only pulled, another scanner run",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\tdocker pull $(OSV_SCANNER_IMAGE)\n" +
+				"\tosv-scanner scan source /src\n",
+			want: []string{notRun, noAllowListPass, noUnfilteredPass},
+		},
+		{
+			name: "the empty config in the variable both passes expand",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\t@scan=\"--config /dev/null scan source\"; \\\n\tdocker run \"$(OSV_SCANNER_IMAGE)\" $$scan /src; \\\n" +
+				"\tdocker run \"$(OSV_SCANNER_IMAGE)\" $$scan --config /dev/null /src\n",
+			want: []string{configOutsidePass},
+		},
+		{
+			name: "a redirection written with & before the empty config",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src 2>&1\n\tdocker run 2>&1 $(OSV_SCANNER_IMAGE) scan source 2>&1 --config /dev/null /src <&0\n",
+		},
+		{
 			name:     "an empty config beside a named one",
 			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" + scanRecipe + "\tdocker run $(OSV_SCANNER_IMAGE) scan source --config=ci.toml /src\n",
 			want:     []string{namedConfig},
@@ -158,12 +195,7 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 		{
 			name:     "a recipe that runs another scanner and one allow list",
 			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\tosv-scanner scan source --config osv-scanner.toml -r .\n",
-			want: []string{
-				"Makefile: the recipe of check-dependency-vulns does not run $(OSV_SCANNER_IMAGE), so the image pinned above is not the scanner that decides",
-				namedConfig,
-				noAllowListPass,
-				noUnfilteredPass,
-			},
+			want:     []string{notRun, namedConfig, configOutsidePass, noAllowListPass, noUnfilteredPass},
 		},
 	}
 

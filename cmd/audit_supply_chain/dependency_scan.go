@@ -104,11 +104,13 @@ const unfilteredConfig = "/dev/null"
 // spelled with a space or an equals sign.
 var osvConfigFlag = regexp.MustCompile(`--config(?:=|[ \t]+)(\S*)`)
 
-// osvScannerRun finds each pass of the scanner in a recipe, a run of
-// $(OSV_SCANNER_IMAGE), and what the recipe hands it: everything after the
-// image up to the end of its shell command, a ;, & or | or a line that does
-// not end in a backslash.
-var osvScannerRun = regexp.MustCompile(`\$\(OSV_SCANNER_IMAGE\)((?:\\\n|[^;&|\n])*)`)
+// osvScannerRun finds each pass of the scanner in a recipe, a docker run
+// whose image is $(OSV_SCANNER_IMAGE), named in that command, and what the
+// recipe hands the image: everything after it up to the end of its shell
+// command, a ;, & or | that is not the & of a redirection such as 2>&1, or a
+// line that does not end in a backslash. A docker pull, an echo or a
+// variable that names the image is no pass.
+var osvScannerRun = regexp.MustCompile(`\bdocker[ \t]+run\b(?:\\\n|[<>]&|[^;&|\n])*?\$\(OSV_SCANNER_IMAGE\)((?:\\\n|[<>]&|[^;&|\n])*)`)
 
 // readConfig is a seam over readTextFile for the osv-scanner.toml files, so a
 // test can drive the branch a file the tests own never produces as root: a
@@ -145,8 +147,12 @@ func checkDependencyScan(root string) ([]string, error) {
 // makefileScanProblems holds the Makefile's dependency scan to running the
 // scanner image it pins by digest, to reading the allow list beside each
 // lockfile rather than one file a --config would put in all their places, and
-// to its two passes: one without --config, which reads those allow lists, and
-// one under --config /dev/null, which no allow list narrows.
+// to its two passes, each a docker run of the image: one without --config,
+// which reads those allow lists, and one under --config /dev/null, which no
+// allow list narrows. A --config no pass carries, in a variable the passes
+// expand or in another command, is a finding too, since which pass it
+// reaches, and so which pass reads the allow lists, is not written where this
+// rule reads it.
 func makefileScanProblems(makefile string) []string {
 	problems := osvImageProblems(osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1))
 	rule := parseMakefile(makefile)[dependencyScanTarget]
@@ -154,11 +160,13 @@ func makefileScanProblems(makefile string) []string {
 		return append(problems, fmt.Sprintf("Makefile: no rule makes %s, so nothing holds the lockfiles to the dependency advisories", dependencyScanTarget))
 	}
 	recipe := strings.Join(rule.recipe, "\n")
-	if !strings.Contains(recipe, "$("+osvImageVariable+")") {
+	runs := osvScannerRun.FindAllStringSubmatch(recipe, -1)
+	if len(runs) == 0 {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s does not run $(%s), so the image pinned above is not the scanner that decides",
 			dependencyScanTarget, osvImageVariable))
 	}
-	named := strings.Count(recipe, "--config")
+	configs := strings.Count(recipe, "--config")
+	named := configs
 	for _, flag := range osvConfigFlag.FindAllStringSubmatch(recipe, -1) {
 		if flag[1] == unfilteredConfig {
 			named--
@@ -168,10 +176,15 @@ func makefileScanProblems(makefile string) []string {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s passes --config naming something other than %s, which puts one file in place of the %s beside each lockfile, the allow lists this audit judges",
 			dependencyScanTarget, unfilteredConfig, osvConfigName))
 	}
-	allowListed, unfiltered := false, false
-	for _, run := range osvScannerRun.FindAllStringSubmatch(recipe, -1) {
+	outside, allowListed, unfiltered := configs, false, false
+	for _, run := range runs {
+		outside -= strings.Count(run[1], "--config")
 		allowListed = allowListed || !strings.Contains(run[1], "--config")
 		unfiltered = unfiltered || slices.ContainsFunc(osvConfigFlag.FindAllStringSubmatch(run[1], -1), func(flag []string) bool { return flag[1] == unfilteredConfig })
+	}
+	if outside > 0 {
+		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s writes --config outside every docker run of $(%s), in a variable or another command, so this audit cannot tell which pass it reaches nor which pass reads the %s beside each lockfile",
+			dependencyScanTarget, osvImageVariable, osvConfigName))
 	}
 	if !allowListed {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s has no pass without --config, the one that reads the %s beside each lockfile, so no scan holds the lockfiles to every advisory on the terms the allow lists this audit judges set",

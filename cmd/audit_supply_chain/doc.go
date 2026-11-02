@@ -171,10 +171,12 @@
 //     a file there would replace the osv-scanner.toml beside each lockfile,
 //     and runs the image in both passes, one without --config, which reads
 //     those allow lists, and one under --config /dev/null, a pass being one
-//     run of the image up to the end of its shell command: OSV-Scanner sets
-//     an advisory aside with all of its aliases, so an entry naming a
-//     malicious package's GHSA or CVE id sets its MAL- one aside, and only a
-//     pass that honors no allow list sees it. A job of ci.yml runs that
+//     docker run of the image, named in that command, up to the end of its
+//     shell command, and a --config no pass carries, in a variable the
+//     passes expand or another command, a finding: OSV-Scanner sets an
+//     advisory aside with all of its aliases, so an entry naming a malicious
+//     package's GHSA or CVE id sets its MAL- one aside, and only a pass that
+//     honors no allow list sees it. A job of ci.yml runs that
 //     target from the root Makefile as the whole run block of a step,
 //     comments aside, under no if:, no continue-on-error: and no shell: of
 //     the job's, the step's or a defaults.run.shell, with no MAKEFLAGS,
