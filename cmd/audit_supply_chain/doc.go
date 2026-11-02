@@ -172,13 +172,19 @@
 //     and runs the image in both passes, one without --config, which reads
 //     those allow lists, and one under --config /dev/null, a pass being one
 //     docker run of the image, named in that command, up to the end of its
-//     shell command, and a --config no pass carries, in a variable the
-//     passes expand or another command, a finding: OSV-Scanner sets an
+//     shell command, -config counting as --config, since OSV-Scanner reads
+//     it so, and a --config the recipe writes outside every pass, in a shell
+//     variable it assigns or another command, a finding: OSV-Scanner sets an
 //     advisory aside with all of its aliases, so an entry naming a malicious
 //     package's GHSA or CVE id sets its MAL- one aside, and only a pass that
-//     honors no allow list sees it. A job of ci.yml runs that
-//     target from the root Makefile as the whole run block of a step,
-//     comments aside, under no if:, no continue-on-error: and no shell: of
+//     honors no allow list sees it. The rule reads the recipe as the Makefile
+//     writes it, comment lines aside, and not what make expands into it: a
+//     --config in a make variable assigned outside the recipe, a
+//     target-specific variable or an included makefile is not seen, and the
+//     words of a docker run of the image read as a pass even inside an echo.
+//     A job of ci.yml runs that target from the root Makefile as the whole
+//     run block of a step, comments aside, under no if:, no continue-on-error:
+//     and no shell: of
 //     the job's, the step's or a defaults.run.shell, with no MAKEFLAGS,
 //     GNUMAKEFLAGS, MAKEFILES, BASH_ENV, OSV_SCANNER_IMAGE or
 //     DEPENDENCY_VULNS_ variable in the workflow's, the job's or the step's

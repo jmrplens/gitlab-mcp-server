@@ -100,9 +100,16 @@ var pinnedOSVImage = regexp.MustCompile(`^[^@\s]+@sha256:[0-9a-f]{64}$`)
 // does.
 const unfilteredConfig = "/dev/null"
 
-// osvConfigFlag finds each --config the recipe passes and the word it names,
-// spelled with a space or an equals sign.
-var osvConfigFlag = regexp.MustCompile(`--config(?:=|[ \t]+)(\S*)`)
+// osvConfigOption is what every spelling of OSV-Scanner's --config contains
+// once: its command line, urfave/cli v3, reads a long option after one dash
+// as well as two, so -config names it too. The rule counts it wherever the
+// recipe writes it, inside another word as well, since a --config it cannot
+// read is one it cannot place.
+const osvConfigOption = "-config"
+
+// osvConfigFlag finds each --config or -config the recipe passes and the word
+// it names, spelled with a space or an equals sign.
+var osvConfigFlag = regexp.MustCompile(`--?config(?:=|[ \t]+)(\S*)`)
 
 // osvScannerRun finds each pass of the scanner in a recipe, a docker run
 // whose image is $(OSV_SCANNER_IMAGE), named in that command, and what the
@@ -149,23 +156,30 @@ func checkDependencyScan(root string) ([]string, error) {
 // lockfile rather than one file a --config would put in all their places, and
 // to its two passes, each a docker run of the image: one without --config,
 // which reads those allow lists, and one under --config /dev/null, which no
-// allow list narrows. A --config no pass carries, in a variable the passes
-// expand or in another command, is a finding too, since which pass it
-// reaches, and so which pass reads the allow lists, is not written where this
-// rule reads it.
+// allow list narrows. A --config the recipe writes outside every pass, in a
+// shell variable it assigns or in another command, is a finding too, since
+// which pass it reaches, and so which pass reads the allow lists, is not
+// written where this rule reads it.
+//
+// The rule reads the recipe's lines as the Makefile writes them, a comment
+// line aside, and does not expand them as make does: a --config that reaches
+// a pass through a make variable assigned outside the recipe, a
+// target-specific variable or an included makefile is not seen, and the words
+// of a docker run of the image read as a pass wherever they stand, in an echo
+// or as another image's arguments included.
 func makefileScanProblems(makefile string) []string {
 	problems := osvImageProblems(osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1))
 	rule := parseMakefile(makefile)[dependencyScanTarget]
 	if rule == nil {
 		return append(problems, fmt.Sprintf("Makefile: no rule makes %s, so nothing holds the lockfiles to the dependency advisories", dependencyScanTarget))
 	}
-	recipe := strings.Join(rule.recipe, "\n")
+	recipe := stripComments(strings.Join(rule.recipe, "\n"))
 	runs := osvScannerRun.FindAllStringSubmatch(recipe, -1)
 	if len(runs) == 0 {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s does not run $(%s), so the image pinned above is not the scanner that decides",
 			dependencyScanTarget, osvImageVariable))
 	}
-	configs := strings.Count(recipe, "--config")
+	configs := strings.Count(recipe, osvConfigOption)
 	named := configs
 	for _, flag := range osvConfigFlag.FindAllStringSubmatch(recipe, -1) {
 		if flag[1] == unfilteredConfig {
@@ -178,8 +192,8 @@ func makefileScanProblems(makefile string) []string {
 	}
 	outside, allowListed, unfiltered := configs, false, false
 	for _, run := range runs {
-		outside -= strings.Count(run[1], "--config")
-		allowListed = allowListed || !strings.Contains(run[1], "--config")
+		outside -= strings.Count(run[1], osvConfigOption)
+		allowListed = allowListed || !strings.Contains(run[1], osvConfigOption)
 		unfiltered = unfiltered || slices.ContainsFunc(osvConfigFlag.FindAllStringSubmatch(run[1], -1), func(flag []string) bool { return flag[1] == unfilteredConfig })
 	}
 	if outside > 0 {

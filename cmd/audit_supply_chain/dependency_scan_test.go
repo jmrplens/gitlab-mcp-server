@@ -56,6 +56,7 @@ func TestDependencyScanNames_Literals_SpellWhatTheyName(t *testing.T) {
 		{name: "the scan command", got: scanCommand, want: "make " + dependencyScanTarget},
 		{name: "the assignment pattern", got: strings.TrimPrefix(osvImageAssignment.String(), "(?m)^")[:len(osvImageVariable)], want: osvImageVariable},
 		{name: "the scanner run pattern", got: strings.SplitN(osvScannerRun.String(), `\$\(`, 2)[1][:len(osvImageVariable)], want: osvImageVariable},
+		{name: "the config flag pattern", got: strings.Replace(osvConfigFlag.String(), "-?", "", 1)[:len(osvConfigOption)], want: osvConfigOption},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -85,6 +86,9 @@ func TestDependencyScanNames_Literals_SpellWhatTheyName(t *testing.T) {
 // a docker pull or an echo that names the image is no pass, and a --config
 // no pass carries, in the variable the passes expand or anywhere else, is a
 // finding, since which pass it reaches is not written where the rule reads.
+// OSV-Scanner reads -config as it reads --config, so the cases spell it both
+// ways, and a comment line of the recipe runs nothing, so one that names the
+// empty config is no finding and a pass commented out is no pass.
 func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 	t.Parallel()
 
@@ -186,6 +190,33 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 			name: "a redirection written with & before the empty config",
 			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
 				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src 2>&1\n\tdocker run 2>&1 $(OSV_SCANNER_IMAGE) scan source 2>&1 --config /dev/null /src <&0\n",
+		},
+		{
+			name: "the empty config spelled with one dash",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src\n\tdocker run $(OSV_SCANNER_IMAGE) scan source -config /dev/null --format json /src\n",
+		},
+		{
+			name:     "a named config spelled with one dash",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" + scanRecipe + "\tdocker run $(OSV_SCANNER_IMAGE) scan source -config=ci.toml /src\n",
+			want:     []string{namedConfig},
+		},
+		{
+			name: "the empty config spelled with one dash in the variable both passes expand",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\t@scan=\"-config /dev/null scan source\"; \\\n\tdocker run \"$(OSV_SCANNER_IMAGE)\" $$scan /src; \\\n" +
+				"\tdocker run \"$(OSV_SCANNER_IMAGE)\" $$scan --config /dev/null /src\n",
+			want: []string{configOutsidePass},
+		},
+		{
+			name:     "a comment line of the recipe that names the empty config",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\t# the second pass runs under --config /dev/null, which honors no allow list\n" + scanRecipe,
+		},
+		{
+			name: "the pass under the empty config commented out",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src\n\t# docker run $(OSV_SCANNER_IMAGE) scan source --config /dev/null /src\n",
+			want: []string{noUnfilteredPass},
 		},
 		{
 			name:     "an empty config beside a named one",
