@@ -107,10 +107,12 @@ type binarySearch struct {
 const binaryName = "gitlab-mcp-server"
 
 // binarySearches are the four release binaries, in the order they are
-// looked for.
+// looked for. The Windows name is written out rather than built from
+// binaryName, since a concatenation in an initializer is not code a test
+// can cover.
 var binarySearches = []binarySearch{
 	{entry: "server/gitlab-mcp-server", part: "darwin_all", name: binaryName},
-	{entry: "server/gitlab-mcp-server.exe", part: "windows_amd64", name: binaryName + ".exe"},
+	{entry: "server/gitlab-mcp-server.exe", part: "windows_amd64", name: "gitlab-mcp-server.exe"},
 	{entry: "server/linux/gitlab-mcp-server-linux-amd64", part: "linux_amd64", name: binaryName},
 	{entry: "server/linux/gitlab-mcp-server-linux-arm64", part: "linux_arm64", name: binaryName},
 }
