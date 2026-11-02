@@ -5,10 +5,12 @@ package testutil
 
 import (
 	"cmp"
+	"html"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // GFMHintsHeading is the heading the server writes over its next-step hints,
@@ -109,8 +111,33 @@ type GFMDocument struct {
 	// SelfLinks are the inline links, outside fences, quotes and code spans,
 	// whose label is their own destination, [url](url): the address written
 	// twice where the autolink <url> writes it once (issue 1396). Each is
-	// recorded as the destination. An image is not one, since no autolink
-	// can stand in for it.
+	// recorded as the destination, as written. An image is not one, since no
+	// autolink can stand in for it.
+	//
+	// The label is its destination when the link renders as that autolink
+	// does, the destination's text inside the anchor: the label holds plain
+	// text and nothing that renders as markup (no code span, raw HTML,
+	// autolink or image), and its characters are the destination's once
+	// CommonMark's backslash escapes and character references are resolved on
+	// both sides, so [https://h/a\_b](https://h/a_b) is one, and so is
+	// [https://h/?a&amp;b](https://h/?a&b). The comparison is between
+	// characters, before a renderer percent-encodes the destination into an
+	// href, which the specification leaves to the renderer: the long form an
+	// address keeps when it holds a pipe, [https://h/a&#124;b](https://h/a%7Cb),
+	// is not one.
+	//
+	// Three choices are deliberate. Emphasis is not modeled, so a label whose
+	// "*" or "_" form emphasis, which renders without them, is still recorded
+	// when its characters are the destination's: it writes the address a
+	// second time all the same, which is what the rule counts, and GFM's
+	// strikethrough, text between tildes, is read the same way. A numeric
+	// reference to a control character other than a tab, a line feed, a form
+	// feed and a carriage return (C0, DEL and C1) or to a noncharacter
+	// (U+FDD0 to U+FDEF and the last two code points of each plane) is that
+	// code point, as the specification reads it, where micromark writes
+	// U+FFFD, and commonmark.js reads a C1 one through the Windows-1252 table.
+	// And a reference link is not read at all, for the reason [walkInline]
+	// gives.
 	SelfLinks []string
 	// Bare is where a raw tag is a live tag rather than text: every line
 	// outside a fence, its code spans elided and its raw HTML listed. It
@@ -146,6 +173,12 @@ var (
 	// backslash and the ASCII punctuation character it makes literal. A
 	// backslash before anything else is a backslash.
 	gfmEscapeRe = regexp.MustCompile(`^\\[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_\x60{|}~]`)
+	// gfmReferenceRe reads a character reference at the start of the text, as
+	// CommonMark spells one between "&" and ";": a decimal number of one to
+	// seven digits, its first group; a hexadecimal one of one to six after an
+	// "x" or an "X", its second; or a name, which is a reference only when
+	// HTML5 defines it, the question [gfmReference] asks.
+	gfmReferenceRe = regexp.MustCompile(`^&(?:#([0-9]{1,7})|#[Xx]([0-9A-Fa-f]{1,6})|[A-Za-z][A-Za-z0-9]{1,31});`)
 	// gfmAngleRe reads what a "<" at the start of the text opens, in the order
 	// CommonMark tries it: an autolink, an absolute URI between angle brackets
 	// whose address is the first group (a scheme of two to thirty-two
@@ -533,20 +566,24 @@ type gfmLink struct {
 }
 
 // gfmOpener is a "[" or a "![" that may still open a link or an image: where
-// it sits, where its label begins in the bare text, how many links and how
-// much raw HTML the walk had read when it opened, which is where an image's
-// description begins in each, and whether a link formed inside it, which
-// leaves it nothing but a bracket.
+// it sits, where its label begins in the bare text, how many code spans and
+// links and how much raw HTML the walk had read when it opened, which is
+// where an image's description begins in each and what tells a label of
+// plain text from one holding a construct, and whether a link formed inside
+// it, which leaves it nothing but a bracket.
 type gfmOpener struct {
-	at, label, links, html int
-	image, inactive        bool
+	at, label, spans, links, html int
+	image, inactive               bool
 }
 
-// gfmWalk is the state of one inline walk.
+// gfmWalk is the state of one inline walk. runs indexes the line's backtick
+// strings by length, each length's starts left to right, which is where a
+// span's closing string is looked up; spans counts the spans the walk read.
 type gfmWalk struct {
 	line    string
-	runs    []backtickSpan
+	runs    map[int][]int
 	bare    strings.Builder
+	spans   int
 	links   []gfmLink
 	html    []string
 	openers []gfmOpener
@@ -649,15 +686,17 @@ func (w *gfmWalk) construct(i int) (int, bool) {
 // into [gfmCodeSpanPlaceholder], when a later string of the same length
 // closes it, and the string as literal text when none does. The closing
 // string is looked for among the line's runs as written, since nothing
-// inside a span is anything but text.
+// inside a span is anything but text: it is the first run of that length
+// that starts after byte i, found by a binary search of that length's starts,
+// so a line of many spans is not read again from its first run for each one.
 func (w *gfmWalk) codeSpan(i int) int {
 	rest := w.line[i:]
 	n := len(rest) - len(strings.TrimLeft(rest, "`"))
-	for _, run := range w.runs {
-		if run.start > i && run.length == n {
-			w.bare.WriteString(gfmCodeSpanPlaceholder)
-			return run.end()
-		}
+	starts := w.runs[n]
+	if k, _ := slices.BinarySearch(starts, i+1); k < len(starts) {
+		w.spans++
+		w.bare.WriteString(gfmCodeSpanPlaceholder)
+		return starts[k] + n
 	}
 	w.bare.WriteString(rest[:n])
 	return i + n
@@ -688,7 +727,7 @@ func (w *gfmWalk) angle(i int) (int, bool) {
 // open records a label opened at byte i, whose text begins at offset label of
 // the bare text.
 func (w *gfmWalk) open(i, label int, image bool) {
-	w.openers = append(w.openers, gfmOpener{at: i, label: label, links: len(w.links), html: len(w.html), image: image})
+	w.openers = append(w.openers, gfmOpener{at: i, label: label, spans: w.spans, links: len(w.links), html: len(w.html), image: image})
 }
 
 // closeLabel reads the "]" at byte i. It closes the latest label still open,
@@ -718,10 +757,93 @@ func (w *gfmWalk) closeLabel(i int) (int, bool) {
 			}
 		}
 	}
-	w.links = append(w.links, gfmLink{at: o.at, dest: dest, self: !o.image && dest != "" && label == dest})
+	w.links = append(w.links, gfmLink{at: o.at, dest: dest, self: w.selfLabel(o, label, dest)})
 	end := i + 1 + n
 	w.bare.WriteString(w.line[i:end])
 	return end, true
+}
+
+// selfLabel reports whether the label o opened, read as label from the bare
+// text, renders as the link's destination, the way the autolink of that
+// destination renders: a label of plain text, holding no code span, autolink,
+// image or raw HTML, whose characters are the destination's once
+// [gfmResolve] has read both. An image's label is its alt text, which no
+// autolink writes, and an empty destination is no address.
+// [GFMDocument.SelfLinks] says what the comparison leaves out.
+func (w *gfmWalk) selfLabel(o gfmOpener, label, dest string) bool {
+	if o.image || dest == "" || w.spans > o.spans || len(w.links) > o.links || len(w.html) > o.html {
+		return false
+	}
+	return gfmResolve(label) == gfmResolve(dest)
+}
+
+// gfmResolve returns s as CommonMark renders the characters of text outside a
+// code span, an autolink and raw HTML, and of a link destination: a backslash
+// escape as the punctuation character it makes literal, a character reference
+// as the character it stands for, a U+0000 byte as the U+FFFD the
+// specification replaces it with, and every other byte as it is. It ranges
+// over s and skips what an escape or a reference consumed, as [walkInline]
+// does over a line.
+func gfmResolve(s string) string {
+	var text strings.Builder
+	next := 0
+	for i := range len(s) {
+		if i < next {
+			continue
+		}
+		if s[i] == 0 {
+			text.WriteString("�")
+			continue
+		}
+		if gfmEscapeRe.MatchString(s[i:]) {
+			text.WriteByte(s[i+1])
+			next = i + 2
+			continue
+		}
+		if m := gfmReferenceRe.FindStringSubmatch(s[i:]); m != nil {
+			text.WriteString(gfmReference(m))
+			next = i + len(m[0])
+			continue
+		}
+		text.WriteByte(s[i])
+	}
+	return text.String()
+}
+
+// gfmReference returns what a character reference renders as, given its
+// match of gfmReferenceRe. A numeric one is the character it numbers, read as
+// the specification reads it: U+0000, a surrogate and a number past U+10FFFF
+// are U+FFFD, and every other code point is itself. A named one is the
+// character, or the two, that HTML5 gives the name, and a name HTML5 does not
+// define is no reference, so it is text as written. [html.UnescapeString]
+// knows every name, and it also reads the legacy ones HTML5 accepts without a
+// semicolon, such as "&amp" in "&ampx;", which CommonMark does not: the name
+// is one exactly when the semicolon was part of what it decoded, so decoding
+// the reference whole differs from decoding it without its semicolon and
+// writing the semicolon after.
+func gfmReference(m []string) string {
+	if m[1] != "" {
+		return gfmCodePoint(m[1], 10)
+	}
+	if m[2] != "" {
+		return gfmCodePoint(m[2], 16)
+	}
+	decoded := html.UnescapeString(m[0])
+	if decoded == html.UnescapeString(strings.TrimSuffix(m[0], ";"))+";" {
+		return m[0]
+	}
+	return decoded
+}
+
+// gfmCodePoint returns the character a numeric reference's digits number in
+// base: U+FFFD for zero, and for a number that is no Unicode scalar value,
+// which converting it to a string already gives.
+func gfmCodePoint(digits string, base int) string {
+	code, _ := strconv.ParseInt(digits, base, 32)
+	if code == 0 {
+		return string(utf8.RuneError)
+	}
+	return string(rune(code))
 }
 
 // gfmResource reads the resource s opens with, "(destination "title")", and
@@ -793,13 +915,10 @@ type backtickSpan struct {
 	start, length int
 }
 
-// end returns the index just past the run.
-func (r backtickSpan) end() int {
-	return r.start + r.length
-}
-
-// backtickRuns lists the maximal runs of backticks in line, left to right.
-func backtickRuns(line string) []backtickSpan {
+// backtickRuns indexes the maximal runs of backticks in line by length: for
+// each length, where the runs of that length start, left to right, which is
+// the order [gfmWalk.codeSpan] searches.
+func backtickRuns(line string) map[int][]int {
 	var runs []backtickSpan
 	for i := range len(line) {
 		if line[i] != '`' {
@@ -811,7 +930,11 @@ func backtickRuns(line string) []backtickSpan {
 		}
 		runs = append(runs, backtickSpan{start: i, length: 1})
 	}
-	return runs
+	starts := map[int][]int{}
+	for _, run := range runs {
+		starts[run.length] = append(starts[run.length], run.start)
+	}
+	return starts
 }
 
 // gfmPipeSegments splits a line on the pipes GFM splits a row on: the same

@@ -425,6 +425,16 @@ func TestScanGFM_RawHTML_ListsWhatARendererPassesThrough(t *testing.T) {
 // destination is recorded, wherever the line model reads links, and nothing
 // else is, an autolink, a link with a real label, and a label that is only
 // close to its destination included.
+//
+// The label and the destination are compared as CommonMark renders their
+// characters, so a backslash escape or a character reference on either side
+// is the character it stands for: [https://h/a\_b](https://h/a_b) renders as
+// its own address and used to go unrecorded. micromark 4.0.3, patched to the
+// specification as [TestScanGFM_Links_ReadsOnlyABracketedLabel] says, renders
+// every case here as its expectation says, except the two the doc comment of
+// [GFMDocument.SelfLinks] names as deliberate: a label that emphasis would
+// format, and a numeric reference to a control character or a noncharacter,
+// which micromark replaces with U+FFFD and the specification keeps.
 func TestScanGFM_SelfLinks_RecordsALabelThatIsItsDestination(t *testing.T) {
 	cases := []struct {
 		name string
@@ -452,6 +462,52 @@ func TestScanGFM_SelfLinks_RecordsALabelThatIsItsDestination(t *testing.T) {
 		{name: "one inside an image's description is alt text", md: "![[https://gitlab.example/T/7](https://gitlab.example/T/7)](https://gitlab.example/I/7)\n"},
 		{name: "an empty link is not one", md: "[]()\n"},
 		{name: "a label holding a span is not one", md: "[`https://gitlab.example/T/7`](https://gitlab.example/T/7)\n"},
+		// A backslash escape is the punctuation character it makes literal,
+		// in the label and in the destination, whichever form the destination
+		// takes; an escaped backslash is a backslash, and so is one before a
+		// letter. Each is recorded as its destination is written.
+		{name: "an escaped underscore in the label", md: "[https://gitlab.example/a\\_b](https://gitlab.example/a_b)\n", want: "https://gitlab.example/a_b"},
+		{name: "an escaped underscore in the destination", md: "[https://gitlab.example/a_b](https://gitlab.example/a\\_b)\n", want: "https://gitlab.example/a\\_b"},
+		{name: "an escaped underscore on both sides", md: "[https://gitlab.example/a\\_b](https://gitlab.example/a\\_b)\n", want: "https://gitlab.example/a\\_b"},
+		{name: "an escaped underscore beside a destination between angle brackets", md: "[https://gitlab.example/a\\_b](<https://gitlab.example/a_b>)\n", want: "https://gitlab.example/a_b"},
+		{name: "an escaped underscore inside a destination between angle brackets", md: "[https://gitlab.example/a_b](<https://gitlab.example/a\\_b>)\n", want: "https://gitlab.example/a\\_b"},
+		{name: "an escaped backslash leaves the underscore after it", md: "[https://gitlab.example/\\\\_](https://gitlab.example/\\_)\n"},
+		{name: "a backslash before a letter is a backslash", md: "[https://gitlab.example/\\a](https://gitlab.example/\\a)\n", want: "https://gitlab.example/\\a"},
+		// A character reference is the character it stands for, on either
+		// side: a name HTML5 defines, a decimal number and a hexadecimal one.
+		// A name HTML5 does not define, a reference without its semicolon and
+		// one whose "&" is escaped are text as written.
+		{name: "an entity in the label", md: "[https://gitlab.example/?a=1&amp;b=2](https://gitlab.example/?a=1&b=2)\n", want: "https://gitlab.example/?a=1&b=2"},
+		{name: "an entity in the destination", md: "[https://gitlab.example/?a=1&b=2](https://gitlab.example/?a=1&amp;b=2)\n", want: "https://gitlab.example/?a=1&amp;b=2"},
+		{name: "a decimal reference", md: "[https://gitlab.example/&#95;](https://gitlab.example/_)\n", want: "https://gitlab.example/_"},
+		{name: "a hexadecimal reference", md: "[https://gitlab.example/&#X5f;](https://gitlab.example/_)\n", want: "https://gitlab.example/_"},
+		{name: "an entity of two code points", md: "[https://gitlab.example/&ngE;](https://gitlab.example/≧̸)\n", want: "https://gitlab.example/≧̸"},
+		{name: "a name HTML5 does not define is text", md: "[https://gitlab.example/&ampx;](https://gitlab.example/&x;)\n"},
+		{name: "a reference without its semicolon is text", md: "[https://gitlab.example/&amp](https://gitlab.example/&)\n"},
+		{name: "an escaped ampersand opens no reference", md: "[https://gitlab.example/\\&amp;](https://gitlab.example/&amp;)\n"},
+		// U+0000 is U+FFFD by reference and by byte, and a reference to a C1
+		// code point is that code point, as the specification reads it, where
+		// micromark writes U+FFFD for it, as it does for the other controls
+		// and the noncharacters.
+		{name: "a reference to U+0000", md: "[https://gitlab.example/&#0;](https://gitlab.example/&#xFFFD;)\n", want: "https://gitlab.example/&#xFFFD;"},
+		{name: "a U+0000 byte in the label", md: "[https://gitlab.example/\x00](https://gitlab.example/&#0;)\n", want: "https://gitlab.example/&#0;"},
+		{name: "a U+0000 byte in the destination", md: "[https://gitlab.example/�](https://gitlab.example/\x00)\n", want: "https://gitlab.example/\x00"},
+		{name: "a reference to U+0000 against the byte", md: "[https://gitlab.example/&#0;](https://gitlab.example/\x00)\n", want: "https://gitlab.example/\x00"},
+		{name: "a reference to a C1 code point", md: "[https://gitlab.example/&#x80;](https://gitlab.example/\u0080)\n", want: "https://gitlab.example/\u0080"},
+		// What the label shows is compared whole: a space it adds is not the
+		// destination's, nor is the long form an address an autolink cannot
+		// hold keeps, whose destination is percent-encoded where its label
+		// shows the character.
+		{name: "a label with a space after the address", md: "[https://gitlab.example/T/7 ](https://gitlab.example/T/7)\n"},
+		{name: "the long form of an address holding a pipe", md: "[https://gitlab.example/a&#124;b](https://gitlab.example/a%7Cb)\n"},
+		// A label holding a construct that renders as markup is not one, even
+		// where its characters are the destination's; emphasis is not modeled,
+		// so a label it would format is still one, since it writes the address
+		// a second time all the same.
+		{name: "a label of a span whose placeholder is the destination", md: "[`x`](￼)\n"},
+		{name: "a label of an autolink", md: "[<https://gitlab.example/T/7>](\\<https://gitlab.example/T/7\\>)\n"},
+		{name: "a label of raw HTML", md: "[<b>](\\<b\\>)\n"},
+		{name: "a label emphasis would format", md: "[https://gitlab.example/_a_](https://gitlab.example/_a_)\n", want: "https://gitlab.example/_a_"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -554,6 +610,10 @@ func TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes(t *testing.T) {
 		// A second span on the line is read after the first one ends, not
 		// from inside it.
 		{name: "two spans on one line are both elided", md: "- `<a>` and `<b>` <c>\n", want: "- " + gfmCodeSpanPlaceholder + " and " + gfmCodeSpanPlaceholder + " <c>"},
+		// A string is closed by the first run of its own length that starts
+		// after it, past runs of other lengths, and never by one before it.
+		{name: "spans of two lengths interleave", md: "- `a` ``b`` `c` ``d`` <e>\n", want: "- " + gfmCodeSpanPlaceholder + " " + gfmCodeSpanPlaceholder + " " + gfmCodeSpanPlaceholder + " " + gfmCodeSpanPlaceholder + " <e>"},
+		{name: "a run of its length before a string closes nothing", md: "- `a` `b <c>\n", want: "- " + gfmCodeSpanPlaceholder + " `b <c>"},
 		{name: "a span inside one cell is elided", md: "| `<a>` | x |\n| --- | --- |\n", want: "| " + gfmCodeSpanPlaceholder + " | x |"},
 		// An escaped pipe is content of its cell, so the row is tokenized
 		// around it and the span beside it still closes. Splitting on it would
