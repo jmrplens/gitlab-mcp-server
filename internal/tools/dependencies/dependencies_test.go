@@ -826,8 +826,8 @@ func TestFormatExportMarkdown(t *testing.T) {
 			want: heading +
 				"- **ID**: 1\n" +
 				"- **Finished**: " + toolutil.BoolEmoji(true) + "\n" +
-				"- **Self**: https://example.com/self\n" +
-				"- **Download**: https://example.com/download\n" + hints,
+				"- **Self**: https\\://example.com/self\n" +
+				"- **Download**: https\\://example.com/download\n" + hints,
 		},
 		{
 			name:  "renders unfinished export without download URL",
@@ -835,7 +835,7 @@ func TestFormatExportMarkdown(t *testing.T) {
 			want: heading +
 				"- **ID**: 2\n" +
 				"- **Finished**: " + toolutil.BoolEmoji(false) + "\n" +
-				"- **Self**: https://example.com/self\n" + hints,
+				"- **Self**: https\\://example.com/self\n" + hints,
 		},
 		{
 			name:  "renders export without self or download URLs",

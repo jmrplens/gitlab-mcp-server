@@ -12232,6 +12232,85 @@ func TestFormatSearchOutput_RequiredParamsCellNamesTheAlternatives(t *testing.T)
 	}
 }
 
+// TestCompactGuidance_CatalogAddress_StaysAsWritten verifies the guidance cell
+// of both discovery renderers keeps the addresses a usage note and a parameter
+// example spell. A caller copies them, so the backslash the cell escaper writes
+// for a value GitLab authored would reach the model inside the example, while
+// what could end the cell is still escaped.
+func TestCompactGuidance_CatalogAddress_StaysAsWritten(t *testing.T) {
+	const (
+		usage     = "Keep the git@ prefix of git@gitlab.example.com:a/b.git | see www.example.com"
+		wantUsage = "Keep the git@ prefix of git@gitlab.example.com:a/b.git &#124; see www.example.com"
+	)
+	t.Run("find", func(t *testing.T) {
+		got := compactFindGuidance(FindResult{
+			Usage:          usage,
+			RequiredParams: []string{"url"},
+			ParamGuidance:  map[string]toolutil.ParameterGuidance{"url": {ExampleBinding: `params.url:"https://example.com/repo.git"`}},
+		})
+		want := wantUsage + " `url` example params.url:\"https://example.com/repo.git\"."
+		if got != want {
+			t.Errorf("compactFindGuidance() = %q, want %q", got, want)
+		}
+	})
+	t.Run("search", func(t *testing.T) {
+		if got := compactSearchGuidance(SearchResult{Usage: usage}); got != wantUsage {
+			t.Errorf("compactSearchGuidance() = %q, want %q", got, wantUsage)
+		}
+	})
+}
+
+// TestActionRowCells_GuidanceAndWhy_TakeTheEscaperTheirTextNeeds verifies the
+// two cells that are escaped where they are written apart: the guidance is the
+// catalog's own prose and keeps its address, and the why can quote the caller's
+// query, so an address in it is escaped as any value is.
+func TestActionRowCells_GuidanceAndWhy_TakeTheEscaperTheirTextNeeds(t *testing.T) {
+	cells := actionRowCells(actionRow{
+		id:       "project.mirror_add",
+		guidance: `params.url:"https://example.com/repo.git" a|b`,
+		why:      `canonical_id matched "https://attacker.invalid/y"`,
+	}, actionColumns{guidance: true, why: true})
+	got := cells[len(cells)-2:]
+	want := []string{
+		`params.url:"https://example.com/repo.git" a&#124;b`,
+		`canonical_id matched "https\://attacker.invalid/y"`,
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("actionRowCells() guidance and why = %q, want %q", got, want)
+	}
+}
+
+// TestFormatDescribeOutput_CatalogAddress_StaysAsWritten verifies the two rows
+// of the describe card that carry the catalog's own prose keep its addresses,
+// as the finder's table does, while a pipe in them is still escaped and a
+// value the catalog does not hold is not written as a row at all.
+func TestFormatDescribeOutput_CatalogAddress_StaysAsWritten(t *testing.T) {
+	got := formatDescribeOutput(DescribeOutput{Count: 1, Actions: []ActionDescription{{
+		ID:             "project.mirror_add",
+		Usage:          "Keep git@gitlab.example.com:a/b.git | as it is",
+		RequiredParams: []string{"url"},
+		ParamGuidance:  map[string]toolutil.ParameterGuidance{"url": {ExampleBinding: `params.url:"https://example.com/repo.git"`}},
+	}}})
+	t.Run("the usage row", func(t *testing.T) {
+		want := "- **Usage**: Keep git@gitlab.example.com:a/b.git &#124; as it is\n"
+		if !strings.Contains(got, want) {
+			t.Errorf("formatDescribeOutput() = %q, want it to hold %q", got, want)
+		}
+	})
+	t.Run("the guidance row", func(t *testing.T) {
+		want := "- **Parameter guidance**: `url` example params.url:\"https://example.com/repo.git\".\n"
+		if !strings.Contains(got, want) {
+			t.Errorf("formatDescribeOutput() = %q, want it to hold %q", got, want)
+		}
+	})
+	t.Run("an action with no prose has neither row", func(t *testing.T) {
+		bare := formatDescribeOutput(DescribeOutput{Count: 1, Actions: []ActionDescription{{ID: "project.get"}}})
+		if strings.Contains(bare, "**Usage**") || strings.Contains(bare, "**Parameter guidance**") {
+			t.Errorf("formatDescribeOutput(no prose) = %q, want neither row", bare)
+		}
+	})
+}
+
 // TestFormatDescribeOutput_RequiredParamsNameTheAlternatives verifies the
 // describe card's requirement line: the alternatives follow the params every
 // call needs, and an action that needs only one of its alternatives still has

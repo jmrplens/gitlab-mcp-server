@@ -739,7 +739,7 @@ func TestFormatMarkdown_MilestoneTitlesAreEscapedOneAtATime(t *testing.T) {
 
 	want := "## Release: Escaping\n\n" +
 		"- **Tag**: v3.0.0\n" +
-		"- **Milestones**: a&#124;b, &#91;c](http://attacker.invalid/)\n" +
+		"- **Milestones**: a&#124;b, &#91;c](http\\://attacker.invalid/)\n" +
 		cardHints
 
 	if got != want {

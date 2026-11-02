@@ -200,7 +200,7 @@ func TestFormatMarkMarkdown_HostileStatus(t *testing.T) {
 		Version: 7,
 	})
 	want := "## Mark Migration\n\n" +
-		"- **Status**: &lt;a href=\"http://attacker.invalid\">x&lt;/a> ## Injected\n" +
+		"- **Status**: &lt;a href=\"http\\://attacker.invalid\">x&lt;/a> ## Injected\n" +
 		"- **Version**: 7\n" +
 		markHints
 	if got != want {

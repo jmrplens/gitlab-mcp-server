@@ -557,7 +557,7 @@ func TestFormatLicenseMarkdown(t *testing.T) {
 		"- **Licensee**:\n" +
 		"  - **Name**: John\n" +
 		"  - **Company**: Acme\n" +
-		"  - **Email**: john@acme.com\n" +
+		"  - **Email**: john\\@acme.com\n" +
 		licenseHints
 	if got != want {
 		t.Errorf("FormatLicenseMarkdown() =\n%q\nwant:\n%q", got, want)
@@ -719,7 +719,7 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 		"- **Licensee**:\n" +
 		"  - **Name**: Jane\n" +
 		"  - **Company**: Corp\n" +
-		"  - **Email**: jane@corp.com\n" +
+		"  - **Email**: jane\\@corp.com\n" +
 		licenseHints
 	if got != want {
 		t.Errorf("FormatLicenseMarkdown() =\n%q\nwant:\n%q", got, want)
@@ -752,7 +752,7 @@ func licenseCard(id int64, plan, name, company, email string) string {
 func TestFormatGetMarkdown_Coverage(t *testing.T) {
 	out := GetOutput{License: Item{ID: 1, Plan: "premium", Licensee: LicenseeItem{Name: "A", Company: "B", Email: "c@d.com"}}}
 	got := markdownText(t, FormatGetMarkdown(out))
-	want := licenseCard(1, "premium", "A", "B", "c@d.com")
+	want := licenseCard(1, "premium", "A", "B", `c\@d.com`)
 	if got != want {
 		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
@@ -763,7 +763,7 @@ func TestFormatGetMarkdown_Coverage(t *testing.T) {
 func TestFormatAddMarkdown_Coverage(t *testing.T) {
 	out := AddOutput{License: Item{ID: 3, Plan: "gold", Licensee: LicenseeItem{Name: "X", Company: "Y", Email: "x@y.com"}}}
 	got := markdownText(t, FormatAddMarkdown(out))
-	want := licenseCard(3, "gold", "X", "Y", "x@y.com")
+	want := licenseCard(3, "gold", "X", "Y", `x\@y.com`)
 	if got != want {
 		t.Errorf("FormatAddMarkdown() =\n%q\nwant:\n%q", got, want)
 	}

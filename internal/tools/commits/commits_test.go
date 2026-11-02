@@ -2196,7 +2196,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 
 	want := "## Commit abc12\n\n" +
 		"- **Title**: feat: init\n" +
-		"- **Author**: Alice (a@t.com)\n" +
+		"- **Author**: Alice (a\\@t.com)\n" +
 		"- **Date**: 1 Jan 2026\n" +
 		"- **URL**: <https://example.com>\n" +
 		commitCardHints
@@ -2395,7 +2395,7 @@ func TestFormatDetailMarkdown(t *testing.T) {
 
 	want := "## Commit abc\n\n" +
 		"- **Title**: feat: test\n" +
-		"- **Author**: Bob (b@t.com)\n" +
+		"- **Author**: Bob (b\\@t.com)\n" +
 		"- **Parents**: `p1, p2`\n" +
 		"- **Stats**: +10 -3 (13 total)\n" +
 		"- **URL**: <https://example.com>\n" +
@@ -2728,7 +2728,7 @@ func TestFormatGPGSignatureMarkdown(t *testing.T) {
 
 	want := "## Commit Signature\n\n" +
 		"- **Verification**: verified\n" +
-		"- **Key User**: Test (t@t.com)\n" +
+		"- **Key User**: Test (t\\@t.com)\n" +
 		"- **Key ID**: 1\n" +
 		"- **Primary Key ID**: `ABC123`\n" +
 		commitSignatureHints
@@ -2777,8 +2777,8 @@ func TestFormatGPGSignatureMarkdown_X509(t *testing.T) {
 	want := "## Commit Signature\n\n" +
 		"- **Type**: X509\n" +
 		"- **Verification**: unverified\n" +
-		"- **X.509 Subject**: CN=gitlab@example.org,OU=Example,O=World\n" +
-		"- **X.509 Email**: gitlab@example.org\n" +
+		"- **X.509 Subject**: CN=gitlab\\@example.org,OU=Example,O=World\n" +
+		"- **X.509 Email**: gitlab\\@example.org\n" +
 		commitSignatureHints
 
 	if got != want {
@@ -2799,7 +2799,7 @@ func TestFormatGPGSignatureMarkdown_AbsentX509Subject(t *testing.T) {
 	want := "## Commit Signature\n\n" +
 		"- **Type**: X509\n" +
 		"- **Verification**: unverified\n" +
-		"- **X.509 Email**: gitlab@example.org\n" +
+		"- **X.509 Email**: gitlab\\@example.org\n" +
 		commitSignatureHints
 
 	if got != want {
@@ -3703,9 +3703,9 @@ func TestFormatOutputMarkdown_AuthorIdentity(t *testing.T) {
 		email string
 		want  string
 	}{
-		{name: "name and address", who: "Alice", email: "a@t.com", want: "\n- **Author**: Alice (a@t.com)\n"},
+		{name: "name and address", who: "Alice", email: "a@t.com", want: "\n- **Author**: Alice (a\\@t.com)\n"},
 		{name: "name alone", who: "Alice", want: "\n- **Author**: Alice\n"},
-		{name: "address alone", email: "a@t.com", want: "\n- **Author**: a@t.com\n"},
+		{name: "address alone", email: "a@t.com", want: "\n- **Author**: a\\@t.com\n"},
 		{name: "neither", want: ""},
 	}
 	for _, tc := range cases {

@@ -549,7 +549,7 @@ func TestWriteFullWebhooksSection_URLWithCredentials_RendersOriginOnly(t *testin
 			}
 		})
 	}
-	for _, want := range []string{"https://hooks.example.com/...", "https://short.example.com/..."} {
+	for _, want := range []string{`https\://hooks.example.com/...`, `https\://short.example.com/...`} {
 		t.Run("renders "+want, func(t *testing.T) {
 			if !strings.Contains(got, want) {
 				t.Errorf("webhook section missing redacted origin %q:\n%s", want, got)

@@ -710,8 +710,8 @@ func TestFormatPipelineSecuritySummaryMarkdown_ScansTheirMessagesAndResources(t 
 		"### Scanned Resources\n\n" +
 		"| Scanner | Method | URL |\n" +
 		"| --- | --- | --- |\n" +
-		"| DAST | GET | https://app.example/login |\n" +
-		"| DAST | POST | https://app.example/session |\n" +
+		"| DAST | GET | https\\://app.example/login |\n" +
+		"| DAST | POST | https\\://app.example/session |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'security_finding.list' to read the findings these scanners reported\n" +
 		"- Use action 'vulnerability.severity_count' to see the project's counts by severity\n"

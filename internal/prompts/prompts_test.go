@@ -506,7 +506,7 @@ func TestLatestPipelinePrompts_GitLabsOwnAnswer_CarryNoFallback(t *testing.T) {
 			if strings.Contains(text, "Head SHA") || strings.Contains(text, "**Note**") {
 				t.Errorf("prompt text names a fallback for GitLab's own answer:\n%s", text)
 			}
-			if !strings.Contains(text, "**URL**: https://gitlab.example.com/pipelines/100\n\n") {
+			if !strings.Contains(text, "**URL**: <https://gitlab.example.com/pipelines/100>\n\n") {
 				t.Errorf("prompt text does not close the pipeline block after its URL:\n%s", text)
 			}
 		})

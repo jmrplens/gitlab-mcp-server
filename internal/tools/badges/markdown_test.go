@@ -67,7 +67,7 @@ func TestFormatBadgeListMarkdown(t *testing.T) {
 			"## Project Badges (1)\n\n"+
 				"| ID | Name | Link URL | Image URL | Kind |\n"+
 				"| --- | --- | --- | --- | --- |\n"+
-				"| 1 | coverage | https://example.com/%{project_path} | https://img.shields.io/%{project_path} | project |\n"+
+				"| 1 | coverage | https\\://example.com/%{project_path} | https\\://img.shields.io/%{project_path} | project |\n"+
 				"\nPage 1 of 1 | 1 items total | 20 per page\n"+
 				badgeListHints)
 	})
@@ -81,7 +81,7 @@ func TestFormatBadgeListMarkdown(t *testing.T) {
 				"Showing 1 of 45 results (page 1 of 45)\n\n"+
 				"| ID | Name | Link URL | Image URL | Kind |\n"+
 				"| --- | --- | --- | --- | --- |\n"+
-				"| 1 | coverage | https://example.com/%{project_path} | https://img.shields.io/%{project_path} | project |\n"+
+				"| 1 | coverage | https\\://example.com/%{project_path} | https\\://img.shields.io/%{project_path} | project |\n"+
 				"\nPage 1 of 45 | 45 items total | 1 per page\n"+
 				badgeListHints)
 	})
@@ -97,10 +97,10 @@ func TestFormatBadgeMarkdown(t *testing.T) {
 	t.Run("every field populated", func(t *testing.T) {
 		assertRendered(t, badgeText(t, FormatBadgeMarkdown(storedBadge)),
 			"## Badge: coverage (ID: 1)\n\n"+
-				"- **Link URL**: https://example.com/%{project_path}\n"+
-				"- **Image URL**: https://img.shields.io/%{project_path}\n"+
-				"- **Rendered Link**: https://example.com/group/project\n"+
-				"- **Rendered Image**: https://img.shields.io/group/project\n"+
+				"- **Link URL**: https\\://example.com/%{project_path}\n"+
+				"- **Image URL**: https\\://img.shields.io/%{project_path}\n"+
+				"- **Rendered Link**: https\\://example.com/group/project\n"+
+				"- **Rendered Image**: https\\://img.shields.io/group/project\n"+
 				"- **Kind**: project\n"+
 				badgeCardHints)
 	})
@@ -125,10 +125,10 @@ func TestFormatBadgeMarkdown(t *testing.T) {
 // no offer to edit a badge that does not exist.
 func TestFormatBadgePreview(t *testing.T) {
 	want := "## Badge Preview\n\n" +
-		"- **Link URL**: https://example.com/%{project_path}\n" +
-		"- **Image URL**: https://img.shields.io/%{project_path}\n" +
-		"- **Rendered Link**: https://example.com/group/project\n" +
-		"- **Rendered Image**: https://img.shields.io/group/project\n" +
+		"- **Link URL**: https\\://example.com/%{project_path}\n" +
+		"- **Image URL**: https\\://img.shields.io/%{project_path}\n" +
+		"- **Rendered Link**: https\\://example.com/group/project\n" +
+		"- **Rendered Image**: https\\://img.shields.io/group/project\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'project.badge_add' to add the badge to a project once the rendered URLs look right\n" +
 		"- Use action 'group.badge_add' to add it to a group instead\n"
@@ -152,10 +152,10 @@ func TestFormatBadgeNotFound_HostileResourceAndHints_ReachThePageAsText(t *testi
 		Hints:      []string{"<a href=\"http://attacker.invalid\">List</a> the badges", "Check the badge ID"},
 	}))
 
-	want := "## " + toolutil.EmojiQuestion + " Project &lt;a href=\"http://attacker.invalid\">Badge&lt;/a> Not Found\n\n" +
-		"The project &lt;a href=\"http://attacker.invalid\">badge&lt;/a> **7** does not exist or is not accessible with your current permissions.\n" +
+	want := "## " + toolutil.EmojiQuestion + " Project &lt;a href=\"http\\://attacker.invalid\">Badge&lt;/a> Not Found\n\n" +
+		"The project &lt;a href=\"http\\://attacker.invalid\">badge&lt;/a> **7** does not exist or is not accessible with your current permissions.\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- &lt;a href=\"http://attacker.invalid\">List&lt;/a> the badges\n" +
+		"- &lt;a href=\"http\\://attacker.invalid\">List&lt;/a> the badges\n" +
 		"- Check the badge ID\n"
 	assertRendered(t, got, want)
 }

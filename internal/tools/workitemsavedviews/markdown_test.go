@@ -139,7 +139,7 @@ func TestFormatMutateMarkdown_HostileMessage_ReachesTheNoteAsText(t *testing.T) 
 		"- **Private**: ❌\n" +
 		"- **Subscribed**: ❌\n" +
 		"- **Sort**: CREATED_DESC\n" +
-		"\nSuccessfully created &lt;a href=\"http://attacker.invalid\">a view&lt;/a>.\n"
+		"\nSuccessfully created &lt;a href=\"http\\://attacker.invalid\">a view&lt;/a>.\n"
 	got := FormatMutateMarkdown(MutateOutput{
 		Status:    "success",
 		Message:   "Successfully created <a href=\"http://attacker.invalid\">a view</a>.",

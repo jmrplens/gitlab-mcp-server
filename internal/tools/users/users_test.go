@@ -1799,7 +1799,7 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 		"## GitLab User: Alice Smith\n\n"+
 			"- **ID**: 1\n"+
 			"- **Username**: alice\n"+
-			"- **Email**: alice@example.com\n"+
+			"- **Email**: alice\\@example.com\n"+
 			"- **State**: active\n"+
 			"- **Bio**: Go developer\n"+
 			"- **Admin**: ✅\n"+
@@ -1909,8 +1909,8 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 		"## GitLab Users (2)\n\n"+
 			"| ID | Username | Name | Email | State |\n"+
 			"| --- | --- | --- | --- | --- |\n"+
-			"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice@example.com | active |\n"+
-			"| 2 | [@bob](https://gitlab.example.com/bob) | Bob | bob@example.com | blocked |\n"+
+			"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice\\@example.com | active |\n"+
+			"| 2 | [@bob](https://gitlab.example.com/bob) | Bob | bob\\@example.com | blocked |\n"+
 			"\nPage 1 of 1 | 2 items total | 20 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- When presenting these results, always include the clickable links from the table so the user can navigate to GitLab\n"+
@@ -2063,8 +2063,8 @@ func TestFormatEmailListMarkdownString_WithData(t *testing.T) {
 		"## Email Addresses (2)\n\n"+
 			"| ID | Email | Confirmed |\n"+
 			"| --- | --- | --- |\n"+
-			"| 1 | primary@example.com | ✅ 1 Jan 2026 00:00 UTC |\n"+
-			"| 2 | alias@example.com | ❌ awaiting confirmation |\n"+
+			"| 1 | primary\\@example.com | ✅ 1 Jan 2026 00:00 UTC |\n"+
+			"| 2 | alias\\@example.com | ❌ awaiting confirmation |\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'user.current' to view your full profile\n")
 }
@@ -2084,7 +2084,7 @@ func TestFormatEmailListMarkdownString_APageOfALongerList(t *testing.T) {
 			"Showing 1 of 2 results (page 1 of 2)\n\n"+
 			"| ID | Email | Confirmed |\n"+
 			"| --- | --- | --- |\n"+
-			"| 1 | primary@example.com | ✅ 1 Jan 2026 00:00 UTC |\n"+
+			"| 1 | primary\\@example.com | ✅ 1 Jan 2026 00:00 UTC |\n"+
 			"\nPage 1 of 2 | 2 items total | 1 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'user.current' to view your full profile\n")

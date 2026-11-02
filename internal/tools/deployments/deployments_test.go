@@ -1589,7 +1589,7 @@ func TestFormatApproveOrRejectMarkdown_HostileMessage_ReachesThePageAsText(t *te
 		Message: "Deployment #10\n<a href=\"http://attacker.invalid\">approved</a>",
 	})
 
-	want := "✅ Deployment #10 &lt;a href=\"http://attacker.invalid\">approved&lt;/a>\n" + confirmHints
+	want := "✅ Deployment #10 &lt;a href=\"http\\://attacker.invalid\">approved&lt;/a>\n" + confirmHints
 	if got != want {
 		t.Errorf("confirmation mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}

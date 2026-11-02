@@ -59,10 +59,16 @@ Where GitLab sent a web URL, the cell or the row links to it: the IID of a merge
 | [!243](https://gitlab.example.com/group/project/-/merge_requests/243) | Fix login bug | 🟢 opened | @alice | group/project | feature/fix-login -> main |
 ```
 
-An address shown as itself, such as the `URL` row of a card, is written once, as an autolink, rather than twice as `[url](url)`. It is still a link, and a client renders it as one:
+An address the server links, such as the `URL` row of an issue's card, is written once, as an autolink, rather than twice as `[url](url)`. It is still a link, and a client renders it as one:
 
 ```markdown
 - **URL**: <https://gitlab.example.com/group/project/-/issues/42>
+```
+
+An address that is a value rather than a link the server writes, such as the destination of a system hook, is not a link, except in the renderers [the security page says still link it](/gitlab-mcp-server/operations/security/#content-written-by-other-people). It goes as text with its colon escaped, and a client shows the same address:
+
+```markdown
+- **URL**: https\://example.com/hook
 ```
 
 Both halves of a link are escaped, so a title cannot close the link or open one of its own, and an address that is not `http` or `https` is shown as code instead of being linked. An address carrying a character an autolink cannot hold (a space, a tab, a line break, `<`, `>` or a pipe) is written in the long form instead, with both halves escaped. A list whose table carries links opens its next steps with one more line, written for the model:

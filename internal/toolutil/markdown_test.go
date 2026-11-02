@@ -1135,7 +1135,7 @@ func TestFormatDiscussionMarkdown(t *testing.T) {
 // nothing at all about a raw tag.
 func TestFormatDiscussionMarkdown_HostileNoteBody_ReachesThePageAsText(t *testing.T) {
 	const anchor = `<a href="http://attacker.invalid">x</a>`
-	const escaped = `&lt;a href="http://attacker.invalid">x&lt;/a>`
+	const escaped = `&lt;a href="http\://attacker.invalid">x&lt;/a>`
 
 	t.Run("a one-line body is escaped", func(t *testing.T) {
 		md := FormatDiscussionMarkdown(NewDiscussionMarkdown("abc123", []NoteMarkdown{
@@ -1180,8 +1180,8 @@ var hostileThreadIDs = []struct {
 	{name: "heading", id: "x\n## injected", escaped: "x ## injected"},
 	{name: "item", id: "x\n- injected", escaped: "x - injected"},
 	{name: "fence", id: "x\n```\ninjected", escaped: "x ``` injected"},
-	{name: "html", id: `<a href="http://attacker.invalid">x</a>`, escaped: `&lt;a href="http://attacker.invalid">x&lt;/a>`},
-	{name: "link", id: "[x](http://attacker.invalid/y)", escaped: "&#91;x](http://attacker.invalid/y)"},
+	{name: "html", id: `<a href="http://attacker.invalid">x</a>`, escaped: `&lt;a href="http\://attacker.invalid">x&lt;/a>`},
+	{name: "link", id: "[x](http://attacker.invalid/y)", escaped: `&#91;x](http\://attacker.invalid/y)`},
 	{name: "guidance", id: "x\n" + hintsBlockOpening + "- injected", escaped: "x --- " + defusedHintsHeading + " - injected"},
 }
 

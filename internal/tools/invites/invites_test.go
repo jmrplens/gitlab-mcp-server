@@ -267,8 +267,8 @@ func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 		},
 	}
 	want := "## Pending Invitations (2)\n\n" + pendingListHeader +
-		"| alice@example.com | Developer (30) | alice |  |  | 31 Dec 2026 00:00 UTC |\n" +
-		"| bob@example.com | Maintainer (40) |  |  |  |  |\n" +
+		"| alice\\@example.com | Developer (30) | alice |  |  | 31 Dec 2026 00:00 UTC |\n" +
+		"| bob\\@example.com | Maintainer (40) |  |  |  |  |\n" +
 		pendingListHints
 	if got := FormatListPendingMarkdownString(out); got != want {
 		t.Errorf("FormatListPendingMarkdownString =\n%q\nwant\n%q", got, want)
@@ -294,7 +294,7 @@ func TestFormatInviteResultMarkdownString(t *testing.T) {
 		"- **Status**: success\n" +
 		"\n### Messages\n\n" +
 		"| Invitee | Message |\n| --- | --- |\n" +
-		"| alice@example.com | Invite sent |\n" +
+		"| alice\\@example.com | Invite sent |\n" +
 		inviteResultHints
 	if got := FormatInviteResultMarkdownString(out); got != want {
 		t.Errorf("FormatInviteResultMarkdownString =\n%q\nwant\n%q", got, want)
@@ -314,9 +314,9 @@ func TestFormatInviteResultMarkdownString_MessagesAreOrdered(t *testing.T) {
 		"- **Status**: success\n" +
 		"\n### Messages\n\n" +
 		"| Invitee | Message |\n| --- | --- |\n" +
-		"| alice@example.com | first |\n" +
-		"| bob@example.com | second |\n" +
-		"| carol@example.com | third |\n" +
+		"| alice\\@example.com | first |\n" +
+		"| bob\\@example.com | second |\n" +
+		"| carol\\@example.com | third |\n" +
 		inviteResultHints
 	for range 8 {
 		if got := FormatInviteResultMarkdownString(out); got != want {
@@ -695,7 +695,7 @@ func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 		t.Fatal("expected TextContent")
 	}
 	want := "## Pending Invitations (1)\n\n" + pendingListHeader +
-		"| test@example.com | Developer (30) |  |  |  |  |\n" +
+		"| test\\@example.com | Developer (30) |  |  |  |  |\n" +
 		pendingListHints
 	if tc.Text != want {
 		t.Errorf("CallToolResult text =\n%q\nwant\n%q", tc.Text, want)
@@ -1600,7 +1600,7 @@ func TestFormatListPendingMarkdownString_OptionalColumns(t *testing.T) {
 			}},
 		})
 		want := "## Pending Invitations (1)\n\n" + pendingListHeader +
-			"| alice@example.com | Developer (30) | alice |  |  | 31 Jan 2027 00:00 UTC |\n" +
+			"| alice\\@example.com | Developer (30) | alice |  |  | 31 Jan 2027 00:00 UTC |\n" +
 			pendingListHints
 		if got != want {
 			t.Errorf("FormatListPendingMarkdownString =\n%q\nwant\n%q", got, want)
@@ -1611,7 +1611,7 @@ func TestFormatListPendingMarkdownString_OptionalColumns(t *testing.T) {
 			Invitations: []PendingInviteOutput{{InviteEmail: "alice@example.com", AccessLevel: 30}},
 		})
 		want := "## Pending Invitations (1)\n\n" + pendingListHeader +
-			"| alice@example.com | Developer (30) |  |  |  |  |\n" +
+			"| alice\\@example.com | Developer (30) |  |  |  |  |\n" +
 			pendingListHints
 		if got != want {
 			t.Errorf("FormatListPendingMarkdownString =\n%q\nwant\n%q", got, want)
@@ -1629,7 +1629,7 @@ func TestPendingInvitations_MarkdownLeavesTheTokenOut(t *testing.T) {
 		}},
 	})
 	want := "## Pending Invitations (1)\n\n" + pendingListHeader +
-		"| alice@example.com | Developer (30) |  |  |  |  |\n" +
+		"| alice\\@example.com | Developer (30) |  |  |  |  |\n" +
 		pendingListHints
 	if got != want {
 		t.Errorf("FormatListPendingMarkdownString =\n%q\nwant\n%q", got, want)
@@ -1692,7 +1692,7 @@ func TestFormatInviteResultMarkdownString_BothKeyedTables(t *testing.T) {
 		"- **Status**: success\n" +
 		"\n### Messages\n\n" +
 		"| Invitee | Message |\n| --- | --- |\n" +
-		"| alice@example.com | Invite sent |\n" +
+		"| alice\\@example.com | Invite sent |\n" +
 		"\n### Queued for Administrator Approval\n\n" +
 		"| User | Message |\n| --- | --- |\n" +
 		"| bob_user | Request queued for administrator approval. |\n" +

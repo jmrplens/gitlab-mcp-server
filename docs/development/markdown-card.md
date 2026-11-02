@@ -205,12 +205,22 @@ func cardInline(s string) string { return DefuseHintsHeading(EscapeMdTableCell(s
 ```
 
 `EscapeMdTableCell` drops control bytes, writes `|` as `&#124;`, `<` as
-`&lt;`, `[` as `&#91;`, and collapses CR, LF and CRLF to a space.
+`&lt;`, `[` as `&#91;`, collapses CR, LF and CRLF to a space, and puts a
+backslash in front of what opens a GFM literal autolink: the `:` of
+`http://`, `https://` and `ftp://`, the `.` of `www.`, and an `@` after a
+byte an email address can hold.
 `DefuseHintsHeading` rewrites the server's own guidance heading to its entity
 form so a value carrying it is shown as text. This is the containment
 `internal/prompts` applies to every inline value (`untrusted.go:34`), moved
 into the card because a tool result annotated for the assistant is
 model-instruction payload on the same terms as a prompt message.
+
+`EscapeMdServerProse` is the cell escaper without the literal autolink step,
+for a sentence the server wrote whose addresses a caller copies: the catalog's
+usage notes and parameter examples, in the discovery table's guidance cell and
+in the describe card, which writes them through `Markdown`. It is never for a
+value GitLab or a caller wrote, and `make check-md-escaping` does not count it
+as an escaper, so a value the gate follows through it needs a directive.
 
 ## The mark rule
 
@@ -243,17 +253,17 @@ its quote, or between table rows.
 
 ## What is escaped, and by what
 
-| Written                                                                         | Helper                                                                                                                                                                     | What it neutralizes                                                              |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Card, Section, Table and Fence headings                                         | `EscapeMdHeading`                                                                                                                                                          | leading `#`, line breaks, `<`, `[`, control bytes                                |
-| Labels, Field, FieldOr, Flag emoji and label, one-line Text, table column names | `cardInline`                                                                                                                                                               | `\|`, `<`, `[`, line breaks, control bytes, the guidance heading                 |
-| Link text and URL                                                               | `MdTitleLink` (cell escaper, then `EscapeMdLinkLabel` on the label, `EscapeMdLinkDestination` on the URL)                                                                  | a label closing the link, a destination ending early or splitting the cell       |
-| URL, and a link whose text is its own address                                   | `MdAutolink` (`<url>` for an http or https address; the `MdTitleLink` long form for one it cannot hold; a code span, not a link, for an address that is not http or https) | a space, a tab, a line break, `<`, `>` or a pipe ending the autolink or the cell |
-| Code, Secret                                                                    | `MdCodeSpan`                                                                                                                                                               | a backtick run closing the span; line breaks; control bytes. No entities         |
-| Multi-line Text                                                                 | `WrapGFMBody`                                                                                                                                                              | any block structure, by quoting every line; the guidance heading                 |
-| Fence body                                                                      | `MarkdownFencedBlock`                                                                                                                                                      | a backtick run closing the fence; the info string                                |
-| Time                                                                            | `FormatTime`                                                                                                                                                               | the fallback branch escapes; the two layouts write nothing escapable             |
-| Markdown, Row cells, Note                                                       | nothing                                                                                                                                                                    | the caller renders these (see "Deliberately not in Card")                        |
+| Written                                                                         | Helper                                                                                                                                                                     | What it neutralizes                                                                             |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Card, Section, Table and Fence headings                                         | `EscapeMdHeading`                                                                                                                                                          | leading `#`, line breaks, `<`, `[`, control bytes, what opens a literal autolink                |
+| Labels, Field, FieldOr, Flag emoji and label, one-line Text, table column names | `cardInline`                                                                                                                                                               | `\|`, `<`, `[`, line breaks, control bytes, what opens a literal autolink, the guidance heading |
+| Link text and URL                                                               | `MdTitleLink` (cell escaper without the literal autolink step, then `EscapeMdLinkLabel` on the label, `EscapeMdLinkDestination` on the URL)                                | a label closing the link, a destination ending early or splitting the cell                      |
+| URL, and a link whose text is its own address                                   | `MdAutolink` (`<url>` for an http or https address; the `MdTitleLink` long form for one it cannot hold; a code span, not a link, for an address that is not http or https) | a space, a tab, a line break, `<`, `>` or a pipe ending the autolink or the cell                |
+| Code, Secret                                                                    | `MdCodeSpan`                                                                                                                                                               | a backtick run closing the span; line breaks; control bytes. No entities                        |
+| Multi-line Text                                                                 | `WrapGFMBody`                                                                                                                                                              | any block structure, by quoting every line; the guidance heading                                |
+| Fence body                                                                      | `MarkdownFencedBlock`                                                                                                                                                      | a backtick run closing the fence; the info string                                               |
+| Time                                                                            | `FormatTime`                                                                                                                                                               | the fallback branch escapes; the two layouts write nothing escapable                            |
+| Markdown, Row cells, Note                                                       | nothing                                                                                                                                                                    | the caller renders these (see "Deliberately not in Card")                                       |
 
 Every escaper Card uses is idempotent (`TestEscapers_AreIdempotent`), so a
 formatter that still escapes by hand passes its value to a Card and renders

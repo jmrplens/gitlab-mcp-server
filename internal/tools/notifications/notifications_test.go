@@ -211,7 +211,7 @@ func TestFormatMarkdownString_CustomEvents_RendersEveryFlagAsARow(t *testing.T) 
 
 	want := "## Notification Settings\n\n" +
 		"- **Level**: custom\n" +
-		"- **Email**: a@b.com\n\n" +
+		"- **Email**: a\\@b.com\n\n" +
 		"### Custom Events\n\n" +
 		"- **Close Issue**: ✅\n" +
 		"- **Close MR**: ✅\n" +

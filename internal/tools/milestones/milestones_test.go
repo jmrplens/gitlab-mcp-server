@@ -2081,7 +2081,8 @@ func TestPromote_CarriesTheContext(t *testing.T) {
 
 // TestFormatPromoteMarkdown verifies the confirmation says what GitLab did and
 // sends a model to the group milestone list for the milestone GitLab did not
-// return, with the title escaped like any value GitLab authored.
+// return, with the title escaped like any value GitLab authored, in the
+// message that names it as well.
 func TestFormatPromoteMarkdown(t *testing.T) {
 	md := FormatPromoteMarkdown(PromoteOutput{
 		Status:  "success",
@@ -2091,11 +2092,22 @@ func TestFormatPromoteMarkdown(t *testing.T) {
 	// A heading is escaped for a heading, where a pipe is no cell boundary.
 	want := "## Milestone promoted: Sprint | 9\n\n" +
 		"- **Title**: Sprint &#124; 9\n\n" +
-		"Project milestone 3 (Sprint | 9) is now a milestone of the project's group.\n" +
+		"Project milestone 3 (Sprint &#124; 9) is now a milestone of the project's group.\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'group.group_milestone_list' to find the group milestone by its title\n"
 	if md != want {
 		t.Errorf("FormatPromoteMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatPromoteMarkdown_HostileTitle_IsTextInTheMessage verifies the
+// message a promotion is confirmed with, which names the milestone by its
+// title: a title holding a tag and an address reaches the note as the text it
+// is, where it used to reach it raw, a live anchor and a link GFM opens.
+func TestFormatPromoteMarkdown_HostileTitle_IsTextInTheMessage(t *testing.T) {
+	md := FormatPromoteMarkdown(promotedOutput(3, `<a href="http://attacker.invalid">x</a> www.attacker.invalid`))
+	if want := "\nProject milestone 3 (" + `&lt;a href="http\://attacker.invalid">x&lt;/a> www\.attacker.invalid` + ") is now"; !strings.Contains(md, want) {
+		t.Errorf("FormatPromoteMarkdown() = %q, want the message to hold %q", md, want)
 	}
 }
 

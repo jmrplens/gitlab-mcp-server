@@ -827,7 +827,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"- **Name**: Alice Smith\n" +
 		"- **State**: active\n" +
 		"- " + toolutil.EmojiWarning + " **Locked**\n" +
-		"- **Public Email**: alice@public.example.com\n" +
+		"- **Public Email**: alice\\@public.example.com\n" +
 		"- **Requested At**: 16 Jun 2026 08:00 UTC\n" +
 		"- **URL**: <https://gitlab.example.com/alice>\n" +
 		cardHints
@@ -888,8 +888,8 @@ func TestFormatMemberOutputMarkdown_AllFields(t *testing.T) {
 		"- **State**: active\n" +
 		"- **Access Level**: Developer (30)\n" +
 		"- " + toolutil.EmojiWarning + " **Locked**\n" +
-		"- **Email**: alice@example.com\n" +
-		"- **Public Email**: alice@public.example.com\n" +
+		"- **Email**: alice\\@example.com\n" +
+		"- **Public Email**: alice\\@public.example.com\n" +
 		"- **Member Role**: Auditor\n" +
 		"- **Membership State**: active\n" +
 		"- **Created By**:\n" +

@@ -556,7 +556,7 @@ func TestFormatCommit_Markdown(t *testing.T) {
 
 	want := "## Commit abc123\n\n" +
 		"- **Title**: " + testTitleFixBug + "\n" +
-		"- **Author**: Dev (dev@example.com)\n" +
+		"- **Author**: Dev (dev\\@example.com)\n" +
 		"- **Date**: 1 Jan 2026\n" +
 		"- **URL**: <https://gitlab.example.com/commit/abc123>\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
@@ -998,7 +998,7 @@ func TestFormatCommit_DetailMarkdown(t *testing.T) {
 
 	want := "## Commit abc1234\n\n" +
 		"- **Title**: feat: add feature\n" +
-		"- **Author**: dev (dev@example.com)\n" +
+		"- **Author**: dev (dev\\@example.com)\n" +
 		"- **Date**: 1 Jan 2026\n" +
 		"- **Parents**: `parent1, parent2`\n" +
 		"- **Stats**: +10 -3 (13 total)\n" +
