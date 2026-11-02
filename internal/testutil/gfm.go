@@ -130,12 +130,31 @@ var (
 	// label, and reports every link this server builds as a link to whatever
 	// destination the value inside it names.
 	//
-	// The second alternative reads an autolink, CommonMark's absolute URI
-	// between angle brackets: a scheme of two to thirty-two characters, a
-	// colon, and anything but a space, a control character, '<' or '>'. Its
-	// address is the second group. The label of an inline link is the first
-	// group, which is what tells a link whose label is its own destination.
-	gfmLinkRe = regexp.MustCompile(`\[((?:[^\[\]\\\n]|\\.)*)\]\(([^)\s]+)\)|<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\x00-\x20<>\x7f]*)>`)
+	// The second alternative reads an autolink, the pattern of
+	// [gfmAutolinkRe]. Its address is the third group. The label of an inline
+	// link is the first group, which is what tells a link whose label is its
+	// own destination.
+	//
+	// It is written out whole rather than joined onto gfmAutolinkRe's
+	// pattern, because the mutation tool cannot see a package-level
+	// declaration and reads the plus of a joined one as never covered.
+	// TestGFMLinkRe_AutolinkAlternative_IsTheAutolinkPattern holds the two to
+	// each other.
+	gfmLinkRe = regexp.MustCompile(`\[((?:[^\[\]\\\n]|\\.)*)\]\(([^)\s]+)\)|<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\x00-\x20<>\x7f\x{FFFC}]*)>`)
+	// gfmAutolinkRe is CommonMark's autolink, an absolute URI between angle
+	// brackets: a scheme of two to thirty-two characters, a colon, and
+	// anything but a space, a control character, '<' or '>'. The address is
+	// its one group. The code-span walk reads it off the raw line, to leave
+	// whole an autolink that begins before a span does.
+	//
+	// It refuses [gfmCodeSpanPlaceholder] in the address as well, because the
+	// links are read off the bare line: the walk keeps an autolink that
+	// begins before a span whole, so one the bare line shows around a
+	// placeholder is angle-bracketed text around a span that began first, and
+	// joining the two reported an address the page does not link. The cost
+	// is that an address holding that character literally is not read as a
+	// link: MdAutolink lets it through, and no fixture carries one.
+	gfmAutolinkRe = regexp.MustCompile(`<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\x00-\x20<>\x7f\x{FFFC}]*)>`)
 )
 
 // gfmCodeSpanPlaceholder stands in for an elided code span: the object
@@ -445,7 +464,9 @@ func (s *gfmScanner) structure() {
 		// one is the text a formatter deliberately moved into a span and not
 		// a destination a client would follow. Reading the raw line reported a
 		// link the page does not have, against exactly the value that had
-		// been contained.
+		// been contained. An autolink shares the span's precedence instead,
+		// and the bare line keeps one that begins first whole, backticks
+		// included, so its address is read as the client follows it.
 		for _, m := range gfmLinkRe.FindAllStringSubmatch(bare, -1) {
 			if m[2] == "" {
 				s.doc.Links = append(s.doc.Links, m[3])
@@ -483,10 +504,22 @@ func (s *gfmScanner) bareLine(i int, line string) string {
 // The walk is the spec's rule read left to right: a backtick string of length
 // n opens a span that the next backtick string of exactly length n closes,
 // and a run with no such partner is literal text that opens nothing. Reading
-// it in that order settles the one precedence question this has by
-// construction: a "<" written before the first backtick is outside every span
-// the walk recognizes, so a raw tag cannot be hidden by a code span opened
-// after it.
+// it in that order settles the precedence questions by construction. A "<"
+// written before the first backtick is outside every span the walk
+// recognizes, so a raw tag cannot be hidden by a code span opened after it.
+// And an autolink has the code span's own precedence, where the one that
+// begins first wins: a run inside an autolink that begins outside every span
+// is part of its address and opens nothing, while a span opened before the
+// "<" closes at its partner wherever that sits, inside the would-be autolink
+// or past it, so what it holds is text and no autolink.
+//
+// Three inline forms share that precedence and are not modeled, because no
+// formatter writes them: an email autolink, whose local part may hold a
+// backtick; a raw HTML tag, whose quoted attribute may; and a backslash
+// before a backtick or a "<", which makes that character literal. A value's
+// "<" reaches a cell or a heading as &lt; and a link label as \<, the label's
+// escaper escapes the backtick as well, and MdAutolink writes http and https
+// addresses only.
 //
 // The runs are listed first and walked with range, so no loop here advances by
 // an amount it computed: a mutant that inverts a condition then gives a wrong
@@ -494,10 +527,11 @@ func (s *gfmScanner) bareLine(i int, line string) string {
 // mutation gate can only report as timed out.
 func elideCodeSpans(line string) string {
 	runs := backtickRuns(line)
+	autolinks := gfmAutolinkRe.FindAllStringIndex(line, -1)
 	var b strings.Builder
 	at, next := 0, 0
 	for k, open := range runs {
-		if k < next {
+		if k < next || heldByAutolink(autolinks, at, open) {
 			continue
 		}
 		m, ok := closingRun(runs, k)
@@ -511,6 +545,27 @@ func elideCodeSpans(line string) string {
 	}
 	b.WriteString(line[at:])
 	return b.String()
+}
+
+// heldByAutolink reports whether a backtick run sits inside an autolink that
+// begins at or after from, the end of the last span the walk elided: every run
+// between from and this one opened nothing, so such an autolink began outside
+// every span and before any could open. One that begins before from either
+// ended before that span opened, or began inside it and is text, so a run
+// past the span's end that it seems to hold opens a span like any other.
+//
+// An autolink holds no '<' and no '>' past its first and last byte, so a run
+// is either wholly before one, wholly inside it or wholly after it. The test
+// against the run's end rather than its start is what lets each comparison be
+// told apart from its boundary mutant: a run can end exactly where an
+// autolink's "<" begins, and cannot start there.
+func heldByAutolink(autolinks [][]int, from int, run backtickSpan) bool {
+	for _, a := range autolinks {
+		if a[0] >= from && a[0] < run.end() && run.start < a[1] {
+			return true
+		}
+	}
+	return false
 }
 
 // backtickSpan is one maximal run of backticks: where it starts and how many

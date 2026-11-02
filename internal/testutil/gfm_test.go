@@ -206,7 +206,9 @@ func TestScanGFM_Structure_CountsWhatAHostileValueMustNotChange(t *testing.T) {
 // TestScanGFM_Links_ReadsOnlyABracketedLabel checks what counts as a link: a
 // label and a destination, so a value carrying "](url)" opens nothing on its
 // own and does open a link to its own destination once it lands inside a
-// label that was not escaped.
+// label that was not escaped; and an autolink, whose address is read whole
+// when it begins before any code span does, backticks included, and is text
+// when a span opened before it.
 func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 	cases := []struct {
 		name string
@@ -237,6 +239,21 @@ func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 		{name: "a raw tag is no autolink", md: `<a href="https://gitlab.example/T/7">x</a>` + "\n"},
 		{name: "an escaped angle bracket is text", md: "| &lt;https://gitlab.example/T/7> |\n"},
 		{name: "an autolink inside a code span is text", md: "| `<https://gitlab.example/T/7>` |\n"},
+		// An autolink and a code span have the same precedence, and the one
+		// that begins first wins: a backtick inside an autolink is part of
+		// its address, and a span opened before the "<" makes what follows
+		// literal up to its closing run, wherever that run sits.
+		{name: "a backtick inside an autolink opens no span", md: "<https://gitlab.example/a`b`c>\n", want: "https://gitlab.example/a`b`c"},
+		{name: "a backtick inside an autolink in a cell opens no span", md: "| <https://gitlab.example/a`b`c> |\n", want: "https://gitlab.example/a`b`c"},
+		{name: "an autolink that begins where a span ends", md: "`x`<https://gitlab.example/a`b`c>\n", want: "https://gitlab.example/a`b`c"},
+		{name: "a span after an autolink that holds a backtick", md: "<https://gitlab.example/a`b> `[x](http://attacker.invalid/y)`\n", want: "https://gitlab.example/a`b"},
+		{name: "a span holding the opening of an autolink", md: "`a <https://gitlab.example/x`y>\n"},
+		// The space inside the span ends the autolink the "<" tries to open,
+		// so that "<" is text and the span is the first construct; the bare
+		// line must not join the angle brackets around the placeholder into
+		// an address.
+		{name: "a span inside what would be an autolink leaves no address", md: "<https://gitlab.example/a`b c`>\n"},
+		{name: "a lookalike with a one-letter scheme leaves the span", md: "<a:x`[y](http://attacker.invalid/y)`>\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -244,6 +261,17 @@ func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 				t.Errorf("links = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestGFMLinkRe_AutolinkAlternative_IsTheAutolinkPattern holds the two
+// spellings of the autolink to each other: the link regexp's last alternative
+// reads the addresses, and the autolink regexp decides which backticks the
+// code-span walk leaves alone, so the two drifting apart would read an
+// address off a line whose spans were elided by a different rule.
+func TestGFMLinkRe_AutolinkAlternative_IsTheAutolinkPattern(t *testing.T) {
+	if link, autolink := gfmLinkRe.String(), gfmAutolinkRe.String(); !strings.HasSuffix(link, "|"+autolink) {
+		t.Errorf("gfmLinkRe = %q, want it to end with the alternative %q", link, autolink)
 	}
 }
 
@@ -347,8 +375,9 @@ func TestScanGFM_Links_ReadsAnEscapedBracketAsLabelText(t *testing.T) {
 // elided; backticks that never close are literal themselves and hide nothing;
 // a row is tokenized per cell, because GFM splits on unescaped pipes before
 // inline parsing and a span cannot cross a cell; a tag written before a span
-// opens is outside it; and a quote line is carried, since the quote contains
-// structure and not tags.
+// opens is outside it; an autolink that begins before a span keeps its
+// backticks, since it has the span's own precedence; and a quote line is
+// carried, since the quote contains structure and not tags.
 func TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes(t *testing.T) {
 	cases := []struct {
 		name string
@@ -375,6 +404,16 @@ func TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes(t *testing.T) {
 		{name: "an escaped pipe does not split a cell", md: "| `<a>` \\| y | z |\n| --- | --- |\n", want: "| " + gfmCodeSpanPlaceholder + " \\| y | z |"},
 		{name: "a tag before a span stays", md: "- <a> `x`\n", want: "- <a> " + gfmCodeSpanPlaceholder},
 		{name: "a quote line is carried", md: "> <a href=\"http://x\">\n", want: "> <a href=\"http://x\">"},
+		// An autolink and a code span have the same precedence and the one
+		// that begins first wins, so the backticks inside an autolink are
+		// part of it, and a span opened before the "<" holds it. A run left
+		// unpaired opens nothing, so the autolink after it is still one.
+		{name: "a backtick inside an autolink opens no span", md: "<https://h/a`b`c>\n", want: "<https://h/a`b`c>"},
+		{name: "a backtick inside a second autolink opens no span", md: "<https://h/a> <https://h/b`c`d>\n", want: "<https://h/a> <https://h/b`c`d>"},
+		{name: "a span right after an autolink closes", md: "<https://h/a>`b`\n", want: "<https://h/a>" + gfmCodeSpanPlaceholder},
+		{name: "a span holding an autolink is elided", md: "`<https://h/a>`\n", want: gfmCodeSpanPlaceholder},
+		{name: "a run after a span that ends inside an autolink's text opens one", md: "`a <https://h/x`y`z`>\n", want: gfmCodeSpanPlaceholder + "y" + gfmCodeSpanPlaceholder + ">"},
+		{name: "an unpaired run before an autolink", md: "``a <https://h/x`y`z>\n", want: "``a <https://h/x`y`z>"},
 	}
 
 	for _, tc := range cases {
