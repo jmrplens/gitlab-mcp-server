@@ -9,8 +9,8 @@ chips:
 datePublished: "2026-04-21"
 head:
   # The page an AI reads to answer "what can this server do?". The prose groups
-  # the base meta-tools into eight families, but nothing in the markup said so —
-  # each family now has a citable deep link.
+  # the base meta-tools into eight families, but nothing in the markup said so.
+  # Each family now has a citable deep link.
   - tag: script
     attrs:
       type: application/ld+json
@@ -100,7 +100,7 @@ head:
         "name": "GitLab MCP Server tool catalog",
         "description": "The complete machine-readable catalog of GitLab MCP Server's MCP surface: every tool and action name with its description and parameters, plus the resources, prompts and meta-tool groups, generated from the canonical action catalog at build time.",
         "inLanguage": "en",
-        "license": "https://opensource.org/licenses/MIT",
+        "license": "https://opensource.org/license/MIT",
         "isAccessibleForFree": true,
         "creator": { "@id": "https://jmrp.io/#person" },
         "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
@@ -108,19 +108,19 @@ head:
         "distribution": [
           {
             "@type": "DataDownload",
-            "name": "llms-server.txt — catalog summary",
+            "name": "llms-server.txt: catalog summary",
             "encodingFormat": "text/markdown",
             "contentUrl": "https://docs.jmrp.io/gitlab-mcp-server/llms-server.txt"
           },
           {
             "@type": "DataDownload",
-            "name": "llms-medium.txt — every tool and action, without schemas",
+            "name": "llms-medium.txt: every tool and action, without schemas",
             "encodingFormat": "text/markdown",
             "contentUrl": "https://docs.jmrp.io/gitlab-mcp-server/llms-medium.txt"
           },
           {
             "@type": "DataDownload",
-            "name": "llms-full.txt — full tool and action reference",
+            "name": "llms-full.txt: full tool and action reference",
             "encodingFormat": "text/markdown",
             "contentUrl": "https://docs.jmrp.io/gitlab-mcp-server/llms-full.txt"
           }
@@ -146,7 +146,7 @@ import Facts from "../../../components/docs/Facts.astro";
 import Fact from "../../../components/docs/Fact.astro";
 import FAQ from "../../../components/FAQ.astro";
 
-GitLab MCP Server exposes GitLab operations as MCP tools that AI assistants can invoke directly. It offers **three tool modes**: dynamic, meta-tool, and individual. All three reach the same GitLab API surface. They differ only in packaging, so the choice trades context cost against tool-list granularity — never capability.
+GitLab MCP Server exposes GitLab operations as MCP tools that AI assistants can invoke directly. It offers **three tool modes**: dynamic, meta-tool, and individual. All three reach the same GitLab API surface. They differ only in packaging, so the choice trades context cost against tool-list granularity, never capability.
 
 Every mode is projected from one **canonical action catalog**. That gives all three identical handlers, typed schemas, and safety rules, apart from how a destructive call is confirmed. Otherwise only the presentation changes. Dynamic mode searches and executes canonical `domain.action` IDs. Meta-tool mode groups actions by domain. Individual mode registers one tool per operation.
 
@@ -173,7 +173,7 @@ Each tool requires exactly the parameters its action requires on the meta-tool a
 <Facts>
 	<Fact kind="exposes">
 		one visible MCP tool per GitLab operation, each with its own typed input
-		and output schema — the whole catalog, flat.
+		and output schema: the whole catalog, flat.
 	</Fact>
 	<Fact kind="requires">`GITLAB_MCP_TOOL_SURFACE=individual`, and a client with the context budget to hold the full tool list.</Fact>
 	<Fact kind="tier">
@@ -231,7 +231,7 @@ Meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`) consolidates related operations 
 
 ### How does the dynamic toolset work?
 
-Dynamic mode (`GITLAB_MCP_TOOL_SURFACE=dynamic`) is the low-token default. It exposes only two public tools — `gitlab_find_action` and `gitlab_execute_action` (the singular `gitlab_execute_action` name is intentional) — while keeping every GitLab action reachable through the canonical catalog. The assistant first finds an action and its exact schema, then executes the canonical `domain.action` ID.
+Dynamic mode (`GITLAB_MCP_TOOL_SURFACE=dynamic`) is the low-token default. It exposes only two public tools, `gitlab_find_action` and `gitlab_execute_action` (the singular `gitlab_execute_action` name is intentional), while keeping every GitLab action reachable through the canonical catalog. The assistant first finds an action and its exact schema, then executes the canonical `domain.action` ID.
 
 ```mermaid
 flowchart LR
@@ -243,7 +243,7 @@ Because all three modes share the canonical action catalog, **the safety rules c
 
 <Facts>
 	<Fact kind="exposes">
-		two tools — `gitlab_find_action` and `gitlab_execute_action` — reaching
+		two tools (`gitlab_find_action` and `gitlab_execute_action`) reaching
 		the full canonical catalog: find returns exact schemas, execute runs the
 		canonical `domain.action`.
 	</Fact>
@@ -255,7 +255,7 @@ Because all three modes share the canonical action catalog, **the safety rules c
 	</Fact>
 	<Fact kind="notCovered">
 		a browsable tool list: the client sees two tools, so a human scanning
-		`tools/list` learns nothing about coverage — that is what
+		`tools/list` learns nothing about coverage; that is what
 		`gitlab://tools` and the find tool are for.
 	</Fact>
 </Facts>
@@ -377,15 +377,15 @@ Enterprise tools require a GitLab Premium or Ultimate license on your instance. 
 ## Further reading
 
 - [Tools by domain](/gitlab-mcp-server/reference/tools/): every action of every catalog group, with its parameters and the tier it needs
-- [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) — detailed meta-tool architecture and usage
+- [Meta-tools](/gitlab-mcp-server/tools/meta-tools/): detailed meta-tool architecture and usage
 - [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/): the low-token find and execute mode
-- [Orbit](/gitlab-mcp-server/tools/orbit/) — GitLab.com Premium/Ultimate Knowledge Graph tools
-- [Resources & Prompts](/gitlab-mcp-server/tools/resources-prompts/) — read-only context and prompt templates
+- [Orbit](/gitlab-mcp-server/tools/orbit/): GitLab.com Premium/Ultimate Knowledge Graph tools
+- [Resources & Prompts](/gitlab-mcp-server/tools/resources-prompts/): read-only context and prompt templates
 - [Output format](/gitlab-mcp-server/reference/output-format/): what a tool result carries, in Markdown and in JSON
 - [Command line](/gitlab-mcp-server/reference/cli/) and [environment variables](/gitlab-mcp-server/reference/environment/): every setting that picks a surface, a tier or a filter
 
 ## External references
 
-- [Model Context Protocol specification](https://modelcontextprotocol.io/) — the protocol these tools implement
-- [GitLab REST API v4](https://docs.gitlab.com/api/rest/) — the REST surface most tools call
-- [GitLab GraphQL API](https://docs.gitlab.com/api/graphql/) — the GraphQL surface used by the remaining domains
+- [Model Context Protocol specification](https://modelcontextprotocol.io/): the protocol these tools implement
+- [GitLab REST API v4](https://docs.gitlab.com/api/rest/): the REST surface most tools call
+- [GitLab GraphQL API](https://docs.gitlab.com/api/graphql/): the GraphQL surface used by the remaining domains

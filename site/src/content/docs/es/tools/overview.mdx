@@ -10,7 +10,7 @@ datePublished: "2026-04-21"
 head:
   # La página que una IA lee para responder "¿qué puede hacer este servidor?".
   # La prosa agrupa las meta-herramientas base en ocho familias, pero el marcado
-  # no lo decía — ahora cada familia tiene un enlace profundo citable.
+  # no lo decía. Ahora cada familia tiene un enlace profundo citable.
   - tag: script
     attrs:
       type: application/ld+json
@@ -100,7 +100,7 @@ head:
         "name": "Catálogo de herramientas de GitLab MCP Server",
         "description": "El catálogo completo legible por máquina de la superficie MCP de GitLab MCP Server: cada herramienta y acción con su descripción y parámetros, más los recursos, prompts y grupos de meta-herramientas, generado desde el catálogo canónico de acciones en tiempo de compilación.",
         "inLanguage": "es",
-        "license": "https://opensource.org/licenses/MIT",
+        "license": "https://opensource.org/license/MIT",
         "isAccessibleForFree": true,
         "creator": { "@id": "https://jmrp.io/#person" },
         "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
@@ -108,19 +108,19 @@ head:
         "distribution": [
           {
             "@type": "DataDownload",
-            "name": "llms-server.txt — resumen del catálogo",
+            "name": "llms-server.txt: resumen del catálogo",
             "encodingFormat": "text/markdown",
             "contentUrl": "https://docs.jmrp.io/gitlab-mcp-server/llms-server.txt"
           },
           {
             "@type": "DataDownload",
-            "name": "llms-medium.txt — todas las herramientas y acciones, sin esquemas",
+            "name": "llms-medium.txt: todas las herramientas y acciones, sin esquemas",
             "encodingFormat": "text/markdown",
             "contentUrl": "https://docs.jmrp.io/gitlab-mcp-server/llms-medium.txt"
           },
           {
             "@type": "DataDownload",
-            "name": "llms-full.txt — referencia completa de herramientas y acciones",
+            "name": "llms-full.txt: referencia completa de herramientas y acciones",
             "encodingFormat": "text/markdown",
             "contentUrl": "https://docs.jmrp.io/gitlab-mcp-server/llms-full.txt"
           }
@@ -173,7 +173,7 @@ Cada herramienta exige exactamente los parámetros que su acción exige en las s
 <Facts>
 	<Fact kind="exposes">
 		una herramienta MCP visible por operación de GitLab, cada una con su
-		esquema tipado de entrada y salida — el catálogo completo, en plano.
+		esquema tipado de entrada y salida: el catálogo completo, en plano.
 	</Fact>
 	<Fact kind="requires">`GITLAB_MCP_TOOL_SURFACE=individual`, y un cliente con presupuesto de contexto para sostener la lista completa.</Fact>
 	<Fact kind="tier">
@@ -233,7 +233,7 @@ El modo meta-herramientas (`GITLAB_MCP_TOOL_SURFACE=meta`) consolida operaciones
 
 ### ¿Cómo funciona el conjunto dinámico de herramientas?
 
-El modo dinámico (`GITLAB_MCP_TOOL_SURFACE=dynamic`) es el predeterminado de bajo coste de tokens. Expone solo dos herramientas públicas —`gitlab_find_action` y `gitlab_execute_action` (el nombre en singular `gitlab_execute_action` es intencionado)— manteniendo cada acción de GitLab accesible a través del catálogo canónico. El asistente primero encuentra una acción y su esquema exacto, y luego ejecuta el ID canónico `domain.action`.
+El modo dinámico (`GITLAB_MCP_TOOL_SURFACE=dynamic`) es el predeterminado de bajo coste de tokens. Expone solo dos herramientas públicas, `gitlab_find_action` y `gitlab_execute_action` (el nombre en singular `gitlab_execute_action` es intencionado), manteniendo cada acción de GitLab accesible a través del catálogo canónico. El asistente primero encuentra una acción y su esquema exacto, y luego ejecuta el ID canónico `domain.action`.
 
 ```mermaid
 flowchart LR
@@ -245,7 +245,7 @@ Como los tres modos comparten el catálogo canónico de acciones, **las reglas d
 
 <Facts>
 	<Fact kind="exposes">
-		dos herramientas — `gitlab_find_action` y `gitlab_execute_action` — que
+		dos herramientas (`gitlab_find_action` y `gitlab_execute_action`) que
 		alcanzan el catálogo canónico completo: find devuelve esquemas exactos y
 		execute ejecuta el `domain.action` canónico.
 	</Fact>
@@ -258,7 +258,7 @@ Como los tres modos comparten el catálogo canónico de acciones, **las reglas d
 	<Fact kind="notCovered">
 		una lista de herramientas explorable: el cliente ve dos herramientas,
 		así que un humano que recorra `tools/list` no aprende nada sobre la
-		cobertura — para eso están `gitlab://tools` y la herramienta find.
+		cobertura; para eso están `gitlab://tools` y la herramienta find.
 	</Fact>
 </Facts>
 
@@ -379,15 +379,15 @@ Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate 
 ## Lectura adicional
 
 - [Herramientas por dominio](/gitlab-mcp-server/es/reference/tools/): cada acción de cada grupo del catálogo, con sus parámetros y el tier que necesita
-- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — arquitectura detallada de meta-herramientas y uso
+- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/): arquitectura detallada de meta-herramientas y uso
 - [Conjunto dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/): el modo de búsqueda y ejecución con bajo consumo de tokens
-- [Orbit](/gitlab-mcp-server/es/tools/orbit/) — herramientas Knowledge Graph para GitLab.com Premium/Ultimate
-- [Recursos y prompts](/gitlab-mcp-server/es/tools/resources-prompts/) — contexto de solo lectura y plantillas de prompts
+- [Orbit](/gitlab-mcp-server/es/tools/orbit/): herramientas Knowledge Graph para GitLab.com Premium/Ultimate
+- [Recursos y prompts](/gitlab-mcp-server/es/tools/resources-prompts/): contexto de solo lectura y plantillas de prompts
 - [Formato de salida](/gitlab-mcp-server/es/reference/output-format/): lo que lleva un resultado de herramienta, en Markdown y en JSON
 - [Línea de comandos](/gitlab-mcp-server/es/reference/cli/) y [variables de entorno](/gitlab-mcp-server/es/reference/environment/): cada ajuste que elige una superficie, un tier o un filtro
 
 ## Referencias externas
 
-- [Especificación del Model Context Protocol](https://modelcontextprotocol.io/) — el protocolo que implementan estas herramientas
-- [API REST v4 de GitLab](https://docs.gitlab.com/api/rest/) — la superficie REST que llama la mayoría de las herramientas
-- [API GraphQL de GitLab](https://docs.gitlab.com/api/graphql/) — la superficie GraphQL que usan el resto de dominios
+- [Especificación del Model Context Protocol](https://modelcontextprotocol.io/): el protocolo que implementan estas herramientas
+- [API REST v4 de GitLab](https://docs.gitlab.com/api/rest/): la superficie REST que llama la mayoría de las herramientas
+- [API GraphQL de GitLab](https://docs.gitlab.com/api/graphql/): la superficie GraphQL que usan el resto de dominios
