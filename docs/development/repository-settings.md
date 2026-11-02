@@ -90,8 +90,8 @@ Nothing in the workflow needs to change: GoReleaser already creates the release
 as a draft and a later step publishes it, which is the shape the feature
 requires.
 
-**What tells you it drifted.** `scripts/validate-server-json-packages.sh`
-(`make check-server-json-packages`) reads the release metadata for the version
+**What tells you it drifted.** `make check-server-json-packages`
+(`cmd/release_packages`) reads the release metadata for the version
 `server.json` declares and warns when it is mutable. It is a drift alarm, not a
 gate: it warns rather than failing, because a warning that cannot be fixed by
 any commit must not block a merge.

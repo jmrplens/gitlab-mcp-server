@@ -60,6 +60,7 @@ var allowedIDs = map[string]string{
 	"gotest.tools":             "the Go module gotest.tools, named in the static analysis page",
 	"graph_query.schema":       "the middle of the Orbit query DSL schema file name, graph_query.schema.json, quoted in upstream-bugs.md",
 	"mcp.schema":               "the middle of the Agent Plugins schema file name, mcp.schema.json",
+	"plugin.schema":            "the middle of the plugin manifest schema file name, plugin.schema.json, the one .plugin/plugin.json names",
 	"project.security_setting": "GitLab's own entity name, quoted in upstream-bugs.md as the thing the endpoint answers with",
 	"resources.subscribe":      "the MCP method, spelled with a dot by the gateway configuration the MCP gateways page quotes",
 	"result.content":           "a jq path into a JSON-RPC response, in the CI/CD examples",

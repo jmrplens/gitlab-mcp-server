@@ -209,7 +209,6 @@ type scriptDeclaration struct {
 // pending script names any longer has landed, and its line is reported until
 // it goes.
 var pendingPorts = map[int]string{
-	3:  "a schema check of the plugin manifests against the schemas each declares",
 	4:  "one coverage command over cmd/internal/golist that stages the module copy and still drives gremlins and gobco",
 	5:  "a command that tells a runtime crash from a failing test in a go test -json stream",
 	6:  "a Go orchestrator for the Docker e2e runs under test/e2e/, the gitlab-rails snippets embedded",
@@ -259,7 +258,6 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/build_pypi.py":                         {category: scriptPortPending, item: 13},
 	"scripts/check-doc-links.mjs":                   {category: scriptPortPending, item: 12},
 	"scripts/check-em-dash.sh":                      {category: scriptPortPending, item: 11},
-	"scripts/check-openplugin.sh":                   {category: scriptPortPending, item: 3},
 	"scripts/check-spec-conditions.sh":              {category: scriptPortPending, item: 4},
 	"scripts/check_doc_links_test.py":               {category: scriptPortPending, item: 12},
 	"scripts/check_em_dash_sh_test.py":              {category: scriptPortPending, item: 11},

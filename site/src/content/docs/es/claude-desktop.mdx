@@ -196,8 +196,8 @@ make mcpb          # los tres paquetes por sistema operativo y el universal, en 
 make check-mcpb    # valida mcpb/manifest.json y los tres manifiestos derivados de él con la CLI oficial de MCPB
 ```
 
-`make mcpb` necesita macOS, por `lipo`, además de `zip`, `unzip` y `jq`, y
-construye los cuatro paquetes que adjunta una release. Qué lleva cada paquete,
+`make mcpb` necesita macOS, por `lipo`, y Go, con el que también se arman
+los paquetes, y construye los cuatro paquetes que adjunta una release. Qué lleva cada paquete,
 cómo se derivan los manifiestos por sistema operativo y qué comprueba y
 rechaza la construcción antes de conservar un paquete se describe, para
 quien contribuye, en

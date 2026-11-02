@@ -1538,9 +1538,11 @@ check-server-json-packages:
 	go run ./cmd/release_packages/ server-json-packages
 
 ## check-openplugin: validate the Agent Plugins manifests (root plugin.json +
-## mcp.json) and the legacy Open Plugins manifest (.plugin/plugin.json).
+## mcp.json) and the legacy Open Plugins manifest (.plugin/plugin.json) against
+## the schema each declares, and hold them to what no schema says
+## (cmd/audit_plugin_manifests).
 check-openplugin:
-	scripts/check-openplugin.sh
+	go run ./cmd/audit_plugin_manifests/
 
 # Pin the MCPB CLI for supply-chain integrity. Only check-mcpb runs it:
 # cmd/release_packages packs the bundles itself and never calls the CLI.

@@ -94,6 +94,8 @@ gitlab-mcp-server/
 │   ├── audit_image_vulns/            # The image's Alpine packages against Trivy's database, before the push (make check-image-vulns)
 │   ├── reproduce_release/            # Release binaries rebuilt from the tag and compared byte for byte (make check-reproducible, check-repeatable)
 │   ├── release_checks/               # The release's preflight order, before anything publishes, and the Linux binaries' ELF loader (make release)
+│   ├── release_packages/             # The .mcpb bundles, their per-OS manifests, and the packages server.json declares (make mcpb, check-server-json-packages)
+│   ├── audit_plugin_manifests/       # Plugin manifests against the schemas they declare (make check-openplugin)
 │   ├── audit_site_headers/           # The documentation site's security headers, after each deploy (make check-site-headers)
 │   ├── audit_dco/                    # Every commit of a pull request signed off by its author, the DCO (make check-dco)
 │   ├── audit_file_headers/           # Every source file opens with the copyright and license header (make check-file-headers, fix-file-headers)
@@ -178,7 +180,7 @@ gitlab-mcp-server/
 ├── test/e2e/                         # End-to-end tests: http/, stdio/, collector/, orbit/, internal/harness/, gitlab/{common,ce,ee}
 ├── plan/                             # Untracked working area; make check-plan-untracked fails on a force-added file
 ├── vex/                              # The OpenVEX document every GitHub release attaches, held by make check-vex
-├── mcpb/                             # Claude Desktop extension manifest, icon, platform.jq and the Linux launcher
+├── mcpb/                             # Claude Desktop extension manifest, icon and the Linux launcher
 ├── .github/                          # AI assistance infrastructure: agents, skills, instructions
 ├── Makefile                          # Build, test, lint targets
 └── VERSION                           # Semantic version (3.4.0)
