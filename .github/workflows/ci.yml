@@ -849,6 +849,12 @@ jobs:
       # module.
       - name: Check documentation local links
         run: make check-doc-links
+      # check-mcpb derives the per-OS manifests with cmd/release_packages,
+      # which imports nothing outside this module, so the toolchain is the
+      # only download.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
       - name: Check Claude Desktop extension manifest
         run: make check-mcpb
 
@@ -1143,11 +1149,10 @@ jobs:
       # bash --posix, whichever the runner has, and runs shellcheck on it.
       # The runner's busybox is busybox-static, whose own uname and chmod run
       # whatever PATH says, so under it the cases that need a stub assert the
-      # real machine's binary or are skipped with the reason;
-      # scripts/mcpb_manifest_test.py pins mcpb/manifest.json; and
-      # scripts/build_mcpb_sh_test.py runs scripts/build-mcpb.sh over stand-in
-      # binaries against each bundle its checks refuse, and over the dist/
-      # layouts of make mcpb and of the release job.
+      # real machine's binary or are skipped with the reason; and
+      # scripts/mcpb_manifest_test.py pins mcpb/manifest.json. What the bundle
+      # build packs and refuses is held by cmd/release_packages' own tests,
+      # which run with every Go package.
       # scripts/coverage_mutants_sh_test.py drives the mutation recipe,
       # scripts/coverage-mutants.sh, against a stand-in go command, and holds
       # the deadline it hands gremlins to the run gremlins actually times.

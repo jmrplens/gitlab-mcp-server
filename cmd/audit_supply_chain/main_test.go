@@ -4407,6 +4407,34 @@ func TestLoadWorkflows_ReleaseWorkflow_HoldsTheLinuxBinariesToTheirLoader(t *tes
 	}
 }
 
+// TestLoadWorkflows_ReleaseWorkflow_BuildsTheBundlesWithReleasePackages
+// verifies that the release job packs the Claude Desktop bundles with the
+// mcpb subcommand of cmd/release_packages, in a rehearsal too, and no longer
+// with scripts/build-mcpb.sh. The command builds from this module and the
+// standard library alone, which rule 2 allows code in this job; the bundles
+// it writes are what the provenance step attests and the rehearsal hands the
+// publishers, so a release that went back to a script, or skipped the step
+// in a rehearsal, would ship or rehearse bundles nothing here had checked.
+func TestLoadWorkflows_ReleaseWorkflow_BuildsTheBundlesWithReleasePackages(t *testing.T) {
+	t.Parallel()
+
+	const (
+		pack   = "Build and upload Claude Desktop extensions (.mcpb)"
+		runner = `go run ./cmd/release_packages/ mcpb "${VERSION}"`
+	)
+	step := releaseStep(t, releaseJob(t, releaseWorkflow(t, repositoryRoot(t)), "release"), stepNamed(pack))
+	run := pythonStr(step["run"])
+	if !hasLine(run, runner) {
+		t.Errorf("the release job's bundle step runs %q, want a line %q", run, runner)
+	}
+	if strings.Contains(run, "build-mcpb.sh") {
+		t.Errorf("the release job's bundle step still runs the script: %q", run)
+	}
+	if condition, guarded := step["if"]; guarded {
+		t.Errorf("the release job's bundle step runs only if %v, want it in a rehearsal too", condition)
+	}
+}
+
 // assertLatestTagsFollow holds both :latest tags of the publishing image
 // build, ghcr.io's and Docker Hub's, behind condition.
 func assertLatestTagsFollow(t *testing.T, release map[string]any, condition string) {

@@ -1364,18 +1364,22 @@ jobs:
       # the three per-OS ones and needs their SHA256. GoReleaser does not
       # produce them, so they are absent from the signed checksums.txt and
       # their hashes cannot be appended there; their integrity comes from the
-      # build-provenance attestation below instead. The script builds one
-      # bundle per operating system and the universal gitlab-mcp-server.mcpb,
-      # which keeps the name links outside this repository use and is uploaded
-      # but not declared. It prints each bundle's download and unpacked size
-      # and writes them to this job's summary.
+      # build-provenance attestation below instead. The mcpb subcommand of
+      # cmd/release_packages builds one bundle per operating system and the
+      # universal gitlab-mcp-server.mcpb, which keeps the name links outside
+      # this repository use and is uploaded but not declared, reads each one
+      # back against its own checks, prints each bundle's download and
+      # unpacked size and writes them to this job's summary. It is compiled
+      # from this module and the standard library alone, which is what rule 2
+      # of cmd/audit_supply_chain allows code in this job, and the same inputs
+      # pack the same bytes on every run.
       - name: Build and upload Claude Desktop extensions (.mcpb)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${RELEASE_TAG#v}"
-          bash scripts/build-mcpb.sh "${VERSION}"
+          go run ./cmd/release_packages/ mcpb "${VERSION}"
           sha256sum dist/*.mcpb
           if [ "$REHEARSAL" = "true" ]; then
             echo "rehearsal: the bundles were built and not uploaded"

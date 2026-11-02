@@ -31,8 +31,9 @@ const osvImageVariable = "OSV_SCANNER_IMAGE"
 // Vulnerabilities check reads it the same way.
 const osvConfigName = "osv-scanner.toml"
 
-// ciWorkflow is the workflow whose verdict job branch protection requires.
-const ciWorkflow = workflowDir + "/ci.yml"
+// ciWorkflow is the workflow whose verdict job branch protection requires, in
+// workflowDir.
+const ciWorkflow = ".github/workflows/ci.yml"
 
 // requiredVerdictJob is the job of ci.yml that branch protection requires,
 // "✅ CI": a check decides whether a change merges only when this job needs
@@ -82,8 +83,8 @@ var (
 )
 
 // osvImageAssignment finds the Makefile's assignment of the scanner image,
-// in any of make's assignment operators.
-var osvImageAssignment = regexp.MustCompile(`(?m)^` + osvImageVariable + `[ \t]*(?:::?|\?|\+)?=[ \t]*(.*?)[ \t]*$`)
+// osvImageVariable, in any of make's assignment operators.
+var osvImageAssignment = regexp.MustCompile(`(?m)^OSV_SCANNER_IMAGE[ \t]*(?:::?|\?|\+)?=[ \t]*(.*?)[ \t]*$`)
 
 // pinnedOSVImage is an image named by the sha256 digest of its manifest, a
 // tag before the digest allowed, as rule 1 reads a docker:// image.
@@ -99,9 +100,24 @@ var pinnedOSVImage = regexp.MustCompile(`^[^@\s]+@sha256:[0-9a-f]{64}$`)
 // does.
 const unfilteredConfig = "/dev/null"
 
-// osvConfigFlag finds each --config the recipe passes and the word it names,
-// spelled with a space or an equals sign.
-var osvConfigFlag = regexp.MustCompile(`--config(?:=|[ \t]+)(\S*)`)
+// osvConfigOption is what every spelling of OSV-Scanner's --config contains
+// once: its command line, urfave/cli v3, reads a long option after one dash
+// as well as two, so -config names it too. The rule counts it wherever the
+// recipe writes it, inside another word as well, since a --config it cannot
+// read is one it cannot place.
+const osvConfigOption = "-config"
+
+// osvConfigFlag finds each --config or -config the recipe passes and the word
+// it names, spelled with a space or an equals sign.
+var osvConfigFlag = regexp.MustCompile(`--?config(?:=|[ \t]+)(\S*)`)
+
+// osvScannerRun finds each pass of the scanner in a recipe, a docker run
+// whose image is $(OSV_SCANNER_IMAGE), named in that command, and what the
+// recipe hands the image: everything after it up to the end of its shell
+// command, a ;, & or | that is not the & of a redirection such as 2>&1, or a
+// line that does not end in a backslash. A docker pull, an echo or a
+// variable that names the image is no pass.
+var osvScannerRun = regexp.MustCompile(`\bdocker[ \t]+run\b(?:\\\n|[<>]&|[^;&|\n])*?\$\(OSV_SCANNER_IMAGE\)((?:\\\n|[<>]&|[^;&|\n])*)`)
 
 // readConfig is a seam over readTextFile for the osv-scanner.toml files, so a
 // test can drive the branch a file the tests own never produces as root: a
@@ -138,53 +154,120 @@ func checkDependencyScan(root string) ([]string, error) {
 // makefileScanProblems holds the Makefile's dependency scan to running the
 // scanner image it pins by digest, to reading the allow list beside each
 // lockfile rather than one file a --config would put in all their places, and
-// to a second pass under --config /dev/null, which no allow list narrows.
+// to its two passes, each a docker run of the image: one without --config,
+// which reads those allow lists, and one under --config /dev/null, which no
+// allow list narrows. A --config the recipe writes outside every pass, in a
+// shell variable it assigns or in another command, is a finding too, since
+// which pass it reaches, and so which pass reads the allow lists, is not
+// written where this rule reads it.
+//
+// The rule reads the recipe's lines as the Makefile writes them, its comment
+// lines aside, @# ones included (recipeWithoutComments), and neither expands
+// them as make does nor parses them as the shell does: a --config that
+// reaches a pass through a make variable assigned outside the recipe, a
+// target-specific variable or an included makefile is not seen, the words of
+// a docker run of the image read as a pass wherever they stand, in an echo or
+// as another image's arguments included, and a comment written at the end of
+// a pass's line is read as arguments of the pass, since telling one from a #
+// inside a word, as in the SECURITY.md#dependencies the recipe writes, takes
+// the shell's parsing.
 func makefileScanProblems(makefile string) []string {
-	var problems []string
-	assignments := osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1)
-	switch {
-	case len(assignments) == 0:
-		problems = append(problems, fmt.Sprintf("Makefile: %s is not assigned, so make %s names no scanner image this audit can hold to a digest",
-			osvImageVariable, dependencyScanTarget))
-	case len(assignments) > 1:
-		problems = append(problems, fmt.Sprintf("Makefile: %s is assigned %d times, so which image make %s runs depends on the order make reads them in",
-			osvImageVariable, len(assignments), dependencyScanTarget))
-	case !pinnedOSVImage.MatchString(assignments[0][1]):
-		problems = append(problems, fmt.Sprintf("Makefile: %s=%s is not pinned to a sha256 image digest, so the scanner that decides is whatever the tag names when the job runs",
-			osvImageVariable, assignments[0][1]))
-	}
+	problems := osvImageProblems(osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1))
 	rule := parseMakefile(makefile)[dependencyScanTarget]
 	if rule == nil {
 		return append(problems, fmt.Sprintf("Makefile: no rule makes %s, so nothing holds the lockfiles to the dependency advisories", dependencyScanTarget))
 	}
-	recipe := strings.Join(rule.recipe, "\n")
-	if !strings.Contains(recipe, "$("+osvImageVariable+")") {
+	recipe := recipeWithoutComments(rule.recipe)
+	runs := osvScannerRun.FindAllStringSubmatch(recipe, -1)
+	if len(runs) == 0 {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s does not run $(%s), so the image pinned above is not the scanner that decides",
 			dependencyScanTarget, osvImageVariable))
 	}
-	unfiltered := 0
+	configs := strings.Count(recipe, osvConfigOption)
+	named := configs
 	for _, flag := range osvConfigFlag.FindAllStringSubmatch(recipe, -1) {
 		if flag[1] == unfilteredConfig {
-			unfiltered++
+			named--
 		}
 	}
-	if strings.Count(recipe, "--config") > unfiltered {
+	if named > 0 {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s passes --config naming something other than %s, which puts one file in place of the %s beside each lockfile, the allow lists this audit judges",
 			dependencyScanTarget, unfilteredConfig, osvConfigName))
 	}
-	if unfiltered == 0 {
+	outside, allowListed, unfiltered := configs, false, false
+	for _, run := range runs {
+		outside -= strings.Count(run[1], osvConfigOption)
+		allowListed = allowListed || !strings.Contains(run[1], osvConfigOption)
+		unfiltered = unfiltered || slices.ContainsFunc(osvConfigFlag.FindAllStringSubmatch(run[1], -1), func(flag []string) bool { return flag[1] == unfilteredConfig })
+	}
+	if outside > 0 {
+		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s writes --config outside every docker run of $(%s), in a variable or another command, so this audit cannot tell which pass it reaches nor which pass reads the %s beside each lockfile",
+			dependencyScanTarget, osvImageVariable, osvConfigName))
+	}
+	if !allowListed {
+		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s has no pass without --config, the one that reads the %s beside each lockfile, so no scan holds the lockfiles to every advisory on the terms the allow lists this audit judges set",
+			dependencyScanTarget, osvConfigName))
+	}
+	if !unfiltered {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s has no pass under --config %s, the one no allow list narrows, so a malicious package an entry sets aside by one of its aliases passes the scan",
 			dependencyScanTarget, unfilteredConfig))
 	}
 	return problems
 }
 
+// recipePrefixes are what make reads off the start of a recipe line before it
+// hands the line to the shell: @, which keeps it from echoing the line, -,
+// which ignores its failure, and +, which runs it even under -n, with any
+// blanks between them.
+const recipePrefixes = "@-+ \t"
+
+// recipeWithoutComments joins a rule's recipe lines without its comment lines,
+// each a line whose text, trimmed, starts with #. On a line that opens a
+// recipe line, because the one before it does not end in a backslash, make's
+// prefixes (recipePrefixes) come off first, so an @# line, the form this
+// Makefile writes its comments in, is one too. A continuation line keeps
+// them, since make hands them to the shell there: a -config opening one is an
+// option of the pass, and an @# opening one is a word of it.
+func recipeWithoutComments(recipe []string) string {
+	kept := make([]string, 0, len(recipe))
+	opens := true
+	for _, line := range recipe {
+		text := strings.TrimSpace(line)
+		if opens {
+			text = strings.TrimLeft(text, recipePrefixes)
+		}
+		opens = !strings.HasSuffix(line, "\\")
+		if !strings.HasPrefix(text, "#") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+// osvImageProblems holds the Makefile's assignments of the scanner image to
+// one, naming the image by its digest.
+func osvImageProblems(assignments [][]string) []string {
+	if len(assignments) == 0 {
+		return []string{fmt.Sprintf("Makefile: %s is not assigned, so make %s names no scanner image this audit can hold to a digest",
+			osvImageVariable, dependencyScanTarget)}
+	}
+	if len(assignments) > 1 {
+		return []string{fmt.Sprintf("Makefile: %s is assigned %d times, so which image make %s runs depends on the order make reads them in",
+			osvImageVariable, len(assignments), dependencyScanTarget)}
+	}
+	if !pinnedOSVImage.MatchString(assignments[0][1]) {
+		return []string{fmt.Sprintf("Makefile: %s=%s is not pinned to a sha256 image digest, so the scanner that decides is whatever the tag names when the job runs",
+			osvImageVariable, assignments[0][1])}
+	}
+	return nil
+}
+
 // scanCommand is the whole run block of the step that makes the scan, its
 // comments aside: anything written beside it, a variable assignment, an
 // option, a || or a pipe, can change which scanner runs or let its failure
 // pass, and none of those is a make invocation this audit could refuse by its
-// targets alone.
-const scanCommand = "make " + dependencyScanTarget
+// targets alone. It names dependencyScanTarget.
+const scanCommand = "make check-dependency-vulns"
 
 // scanEnvironment are the variables a workflow, the scan's job or its step may
 // not set, each read by make or by the step's shell before the recipe runs:
@@ -213,14 +296,14 @@ func workflowScanProblems(workflows []workflow) []string {
 	file := workflows[index]
 	jobs, _ := file.doc["jobs"].(map[string]any)
 	var problems []string
-	scanners := 0
+	scanned := false
 	for _, id := range orderedKeys(jobs, file.jobOrder) {
 		job, _ := jobs[id].(map[string]any)
 		positions := scanSteps(file.doc, job)
 		if len(positions) == 0 {
 			continue
 		}
-		scanners++
+		scanned = true
 		where := fmt.Sprintf("%s: job %s runs make %s", ciWorkflow, id, dependencyScanTarget)
 		all, _ := job["steps"].([]any)
 		steps := make([]map[string]any, 0, len(positions))
@@ -251,7 +334,7 @@ func workflowScanProblems(workflows []workflow) []string {
 			problems = append(problems, where+", and "+excuse)
 		}
 	}
-	if scanners == 0 {
+	if !scanned {
 		problems = append(problems, fmt.Sprintf("%s: no job runs make %s, so no change is held to the dependency advisories before it merges",
 			ciWorkflow, dependencyScanTarget))
 	}

@@ -1,0 +1,145 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "gitlab-mcp-server",
+  "display_name": "GitLab MCP Server",
+  "version": "3.4.0",
+  "description": "Manage GitLab projects, issues, merge requests, pipelines, repositories, and admin workflows from Claude.",
+  "long_description": "Comprehensive GitLab MCP server covering the full REST API v4 and GraphQL with automatic edition gating: ~872 tools on Free/CE, ~1027 on Premium, up to ~1099 on GitLab.com Ultimate.\n\nBy default it exposes a low-token dynamic surface (two find/execute tools) so it never crowds your context window; a consolidated meta-tool mode (~34 domain tools) and a one-tool-per-action individual mode are selectable in the extension settings. Bundles 45 MCP resources, 37 prompts, argument completions, progress notifications, elicitation, and resource subscriptions (live change notifications for 26 resource kinds, honored by polling).\n\nWorks with GitLab.com and self-managed instances. Read-only and safe (mutation-preview) modes are available for cautious use.",
+  "author": {
+    "name": "José M. Requena Plens",
+    "email": "jmrplens@gmail.com",
+    "url": "https://github.com/jmrplens"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jmrplens/gitlab-mcp-server"
+  },
+  "homepage": "https://docs.jmrp.io/gitlab-mcp-server",
+  "documentation": "https://docs.jmrp.io/gitlab-mcp-server",
+  "support": "https://github.com/jmrplens/gitlab-mcp-server/issues",
+  "icon": "icon.png",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/missing",
+    "mcp_config": {
+      "command": "${__dirname}/server/gitlab-mcp-server",
+      "args": [],
+      "env": {
+        "GITLAB_URL": "${user_config.gitlab_url}",
+        "GITLAB_TOKEN": "${user_config.gitlab_token}",
+        "GITLAB_MCP_TOOL_SURFACE": "${user_config.tool_surface}",
+        "GITLAB_MCP_TIER": "${user_config.gitlab_tier}",
+        "GITLAB_MCP_READ_ONLY": "${user_config.read_only}",
+        "GITLAB_MCP_SAFE_MODE": "${user_config.safe_mode}",
+        "GITLAB_MCP_SKIP_TLS_VERIFY": "${user_config.skip_tls_verify}",
+        "GITLAB_MCP_LOG_LEVEL": "${user_config.log_level}"
+      },
+      "platform_overrides": {
+        "win32": {
+          "command": "${__dirname}/server/gitlab-mcp-server.exe"
+        },
+        "linux": {
+          "command": "/bin/sh",
+          "args": [
+            "${__dirname}/server/linux/launch.sh"
+          ]
+        }
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "gitlab_find_action",
+      "description": "Discover GitLab actions with a natural-language query and get their exact input schemas."
+    },
+    {
+      "name": "gitlab_execute_action",
+      "description": "Execute any catalog GitLab action (projects, issues, MRs, pipelines, admin, …) by canonical id with typed parameters."
+    }
+  ],
+  "tools_generated": true,
+  "prompts_generated": true,
+  "keywords": [
+    "gitlab",
+    "devops",
+    "ci-cd",
+    "merge-requests",
+    "issues",
+    "pipelines",
+    "code-review",
+    "graphql",
+    "rest-api"
+  ],
+  "license": "MIT",
+  "privacy_policies": [
+    "https://github.com/jmrplens/gitlab-mcp-server/blob/main/PRIVACY.md",
+    "https://about.gitlab.com/privacy/"
+  ],
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ]
+  },
+  "user_config": {
+    "gitlab_url": {
+      "type": "string",
+      "title": "GitLab URL",
+      "description": "GitLab instance URL. Keep https://gitlab.com for SaaS, or set your self-managed instance URL.",
+      "default": "https://gitlab.com",
+      "required": true
+    },
+    "gitlab_token": {
+      "type": "string",
+      "title": "GitLab Personal Access Token",
+      "description": "Personal Access Token (glpat-…) with `api` scope. Create one in GitLab under your avatar → Edit profile → Access → Personal access tokens.",
+      "sensitive": true,
+      "required": true
+    },
+    "tool_surface": {
+      "type": "string",
+      "title": "Tool surface",
+      "description": "Tool catalog surface: \"dynamic\" (two find/execute tools, lowest token use, recommended), \"meta\" (~34 consolidated domain tools on Free/CE, more on paid tiers) or \"individual\" (one tool per action, ~872 on Free/CE, up to ~1099 on GitLab.com Ultimate).",
+      "default": "dynamic",
+      "required": false
+    },
+    "gitlab_tier": {
+      "type": "string",
+      "title": "GitLab tier",
+      "description": "Force the licensing tier (\"free\", \"premium\" or \"ultimate\") and skip detection. Leave empty to detect it from the instance license, then from the plans of the namespaces your token administers, then, on GitLab.com, from the top-level groups your token is a member of, falling back to free.",
+      "default": "",
+      "required": false
+    },
+    "read_only": {
+      "type": "boolean",
+      "title": "Read-only mode",
+      "description": "Remove every mutating action; reads keep working. Safe for exploration and review-only sessions.",
+      "default": false,
+      "required": false
+    },
+    "safe_mode": {
+      "type": "boolean",
+      "title": "Safe mode",
+      "description": "A mutating action returns a preview card naming the action and echoing its arguments instead of running; reads keep working.",
+      "default": false,
+      "required": false
+    },
+    "skip_tls_verify": {
+      "type": "boolean",
+      "title": "Skip TLS verification",
+      "description": "Allow self-signed certificates on self-managed instances. Leave off unless you need it.",
+      "default": false,
+      "required": false
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Log level",
+      "description": "Logging verbosity written to Claude Desktop's MCP log files: \"debug\", \"info\", \"warn\" or \"error\". Set \"debug\" when reporting an issue.",
+      "default": "info",
+      "required": false
+    }
+  }
+}
