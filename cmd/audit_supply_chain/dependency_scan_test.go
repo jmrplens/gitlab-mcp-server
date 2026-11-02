@@ -88,7 +88,10 @@ func TestDependencyScanNames_Literals_SpellWhatTheyName(t *testing.T) {
 // finding, since which pass it reaches is not written where the rule reads.
 // OSV-Scanner reads -config as it reads --config, so the cases spell it both
 // ways, and a comment line of the recipe runs nothing, so one that names the
-// empty config is no finding and a pass commented out is no pass.
+// empty config is no finding and a pass commented out is no pass, written
+// with # or with @#, the form this Makefile comments in. Make takes the @ off
+// only where a recipe line opens, so on a continuation line a -config is
+// still an option of the pass and an @# a word of it.
 func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 	t.Parallel()
 
@@ -217,6 +220,26 @@ func TestMakefileScanProblems_Recipe_RunsThePinnedScanner(t *testing.T) {
 			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
 				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src\n\t# docker run $(OSV_SCANNER_IMAGE) scan source --config /dev/null /src\n",
 			want: []string{noUnfilteredPass},
+		},
+		{
+			name: "the pass under the empty config commented out with @#, as the Makefile writes its comments",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src\n\t@# docker run $(OSV_SCANNER_IMAGE) scan source --config /dev/null /src\n",
+			want: []string{noUnfilteredPass},
+		},
+		{
+			name:     "an @# comment line of the recipe that names the empty config",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n\t@# the second pass runs under --config /dev/null, which honors no allow list\n" + scanRecipe,
+		},
+		{
+			name: "the empty config spelled with one dash on a continuation line",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src\n\tdocker run $(OSV_SCANNER_IMAGE) scan source \\\n\t\t-config /dev/null --format json /src\n",
+		},
+		{
+			name: "a continuation line opening with @#, a word of the pass rather than a comment",
+			makefile: "OSV_SCANNER_IMAGE=" + pinnedScanner + "\ncheck-dependency-vulns:\n" +
+				"\tdocker run $(OSV_SCANNER_IMAGE) scan source /src\n\tdocker run $(OSV_SCANNER_IMAGE) scan source --format json \\\n\t\t@#1 --config /dev/null /src\n",
 		},
 		{
 			name:     "an empty config beside a named one",

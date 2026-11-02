@@ -161,19 +161,23 @@ func checkDependencyScan(root string) ([]string, error) {
 // which pass it reaches, and so which pass reads the allow lists, is not
 // written where this rule reads it.
 //
-// The rule reads the recipe's lines as the Makefile writes them, a comment
-// line aside, and does not expand them as make does: a --config that reaches
-// a pass through a make variable assigned outside the recipe, a
-// target-specific variable or an included makefile is not seen, and the words
-// of a docker run of the image read as a pass wherever they stand, in an echo
-// or as another image's arguments included.
+// The rule reads the recipe's lines as the Makefile writes them, its comment
+// lines aside, @# ones included (recipeWithoutComments), and neither expands
+// them as make does nor parses them as the shell does: a --config that
+// reaches a pass through a make variable assigned outside the recipe, a
+// target-specific variable or an included makefile is not seen, the words of
+// a docker run of the image read as a pass wherever they stand, in an echo or
+// as another image's arguments included, and a comment written at the end of
+// a pass's line is read as arguments of the pass, since telling one from a #
+// inside a word, as in the SECURITY.md#dependencies the recipe writes, takes
+// the shell's parsing.
 func makefileScanProblems(makefile string) []string {
 	problems := osvImageProblems(osvImageAssignment.FindAllStringSubmatch(stripComments(makefile), -1))
 	rule := parseMakefile(makefile)[dependencyScanTarget]
 	if rule == nil {
 		return append(problems, fmt.Sprintf("Makefile: no rule makes %s, so nothing holds the lockfiles to the dependency advisories", dependencyScanTarget))
 	}
-	recipe := stripComments(strings.Join(rule.recipe, "\n"))
+	recipe := recipeWithoutComments(rule.recipe)
 	runs := osvScannerRun.FindAllStringSubmatch(recipe, -1)
 	if len(runs) == 0 {
 		problems = append(problems, fmt.Sprintf("Makefile: the recipe of %s does not run $(%s), so the image pinned above is not the scanner that decides",
@@ -209,6 +213,35 @@ func makefileScanProblems(makefile string) []string {
 			dependencyScanTarget, unfilteredConfig))
 	}
 	return problems
+}
+
+// recipePrefixes are what make reads off the start of a recipe line before it
+// hands the line to the shell: @, which keeps it from echoing the line, -,
+// which ignores its failure, and +, which runs it even under -n, with any
+// blanks between them.
+const recipePrefixes = "@-+ \t"
+
+// recipeWithoutComments joins a rule's recipe lines without its comment lines,
+// each a line whose text, trimmed, starts with #. On a line that opens a
+// recipe line, because the one before it does not end in a backslash, make's
+// prefixes (recipePrefixes) come off first, so an @# line, the form this
+// Makefile writes its comments in, is one too. A continuation line keeps
+// them, since make hands them to the shell there: a -config opening one is an
+// option of the pass, and an @# opening one is a word of it.
+func recipeWithoutComments(recipe []string) string {
+	kept := make([]string, 0, len(recipe))
+	opens := true
+	for _, line := range recipe {
+		text := strings.TrimSpace(line)
+		if opens {
+			text = strings.TrimLeft(text, recipePrefixes)
+		}
+		opens = !strings.HasSuffix(line, "\\")
+		if !strings.HasPrefix(text, "#") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 // osvImageProblems holds the Makefile's assignments of the scanner image to
