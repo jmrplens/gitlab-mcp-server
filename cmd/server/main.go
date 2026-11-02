@@ -4817,16 +4817,6 @@ func serverCardTelemetry() map[string]any {
 	}
 }
 
-// buildServerCard creates a Smithery-compatible server-card JSON by spinning up
-// an ephemeral MCP server with a dummy GitLab client, listing all registered
-// tools, resources, resource templates, and prompts via in-memory MCP session,
-// and marshaling the result. The dummy client is never used for API calls —
-// it only satisfies createServer's non-nil requirement so that registration
-// can proceed.
-//
-// The card includes per-tool OutputSchema, Annotations, and Title so external
-// scanners (Smithery, Glama, MCP Hive) get the full metadata without needing
-// to authenticate against the live MCP endpoint.
 // buildServerCardFn is the card builder serveHTTPOn uses; a variable so a
 // test can substitute a builder it controls and drive the
 // shutdown-during-build path deterministically instead of racing a sleep
@@ -4912,6 +4902,16 @@ func serverCardAuthentication(cfg *config.Config) map[string]any {
 	}
 }
 
+// buildServerCard creates the enumerating server-card JSON served at
+// /.well-known/mcp/server-card.json (SEP-1649) by spinning up an ephemeral MCP
+// server with a dummy GitLab client, listing all registered tools, resources,
+// resource templates, and prompts via an in-memory MCP session, and marshaling
+// the result. The dummy client is never used for API calls: it only satisfies
+// createServer's non-nil requirement so that registration can proceed.
+//
+// The card includes per-tool OutputSchema, Annotations, and Title so external
+// scanners (Glama, MCP Hive) get the full metadata without needing to
+// authenticate against the live MCP endpoint.
 func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// Use configured URL or a placeholder — the dummy client only needs a
 	// parseable URL to register tools; it never makes real API calls.

@@ -343,7 +343,6 @@ const jsonLd = JSON.stringify({
 			sameAs: [
 				"https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server",
 				"https://cursor.directory/plugins/gitlab-mcp-server",
-				"https://smithery.ai/servers/jmrp/gitlab-mcp-server",
 				// Canonical form: /server/<name>/<owner> 301s to this URL.
 				"https://mcp.so/servers/gitlab-mcp-server-jmrplens",
 				"https://www.pulsemcp.com/servers/jmrplens-gitlab",
