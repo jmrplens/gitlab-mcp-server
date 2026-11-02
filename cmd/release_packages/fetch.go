@@ -5,11 +5,14 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"slices"
 	"time"
 )
@@ -48,6 +51,10 @@ type fetcher struct {
 	// diagnostics is where a failed request is described, the line curl -S
 	// printed.
 	diagnostics io.Writer
+	// spoolDir is the directory each download is written into, the system's
+	// temporary directory when empty, where the script's mktemp -d put the
+	// files its curl -o wrote.
+	spoolDir string
 }
 
 // newFetcher returns a fetcher over the network, through the proxy the
@@ -62,20 +69,43 @@ func newFetcher(diagnostics io.Writer) *fetcher {
 	return &fetcher{client: &http.Client{Transport: transport}, retryDelay: time.Second, diagnostics: diagnostics}
 }
 
-// request is one request: its method, URL and headers, its time bound, and
-// whether it follows redirects (curl -L).
+// request is one request: its method, URL and headers, its time bound,
+// whether it follows redirects (curl -L), and for a download the file its
+// body is written into rather than held in memory (curl -o).
 type request struct {
 	method  string
 	url     string
 	headers map[string]string
 	timeout time.Duration
 	follow  bool
+	into    *os.File
 }
 
-// response is what a request was answered with.
+// response is what a request was answered with: its body, or for a request
+// written into a file the size and SHA-256 of the body written there.
 type response struct {
 	body   []byte
+	size   int64
+	digest string
 	header http.Header
+}
+
+// artifact is a download held in a file of its own. The answer's bytes are
+// the file's first size bytes, and digest is their SHA-256 in lowercase hex,
+// as releaseassets.Digest writes it.
+type artifact struct {
+	file   *os.File
+	size   int64
+	digest string
+}
+
+// reader reads the answer's bytes.
+func (a *artifact) reader() *io.SectionReader { return io.NewSectionReader(a.file, 0, a.size) }
+
+// close closes the file and removes it.
+func (a *artifact) close() {
+	_ = a.file.Close()
+	_ = os.Remove(a.file.Name()) //#nosec G703 -- the file os.CreateTemp made for this download, named by it
 }
 
 // errNotAnswered is a request whose answer was a failure: the reason is on
@@ -105,7 +135,9 @@ func (f *fetcher) fetch(req request) (response, error) {
 	}
 }
 
-// once sends a request one time.
+// once sends a request one time. A request with a file writes the body there
+// from the file's start, so the answer's bytes are its first size bytes
+// whatever an attempt before it left past them.
 func (f *fetcher) once(req request) (response, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), req.timeout)
 	defer cancel()
@@ -127,6 +159,14 @@ func (f *fetcher) once(req request) (response, int, error) {
 		return response{}, 0, err
 	}
 	defer resp.Body.Close()
+	if req.into != nil {
+		hash := sha256.New()
+		var size int64
+		if size, err = io.Copy(io.MultiWriter(io.NewOffsetWriter(req.into, 0), hash), resp.Body); err != nil {
+			return response{}, 0, err
+		}
+		return response{size: size, digest: hex.EncodeToString(hash.Sum(nil)), header: resp.Header}, resp.StatusCode, nil
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return response{}, 0, err
@@ -139,8 +179,21 @@ func (f *fetcher) get(url string, follow bool, headers map[string]string) (respo
 	return f.fetch(request{method: http.MethodGet, url: url, headers: headers, timeout: metadataTimeout, follow: follow})
 }
 
-// download fetches an artifact, following redirects.
-func (f *fetcher) download(url string) ([]byte, error) {
-	got, err := f.fetch(request{method: http.MethodGet, url: url, timeout: downloadTimeout, follow: true})
-	return got.body, err
+// download fetches an artifact, following redirects, into a file of its own
+// in spoolDir, as curl -o wrote it, so an artifact is held on disk however
+// large it is and never in memory. The caller closes what it returns, which
+// removes the file; a download that fails leaves none.
+func (f *fetcher) download(url string) (*artifact, error) {
+	file, err := os.CreateTemp(f.spoolDir, "download-*")
+	if err != nil {
+		fmt.Fprintf(f.diagnostics, "  GET %s: %v\n", url, err)
+		return nil, err
+	}
+	got, err := f.fetch(request{method: http.MethodGet, url: url, timeout: downloadTimeout, follow: true, into: file})
+	downloaded := &artifact{file: file, size: got.size, digest: got.digest}
+	if err != nil {
+		downloaded.close()
+		return nil, err
+	}
+	return downloaded, nil
 }

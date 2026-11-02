@@ -5,15 +5,13 @@ package main
 
 import (
 	"archive/zip"
-	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 	"strings"
-
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/releaseassets"
 )
 
 // servedPlatform is one platform a declared bundle's manifest lists.
@@ -65,17 +63,18 @@ func (c *serverJSONCheck) checkBundle(pkg *jsonValue, identifier string) ([]stri
 		c.failf("no fileSha256 declared")
 		return nil, false
 	}
-	data, err := c.fetch.download(identifier)
+	bundle, err := c.fetch.download(identifier)
 	if err != nil {
 		c.failf("not downloadable")
 		return nil, false
 	}
-	actual := releaseassets.Digest(data)
+	defer bundle.close()
+	actual := bundle.digest
 	if actual != declared {
 		c.failf("fileSha256 mismatch: declared %s..., actual %s...", prefix(declared, 16), prefix(actual, 16))
 		return nil, false
 	}
-	platforms, err := c.readBundle(data)
+	platforms, err := c.readBundle(bundle.reader())
 	if err != nil {
 		fmt.Fprintln(c.stderr, err)
 		c.failf("not a valid MCP bundle")
@@ -99,10 +98,12 @@ func prefix(s string, n int) string { return s[:min(n, len(s))] }
 // so a missing one is a platform on which the extension installs and never
 // starts. It returns the platforms the manifest lists, the strings of
 // compatibility.platforms when that is a list.
-func (c *serverJSONCheck) readBundle(data []byte) ([]string, error) {
-	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+func (c *serverJSONCheck) readBundle(bundle *io.SectionReader) ([]string, error) {
+	archive, err := zip.NewReader(bundle, bundle.Size())
 	if err != nil {
-		return nil, fmt.Errorf("not a zip archive (magic bytes: %s)", magicBytes(data))
+		head := make([]byte, 4)
+		n, _ := bundle.ReadAt(head, 0)
+		return nil, fmt.Errorf("not a zip archive (magic bytes: %s)", magicBytes(head[:n]))
 	}
 	names := map[string]bool{}
 	var manifestFile *zip.File
@@ -232,9 +233,9 @@ func (c *serverJSONCheck) checkCoverage(served []servedPlatform) {
 	}
 }
 
-// readZipNames returns the names of the entries of a zip held in memory.
-func readZipNames(data []byte) ([]string, error) {
-	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+// readZipNames returns the names of the entries of a zip.
+func readZipNames(data *io.SectionReader) ([]string, error) {
+	archive, err := zip.NewReader(data, data.Size())
 	if err != nil {
 		return nil, err
 	}

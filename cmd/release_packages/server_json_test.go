@@ -202,7 +202,9 @@ func (rt rewritingTransport) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // serveScenario starts the stand-in for one scenario and returns it with a
-// fetcher that sends everything there and never waits to retry.
+// fetcher that sends everything there, never waits to retry, and writes its
+// downloads into a directory of the test's own, which the scenario's run has
+// to leave empty.
 func serveScenario(t *testing.T, routes map[string]route, diagnostics *bytes.Buffer) (*standIn, *fetcher) {
 	t.Helper()
 	stand := &standIn{routes: routes}
@@ -212,7 +214,7 @@ func serveScenario(t *testing.T, routes map[string]route, diagnostics *bytes.Buf
 	if err != nil {
 		t.Fatal(err)
 	}
-	return stand, &fetcher{client: &http.Client{Transport: rewritingTransport{target: target}}, diagnostics: diagnostics}
+	return stand, &fetcher{client: &http.Client{Transport: rewritingTransport{target: target}}, diagnostics: diagnostics, spoolDir: t.TempDir()}
 }
 
 // layOutScenario writes a scenario's server.json and files into a new
@@ -315,6 +317,9 @@ func TestServerJSONCheck_ServerJSONRecord_SaysAndAsksWhatTheScriptDid(t *testing
 			if !slices.Equal(stand.sent, scenario.Requests) {
 				t.Errorf("requests\n%+v\nwant\n%+v", stand.sent, scenario.Requests)
 			}
+			if left := spooled(t, fetch.spoolDir); left != 0 {
+				t.Errorf("the run left %d downloads behind, want none", left)
+			}
 		})
 	}
 }
@@ -340,6 +345,9 @@ func runCheck(t *testing.T, serverJSON string, routes map[string]route, files, e
 	check := newServerJSONCheck(root, "server.json", &stdout, &stderr, func(key string) string { return env[key] })
 	check.fetch = fetch
 	code := check.run()
+	if left := spooled(t, fetch.spoolDir); left != 0 {
+		t.Errorf("the run left %d downloads behind, want none", left)
+	}
 	return checkResult{code: code, stdout: stdout.String(), stderr: stderr.String(), sent: stand.sent}
 }
 

@@ -115,7 +115,9 @@
 // release of the declared npm version is immutable, as a warning rather
 // than a failure. Each request is bounded and retried as curl
 // --retry 2 --retry-connrefused retried it, and a failed one is described on
-// stderr.
+// stderr. A bundle or a NuGet package is written to a temporary file as it
+// arrives, as the script's curl -o wrote it, its SHA-256 taken on the way,
+// and read as a zip from that file, so no artifact is held in memory.
 //
 // Three things differ from the script on purpose. Every field is held
 // against the entry that carries it, where the script held each entry to the

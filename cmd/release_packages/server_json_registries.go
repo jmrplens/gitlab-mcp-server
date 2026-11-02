@@ -217,7 +217,8 @@ func (c *serverJSONCheck) checkNuGetPackage(identifier, v string, token *regexp.
 		c.failf("version %s is listed but its package could not be downloaded", v)
 		return
 	}
-	names, err := readZipNames(nupkg)
+	defer nupkg.close()
+	names, err := readZipNames(nupkg.reader())
 	if err != nil {
 		fmt.Fprintln(c.stderr, "not a zip archive")
 		c.failf("not a valid .NET tool package with an MCP manifest")
