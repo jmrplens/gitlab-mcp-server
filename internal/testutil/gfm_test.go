@@ -209,6 +209,14 @@ func TestScanGFM_Structure_CountsWhatAHostileValueMustNotChange(t *testing.T) {
 // label that was not escaped; and an autolink, whose address is read whole
 // when it begins before any code span does, backticks included, and is text
 // when a span opened before it.
+//
+// The precedence cases come in pairs, one for each direction: the form that
+// begins first wins, whether it is the span, an autolink, an email
+// autolink, raw HTML, a backslash escape or a link whose "]" came first. The
+// cases where the form begins first were red against the walk that knew
+// only spans and URI autolinks, and each of them hid or invented a
+// destination; micromark, patched to the specification in the three places
+// where it departs from it, reads every paragraph case as written here.
 func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 	cases := []struct {
 		name string
@@ -254,6 +262,81 @@ func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 		// an address.
 		{name: "a span inside what would be an autolink leaves no address", md: "<https://gitlab.example/a`b c`>\n"},
 		{name: "a lookalike with a one-letter scheme leaves the span", md: "<a:x`[y](http://attacker.invalid/y)`>\n"},
+		// An email autolink is a link to mailto:, and its local part may
+		// hold a backtick, which then opens nothing.
+		{name: "an email autolink", md: "<user7@gitlab.example>\n", want: "mailto:user7@gitlab.example"},
+		{name: "a backtick in an email autolink opens no span", md: "<q`r@w.ex> [x](http://attacker.invalid/y) `\n", want: "mailto:q`r@w.ex|http://attacker.invalid/y"},
+		{name: "a span opened before an email autolink holds its start", md: "`a <q`r@w.ex> [x](http://attacker.invalid/y)\n", want: "http://attacker.invalid/y"},
+		{name: "an exclamation mark in an email address", md: "<q!r@w.ex>\n", want: "mailto:q!r@w.ex"},
+		{name: "an email domain label ends in a letter or a digit", md: "<q@w-.ex>\n"},
+		// Raw HTML has the span's precedence as well, so a bracket inside a
+		// tag's attribute neither closes a label nor opens one.
+		{name: "a bracket inside a tag's attribute closes no label", md: `[x<a title="](http://attacker.invalid/y)">y</a>` + "\n"},
+		{name: "a tag inside a label", md: "[x <b>y</b>](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "a backtick inside a tag's attribute opens no span", md: "<b title=\"`\">[x](http://attacker.invalid/y) `\n", want: "http://attacker.invalid/y"},
+		{name: "a span opened before a tag holds its start", md: "`<b title=\"`\">[x](http://attacker.invalid/y)\n", want: "http://attacker.invalid/y"},
+		{name: "an autolink holds a label's bracket", md: "[x<http://h/](http://attacker.invalid/y)>\n", want: "http://h/](http://attacker.invalid/y)"},
+		// A backslash before ASCII punctuation makes it literal: an escaped
+		// backtick opens no span, an escaped "<" opens no autolink and an
+		// escaped bracket opens no label; inside a span it is a backslash.
+		{name: "an escaped angle bracket opens no autolink", md: "\\<https://h/a`b> `[x](http://attacker.invalid/y)`\n", want: "http://attacker.invalid/y"},
+		{name: "an escaped backtick opens no span", md: "\\`[x](http://attacker.invalid/y)`\n", want: "http://attacker.invalid/y"},
+		{name: "a run after an escaped backtick opens one", md: "\\``[x](http://attacker.invalid/y)`\n"},
+		{name: "a backslash inside a span does not keep it from closing", md: "`a\\`[x](http://attacker.invalid/y)\n", want: "http://attacker.invalid/y"},
+		{name: "an escaped bracket opens no label", md: "\\[x](http://attacker.invalid/y)\n"},
+		{name: "an escaped backslash leaves the bracket a label", md: "\\\\[x](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "a backslash before a letter is a backslash", md: "\\a[x](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "a backslash ending the line", md: "[x](https://gitlab.example/T/7)\\\n", want: "https://gitlab.example/T/7"},
+		// A link whose "]" comes first reads its resource as written, so a
+		// backtick in the destination opens nothing; a span opened before
+		// the label holds the label instead.
+		{name: "a backtick in a destination opens no span", md: "[a](https://gitlab.example/a`b) `[x](http://attacker.invalid/y)`\n", want: "https://gitlab.example/a`b"},
+		{name: "a span opened before a label holds the destination", md: "`[a](https://gitlab.example/a`b) [x](http://attacker.invalid/y)\n", want: "http://attacker.invalid/y"},
+		// The bracket rule: the next "]" closes the latest "[" still open,
+		// links do not nest, and an image's description is alt text.
+		{name: "brackets inside a label are balanced", md: "[a [b] c](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "a link inside a label leaves the outer brackets text", md: "[a [b](https://gitlab.example/B/7) c](http://attacker.invalid/y)\n", want: "https://gitlab.example/B/7"},
+		{name: "a closing bracket with no label", md: "x] [y](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "a label that forms nothing", md: "[a] [b](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "an image's source", md: "![x](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "a link inside an image's description is alt text", md: "![a [b](http://attacker.invalid/y) c](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "an autolink inside an image's description is alt text", md: "![<http://attacker.invalid/y>](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "an image inside an image's description is alt text", md: "![![a](http://attacker.invalid/y)](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "a link before an image", md: "[a](https://gitlab.example/A/7) ![b](https://gitlab.example/B/7)\n", want: "https://gitlab.example/A/7|https://gitlab.example/B/7"},
+		{name: "a link holding an image", md: "[![a](https://gitlab.example/I/7)](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7|https://gitlab.example/I/7"},
+		{name: "a link holding an autolink", md: "[<https://gitlab.example/A/7>](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7|https://gitlab.example/A/7"},
+		// The resource: a title, a destination between angle brackets, an
+		// empty one, the whitespace around it, and its parentheses.
+		{name: "a title in double quotes", md: `[x](https://gitlab.example/T/7 "t")` + "\n", want: "https://gitlab.example/T/7"},
+		{name: "a title in single quotes", md: "[x](https://gitlab.example/T/7 't')\n", want: "https://gitlab.example/T/7"},
+		{name: "a title in parentheses", md: "[x](https://gitlab.example/T/7 (t))\n", want: "https://gitlab.example/T/7"},
+		{name: "a parenthesis inside a title in parentheses", md: "[x](https://gitlab.example/T/7 (t(u)))\n"},
+		{name: "an escaped parenthesis inside a title in parentheses", md: "[x](https://gitlab.example/T/7 (t\\(u))\n", want: "https://gitlab.example/T/7"},
+		// With no whitespace before the title there is no link, and what the
+		// resource held is read again as text, where the address is an
+		// autolink.
+		{name: "a title needs whitespace before it", md: `[x](<https://gitlab.example/T/7>"t")` + "\n", want: "https://gitlab.example/T/7"},
+		{name: "a destination between angle brackets", md: "[x](<https://gitlab.example/T 7>)\n", want: "https://gitlab.example/T 7"},
+		{name: "an unclosed angle bracket", md: "[x](<https://gitlab.example/T/7)\n"},
+		{name: "an empty destination", md: "[x]() [y](https://gitlab.example/T/7)\n", want: "|https://gitlab.example/T/7"},
+		{name: "whitespace around the destination", md: "[x]( https://gitlab.example/T/7\t)\n", want: "https://gitlab.example/T/7"},
+		{name: "balanced parentheses in a destination", md: "[x](https://gitlab.example/T(7))\n", want: "https://gitlab.example/T(7)"},
+		{name: "an unbalanced parenthesis in a destination", md: "[x](https://gitlab.example/T(7)\n"},
+		{name: "a parenthesis still open where whitespace ends the destination", md: "[x](https://gitlab.example/T(7 )\n"},
+		{name: "an escaped parenthesis in a destination", md: "[x](https://gitlab.example/T\\)7)\n", want: "https://gitlab.example/T\\)7"},
+		{name: "a space inside a bare destination", md: "[x](https://gitlab.example/T 7)\n"},
+		{name: "a control character inside a destination", md: "[x](https://gitlab.example/T\x7f7)\n"},
+		// U+0000 is replaced with U+FFFD before anything is parsed, and U+FFFD
+		// is no control character: a bare destination or an autolink holding a
+		// U+0000 is still one, where any other control character in either
+		// leaves no link.
+		{name: "U+0000 inside a destination", md: "[x](https://gitlab.example/T\x007)\n", want: "https://gitlab.example/T\x007"},
+		{name: "a control character below the space inside a destination", md: "[x](https://gitlab.example/T\x017)\n"},
+		{name: "U+0000 inside an autolink", md: "<https://gitlab.example/T\x007>\n", want: "https://gitlab.example/T\x007"},
+		{name: "a control character inside an autolink", md: "<https://gitlab.example/T\x017>\n"},
+		{name: "a delete character inside an autolink", md: "<https://gitlab.example/T\x7f7>\n"},
+		{name: "a destination running to the end of the line", md: "[x](https://gitlab.example/T/7\n"},
+		{name: "a label ending the line", md: "[x](\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -264,14 +347,76 @@ func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 	}
 }
 
-// TestGFMLinkRe_AutolinkAlternative_IsTheAutolinkPattern holds the two
-// spellings of the autolink to each other: the link regexp's last alternative
-// reads the addresses, and the autolink regexp decides which backticks the
-// code-span walk leaves alone, so the two drifting apart would read an
-// address off a line whose spans were elided by a different rule.
-func TestGFMLinkRe_AutolinkAlternative_IsTheAutolinkPattern(t *testing.T) {
-	if link, autolink := gfmLinkRe.String(), gfmAutolinkRe.String(); !strings.HasSuffix(link, "|"+autolink) {
-		t.Errorf("gfmLinkRe = %q, want it to end with the alternative %q", link, autolink)
+// TestScanGFM_RawHTML_ListsWhatARendererPassesThrough checks the raw HTML the
+// raw-tag rule reads: each of the six forms CommonMark passes through, what an
+// unquoted attribute value may and may not hold, the forms that look like one
+// and are text, and the three places a tag is text
+// although it is spelled as one, a code span, an escaped "<" and an image's
+// description. A tag that begins before a code span keeps the backtick in its
+// attribute, which used to pair with a later one and hide every tag between
+// them; a span that begins first holds the start of the tag instead.
+func TestScanGFM_RawHTML_ListsWhatARendererPassesThrough(t *testing.T) {
+	cases := []struct {
+		name string
+		md   string
+		want []string
+	}{
+		{name: "an open tag", md: `<a href="http://attacker.invalid">x` + "\n", want: []string{`<a href="http://attacker.invalid">`}},
+		{name: "a closing tag", md: "x</a >\n", want: []string{"</a >"}},
+		{name: "a self-closing tag with every kind of attribute", md: "<b a b=c d = 'e' f=\"g\" h:i-j.k_l=/m/n />\n", want: []string{"<b a b=c d = 'e' f=\"g\" h:i-j.k_l=/m/n />"}},
+		{name: "a comment", md: "<!-- a -- b -->\n", want: []string{"<!-- a -- b -->"}},
+		{name: "the two shortest comments", md: "<!--> <!--->\n", want: []string{"<!-->", "<!--->"}},
+		{name: "a processing instruction", md: "<?php x ?>\n", want: []string{"<?php x ?>"}},
+		{name: "a declaration", md: "<!DOCTYPE html>\n", want: []string{"<!DOCTYPE html>"}},
+		{name: "a CDATA section", md: "<![CDATA[ a ]] b ]]>\n", want: []string{"<![CDATA[ a ]] b ]]>"}},
+		{name: "a tag of a table cell", md: "| <b> | </b> |\n| --- | --- |\n", want: []string{"<b>", "</b>"}},
+		{name: "a tag on a quote line", md: "> <a href=\"http://x\">\n", want: []string{`<a href="http://x">`}},
+		{name: "a tag inside a label", md: "[<b>x</b>](https://gitlab.example/T/7)\n", want: []string{"<b>", "</b>"}},
+		{name: "a tag before an image and one after it", md: "<b> ![a](https://gitlab.example/T/7) </b>\n", want: []string{"<b>", "</b>"}},
+		{name: "a tag that begins before a span keeps its backtick", md: "<b title=\"`\">x <a href=\"http://attacker.invalid\">y</a> `\n", want: []string{"<b title=\"`\">", `<a href="http://attacker.invalid">`, "</a>"}},
+		{name: "a span that begins before a tag holds its start", md: "`<b title=\"`\">x <a href=\"http://attacker.invalid\">y</a>\n", want: []string{`<a href="http://attacker.invalid">`, "</a>"}},
+		{name: "a backtick inside a comment opens no span", md: "<!-- ` --> <a href=\"http://x\"> `\n", want: []string{"<!-- ` -->", `<a href="http://x">`}},
+		{name: "a tag inside a span is text", md: "`<a href=\"http://x\">`\n"},
+		{name: "an escaped angle bracket is text", md: "\\<a href=\"http://x\">\n"},
+		{name: "a tag inside an image's description is alt text", md: "![<a href=\"http://x\">y</a>](https://gitlab.example/T/7)\n"},
+		{name: "an autolink is no tag", md: "<https://gitlab.example/T/7>\n"},
+		{name: "an unclosed tag", md: "<a href=\"http://x\"\n"},
+		{name: "an attribute with no value after its equals sign", md: "<a b=>\n"},
+		{name: "an unclosed quoted value", md: "<a b='c>\n"},
+		{name: "a space after the angle bracket", md: "< a>\n"},
+		{name: "a tag name that opens with a digit", md: "<1a>\n"},
+		{name: "attributes with no whitespace between them", md: "<a b=\"c\"d>\n"},
+		// An unquoted attribute value holds anything CommonMark does not
+		// exclude from it, and it excludes a space, a tab, a line ending, ", ',
+		// =, <, > and the backtick: any other control character is part of the
+		// value, and so is U+0000, which the specification replaces with
+		// U+FFFD.
+		{name: "a control character inside an unquoted value", md: "<a b=c\x01d>\n", want: []string{"<a b=c\x01d>"}},
+		{name: "a vertical tab inside an unquoted value", md: "<a b=c\x0bd>\n", want: []string{"<a b=c\x0bd>"}},
+		{name: "a form feed inside an unquoted value", md: "<a b=c\x0cd>\n", want: []string{"<a b=c\x0cd>"}},
+		{name: "U+0000 inside an unquoted value", md: "<a b=c\x00d>\n", want: []string{"<a b=c\x00d>"}},
+		{name: "a space ends an unquoted value", md: "<a b=c 1>\n"},
+		{name: "a tab ends an unquoted value", md: "<a b=c\t1>\n"},
+		{name: "a carriage return ends an unquoted value", md: "<a b=c\r1>\n"},
+		{name: "a double quote inside an unquoted value", md: "<a b=c\"d>\n"},
+		{name: "a single quote inside an unquoted value", md: "<a b=c'd>\n"},
+		{name: "an equals sign inside an unquoted value", md: "<a b=c=d>\n"},
+		{name: "a backtick inside an unquoted value", md: "<a b=c`d>\n"},
+		{name: "an angle bracket inside an unquoted value opens the next tag", md: "<a b=c<d>\n", want: []string{"<d>"}},
+		{name: "an unclosed comment", md: "<!-- a\n"},
+		{name: "an empty declaration", md: "<!>\n"},
+		{name: "an unclosed CDATA section", md: "<![CDATA[ a ]>\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, line := range ScanGFM(tc.md).Bare {
+				got = append(got, line.RawHTML...)
+			}
+			if strings.Join(got, "\x00") != strings.Join(tc.want, "\x00") || len(got) != len(tc.want) {
+				t.Errorf("raw HTML = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -295,6 +440,18 @@ func TestScanGFM_SelfLinks_RecordsALabelThatIsItsDestination(t *testing.T) {
 		{name: "one inside a code span is text", md: "`[https://gitlab.example/T/7](https://gitlab.example/T/7)`\n"},
 		{name: "one inside a quote is GitLab's", md: "> [https://gitlab.example/T/7](https://gitlab.example/T/7)\n"},
 		{name: "one inside a fence is content", md: "```\n[https://gitlab.example/T/7](https://gitlab.example/T/7)\n```\n"},
+		// The label is what the bracket rule read, so a title, a destination
+		// between angle brackets and the text before the label change
+		// nothing, and an image, an empty link and a label holding a span
+		// are not one.
+		{name: "one with a title", md: `[https://gitlab.example/T/7](https://gitlab.example/T/7 "t")` + "\n", want: "https://gitlab.example/T/7"},
+		{name: "one with its destination between angle brackets", md: "[https://gitlab.example/T/7](<https://gitlab.example/T/7>)\n", want: "https://gitlab.example/T/7"},
+		{name: "one after a span", md: "`x` [https://gitlab.example/T/7](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "one inside a label left open", md: "[a [https://gitlab.example/T/7](https://gitlab.example/T/7)\n", want: "https://gitlab.example/T/7"},
+		{name: "an image is not one", md: "![https://gitlab.example/T/7](https://gitlab.example/T/7)\n"},
+		{name: "one inside an image's description is alt text", md: "![[https://gitlab.example/T/7](https://gitlab.example/T/7)](https://gitlab.example/I/7)\n"},
+		{name: "an empty link is not one", md: "[]()\n"},
+		{name: "a label holding a span is not one", md: "[`https://gitlab.example/T/7`](https://gitlab.example/T/7)\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -414,6 +571,25 @@ func TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes(t *testing.T) {
 		{name: "a span holding an autolink is elided", md: "`<https://h/a>`\n", want: gfmCodeSpanPlaceholder},
 		{name: "a run after a span that ends inside an autolink's text opens one", md: "`a <https://h/x`y`z`>\n", want: gfmCodeSpanPlaceholder + "y" + gfmCodeSpanPlaceholder + ">"},
 		{name: "an unpaired run before an autolink", md: "``a <https://h/x`y`z>\n", want: "``a <https://h/x`y`z>"},
+		// Raw HTML, an email autolink, a backslash escape and a link whose
+		// "]" came first share that precedence, so a backtick inside any of
+		// them opens nothing, and a span that begins first holds what
+		// follows. The first of each pair was red against the walk that knew
+		// only spans and URI autolinks.
+		{name: "a backtick inside a tag's attribute opens no span", md: "<b title=\"`\">x `y`\n", want: "<b title=\"`\">x " + gfmCodeSpanPlaceholder},
+		{name: "a span that begins before a tag holds its start", md: "`<b title=\"`\">x\n", want: gfmCodeSpanPlaceholder + "\">x"},
+		{name: "a backtick inside a comment opens no span", md: "<!-- `a --> `b`\n", want: "<!-- `a --> " + gfmCodeSpanPlaceholder},
+		{name: "a backtick inside a processing instruction opens no span", md: "<? `a ?> `b`\n", want: "<? `a ?> " + gfmCodeSpanPlaceholder},
+		{name: "a backtick inside a declaration opens no span", md: "<!X `a> `b`\n", want: "<!X `a> " + gfmCodeSpanPlaceholder},
+		{name: "a backtick inside a CDATA section opens no span", md: "<![CDATA[ `a ]]> `b`\n", want: "<![CDATA[ `a ]]> " + gfmCodeSpanPlaceholder},
+		{name: "a backtick inside an email autolink opens no span", md: "<q`r@w.ex> `x`\n", want: "<q`r@w.ex> " + gfmCodeSpanPlaceholder},
+		{name: "an escaped backtick opens no span", md: "\\`a`\n", want: "\\`a`"},
+		{name: "a run after an escaped backtick opens one", md: "\\``a`\n", want: "\\`" + gfmCodeSpanPlaceholder},
+		{name: "a backslash inside a span is a backslash", md: "`a\\`b`\n", want: gfmCodeSpanPlaceholder + "b`"},
+		{name: "an escaped angle bracket opens no autolink", md: "\\<https://h/a`b> `c`\n", want: "\\<https://h/a" + gfmCodeSpanPlaceholder + "c`"},
+		{name: "a backtick in a destination opens no span", md: "[a](h`b) `c`\n", want: "[a](h`b) " + gfmCodeSpanPlaceholder},
+		{name: "a destination ending in a backtick", md: "[a](h`) `c\n", want: "[a](h`) `c"},
+		{name: "an escaped bracket leaves the destination text", md: "\\[a](h`b) `c`\n", want: "\\[a](h" + gfmCodeSpanPlaceholder + "c`"},
 	}
 
 	for _, tc := range cases {

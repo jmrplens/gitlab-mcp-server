@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -3009,17 +3010,19 @@ func mdGateHostileText(exempt map[string]bool, payload string) func(string) stri
 // mdGateCompare reports every way a hostile render's structure differs from
 // the benign one.
 //
-// X2, the raw-tag rule, reads the bare lines of the render rather than its
-// content, which settles two questions the rule used to inherit rather than
-// decide. A code span is not judged, because CommonMark makes its contents
-// literal and HTML-escaped, so a value a formatter deliberately moved into
-// one is contained and reporting it would condemn the fix. A blockquote line
-// is judged, and that is the decision: the quote is containment against
-// structure, so a heading or a bullet inside one cannot reach the document,
-// and it is no containment at all against a tag, which a client renders as a
-// live anchor wherever it sits. Every offending line is reported rather than
-// the first, since stopping at one hid two findings of the class the rule
-// exists to find.
+// X2, the raw-tag rule, reads the raw HTML the line model lists on each bare
+// line of the render rather than its content, which settles two questions the
+// rule used to inherit rather than decide. A code span is not judged, because
+// CommonMark makes its contents literal and HTML-escaped, so a value a
+// formatter deliberately moved into one is contained and reporting it would
+// condemn the fix; nor is a tag the model reads as text for another reason,
+// an escaped "<" or an image's alt text. A blockquote line is judged, and
+// that is the decision: the quote is containment against structure, so a
+// heading or a bullet inside one cannot reach the document, and it is no
+// containment at all against a tag, which a client renders as a live anchor
+// wherever it sits. Every offending line is reported rather than the first,
+// since stopping at one hid two findings of the class the rule exists to
+// find.
 func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, baseHints []string, md string) []mdGateFinding {
 	doc := testutil.ScanGFM(md)
 	state := "hostile " + hostile
@@ -3048,7 +3051,7 @@ func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, bas
 	}
 	if hostile == "html" {
 		for _, line := range doc.Bare {
-			if strings.Contains(line.Bare, `<a href="http://attacker.invalid">`) {
+			if slices.Contains(line.RawHTML, `<a href="http://attacker.invalid">`) {
 				findings = append(findings, mdGateFinding{kase: c, state: state, rule: "X2", line: line.Line, text: line.Text, detail: "the value reaches the page as a raw tag"})
 			}
 		}
