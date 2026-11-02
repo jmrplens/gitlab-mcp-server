@@ -186,7 +186,7 @@ func TestFetcher_Downloads_AreWrittenToAFileOfTheirOwn(t *testing.T) {
 			if data := artifactBytes(t, got); string(data) != bundle || got.size != int64(len(bundle)) || got.digest != releaseassets.Digest([]byte(bundle)) {
 				t.Errorf("download holds %q, size %d, digest %s, want %q, %d and %s", data, got.size, got.digest, bundle, len(bundle), releaseassets.Digest([]byte(bundle)))
 			}
-			if dir := filepath.Dir(got.file.Name()); dir != f.spoolDir || spooled(t, f.spoolDir) != 1 {
+			if dir := filepath.Dir(got.file.Name()); dir != filepath.Clean(f.spoolDir) || spooled(t, f.spoolDir) != 1 {
 				t.Errorf("download written to %s beside %d files, want one file in %s", dir, spooled(t, f.spoolDir), f.spoolDir)
 			}
 			got.close()
