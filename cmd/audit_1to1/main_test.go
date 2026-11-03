@@ -504,14 +504,14 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 			wantErr: "boom",
 		},
 		{
-			name: "params_gate_reports_stale_declarations", scope: scopeParams,
+			name: "params_gate_reports_not_offered_params_and_stale_declarations", scope: scopeParams,
 			arrange: func(t *testing.T) {
 				t.Helper()
 				original := paramsRun
 				t.Cleanup(func() { paramsRun = original })
 				paramsRun = func(string, params.Options) ([]byte, bool, error) { return []byte("{}\n"), false, nil }
 			},
-			wantErr: "param declarations that answer nothing", wantReport: true,
+			wantErr: "params an input could offer that none does, or param declarations that answer nothing", wantReport: true,
 		},
 		{
 			name: "params_scope_fails", scope: scopeParams,

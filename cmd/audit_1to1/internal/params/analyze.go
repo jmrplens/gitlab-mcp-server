@@ -128,9 +128,12 @@ type Summary struct {
 	UnreadRequests    int `json:"unread_requests"`
 }
 
-// clean reports whether the gate passes: no declaration that answers
-// nothing. A finding is a report, not a failure.
-func (s *Summary) clean() bool { return s.Stale == 0 }
+// clean reports whether the gate passes: no declaration that answers nothing,
+// and no not_offered finding no declaration answers, since an input can offer
+// that param today. Every other finding is a report, not a failure: an
+// unmodeled param waits on client-go, and an offered_unrecorded or unjudged
+// one is still to be looked at (issue 1599).
+func (s *Summary) clean() bool { return s.Stale == 0 && s.NotOffered == 0 }
 
 // Options is what a run of this scope needs beyond the tree.
 type Options struct {

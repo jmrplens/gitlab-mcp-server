@@ -101,7 +101,7 @@ go run ./cmd/audit_1to1/ -scope=enums -gaps-only
 # SDK parity gate (services, raw GraphQL, enum values, option structs, upstream waits, captures, identifiers): exits non-zero on a finding
 go run ./cmd/audit_1to1/ -scope=sdk -gaps-only
 
-# Route params (R-PARAM): reports, exits non-zero on a stale declaration
+# Route params (R-PARAM): reports, exits non-zero on an undeclared not_offered param or a stale declaration
 go run ./cmd/audit_1to1/ -scope=params -gaps-only
 
 # Live routes (R-ROUTE): exits non-zero on a route nothing answers or a stale declaration
@@ -442,7 +442,7 @@ A tracked row is a promise: a family row of R-ROUTE, or an identifier declaratio
 - `make audit-1to1-grants-report`: the whole R-GRANT report, written to `plan/1to1-grants.json`, with the end-to-end count comparison when `dist/e2e-calls` exists. Gates on nothing the plain target does not.
 - `make audit-1to1-required`: the requiredness gate (R-REQUIRED, `-scope=required -gaps-only`); fails the build when a parameter's requiredness in the schema and in GitLab disagree with no declaration answering it, or when a declaration answers nothing. No network, step 29 of `make analyze`.
 - `make audit-1to1-required-report`: the whole requiredness report, with the unplaced and unjudged fields, written to `plan/1to1-required.json`. Gates on nothing the plain target does not.
-- `make audit-1to1-params`: the route param gate (R-PARAM, `-scope=params -gaps-only`); reports every param of a reached route no recorded request carries and fails the build on a declaration that answers nothing. No network, step 30 of `make analyze`.
+- `make audit-1to1-params`: the route param gate (R-PARAM, `-scope=params -gaps-only`); reports every param of a reached route no recorded request carries and fails the build on a `not_offered` param no declaration answers and on a declaration that answers nothing. No network, step 30 of `make analyze`.
 - `make audit-1to1-params-report`: the whole R-PARAM report, with the declared findings and the requests whose options could not be read, written to `plan/1to1-params.json`. Gates on nothing the plain target does not.
 - `make audit-1to1-routes`: the live route gate (R-ROUTE, `-scope=routes -gaps-only`); fails the build on a route no action reaches that nothing answers and on a declaration that no longer describes the tree. No network, step 31 of `make analyze`.
 - `make audit-1to1-routes-report`: the whole R-ROUTE report, with the answered routes ordered by family and the reached ones, written to `plan/1to1-routes.json`. Gates on nothing the plain target does not.
