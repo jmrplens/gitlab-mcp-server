@@ -72,6 +72,70 @@ func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
 	recorder.AssertMembers(t, want)
 }
 
+// TestList_ALinkEntryWhoseFirstParameterHasNoValue_EndsTheListRatherThanPanicking
+// checks point 5 of issue 1671 against this server's pagination. RFC 8288
+// lets a Link entry's first parameter carry no value (`<url>; anchor;
+// rel="next"`), and client-go indexed past the end of such an entry and
+// panicked the call until v3.38.1, which skips it (register row 129). It still
+// reads rel from the first parameter alone, so the skipped entry names no next
+// page: the list answers the page it has, with no next_page_token and
+// has_more false, and the next entry beside it, written the way GitLab writes
+// one, is still the continuation.
+func TestList_ALinkEntryWhoseFirstParameterHasNoValue_EndsTheListRatherThanPanicking(t *testing.T) {
+	const next = "https://gitlab.example.com/api/v4/projects?id_after=2&order_by=id&pagination=keyset"
+	cases := []struct {
+		name, link, wantToken string
+	}{
+		{"the only entry", "<" + next + `>; anchor; rel="next"`, ""},
+		{"beside an entry GitLab writes", "<https://gitlab.example.com/api/v4/projects?id_after=1>; anchor, <" + next + `>; rel="next"`, next},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Link", tc.link)
+				testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"a"},{"id":2,"name":"b"}]`)
+			}))
+			out, err := List(t.Context(), client, ListInput{OrderBy: "id"})
+			if err != nil {
+				t.Fatalf("List() error: %v", err)
+			}
+			if len(out.Projects) != 2 || out.Pagination.NextPageToken != tc.wantToken || out.Pagination.HasMore != (tc.wantToken != "") {
+				t.Errorf("List() = %d projects, pagination %+v; want both projects and the token %q", len(out.Projects), out.Pagination, tc.wantToken)
+			}
+		})
+	}
+}
+
+// TestUpdate_DuoWorkflowSwitches_EachReachesTheBodyAlone drives each of the
+// three GitLab Duo security workflow switches EditProjectOptions models from
+// client-go v3.36.0 alone, through the parameters a tool call carries, at
+// true and at false, and holds the PUT body to that switch with the value
+// given and the other two absent. false turns a switch off, so a handler that
+// sent only a true one would leave it on.
+func TestUpdate_DuoWorkflowSwitches_EachReachesTheBodyAlone(t *testing.T) {
+	switches := []string{"duo_sast_fp_detection_enabled", "duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled"}
+	for _, key := range switches {
+		for _, value := range []string{"true", "false"} {
+			t.Run(key+"="+value, func(t *testing.T) {
+				input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"project_id": "42", key: value == "true"})
+				if err != nil {
+					t.Fatalf("UnmarshalParams() error: %v", err)
+				}
+				client, recorder := testutil.RecordWrites(t, `{}`, projectJSON)
+				if _, err = Update(t.Context(), client, input); err != nil {
+					t.Fatalf("Update() error: %v", err)
+				}
+				recorder.AssertMembers(t, map[string]string{key: value})
+				for _, other := range switches {
+					if got, sent := recorder.Member(other); sent && other != key {
+						t.Errorf("an update naming %s alone sent %s = %s", key, other, got)
+					}
+				}
+			})
+		}
+	}
+}
+
 // TestUpdate_RemoveAvatar_SendsTheBlankAvatarGitLabRemovesItFor verifies
 // that remove_avatar sends avatar as an empty value in the JSON body, which
 // PUT /projects/:id maps to CarrierWave's remove_avatar (lib/api/projects.rb),

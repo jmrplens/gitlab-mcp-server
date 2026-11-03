@@ -472,20 +472,23 @@ func TestServiceAccounts_ExternalLeftOut_IsAbsentRatherThanInternal(t *testing.T
 }
 
 // TestCreateServiceAccount_EachOptionReachesTheRequest drives one field at a
-// time and compares the whole body. Every field here is optional, so a body
-// that carried none of them would still be a request GitLab accepts, and a
-// handler that dropped one would answer with the fixture's account and look
-// like it worked.
+// time, through the parameters a tool call carries, and compares the whole
+// body. Every field here is optional, so a body that carried none of them
+// would still be a request GitLab accepts, and a handler that dropped one
+// would answer with the fixture's account and look like it worked. Decoding
+// the params is what holds the input's json tags to the keys a caller sends.
 func TestCreateServiceAccount_EachOptionReachesTheRequest(t *testing.T) {
 	tests := []struct {
-		name  string
-		input CreateServiceAccountInput
-		want  map[string]any
+		name   string
+		params map[string]any
+		want   map[string]any
 	}{
-		{"name", CreateServiceAccountInput{Name: "Build Bot"}, map[string]any{"name": "Build Bot"}},
-		{"username", CreateServiceAccountInput{Username: "build-bot"}, map[string]any{"username": "build-bot"}},
-		{"email", CreateServiceAccountInput{Email: "bot@x.test"}, map[string]any{"email": "bot@x.test"}},
-		{"nothing", CreateServiceAccountInput{}, map[string]any{}},
+		{"name", map[string]any{"name": "Build Bot"}, map[string]any{"name": "Build Bot"}},
+		{"username", map[string]any{"username": "build-bot"}, map[string]any{"username": "build-bot"}},
+		{"email", map[string]any{"email": "bot@x.test"}, map[string]any{"email": "bot@x.test"}},
+		{"external", map[string]any{"external": true}, map[string]any{"external": true}},
+		{"external false", map[string]any{"external": false}, map[string]any{"external": false}},
+		{"nothing", map[string]any{}, map[string]any{}},
 	}
 
 	for _, tt := range tests {
@@ -493,7 +496,11 @@ func TestCreateServiceAccount_EachOptionReachesTheRequest(t *testing.T) {
 			var got capturedRequest
 			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/service_accounts", &got, http.StatusCreated, userJSON))
 
-			if _, err := CreateServiceAccount(context.Background(), client, tt.input); err != nil {
+			input, err := toolutil.UnmarshalParams[CreateServiceAccountInput](tt.params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			if _, err = CreateServiceAccount(context.Background(), client, input); err != nil {
 				t.Fatalf("CreateServiceAccount() unexpected error: %v", err)
 			}
 			assertSent(t, "create service account body", got.body, tt.want)
@@ -502,21 +509,24 @@ func TestCreateServiceAccount_EachOptionReachesTheRequest(t *testing.T) {
 }
 
 // TestUpdateInstanceServiceAccount_EachOptionReachesTheRequest drives one field
-// at a time, for the reason the create sibling gives: a PATCH sends only what
-// the caller asked to change, so the body is exactly that key and a builder
-// that wrote the username into the name is visible here.
+// at a time through the parameters a tool call carries, for the reason the
+// create sibling gives: a PATCH sends only what the caller asked to change, so
+// the body is exactly that key and a builder that wrote the username into the
+// name is visible here.
 func TestUpdateInstanceServiceAccount_EachOptionReachesTheRequest(t *testing.T) {
 	const response = `{"id":5,"username":"svc-updated","name":"Updated Service","email":"updated@example.com"}`
 
 	tests := []struct {
-		name  string
-		input UpdateServiceAccountInput
-		want  map[string]any
+		name   string
+		params map[string]any
+		want   map[string]any
 	}{
-		{"name", UpdateServiceAccountInput{Name: "Updated Service"}, map[string]any{"name": "Updated Service"}},
-		{"username", UpdateServiceAccountInput{Username: "svc-updated"}, map[string]any{"username": "svc-updated"}},
-		{"email", UpdateServiceAccountInput{Email: "updated@example.com"}, map[string]any{"email": "updated@example.com"}},
-		{"nothing", UpdateServiceAccountInput{}, map[string]any{}},
+		{"name", map[string]any{"name": "Updated Service"}, map[string]any{"name": "Updated Service"}},
+		{"username", map[string]any{"username": "svc-updated"}, map[string]any{"username": "svc-updated"}},
+		{"email", map[string]any{"email": "updated@example.com"}, map[string]any{"email": "updated@example.com"}},
+		{"external", map[string]any{"external": true}, map[string]any{"external": true}},
+		{"external false", map[string]any{"external": false}, map[string]any{"external": false}},
+		{"nothing", map[string]any{}, map[string]any{}},
 	}
 
 	for _, tt := range tests {
@@ -524,9 +534,13 @@ func TestUpdateInstanceServiceAccount_EachOptionReachesTheRequest(t *testing.T) 
 			var got capturedRequest
 			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/service_accounts/5", &got, http.StatusOK, response))
 
-			input := tt.input
-			input.ServiceAccountID = 5
-			if _, err := UpdateInstanceServiceAccount(context.Background(), client, input); err != nil {
+			params := maps.Clone(tt.params)
+			params["service_account_id"] = 5
+			input, err := toolutil.UnmarshalParams[UpdateServiceAccountInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			if _, err = UpdateInstanceServiceAccount(context.Background(), client, input); err != nil {
 				t.Fatalf("UpdateInstanceServiceAccount() unexpected error: %v", err)
 			}
 			assertSent(t, "update service account body", got.body, tt.want)

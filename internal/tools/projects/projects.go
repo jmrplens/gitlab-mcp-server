@@ -666,6 +666,12 @@ type UpdateInput struct {
 	AutoDevopsDeployStrategy string `json:"auto_devops_deploy_strategy,omitempty" jsonschema:"Auto DevOps deploy strategy (continuous, manual, timed_incremental)"`
 	AutoDuoCodeReviewEnabled *bool  `json:"auto_duo_code_review_enabled,omitempty" jsonschema:"Enable automatic GitLab Duo code review. GitLab keeps it only where Duo code review is available to the project: on Premium or Ultimate with GitLab Duo, or on GitLab.com for a Free group with GitLab Credits. Elsewhere it is dropped"`
 
+	// GitLab Duo security workflows (additive), which GitLab keeps only where
+	// the instance's license carries ai_features and drops elsewhere.
+	DuoSastFPDetectionEnabled   *bool `json:"duo_sast_fp_detection_enabled,omitempty"   tier:"ultimate" jsonschema:"Enable GitLab Duo SAST false positive detection for this project. GitLab keeps it only where the license includes GitLab Duo AI features, and drops it elsewhere"`
+	DuoSastVRWorkflowEnabled    *bool `json:"duo_sast_vr_workflow_enabled,omitempty"    tier:"ultimate" jsonschema:"Enable the GitLab Duo SAST vulnerability resolution workflow for this project. GitLab keeps it only where the license includes GitLab Duo AI features, and drops it elsewhere"`
+	DuoSecretDetectionFPEnabled *bool `json:"duo_secret_detection_fp_enabled,omitempty" tier:"ultimate" jsonschema:"Enable GitLab Duo secret detection false positive detection for this project. GitLab keeps it only where the license includes GitLab Duo AI features and the duo_secret_detection_false_positive feature flag is on, and drops it elsewhere"`
+
 	// CI/CD settings (additive)
 	BuildGitStrategy                       string   `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
 	AutoCancelPendingPipelines             string   `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
@@ -1645,6 +1651,9 @@ func applyUpdatePipelineOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.AutoDuoCodeReviewEnabled != nil {
 		opts.AutoDuoCodeReviewEnabled = input.AutoDuoCodeReviewEnabled
 	}
+	opts.DuoSASTFPDetectionEnabled = input.DuoSastFPDetectionEnabled
+	opts.DuoSASTVRWorkflowEnabled = input.DuoSastVRWorkflowEnabled
+	opts.DuoSecretDetectionFPEnabled = input.DuoSecretDetectionFPEnabled
 	if input.BuildGitStrategy != "" {
 		opts.BuildGitStrategy = new(input.BuildGitStrategy)
 	}

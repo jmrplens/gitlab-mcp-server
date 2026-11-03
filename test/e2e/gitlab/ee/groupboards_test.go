@@ -9,10 +9,11 @@
 // it, and after the delete the listing no longer holds it. It also covers
 // what only a licensed instance sends on a group board, the assignee and
 // weight it is scoped to and the metric each limited column is counted by
-// (issue 1283), and the text of the board listing, which names each limited
-// column with its ceilings and its metric (issue 1284). The column actions, and the
-// reads and the rename of a board the fixture library built, are Free and
-// live in the common package.
+// (issue 1283), the text of the board listing, which names each limited
+// column with its ceilings and its metric (issue 1284), and the assignee and
+// milestone columns a column create makes (register row 96). The label
+// column actions, and the reads and the rename of a board the fixture library
+// built, are Free and live in the common package.
 
 package ee
 
@@ -80,6 +81,47 @@ func TestGroupBoards_Create_ListsReadsAndDeletesTheBoard(t *testing.T) {
 		after := harness.Do[groupboards.ListGroupBoardsOutput](s, actionGroupBoardList, params)
 		if containsID(groupBoardIDs(after.Boards), created.ID) {
 			e.T.Errorf("the group still lists board %d after its delete", created.ID)
+		}
+	})
+}
+
+// TestGroupBoards_CreateList_ScopesAColumnToAnAssigneeOrAMilestone creates a
+// group board on every surface and adds the two licensed column types the
+// column create takes since client-go v3.39.0 modeled them (register row 96):
+// one scoped to the caller and one to a group milestone, and holds each
+// answer to the scope it was asked for and to no other. Assignee and
+// milestone lists are Premium, which is why the scenario lives here; the label
+// column is Free and is in the common package. An iteration column needs the
+// numeric ID of an iteration, which the fixture library does not hand out, so
+// the unit suite holds its key to the request.
+func TestGroupBoards_CreateList_ScopesAColumnToAnAssigneeOrAMilestone(t *testing.T) {
+	e := harness.New(t)
+
+	me, _, err := e.Client().GL().Users.CurrentUser(gl.WithContext(e.Ctx))
+	if err != nil {
+		e.T.Fatalf("reading the token's user: %v", err)
+	}
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("boardlists"))
+		params := map[string]any{"group_id": group.IDParam()}
+
+		created := harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardCreate, withParams(params, map[string]any{"name": e.Name("board")}))
+		if created.ID == 0 {
+			e.T.Fatalf("group_board_create answered %+v, want a board with an ID", created)
+		}
+		board := withParams(params, map[string]any{"board_id": created.ID})
+		milestone := fixture.NewGroupMilestone(e, group, "boardlist")
+
+		byAssignee := harness.Do[groupboards.BoardListOutput](s, actionGroupBoardCreateList, withParams(board, map[string]any{"assignee_id": me.ID}))
+		if byAssignee.ID == 0 || byAssignee.Assignee == nil || byAssignee.Assignee.ID != me.ID || byAssignee.Label != nil || byAssignee.Milestone != nil {
+			e.T.Errorf("group_board_create_list for assignee %d answered %+v, want a column scoped to that user alone", me.ID, byAssignee)
+		}
+
+		byMilestone := harness.Do[groupboards.BoardListOutput](s, actionGroupBoardCreateList, withParams(board, map[string]any{"milestone_id": milestone.ID}))
+		if byMilestone.ID == 0 || byMilestone.Milestone == nil || byMilestone.Milestone.ID != milestone.ID || byMilestone.Label != nil || byMilestone.Assignee != nil {
+			e.T.Errorf("group_board_create_list for milestone %d answered %+v, want a column scoped to that milestone alone", milestone.ID, byMilestone)
 		}
 	})
 }

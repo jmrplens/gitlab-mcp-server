@@ -1050,6 +1050,7 @@ func TestCentralTierFilter_BoardScopeInputsArePremium(t *testing.T) {
 		projectBoardUpdate = actioncatalog.ActionID("project.board_update")
 		groupBoardUpdate   = actioncatalog.ActionID("group.group_board_update")
 		projectListCreate  = actioncatalog.ActionID("project.board_list_create")
+		groupListCreate    = actioncatalog.ActionID("group.group_board_create_list")
 	)
 	cases := []struct {
 		name        string
@@ -1075,6 +1076,10 @@ func TestCentralTierFilter_BoardScopeInputsArePremium(t *testing.T) {
 		{name: "board_list_create_milestone_id", id: projectListCreate, field: "milestone_id", premiumOnly: true},
 		{name: "board_list_create_iteration_id", id: projectListCreate, field: "iteration_id", premiumOnly: true},
 		{name: "board_list_create_label_id", id: projectListCreate, field: "label_id"},
+		{name: "group_board_create_list_assignee_id", id: groupListCreate, field: "assignee_id", premiumOnly: true},
+		{name: "group_board_create_list_milestone_id", id: groupListCreate, field: "milestone_id", premiumOnly: true},
+		{name: "group_board_create_list_iteration_id", id: groupListCreate, field: "iteration_id", premiumOnly: true},
+		{name: "group_board_create_list_label_id", id: groupListCreate, field: "label_id"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1323,11 +1328,15 @@ func TestCentralTierFilter_EpicNotification_IsOfferedWhereGitLabTakesIt(t *testi
 // Service Ping and registration features turned on
 // (License.feature_available?), and the mirror settings take its license
 // tier all the same, as the pull mirror actions beside them, the group wiki
-// and the group webhooks already do. The built-in template name, the hidden
-// project filter, which an administrator uses on every tier, and the
-// automatic Duo code review stay on Free: the last follows the group Duo
-// settings, which stay on every tier with a description, since a Free group
-// with GitLab Credits keeps them on GitLab.com.
+// and the group webhooks already do. The three GitLab Duo security workflow
+// switches are deleted unless the instance's license carries ai_features, an
+// Ultimate feature
+// (EE::API::Helpers::ProjectsHelpers#filter_duo_vulnerability_attributes!),
+// which is also the tier the project read publishes them from. The built-in
+// template name, the hidden project filter, which an administrator uses on
+// every tier, and the automatic Duo code review stay on Free: the last follows
+// the group Duo settings, which stay on every tier with a description, since a
+// Free group with GitLab Credits keeps them on GitLab.com.
 func TestCentralTierFilter_ProjectSettings_AreOfferedFromTheTierGitLabHonorsThem(t *testing.T) {
 	cases := []tieredInput{
 		{name: "list_include_hidden", id: "project.list", field: "include_hidden", from: edition.Free},
@@ -1345,6 +1354,9 @@ func TestCentralTierFilter_ProjectSettings_AreOfferedFromTheTierGitLabHonorsThem
 		{name: "update_only_mirror_protected_branches", id: "project.update", field: "only_mirror_protected_branches", from: edition.Premium},
 		{name: "update_prevent_merge_without_jira_issue", id: "project.update", field: "prevent_merge_without_jira_issue", from: edition.Ultimate},
 		{name: "update_auto_duo_code_review_enabled", id: "project.update", field: "auto_duo_code_review_enabled", from: edition.Free},
+		{name: "update_duo_sast_fp_detection_enabled", id: "project.update", field: "duo_sast_fp_detection_enabled", from: edition.Ultimate},
+		{name: "update_duo_sast_vr_workflow_enabled", id: "project.update", field: "duo_sast_vr_workflow_enabled", from: edition.Ultimate},
+		{name: "update_duo_secret_detection_fp_enabled", id: "project.update", field: "duo_secret_detection_fp_enabled", from: edition.Ultimate},
 	}
 	// project.create_for_user embeds the create input, so both creates are
 	// held to the same tiers.

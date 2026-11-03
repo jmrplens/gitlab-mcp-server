@@ -59,6 +59,7 @@ type CreateServiceAccountInput struct {
 	Name     string `json:"name,omitempty" jsonschema:"Name for the service account"`
 	Username string `json:"username,omitempty" jsonschema:"Username for the service account"`
 	Email    string `json:"email,omitempty" jsonschema:"Email for the service account"`
+	External *bool  `json:"external,omitempty" jsonschema:"Create the service account as an external user, which reaches internal and private projects only where it is a member"`
 }
 
 // ListServiceAccountsInput holds parameters for listing service accounts.
@@ -95,6 +96,7 @@ func CreateServiceAccount(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.Email != "" {
 		opts.Email = new(input.Email)
 	}
+	opts.External = input.External
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	user, _, err := client.GL().Users.CreateServiceAccountUser(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -147,6 +149,7 @@ type UpdateServiceAccountInput struct {
 	Name             string `json:"name,omitempty"              jsonschema:"New name for the service account"`
 	Username         string `json:"username,omitempty"          jsonschema:"New username for the service account"`
 	Email            string `json:"email,omitempty"             jsonschema:"New email for the service account"`
+	External         *bool  `json:"external,omitempty"          jsonschema:"Make the service account an external user (true), which reaches internal and private projects only where it is a member, or a regular one (false)"`
 }
 
 // UpdateInstanceServiceAccount updates an instance-level service account.
@@ -164,6 +167,7 @@ func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Clie
 	if input.Email != "" {
 		opts.Email = new(input.Email)
 	}
+	opts.External = input.External
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	account, _, err := client.GL().Users.UpdateInstanceServiceAccount(input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {

@@ -323,12 +323,12 @@ readable without opening the tracker:
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065), open; our request of 2026-10-21 for the reviewer to look at it again has had no answer | No | No | Yes |
 | 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | Yes | Yes, [gitlab-org/api/client-go!3153](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3153), merged on 2026-10-26, after [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) closed unmerged on 2026-10-21 | **Yes, v3.38.0**: merged at 23:13 UTC on 2026-10-26 and tagged at 23:27; this server pins it since the bump to v3.38.1 | Was partly, until the pin carried v3.38.0 | Retired at the v3.38.1 pin: the 422 hint is gone, the e2e lifecycle updates a single field, and the waits table's row 52 entry is gone |
 | 53 | gitlab-org/gitlab | [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator) | Yes, [gitlab-org/gitlab#630305](https://gitlab.com/gitlab-org/gitlab/-/issues/630305) | Yes, [gitlab-org/gitlab!256936](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256936), merged, after a product decision given on the issue on 2026-10-09 and the approvals of the backend maintainer and the technical writer; it adds `plan` to `GET /api/v4/metadata`, its `/version` alias and the `Metadata` GraphQL type, for every caller who can read them; the issue stayed open after the merge, since GitLab's project does not close an issue when the merge request naming it merges, until this project's maintainer closed it as completed on 2026-10-26 | **Yes, unreleased**: merged on 2026-10-22 in milestone 19.6, so 19.6 is its first release; deployed to GitLab.com at 15:56 UTC that day, where it answers `null`, since GitLab.com holds subscriptions per namespace | No | Yes; a step reading `plan` from `GET /metadata` on 19.6 or later is not taken yet, and the cascade stays for GitLab.com and older instances |
-| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; `label_id`'s tag went out instead in [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), merged, with row 96's three list types; the other six to go out again in a small merge request, not opened yet | In part, **v3.39.0**: `label_id`, by [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085); the other six, no | No; one latent until the pin carries v3.39.0, one narrows an action | Not needed for five; two handlers require the field, `label_id` until the bump to v3.39.0 or later with row 96, `value` until its tag changes |
+| 54 | client-go | [Seven more option structs send an optional param on every call](#seven-more-option-structs-send-an-optional-param-on-every-call) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; `label_id`'s tag went out instead in [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), merged, with row 96's three list types; the other six to go out again in a small merge request, not opened yet | In part, **v3.39.0**: `label_id`, by [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085); the other six, no | No; one latent until the v3.40.3 pin, one narrows an action | Not needed for five; one handler requires the field, `value`, until its tag changes; `label_id` was required until the v3.40.3 pin, where the column create takes row 96's four list types and asks for exactly one |
 | 55 | gitlab-org/gitlab | [A permission refusal is answered 401 rather than 403](#a-permission-refusal-is-answered-401-rather-than-403) | In part, by another user, [gitlab-org/gitlab#383531](https://gitlab.com/gitlab-org/gitlab/-/issues/383531), for one of its sites | The documentation half, [gitlab-org/gitlab!260774](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260774), merged; the behaviour, no; the SAML group link routes' 401 for a missing group, [gitlab-org/gitlab!261348](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261348), merged, keeping the permission 401, after a GitLab team member ran the new pipeline our `@gitlab-bot help` of 2026-10-21 asked for and a backend maintainer approved it; the issue it names to close stayed open after the merge, since GitLab's project does not close an issue when the merge request naming it merges, until this project's maintainer closed it as completed on 2026-10-26 | **The documentation half, 19.5.0**. The missing group's 404, unreleased: merged on 2026-10-22 in milestone 19.6, so 19.6 is its first release, and deployed to GitLab.com at 08:56 UTC on 2026-10-23. The permission refusal itself, no | No | Yes |
 | 56 | gitlab-org/gitlab | [Deleting an external status check without the role answers 204 and deletes nothing](#deleting-an-external-status-check-without-the-role-answers-204-and-deletes-nothing) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 57 | **Yes, 19.5.0**: merged on 2026-10-09 before the 19.5 cut, although its milestone says 19.6 | No | Partial, for releases before 19.5, whose silent `204` the usage asks the caller to check; from 19.5 the `403` is hinted with the role |
 | 57 | gitlab-org/gitlab | [Creating an external status check without the role answers 500](#creating-an-external-status-check-without-the-role-answers-500) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260486](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260486), merged, with row 56 | **Yes, 19.5.0**: with row 56, merged before the 19.5 cut although its milestone says 19.6 | No | Yes, for releases before 19.5, whose `500` is read as the role refusal; from 19.5 the `403` is hinted with the role |
 | 58 | client-go | [Five response keys and three parameters GitLab 19.4 added](#five-response-keys-and-three-parameters-gitlab-194-added-that-v3140-does-not-model) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Partial |
-| 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | Yes | Yes, [gitlab-org/api/client-go!3154](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3154), merged on 2026-10-25, after [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) closed unmerged on 2026-10-21 | **Yes, v3.35.0**: merged at 21:59 UTC on 2026-10-25 and tagged at 22:14; this server pins it since the bump to v3.38.1 | No | Retired for the response at the v3.38.1 pin, which reads every limit off `PlanLimit` and so publishes a limit an older instance leaves out as 0; the twenty-one parameters can be offered |
+| 59 | client-go | [PlanLimit models eight of the twenty-nine limits GitLab sends and accepts](#planlimit-models-eight-of-the-twenty-nine-limits-gitlab-sends-and-accepts) | Yes | Yes, [gitlab-org/api/client-go!3154](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3154), merged on 2026-10-25, after [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063) closed unmerged on 2026-10-21 | **Yes, v3.35.0**: merged at 21:59 UTC on 2026-10-25 and tagged at 22:14; this server pins it since the bump to v3.38.1 | No | Retired for the response at the v3.38.1 pin, which reads every limit off `PlanLimit` and so publishes a limit an older instance leaves out as 0; the twenty-one parameters are offered since the v3.40.3 pin |
 | 60 | client-go | [JobPipeline models five of the ten keys a job's pipeline carries](#jobpipeline-models-five-of-the-ten-keys-a-jobs-pipeline-carries) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
 | 61 | client-go | [`AwardEmoji` does not model the image URL of a custom emoji](#awardemoji-does-not-model-the-image-url-of-a-custom-emoji) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
 | 62 | client-go | [`Diff` does not model why a file diff arrives without its text](#diff-does-not-model-why-a-file-diff-arrives-without-its-text) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
@@ -365,7 +365,7 @@ readable without opening the tracker:
 | 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Was yes; the handler reads GraphQL since GitLab.com removed the route (row 148) |
 | 94 | gitlab-org/gitlab | [A board name GitLab cannot save is answered as a success](#a-board-name-gitlab-cannot-save-is-answered-as-a-success) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260458](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260458), merged | **Yes, 19.5.0** | No | None taken |
 | 95 | client-go | [`ListGroupMilestonesOptions` misspells `include_descendants` and `GroupMilestone` drops the web URL and project](#listgroupmilestonesoptions-misspells-include_descendants-and-groupmilestone-drops-the-web-url-and-project) | `web_url`: yes, by another contributor; the rest: yes, by the merge request | `web_url`: [gitlab-org/api/client-go!3126](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3126), merged; the rest: [gitlab-org/api/client-go!3164](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3164), merged | **`web_url`: v3.26.0**, not ours; **the rest: v3.40.1** | No | Retired for `web_url` at the v3.29.0 pin, and for `include_descendants` and `project_id` at the v3.40.3 pin |
-| 96 | client-go | [`CreateGroupIssueBoardListOptions` models only `label_id` where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), merged, commit 8 | **Yes, v3.39.0**; this server pins v3.40.3 | No; until the action widens it narrows `group.group_board_create_list` to label lists | None, by decision; the v3.40.3 pin lets the action widen to the four list types, as the entry says |
+| 96 | client-go | [`CreateGroupIssueBoardListOptions` models only `label_id` where GitLab takes four list types](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), merged, commit 8 | **Yes, v3.39.0**; this server pins v3.40.3 | No; until the v3.40.3 pin it narrowed `group.group_board_create_list` to label lists | None was needed, by decision; at the v3.40.3 pin the action takes the four list types |
 | 97 | gobco | [gobco cannot instrument a package whose `export_test.go` feeds its external test package](#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package) | Yes, [rillig/gobco#42](https://github.com/rillig/gobco/issues/42) | Yes, [rillig/gobco#43](https://github.com/rillig/gobco/pull/43), open and unreviewed; its CI run still waits on the maintainer's approval, and a reminder of 2026-10-19 on [rillig/gobco#41](https://github.com/rillig/gobco/pull/41#issuecomment-6273951341) that names it had no answer by 2026-10-31 | No | No; the condition gate could not measure a package it reaches | Yes, temporarily: the staged copy of `scripts/coverage-conditions.sh` since 2026-10-27, kept by the maintainer's decision of that day, which supersedes that of 2026-10-06, until a gobco release carries the fix |
 | 98 | client-go | [`UpdateGroupIssueBoardOptions` models neither list switch the group board update takes](#updategroupissueboardoptions-models-neither-list-switch-the-group-board-update-takes) | Yes | Yes, [gitlab-org/api/client-go!3085](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3085), merged, commit 7, beside row 96 | **Yes, v3.39.0**; this server pins v3.40.3 | No | **Retired at the v3.40.3 pin**; from [issue 1241](https://github.com/jmrplens/gitlab-mcp-server/issues/1241) until then `group.group_board_update` sent both in a body that embedded `UpdateGroupIssueBoardOptions`, and it now calls `GroupIssueBoards.UpdateIssueBoard` |
 | 99 | gitlab-org/gitlab | [The roles and permissions page does not say when a Guest or a Planner can view pipelines and merge requests](#the-roles-and-permissions-page-does-not-say-when-a-guest-or-a-planner-can-view-pipelines-and-merge-requests) | Yes, by another user, [gitlab-org/gitlab#632031](https://gitlab.com/gitlab-org/gitlab/-/issues/632031), which the merge request closes, closed by its author on 2026-10-11 | Yes, [gitlab-org/gitlab!260353](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260353), merged | **Yes, 19.5.0** | No | Not needed; `pipeline.latest`'s refusal names the role the policy names |
@@ -402,7 +402,7 @@ readable without opening the tracker:
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
 | 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
-| 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No, by us; by another contributor, for the instance service account's `external`, [gitlab-org/api/client-go#2310](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2310), closed by the merge, and for the group's two SHA keys, [gitlab-org/api/client-go#2321](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2321), open | Partly, theirs: [gitlab-org/api/client-go!3102](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3102), merged, for that key and its two parameters, and [gitlab-org/api/client-go!3117](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3117), open, for the two group keys | **Partly, v3.32.0**, not ours: `external` on the instance `ServiceAccount` and on its create and update options; v3.40.0 adds none of the rest; this server pins it since the bump to v3.38.1 | No | Partial: six keys read from the captured response, `external` of a group and of a project service account among them, and the instance service account's `external` kept captured for its presence since the v3.38.1 pin; the merge request author's `bot` and the parameters not yet |
+| 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No, by us; by another contributor, for the instance service account's `external`, [gitlab-org/api/client-go#2310](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2310), closed by the merge, and for the group's two SHA keys, [gitlab-org/api/client-go#2321](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2321), open | Partly, theirs: [gitlab-org/api/client-go!3102](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3102), merged, for that key and its two parameters, and [gitlab-org/api/client-go!3117](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3117), open, for the two group keys | **Partly, v3.32.0**, not ours: `external` on the instance `ServiceAccount` and on its create and update options; v3.40.0 adds none of the rest; this server pins it since the bump to v3.38.1 | No | Partial: six keys read from the captured response, `external` of a group and of a project service account among them, and the instance service account's `external` kept captured for its presence since the v3.38.1 pin, its create and update parameter offered since the v3.40.3 pin; the merge request author's `bot` and the other parameters not yet |
 | 134 | client-go | [The rate limit backoff ignores `Retry-After` on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147), open; GitLab Duo approved it on 2026-10-21 after we fixed its finding; on 2026-10-26 a client-go maintainer asked how callers that fail fast on these 429s keep doing so, a client-go code owner preferred an opt-in now and the new default in a later major, and we made it opt-in that day, which reset GitLab Duo's approval, and asked for review again; not reviewed since | No; v3.40.0 still reads `Ratelimit-Reset` alone | No; this server replaces client-go's backoff with its own | Not needed |
 | 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Yes, `admin.settings_update` refuses them by name before anything is sent, as it refuses a key client-go does not model |
 | 136 | client-go | [`ListTopicsOptions` and `CreateTopicOptions` model no `organization_id`](#listtopicsoptions-and-createtopicoptions-model-no-organization_id) | Yes, by another contributor, [gitlab-org/api/client-go#2313](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2313) | Yes, theirs, [gitlab-org/api/client-go!3105](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3105), open | No | No | None; `admin.topic_list` and `admin.topic_create` act on the organization GitLab resolves for the request |
@@ -4835,7 +4835,11 @@ want the shapes above rather than the nearest existing struct, and the nested
   v3.38.1, each declared `kept-for-presence` in the sdk scope's capture
   declarations (`cmd/audit_1to1/internal/sdk/capture_declarations.go`) with a
   `FieldKind` holding `Project`'s field to a plain `bool`, so a client-go that
-  makes it a pointer retires the capture.
+  makes it a pointer retires the capture. The update side needs no
+  workaround: `EditProjectOptions` models the three as `*bool`, and at the
+  v3.40.3 pin `project.update` offers them, tagged `tier:"ultimate"` like the
+  output, since GitLab drops them from an update where the license lacks
+  `ai_features`.
 
 **What**: three of the structs this server uses most model fewer keys than the
 Grape entity their routes render, and in each case the gap is bigger than a
@@ -5398,11 +5402,13 @@ lines; v3.38.0 is the first release that changes them.
   `go.mod` pins, leaves the seven files unchanged.
 - **Blocking**: no, field by field in the second table below. For five of the
   seven, GitLab reads a null exactly as it reads the key left out, or never
-  receives one. `label_id` is latent: a null would be refused beside another
-  board list type, which neither the struct nor the handler offers today. It
-  stops being latent the day client-go models the other three list types
-  ([entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)),
-  so that change has to ship with this one or after it, never before.
+  receives one. `label_id` was latent: a null would be refused beside another
+  board list type, which neither the struct nor the handler offered until
+  client-go modeled the other three list types
+  ([entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)).
+  v3.39.0 gave `label_id` its `omitempty` in the same merge request, so at the
+  v3.40.3 pin, where the action offers the other three, a column of another
+  type carries no `label_id`.
   `value` narrows an action: GitLab would store the null over the variable's
   value, and what keeps it from doing so is that the handler requires a value,
   which GitLab does not, so an edit of the type alone cannot be made. Entries
@@ -5411,15 +5417,14 @@ lines; v3.38.0 is the first release that changes them.
   hold the fields of this class GitLab refuses outright: every feature flag
   set sent through the SDK, and a package protection rule update that leaves
   out either of its two fields.
-- **Workaround**: none needed for five. Two handlers never leave the field
-  unset, because they require it, and neither requirement was written for this
-  defect. `groupboards.CreateGroupBoardList` requires `label_id`, the only
-  list type the struct models, so that requirement is not a workaround and
-  stays until client-go models the milestone, iteration and assignee lists,
-  which is
-  [entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types);
-  v3.39.0 models them, so the requirement goes with entry 96 at the bump.
-  `pipelineschedules.EditVariable` has required `value` since
+- **Workaround**: none needed for five. Two handlers never left the field
+  unset, because they required it, and neither requirement was written for
+  this defect. `groupboards.CreateGroupBoardList` required `label_id`, the
+  only list type the struct modeled, so that requirement was not a workaround;
+  v3.39.0 models the milestone, iteration and assignee lists
+  ([entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)),
+  and at the v3.40.3 pin the handler takes the four and asks for exactly one
+  of them instead. `pipelineschedules.EditVariable` has required `value` since
   the domain was written, and the requirement is what keeps the null from
   reaching GitLab and what costs the action an edit of the type alone. It
   retires with the tag: `value` then becomes optional in the handler, in its
@@ -5616,9 +5621,9 @@ moves with it. The bump layer does, beside what entries 6 and 52 list:
   (`internal/tools/members/members_test.go:1566`, `fieldExpiresAt: nil`),
   `TestShareProjectWithGroup_SendsExactlyWhatTheCallerSet` and
   `TestIssueLinkCreate_SendsNoLinkTypeWhenUnset`.
-- `groupboards.CreateGroupBoardList` keeps requiring `label_id` until
-  [entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types)
-  lands as well.
+- `groupboards.CreateGroupBoardList` stopped requiring `label_id` at the
+  v3.40.3 pin, with
+  [entry 96](#creategroupissueboardlistoptions-models-only-label_id-where-gitlab-takes-four-list-types).
 
 Two issues of this repository built on these nulls, both closed:
 [issue 1100](https://github.com/jmrplens/gitlab-mcp-server/issues/1100), on
@@ -5736,10 +5741,11 @@ integers for the usage, and three option fields with `url` and `json` tags.
   for the parameters: `admin.plan_limits_change` offers the eight the options
   struct at the v3.30.0 pin could send, and taking the other twenty-one would
   have meant building the request outside the SDK; v3.35.0's
-  `ChangePlanLimitOptions` takes all twenty-nine, so the action can offer the
-  other twenty-one after the bump, which is new capability rather than a
-  workaround retiring, and the twenty-one `upstream` declarations R-PARAM held
-  for them on row 59 are gone with the pin.
+  `ChangePlanLimitOptions` takes all twenty-nine, and the twenty-one `upstream`
+  declarations R-PARAM held for them on row 59 went with the v3.38.1 pin. At
+  the v3.40.3 pin `admin.plan_limits_change` offers all twenty-nine, each a
+  pointer so that 0 reaches GitLab, which is new capability rather than a
+  workaround retiring.
 
 **What**: `PlanLimit` in client-go v3.14.0's `plan_limits.go` carries the eight
 package file sizes (`conan`, `generic_packages`, `helm`, `maven`, `npm`,
@@ -6627,23 +6633,19 @@ the group milestone tests.
   there carries `LabelID`, `AssigneeID`, `MilestoneID` and `IterationID`, each
   `omitempty` on both halves of its tag, so entry 54's tag ships with it.
   This server pins v3.40.3, which lets the action make the change below.
-- **Blocking**: no. Until the action makes it, `group.group_board_create_list`
-  stays narrowed to label lists, where GitLab also takes assignee, milestone and
-  iteration lists on a licensed instance, which the 1:1 policy asks this server
-  to offer.
-- **Workaround**: none, by decision. The action offers only what the SDK
-  struct can send, and no request is built outside the SDK for the other
-  three types (a request option rewriting the body, or a request of the
+- **Blocking**: no. Until the v3.40.3 pin `group.group_board_create_list`
+  was narrowed to label lists, where GitLab also takes assignee, milestone and
+  iteration lists on a licensed instance; at that pin the action takes all
+  four, as the paragraph below describes.
+- **Workaround**: none was needed, by decision. The action offered only what
+  the SDK struct could send, and no request was built outside the SDK for the
+  other three types (a request option rewriting the body, or a request of the
   handler's own):
   [issue 1101](https://github.com/jmrplens/gitlab-mcp-server/issues/1101)
   decided that they follow a client-go change, and pull requests 1218 and
   1226, which kept that decision, made the refusal hints speak of `label_id`
-  alone and key the role hint on the refusal GitLab gives
-  (`createGroupBoardListError` in
-  `internal/tools/groupboards/group_boards.go`, whose comment records the
-  decision; `CreateGroupBoardList` refuses an input without `label_id` before
-  it sends anything). This entry replaces issue 1101, closed at 00:26 UTC on
-  2026-10-08.
+  alone and key the role hint on the refusal GitLab gives. This entry replaces
+  issue 1101, closed at 00:26 UTC on 2026-10-08.
 
 **Where**: client-go v3.15.0 to v3.38.1, which leave the file unchanged,
 `group_boards.go:215-217`:
@@ -6686,20 +6688,26 @@ and Grape's `exactly_one_of` counts a key present whatever its value
 (`MultipleParamsBase#keys_in_common`), so GitLab would refuse it as two list
 types at once. That is entry 54's latent case.
 
-**What this server does when a release carries it**: in
+**What this server does at the v3.40.3 pin**: in
 `internal/tools/groupboards/group_boards.go`, `CreateGroupBoardListInput`
-gains `assignee_id`, `milestone_id` and `iteration_id`, tagged
+carries `assignee_id`, `milestone_id` and `iteration_id`, tagged
 `tier:"premium"` as the other Premium board inputs have been since
 [issue 1233](https://github.com/jmrplens/gitlab-mcp-server/issues/1233);
-`label_id` loses its requirement in the handler's check and in the schema;
-the handler asks for exactly one of the four; and `createGroupBoardListError`
-gains a hint for the licence 400, as the project-side `CreateBoardList` has.
-The action's description, usage and aliases ("from a group label") widen with
-it, `TestCreateGroupBoardList_Refused_HintNamesOnlyWhatTheInputOffers`, which
-asserts that no hint names an assignee, a milestone, an iteration, a tier or
-a licence, is rewritten, Enterprise e2e scenarios are added for the three
-list types (`test/e2e/gitlab/common/groupboards_test.go` creates label lists
-only), and the tool reference is regenerated.
+`label_id` lost its requirement in the handler's check and in the schema, and
+the requiredness scope's declaration for it went; the handler refuses an
+input that names none of the four or more than one before it sends anything;
+and `createGroupBoardListError` gives the licence 400 a hint of its own, as
+the project-side `CreateBoardList` does. The action's description and usage
+widened with it, `TestCreateGroupBoardList_Refused_HintNamesOnlyWhatTheInputOffers`
+gave way to `TestCreateGroupBoardList_BadRequest_HintFollowsGitLabsAnswer`
+and `TestCreateGroupBoardList_Refused_RoleHintFollowsAPermissionRefusal`, and
+the Enterprise scenario
+`TestGroupBoards_CreateList_ScopesAColumnToAnAssigneeOrAMilestone` creates an
+assignee and a milestone column (`test/e2e/gitlab/common/groupboards_test.go`
+creates label lists only; an iteration column needs an iteration's numeric
+ID, which the fixture library does not hand out, so the unit suite holds that
+key to the request). The tool reference is regenerated at the top of the
+stack.
 
 GitLab 19.6 adds a fifth list type, `status_id`
 ([gitlab-org/gitlab!260752](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260752),
@@ -8336,9 +8344,10 @@ test that each reaches the query only when set.
   and update read the flag off the captured response, so an account an
   instance before 19.5 answers for carries no `external` rather than reading
   as internal. The two `upstream` declarations R-PARAM held for the create
-  and update parameter are gone, so the parameter is a plain `not_offered`
-  finding until the two actions offer it.
-  `GroupServiceAccount` and `ProjectServiceAccount` still declare no
+  and update parameter are gone. At the v3.40.3 pin
+  `user.create_service_account` and `user.update_service_account` offer the
+  parameter, a pointer so that `false` makes an external account a regular
+  one again. `GroupServiceAccount` and `ProjectServiceAccount` still declare no
   `external` there. v3.40.0, read on 2026-10-31, models none of the rest
   either.
 - **Blocking**: no.
@@ -8352,9 +8361,9 @@ test that each reaches the query only when set.
   the twelve parameters, which this server does not offer, as with entry
   58's three: taking the eleven client-go does not model would mean building
   the request outside the SDK's option struct, and `external`, which it
-  models from v3.32.0, is a plain `not_offered` finding until the two actions
-  offer it. The other six keys are read from the captured response beside the
-  SDK's decode
+  models from v3.32.0, is offered by the instance service account create and
+  update since the v3.40.3 pin. The other six keys are read from the captured
+  response beside the SDK's decode
   ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)):
   through `toolutil.CapturedProject` for the project, `CapturedGroup` and
   `CapturedGroups` for the group, `CapturedServiceAccount` and

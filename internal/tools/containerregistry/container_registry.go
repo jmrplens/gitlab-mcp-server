@@ -218,6 +218,7 @@ type GetRepositoryInput struct {
 	RepositoryID int64 `json:"repository_id" jsonschema:"Registry repository ID,required"`
 	Tags         bool  `json:"tags,omitempty" jsonschema:"Include tags in response"`
 	TagsCount    bool  `json:"tags_count,omitempty" jsonschema:"Include tags count in response"`
+	Size         bool  `json:"size,omitempty" jsonschema:"Include the deduplicated size of all the repository's images, in bytes. GitLab can measure it only where the container registry has its metadata database, as on GitLab.com for repositories created after 2021-11-04, and sends no size elsewhere"`
 }
 
 // GetRepository gets details of a single registry repository by its ID.
@@ -231,6 +232,9 @@ func GetRepository(ctx context.Context, client *gitlabclient.Client, input GetRe
 	}
 	if input.TagsCount {
 		opts.TagsCount = new(true)
+	}
+	if input.Size {
+		opts.Size = new(true)
 	}
 	repo, _, err := client.GL().ContainerRegistry.GetSingleRegistryRepository(
 		input.RepositoryID, opts, gl.WithContext(ctx),

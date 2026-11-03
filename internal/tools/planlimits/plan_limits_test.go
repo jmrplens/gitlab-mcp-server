@@ -10,9 +10,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
@@ -329,6 +331,75 @@ func TestChange_EverySetLimit_ReachesGitLabUnderItsOwnKey(t *testing.T) {
 	}
 	if !reflect.DeepEqual(out.PlanLimitItem, wantPlanLimits) {
 		t.Errorf("Change() limits = %+v, want %+v", out.PlanLimitItem, wantPlanLimits)
+	}
+}
+
+// changeableLimits are the limits PUT /application/plan_limits takes, each
+// with a value of its own: the eight package file sizes, and the twenty-one
+// ChangePlanLimitOptions models from client-go v3.35.0.
+var changeableLimits = map[string]int64{
+	"conan_max_file_size":                   11,
+	"generic_packages_max_file_size":        22,
+	"helm_max_file_size":                    33,
+	"maven_max_file_size":                   44,
+	"npm_max_file_size":                     55,
+	"nuget_max_file_size":                   66,
+	"pypi_max_file_size":                    77,
+	"terraform_module_max_file_size":        88,
+	"cargo_max_file_size":                   101,
+	"ci_active_jobs":                        102,
+	"ci_instance_level_variables":           103,
+	"ci_needs_size_limit":                   104,
+	"ci_pipeline_schedules":                 105,
+	"ci_pipeline_size":                      106,
+	"ci_project_subscriptions":              107,
+	"ci_registered_group_runners":           108,
+	"ci_registered_project_runners":         109,
+	"dotenv_size":                           110,
+	"dotenv_variables":                      111,
+	"enforcement_limit":                     112,
+	"max_pipelines_per_merge_train":         113,
+	"notification_limit":                    114,
+	"pipeline_hierarchy_size":               115,
+	"service_desk_outbound_emails_per_day":  116,
+	"service_desk_outbound_emails_per_hour": 117,
+	"storage_size_limit":                    118,
+	"web_hook_calls":                        119,
+	"web_hook_calls_low":                    120,
+	"web_hook_calls_mid":                    121,
+}
+
+// TestChange_EachLimit_ReachesGitLabAloneUnderItsOwnKey drives every limit
+// the route takes alone, through the parameters a tool call carries, and
+// holds the PUT body to the plan name and that limit. Each is driven at a
+// value of its own and at 0, which GitLab reads as unlimited for the web hook
+// and Service Desk limits and as a limit of its own for the rest, so a
+// handler that dropped a zero would leave the limit where it was.
+func TestChange_EachLimit_ReachesGitLabAloneUnderItsOwnKey(t *testing.T) {
+	for key, value := range changeableLimits {
+		for _, sent := range []int64{value, 0} {
+			t.Run(key+"="+strconv.FormatInt(sent, 10), func(t *testing.T) {
+				bodies := make(chan map[string]any, 1)
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					var body map[string]any
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						body = map[string]any{"undecodable": err.Error()}
+					}
+					bodies <- body
+					testutil.RespondJSON(w, http.StatusOK, planLimitJSON)
+				}))
+				input, err := toolutil.UnmarshalParams[ChangeInput](map[string]any{"plan_name": "silver", key: sent})
+				if err != nil {
+					t.Fatalf("UnmarshalParams() error: %v", err)
+				}
+				if _, err = Change(t.Context(), client, input); err != nil {
+					t.Fatalf(fmtUnexpErr, err)
+				}
+				if body, want := <-bodies, map[string]any{"plan_name": "silver", key: float64(sent)}; !reflect.DeepEqual(body, want) {
+					t.Errorf("PUT body = %v, want %v", body, want)
+				}
+			})
+		}
 	}
 }
 
