@@ -19,7 +19,6 @@
 package httpe2e
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -368,20 +367,11 @@ func tryStartServerLaunched(t *testing.T, port int, launch launcher, env map[str
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
-	var out bytes.Buffer
-	var mu sync.Mutex
-	cmd.Stdout = &lockedWriter{mu: &mu, buf: &out}
-	cmd.Stderr = cmd.Stdout
+	logs := captureOutput(t, cmd)
 
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return nil, fmt.Errorf("launching the binary: %w", err)
-	}
-
-	logs := func() string {
-		mu.Lock()
-		defer mu.Unlock()
-		return out.String()
 	}
 
 	// The process is waited on once, here, and the result published by closing
@@ -527,17 +517,43 @@ func describeExit(waitErr error, cmd *exec.Cmd) string {
 	return "exit status not recorded"
 }
 
-// lockedWriter serializes writes from the process's two pipes into one buffer
-// the test can read while the process is still running.
-type lockedWriter struct {
-	mu  *sync.Mutex
-	buf *bytes.Buffer
-}
+// captureOutput points the process's stdout and stderr at one file and returns
+// what reads it back.
+//
+// A file, because a writer puts a pipe in the way: os/exec copies the pipe into
+// the writer on a goroutine of its own, and nothing orders that copy with what a
+// test observes. A line the server wrote before answering could still be in the
+// pipe when the answer arrived, so a read right after it could miss the line it
+// needed, and worse, a count or an assertion that a line is absent could pass
+// with that line on its way. A write to a file is readable once it returns, so
+// everything the server wrote before an answer is there when the answer arrives,
+// and no wait has to stand in for that order. What can still need a wait is a
+// line with no order to the answer ([awaitLog]).
+//
+// A read that fails fails the test rather than reading as no output, which an
+// assertion of absence would take for a pass.
+func captureOutput(t *testing.T, cmd *exec.Cmd) func() string {
+	t.Helper()
 
-func (w *lockedWriter) Write(p []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.buf.Write(p)
+	path := filepath.Join(t.TempDir(), "server-output.log")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("creating the file the server writes to: %v", err)
+	}
+	// Runs after the cleanup that stops the process, which is registered later,
+	// and before the one that removes the directory, since Windows removes no
+	// file somebody still holds open.
+	t.Cleanup(func() { _ = file.Close() })
+	cmd.Stdout = file
+	cmd.Stderr = file
+
+	return func() string {
+		output, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Errorf("reading the server's output: %v", readErr)
+		}
+		return string(output)
+	}
 }
 
 // waitHealthy polls /health until the server answers, for a caller holding a

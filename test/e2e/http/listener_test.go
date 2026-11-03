@@ -16,7 +16,6 @@
 package httpe2e
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -39,7 +38,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -94,25 +92,14 @@ func startServerWithClientEnv(t *testing.T, client *http.Client, baseURL string,
 	cmd.Env = append(cmd.Env, coverEnviron(t)...)
 	cmd.Env = append(cmd.Env, env...)
 
-	var out bytes.Buffer
-	var mu sync.Mutex
-	cmd.Stdout = &lockedWriter{mu: &mu, buf: &out}
-	cmd.Stderr = cmd.Stdout
+	logs := captureOutput(t, cmd)
 
 	if err := cmd.Start(); err != nil {
 		cancel()
 		t.Fatalf("starting the server: %v", err)
 	}
 
-	srv := &server{
-		baseURL: baseURL,
-		client:  client,
-		logs: func() string {
-			mu.Lock()
-			defer mu.Unlock()
-			return out.String()
-		},
-	}
+	srv := &server{baseURL: baseURL, client: client, logs: logs}
 	// Reaped on its own goroutine so the cleanup can ask the server to stop
 	// and wait for it under a bound: Cmd.Wait can be called once, and a
 	// cleanup that called it directly would either hang on a server that
@@ -552,13 +539,9 @@ func TestListener_PlaintextOffLoopback_TheHardenedModeRefusesToStart(t *testing.
 // serving TLS write neither line, in the hardened mode too, where each of
 // them starts.
 //
-// Absence is only proved once the output that would have held the line has
-// arrived, and an answer from /health does not prove that: the process writes
-// to a pipe, and the harness copies the pipe into its buffer on a goroutine of
-// its own. So each case first waits for the "listening on" line, which the
-// process writes after the bind, and the bind comes after the announcement.
-// The pipe keeps the order, so a line that was going to be written is in the
-// buffer by then.
+// Absence is only proved once the line would have been written, so each case
+// first waits for the "listening on" line, which the process writes after the
+// bind, and the bind comes after the announcement.
 func TestListener_ListenersThatCrossNoNetworkInTheClear_AreNotAnnounced(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 	certFile, keyFile, pool := writeSelfSignedCert(t)

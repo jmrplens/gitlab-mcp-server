@@ -52,7 +52,7 @@ const goCoverDirVar = "GOCOVERDIR"
 // not a string: the runtime of a child given an empty GOCOVERDIR prints
 // "warning: GOCOVERDIR not set, no coverage data emitted" the moment it
 // starts, from the meta-data emit the main package's init runs, and every
-// child here has its stderr folded into the buffer each failure message
+// child here has its stderr folded into the output file each failure message
 // prints. The stdio module's copy of this is stricter still, since a line that
 // is not JSON fails a test there outright.
 //

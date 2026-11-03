@@ -63,8 +63,7 @@ func TestStdout_CarriesNothingButJSONRPC(t *testing.T) {
 	}
 
 	// The startup line is written before the server answers anything, so its
-	// absence here would mean logging is off or went somewhere else; waited
-	// for, because the harness copies stderr on a goroutine of its own.
+	// absence here would mean logging is off or went somewhere else.
 	s.waitForStderr(t, "starting MCP server", 5*time.Second)
 }
 
@@ -82,9 +81,7 @@ func TestStderr_TakesTheLogsAndStdoutDoesNot(t *testing.T) {
 	}
 
 	// Debug logging produces a lot; none of it may appear on stdout, and
-	// readMessage would have failed above if it had. The debug lines are
-	// waited for rather than read, since the harness copies stderr on a
-	// goroutine of its own.
+	// readMessage would have failed above if it had.
 	s.waitForStderr(t, "DEBUG", 5*time.Second)
 }
 
@@ -113,10 +110,13 @@ func TestStderr_DefaultLevelIsNotAllSessionChatter(t *testing.T) {
 		}
 	}
 
-	// Anchored on a line the server writes after the session is up, so the
-	// absences asserted below are absences in what was logged rather than in
-	// what the harness had copied so far.
-	logs := s.waitForStderr(t, "starting MCP server", 5*time.Second)
+	// Read once the server has gone, when it has written all it ever will, the
+	// end of the session included, so the absences asserted below are absences
+	// in what was logged.
+	if _, exited := s.closeStdinAndWait(t, 10*time.Second); !exited {
+		t.Fatalf("the server did not exit once its stdin closed:\n%s", s.stderrText())
+	}
+	logs := s.stderrText()
 	for _, chatter := range []string{
 		"server session connected",
 		"server session disconnected",
@@ -681,12 +681,11 @@ func TestTransportAuto_WithAPipeOnStdin_SpeaksStdio(t *testing.T) {
 // awaitLogRecord polls stderr until a JSON log record with the given msg
 // appears, and fails the test when none does within the window.
 //
-// Polling rather than reading once, because stderr is copied into the session
-// by a goroutine of its own: a record the server has already written is not
-// necessarily in that buffer at the moment a later request's answer arrives on
-// stdout, so a single read raced the drain and could fail while the feature
-// worked. An intermittent failure in a test that pins a startup property is
-// worse than no test at all, since what it teaches is to re-run.
+// Polling rather than reading once, because a startup record has no order to a
+// request's answer unless the readiness gate gives it one, so a single read could
+// fail while the feature worked. An intermittent failure in a test that pins a
+// startup property is worse than no test at all, since what it teaches is to
+// re-run.
 func awaitLogRecord(t *testing.T, s *session, msg string, within time.Duration) map[string]any {
 	t.Helper()
 
