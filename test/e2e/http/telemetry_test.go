@@ -21,6 +21,12 @@ import (
 // represents a timeout MUST be an integer representing a number of
 // milliseconds". Writing "200ms" here would parse as nothing, silently keep the
 // ten-second default, and make these tests slow for a reason nobody could see.
+//
+// Each of the three exporters runs on a schedule of its own, so each is
+// shortened. The logs exporter's is OTEL_BLRP_SCHEDULE_DELAY, a second by
+// default, and while it was left there the traces and metrics exporters had
+// failed long before it tried, so a test reading within that second ran the
+// failure path of two exporters and not the third.
 func telemetryEnv() map[string]string {
 	return map[string]string{
 		"GITLAB_MCP_TELEMETRY":        "true",
@@ -28,6 +34,7 @@ func telemetryEnv() map[string]string {
 		"OTEL_EXPORTER_OTLP_TIMEOUT":  "200",
 		"OTEL_BSP_SCHEDULE_DELAY":     "100",
 		"OTEL_BSP_EXPORT_TIMEOUT":     "200",
+		"OTEL_BLRP_SCHEDULE_DELAY":    "100",
 		"OTEL_METRIC_EXPORT_INTERVAL": "100",
 		"OTEL_METRIC_EXPORT_TIMEOUT":  "200",
 	}
@@ -158,10 +165,14 @@ func TestTelemetry_CollectorCredentialsNeverReachTheLogs(t *testing.T) {
 			env["OTEL_EXPORTER_OTLP_HEADERS"] = tt.value
 			srv := startServer(t, env)
 
-			// Traffic, so the exporter has genuinely tried and failed.
+			// Traffic, so every exporter has genuinely tried and failed, which
+			// each does on its own schedule and not before any answer, so each
+			// failure is waited for: read sooner, the well-formed row judged a
+			// log the export had not reached yet.
 			for range 3 {
 				srv.do(t, request{body: `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`})
 			}
+			awaitEveryExportFailure(t, srv)
 
 			logs := srv.logs()
 			if strings.Contains(logs, secret) {
@@ -187,6 +198,24 @@ func TestTelemetry_CollectorCredentialsNeverReachTheLogs(t *testing.T) {
 				t.Errorf("nothing was substituted, so the credential was never in the line to begin with: %s", logs)
 			}
 		})
+	}
+}
+
+// awaitEveryExportFailure waits until each of the three exporters has said it
+// could not reach the collector, and fails the test naming the one that never
+// does, since an absence asserted afterwards proves nothing for it.
+//
+// Only a failed export names the path, and each exporter fails on its own
+// schedule, so the first failure is one exporter's and says nothing of the
+// others: waiting for it alone, the logs exporter had not tried yet, and a
+// credential planted in its failure line alone passed.
+func awaitEveryExportFailure(t *testing.T, srv *server) {
+	t.Helper()
+
+	for _, signal := range []string{"traces", "metrics", "logs"} {
+		if awaitLog(t, srv, "http://127.0.0.1:1/v1/"+signal) == "" {
+			t.Fatalf("the %s exporter never said it could not reach the collector, so the absence asserted after this proves nothing for it:\n%s", signal, srv.logs())
+		}
 	}
 }
 

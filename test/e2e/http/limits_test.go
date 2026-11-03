@@ -867,7 +867,7 @@ func TestLimit_RateLimitRefusalIsVisible(t *testing.T) {
 // token is therefore served a surface that finds a write under the flag, and
 // what read_api reaches without it, both after its scopes were read. The
 // surface is asked rather than a log line read, since a line written after the
-// response can still be in the pipe when the response is read.
+// response need not be written yet when the response is read.
 func TestLimit_IgnoreScopesReadsTheScopesAndSkipsTheNarrowing(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -914,12 +914,10 @@ func findActionFor(t *testing.T, srv *server, token, query string) string {
 // awaitLog returns the server's output once it contains want, or "" if it never
 // does.
 //
-// Reading the log immediately after the response that provoked it is a race,
-// and one that only shows under load: the server writes to a pipe, and the
-// parent's copier goroutine appends to the buffer this reads. Asserting on a
-// log line therefore has to wait for the line rather than for the response. The
-// case that needed this passed alone and failed inside the full suite under
-// -shuffle, which is the shape of every such race.
+// A line the server writes before it answers is in its output when the answer
+// arrives ([captureOutput]), so this is what a test needs for a line with no
+// such order, written on another goroutine or after the answer. What it returns
+// holds that line and what came before it, not what is still to come.
 func awaitLog(t *testing.T, srv *server, want string) string {
 	t.Helper()
 

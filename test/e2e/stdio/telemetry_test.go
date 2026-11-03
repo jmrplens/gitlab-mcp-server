@@ -58,25 +58,34 @@ func TestTelemetry_EnabledWithAnUnreachableCollectorKeepsStdoutClean(t *testing.
 	session.call(t, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"stdio-e2e","version":"0"}}}`)
 	session.send(t, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
 
-	// Enough traffic that the batch processor's schedule fires during the
-	// session rather than only at shutdown, which is the window where an
-	// export failure would be written.
+	// Enough traffic that every exporter's schedule fires during the session
+	// rather than only at shutdown, which is the window where an export
+	// failure would be written.
 	for id := 2; id <= 5; id++ {
 		session.call(t, `{"jsonrpc":"2.0","id":`+strconv.Itoa(id)+`,"method":"tools/list"}`)
 	}
-	time.Sleep(500 * time.Millisecond)
+
+	// The failures must be visible, on stderr. A telemetry stack that fails
+	// silently is worse than one that fails loudly: an operator would see an
+	// empty dashboard and no reason for it. Each exporter's failure is waited
+	// for, since each runs on its own schedule and only a failed export names
+	// its path. A wait for any line naming telemetry ended at the startup
+	// announcement, before anything had been exported, so an exporter whose
+	// failures went nowhere passed. Asserted before the shutdown so it holds on
+	// every platform, including the one that cannot reach the shutdown below.
+	for _, signal := range []string{"traces", "metrics", "logs"} {
+		t.Run(signal+" exporter", func(t *testing.T) {
+			session.waitForStderr(t, "http://127.0.0.1:1/v1/"+signal, 5*time.Second)
+		})
+	}
+
+	// Read once every exporter has failed, so a failure written to stdout
+	// instead is on the pipe ahead of this answer and fails the read.
 	session.call(t, `{"jsonrpc":"2.0","id":6,"method":"tools/list"}`)
 
 	if !session.alive() {
 		t.Fatalf("the server exited while telemetry was failing to export\nstderr: %s", session.stderrText())
 	}
-
-	// The failures must be visible, on stderr. A telemetry stack that fails
-	// silently is worse than one that fails loudly: an operator would see an
-	// empty dashboard and no reason for it. Asserted before the shutdown so it
-	// holds on every platform, including the one that cannot reach the shutdown
-	// below.
-	session.waitForStderr(t, "telemetry", 5*time.Second)
 
 	// Shutdown flushes, which is the other moment an exporter writes. Closing
 	// stdin is the stdio shutdown a client actually performs, and the portable
@@ -114,7 +123,7 @@ func TestTelemetry_DisabledByDefault(t *testing.T) {
 
 	// Anchored on a line the server writes after its telemetry decision, so
 	// the absence asserted below is an absence in what was logged rather than
-	// in what the harness had copied so far.
+	// a decision still to come.
 	stderr := session.waitForStderr(t, "starting MCP server", 5*time.Second)
 	if strings.Contains(stderr, "telemetry enabled") {
 		t.Errorf("telemetry started without being asked for\nstderr: %s", stderr)
@@ -143,10 +152,8 @@ func TestTelemetry_SDKDisabledVetoesTheSwitch(t *testing.T) {
 	session := startSession(t, env)
 	session.call(t, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"stdio-e2e","version":"0"}}}`)
 
-	// The veto is logged before the server serves anything, so it is on its
-	// way by the time initialize is answered; waited for rather than read,
-	// because the harness copies stderr on a goroutine of its own and the
-	// buffer can trail the pipe by the very line this asserts on.
+	// The veto is logged before the server serves anything, so it is there by
+	// the time initialize is answered.
 	stderr := session.waitForStderr(t, "OTEL_SDK_DISABLED", 5*time.Second)
 	if strings.Contains(stderr, "telemetry enabled") {
 		t.Errorf("OTEL_SDK_DISABLED=true did not veto an explicitly requested start\nstderr: %s", stderr)

@@ -16,7 +16,6 @@ package httpe2e
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -181,20 +180,12 @@ func shutdownStartServer(t *testing.T, flags ...string) *shutdownServer {
 	// (coverage_test.go).
 	cmd.Env = append(cmd.Env, coverEnviron(t)...)
 
-	var mu sync.Mutex
-	var out bytes.Buffer
-	cmd.Stdout = &lockedWriter{mu: &mu, buf: &out}
-	cmd.Stderr = cmd.Stdout
+	logs := captureOutput(t, cmd)
 
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting the server: %v", err)
 	}
 
-	logs := func() string {
-		mu.Lock()
-		defer mu.Unlock()
-		return out.String()
-	}
 	srv := &shutdownServer{cmd: cmd, logs: logs}
 
 	t.Cleanup(func() {

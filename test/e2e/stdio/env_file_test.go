@@ -248,9 +248,7 @@ func TestWorkingDirEnvFile_IgnoredFileIsAnnouncedByAbsolutePath(t *testing.T) {
 		"GITLAB_MCP_LOG_LEVEL": "info",
 	})
 	// One completed exchange, so the startup logging has certainly been
-	// written by the time stderr is read; not necessarily copied into the
-	// harness's buffer, though, which is on a goroutine of its own, so the
-	// line the assertions are about is waited for.
+	// written by the time stderr is read.
 	if got := s.call(t, request(1, "tools/list", "")); got["error"] != nil {
 		t.Fatalf("tools/list failed: %v", got["error"])
 	}
