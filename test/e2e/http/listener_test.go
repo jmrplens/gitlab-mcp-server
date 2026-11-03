@@ -155,7 +155,7 @@ func TestListener_UnixSocket_ServesMCP(t *testing.T) {
 		// access follows the directory's ACL. The server says so at startup,
 		// and that warning is what a Windows deployment gets instead of the
 		// mode, so it is what this leg asserts.
-		if !strings.Contains(srv.logs(), "not enforceable on Windows") {
+		if awaitLog(t, srv, "not enforceable on Windows") == "" {
 			t.Errorf("the server did not warn that the socket mode is not enforceable on Windows:\n%s", srv.logs())
 		}
 	} else {

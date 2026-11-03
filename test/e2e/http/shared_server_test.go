@@ -439,9 +439,15 @@ func startTwoTenantGitLab(t *testing.T, changingToken, frozenToken string) *twoT
 	return fake
 }
 
-// countShapeBuilds reports how many configuration shapes the server has built.
-func countShapeBuilds(logs string) int {
-	return strings.Count(logs, "built the MCP server for a configuration shape")
+// shapeBuildLine is what the server logs when it builds a configuration shape.
+const shapeBuildLine = "built the MCP server for a configuration shape"
+
+// countShapeBuilds reports how many configuration shapes the server has built,
+// once it has logged the first: a build happens while a request is being served,
+// so its line can still be in the pipe when the answer arrives ([awaitLog]).
+func countShapeBuilds(t *testing.T, srv *server) int {
+	t.Helper()
+	return strings.Count(awaitLog(t, srv, shapeBuildLine), shapeBuildLine)
 }
 
 // TestSharedServer_TwoCredentialsOnOneURIEachSeeOnlyTheirOwnWatcher is the
@@ -486,7 +492,7 @@ func TestSharedServer_TwoCredentialsOnOneURIEachSeeOnlyTheirOwnWatcher(t *testin
 	// One build for both credentials is the whole point of the change, and it
 	// is also what makes the rest of this test meaningful: two servers would
 	// have no delivery to filter.
-	if builds := countShapeBuilds(srv.logs()); builds != 1 {
+	if builds := countShapeBuilds(t, srv); builds != 1 {
 		t.Errorf("the server built %d configuration shapes for two credentials of one configuration, want 1", builds)
 	}
 
@@ -569,7 +575,7 @@ func TestSharedServer_ARevokedCredentialReceivesNothing(t *testing.T) {
 	// The same check its sibling makes, and for the same reason: two servers
 	// would keep these credentials apart by construction, so without this the
 	// test would pass vacuously if the two ever hashed to different shapes.
-	if builds := countShapeBuilds(srv.logs()); builds != 1 {
+	if builds := countShapeBuilds(t, srv); builds != 1 {
 		t.Errorf("the server built %d configuration shapes for two credentials of one configuration, want 1", builds)
 	}
 
@@ -957,7 +963,7 @@ func TestSharedServer_TwoPublishedInstancesShareOneShape(t *testing.T) {
 
 	// One server for both instances is the property under test: with a server
 	// per instance there would be no per-request client resolution to get wrong.
-	if builds := countShapeBuilds(srv.logs()); builds != 1 {
+	if builds := countShapeBuilds(t, srv); builds != 1 {
 		t.Errorf("the server built %d configuration shapes for two published instances of one tier, want 1", builds)
 	}
 }

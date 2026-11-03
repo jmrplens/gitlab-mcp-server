@@ -110,7 +110,7 @@ func TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials(t *testing.T
 			// One shape for every credential is the structural claim; the heap
 			// figure is its consequence. Asserting both means a failure says
 			// which of the two went wrong.
-			if builds := countShapeBuilds(srv.logs()); builds != 1 {
+			if builds := countShapeBuilds(t, srv); builds != 1 {
 				t.Errorf("the server built %d configuration shapes for %d credentials of one configuration, want 1",
 					builds, heapCredentials)
 			}

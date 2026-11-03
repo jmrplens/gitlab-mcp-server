@@ -113,10 +113,12 @@ func TestStderr_DefaultLevelIsNotAllSessionChatter(t *testing.T) {
 		}
 	}
 
-	// Anchored on a line the server writes after the session is up, so the
-	// absences asserted below are absences in what was logged rather than in
-	// what the harness had copied so far.
-	logs := s.waitForStderr(t, "starting MCP server", 5*time.Second)
+	// Anchored on the line the startup goroutine writes last, so the startup
+	// signal asserted below has been copied with it and the absences read what
+	// was logged rather than what the harness had copied so far. The line
+	// "starting MCP server" would not do: another goroutine writes it, and it
+	// can come before the signal.
+	logs := s.waitForStderr(t, catalogReadyLine, 5*time.Second)
 	for _, chatter := range []string{
 		"server session connected",
 		"server session disconnected",

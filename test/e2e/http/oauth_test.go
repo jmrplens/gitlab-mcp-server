@@ -913,7 +913,8 @@ func TestOAuth_OneUserIDOnTwoInstances_IsTwoCallers(t *testing.T) {
 	slices.Sort(want)
 
 	t.Run("each stderr line names its instance", func(t *testing.T) {
-		if got := loggedInstancesOfUserSeven(srv.logs()); !slices.Equal(got, want) {
+		got := awaitInstances(func() []string { return loggedInstancesOfUserSeven(srv.logs()) }, want)
+		if !slices.Equal(got, want) {
 			t.Errorf("the tool calls of user 7 were logged under instances %v, want %v:\n%s", got, want, srv.logs())
 		}
 	})
@@ -970,9 +971,11 @@ func exportedInstancesOfUserSeven(t *testing.T, c *collector) []string {
 	return seen
 }
 
-// awaitInstances polls collect until it reports every instance of want, for
-// as long as the exporters take to send a batch, and returns the distinct
-// instances it last reported, sorted.
+// awaitInstances polls collect until it reports every instance of want and
+// returns the distinct instances it last reported, sorted. What it waits out
+// depends on the source: an exporter sends a batch when it sends one, and a
+// stderr line the server wrote before answering can still be in the pipe when
+// the answer arrives, for the reason [awaitLog] gives.
 func awaitInstances(collect func() []string, want []string) []string {
 	deadline := time.Now().Add(20 * time.Second)
 	for {
@@ -1604,8 +1607,9 @@ func TestOAuth_VerificationFlood_IsBoundedAndChargesNothing(t *testing.T) {
 		})
 	}
 
-	logs := srv.logs()
-	if lines := strings.Count(logs, "token verification refused: every verification slot stayed busy"); lines != 1 {
+	const saturationLine = "token verification refused: every verification slot stayed busy"
+	logs := awaitLog(t, srv, saturationLine)
+	if lines := strings.Count(logs, saturationLine); lines != 1 {
 		t.Errorf("%d saturation lines logged for %d refusals, want one: the line is throttled", lines, excess)
 	}
 	if strings.Contains(logs, floodTokenPrefix) {

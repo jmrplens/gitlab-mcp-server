@@ -106,9 +106,13 @@ const maskedTokenSuffix = "...ZZZ9"
 var credentialHashInLog = regexp.MustCompile(`"` + telemetry.LogFieldCredentialHash + `":"([0-9a-f]+)"`)
 
 // loggedCredentialHash returns the handle the server logged for a credential,
-// or fails: a run that logged none has nothing to hold the export to.
-func loggedCredentialHash(t *testing.T, logs string) string {
+// or fails: a run that logged none has nothing to hold the export to. The line
+// is waited for, since the copy of stderr can trail the export that was just
+// received ([awaitLog]).
+func loggedCredentialHash(t *testing.T, srv *server) string {
 	t.Helper()
+	awaitLog(t, srv, telemetry.LogFieldCredentialHash)
+	logs := srv.logs()
 	match := credentialHashInLog.FindStringSubmatch(logs)
 	if match == nil {
 		t.Fatalf("the server logged no %s on stderr, so there is no handle to look for in the export:\n%s",
@@ -368,7 +372,7 @@ func TestCollectorPrivacy_NothingPrivateReachesTheCollector(t *testing.T) {
 		maskedTokenSuffix,
 		// The handle stays on the operator's stderr; the export strips it.
 		telemetry.LogFieldCredentialHash,
-		loggedCredentialHash(t, srv.logs()),
+		loggedCredentialHash(t, srv),
 		collectorPwd,
 	)
 }
