@@ -41,6 +41,9 @@ import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SCRIPT = os.path.join(ROOT, "scripts", "setup-orbit-fixtures.sh")
+# An absolute path: on Windows, CreateProcess searches System32 before PATH and
+# would pick the WSL launcher called bash.exe, which runs no distro here.
+BASH = shutil.which("bash") or "bash"
 API = "/api/v4"
 KG_ID = 10
 SEC_ID = 20
@@ -76,12 +79,24 @@ def route_file(key):
     return key.replace(" ", "_").replace("/", "!")
 
 
+def _fixture_files(project):
+    """The fixture files a project directory holds, relative and POSIX-slash."""
+    base = os.path.join(ROOT, "test", "fixtures", "orbit", project)
+    found = []
+    for root, _dirs, names in os.walk(base):
+        for name in names:
+            rel = os.path.relpath(os.path.join(root, name), base)
+            found.append(rel.replace(os.sep, "/"))
+    return sorted(found)
+
+
 def existing_fixtures(namespace="plens1"):
     """The routes of a namespace whose two projects and seven labels exist and nothing else.
 
     GitLab finds a group or a project by its full path with every slash in it
     percent-encoded, a nested namespace's own slashes included, so those are
-    the only paths the routes answer.
+    the only paths the routes answer. Each project is public and holds every
+    fixture file, so a re-run finds it in line and writes nothing (#1533).
     """
     encoded = namespace.replace("/", "%2F")
     labels = [
@@ -94,6 +109,12 @@ def existing_fixtures(namespace="plens1"):
         "GET " + API + "/groups/" + encoded: {"id": 1},
         "GET " + API + "/projects/" + encoded + "%2Fkg-fixtures": {"id": KG_ID},
         "GET " + API + "/projects/" + encoded + "%2Fsecurity-fixtures": {"id": SEC_ID},
+        "GET " + API + "/projects/%d" % KG_ID: {"id": KG_ID, "visibility": "public"},
+        "GET " + API + "/projects/%d" % SEC_ID: {"id": SEC_ID, "visibility": "public"},
+        "GET " + API + "/projects/%d/repository/tree" % KG_ID:
+            [{"path": p} for p in _fixture_files("kg-fixtures")],
+        "GET " + API + "/projects/%d/repository/tree" % SEC_ID:
+            [{"path": p} for p in _fixture_files("security-fixtures")],
         "GET " + API + "/projects/%d/labels" % KG_ID: labels,
         "GET " + API + "/projects/%d/milestones" % KG_ID: [],
         "GET " + API + "/projects/%d/issues" % KG_ID: [],
@@ -135,7 +156,7 @@ class SetupOrbitFixturesTest(unittest.TestCase):
             with open(os.path.join(self.routes, route_file(key)), "w") as f:
                 json.dump(answer, f)
         return subprocess.run(
-            ["bash", SCRIPT, "--skip-mirror"], env=self.env, capture_output=True, text=True, timeout=600
+            [BASH, SCRIPT, "--skip-mirror"], env=self.env, capture_output=True, text=True, timeout=600
         )
 
     def requests(self, method):
@@ -194,7 +215,7 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertIn("project exists: jmrp-oss/orbit-fixtures/kg-fixtures (id=%d)" % KG_ID, result.stderr)
 
     def test_help_prints_the_whole_usage_comment(self):
-        result = subprocess.run(["bash", SCRIPT, "--help"], env=self.env, capture_output=True, text=True, timeout=60)
+        result = subprocess.run([BASH, SCRIPT, "--help"], env=self.env, capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         lines = result.stdout.splitlines()
         self.assertTrue(lines[0].startswith("# setup-orbit-fixtures.sh "), lines[:3])
@@ -203,6 +224,36 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertNotIn("Copyright", result.stdout)
         self.assertNotIn("SPDX-License-Identifier", result.stdout)
         self.assertEqual(self.requests("GET"), [])
+
+
+    def test_an_existing_project_without_the_license_gets_it_first(self):
+        routes = existing_fixtures()
+        files = [{"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"]
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = files
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        created = [r["path"] for r in self.requests("POST") if "/repository/files/" in r["path"]]
+        self.assertTrue(created, "the missing LICENSE must be created")
+        self.assertEqual(created[0], API + "/projects/%d/repository/files/LICENSE" % KG_ID,
+                         "the LICENSE must come first")
+        self.assertIn("added LICENSE", result.stderr)
+
+    def test_an_existing_private_project_is_made_public(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "private"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        updated = [r["path"] for r in self.requests("PUT")]
+        self.assertEqual(updated, [API + "/projects/%d" % KG_ID])
+        self.assertIn("visibility private → public", result.stderr)
+
+    def test_a_private_visibility_is_refused_under_jmrp_oss(self):
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = "jmrp-oss/orbit-fixtures"
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = "private"
+        result = self.run_script(existing_fixtures("jmrp-oss/orbit-fixtures"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ORBIT_FIXTURES_VISIBILITY=private is not allowed", result.stderr)
+        self.assertEqual(self.requests("GET"), [], "the refusal must come before any API call")
 
 
 if __name__ == "__main__":

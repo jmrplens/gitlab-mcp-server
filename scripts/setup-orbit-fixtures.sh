@@ -76,6 +76,19 @@ NAMESPACE="${ORBIT_FIXTURES_NAMESPACE:-jmrp-oss/orbit-fixtures}"
 # OSI license: a project re-provisioned private there would break the rule.
 VISIBILITY="${ORBIT_FIXTURES_VISIBILITY:-public}"
 
+# #1533: jmrp-oss allows exactly one private project, and these fixtures are
+# public. Refuse a non-public visibility up front: the script now sets the
+# visibility of projects it did not create, so a typo would flip both fixtures.
+case "$NAMESPACE" in
+  jmrp-oss | jmrp-oss/*)
+    if [ "$VISIBILITY" != "public" ]; then
+      echo "error: ORBIT_FIXTURES_VISIBILITY=$VISIBILITY is not allowed under $NAMESPACE:" >&2
+      echo "       jmrp-oss allows one private project, and these fixtures must be public." >&2
+      exit 2
+    fi
+    ;;
+esac
+
 API="$GITLAB_URL/api/v4"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd)"
@@ -94,6 +107,11 @@ api_post() {
 # api_get PATH  →  echoes the response body
 api_get() {
   curl -sS "${H_AUTH[@]}" "$API$1"
+}
+
+# api_put PATH JSON  →  echoes the response body
+api_put() {
+  curl -sS -X PUT "${H_AUTH[@]}" "${H_JSON[@]}" "$API$1" -d "$2"
 }
 
 # ensure_resource GET_PATH JSON
@@ -154,10 +172,83 @@ echo "    namespace id: $NAMESPACE_ID"
 
 # ─── Project creation (pushes local source tree via git) ───────────────
 
+# reconcile_existing_project ID FIXTURE_DIR
+#   Brings a fixture project that already exists into line (#1533): sets the
+#   visibility, then creates by API the fixture files the project lacks,
+#   the LICENSE first, since jmrp-oss requires an OSI licence on every
+#   project. A re-run used to leave an existing project untouched, so one
+#   provisioned before its LICENSE existed, a private one, and one whose
+#   first push failed all stayed broken while the run reported success.
+reconcile_existing_project() {
+  local project_id="$1"
+  local fixture_dir="$2"
+
+  local current_visibility
+  current_visibility=$(api_get "/projects/$project_id" | python3 -c 'import sys,json
+try:
+    print(json.load(sys.stdin).get("visibility",""))
+except Exception: pass' 2>/dev/null)
+  if [ "$current_visibility" != "$VISIBILITY" ]; then
+    echo "    → visibility ${current_visibility:-unknown} → $VISIBILITY" >&2
+    api_put "/projects/$project_id" "{\"visibility\": \"$VISIBILITY\"}" >/dev/null
+  fi
+
+  # The repository tree lists the paths the project already holds. A route
+  # that cannot be read is reported, never guessed at: writing a file that
+  # already exists would be a spurious commit on every re-run.
+  local tree missing
+  tree=$(api_get "/projects/$project_id/repository/tree?recursive=true&per_page=100")
+  missing=$(FIXTURE_DIR="$fixture_dir" TREE="$tree" python3 - <<'PY'
+import json
+import os
+import sys
+
+tree = os.environ.get("TREE", "")
+try:
+    entries = json.loads(tree)
+except Exception:
+    print("UNREADABLE")
+    raise SystemExit(0)
+if not isinstance(entries, list):
+    print("UNREADABLE")
+    raise SystemExit(0)
+present = {e.get("path", "") for e in entries if isinstance(e, dict)}
+fixture_dir = os.environ["FIXTURE_DIR"]
+found = []
+for root, _dirs, names in os.walk(fixture_dir):
+    for name in names:
+        rel = os.path.relpath(os.path.join(root, name), fixture_dir).replace(os.sep, "/")
+        if rel not in present:
+            found.append(rel)
+found.sort(key=lambda rel: (rel != "LICENSE", rel))
+print("\n".join(found))
+PY
+)
+  if [ "$missing" = "UNREADABLE" ]; then
+    echo "    ! cannot list the project's files; leaving them as they are" >&2
+    return 0
+  fi
+  if [ -z "$missing" ]; then
+    echo "    ✓ project files are in line" >&2
+    return 0
+  fi
+  local rel encoded content_b64
+  while IFS= read -r rel; do
+    [ -z "$rel" ] && continue
+    encoded=$(printf %s "$rel" | python3 -c 'import sys,urllib.parse
+print(urllib.parse.quote(sys.stdin.read(), safe=""))')
+    content_b64=$(python3 -c 'import base64,sys
+print(base64.b64encode(open(sys.argv[1], "rb").read()).decode())' "$fixture_dir/$rel")
+    api_post "/projects/$project_id/repository/files/$encoded" \
+      "{\"branch\": \"main\", \"encoding\": \"base64\", \"content\": \"$content_b64\", \"commit_message\": \"Add $rel\"}" >/dev/null
+    echo "    → added $rel" >&2
+  done <<< "$missing"
+}
+
 # create_or_skip_project NAME PATH FIXTURE_DIR DESCRIPTION [MIRROR_FROM]
 #   - If the project does not exist, creates it.
-#   - If it exists, prints "project exists" to stderr and echoes the
-#     existing id to stdout (so callers can capture it with $()).
+#   - If it exists, reconciles it (visibility and missing fixture files) and
+#     echoes the existing id to stdout (so callers can capture it with $()).
 #   - Otherwise, creates the project, clones it locally, copies the
 #     fixture content, commits, and pushes.
 create_or_skip_project() {
@@ -180,6 +271,7 @@ except Exception: pass' 2>/dev/null)
 
   if [ -n "$existing_id" ] && [ "$existing_id" -gt 0 ] 2>/dev/null; then
     echo "    ✓ project exists: $NAMESPACE/$path (id=$existing_id)" >&2
+    reconcile_existing_project "$existing_id" "$fixture_dir"
     echo "$existing_id"
     return 0
   fi

@@ -128,15 +128,20 @@ ORBIT_FIXTURES_NAMESPACE=mynamespace \
 ```
 
 The script is **idempotent**: it checks for existing resources via the
-API and skips them. Re-running it on an already-provisioned namespace
-is a no-op. The namespace may be a subgroup, as the default
+API and skips them. Re-running it on an already-provisioned namespace is
+otherwise a no-op, but a project that already exists is brought into
+line rather than left alone: its visibility is set and any fixture file
+it lacks is added, the `LICENSE` first (a project provisioned before the
+licence existed, or one whose first push failed, is repaired this way).
+The namespace may be a subgroup, as the default
 `jmrp-oss/orbit-fixtures` is: the script looks each project up by its
 full path with every slash encoded. It creates the projects public, as
 `jmrp-oss` requires; set `ORBIT_FIXTURES_VISIBILITY=private` for a
 private group of your own, since GitLab refuses a public project in a
-private group. `make orbit-setup-fixtures` and `make test-e2e-gitlab-com`
-hand the setting on from their command line, else the environment, else
-`.env`.
+private group: a non-public visibility is refused outright under
+`jmrp-oss`, which allows one private project. `make orbit-setup-fixtures`
+and `make test-e2e-gitlab-com` hand the setting on from their command
+line, else the environment, else `.env`.
 
 ### What the script creates
 
