@@ -322,7 +322,11 @@ func isRenderControl(r rune) bool {
 //
 // The result is idempotent: nothing this function writes is anything it
 // rewrites, so a value escaped twice renders once, which is what lets a caller
-// that still escapes by hand pass its value to a helper that escapes again.
+// that still escapes by hand pass its value to a helper that escapes it as a
+// cell again, such as [Card.Field]. A link's label is not a cell:
+// [MdTitleLink] escapes its title as a label, where the backslash this
+// function writes in front of an address's colon, dot or '@' is escaped again
+// into one the reader sees, so a link is built from the raw value.
 func EscapeMdTableCell(s string) string {
 	return escapeLiteralAutolinks(escapeCellMarkup(s))
 }

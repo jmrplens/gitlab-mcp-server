@@ -1154,7 +1154,8 @@ func TestEscapeMdTableCell_BracketCannotOpenALink(t *testing.T) {
 // to be escaped again without changing, that a second pass is the identity
 // and that the first pass leaves none of the characters it exists to remove.
 // This is what lets a half-migrated formatter that still escapes by hand pass
-// its value to a Card, which escapes again, and render exactly what it did.
+// its value to a Card field, which escapes again, and render exactly what it
+// did; a link's label is no such helper, so MdTitleLink takes the raw value.
 // EscapeMdLinkLabel is deliberately absent: it backslash-escapes the
 // backslash, so a second pass doubles it, and MdTitleLink applies it exactly
 // once for that reason. The cell and heading escapers also leave no literal

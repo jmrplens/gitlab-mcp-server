@@ -265,9 +265,13 @@ its quote, or between table rows.
 | Time                                                                            | `FormatTime`                                                                                                                                                               | the fallback branch escapes; the two layouts write nothing escapable                            |
 | Markdown, Row cells, Note                                                       | nothing                                                                                                                                                                    | the caller renders these (see "Deliberately not in Card")                                       |
 
-Every escaper Card uses is idempotent (`TestEscapers_AreIdempotent`), so a
-formatter that still escapes by hand passes its value to a Card and renders
-exactly what it did (`TestCard_EscapingIsIdempotent_APreEscapedValueRendersUnchanged`).
+The escapers behind an inline value and a heading are idempotent
+(`TestEscapers_AreIdempotent`), so a formatter that still escapes one by hand
+passes it to `Field` or to a heading and renders exactly what it did
+(`TestCard_EscapingIsIdempotent_APreEscapedValueRendersUnchanged`). The escaping
+of a link's text or a code span is not: `MdTitleLink` escapes the backslash the
+cell escaper writes, which then shows, and nothing in a span resolves, so `Link`,
+`Code` and `Secret` take the raw value.
 
 ## Invariants a gate can check
 

@@ -38,10 +38,14 @@ import (
 // Every value is escaped at the write that renders it, by the helper the
 // value's shape needs, and a caller passes GitLab text as it arrived: the cell
 // escaper for an inline value, [MdCodeSpan] for a code span, [MdTitleLink] for
-// a link, [WrapGFMBody] for prose. The escaping is idempotent, so a caller
-// that still escapes by hand renders unchanged. An empty, nil, blank or zero
-// value writes nothing where the zero is an absence: the card shows what
-// GitLab sent, and never a label with nothing after it.
+// a link, [WrapGFMBody] for prose. The escaping of an inline value or a
+// heading is idempotent, so a caller that still escapes one by hand renders
+// unchanged. That of a link's text or a code span is not: [MdTitleLink] escapes
+// the backslash the cell escaper writes, which then shows, and nothing in a
+// span resolves, so [Card.Link], [Card.Code] and [Card.Secret] take the raw
+// value. An empty, nil, blank or zero value writes nothing where the zero is
+// an absence: the card shows what GitLab sent, and never a label with nothing
+// after it.
 type Card struct {
 	b *strings.Builder
 	// root is the card End writes the hints of and the one that remembers a

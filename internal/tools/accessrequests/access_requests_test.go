@@ -918,6 +918,38 @@ func TestFormatMemberOutputMarkdown_NoAccessLevel(t *testing.T) {
 	}
 }
 
+// TestFormatMemberOutputMarkdown_CreatorHandleHoldingWWW_LinksItAsWritten
+// verifies that the creator of an approved request whose username holds
+// "www." is linked under the handle as GitLab spells it, and escaped as a
+// cell when GitLab sent no profile to link.
+//
+// The link was built from the handle escaped for a cell, and the link helper
+// escapes its label again, so the backslash the cell escaper writes in front
+// of the dot became one the reader saw: the card read "@www\.carol". GitLab
+// accepts a dot in a username, so an instance can send this one.
+func TestFormatMemberOutputMarkdown_CreatorHandleHoldingWWW_LinksItAsWritten(t *testing.T) {
+	tests := []struct {
+		name   string
+		webURL string
+		want   string
+	}{
+		{name: "linked", webURL: "https://gitlab.example.com/www.carol", want: "  - **Username**: [@www.carol](https://gitlab.example.com/www.carol)\n"},
+		{name: "no profile", want: "  - **Username**: @www\\.carol\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatMemberOutputMarkdown(MemberOutput{
+				ID:        1,
+				Username:  "alice",
+				CreatedBy: &toolutil.MemberUserOutput{Name: "Carol", Username: "www.carol", WebURL: tt.webURL},
+			})
+			if !strings.Contains(got, "- **Created By**:\n  - **Name**: Carol\n"+tt.want) {
+				t.Errorf("the creator's rows are not %q:\n%s", tt.want, got)
+			}
+		})
+	}
+}
+
 // TestFormatMemberOutputMarkdown_UnknownAccessLevel pins what a level GitLab
 // has and this server's table does not renders as: the number it sent, which
 // is the one thing a reader can act on.

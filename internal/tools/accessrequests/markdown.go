@@ -76,7 +76,11 @@ func FormatMemberOutputMarkdown(out MemberOutput) string {
 	if by := out.CreatedBy; by != nil {
 		sub := c.Sub("Created By")
 		sub.Field("Name", by.Name)
-		sub.Link("Username", toolutil.MdUserHandle(by.Username), by.WebURL)
+		// The link is built from the raw username. Built from the handle
+		// escaped for a cell, it had that handle escaped again as its label,
+		// and the backslash in front of the dot of a username holding "www."
+		// became one the reader sees.
+		sub.Markdown("Username", toolutil.MdUserLink(by.Username, by.WebURL))
 	}
 	c.Time("Created At", out.CreatedAt)
 	c.Time("Expires At", out.ExpiresAt)

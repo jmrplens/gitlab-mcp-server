@@ -165,6 +165,61 @@ func TestFormatListMarkdown_EmojiWithoutName_RendersAnEmptyCellRatherThanALink(t
 	}
 }
 
+// TestNameCell_NameHoldingAnAddress_LinksItAsWritten verifies that an emoji
+// whose name holds what opens a literal autolink is linked under its name as
+// written, and escaped as a cell when GitLab sent no image to link.
+//
+// The link was built from the cell escaping of ":name:", and the link helper
+// escapes its label again, so the backslash the cell escaper writes in front
+// of an address's colon, dot or '@' was one the reader saw: "[:www\\.party:]"
+// renders as ":www\.party:". GitLab holds an emoji name to letters, digits,
+// '_' and '-' today, and the formatter does not rely on that.
+func TestNameCell_NameHoldingAnAddress_LinksItAsWritten(t *testing.T) {
+	tests := []struct {
+		name  string
+		emoji string
+		url   string
+		want  string
+	}{
+		{name: "dot of www, linked", emoji: "www.party", url: "https://example.com/www.png", want: "[:www.party:](https://example.com/www.png)"},
+		{name: "email address, linked", emoji: "a@b.co", url: "https://example.com/a.png", want: "[:a@b.co:](https://example.com/a.png)"},
+		{name: "dot of www, no image", emoji: "www.party", want: `:www\.party:`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := nameCell(Item{Name: tt.emoji, URL: tt.url}); got != tt.want {
+				t.Errorf("nameCell(%q, %q) = %q, want %q", tt.emoji, tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEmojiCell_NameOpeningWithAnAt_IsEscapedAfterTheColon verifies that the
+// card's ":name:" is escaped as one value, so a name whose first character is
+// an '@' is escaped there, after the colon.
+//
+// Escaped alone, "@evil.com" has nothing in front of its '@' and stays as it
+// is, and between the colons it reads ":@evil.com:", which markdown-it's
+// linkify links as an email address whose local part is the colon.
+func TestEmojiCell_NameOpeningWithAnAt_IsEscapedAfterTheColon(t *testing.T) {
+	tests := []struct {
+		name  string
+		emoji string
+		want  string
+	}{
+		{name: "at sign after the colon", emoji: "@evil.com", want: `:\@evil.com:`},
+		{name: "ordinary name", emoji: "party_parrot", want: ":party_parrot:"},
+		{name: "no name", emoji: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := emojiCell(tt.emoji); got != tt.want {
+				t.Errorf("emojiCell(%q) = %q, want %q", tt.emoji, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestFormatCreateMarkdown verifies the created emoji renders as the card of
 // one object, with the global ID as a code span because it is the value the
 // delete action takes.
