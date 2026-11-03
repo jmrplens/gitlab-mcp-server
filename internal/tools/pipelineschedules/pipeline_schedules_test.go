@@ -213,12 +213,11 @@ func assertLastPipelineDocumentedSubset(t *testing.T, lp *LastPipelineOutput) {
 }
 
 // TestPipelineScheduleGet_WholeSchedule_IsPublishedFieldForField holds what a
-// get publishes to the schedule GitLab answered, field for field, over the raw
-// superset path the handler takes. It is the same fixture the list test uses,
-// with variables[].raw added, which is the one field that path exists for: no
-// two values agree, so a converter reading a neighbor's field is told from
-// one reading its own, and the null array elements must be skipped rather than
-// published as empty entries.
+// get publishes to the schedule GitLab answered, field for field. It is the same
+// fixture the list test uses, with variables[].raw added: no two values agree,
+// so a converter reading a neighbor's field is told from one reading its own,
+// and the null array elements must be skipped rather than published as empty
+// entries.
 func TestPipelineScheduleGet_WholeSchedule_IsPublishedFieldForField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
@@ -2351,13 +2350,9 @@ func TestFormatTriggeredPipelinesMarkdown_Empty(t *testing.T) {
 }
 
 // TestPipelineScheduleGet_WithTimestamps holds the three timestamps a get
-// publishes to the three the response carried, each a different instant.
-//
-// The comment here used to say it covered the != nil branches of toOutput,
-// which it never did: the get handler reads the raw superset path, where the
-// timestamps are decoded as strings and passed through with no branch at all,
-// so the only thing to hold is that each lands on its own field. Asserting
-// they are merely non-empty left a converter that reads created_at into
+// publishes to the three the response carried, each a different instant. They go
+// through the != nil branches of toOutput, and each has to land on its own field:
+// asserting they are merely non-empty left a converter that reads created_at into
 // updated_at passing.
 func TestPipelineScheduleGet_WithTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

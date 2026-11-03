@@ -335,15 +335,14 @@ func TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet(t *testing.T) {
 
 // TestUpdateGroupBoard_ListSwitches_ReachTheBodyOnlyWhenSet pins the whole PUT
 // body for the two list switches GitLab's group board update takes on every
-// tier and client-go's UpdateGroupIssueBoardOptions does not model (register
-// row 98). The group update offered neither, so a group board's Open and
-// Closed lists could not be hidden or shown (issue 1241). Each case is built
+// tier, which client-go's UpdateGroupIssueBoardOptions models since v3.39.0
+// (register row 98). The group update offered neither, so a group board's Open
+// and Closed lists could not be hidden or shown (issue 1241). Each case is built
 // from the parameters a model sends, so the switches are read as the catalog
 // reads them, and false is sent as false rather than read as unset. The two
 // switches take values from the same two possibilities, so the cases give
 // them opposite values to tell the two apart, and one case sets a switch
-// beside the name to show the switches and client-go's own fields go out in
-// one body.
+// beside the name to show both go out in one body.
 func TestUpdateGroupBoard_ListSwitches_ReachTheBodyOnlyWhenSet(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -1899,9 +1898,8 @@ func TestGroupBoardRoutes_CallersContext_ReachesTheRequest(t *testing.T) {
 // TestGetGroupBoardList_WholeShapeOfOneAnswer pins the column shape the SDK
 // path produces, for the same reason and against the same distinct values. It
 // is a path of its own rather than a repeat of the board test: here the column
-// comes from client-go's own struct and its limit_metric from the captured
-// response beside it, and only this test says the two are joined on the right
-// column.
+// is the whole answer of a client-go route of its own, limit_metric included,
+// rather than one entry of a board's lists.
 func TestGetGroupBoardList_WholeShapeOfOneAnswer(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/31", func(w http.ResponseWriter, _ *http.Request) {

@@ -84,8 +84,8 @@ func TestGroupBoards_Create_ListsReadsAndDeletesTheBoard(t *testing.T) {
 	})
 }
 
-// groupBoardKeys is what the scenario below holds a board answer to: the
-// keys client-go's GroupIssueBoard does not model, and the metric of each
+// groupBoardKeys is what the scenario below holds a board answer to: its two
+// list switches, the assignee and weight it is scoped to, and the metric of each
 // column it limited.
 type groupBoardKeys struct {
 	hideBacklog, hideClosed bool

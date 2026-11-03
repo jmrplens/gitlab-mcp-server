@@ -3888,7 +3888,7 @@ day. It models `SubmoduleCommit`'s five keys (`extended_trailers` as
 `ListTreeOptions.WithLastCommit`, `PipelineVariable.Raw`, and
 `ImportStatus.CreatedAt`, `FailedRelations` and `Stats`, with `CreateAt`
 deprecated, beside rows 96, 98 and 101. Every read below of those four
-**retired at the v3.40.3 pin**, the pin the bump waited for: `TreeNode.LastCommit`
+**retired at the v3.40.3 pin**, not at v3.39.0: `TreeNode.LastCommit`
 is a `*Commit`, whose `ExtendedTrailers` was the `map[string]string`
 [row 69](#commit-declares-extended_trailers-a-map-of-strings-and-gitlab-sends-lists)
 records until that release, so on v3.39.0 to v3.40.2 `ListTree` with
@@ -3896,10 +3896,16 @@ records until that release, so on v3.39.0 to v3.40.2 `ListTree` with
 Measured on 2026-10-31 against v3.40.0, a page whose commit carries one was
 refused with
 `json: cannot unmarshal array into Go struct field .0.last_commit.extended_trailers.Signed-off-by of type string`,
-and a page whose commits carry none decoded. `PipelineVariable.Raw` is a plain
+and a page whose commits carry none decoded. The bump was going to keep the
+capture of the tree's `last_commit` at its new pin until a release carried row
+69's merge request
+([issue 1671](https://github.com/jmrplens/gitlab-mcp-server/issues/1671)).
+v3.40.3 came out before the bump was built, so the pin moved straight to it and
+that capture retired with the rest. `PipelineVariable.Raw` is a plain
 `bool`, so `raw` is published as one, false where an instance older than the
 column leaves it out, and `ImportStatus.Stats` is two maps, which
-`projectimportexport.ImportStatsOutput` mirrors.
+`projectimportexport.ImportStatsOutput` mirrors, each published as GitLab sends
+it, an empty one as an empty map.
 
 - `Todo` had no `updated_at`, which `lib/api/entities/todo.rb` exposes with no
   condition, and no `group`, which it exposes on a to-do raised in a group
@@ -6116,12 +6122,13 @@ options or documented as answering an object.
   a predicate of its own, since `gl.Wiki` is not what that search answers with
   ([row 130](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages)). The
   handlers that decode a `Commit` inside an answer and publish no trailers (the
-  commit of a tag, a release, a group release or a job, and the deployable
-  commit of a deployment or an environment), and the readers outside the tools
-  that take a commit from client-go (the commit, branch and tag resources, the
-  prompts that compare two refs or list branches, and the branch, tag and commit
-  completions) would have failed as `repository.commit_list` did the day their
-  route parsed trailers, and cannot any more.
+  commit of a tag, a release, a group release or a job, the deployable commit of
+  a deployment or an environment, and the commits of a project event's `data`,
+  which `internal/tools/events` does not publish at all), and the readers outside
+  the tools that take a commit from client-go (the commit, branch and tag
+  resources, the prompts that compare two refs or list branches, and the branch,
+  tag and commit completions) would have failed as `repository.commit_list` did
+  the day their route parsed trailers, and cannot any more.
 
 **What**: `lib/api/entities/commit.rb` at 19.4.1-ee exposes `extended_trailers`
 with no condition, documented as a hash of each trailer to the list of its

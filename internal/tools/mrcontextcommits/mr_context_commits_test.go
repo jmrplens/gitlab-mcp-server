@@ -119,19 +119,17 @@ var firstOfTwoPages = toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems:
 var firstOfTwoPagesHeaders = testutil.PaginationHeaders{Page: "1", PerPage: "1", Total: "2", TotalPages: "2", NextPage: "2"}
 
 // TestList_NextPageHeader_PublishesThePaginationBlock holds that the page
-// GitLab answers is published as a page, whether or not client-go could read
-// its commits. The commits are read from the captured body and the capture
-// keeps no headers, so the block has to come from the response client-go
-// returns; a commit carrying a trailer makes client-go's own decode fail, and
-// the block must survive that too, since that is the failure List passes over.
+// GitLab answers is published as a page, whatever its commits carry. The commits
+// are read from the captured body and the capture keeps no headers, so the block
+// has to come from the response client-go returns.
 func TestList_NextPageHeader_PublishesThePaginationBlock(t *testing.T) {
 	cases := []struct {
 		name   string
 		commit string
 		wantID string
 	}{
-		{"client-go reads the page", `{"id":"abc123","short_id":"abc1","title":"Initial commit"}`, testCommitSHA},
-		{"client-go misreads a trailer", fullCommitJSON, fullCommitItem.ID},
+		{"a commit with no trailers", `{"id":"abc123","short_id":"abc1","title":"Initial commit"}`, testCommitSHA},
+		{"a commit with trailers as GitLab sends them", fullCommitJSON, fullCommitItem.ID},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
