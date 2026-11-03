@@ -31,8 +31,8 @@
 //   - the input schema of every action, through actionids.Catalogs, a param
 //     with brackets looked up as an input spells it (`not[author_id]` as
 //     `not_author_id`, `custom_headers[key]` under `custom_headers`), and a
-//     GitLab name an input fills from another field through the aliases the
-//     requiredness scope declares.
+//     GitLab name an input fills from another field through the aliases
+//     R-REQUIRED declares.
 //
 // # How a param is judged
 //
@@ -56,10 +56,16 @@
 // the action's and leaves its route judged.
 //
 // A path param is not judged, nor an attribute Workhorse fills for an
-// uploaded file (`file.sha256`). A param that holds others (`custom_headers`
-// and its `custom_headers[key]`) is covered when one of them is, and a
-// container none of whose members is covered stands for them as one finding
-// when they share its class.
+// uploaded file (`file.sha256`). A required WorkhorseFile param on a route
+// whose request carries no multipart form and whose option structs do not
+// model it is covered as `workhorse_body`: Workhorse writes the whole body of
+// such a request (repository commits and files, a generic package) to that
+// file, and R-REQUIRED judges the fields a repository commit's or file's
+// endpoint reads back out of it. A route whose client can upload a form still answers for its form field, so an
+// upload that sends no field of the name stays a finding. A param that holds
+// others (`custom_headers` and its `custom_headers[key]`) is covered when one
+// of them is, and a container none of whose members is covered stands for them
+// as one finding when they share its class.
 //
 // # What it gates
 //

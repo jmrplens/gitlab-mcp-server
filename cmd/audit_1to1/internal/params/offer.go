@@ -20,14 +20,13 @@ type offerer struct {
 // offers reports whether any of the actions' inputs offers param.
 //
 // A param is found among an input's fields by name, since the inputs here
-// spell a param the way GitLab does, or under the field an alias the
-// requiredness scope declares names for it. A param with brackets is found
-// under the one name an input flattens it to (`not[author_id]` as
-// `not_author_id`, which is how every negated filter here is spelled) or
-// through the nested schema of the field it sits under (`custom_headers[key]`
-// as the key property of the items of `custom_headers`). The placement
-// rules of the requiredness scope pass over a bracketed name, which is why
-// this one reads it.
+// spell a param the way GitLab does, or under the field an alias R-REQUIRED
+// declares names for it. A param with brackets is found under the one name an
+// input flattens it to (`not[author_id]` as `not_author_id`, which is how
+// every negated filter here is spelled) or through the nested schema of the
+// field it sits under (`custom_headers[key]` as the key property of the items
+// of `custom_headers`). The placement rules of R-REQUIRED pass over a
+// bracketed name, which is why this one reads it.
 func (o offerer) offers(param string) bool {
 	for _, action := range o.actions {
 		properties := schemaProperties(o.schemas[action])

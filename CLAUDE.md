@@ -76,7 +76,7 @@ One line per entry; [Repository Map](docs/development/repository-map.md) carries
 gitlab-mcp-server/
 ├── cmd/
 │   ├── server/                       # MCP server entry point and --shutdown support
-│   ├── audit_1to1/                   # 1:1 SDK/API parity audit: R-INPUT, R-OUTPUT, R-ACTION, R-ENUM, R-PATH, R-PAGE, R-GRANT, R-PARAM, R-ROUTE and requiredness (R-META retired for audit_discovery_completeness)
+│   ├── audit_1to1/                   # 1:1 SDK/API parity audit: R-INPUT, R-OUTPUT, R-ACTION, R-ENUM, R-PATH, R-PAGE, R-GRANT, R-PARAM, R-ROUTE and R-REQUIRED (R-META retired for audit_discovery_completeness)
 │   ├── audit_action_ids/             # Action IDs and tool names in served prose held to the catalog (make check-action-ids)
 │   ├── audit_catalog_first/          # Catalog-first registration (ADR-0004); every ActionSpecs aggregated (make audit-catalog-first)
 │   ├── audit_dead_consts/            # Unread constants in const groups staticcheck cannot judge (make check-dead-consts)

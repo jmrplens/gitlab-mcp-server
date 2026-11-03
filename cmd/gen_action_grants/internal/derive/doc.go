@@ -60,4 +60,15 @@
 // request is, where it came from and which directive shaped it is kept, for
 // the committed record of what this server sends and for the gates that hold
 // the derivation to an author's intent.
+//
+// # From a call to the fields it fills
+//
+// Beside what a request is, each one records which field of the action's
+// input fills each segment of its path (placeholders.go), read from the call
+// that sends it: cmd/internal/sdkroutes says where each argument of a client-go
+// method lands, and the argument, or the identifier a raw path carries, is read
+// back through locals, parameters and calls to the field it is built out of.
+// R-REQUIRED places a path parameter through the answer, since GitLab's name
+// for a parameter and the input's often differ. A segment every call does not
+// fill from one field is left out.
 package derive

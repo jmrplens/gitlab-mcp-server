@@ -5,6 +5,7 @@ package join
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -998,6 +999,66 @@ func TestWayClassic_IsTheStrongestRequestOfTheWay(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := WayClassic(requests, tc.path); got != tc.want {
 				t.Errorf("WayClassic(%v) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestJoin_ARequestsFills_AreNamedAfterTheRoutesPlaceholders verifies the
+// fields the derivation read each path segment from reach the request under
+// the names the record gives its placeholders, through a route with an
+// optional group as well as a plain one, and that a request with none carries
+// none.
+func TestJoin_ARequestsFills_AreNamedAfterTheRoutesPlaceholders(t *testing.T) {
+	filled := func(use derive.Use, fills map[int]string) derive.Use {
+		use.Fills = fills
+		return use
+	}
+	actions := []derive.Action{
+		action("rest.issues", filled(rest("GET", "/projects/:/issues"), map[int]string{1: "project_id"})),
+		action("rest.epics_plain", filled(rest("GET", "/groups/:/epics"), map[int]string{1: "group_id"})),
+		action("rest.unfilled", rest("GET", "/projects/:/issues")),
+	}
+	result := Join(fixtureRecord(), fixtureSchema(t), actions, fixtureDeclarations())
+	cases := []struct {
+		id   string
+		want map[string]string
+	}{
+		{id: "rest.issues", want: map[string]string{"id": "project_id"}},
+		{id: "rest.epics_plain", want: map[string]string{"id": "group_id"}},
+		{id: "rest.unfilled"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			got := joined(t, result, tc.id).Requests[0].Placeholders
+			if !maps.Equal(got, tc.want) || (got == nil) != (tc.want == nil) {
+				t.Errorf("placeholders = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNamed_KeepsTheFillsTheRouteHasAPlaceholderFor verifies a fill names the
+// placeholder at its segment, one at a segment the route spells no placeholder
+// at is passed over, which is a declared route the derived path does not meet,
+// and a request left with none carries nothing rather than an empty map.
+func TestNamed_KeepsTheFillsTheRouteHasAPlaceholderFor(t *testing.T) {
+	names := map[int]string{1: "id", 3: "key_id"}
+	cases := []struct {
+		name  string
+		fills map[int]string
+		want  map[string]string
+	}{
+		{name: "every fill", fills: map[int]string{1: "project_id", 3: "deploy_key_id"}, want: map[string]string{"id": "project_id", "key_id": "deploy_key_id"}},
+		{name: "a fill the route has no placeholder for", fills: map[int]string{1: "project_id", 2: "other"}, want: map[string]string{"id": "project_id"}},
+		{name: "only such a fill", fills: map[int]string{2: "other"}},
+		{name: "no fills"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := named(tc.fills, names)
+			if !maps.Equal(got, tc.want) || (got == nil) != (tc.want == nil) {
+				t.Errorf("named(%v) = %v, want %v", tc.fills, got, tc.want)
 			}
 		})
 	}

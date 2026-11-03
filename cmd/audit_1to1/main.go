@@ -321,8 +321,8 @@ const scopePaths = "paths"
 // scopeGrants is the fine-grained permission dimension (R-GRANT).
 const scopeGrants = "grants"
 
-// scopeRequired is the requiredness rule of R-INPUT: each parameter the input
-// schema requires, held to what GitLab requires of it.
+// scopeRequired is R-REQUIRED: each parameter the input schema requires, held
+// to what GitLab requires of it.
 const scopeRequired = "required"
 
 // scopeParams is R-PARAM: each param a route this server reaches declares,

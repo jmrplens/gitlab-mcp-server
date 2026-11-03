@@ -263,6 +263,13 @@ type Param struct {
 	Desc     string `json:"desc,omitempty"`
 }
 
+// WorkhorseFile is the type the record gives a param Workhorse uploads: a
+// file it writes to disk before the request reaches Rails, whose attributes
+// (`file.etag`, `file.sha256` and the rest) it fills in itself. On some
+// routes the file is the whole body of the request, which Rails then parses
+// for the params the record cannot list.
+const WorkhorseFile = "API::Validations::Types::WorkhorseFile"
+
 // Path is where the record lives under a repository root.
 func Path(dir string) string { return filepath.Join(dir, FileName) }
 

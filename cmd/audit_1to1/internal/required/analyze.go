@@ -113,6 +113,7 @@ var (
 	}
 	declarations = declaredRequiredness
 	aliases      = declaredAliases
+	bodies       = declaredWorkhorseBodies
 )
 
 // Run builds the report for the repository at root and returns it as indented
@@ -143,7 +144,7 @@ func buildReport(root string, opts Options) (Report, error) {
 	if err != nil {
 		return Report{}, fmt.Errorf("build the action catalog: %w", err)
 	}
-	report := judgeAll(schemasByAction(built), record, routesByName(live.Routes), declarations(), aliases())
+	report := judgeAll(schemasByAction(built), record, routesByName(live.Routes), tables{declared: declarations(), aliased: aliases(), bodies: bodies()})
 	report.Requests = actionrequests.RecordPath
 	report.Record = filepath.ToSlash(apilive.Path(apilive.DefaultDir))
 	if opts.GapsOnly {
@@ -179,10 +180,17 @@ func routesByName(routes []apilive.Route) map[string]*apilive.Route {
 	return byName
 }
 
+// tables are the declaration tables a judgement reads.
+type tables struct {
+	declared map[declarationKey]declaration
+	aliased  map[aliasKey]paramAlias
+	bodies   map[string]workhorseBody
+}
+
 // judgeAll judges every action and assembles the report.
-func judgeAll(schemas map[string]map[string]any, record actionrequests.Record, routes map[string]*apilive.Route, declared map[declarationKey]declaration, aliased map[aliasKey]pathAlias) Report {
+func judgeAll(schemas map[string]map[string]any, record actionrequests.Record, routes map[string]*apilive.Route, in tables) Report {
 	report := Report{SchemaVersion: shared.SchemaVersion, Findings: []Finding{}}
-	byAction := aliasesByAction(aliased)
+	byAction := aliasesByAction(in.aliased)
 	byID := make(map[string]actionrequests.RecordAction, len(record.Actions))
 	for _, action := range record.Actions {
 		byID[action.ID] = action
@@ -194,26 +202,50 @@ func judgeAll(schemas map[string]map[string]any, record actionrequests.Record, r
 	sort.Strings(ids)
 	used := map[declarationKey]bool{}
 	aliasUsed := map[aliasKey]bool{}
+	bodyUsed := map[string]bool{}
 	report.Summary.Actions = len(ids)
 	for _, id := range ids {
-		verdict := judgeAction(id, schemas[id], byID[id], routes, byAction[id])
+		verdict := judgeAction(id, schemas[id], byID[id], routes, rules{aliases: byAction[id], bodies: in.bodies, bodyUsed: bodyUsed})
 		for param := range verdict.aliased {
 			if _, isField := schemaProperties(schemas[id])[byAction[id][param]]; isField {
 				aliasUsed[aliasKey{action: id, param: param}] = true
 			}
 		}
-		report.add(id, verdict, declared, used)
+		report.add(id, verdict, in.declared, used)
 	}
-	report.Stale = staleEntries(declared, used, aliased, aliasUsed)
+	report.Stale = staleEntries(in.declared, used, in.aliased, aliasUsed)
+	report.Stale = append(report.Stale, staleBodies(in.bodies, bodyUsed)...)
+	sort.Strings(report.Stale)
 	report.Summary.Findings = len(report.Findings)
 	report.Summary.Declared = len(report.Declared)
 	report.Summary.Stale = len(report.Stale)
 	return report
 }
 
+// staleBodies names every Workhorse body declaration that read no route an
+// action sends: one for a route no judged action sends, and one whose record
+// route declares a param of the body again or no longer requires a
+// WorkhorseFile param. used holds, by route, whether a request of it read the
+// declaration, false for one sent whose record route the declaration no longer
+// answers.
+func staleBodies(bodies map[string]workhorseBody, used map[string]bool) []string {
+	var stale []string
+	for route := range bodies {
+		answered, sent := used[route]
+		if !sent {
+			stale = append(stale, route+": no action this scope judges sends the route, so its Workhorse body answers nothing")
+			continue
+		}
+		if !answered {
+			stale = append(stale, route+": the record declares a param of the route's body again, or no longer requires a WorkhorseFile param")
+		}
+	}
+	return stale
+}
+
 // aliasesByAction indexes the declared aliases by action, then by the GitLab
 // parameter each places.
-func aliasesByAction(aliased map[aliasKey]pathAlias) map[string]map[string]string {
+func aliasesByAction(aliased map[aliasKey]paramAlias) map[string]map[string]string {
 	byAction := map[string]map[string]string{}
 	for key, alias := range aliased {
 		if byAction[key.action] == nil {
@@ -258,7 +290,7 @@ func (r *Report) add(id string, verdict actionVerdict, declared map[declarationK
 
 // staleEntries names, sorted, every declaration no disagreement used and
 // every alias that placed no parameter onto a field the schema has.
-func staleEntries(declared map[declarationKey]declaration, used map[declarationKey]bool, aliased map[aliasKey]pathAlias, aliasUsed map[aliasKey]bool) []string {
+func staleEntries(declared map[declarationKey]declaration, used map[declarationKey]bool, aliased map[aliasKey]paramAlias, aliasUsed map[aliasKey]bool) []string {
 	stale := []string{}
 	for key, answer := range declared {
 		if !used[key] {
@@ -286,6 +318,31 @@ type actionVerdict struct {
 	aliased map[string]bool
 }
 
+// rules are the declarations placing one action's requests reads: the
+// aliases the action declares, by GitLab parameter, and the Workhorse bodies
+// every action shares, with which of them a request read.
+type rules struct {
+	aliases  map[string]string
+	bodies   map[string]workhorseBody
+	bodyUsed map[string]bool
+}
+
+// body returns the params GitLab reads out of the body Workhorse rewrote on
+// one route, when a declaration names the route and the record still answers
+// it ([workhorseBody.answers]), and records whether it did.
+func (r rules) body(name string, route *apilive.Route) map[string]bool {
+	declared, isBody := r.bodies[name]
+	if !isBody {
+		return nil
+	}
+	answers := declared.answers(route)
+	r.bodyUsed[name] = r.bodyUsed[name] || answers
+	if !answers {
+		return nil
+	}
+	return declared.Params
+}
+
 // wayState is what one way of running an action says of one field.
 type wayState int
 
@@ -307,7 +364,7 @@ const (
 // requires it, since a way that does not is a call GitLab serves without it.
 // A field found on no route is unplaced and a field some way could not be read
 // for is unjudged; neither is a finding.
-func judgeAction(id string, schema map[string]any, action actionrequests.RecordAction, routes map[string]*apilive.Route, aliases map[string]string) actionVerdict {
+func judgeAction(id string, schema map[string]any, action actionrequests.RecordAction, routes map[string]*apilive.Route, with rules) actionVerdict {
 	placed := make([]map[string]bool, len(action.Requests))
 	routeNames := make([]string, len(action.Requests))
 	verdict := actionVerdict{aliased: map[string]bool{}}
@@ -320,7 +377,7 @@ func judgeAction(id string, schema map[string]any, action actionrequests.RecordA
 			continue
 		}
 		verdict.rest = true
-		placed[index] = placements(route, aliases, verdict.aliased)
+		placed[index] = placements(route, request.Placeholders, with.body(request.Route, route), with.aliases, verdict.aliased)
 		routeNames[index] = request.Route
 	}
 	if !verdict.rest {

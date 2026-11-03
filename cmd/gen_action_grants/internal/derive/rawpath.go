@@ -16,12 +16,14 @@ import (
 )
 
 // frame is where an expression is evaluated: the package that types it, the
-// body whose local assignments it reads, and the parameters of that body bound
-// to what the caller passed.
+// body whose local assignments it reads, the parameters of that body bound
+// to what the caller passed, and the parameter list they are declared in,
+// whose unbound members are what a handler is handed (see [deriver.isInput]).
 type frame struct {
-	pkg  *packages.Package
-	body ast.Node
-	env  map[*types.Var]binding
+	pkg    *packages.Package
+	body   ast.Node
+	env    map[*types.Var]binding
+	params *ast.FieldList
 }
 
 // binding is one parameter bound to the caller's argument, with the frame the
@@ -83,7 +85,7 @@ func (d *deriver) fold(expr ast.Expr, at *frame, depth int) []string {
 	case *ast.CallExpr:
 		return d.foldCall(typed, at, depth)
 	case *ast.SelectorExpr, *ast.IndexExpr, *ast.StarExpr:
-		return []string{placeholder}
+		return []string{d.identifier(expr, at)}
 	}
 	return []string{unknownPiece}
 }
@@ -139,7 +141,7 @@ func (d *deriver) foldCall(call *ast.CallExpr, at *frame, depth int) []string {
 	// call names has a declaration.
 	fn, ours := d.prog.Function(callee.Origin())
 	if !ours || !returnsString(callee) {
-		return []string{placeholder}
+		return []string{d.identifier(call, at)}
 	}
 	decl := fn.Decl()
 	inner := &frame{pkg: fn.Package(), body: decl.Body, env: bind(fn.Package(), decl.Type.Params, call, at)}
@@ -338,15 +340,22 @@ func normalizePath(raw string) (string, bool) {
 	if strings.Contains(raw, unknownPiece) {
 		return "", false
 	}
-	if cut := strings.IndexAny(raw, "?#"); cut >= 0 {
-		raw = raw[:cut]
-	}
-	raw = strings.TrimPrefix(strings.TrimPrefix(raw, "/"), "api/v4/")
-	segments := strings.Split(strings.Trim(raw, "/"), "/")
+	segments := pathSegments(raw)
 	for i, segment := range segments {
 		if strings.Contains(segment, placeholder) {
 			segments[i] = placeholder
 		}
 	}
 	return "/" + strings.Join(segments, "/"), true
+}
+
+// pathSegments splits a folded request path into the segments of the route
+// it names: its query and fragment cut off, and the API prefix and the
+// slashes around it trimmed.
+func pathSegments(raw string) []string {
+	if cut := strings.IndexAny(raw, "?#"); cut >= 0 {
+		raw = raw[:cut]
+	}
+	raw = strings.TrimPrefix(strings.TrimPrefix(raw, "/"), "api/v4/")
+	return strings.Split(strings.Trim(raw, "/"), "/")
 }

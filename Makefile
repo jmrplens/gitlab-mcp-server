@@ -1260,7 +1260,7 @@ analyze:
 	run_check "[26/36] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
 	run_check "[27/36] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
 	run_check "[28/36] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/36] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[29/36] parameter requiredness (R-REQUIRED)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
 	run_check "[30/36] params of the routes reached (R-PARAM)" go run ./cmd/audit_1to1/ -scope=params -gaps-only; \
 	run_check "[31/36] routes the live record mounts (R-ROUTE)" go run ./cmd/audit_1to1/ -scope=routes -gaps-only; \
 	run_check "[32/36] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
@@ -2063,8 +2063,8 @@ audit-1to1-grants-report:
 	go run ./cmd/audit_1to1/ -scope=grants $(if $(wildcard $(E2E_CALLS_DIR)),-e2e-calls $(E2E_CALLS_DIR)) -output plan/1to1-grants.json
 	@echo "R-GRANT report written to plan/1to1-grants.json"
 
-## audit-1to1-required: gate the parameters every input schema requires (the requiredness
-## rule of R-INPUT, issue 1100). The three surfaces read one required list, the `,required`
+## audit-1to1-required: gate the parameters every input schema requires (R-REQUIRED,
+## issue 1100). The three surfaces read one required list, the `,required`
 ## marker of each field's jsonschema tag, and this holds it to GitLab: a field the schema
 ## leaves optional that every way the action runs sends to a route GitLab requires it on,
 ## and a field the schema requires that some way runs without. It FAILS on either unless
@@ -2082,7 +2082,7 @@ audit-1to1-required:
 audit-1to1-required-report:
 	@mkdir -p plan
 	go run ./cmd/audit_1to1/ -scope=required -output plan/1to1-required.json
-	@echo "R-INPUT requiredness report written to plan/1to1-required.json"
+	@echo "R-REQUIRED report written to plan/1to1-required.json"
 
 ## audit-1to1-params: hold every param a route this server reaches declares to whether
 ## anything here can send it (R-PARAM). A param no recorded request carries is a finding:
