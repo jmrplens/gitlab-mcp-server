@@ -17,8 +17,10 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/actions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/baseline"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/grants"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/merge"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/params"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
@@ -33,8 +35,9 @@ import (
 
 // Seams for what a test cannot otherwise reach: the process exit behind a
 // fatal error, a repository root that cannot be found, the analyzers whose
-// failures the real tree never produces, and the JSON encoder that never
-// fails on a report of strings and ints. Each is a variable a test restores.
+// failures the real tree never produces, the JSON encoder that never fails on
+// a report of strings and ints, and GitHub. Each is a variable a test
+// restores.
 var (
 	fatalf         = cmdutil.Fatalf
 	repositoryRoot = cmdutil.RepositoryRoot
@@ -53,6 +56,10 @@ var (
 	// it, which a test answers without the network.
 	releaseRef        = paths.ReleaseRef
 	buildDocEndpoints = paths.BuildDocEndpoints
+	// githubAPI and getenv are where -check-issues asks and the token it asks
+	// with, which a test points at a stand-in GitHub.
+	githubAPI = issues.DefaultAPI
+	getenv    = os.Getenv
 )
 
 func main() {
@@ -67,6 +74,9 @@ func main() {
 	refresh := flag.Bool("refresh", false, "with -validate-docs or -write-doc-endpoints, force re-fetch of the docs even when cached and fresh")
 	offline := flag.Bool("offline", false, "with -validate-docs or -write-doc-endpoints, use only cached docs; do not fetch")
 	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "with -validate-docs or -write-doc-endpoints, re-download cached docs older than this")
+	writeBaseline := flag.Bool("write-baseline", false, "instead of the audit, run the structs, actions, params, paths, required, grants and enums scopes and write every finding they report without gating, as keys by stream, to -output (make gen-audit-1to1-baseline writes "+baseline.File+")")
+	checkBaseline := flag.Bool("check-baseline", false, "instead of the audit, hold the findings those scopes report without gating to the committed "+baseline.File+" and write the comparison to -output; exits non-zero on a finding the file does not hold and on a key of it no finding answers")
+	checkIssues := flag.Bool("check-issues", false, "instead of the audit, ask GitHub whether every issue a tracked row of the routes and sdk reports names is still open, with GITHUB_TOKEN or GH_TOKEN when set, and write the answers to -output; exits non-zero on an issue that is not open and on one it could not ask about (needs the network)")
 	flag.Parse()
 
 	if *validateDocs {
@@ -77,6 +87,18 @@ func main() {
 		// Strict, as -validate-docs is: a page the sweep cannot download must
 		// fail it rather than be answered by an older cached copy.
 		runWriteDocEndpointsMode(*outputPath, *docRef, apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge, Strict: true})
+		return
+	}
+	if *writeBaseline {
+		failOn(writeBaselineFile(*outputPath))
+		return
+	}
+	if *checkBaseline {
+		failOn(checkBaselineFile(*outputPath))
+		return
+	}
+	if *checkIssues {
+		runCheckIssuesMode(*outputPath)
 		return
 	}
 
@@ -242,6 +264,13 @@ func validateDocs(ctx context.Context, root, outputPath string, fetcher *apidocs
 		return errors.New("audit_1to1: stale doc/api citations found (see report)")
 	}
 	return nil
+}
+
+// failOn ends the run through fatalf when a mode returned an error.
+func failOn(err error) {
+	if err != nil {
+		fatalf("%v", err)
+	}
 }
 
 // runMerged runs the three analyzers and produces the merged backlog JSON via

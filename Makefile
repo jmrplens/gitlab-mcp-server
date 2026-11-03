@@ -13,7 +13,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
 	audit-catalog-first \
-	audit-struct-completeness audit-action-coverage audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-report audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs audit-edition-tier \
+	audit-struct-completeness audit-action-coverage audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-report audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs gen-audit-1to1-baseline check-audit-1to1-baseline audit-1to1-issues audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
@@ -1775,7 +1775,7 @@ publish-lobehub: check-lhm-manifest
 	npx -y @lobehub/market-cli@$(LOBEHUB_MARKET_CLI_VERSION) plugin update --dir "$(CURDIR)"
 
 ## update-all: run every generator, the brand assets included, then the table formatter.
-## Generates: brand vectors, fine-grained permissions per action, token footprint, site stats, llms.txt, the per-domain tool reference, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
+## Generates: brand vectors, fine-grained permissions per action, the 1:1 audit's baseline of report-only findings, token footprint, site stats, llms.txt, the per-domain tool reference, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
 # One generator at a time, in the recipe rather than as prerequisites: brand
 # rewrites internal/toolutil/brandmark_gen.go, which the generators after it
 # compile, so make -j would build them against a file still being written.
@@ -1789,8 +1789,12 @@ publish-lobehub: check-lhm-manifest
 # gen-model-results is in and model-results-record is out for the third time on
 # those terms, and the measurement there is not merely slow: it is a paid run
 # against a provider.
+# gen-audit-1to1-baseline comes right after gen-action-grants, because three of
+# the scopes it reads read the request record that target rewrites. It reads the
+# request inventory too, which no generator here writes (gen-request-inventory
+# needs a suite run), so after one it is run again.
 update-all:
-	@for target in brand gen-action-grants gen-footprint gen-site-stats gen-llms gen-tool-reference gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
+	@for target in brand gen-action-grants gen-audit-1to1-baseline gen-footprint gen-site-stats gen-llms gen-tool-reference gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
@@ -2138,6 +2142,34 @@ audit-1to1-enums:
 ## audit-1to1-validate-docs: verify every doc/api citation behind the 1:1 adjudication tables is still fetchable.
 audit-1to1-validate-docs:
 	go run ./cmd/audit_1to1/ -validate-docs
+
+## gen-audit-1to1-baseline: write every finding the 1:1 audit reports without gating to
+## docs/development/audit-1to1-baseline.json, as keys by stream: the struct and action
+## candidates, the four classes of R-PARAM, the R-PATH shapes, always-sent params and
+## identifier leads, the fields R-REQUIRED places on no route, the R-GRANT cross-check with
+## the request inventory and the enum output fields no schema names a value of. A change
+## that adds or settles one regenerates it, and the diff of the file is what the change
+## adds. It reads committed records only, so it needs no network.
+gen-audit-1to1-baseline:
+	go run ./cmd/audit_1to1/ -write-baseline -output docs/development/audit-1to1-baseline.json
+
+## check-audit-1to1-baseline: hold the findings the 1:1 audit reports without gating to
+## docs/development/audit-1to1-baseline.json. FAILS on a finding the file does not hold,
+## naming its stream and key, and on a key of the file no finding answers. It reads the
+## request records make gen-action-grants and make gen-request-inventory commit, so the
+## unit suite's comparison of the file with the tree waits on the FRESHNESS deferral, as
+## R-GRANT's does. No network.
+check-audit-1to1-baseline:
+	go run ./cmd/audit_1to1/ -check-baseline
+
+## audit-1to1-issues: ask GitHub whether every issue a tracked row names is still open: the
+## domain issue of each tracked family row of R-ROUTE and the issue of each tracked
+## identifier of the sdk scope. FAILS on an issue that is closed, is a pull request or is not
+## in the repository, naming the rows that rest on it, and on one it could not ask about (a
+## refused token, a rate limit, no network), which is never a pass. It asks with
+## GITHUB_TOKEN or GH_TOKEN when either is set, and needs the network.
+audit-1to1-issues:
+	go run ./cmd/audit_1to1/ -check-issues
 
 ## audit-struct-completeness: diff MCP input/output structs vs client-go fields (R-INPUT/R-OUTPUT).
 ## Backward-compat wrapper over audit-1to1 -scope=structs.

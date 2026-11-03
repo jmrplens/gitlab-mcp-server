@@ -22,6 +22,7 @@
 // each of which reads a committed artifact and compares it:
 //
 //   - internal/tools
+//   - cmd/audit_1to1
 //   - cmd/audit_1to1/internal/grants
 //   - cmd/audit_1to1/internal/params
 //   - cmd/audit_1to1/internal/required
