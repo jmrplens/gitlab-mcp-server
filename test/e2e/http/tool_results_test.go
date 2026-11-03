@@ -138,9 +138,9 @@ const toolResultsLogPrefix = `"msg":"tool call `
 // toolResultsToolCallLogLines waits for the dispatcher to write about a call
 // and returns those lines, and only those.
 //
-// Waiting is necessary: the line is written before the response leaves the
-// handler, but it travels to this process down a pipe, so reading the buffer
-// the instant the response arrives sometimes finds it empty.
+// The line is written before the response leaves the handler, so it is in the
+// output when the answer arrives ([captureOutput]); the wait only bounds a line
+// that never comes.
 //
 // Scoping is necessary too. The process output also holds the pool's startup
 // probes, and the scope probe in internal/gitlab logs its error whole, so a

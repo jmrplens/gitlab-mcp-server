@@ -103,8 +103,7 @@ func TestRateLimit_VariableSet_RefusesAStdioToolCall(t *testing.T) {
 // enough serves them too. So the calls are made past the burst of 40 either
 // transport would give a bucket, none of them may be refused, and the startup
 // line the limiter writes when it is attached must be absent: read once the
-// line the server always writes after it is there, since stderr reaches this
-// harness on a goroutine of its own.
+// line the server always writes after it is there.
 func TestRateLimit_VariableUnset_IsOffOnStdio(t *testing.T) {
 	s := startSession(t, baseEnv(startFakeGitLab(t).URL))
 

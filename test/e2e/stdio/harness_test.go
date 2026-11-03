@@ -228,9 +228,10 @@ type session struct {
 	// the server to stop goes through. Without it the cleanup cannot tell an
 	// exit a test was about from one the server took by itself.
 	expectedExit atomic.Bool
+	// readStderr reads back the file the server's stderr goes to.
+	readStderr func() string
 
-	mu     sync.Mutex
-	stderr strings.Builder
+	mu sync.Mutex
 	// notifications holds every notification call read past while waiting
 	// for a response, in arrival order, for the tests that want them.
 	notifications []map[string]any
@@ -317,21 +318,18 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 		cancel()
 		t.Fatalf("stdout pipe: %v", err)
 	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		cancel()
-		t.Fatalf("stderr pipe: %v", err)
-	}
+	readStderr := captureStderr(t, cmd)
 	if startErr := cmd.Start(); startErr != nil {
 		cancel()
 		t.Fatalf("starting the server: %v", startErr)
 	}
 
 	s := &session{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: bufio.NewReader(stdout),
-		exited: make(chan struct{}),
+		cmd:        cmd,
+		stdin:      stdin,
+		stdout:     bufio.NewReader(stdout),
+		exited:     make(chan struct{}),
+		readStderr: readStderr,
 	}
 
 	// The one reaper. Started with the process rather than on demand, because
@@ -341,24 +339,6 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 		state, _ := cmd.Process.Wait()
 		s.state.Store(state)
 		close(s.exited)
-	}()
-
-	// stderr is drained on its own goroutine: a full pipe would block the
-	// server, and the contents are an assertion of their own — logs belong
-	// here and nowhere near stdout.
-	go func() {
-		buf := make([]byte, 4096)
-		for {
-			n, readErr := stderrPipe.Read(buf)
-			if n > 0 {
-				s.mu.Lock()
-				s.stderr.Write(buf[:n])
-				s.mu.Unlock()
-			}
-			if readErr != nil {
-				return
-			}
-		}
 	}()
 
 	t.Cleanup(func() {
@@ -543,25 +523,57 @@ func (s *session) exitStatus() string {
 	return "exit status not recorded"
 }
 
+// captureStderr points the process's stderr at a file and returns what reads it
+// back.
+//
+// A file, because a pipe needs a goroutine here to copy it, and nothing orders
+// that copy with the reply on stdout. A line the server wrote before answering
+// could still be in the pipe when the reply arrived, so a read right after it
+// could miss the line it needed, and worse, a count or an assertion that a line
+// is absent could pass with that line on its way. A write to a file is readable
+// once it returns, so everything the server wrote before a reply is there when
+// the reply arrives, and no wait has to stand in for that order. What can still
+// need a wait is a line with no order to the reply ([session.waitForStderr]).
+//
+// A read that fails fails the test rather than reading as no output, which an
+// assertion of absence would take for a pass.
+func captureStderr(t *testing.T, cmd *exec.Cmd) func() string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "server-stderr.log")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("creating the file the server's stderr goes to: %v", err)
+	}
+	// Runs after the cleanup that stops the process, which is registered later,
+	// and before the one that removes the directory, since Windows removes no
+	// file somebody still holds open.
+	t.Cleanup(func() { _ = file.Close() })
+	cmd.Stderr = file
+
+	return func() string {
+		output, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Errorf("reading the server's stderr: %v", readErr)
+		}
+		return string(output)
+	}
+}
+
 // stderrText returns everything the server has logged so far.
 func (s *session) stderrText() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.stderr.String()
+	return s.readStderr()
 }
 
 // waitForStderr returns the server's stderr once it contains needle, and fails
 // the test if it does not within the window.
 //
-// stderr is copied into the buffer by a goroutine of this harness, so a line
-// the server wrote before answering on stdout can still be in the pipe when
-// the test reads the buffer: the stdout reply and the stderr copy are two
-// goroutines with no ordering between them. A test that asserted on
-// stderrText right after a call therefore found it empty now and then,
-// including for the OTEL_SDK_DISABLED veto, which the server logs before it
-// serves anything. Waiting for the line the assertion is about removes the
-// race without loosening the assertion; an absence assertion that follows
-// should anchor on a line the server always writes after the one it denies.
+// A line the server writes before it answers is on stderr when the answer
+// arrives ([captureStderr]), so this is what a test needs for a line with no
+// such order: the startup goroutine opens the readiness gate before it logs that
+// the catalog is ready, so a call can be answered first. An absence assertion
+// that follows should anchor on a line the server always writes after the one
+// it denies.
 func (s *session) waitForStderr(t *testing.T, needle string, within time.Duration) string {
 	t.Helper()
 	deadline := time.Now().Add(within)
@@ -909,10 +921,9 @@ func (s *session) closeStdinAndWait(t *testing.T, within time.Duration) (code in
 // waitExit reaps the process and returns its exit code.
 //
 // It reaps through Process.Wait rather than Cmd.Wait deliberately: Cmd.Wait
-// closes the stdout and stderr pipes once it sees the process exit, and a read
-// still in flight on either would fail rather than return what it had. Reading
-// the status directly leaves the pipes alone, and the drain goroutine ends on
-// its own when the process does.
+// closes the stdout pipe once it sees the process exit, and a read still in
+// flight on it would fail rather than return what it had. Reading the status
+// directly leaves the pipe alone.
 func (s *session) waitExit(t *testing.T, within time.Duration) (code int, exited bool) {
 	t.Helper()
 

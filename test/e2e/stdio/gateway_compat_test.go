@@ -116,7 +116,5 @@ func TestDescriptionSubstitutions_MalformedValueRefusesToStart(t *testing.T) {
 	if code == 0 {
 		t.Errorf("the server exited 0 on a configuration error\nstderr: %s", s.stderrText())
 	}
-	// Waited for rather than read: the process has exited, but the harness
-	// copies stderr on its own goroutine and may still be draining the pipe.
 	s.waitForStderr(t, "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS", 5*time.Second)
 }

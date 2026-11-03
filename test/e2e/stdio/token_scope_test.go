@@ -87,12 +87,8 @@ func TestTokenScope_ReadAPITokenIsServedWhatReadAPIReaches(t *testing.T) {
 					}
 				})
 			}
-			// The narrowing line is written before the catalog line, by the same
-			// goroutine, so what the catalog line is copied with answers the
-			// question in both directions.
-			logs := s.waitForStderr(t, catalogReadyLine, 5*time.Second)
-			if logged := strings.Contains(logs, readAPILogLine); logged != tt.narrowed {
-				t.Errorf("startup log says the token carries read_api without api = %v, want %v\nstderr: %s", logged, tt.narrowed, logs)
+			if logged := strings.Contains(s.stderrText(), readAPILogLine); logged != tt.narrowed {
+				t.Errorf("startup log says the token carries read_api without api = %v, want %v\nstderr: %s", logged, tt.narrowed, s.stderrText())
 			}
 		})
 	}
@@ -222,8 +218,8 @@ func TestTokenScope_FineGrainedTokenIsNotReadOnly(t *testing.T) {
 			if listed := contains(names, "gitlab_get_settings"); listed != tt.wantAdmin {
 				t.Errorf("gitlab_get_settings listed = %v, want %v with scopes %v", listed, tt.wantAdmin, tt.scopes)
 			}
-			if logs := s.waitForStderr(t, catalogReadyLine, 5*time.Second); strings.Contains(logs, readAPILogLine) {
-				t.Errorf("startup log says the token carries read_api without api with scopes %v\nstderr: %s", tt.scopes, logs)
+			if strings.Contains(s.stderrText(), readAPILogLine) {
+				t.Errorf("startup log says the token carries read_api without api with scopes %v\nstderr: %s", tt.scopes, s.stderrText())
 			}
 		})
 	}
@@ -516,9 +512,8 @@ func assertVersionAskedOnceAndWarnedOnce(t *testing.T, s *session, fake *fakeGit
 		t.Errorf("the version endpoint was asked %d times over twenty calls, want once", got)
 	}
 
-	const refusedVersionLine = "GitLab refused this token GET /api/v4/version"
-	stderr := s.waitForStderr(t, refusedVersionLine, 5*time.Second)
-	if got := strings.Count(stderr, refusedVersionLine); got != 1 {
+	stderr := s.stderrText()
+	if got := strings.Count(stderr, "GitLab refused this token GET /api/v4/version"); got != 1 {
 		t.Errorf("the refused version was warned about %d times, want once\nstderr: %s", got, stderr)
 	}
 	if !strings.Contains(stderr, "Metadata: Read") {

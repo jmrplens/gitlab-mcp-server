@@ -370,7 +370,7 @@ func listToolsDuringStartup(t *testing.T, surface string) []string {
 // awaitStderr waits for a line to appear in the server's log.
 //
 // Polled rather than streamed because the harness collects stderr into a
-// buffer: what is being asked is whether something has been logged yet, and
+// file: what is being asked is whether something has been logged yet, and
 // that question only has an answer at the moment it is asked.
 func awaitStderr(t *testing.T, s *session, want string, within time.Duration) {
 	t.Helper()
