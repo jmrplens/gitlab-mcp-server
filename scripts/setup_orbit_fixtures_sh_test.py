@@ -38,6 +38,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import urllib.parse
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SCRIPT = os.path.join(ROOT, "scripts", "setup-orbit-fixtures.sh")
@@ -50,11 +51,12 @@ SEC_ID = 20
 
 # The routes live one file each under CURL_ROUTES, named by route_file.
 CURL = """#!/usr/bin/env bash
-method=GET url= want_status=0
+method=GET url= want_status=0 body= page= query=
 while [ $# -gt 0 ]; do
   case "$1" in
     -X) method=$2; shift 2 ;;
-    -H|-d) shift 2 ;;
+    -H) shift 2 ;;
+    -d) body=$2; shift 2 ;;
     -w) want_status=1; shift 2 ;;
     --connect-timeout|--max-time) shift 2 ;;
     http*) url=$1; shift ;;
@@ -63,16 +65,24 @@ while [ $# -gt 0 ]; do
 done
 path=${url#*://}
 path=/${path#*/}
-path=${path%%\?*}
+case "$path" in
+  *\?*) query=${path#*\?}; path=${path%%\?*} ;;
+esac
+case "$query" in
+  *page=*) page=${query##*page=}; page=${page%%&*} ;;
+esac
 printf '%s %s\n' "$method" "$path" >> "$CURL_LOG"
+[ -n "$body" ] && printf '%s %s\t%s\n' "$method" "$path" "$body" >> "$CURL_BODY_LOG"
 key="$method $path"
 key=${key// /_}
 key=${key//\//!}
 status=404
-if [ -f "$CURL_ROUTES/$key" ]; then
-  cat "$CURL_ROUTES/$key"
+answer="$CURL_ROUTES/$key"
+[ -n "$page" ] && [ -f "$CURL_ROUTES/$key@$page" ] && answer="$CURL_ROUTES/$key@$page"
+if [ -f "$answer" ]; then
+  cat "$answer"
   status=200
-  [ -f "$CURL_ROUTES/$key.status" ] && status=$(cat "$CURL_ROUTES/$key.status")
+  [ -f "$answer.status" ] && status=$(cat "$answer.status")
 else
   printf '%s' '{"message":"404 Not Found"}'
 fi
@@ -144,12 +154,14 @@ class SetupOrbitFixturesTest(unittest.TestCase):
             f.write(CURL)
         os.chmod(curl, 0o755)
         self.log = os.path.join(self.tmp, "curl.log")
+        self.body_log = os.path.join(self.tmp, "curl-body.log")
         self.routes = os.path.join(self.tmp, "routes")
         self.env = dict(os.environ)
         self.env.update(
             {
                 "PATH": bindir + os.pathsep + os.environ["PATH"],
                 "CURL_LOG": self.log,
+                "CURL_BODY_LOG": self.body_log,
                 "CURL_ROUTES": self.routes,
                 "GITLAB_COM_TOKEN": "stand-in-token",
                 "ORBIT_FIXTURES_NAMESPACE": "plens1",
@@ -169,6 +181,18 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         return subprocess.run(
             [BASH, SCRIPT, "--skip-mirror"], env=self.env, capture_output=True, text=True, timeout=600
         )
+
+    def request_bodies(self, method):
+        """(path, body) for every request the script sent with method and a body."""
+        if not os.path.exists(self.body_log):
+            return []
+        rows = []
+        with open(self.body_log) as f:
+            for line in f:
+                head, _, body = line.rstrip(chr(10)).partition(chr(9))
+                if head.startswith(method + " "):
+                    rows.append({"path": head.split(" ", 1)[1], "body": body})
+        return rows
 
     def requests(self, method):
         """The paths of every request the script sent with method, in order."""
@@ -261,6 +285,41 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         updated = [r["path"] for r in self.requests("PUT")]
         self.assertEqual(updated, [API + "/projects/%d" % KG_ID])
         self.assertIn("visibility private → public", result.stderr)
+        payload = json.loads(self.request_bodies("PUT")[-1]["body"])
+        self.assertEqual(payload, {"visibility": "public"})
+
+    def test_reads_every_tree_page(self):
+        routes = existing_fixtures()
+        all_files = [{"path": p} for p in _fixture_files("kg-fixtures")]
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": "filler/%d" % i} for i in range(100)
+        ]
+        routes["GET " + API + "/projects/%d/repository/tree@2" % KG_ID] = all_files
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            [r for r in self.requests("POST") if "/repository/files/" in r["path"]],
+            [],
+            "files on the second page must count as present",
+        )
+
+    def test_the_license_is_created_before_another_missing_file(self):
+        routes = existing_fixtures()
+        files = _fixture_files("kg-fixtures")
+        others = [p for p in files if p != "LICENSE"]
+        missing = ["LICENSE", others[0]]
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": p} for p in files if p not in missing
+        ]
+        for name in missing:
+            quoted = urllib.parse.quote(name, safe="")
+            routes["POST " + API + "/projects/%d/repository/files/%s" % (KG_ID, quoted)] = {
+                "file_path": name
+            }
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        created = [r["path"] for r in self.requests("POST") if "/repository/files/" in r["path"]]
+        self.assertTrue(created[0].endswith("/files/LICENSE"), created)
 
     def test_unreadable_project_details_stop_reconciliation(self):
         routes = existing_fixtures()

@@ -294,7 +294,7 @@ for root, _dirs, names in os.walk(fixture_dir):
         if rel not in present:
             found.append(rel)
 found.sort(key=lambda rel: (rel != "LICENSE", rel))
-print("\n".join(found))
+sys.stdout.buffer.write(("\n".join(found)).encode())
 PY
 )
   if [ "$missing" = "UNREADABLE" ]; then
@@ -307,12 +307,19 @@ PY
   fi
   local rel encoded content_b64
   while IFS= read -r rel; do
+    # Python's text stdout ends lines with CRLF on Windows; the path itself
+    # never ends with a CR.
+    rel=${rel%$''}
     [ -z "$rel" ] && continue
     encoded=$(printf %s "$rel" | python3 -c 'import sys,urllib.parse
 print(urllib.parse.quote(sys.stdin.read(), safe=""))')
     content_b64=$(python3 -c 'import base64,sys
 print(base64.b64encode(open(sys.argv[1], "rb").read()).decode())' "$fixture_dir/$rel")
-    api_request POST "/projects/$project_id/repository/files/$encoded"       "{\"branch\": \"main\", \"encoding\": \"base64\", \"content\": \"$content_b64\", \"commit_message\": \"Add $rel\"}"
+    # Escape the path for JSON: a fixture name with a quote or backslash
+    # would otherwise make the commit message invalid.
+    commit_message=$(REL="$rel" python3 -c 'import json, os; print(json.dumps("Add " + os.environ["REL"]))')
+    api_request POST "/projects/$project_id/repository/files/$encoded" \
+      "{\"branch\": \"main\", \"encoding\": \"base64\", \"content\": \"$content_b64\", \"commit_message\": $commit_message}"
     if [ "$API_STATUS" -lt 200 ] || [ "$API_STATUS" -ge 300 ]; then
       echo "    ✗ could not create $rel (HTTP $API_STATUS): $API_BODY" >&2
       return 1
