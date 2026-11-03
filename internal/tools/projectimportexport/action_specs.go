@@ -89,12 +89,11 @@ const (
 // actions, parameter guidance, and a "Returns: … See also: …" description).
 var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 	"gitlab_schedule_project_export": {
-		usage:    "Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll project.export_status until 'finished' and download with project.export_download.",
-		aliases:  []string{"export project", "schedule project export", "create project export archive", "back up project"},
-		related:  []string{actionExportStatus, actionExportDownload, actionProjectGet},
-		guidance: projectIDGuidance(),
-		description: "Schedule an asynchronous project export. Returns: a confirmation message. " +
-			"See also: gitlab_get_project_export_status, gitlab_download_project_export.",
+		usage:       "Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll project.export_status until 'finished' and download with project.export_download.",
+		aliases:     []string{"export project", "schedule project export", "create project export archive", "back up project"},
+		related:     []string{actionExportStatus, actionExportDownload, actionProjectGet},
+		guidance:    projectIDGuidance(),
+		description: "Schedule an asynchronous project export. Returns: a confirmation message. See also: gitlab_get_project_export_status, gitlab_download_project_export.",
 		// GitLab accepts only PUT and POST for upload[http_method]
 		// (https://docs.gitlab.com/api/project_import_export/#schedule-an-export).
 		overrides: []toolutil.InputSchemaOverride{
@@ -103,20 +102,18 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 		},
 	},
 	"gitlab_get_project_export_status": {
-		usage:    "Get the current export status of a project. Use after project.export_schedule to poll until export_status is 'finished'. Status values are none, started, finished, regeneration_in_progress.",
-		aliases:  []string{"export status", "check project export progress", "is project export ready"},
-		related:  []string{actionExportSchedule, actionExportDownload, actionProjectGet},
-		guidance: projectIDGuidance(),
-		description: "Get the export status of a project. Returns: export id, name, path, status, message, and download links. " +
-			"See also: gitlab_schedule_project_export, gitlab_download_project_export.",
+		usage:       "Get the current export status of a project. Use after project.export_schedule to poll until export_status is 'finished'. Status values are none, started, finished, regeneration_in_progress.",
+		aliases:     []string{"export status", "check project export progress", "is project export ready"},
+		related:     []string{actionExportSchedule, actionExportDownload, actionProjectGet},
+		guidance:    projectIDGuidance(),
+		description: "Get the export status of a project. Returns: export id, name, path, status, message, and download links. See also: gitlab_schedule_project_export, gitlab_download_project_export.",
 	},
 	"gitlab_download_project_export": {
-		usage:    "Download the generated export archive (.tar.gz) of a project as base64 once the export status is 'finished'. Archives are retained for 24 hours after generation.",
-		aliases:  []string{"download project export", "get project export archive", "fetch export tarball"},
-		related:  []string{actionExportStatus, actionExportSchedule, actionImportFromFile},
-		guidance: projectIDGuidance(),
-		description: "Download a finished project export archive as base64. Returns: base64 archive content and size in bytes. " +
-			"See also: gitlab_get_project_export_status, gitlab_import_project_from_file.",
+		usage:       "Download the generated export archive (.tar.gz) of a project as base64 once the export status is 'finished'. Archives are retained for 24 hours after generation.",
+		aliases:     []string{"download project export", "get project export archive", "fetch export tarball"},
+		related:     []string{actionExportStatus, actionExportSchedule, actionImportFromFile},
+		guidance:    projectIDGuidance(),
+		description: "Download a finished project export archive as base64. Returns: base64 archive content and size in bytes. See also: gitlab_get_project_export_status, gitlab_import_project_from_file.",
 	},
 	"gitlab_import_project_from_file": {
 		usage:   "Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content, at the URL path the new project takes. Optionally set the namespace and name, and override project attributes via override_params. Poll project.import_status afterward.",
@@ -142,8 +139,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 				CommonConfusions: []string{"Supply exactly one of file_path or content_base."},
 			},
 		},
-		description: "Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. " +
-			"See also: gitlab_get_project_import_status, gitlab_download_project_export.",
+		description: "Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.",
 		// override_params accepts the create-project attributes, whose closed
 		// value sets are documented on the Projects API
 		// (https://docs.gitlab.com/api/projects/#create-a-project). The central
@@ -154,11 +150,10 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 		},
 	},
 	"gitlab_get_project_import_status": {
-		usage:    "Get the import status of a project created by project.import_from_file. Poll until import_status is 'finished' or 'failed'. Inspect import_error on failure. Status values are none, scheduled, started, finished, failed.",
-		aliases:  []string{"import status", "check project import progress", "did project import succeed"},
-		related:  []string{actionImportFromFile, actionProjectGet},
-		guidance: projectIDGuidance(),
-		description: "Get the import status of a project. Returns: import id, name, path, status, type, correlation id, import error, the relations that failed to import, and a GitHub import's fetched and imported counts. " +
-			"See also: gitlab_import_project_from_file.",
+		usage:       "Get the import status of a project created by project.import_from_file. Poll until import_status is 'finished' or 'failed'. Inspect import_error on failure. Status values are none, scheduled, started, finished, failed.",
+		aliases:     []string{"import status", "check project import progress", "did project import succeed"},
+		related:     []string{actionImportFromFile, actionProjectGet},
+		guidance:    projectIDGuidance(),
+		description: "Get the import status of a project. Returns: import id, name, path, status, type, correlation id, import error, the relations that failed to import, and a GitHub import's fetched and imported counts. See also: gitlab_import_project_from_file.",
 	},
 }

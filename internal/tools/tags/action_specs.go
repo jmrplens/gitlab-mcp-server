@@ -144,14 +144,14 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 		options.RelatedActions = []string{actionTagProtect, actionTagListProtected, "tag.delete"}
 		options.IndividualTool.Description = "Remove protection from a tag or wildcard pattern. Returns: a success confirmation naming the tag and project. See also: gitlab_tag_protect, gitlab_tag_list_protected, gitlab_tag_get_protected."
 	}
-	switch {
-	case readOnly:
+	if readOnly {
 		return toolutil.NewReadActionSpec(name, route, options)
-	case route.Destructive && idempotent:
-		return toolutil.NewDeleteActionSpec(name, route, options)
-	case idempotent:
-		return toolutil.NewUpdateActionSpec(name, route, options)
-	default:
-		return toolutil.NewCreateActionSpec(name, route, options)
 	}
+	if route.Destructive && idempotent {
+		return toolutil.NewDeleteActionSpec(name, route, options)
+	}
+	if idempotent {
+		return toolutil.NewUpdateActionSpec(name, route, options)
+	}
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
