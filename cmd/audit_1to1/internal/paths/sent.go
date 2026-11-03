@@ -103,9 +103,16 @@ func (f UnsurfacedField) declared() bool { return f.Category != "" }
 // rather than an action. It over-reports in one known way: a package that
 // calls an endpoint for something other than surfacing its answer (the health
 // check reads /user to learn who the token is) is reported as missing that
-// answer's every field. It is a report and not a gate: a field GitLab sends
-// that this server does not surface is a candidate for the 1:1 surface, not a
-// defect in it, until somebody reads the condition.
+// answer's every field. A field GitLab sends that this server does not surface
+// is a candidate for the 1:1 surface, not a defect in it, until somebody reads
+// the condition, and the finding is the request to read it. What gates is the
+// finding nobody has read: the package grain fails on a field no declaration
+// answers, because every one of its findings has been answered one way or the
+// other and a new one is a request a handler started making, or a key GitLab
+// started sending, that nobody has decided about. The type grain beside it is
+// reported only, since its findings follow the routes client-go reaches with a
+// struct as well as the ones a handler calls, so a client-go release moves them
+// without anything here changing.
 type SentCheck struct {
 	// Ran is false when the conditions record could not be read, in which
 	// case every finding says unknown and only the document speaks.

@@ -48,6 +48,11 @@ var (
 	paramsRun      = params.Run
 	routesRun      = routes.Run
 	marshalIndent  = json.MarshalIndent
+	// releaseRef and buildDocEndpoints are the documentation oracle's
+	// generator: the ref the live record names, and the sweep of doc/api at
+	// it, which a test answers without the network.
+	releaseRef        = paths.ReleaseRef
+	buildDocEndpoints = paths.BuildDocEndpoints
 )
 
 func main() {
@@ -55,29 +60,30 @@ func main() {
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
 	scope := flag.String("scope", "structs,actions,enums", "one of {structs,actions,enums,sdk,paths,grants,required,params,routes} for a single-scope report, or the first three (default) for the merged backlog; other combinations are not supported, and metadata (R-META) is retired in favor of cmd/audit_discovery_completeness")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
-	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint against GitLab's API documentation (needs the network and reads ~250 pages; fails on an endpoint no declaration in cmd/audit_1to1/internal/paths accounts for)")
-	e2eCalls := flag.String("e2e-calls", "", "with -scope=paths or -scope=grants, the shard directory an end-to-end run recorded its calls into (dist/e2e-calls after `make test-e2e-ce`), which lets the observation question (paths) and the request count and routes of each action (grants) be asked per action rather than per owning package; reports and never gates")
-	refresh := flag.Bool("refresh", false, "with -validate-docs or -check-endpoints, force re-fetch of cited docs even when cached and fresh")
-	offline := flag.Bool("offline", false, "with -validate-docs or -check-endpoints, use only cached docs; do not fetch")
-	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "with -validate-docs or -check-endpoints, re-download cached docs older than this")
+	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint with the documentation oracle "+paths.DocEndpointsFile+" (offline; fails on an endpoint neither it nor a declaration in cmd/audit_1to1/internal/paths accounts for, and on an oracle read at another release than the live record's)")
+	writeDocEndpoints := flag.Bool("write-doc-endpoints", false, "instead of the audit, read GitLab's API documentation (doc/api of gitlab-org/gitlab) at -doc-ref and write the endpoint oracle -check-endpoints reads to -output (needs the network and reads ~250 pages; make gen-api-doc-endpoints)")
+	docRef := flag.String("doc-ref", "", "with -write-doc-endpoints, the gitlab-org/gitlab tag or branch to read doc/api at (default: the tag of the live API record's release, the only ref -check-endpoints accepts)")
+	e2eCalls := flag.String("e2e-calls", "", "with -scope=paths or -scope=grants, the shard directory an end-to-end run recorded its calls into (dist/e2e-calls after `make test-e2e-ce`), which lets the observation question (paths) and the request count and routes of each action (grants) be asked per action rather than per owning package; reports and never gates, and a directory paths cannot read fails the run")
+	refresh := flag.Bool("refresh", false, "with -validate-docs or -write-doc-endpoints, force re-fetch of the docs even when cached and fresh")
+	offline := flag.Bool("offline", false, "with -validate-docs or -write-doc-endpoints, use only cached docs; do not fetch")
+	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "with -validate-docs or -write-doc-endpoints, re-download cached docs older than this")
 	flag.Parse()
 
 	if *validateDocs {
 		runValidateDocsMode(*outputPath, *refresh, *offline, *maxAge)
 		return
 	}
+	if *writeDocEndpoints {
+		// Strict, as -validate-docs is: a page the sweep cannot download must
+		// fail it rather than be answered by an older cached copy.
+		runWriteDocEndpointsMode(*outputPath, *docRef, apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge, Strict: true})
+		return
+	}
 
-	// Cancel a documentation sweep on Ctrl+C, the way -validate-docs does: it
-	// is 250 fetches and a person who changed their mind should not wait it
-	// out.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-
-	if err := run(ctx, options{
+	if err := run(options{
 		scope:      *scope,
 		gapsOnly:   *gapsOnly,
 		outputPath: *outputPath,
-		docs:       apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge},
 		endpoints:  *checkEndpoints,
 		e2eCalls:   *e2eCalls,
 	}); err != nil {
@@ -91,9 +97,8 @@ type options struct {
 	scope      string
 	gapsOnly   bool
 	outputPath string
-	// docs configures the API-doc fetcher the endpoint comparison reads
-	// through, and is used only when endpoints is set.
-	docs      apidocs.Options
+	// endpoints asks the paths scope for the endpoint comparison, which reads
+	// the committed documentation oracle.
 	endpoints bool
 	// e2eCalls is the shard directory an end-to-end run recorded, read by the
 	// paths and grants scopes. Empty leaves the per-action observation and
@@ -104,7 +109,11 @@ type options struct {
 // run resolves the -scope selection, produces the report it names (the merged
 // backlog for the three merged streams, one analyzer's native shape for a
 // single scope) and writes it to outputPath.
-func run(ctx context.Context, opts options) error {
+//
+// It takes no context, because no scope waits on anything a caller could
+// cancel: every input is committed or compiled in. The two modes that read the
+// network, -validate-docs and -write-doc-endpoints, take one of their own.
+func run(opts options) error {
 	scopes, err := parseScope(opts.scope)
 	if err != nil {
 		return err
@@ -122,7 +131,7 @@ func run(ctx context.Context, opts options) error {
 	if merged {
 		content, err = runMerged(opts.gapsOnly)
 	} else {
-		content, clean, err = runSingle(ctx, scopes[0], opts)
+		content, clean, err = runSingle(scopes[0], opts)
 	}
 	if err != nil {
 		return err
@@ -178,6 +187,46 @@ func runValidateDocsMode(outputPath string, refresh, offline bool, maxAge time.D
 	}
 }
 
+// runWriteDocEndpointsMode writes the documentation oracle -check-endpoints
+// reads, and exits non-zero when it could not, with a context that a Ctrl+C
+// cancels: the sweep is 250 downloads, and a person who changed their mind
+// should not wait it out.
+func runWriteDocEndpointsMode(outputPath, ref string, docs apidocs.Options) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	if err := writeDocEndpointsOracle(ctx, outputPath, ref, docs); err != nil {
+		fatalf("%v", err)
+	}
+}
+
+// writeDocEndpointsOracle reads doc/api at ref, or at the tag of the live
+// record's release when ref is empty, and writes the oracle to outputPath.
+// Nothing is written when any page could not be read, so a failed sweep leaves
+// the committed oracle as it was.
+func writeDocEndpointsOracle(ctx context.Context, outputPath, ref string, docs apidocs.Options) error {
+	root, err := repositoryRoot(".")
+	if err != nil {
+		return fmt.Errorf("find repository root: %w", err)
+	}
+	if ref == "" {
+		if ref, err = releaseRef(root); err != nil {
+			return fmt.Errorf("read the release to read the documentation at: %w", err)
+		}
+	}
+	fetcher, err := apidocs.NewAtRef(root, ref, docs)
+	if err != nil {
+		return err
+	}
+	content, err := buildDocEndpoints(ctx, fetcher, ref)
+	if err != nil {
+		return err
+	}
+	if writeErr := docgen.WriteReport(outputPath, content); writeErr != nil {
+		return fmt.Errorf("write output: %w", writeErr)
+	}
+	return nil
+}
+
 // validateDocs runs the citation check against fetcher, writes the report to
 // outputPath, and returns an error when the report could not be produced or
 // when any citation is stale.
@@ -228,7 +277,7 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 // that scope's gate passes. The structs and actions streams always report
 // clean, because a listed candidate is a backlog entry rather than a defect;
 // every other scope gates.
-func runSingle(ctx context.Context, scope string, opts options) (content []byte, clean bool, err error) {
+func runSingle(scope string, opts options) (content []byte, clean bool, err error) {
 	switch scope {
 	case "structs", "actions", "enums", "sdk", scopePaths, scopeGrants, scopeRequired, scopeParams, scopeRoutes:
 		root, rootErr := repositoryRoot(".")
@@ -245,10 +294,10 @@ func runSingle(ctx context.Context, scope string, opts options) (content []byte,
 		case "enums":
 			return enumsRun(root, opts.gapsOnly)
 		case scopePaths:
-			return pathsRun(ctx, root, paths.Options{
-				GapsOnly:    opts.gapsOnly,
-				Fetcher:     endpointFetcher(root, opts),
-				E2ECallsDir: opts.e2eCalls,
+			return pathsRun(root, paths.Options{
+				GapsOnly:       opts.gapsOnly,
+				CheckEndpoints: opts.endpoints,
+				E2ECallsDir:    opts.e2eCalls,
 			})
 		case scopeGrants:
 			return grantsRun(root, grants.Options{GapsOnly: opts.gapsOnly, E2ECallsDir: opts.e2eCalls})
@@ -264,20 +313,6 @@ func runSingle(ctx context.Context, scope string, opts options) (content []byte,
 	default:
 		return nil, false, fmt.Errorf("unknown scope %q (valid: %s)", scope, strings.Join(validScopes, ", "))
 	}
-}
-
-// endpointFetcher returns the API-doc fetcher the endpoint comparison reads
-// through, or nil when the comparison was not asked for.
-//
-// Nil is the default because the comparison needs the network and two minutes
-// of it on a cold cache: a run that only wants the two offline checks should
-// not pay for it. When it is asked for it gates, on the endpoints no
-// declaration in cmd/audit_1to1/internal/paths accounts for.
-func endpointFetcher(root string, opts options) *apidocs.Fetcher {
-	if !opts.endpoints {
-		return nil
-	}
-	return apidocs.New(root, opts.docs)
 }
 
 // scopePaths is the request-path dimension (R-PATH).

@@ -24,6 +24,19 @@ const (
 	// <DefaultBaseURL><area>.md.
 	DefaultBaseURL = "https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/"
 
+	// DefaultFilesURL is the repository files API of the canonical
+	// repository, which [NewAtRef] reads a page at a ref through:
+	// <DefaultFilesURL><escaped path>/raw?ref=<ref>.
+	//
+	// It serves the bytes the raw web route serves, and it is the one a sweep
+	// can finish: measured on 2026-11-03, Cloudflare answered the raw route
+	// with 429 after some thirty pages, with no Retry-After to wait for, and
+	// kept answering it for longer than the backoff waits, while the API route
+	// is held to GitLab's own limit, which it states in its RateLimit headers
+	// (500 a minute without a token that day) and which a sweep paced by the
+	// fetcher's spacing stays under.
+	DefaultFilesURL = "https://gitlab.com/api/v4/projects/gitlab-org%2Fgitlab/repository/files/"
+
 	// DefaultUserDocBaseURL is the raw doc root one level above the API
 	// reference. Some endpoint families carry their only licensing-tier badge on
 	// a user-facing page (e.g. merge request dependencies), so tier auditors need
@@ -53,9 +66,14 @@ var progressf = cmdutil.Progressf
 
 // sleepCtx waits for d or until ctx is cancelled, returning ctx.Err() on
 // cancellation. It is indirected so tests can make retries instant.
+//
+// The context is asked first, so a cancelled one is reported whatever d is,
+// and a d of zero or less makes a timer that has already fired, which the
+// select below takes at once. A `d <= 0` guard in front said the same thing
+// with a boundary whose two sides agreed at zero, a mutant no test could kill.
 var sleepCtx = func(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	t := time.NewTimer(d)
 	defer t.Stop()
@@ -79,6 +97,10 @@ type Fetcher struct {
 	cacheDir string
 	baseURL  string
 	areasURL string
+	// filesURL and ref are set by [NewAtRef] alone: a page is then read
+	// through the repository files API at ref rather than under baseURL.
+	filesURL string
+	ref      string
 	maxAge   time.Duration
 	spacing  time.Duration
 	refresh  bool
@@ -117,6 +139,10 @@ type Options struct {
 	// AreasURL overrides the endpoint [Fetcher.Areas] lists doc/api from (used
 	// by tests); empty uses DefaultAreasURL.
 	AreasURL string
+	// FilesURL overrides the repository files API a [NewAtRef] fetcher reads
+	// its pages through (used by tests); empty uses DefaultFilesURL. [New]
+	// ignores it, since a fetcher without a ref has nothing to name there.
+	FilesURL string
 	// CacheDir overrides the on-disk cache location; empty uses the shared
 	// CacheDir(repoRoot). Useful for tests and callers that want an isolated cache.
 	CacheDir string
@@ -222,7 +248,7 @@ func (f *Fetcher) cachedIfUsable(cachePath string) (string, bool) {
 
 // download fetches one area's markdown with retry.
 func (f *Fetcher) download(ctx context.Context, area string) ([]byte, error) {
-	return f.request(ctx, area, f.baseURL+area+".md")
+	return f.request(ctx, area, f.pageURL(area))
 }
 
 // request performs one GET with retry, honoring Retry-After and falling back to
@@ -326,16 +352,13 @@ func parseRetryAfter(v string) time.Duration {
 	if v == "" {
 		return 0
 	}
+	// A delay of zero or less is none. max says so with no comparison to flip,
+	// where `secs <= 0` and `d > 0` guards had two sides that agreed at zero.
 	if secs, convErr := strconv.Atoi(v); convErr == nil {
-		if secs <= 0 {
-			return 0
-		}
-		return time.Duration(secs) * time.Second
+		return time.Duration(max(secs, 0)) * time.Second
 	}
 	if t, parseErr := http.ParseTime(v); parseErr == nil {
-		if d := time.Until(t); d > 0 {
-			return d
-		}
+		return max(time.Until(t), 0)
 	}
 	return 0
 }

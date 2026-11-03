@@ -13,7 +13,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
 	audit-catalog-first \
-	audit-struct-completeness audit-action-coverage audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs audit-edition-tier \
+	audit-struct-completeness audit-action-coverage audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-report audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
@@ -27,7 +27,7 @@
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema gen-graphql-release-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent check-graphql-sdk-shapes audit-graphql-sdk-sent \
-	gen-api-live check-api-live check-meta-descriptions \
+	gen-api-live check-api-live gen-api-doc-endpoints check-meta-descriptions \
 	gen-action-grants check-action-grants check-action-grants-derivation \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	gen-tool-reference check-tool-reference \
@@ -1245,7 +1245,7 @@ analyze:
 	run_check "[11/36] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
 	run_check "[12/36] pinned GraphQL schemas, gitlab.com's and the release's" $(MAKE) --no-print-directory check-graphql-schema; \
 	run_check "[13/36] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/36] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[14/36] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -gaps-only; \
 	run_check "[15/36] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
 	run_check "[16/36] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
 	run_check "[17/36] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
@@ -1992,25 +1992,37 @@ audit-1to1-sdk:
 ## builds, which is how nine registered tools shipped unable to work. This FAILS on a
 ## GraphQL document the pinned schema refuses, on an action whose owner names no
 ## package under internal/tools, on a package the catalog owns actions in that neither
-## the committed inventory shows issuing a request nor declares a reason, and on a
-## declaration that no longer describes the tree. A silent package means one of two
-## things and the finding cannot tell them apart: no test drives that package, or the
-## inventory is stale (`make gen-request-inventory`). It reads the committed inventory,
+## the committed inventory shows issuing a request nor declares a reason, on a field
+## GitLab sends to an endpoint a package calls that the package publishes nowhere and
+## no declaration in cmd/audit_1to1/internal/paths/sent_declarations.go answers, on a
+## recorded REST endpoint neither the documentation oracle
+## (docs/development/gitlab-api-doc-endpoints.json) nor a declaration in
+## endpoint_declarations.go accounts for, and on a declaration that no longer describes
+## the tree. A silent package means one of two things and the finding cannot tell them
+## apart: no test drives that package, or the inventory is stale (`make
+## gen-request-inventory`). It reads the committed inventory, live record and oracle,
 ## so it needs no network and no suite run.
 audit-1to1-paths:
-	go run ./cmd/audit_1to1/ -scope=paths -gaps-only
+	go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -gaps-only
 
-## audit-1to1-paths-endpoints: the same, plus every recorded REST endpoint compared with
-## GitLab's own API documentation. Needs the network and reads ~250 pages (cached for a
-## week afterwards). It FAILS on an endpoint no declaration in
-## cmd/audit_1to1/internal/paths/endpoint_declarations.go accounts for, and on a
-## declaration that accounts for nothing any more. The declarations are what make the
-## comparison safe to gate on: the oracle is prose, so a deprecated-but-working alias,
-## an endpoint documented under doc/user, and one whose only mention is a sentence all
-## look exactly like a defect, and each of those is written down with its reason.
-audit-1to1-paths-endpoints:
+## audit-1to1-paths-report: the whole R-PATH report, the documentation comparison
+## included, written to plan/1to1-paths.json: every undocumented endpoint with the
+## declaration that answers it, and every finding the reports beside the gate hold.
+## It gates on nothing audit-1to1-paths does not.
+audit-1to1-paths-report:
 	go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -output plan/1to1-paths.json
 	@echo "R-PATH report written to plan/1to1-paths.json"
+
+## gen-api-doc-endpoints: read GitLab's API documentation (doc/api of gitlab-org/gitlab,
+## ~250 pages through the repository files API) at the tag of the release the live
+## record was taken from, and rewrite docs/development/gitlab-api-doc-endpoints.json,
+## the oracle audit-1to1-paths holds every recorded REST endpoint to. It needs the
+## network and no token, reads nothing a regeneration changes for a tag already read
+## (the pages are cached under .cache/gitlab-api-docs@<tag>), and writes nothing when a
+## page cannot be read. Run it in the change that re-pins the live record
+## (make gen-api-live): audit-1to1-paths refuses an oracle read at another release.
+gen-api-doc-endpoints:
+	go run ./cmd/audit_1to1/ -write-doc-endpoints -output docs/development/gitlab-api-doc-endpoints.json
 
 ## audit-1to1-paths-e2e: the same report, plus the observation question asked per ACTION
 ## instead of per owning package, read from the shards a Docker end-to-end run left under
@@ -2019,7 +2031,8 @@ audit-1to1-paths-endpoints:
 ## action; a trace does, so the record says which actions were themselves seen issuing a
 ## request and which ran without issuing one. It changes nothing the gate fails on: the
 ## shards are a byproduct of a run CI does not schedule, and the counts are floors, since
-## a batch queue that overflowed drops client spans without saying so.
+## a batch queue that overflowed drops client spans without saying so. A directory it
+## cannot read fails the run, since the run asked for an answer it cannot give.
 audit-1to1-paths-e2e:
 	go run ./cmd/audit_1to1/ -scope=paths -e2e-calls $(E2E_CALLS_DIR) -output plan/1to1-paths-e2e.json
 	@echo "R-PATH report with per-action observation written to plan/1to1-paths-e2e.json"
@@ -2525,7 +2538,9 @@ check-graphql-schema:
 ## feature_available? when a request is served and not when a class is defined.
 ## This is the only oracle here that is evaluated rather than parsed, which is
 ## what lets it see the ~600 fields GeoSiteStatus exposes through a loop where
-## a scan of the same source sees 26.
+## a scan of the same source sees 26. A re-pin onto a new release regenerates the
+## documentation oracle beside it (make gen-api-doc-endpoints), which
+## audit-1to1-paths refuses when it was read at another release than this record's.
 gen-api-live:
 	go run ./cmd/gen_api_live/
 

@@ -4,13 +4,11 @@
 package paths
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
@@ -28,8 +26,9 @@ type Report struct {
 	// StaleDeclarations are the claims about a silent package that no longer
 	// describe the tree.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
-	// Endpoints is the documentation comparison, which is a candidate list and
-	// never a gate.
+	// Endpoints is the documentation comparison, which gates on an endpoint
+	// neither the documentation oracle nor a declaration accounts for, when
+	// -check-endpoints asks for it. See [EndpointCheck].
 	Endpoints EndpointCheck `json:"endpoints"`
 	// Shapes is what GitLab's own OpenAPI document says the endpoints we call
 	// return, compared with what we publish. A report and not a gate, for the
@@ -107,6 +106,11 @@ type Summary struct {
 	// those say what the conditions record answered, and this says how many
 	// of them a reader need not act on.
 	UnsurfacedDeclared int `json:"unsurfaced_declared"`
+	// UnsurfacedUndeclared is the remainder, the findings no declaration
+	// answers, and the gate fails on it: every one is a field GitLab sends to
+	// an endpoint a package calls that nothing here publishes and nobody has
+	// decided about. See [Summary.clean].
+	UnsurfacedUndeclared int `json:"unsurfaced_undeclared"`
 	// The typed counts are the same comparison held at type grain, where an
 	// output type is judged only against the endpoints its client-go struct
 	// models. They are published beside the package-grain count rather than
@@ -266,13 +270,23 @@ const observedGrain = "package: an action counts as observed when the package th
 // list offering a way to page that GitLab ignores or refuses, or a keyset
 // list a caller cannot page the cheaper way, and a re-recorded live record
 // that moves a route between the two is held to the same rule.
+//
+// The package grain of the sent comparison gates the same way, on the
+// findings no declaration answers (issue 1688). Every one of them used to be
+// answered, and the table said so, while nothing held the count there: the
+// read of GET /version that four packages make to choose a route reached the
+// inventory and stood as fourteen findings nobody had decided about. A request
+// a handler adds now fails here until the field is published or the reason it
+// is not is written down. The type grain stays a report, for the reason
+// [SentCheck] gives.
 func (s Summary) clean() bool {
 	return s.GraphQLRefused == 0 &&
 		s.UndeclaredSilent == 0 &&
 		s.StaleDeclarations == 0 &&
 		s.ActionsUnmapped == 0 &&
 		s.UndeclaredEndpoints == 0 &&
-		s.KeysetFindingsUndeclared == 0
+		s.KeysetFindingsUndeclared == 0 &&
+		s.UnsurfacedUndeclared == 0
 }
 
 // GraphQLRefusal is one document the schema will not accept.
@@ -296,19 +310,21 @@ var (
 
 // Options is what a run of this scope needs beyond the tree.
 //
-// It is a struct rather than three parameters because two of the three are
-// inputs the run may not have: an API-doc fetcher costs the network, and an
-// end-to-end record exists only after a Docker session wrote one. Naming them
-// at the call site is what keeps "not asked for" and "asked for and empty"
-// from being the same argument.
+// It is a struct rather than three parameters because each of the three asks
+// for something the run would not otherwise do, and an end-to-end record
+// exists only after a Docker session wrote one. Naming them at the call site is
+// what keeps "not asked for" and "asked for and empty" from being the same
+// argument.
 type Options struct {
 	// GapsOnly keeps only the findings, matching the other scopes' flag.
 	GapsOnly bool
-	// Fetcher enables the endpoint comparison. Nil leaves it out, which is the
-	// default: it needs the network and two minutes of it on a cold cache, and
-	// it gates nothing, so a run that only wants the gate should not pay for
-	// it.
-	Fetcher *apidocs.Fetcher
+	// CheckEndpoints adds the endpoint comparison, which reads the committed
+	// documentation oracle and gates on what neither it nor a declaration
+	// accounts for (see [EndpointCheck]). It needs no network, and make
+	// audit-1to1-paths, make analyze and CI all ask for it; a run that leaves
+	// it out is one that wants the other checks without the oracle, such as a
+	// test of a planted tree that has none.
+	CheckEndpoints bool
 	// E2ECallsDir is the shard directory an end-to-end run recorded its calls
 	// into, which lets the observation question be asked per action rather than
 	// per package. Empty leaves that out, which is every run outside a Docker
@@ -318,8 +334,12 @@ type Options struct {
 
 // Run builds the report for the given repository root and returns it as
 // indented JSON (with a trailing newline) together with the gate outcome.
-func Run(ctx context.Context, root string, opts Options) (content []byte, clean bool, err error) {
-	report, err := buildReport(ctx, root, opts)
+//
+// It takes no context: every input is committed or compiled in, so nothing it
+// does waits on anything a caller could cancel. The documentation sweep that
+// once did is the generator's now ([BuildDocEndpoints]).
+func Run(root string, opts Options) (content []byte, clean bool, err error) {
+	report, err := buildReport(root, opts)
 	if err != nil {
 		return nil, false, err
 	}
@@ -330,7 +350,7 @@ func Run(ctx context.Context, root string, opts Options) (content []byte, clean 
 	return append(content, '\n'), report.Summary.clean(), nil
 }
 
-func buildReport(ctx context.Context, root string, opts Options) (Report, error) {
+func buildReport(root string, opts Options) (Report, error) {
 	inventory, err := readInventory(root)
 	if err != nil {
 		return Report{}, err
@@ -338,6 +358,12 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 	actions, err := catalogActions()
 	if err != nil {
 		return Report{}, fmt.Errorf("build action catalog: %w", err)
+	}
+	// Read before the comparisons, which take seconds, so a run that named a
+	// directory it cannot read is told so at once.
+	e2e, err := e2eObservation(opts.E2ECallsDir, actions)
+	if err != nil {
+		return Report{}, err
 	}
 
 	documents, err := auditGraphQL(graphqldocs.Options{Dir: root})
@@ -350,8 +376,8 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 	undeclaredPackages, undeclaredActions := undeclaredSilent(owners)
 
 	endpoints := EndpointCheck{}
-	if opts.Fetcher != nil {
-		if endpoints, err = auditEndpoints(ctx, opts.Fetcher, inventory.Requests); err != nil {
+	if opts.CheckEndpoints {
+		if endpoints, err = auditEndpoints(root, inventory.Requests); err != nil {
 			return Report{}, fmt.Errorf("compare the recorded endpoints with the API documentation: %w", err)
 		}
 	}
@@ -368,7 +394,6 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 	sdkGraphQL := sdkGraphQLCheck(root)
 	alwaysSent := alwaysSentCheck(root, inventory.Requests)
 	identifiers := identifierCheck(inventory.Requests)
-	e2e := e2eObservation(opts.E2ECallsDir, actions)
 
 	stale = append(stale, endpoints.staleDeclarations()...)
 	stale = append(stale, shapes.Typed.staleDeclarations()...)
@@ -411,6 +436,7 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 			UnsurfacedAlways:          sentAlways,
 			UnsurfacedWhen:            sentWhen,
 			UnsurfacedDeclared:        sentDeclared,
+			UnsurfacedUndeclared:      len(shapes.Sent.Unsurfaced) - sentDeclared,
 			TypedUnsurfacedFields:     len(shapes.Typed.Unsurfaced),
 			TypedUnsurfacedAlways:     typedSentAlways,
 			TypedUnsurfacedWhen:       typedSentWhen,

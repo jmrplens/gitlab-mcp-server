@@ -32,16 +32,20 @@ import (
 // overflows, so a trace whose client spans were dropped reads as an action
 // that issued nothing. A positive claim here is therefore solid and a negative
 // one is a lead.
+//
+// Absent is not the same as unreadable, though. A run that names no directory
+// asks nothing and is the ordinary case; a run that names one asked for this
+// answer, and a directory that cannot be read gives it no answer at all, so
+// the run fails the way an unreadable inventory fails it (issue 1688). It used
+// to exit 0 with the reason inside the report, where `make
+// audit-1to1-paths-e2e` after a Docker run that wrote nothing read exactly
+// like a run whose every action was observed.
 type E2EObservation struct {
 	// Ran is whether a record was read at all. Everything below is empty when
-	// it is false, and Error says why when the reason was not "none was asked
-	// for".
+	// it is false, which is a run that named no directory.
 	Ran bool `json:"ran"`
 	// Directory is where the shards were read from.
 	Directory string `json:"directory,omitempty"`
-	// Error is what stopped the read, when something did. It is a note rather
-	// than a failure: this check reports.
-	Error string `json:"error,omitempty"`
 	// Dispatches is how many traces named an action, which is the denominator
 	// of the two lists below. It is traces and not lines: one trace can be
 	// written twice, and [foldDispatchesByTrace] is what keeps the count and
@@ -78,17 +82,17 @@ var readE2ECalls = e2ecalls.ReadForCalls
 // answer, held against the catalog so an id nothing registers is named rather
 // than counted.
 //
-// An empty directory is not an error: it means no end-to-end record was
-// offered, which is what every run outside a Docker session looks like.
-func e2eObservation(dir string, actions []requestinventory.Action) E2EObservation {
+// An empty directory name is not an error: it means no end-to-end record was
+// offered, which is what every run outside a Docker session looks like. A
+// directory named and not readable is, for the reason [E2EObservation] gives.
+func e2eObservation(dir string, actions []requestinventory.Action) (E2EObservation, error) {
 	if dir == "" {
-		return E2EObservation{}
+		return E2EObservation{}, nil
 	}
 	observation := E2EObservation{Ran: true, Directory: dir}
 	records, err := readE2ECalls(dir)
 	if err != nil {
-		observation.Error = fmt.Sprintf("read the end-to-end call record: %v", err)
-		return observation
+		return E2EObservation{}, fmt.Errorf("read the end-to-end call record: %w", err)
 	}
 
 	catalog := make(map[string]struct{}, len(actions))
@@ -130,7 +134,7 @@ func e2eObservation(dir string, actions []requestinventory.Action) E2EObservatio
 	observation.Issuing = sortedActions(issuing)
 	observation.Silent = sortedActions(silent)
 	observation.Unmatched = sortedActions(unmatched)
-	return observation
+	return observation, nil
 }
 
 // foldDispatchesByTrace reduces a record to one dispatch per trace, keeping the

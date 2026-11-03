@@ -29,7 +29,7 @@ import (
 // runScope runs one scope the way the command runs it with -gaps-only and no
 // documentation comparison, which is what every case below asks for.
 func runScope(scope, outputPath string) error {
-	return run(context.Background(), options{scope: scope, gapsOnly: true, outputPath: outputPath})
+	return run(options{scope: scope, gapsOnly: true, outputPath: outputPath})
 }
 
 // captureFatal replaces fatalf with a recorder and returns the messages it
@@ -188,19 +188,19 @@ func TestMain_PathsScope_CarriesEachFlagToTheFieldItNames(t *testing.T) {
 	original := pathsRun
 	t.Cleanup(func() { pathsRun = original })
 	var got paths.Options
-	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
+	pathsRun = func(_ string, opts paths.Options) ([]byte, bool, error) {
 		got = opts
 		return []byte("{}\n"), true, nil
 	}
 
 	cases := []struct {
-		name      string
-		args      []string
-		wantGaps  bool
-		wantFetch bool
-		wantDir   string
+		name          string
+		args          []string
+		wantGaps      bool
+		wantEndpoints bool
+		wantDir       string
 	}{
-		{name: "endpoints_without_gaps_only", args: []string{"-check-endpoints"}, wantFetch: true},
+		{name: "endpoints_without_gaps_only", args: []string{"-check-endpoints"}, wantEndpoints: true},
 		{name: "gaps_only_without_endpoints", args: []string{"-gaps-only"}, wantGaps: true},
 		{name: "the_shard_directory", args: []string{"-e2e-calls", "/tmp/e2e-calls-fixture"}, wantDir: "/tmp/e2e-calls-fixture"},
 	}
@@ -219,8 +219,8 @@ func TestMain_PathsScope_CarriesEachFlagToTheFieldItNames(t *testing.T) {
 			if got.GapsOnly != testCase.wantGaps {
 				t.Errorf("GapsOnly = %v, want %v", got.GapsOnly, testCase.wantGaps)
 			}
-			if (got.Fetcher != nil) != testCase.wantFetch {
-				t.Errorf("Fetcher present = %v, want %v", got.Fetcher != nil, testCase.wantFetch)
+			if got.CheckEndpoints != testCase.wantEndpoints {
+				t.Errorf("CheckEndpoints = %v, want %v", got.CheckEndpoints, testCase.wantEndpoints)
 			}
 			if got.E2ECallsDir != testCase.wantDir {
 				t.Errorf("E2ECallsDir = %q, want %q", got.E2ECallsDir, testCase.wantDir)
@@ -457,7 +457,7 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 				t.Helper()
 				original := pathsRun
 				t.Cleanup(func() { pathsRun = original })
-				pathsRun = func(context.Context, string, paths.Options) ([]byte, bool, error) {
+				pathsRun = func(string, paths.Options) ([]byte, bool, error) {
 					return []byte("{}\n"), false, nil
 				}
 			},
@@ -571,7 +571,7 @@ func TestRunSingle_EnumScope_ReturnsTheGateVerdict(t *testing.T) {
 		}
 		return []byte("{}\n"), false, nil
 	}
-	content, clean, err := runSingle(t.Context(), "enums", options{gapsOnly: true})
+	content, clean, err := runSingle("enums", options{gapsOnly: true})
 	if err != nil || clean || string(content) != "{}\n" {
 		t.Fatalf("runSingle(enums) = %q/%v/%v, want the seam's report and verdict", content, clean, err)
 	}
@@ -724,7 +724,7 @@ func TestRunMerged_Summary_DescribesTheTreeWhateverGapsOnlySays(t *testing.T) {
 	// sequential: the two runs write the two summaries compared below, not cases of their own
 	for _, gapsOnly := range []bool{false, true} {
 		path := filepath.Join(t.TempDir(), "backlog.json")
-		if err := run(context.Background(), options{scope: "all", gapsOnly: gapsOnly, outputPath: path}); err != nil {
+		if err := run(options{scope: "all", gapsOnly: gapsOnly, outputPath: path}); err != nil {
 			t.Fatalf("run(all, gaps-only %t): %v", gapsOnly, err)
 		}
 		summaries[gapsOnly], _ = readJSONFile(t, path)["summary"].(map[string]any)
@@ -769,42 +769,145 @@ func TestRun_MetadataScope_IsRefusedNamingTheAuditThatGatesIt(t *testing.T) {
 	}
 }
 
-// TestMain_EndpointComparison_BuildsTheFetcherFromTheDocumentationFlags
-// verifies the fetcher the endpoint comparison is handed was configured from
-// the documentation flags, by asking it for an area nothing cached: offline, it
-// must say so rather than reach for the network.
-//
-// -refresh and -offline are two booleans of one options struct that no test
-// distinguished: every case asserted the fetcher was present and nothing about
-// what it was built to do, so a run told to stay offline could have been
-// handed one that downloads. The root is a planted directory, so the cache the
-// fetcher derives from it holds nothing whatever this machine has fetched
-// before.
-func TestMain_EndpointComparison_BuildsTheFetcherFromTheDocumentationFlags(t *testing.T) {
-	originalRoot, originalPaths := repositoryRoot, pathsRun
-	t.Cleanup(func() { repositoryRoot, pathsRun = originalRoot, originalPaths })
+// stubDocEndpoints replaces the oracle generator's two seams and the root, so
+// a case can drive -write-doc-endpoints through main without the network or a
+// live record. It returns what the generator was handed: the fetcher and the
+// ref.
+func stubDocEndpoints(t *testing.T, release string, built []byte) (fetcher **apidocs.Fetcher, ref *string) {
+	t.Helper()
+	originalRoot, originalRelease, originalBuild := repositoryRoot, releaseRef, buildDocEndpoints
+	t.Cleanup(func() { repositoryRoot, releaseRef, buildDocEndpoints = originalRoot, originalRelease, originalBuild })
 	root := t.TempDir()
 	repositoryRoot = func(string) (string, error) { return root, nil }
-	var got paths.Options
-	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
-		got = opts
-		return []byte("{}\n"), true, nil
+	releaseRef = func(string) (string, error) { return release, nil }
+	var gotFetcher *apidocs.Fetcher
+	var gotRef string
+	buildDocEndpoints = func(_ context.Context, f *apidocs.Fetcher, r string) ([]byte, error) {
+		gotFetcher, gotRef = f, r
+		return built, nil
 	}
+	return &gotFetcher, &gotRef
+}
 
-	messages := captureFatal(t)
-	resetFlags(t, "-scope=paths", "-check-endpoints", "-offline",
-		"-output", filepath.Join(t.TempDir(), "paths.json"))
-	main()
+// TestMain_WriteDocEndpoints_WritesTheOracleAtTheRef verifies the generator
+// mode end to end through the flag set: it reads at the tag of the live
+// record's release unless -doc-ref names another, writes what the sweep built
+// to -output, and builds its fetcher from the documentation flags, which the
+// offline case shows by asking the fetcher for a page nothing cached. The root
+// is a planted directory, so the cache the fetcher derives from it holds
+// nothing whatever this machine has fetched before.
+func TestMain_WriteDocEndpoints_WritesTheOracleAtTheRef(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantRef string
+	}{
+		{name: "the_live_records_release", wantRef: "v19.5.0-ee"},
+		{name: "a_ref_the_caller_names", args: []string{"-doc-ref", "master"}, wantRef: "master"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			fetcher, ref := stubDocEndpoints(t, "v19.5.0-ee", []byte("{\"schema_version\": 1}\n"))
+			messages := captureFatal(t)
+			output := filepath.Join(t.TempDir(), "oracle.json")
+			resetFlags(t, append([]string{"-write-doc-endpoints", "-offline", "-output", output}, testCase.args...)...)
 
-	if len(*messages) != 0 {
-		t.Fatalf("main reported %v, want a clean run", *messages)
+			main()
+
+			if len(*messages) != 0 {
+				t.Fatalf("main reported %v, want the oracle written", *messages)
+			}
+			if *ref != testCase.wantRef {
+				t.Errorf("ref = %q, want %q", *ref, testCase.wantRef)
+			}
+			if written, err := os.ReadFile(output); err != nil || string(written) != "{\"schema_version\": 1}\n" {
+				t.Errorf("output = %q, %v; want what the sweep built", written, err)
+			}
+			if _, err := (*fetcher).Fetch(t.Context(), "an-area-nothing-cached"); err == nil || !strings.Contains(err.Error(), "not cached and offline") {
+				t.Errorf("fetching an uncached area = %v, want the offline refusal", err)
+			}
+		})
 	}
-	if got.Fetcher == nil {
-		t.Fatal("-check-endpoints was passed no fetcher")
+}
+
+// TestMain_WriteDocEndpoints_AFailure_IsFatalAndWritesNothing verifies that
+// every way the generator cannot finish reaches the fatal path with what
+// stopped it, and leaves the output where it was: a root it cannot find, a
+// live record that names no release, a ref that is not one, a sweep that
+// failed, and an output it cannot write.
+func TestMain_WriteDocEndpoints_AFailure_IsFatalAndWritesNothing(t *testing.T) {
+	boom := errors.New("boom")
+	cases := []struct {
+		name    string
+		args    []string
+		arrange func(t *testing.T)
+		output  func(t *testing.T) string
+		want    string
+	}{
+		{
+			name: "no_repository_root",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				repositoryRoot = func(string) (string, error) { return "", boom }
+			},
+			want: "find repository root: boom",
+		},
+		{
+			name: "no_release_in_the_live_record",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				releaseRef = func(string) (string, error) { return "", boom }
+			},
+			want: "read the release to read the documentation at: boom",
+		},
+		{
+			name: "a_ref_that_is_not_one",
+			args: []string{"-doc-ref", "feature/x"},
+			want: `"feature/x" is not a ref`,
+		},
+		{
+			name: "a_sweep_that_failed",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				buildDocEndpoints = func(context.Context, *apidocs.Fetcher, string) ([]byte, error) { return nil, boom }
+			},
+			want: "boom",
+		},
+		{
+			name: "an_output_it_cannot_write",
+			output: func(t *testing.T) string {
+				t.Helper()
+				file := filepath.Join(t.TempDir(), "file")
+				if err := os.WriteFile(file, nil, 0o600); err != nil {
+					t.Fatalf("prepare the output: %v", err)
+				}
+				return filepath.Join(file, "oracle.json")
+			},
+			want: "write output",
+		},
 	}
-	_, err := got.Fetcher.Fetch(t.Context(), "an-area-nothing-cached")
-	if err == nil || !strings.Contains(err.Error(), "not cached and offline") {
-		t.Errorf("fetching an uncached area = %v, want the offline refusal", err)
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stubDocEndpoints(t, "v19.5.0-ee", []byte("{}\n"))
+			if testCase.arrange != nil {
+				testCase.arrange(t)
+			}
+			output := filepath.Join(t.TempDir(), "oracle.json")
+			if testCase.output != nil {
+				output = testCase.output(t)
+			}
+			messages := captureFatal(t)
+			resetFlags(t, append([]string{"-write-doc-endpoints", "-output", output}, testCase.args...)...)
+
+			main()
+
+			if len(*messages) != 1 || !strings.Contains((*messages)[0], testCase.want) {
+				t.Errorf("main reported %v, want one fatal message containing %q", *messages, testCase.want)
+			}
+			if _, err := os.Stat(output); err == nil {
+				t.Errorf("main wrote %s, want nothing written", output)
+			}
+		})
 	}
 }
 
@@ -849,22 +952,18 @@ func TestMain_ValidateDocsOffline_ReportsTheOfflineReason(t *testing.T) {
 	}
 }
 
-// TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough verifies the wiring
+// TestRunSingle_PathsScope_PassesTheEndpointSwitchThrough verifies the wiring
 // of the dimension that reads the recorded requests: the flag decides whether
-// the documentation comparison gets a fetcher at all, and the scope's own
-// verdict is what the run reports.
-//
-// Nil is the interesting half. The comparison needs the network and 250 pages
-// of it, and it gates nothing, so a run that did not ask for it must be handed
-// nothing to fetch with rather than a fetcher it might use. The shard
-// directory is the same shape of input one layer along: an end-to-end record
-// exists only after a Docker session wrote one, so a run that named none must
-// be handed the empty string and not a path it might read.
-func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
+// the documentation comparison runs at all, and the scope's own verdict is
+// what the run reports. The shard directory is the same shape of input one
+// field along: an end-to-end record exists only after a Docker session wrote
+// one, so a run that named none must be handed the empty string and not a path
+// it might read.
+func TestRunSingle_PathsScope_PassesTheEndpointSwitchThrough(t *testing.T) {
 	original := pathsRun
 	t.Cleanup(func() { pathsRun = original })
 	var got paths.Options
-	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
+	pathsRun = func(_ string, opts paths.Options) ([]byte, bool, error) {
 		got = opts
 		return []byte("{}\n"), true, nil
 	}
@@ -873,17 +972,16 @@ func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
 		name      string
 		endpoints bool
 		e2eCalls  string
-		wantNil   bool
 	}{
-		{name: "without -check-endpoints", endpoints: false, wantNil: true},
-		{name: "with -check-endpoints", endpoints: true, wantNil: false},
-		{name: "with -e2e-calls", endpoints: false, e2eCalls: "/tmp/e2e-calls", wantNil: true},
+		{name: "without -check-endpoints", endpoints: false},
+		{name: "with -check-endpoints", endpoints: true},
+		{name: "with -e2e-calls", endpoints: false, e2eCalls: "/tmp/e2e-calls"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			got = paths.Options{}
 
-			content, clean, err := runSingle(t.Context(), scopePaths,
+			content, clean, err := runSingle(scopePaths,
 				options{gapsOnly: true, endpoints: testCase.endpoints, e2eCalls: testCase.e2eCalls})
 
 			if err != nil || !clean || string(content) != "{}\n" {
@@ -892,8 +990,8 @@ func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
 			if !got.GapsOnly {
 				t.Error("runSingle(paths) did not pass -gaps-only through")
 			}
-			if (got.Fetcher == nil) != testCase.wantNil {
-				t.Errorf("runSingle(paths) fetcher = %v, want nil == %v", got.Fetcher, testCase.wantNil)
+			if got.CheckEndpoints != testCase.endpoints {
+				t.Errorf("runSingle(paths) CheckEndpoints = %v, want %v", got.CheckEndpoints, testCase.endpoints)
 			}
 			if got.E2ECallsDir != testCase.e2eCalls {
 				t.Errorf("runSingle(paths) e2e calls = %q, want %q", got.E2ECallsDir, testCase.e2eCalls)
@@ -906,7 +1004,7 @@ func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
 // scope name it does not know instead of running nothing silently, and that a
 // refusal reports the gate as failed rather than clean.
 func TestRunSingle_UnknownScope(t *testing.T) {
-	_, clean, err := runSingle(t.Context(), "bogus", options{})
+	_, clean, err := runSingle("bogus", options{})
 	if err == nil {
 		t.Fatal("expected error for unknown scope")
 	}
@@ -1079,7 +1177,7 @@ func checkMergedSummaryKeys(t *testing.T, doc map[string]any) {
 func checkMergedSummaryOnTheTree(t *testing.T, dir string) {
 	t.Helper()
 	full := filepath.Join(t.TempDir(), "full.json")
-	if err := run(context.Background(), options{scope: "all", outputPath: full}); err != nil {
+	if err := run(options{scope: "all", outputPath: full}); err != nil {
 		t.Fatalf("run(all) without -gaps-only: %v", err)
 	}
 	merged, _ := readJSONFile(t, filepath.Join(dir, "all.json"))["summary"].(map[string]any)

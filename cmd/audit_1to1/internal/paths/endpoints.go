@@ -5,14 +5,12 @@ package paths
 
 import (
 	"cmp"
-	"context"
 	"fmt"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
@@ -34,8 +32,8 @@ type Endpoint struct {
 // declared reports whether a declaration accounts for this endpoint.
 func (e Endpoint) declared() bool { return e.Category != "" }
 
-// EndpointCheck is what the documentation comparison found, and how much of the
-// documentation it managed to read.
+// EndpointCheck is what the documentation comparison found, and which oracle
+// it read.
 //
 // A recorded endpoint GitLab does not document is a finding, and the issue this
 // dimension answers says so: a path GitLab does not have is a failure, not a
@@ -43,14 +41,17 @@ func (e Endpoint) declared() bool { return e.Category != "" }
 // oracle is prose. GitLab writes its endpoints as `METHOD /path` lines in
 // fenced blocks, which is regular enough to compare against, and then:
 //
-//   - 57 of those lines omit the leading slash, and project_access_tokens.md
-//     writes every one of its endpoints that way;
+//   - 60 of those lines omit the leading slash at 19.5.0-ee, and
+//     project_access_tokens.md writes every one of its endpoints that way;
 //   - emoji_reactions.md gives the note reactions one plaintext block, for
 //     issues, and leaves the merge request and snippet variants to prose;
 //   - usage_data.md documents /usage_data/track_events in a sentence and a curl
 //     example, never as a line;
 //   - the generic package registry and Terraform state are documented outside
 //     doc/api entirely, under doc/user;
+//   - the job artifacts of a ref are documented under :ref_name, which the
+//     route lets carry a slash, so a branch named feature/x fills two segments
+//     where the line has one;
 //   - client-go still spells the integrations endpoints /services/, an alias
 //     GitLab replaced with /integrations/ and no longer documents, and the
 //     Orbit Knowledge Graph endpoints are documented only in a generated
@@ -64,21 +65,25 @@ func (e Endpoint) declared() bool { return e.Category != "" }
 // declaration that stops matching anything is a finding too, so the excuse
 // cannot outlive the thing it excuses.
 //
-// The second half of the honesty is coverage. UnreadAreas counts the pages the
-// fetch could not get, and a hole there produces candidates that are only about
-// the hole: a reader weighing this list has to read that number first. The
-// check only runs when it is asked for (`-check-endpoints`), because it needs
-// the network and two minutes of it, so this is a gate whenever it runs and
-// never a reason for a run that did not ask for it to fail.
+// The oracle is read once and committed ([DocEndpointsFile], written by make
+// gen-api-doc-endpoints), at the tag of the release the live record was taken
+// from, so the comparison needs no network and runs with the rest of the
+// scope, in CI and in make analyze, whenever -check-endpoints asks for it.
+// Until it was committed it read 250 pages over the network on every run, so
+// nothing ran it: no cache held a listing, and the declarations in
+// endpoint_declarations.go went unjudged. A committed oracle has no unread
+// page by construction, because its generator refuses to write one with a
+// hole, and an oracle read at another release than the live record's is
+// refused rather than compared, since the two would speak for two GitLabs.
 type EndpointCheck struct {
 	// Ran says whether the comparison was asked for at all.
 	Ran bool `json:"ran"`
-	// Areas is how many documentation pages were read.
+	// Oracle and Ref name the file that answered and the tag its pages were
+	// read at.
+	Oracle string `json:"oracle,omitempty"`
+	Ref    string `json:"ref,omitempty"`
+	// Areas is how many documentation pages the oracle was read from.
 	Areas int `json:"areas,omitempty"`
-	// UnreadAreas names the pages that could not be fetched, sorted. Every
-	// endpoint documented only on one of them is reported as undocumented, so
-	// this is the first thing a reader of the candidates needs.
-	UnreadAreas []string `json:"unread_areas,omitempty"`
 	// DocumentedEndpoints is how many distinct method-and-path shapes the pages
 	// spell out.
 	DocumentedEndpoints int `json:"documented_endpoints,omitempty"`
@@ -129,9 +134,9 @@ const skippedAreaPrefix = "graphql/reference/"
 // endpointLine matches the way GitLab's documentation spells an endpoint: a
 // method, then the path.
 //
-// The leading slash is optional because 57 lines across the documentation do
-// not have one, all of project_access_tokens.md among them, and demanding it
-// would report every endpoint on those pages as undocumented.
+// The leading slash is optional because 60 lines across the documentation do
+// not have one at 19.5.0-ee, all of project_access_tokens.md among them, and
+// demanding it would report every endpoint on those pages as undocumented.
 var endpointLine = regexp.MustCompile(`^(GET|POST|PUT|DELETE|PATCH|HEAD)\s+(/?[A-Za-z:][^\s"'` + "`" + `]*)`)
 
 // apiPrefix is what a documentation line sometimes carries in front of the
@@ -139,42 +144,34 @@ var endpointLine = regexp.MustCompile(`^(GET|POST|PUT|DELETE|PATCH|HEAD)\s+(/?[A
 const apiPrefix = "/api/v4"
 
 // checkEndpoints compares every recorded REST endpoint with GitLab's own
-// documentation.
+// documentation, as the committed oracle under root records it.
 //
-// A page that cannot be fetched is recorded and skipped rather than failing the
-// run: the documentation is 250 pages and one renamed page must not turn a
-// candidate list into a page of noise about a fetch.
-func checkEndpoints(ctx context.Context, fetcher *apidocs.Fetcher, rows []requestinventory.Row) (EndpointCheck, error) {
-	areas, err := fetcher.Areas(ctx)
+// An oracle it cannot read, and one read at another release than the live
+// record's, are errors rather than findings: neither says anything about an
+// endpoint, and a comparison against either would report the oracle as the
+// server's defect.
+func checkEndpoints(root string, rows []requestinventory.Row) (EndpointCheck, error) {
+	oracle, err := readDocEndpoints(root)
 	if err != nil {
 		return EndpointCheck{}, err
 	}
-
-	check := EndpointCheck{Ran: true, UnreadAreas: []string{}}
-	documented := map[string][][]string{}
-	for _, area := range areas {
-		if strings.HasPrefix(area, skippedAreaPrefix) {
-			continue
-		}
-		page, fetchErr := fetcher.Fetch(ctx, area)
-		if fetchErr != nil {
-			// A cancelled sweep is not a documentation gap. Without this, one
-			// Ctrl+C halfway through 250 pages reports every endpoint below the
-			// interruption as undocumented, which is a page of findings about
-			// the interruption.
-			if ctx.Err() != nil {
-				return EndpointCheck{}, fmt.Errorf("read %s: %w", area, fetchErr)
-			}
-			check.UnreadAreas = append(check.UnreadAreas, area)
-			continue
-		}
-		check.Areas++
-		addDocumentedEndpoints(documented, page)
+	release, err := ReleaseRef(root)
+	if err != nil {
+		return EndpointCheck{}, fmt.Errorf("read the release the documentation oracle must have been read at: %w", err)
 	}
-	for _, shapes := range documented {
-		check.DocumentedEndpoints += len(shapes)
+	if oracle.Source.Ref != release {
+		return EndpointCheck{}, fmt.Errorf("%s was read at %s and the live API record is of %s: regenerate it with make gen-api-doc-endpoints",
+			DocEndpointsFile, oracle.Source.Ref, release)
 	}
 
+	check := EndpointCheck{
+		Ran:                 true,
+		Oracle:              DocEndpointsFile,
+		Ref:                 oracle.Source.Ref,
+		Areas:               oracle.Source.Areas,
+		DocumentedEndpoints: len(oracle.Endpoints),
+	}
+	documented := oracle.documented()
 	recorded := recordedEndpoints(rows)
 	check.RecordedEndpoints = len(recorded)
 	found := make([]Endpoint, 0)
@@ -185,29 +182,6 @@ func checkEndpoints(ctx context.Context, fetcher *apidocs.Fetcher, rows []reques
 	}
 	check.Undocumented, check.UnusedDeclarations = classifyUndocumented(found)
 	return check, nil
-}
-
-// addDocumentedEndpoints records every endpoint one documentation page spells
-// out, as the segments of its path.
-func addDocumentedEndpoints(documented map[string][][]string, page string) {
-	for line := range strings.SplitSeq(page, "\n") {
-		match := endpointLine.FindStringSubmatch(strings.TrimSpace(line))
-		// A line has to carry a slash to be an endpoint. Without that, a
-		// sentence beginning "GET is the method this endpoint takes" is read as
-		// an endpoint called "is", and every recorded single-segment path then
-		// matches something the documentation never said.
-		if len(match) == 0 || !strings.Contains(match[2], "/") {
-			continue
-		}
-		segments := normalizePath(match[2])
-		if len(segments) == 0 {
-			continue
-		}
-		method := match[1]
-		if !slices.ContainsFunc(documented[method], func(known []string) bool { return slices.Equal(known, segments) }) {
-			documented[method] = append(documented[method], segments)
-		}
-	}
 }
 
 // normalizePath turns a written path into its segments, dropping the query, the
