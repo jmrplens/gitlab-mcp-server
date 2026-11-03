@@ -529,11 +529,13 @@ func TestConvertRepository_AllFields(t *testing.T) {
 		CreatedAt:              &now,
 		CleanupPolicyStartedAt: &cleanup,
 		Status:                 &status,
+		Size:                   4096,
+		DeleteAPIPath:          "/api/v4/registry/repositories/1",
 		Tags: []*gl.RegistryRepositoryTag{
 			{Name: "v1.0", Path: "g/p/img:v1.0", Location: "loc:v1.0", TotalSize: 2048},
 		},
 	}
-	got := convertRepository(r, toolutil.RegistryRepositoryExtra{Size: 4096, DeleteAPIPath: "/api/v4/registry/repositories/1"})
+	got := convertRepository(r)
 	want := RepositoryOutput{
 		ID: 100, Name: "img", Path: testCovRepoPath, ProjectID: 42,
 		Location:               "loc",
@@ -555,7 +557,7 @@ func TestConvertRepository_AllFields(t *testing.T) {
 // time or a zero-value status.
 func TestConvertRepository_NilOptionalFields(t *testing.T) {
 	r := &gl.RegistryRepository{ID: 1, Name: "n", Path: "p", ProjectID: 1}
-	out := convertRepository(r, toolutil.RegistryRepositoryExtra{})
+	out := convertRepository(r)
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %s", out.CreatedAt)
 	}
@@ -1537,62 +1539,6 @@ func TestListTags_KeysetAndOrdering(t *testing.T) {
 	}
 }
 
-// TestRegistryRepositories_UnreadableCapturedDeleteAPIPath verifies that every
-// registry repository handler returns an error rather than a half-filled
-// repository when GitLab sends delete_api_path as something that is not a
-// string. The SDK ignores the key its own RegistryRepository does not model, so
-// the read of the captured response is the only thing that can notice.
-func TestRegistryRepositories_UnreadableCapturedDeleteAPIPath(t *testing.T) {
-	// A list answers with an array and a get with an object, so each case
-	// drives a client of its own rather than one shared handler.
-	poisoned := func(body string) *gitlabclient.Client {
-		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			testutil.RespondJSON(w, http.StatusOK, body)
-		}))
-	}
-	// Each of these three handlers wraps the capture's failure under an
-	// operation of its own, a second copy of the label its hinted refusal
-	// carries, and the shared assertion below judges only the decode message.
-	// The errors are therefore kept here and their operations asserted once
-	// the cases have run, which leaves every assertion on the test goroutine.
-	refused := map[string]error{}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "list_project", Call: func() error {
-			client := poisoned(`[{"id":1,"name":"app","delete_api_path":42}]`)
-			_, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "10"})
-			refused["list_project"] = err
-			return err
-		}},
-		{Name: "list_group", Call: func() error {
-			client := poisoned(`[{"id":1,"name":"app","delete_api_path":42}]`)
-			_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "7"})
-			refused["list_group"] = err
-			return err
-		}},
-		{Name: "get", Call: func() error {
-			client := poisoned(`{"id":1,"name":"app","delete_api_path":42}`)
-			_, err := GetRepository(context.Background(), client, GetRepositoryInput{RepositoryID: 1})
-			refused["get"] = err
-			return err
-		}},
-	})
-	for name, op := range map[string]string{
-		"list_project": "registry_list_project",
-		"list_group":   "registry_list_group",
-		"get":          "registry_get_repository",
-	} {
-		t.Run(name+"_operation", func(t *testing.T) {
-			err := refused[name]
-			if err == nil {
-				t.Fatalf("%s error = nil, want the capture's decode failure", name)
-			}
-			if !strings.HasPrefix(err.Error(), op+": ") {
-				t.Errorf("error = %q, want it to open with the operation %q", err, op)
-			}
-		})
-	}
-}
-
 // TestHandlers_RefusedAtTheHintedStatus_CarryTheHint verifies that every
 // handler, refused at the one status it attaches a hint to, returns an error
 // naming that handler's operation and carrying that hint. The operation, the
@@ -1877,9 +1823,8 @@ func TestDeleteTagsBulk_OneCriterionAtATime_SendsThatCriterionAndNothingElse(t *
 // ---------------------------------------------------------------------------.
 
 // covRepoFullJSON is a repository carrying every field the output publishes,
-// the two the capture reads beside the decode included, with no two values
-// alike, so a field filled from its neighbor is a mismatch rather than a
-// coincidence.
+// with no two values alike, so a field filled from its neighbor is a mismatch
+// rather than a coincidence.
 const covRepoFullJSON = `{
 	"id":100,"name":"cov-img","path":"group/project/cov-img",
 	"project_id":42,"location":"registry.example.com/group/project/cov-img",
@@ -1892,9 +1837,10 @@ const covRepoFullJSON = `{
 
 // TestGetRepository_PublishesEveryFieldGitLabSent verifies the whole output a
 // caller is handed for a fully populated repository, through the handler
-// rather than the converter, so the capture of size and delete_api_path is
-// part of what is asserted. The two timestamps are the pair that used to be
-// checked as non-empty only, and a converter that swapped them passed.
+// rather than the converter, so the decode of size and delete_api_path, which
+// client-go's RegistryRepository models from v3.34.0, is part of what is
+// asserted. The two timestamps are the pair that used to be checked as
+// non-empty only, and a converter that swapped them passed.
 func TestGetRepository_PublishesEveryFieldGitLabSent(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/registry/repositories/100", func(w http.ResponseWriter, _ *http.Request) {

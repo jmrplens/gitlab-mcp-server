@@ -134,6 +134,13 @@ type taggedOnly struct {
 	Raw bool ~json:"raw"~
 }
 
+type unwritten struct {
+	gl.Inner
+	notStruct ~json:"num"~
+	secret    string ~json:"secret"~
+	Fresh     bool   ~json:"fresh"~
+}
+
 var (
 	widgets   []*widgetAPI
 	one       *mirror
@@ -147,6 +154,7 @@ var (
 	shadows   shadowed
 	tags      tagged
 	tagOnly   taggedOnly
+	unwrit    unwritten
 )
 `
 
@@ -248,7 +256,8 @@ func TestSupersetOf_ClientGoEmbeddedThroughAStructOfItsOwn_IsTheRoot(t *testing.
 // decoded struct embeds the root, even through another of its own; and an
 // embedded field its tag names, or that holds no struct, is a key of its
 // own, while one tagged "-" or of an unexported type that is no struct is
-// never written.
+// never written, its tag naming it or not, and neither is an unexported
+// field its tag names.
 func TestSupersetOf_TheKeysOfEveryStructItEmbeds_AreItsOwn(t *testing.T) {
 	sdk := standInSDK(t)
 	local := localPackage(t, sdk)
@@ -271,6 +280,10 @@ func TestSupersetOf_TheKeysOfEveryStructItEmbeds_AreItsOwn(t *testing.T) {
 		{name: "tags", want: Superset{
 			Type: "local.tagged", Root: "Inner", Keys: []string{"Labels", "embedded", "payload"},
 			Needs: []string{"LacksKey{Inner, Labels}", "LacksKey{Inner, embedded}", "LacksKey{Inner, payload}"},
+		}},
+		{name: "unwrit", want: Superset{
+			Type: "local.unwritten", Root: "Inner", Keys: []string{"fresh"},
+			Needs: []string{"LacksKey{Inner, fresh}"},
 		}},
 	}
 	for _, tc := range cases {

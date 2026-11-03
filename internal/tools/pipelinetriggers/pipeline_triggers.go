@@ -50,12 +50,11 @@ type ListOutput struct {
 
 // RunOutput mirrors gl.Pipeline, the result of triggering a pipeline. Per the
 // 1:1 audit policy every Pipeline field is surfaced, with the user and
-// detailed_status sub-objects preserved as full nested objects, plus whether
-// the pipeline is archived, which lib/api/entities/ci/pipeline.rb sends and
-// the SDK does not carry, read from the captured response (ADR-0021). The two
-// durations are read from the same capture: GitLab sends null for a pipeline
-// that has not run, which a just-triggered one has not, and client-go decodes
-// that null as 0, so they are left out then and a measured 0 is kept.
+// detailed_status sub-objects preserved as full nested objects. The two
+// durations are read from the captured response (ADR-0021): GitLab sends null
+// for a pipeline that has not run, which a just-triggered one has not, and
+// client-go decodes that null as 0, so they are left out then and a measured 0
+// is kept.
 type RunOutput struct {
 	toolutil.HintableOutput
 	ID             int64                 `json:"id"`
@@ -350,8 +349,8 @@ func convertTrigger(t *gl.PipelineTrigger, extra toolutil.PipelineTriggerExtra) 
 
 // convertPipeline maps a triggered GitLab pipeline into the run output shape,
 // surfacing every gl.Pipeline field plus the nested user and detailed_status
-// sub-objects, and takes the fields the capture read beside the SDK: whether
-// the pipeline is archived and the two durations as GitLab sent them.
+// sub-objects, and takes the two durations as GitLab sent them from what the
+// capture read beside the SDK.
 func convertPipeline(p *gl.Pipeline, extra toolutil.PipelineExtra) RunOutput {
 	return RunOutput{
 		ID:             p.ID,
@@ -364,7 +363,7 @@ func convertPipeline(p *gl.Pipeline, extra toolutil.PipelineExtra) RunOutput {
 		SHA:            p.SHA,
 		BeforeSHA:      p.BeforeSHA,
 		Tag:            p.Tag,
-		Archived:       extra.Archived,
+		Archived:       p.Archived,
 		YamlErrors:     p.YamlErrors,
 		User:           basicUserOutput(p.User),
 		Duration:       extra.Duration,

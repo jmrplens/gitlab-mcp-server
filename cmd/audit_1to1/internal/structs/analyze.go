@@ -59,14 +59,13 @@ const (
 	// that field in their example bodies, except that the lint page prints
 	// the jobs array on the existing-configuration example alone and the
 	// runner pages print job_execution_status and never created_by. The key
-	// page left the list when client-go v3.19.0 modeled the key's three.
+	// page left the list when client-go v3.19.0 modeled the key's three, and
+	// the two pipeline pages when v3.36.0 modeled the pipeline's archived.
 	docRunnersList     = "runners.md#list-all-runners"
 	docRunnersDetails  = "runners.md#retrieve-runners-details"
 	docLintExisting    = "lint.md#validate-existing-cicd-configuration"
 	docLabelsList      = "labels.md#list-all-project-labels"
 	docGroupLabelsList = "group_labels.md#list-group-labels"
-	docPipelinesGet    = "pipelines.md#retrieve-a-single-pipeline"
-	docTriggersRun     = "pipeline_triggers.md#trigger-a-pipeline-with-a-token"
 
 	docGroupsList       = "groups.md#list-all-groups"
 	docGroupsGet        = "groups.md#get-a-single-group"
@@ -137,18 +136,11 @@ const (
 	// condition beside the other eleven.
 	docMRCreatePipeline      = "merge_requests.md#create-merge-request-pipeline"
 	docMRCreatePipelineQueue = "merge_requests.md#create-merge-request-pipeline (queued_duration, exposed unconditionally by lib/api/entities/ci/pipeline.rb and absent from that section's example body)"
-	// lib/api/entities/plan_limit.rb exposes twenty-nine limits and the change
-	// history, every one with no condition, and client-go's PlanLimit models
-	// the eight package file sizes. The page lists the rest among the update
-	// parameters, except the two webhook tiers GitLab.com uses, and neither of
-	// its example bodies carries the webhook limits or the history, so the
-	// entity is the oracle for those four.
-	docPlanLimits         = "plan_limits.md (lib/api/entities/plan_limit.rb exposes every limit and limits_history with no condition; web_hook_calls_low, web_hook_calls_mid and limits_history are on the entity and not on the page)"
-	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
-	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
-	docGroupTokensList    = "group_access_tokens.md"
-	docImpersonationPage  = "user_tokens.md#list-all-impersonation-tokens-for-a-user"
-	docServiceAccountPATs = "group_service_accounts.md"
+	docPATList               = "personal_access_tokens.md#list-all-personal-access-tokens"
+	docProjectTokensList     = "project_access_tokens.md#list-all-project-access-tokens"
+	docGroupTokensList       = "group_access_tokens.md"
+	docImpersonationPage     = "user_tokens.md#list-all-impersonation-tokens-for-a-user"
+	docServiceAccountPATs    = "group_service_accounts.md"
 	// The dual-shape labels array cannot be two types under one key in a typed
 	// schema, so the object half is published beside the names the way issues
 	// and merge requests publish theirs.
@@ -621,8 +613,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"labeldata.Output.description_html":          docLabelsList,
 	"labels.Output.description_html":             docLabelsList,
 	"grouplabels.Output.description_html":        docGroupLabelsList,
-	"pipelines.DetailOutput.archived":            docPipelinesGet,
-	"pipelinetriggers.RunOutput.archived":        docTriggersRun,
 
 	// groups, issues and projects — the three entity families whose Grape
 	// entity sends keys the client-go struct does not declare, read from the
@@ -677,9 +667,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"projects.Output.duo_dependency_bump_breaking_changes_enabled": docProjectsGet,
 	"projects.Output.duo_foundational_flows_enabled":               docProjectsGet,
 	"projects.Output.duo_remote_flows_enabled":                     docProjectsGet,
-	"projects.Output.duo_sast_fp_detection_enabled":                docProjectsGet,
-	"projects.Output.duo_sast_vr_workflow_enabled":                 docProjectsGet,
-	"projects.Output.duo_secret_detection_fp_enabled":              docProjectsGet,
 	"projects.Output.max_pipelines_per_merge_train":                docProjectsGet,
 	"projects.Output.only_allow_merge_if_all_status_checks_passed": docProjectsGet,
 	"projects.Output.repository_object_format":                     docProjectsGet,
@@ -919,34 +906,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"pipelines.Output.coverage":        docMRCreatePipeline,
 	"pipelines.Output.detailed_status": docMRCreatePipeline,
 	"pipelines.Output.archived":        docMRCreatePipeline,
-
-	// planlimits: the twenty-one limits and the change history
-	// API::Entities::PlanLimit sends beside the eight package file sizes
-	// client-go's PlanLimit models, read from the captured response (ADR-0021,
-	// planlimits.capturedLimits) on both plan limit routes. Recorded in
-	// docs/development/upstream-bugs.md.
-	"planlimits.PlanLimitItem.cargo_max_file_size":                   docPlanLimits,
-	"planlimits.PlanLimitItem.ci_instance_level_variables":           docPlanLimits,
-	"planlimits.PlanLimitItem.ci_pipeline_size":                      docPlanLimits,
-	"planlimits.PlanLimitItem.ci_active_jobs":                        docPlanLimits,
-	"planlimits.PlanLimitItem.ci_project_subscriptions":              docPlanLimits,
-	"planlimits.PlanLimitItem.ci_pipeline_schedules":                 docPlanLimits,
-	"planlimits.PlanLimitItem.ci_needs_size_limit":                   docPlanLimits,
-	"planlimits.PlanLimitItem.ci_registered_group_runners":           docPlanLimits,
-	"planlimits.PlanLimitItem.ci_registered_project_runners":         docPlanLimits,
-	"planlimits.PlanLimitItem.dotenv_variables":                      docPlanLimits,
-	"planlimits.PlanLimitItem.dotenv_size":                           docPlanLimits,
-	"planlimits.PlanLimitItem.enforcement_limit":                     docPlanLimits,
-	"planlimits.PlanLimitItem.notification_limit":                    docPlanLimits,
-	"planlimits.PlanLimitItem.storage_size_limit":                    docPlanLimits,
-	"planlimits.PlanLimitItem.pipeline_hierarchy_size":               docPlanLimits,
-	"planlimits.PlanLimitItem.max_pipelines_per_merge_train":         docPlanLimits,
-	"planlimits.PlanLimitItem.service_desk_outbound_emails_per_hour": docPlanLimits,
-	"planlimits.PlanLimitItem.service_desk_outbound_emails_per_day":  docPlanLimits,
-	"planlimits.PlanLimitItem.web_hook_calls":                        docPlanLimits,
-	"planlimits.PlanLimitItem.web_hook_calls_low":                    docPlanLimits,
-	"planlimits.PlanLimitItem.web_hook_calls_mid":                    docPlanLimits,
-	"planlimits.PlanLimitItem.limits_history":                        docPlanLimits,
 }}
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

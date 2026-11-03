@@ -102,6 +102,9 @@ var declaredServices = map[string]declaration{
 	"InstanceClusters": {supersededUpstream, certificateClusters},
 	"ProjectClusters":  {supersededUpstream, certificateClusters},
 	"Version":          {supersededUpstream, "GET /version is 'deprecated in 15.5. We recommend you instead use the Metadata API' (lib/api/metadata.rb), which serves the same Entities::Metadata on GET /metadata; client-go's Version struct decodes two of its four keys and Metadata all of them. internal/tools/health and internal/tools/metadata call Metadata.GetMetadata instead. The decision covers the tool surface: outside it, internal/gitlab's Client.Ping, which only the e2e harness calls, still reads the version through Version.GetVersion, and the startup probe and the edition detection read /api/v4/version with requests of their own"},
+
+	// UNWRAPPED_TRACKED
+	"GroupPlaceholderReassignments": {unwrappedTracked, "client-go v3.37.0 added it for GET and POST /groups/:id/placeholder_reassignments (DownloadPendingReassignments and ReassignPlaceholders), with which a group owner downloads as a CSV file the placeholder users an import left to reassign and reassigns them by uploading it back; no action reaches either route yet, and the actions that will are tracked in https://github.com/jmrplens/gitlab-mcp-server/issues/1605"},
 }
 
 // GraphQL operation decisions.

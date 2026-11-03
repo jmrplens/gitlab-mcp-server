@@ -214,8 +214,23 @@ func presenceCapture(key, field, kind string) captureDeclaration {
 	}
 }
 
-// presenceCaptures are the keys a Community Edition answer leaves out where
-// client-go decodes a value that is not a pointer.
+// duoFlagReason is why three of a project's Duo flags are read off the
+// capture.
+const duoFlagReason = "ee/lib/ee/api/entities/project.rb sends the flag only on a project whose license carries ai_features, the secret detection one only while the duo_secret_detection_false_positive feature flag is on too, and client-go's Project, which models it from v3.36.0, decodes the key an answer leaves out as false, a value a licensed answer also carries"
+
+// projectFlagCapture declares a flag of the project entity kept for its
+// presence.
+func projectFlagCapture(key, field string) captureDeclaration {
+	return captureDeclaration{
+		Type: "toolutil.ProjectExtra", Key: key, Category: keptForPresence,
+		Predicates: []waits.Predicate{waits.FieldKind{Type: "Project", Field: field, Kind: "bool"}},
+		Reason:     duoFlagReason,
+	}
+}
+
+// presenceCaptures are the keys an answer leaves out where client-go decodes
+// a value that is not a pointer: a Community Edition answer's approval state,
+// and a project's Duo flags outside the license that sends them.
 var presenceCaptures = []captureDeclaration{
 	presenceCapture("approvals_left", "ApprovalsLeft", "int64"),
 	presenceCapture("approvals_required", "ApprovalsRequired", "int64"),
@@ -230,6 +245,9 @@ var presenceCaptures = []captureDeclaration{
 	presenceCapture("require_password_to_approve", "RequirePasswordToApprove", "bool"),
 	presenceCapture("state", "State", "string"),
 	presenceCapture("title", "Title", "string"),
+	projectFlagCapture("duo_sast_fp_detection_enabled", "DuoSASTFPDetectionEnabled"),
+	projectFlagCapture("duo_sast_vr_workflow_enabled", "DuoSASTVRWorkflowEnabled"),
+	projectFlagCapture("duo_secret_detection_fp_enabled", "DuoSecretDetectionFPEnabled"),
 }
 
 // confidentialReason is why a note's confidential is read off the capture.

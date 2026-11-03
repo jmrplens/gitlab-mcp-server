@@ -371,17 +371,18 @@ func TestSet_AllOptionalFields(t *testing.T) {
 }
 
 // TestSet_RequestBody_CarriesOnlyTheScopesTheCallerNamed holds the one property
-// the hand-assembled body in Set exists for. GitLab refuses a feature_set whose
-// scope fields are present but empty, answering "mutually exclusive", which is
-// why the handler builds a map instead of passing client-go's
-// SetFeatureFlagOptions, whose fields lack omitempty. Nothing above the wire can
-// see that: GitLab echoes the flag either way, so a guard inverted here would
-// send a scope the caller never named, or drop one they did, and every other
-// assertion in this file would still pass. The request itself is therefore the
-// assertion, in both directions — a caller who named no scope sends no scope key
-// at all, and a caller who named them all sends each under GitLab's own spelling
-// carrying that caller's value and not a neighbour's. The two path values differ
-// on purpose, so crossing project with repository fails rather than agreeing.
+// a feature_set request needs. GitLab refuses a feature_set whose scope fields
+// are present but empty, answering "mutually exclusive", which is why the
+// handler built the body itself while client-go's SetFeatureFlagOptions tagged
+// its scopes without omitempty, and what the options carry since v3.34.0
+// (register row 6). Nothing above the wire can see that: GitLab echoes the
+// flag either way, so a scope sent empty, or one the caller named dropped,
+// leaves every other assertion in this file passing. The request itself is
+// therefore the assertion, in both directions: a caller who named no scope
+// sends no scope key at all, and a caller who named them all sends each under
+// GitLab's own spelling carrying that caller's value and not a neighbour's.
+// The two path values differ on purpose, so crossing project with repository
+// fails rather than agreeing.
 func TestSet_RequestBody_CarriesOnlyTheScopesTheCallerNamed(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -540,9 +541,9 @@ func TestFeatures_UnreadableCapturedDefinition(t *testing.T) {
 
 // TestSet_NewRequestErrorOnUnserializableValue verifies that Set surfaces an
 // error when the user-supplied value field cannot be marshaled to JSON (for
-// example, a channel or function). GitLab's client-go NewRequest returns
-// the marshal error directly, and the handler wraps it with the operation
-// name so the LLM sees a meaningful diagnostic.
+// example, a channel or function). client-go's SetFeatureFlag returns the
+// marshal error before any request is sent, and the handler wraps it with the
+// operation name so the LLM sees a meaningful diagnostic.
 func TestSet_NewRequestErrorOnUnserializableValue(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 

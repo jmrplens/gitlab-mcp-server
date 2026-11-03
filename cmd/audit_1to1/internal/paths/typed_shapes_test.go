@@ -1262,18 +1262,18 @@ func TestShapeCheck_ANestedOptionDeclaration_IsHeldToItsEvidence(t *testing.T) {
 }
 
 // TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity is the
-// witness of the nested comparison on this tree, against client-go v3.30.0 and
+// witness of the nested comparison on this tree, against client-go v3.38.1 and
 // the record of GitLab 19.5.0.
 //
 // A merge request's head_pipeline is rendered with API::Entities::Ci::Pipeline,
 // which sends no name and sends archived, and toolutil.PipelineOutput publishes
-// name and not archived on every merge request and every merge request a
-// deployment lists. Both rows are payloads of a list and were never compared
-// one level down, so neither half was reported. archived is reported as a key
-// client-go does not model, which is true of v3.30.0: gl.Pipeline carries it
-// from v3.36.0, and the bump turns this witness's sdk_models to true. It reads
-// the record and the typed packages and not the request inventory, so it does
-// not wait on a regeneration.
+// name on every merge request and every merge request a deployment lists. Both
+// rows are payloads of a list and were never compared one level down, so
+// neither half was reported. On v3.30.0 archived was reported unsurfaced, a key
+// client-go did not model; gl.Pipeline carries it from v3.36.0, and on the
+// v3.38.1 pin PipelineOutput publishes it, so the comparison reports it no
+// more while name stays reported. It reads the record and the typed packages
+// and not the request inventory, so it does not wait on a regeneration.
 func TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity(t *testing.T) {
 	root := repoRoot(t)
 
@@ -1289,15 +1289,10 @@ func TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity(t *t
 			}) {
 				t.Errorf("no nested finding for %s head_pipeline.name, want toolutil.PipelineOutput's name reported unpublished", pkg)
 			}
-			index := slices.IndexFunc(check.NestedUnsurfaced, func(finding UnsurfacedField) bool {
+			if index := slices.IndexFunc(check.NestedUnsurfaced, func(finding UnsurfacedField) bool {
 				return finding.Package == pkg && finding.Type == "toolutil.PipelineOutput" && finding.Under == "head_pipeline" && finding.Field == "archived"
-			})
-			if index < 0 {
-				t.Fatalf("no nested unsurfaced finding for %s head_pipeline.archived, want the key the pipeline entity sends reported", pkg)
-			}
-			archived := check.NestedUnsurfaced[index]
-			if archived.Entity != "API::Entities::Ci::Pipeline" || archived.SDKModels || archived.Sent != sentAlways {
-				t.Errorf("head_pipeline.archived = %+v, want it read on API::Entities::Ci::Pipeline, sent always, and not modeled by client-go v3.30.0", archived)
+			}); index >= 0 {
+				t.Errorf("head_pipeline.archived = %+v, want it published from gl.Pipeline and reported no more", check.NestedUnsurfaced[index])
 			}
 		})
 	}

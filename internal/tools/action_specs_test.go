@@ -1310,6 +1310,7 @@ const (
 	reasonAvatarUpload      = "part of an image upload, not a stored value"
 	reasonCommitMetadata    = "describes the commit the update makes, not a value stored on the object"
 	reasonHookSecret        = "a secret GitLab only ever replaces"
+	reasonHookURLVariables  = "each entry sets one URL variable, which lib/api/helpers/web_hooks_helpers.rb merges into the hook's own and skips when the list is empty, so an empty list changes nothing and is not a clear; hook_delete_url_variable removes one"
 	reasonLabelOperation    = "labels to add or remove, an operation rather than a stored list"
 	reasonMilestoneTitle    = "a title lib/api/helpers/milestones_helpers.rb resolves to a milestone and skips when blank, so an empty one names nothing; milestone_id 0 is what unassigns the milestone"
 	reasonEpicLookup        = "the handler reads the epic's global ID before it sends the mutation, which the probe's generic answer cannot give; the epics package's tests hold its clears (issue 1302)"
@@ -1407,6 +1408,7 @@ var clearingDeclarations = map[string]clearingDeclaration{
 	"group.hook_edit.signing_token":                                  clearNotStored(reasonHookSecret),
 	"group.hook_edit.token":                                          clearNotStored(reasonHookSecret),
 	"group.hook_edit.url":                                            clearRequired(reasonWebhookURL),
+	"group.hook_edit.url_variables":                                  clearNotStored(reasonHookURLVariables),
 	"group.protected_branch_update.allowed_to_merge":                 clearNotStored(reasonAccessRuleEntries),
 	"group.protected_branch_update.allowed_to_push":                  clearNotStored(reasonAccessRuleEntries),
 	"group.protected_branch_update.allowed_to_unprotect":             clearNotStored(reasonAccessRuleEntries),
@@ -1460,6 +1462,8 @@ var clearingDeclarations = map[string]clearingDeclaration{
 	"mr_review.discussion_note_update.created_at":                    clearNotStored(reasonAdminMoment),
 	"package.protection_rule_update.minimum_access_level_for_delete": clearUnverified,
 	"package.protection_rule_update.minimum_access_level_for_push":   clearUnverified,
+	"package.protection_rule_update.package_name_pattern":            clearRequired("a package protection rule matches a package name pattern (app/models/packages/protection/rule.rb validates its presence)"),
+	"package.protection_rule_update.package_type":                    clearRequired("a package protection rule protects one package type (app/models/packages/protection/rule.rb validates its presence)"),
 	"package.registry_rule_update.repository_path_pattern":           clearRequired("a protection rule matches a repository path pattern"),
 	"package.registry_tag_rule_update.tag_name_pattern":              clearRequired("a tag protection rule matches a tag name pattern"),
 	"pipeline.schedule_update.cron":                                  clearRequired("a schedule has a cron expression"),
@@ -1483,6 +1487,7 @@ var clearingDeclarations = map[string]clearingDeclaration{
 	"project.hook_edit.signing_token":                                clearNotStored(reasonHookSecret),
 	"project.hook_edit.token":                                        clearNotStored(reasonHookSecret),
 	"project.hook_edit.url":                                          clearRequired(reasonWebhookURL),
+	"project.hook_edit.url_variables":                                clearNotStored(reasonHookURLVariables),
 	"project.label_update.color":                                     clearRequired("a label has a color"),
 	"project.label_update.new_name":                                  clearRequired("a label has a name"),
 	"project.member_edit.expires_at":                                 clearUnverified,

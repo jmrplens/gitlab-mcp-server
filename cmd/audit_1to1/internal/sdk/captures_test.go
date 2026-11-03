@@ -1043,7 +1043,7 @@ var witnessUnpaired = []string{
 	"toolutil.DeploymentApprovalOutput answers_no_struct",
 }
 
-// witnessDeclared is what the witness expects of the captures on v3.30.0:
+// witnessDeclared is what the witness expects of the captures on v3.38.1:
 // each declaration by the type and key it is written on, with its category
 // and how many keys both a capture and the client-go struct beside it read
 // it answers.
@@ -1089,6 +1089,9 @@ var witnessDeclared = map[string]string{
 	"mrapprovals.enterpriseApprovalCapture.require_password_to_approve":       "kept-for-presence 1",
 	"mrapprovals.enterpriseApprovalCapture.state":                             "kept-for-presence 1",
 	"mrapprovals.enterpriseApprovalCapture.title":                             "kept-for-presence 1",
+	"toolutil.ProjectExtra.duo_sast_fp_detection_enabled":                     "kept-for-presence 1",
+	"toolutil.ProjectExtra.duo_sast_vr_workflow_enabled":                      "kept-for-presence 1",
+	"toolutil.ProjectExtra.duo_secret_detection_fp_enabled":                   "kept-for-presence 1",
 	"toolutil.MemberExtra.group_saml_identity":                                "kept-for-sibling-pairing 3",
 	"toolutil.MemberExtra.public_email":                                       "kept-for-sibling-pairing 1",
 	"toolutil.MergeRequestExtra.work_in_progress":                             "kept-for-sibling-pairing 1",
@@ -1100,25 +1103,29 @@ var witnessDeclared = map[string]string{
 	"mrapprovals.enterpriseApprovalCapture.suggested_approvers":               "kept-with-its-object 6",
 }
 
-// TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3300 is the
+// TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3381 is the
 // witness on the real tree. A struct a handler decodes off a captured
 // response (ADR-0021) reads keys the client-go struct decoded from the same
 // answer does not model, and nothing asked whether it also reads keys the
-// struct does: client-go v3.31 to v3.38 model thirty more of them, and on
-// v3.30.0 seventy-eight are read twice already. Each is kept for a reason a
-// predicate on the pinned SDK says, or the capture is retired: the approval
-// state's two timestamps and its pending rules, which client-go decodes as
-// GitLab sends them, are read off its decode now. A reader that hands back
-// an object from inside the answer is paired at that object's depth, and
-// every struct a capture is decoded into is paired or has no SDK half. The
-// resource and prompt packages capture too, and their pairings are read
-// where they make them. The bump stack is where the thirty appear and this
-// list changes.
+// struct does. On v3.30.0 seventy-eight were read twice, each kept for a
+// reason a predicate on the pinned SDK says: the approval state's two
+// timestamps and its pending rules, which client-go decodes as GitLab sends
+// them, had been retired already. client-go v3.31 to v3.38 model thirty more,
+// and on the v3.38.1 pin twenty-seven of them are read off the SDK's decode
+// and their captures retired (the plan limits and their history, a
+// pipeline's archived, a registry repository's size and delete path, a
+// storage move's error message, a service account's external), while the
+// three Duo flags of a project are kept for their presence, which the SDK's
+// plain booleans cannot tell from false. A reader that hands back an object
+// from inside the answer is paired at that object's depth, and every struct a
+// capture is decoded into is paired or has no SDK half. The resource and
+// prompt packages capture too, and their pairings are read where they make
+// them.
 //
 // It reads the report as plain JSON and spells the status it expects, so
 // copied on its own into a tree that has no such section it compiles and
 // fails there, which is the point.
-func TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3300(t *testing.T) {
+func TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3381(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repository root: %v", err)

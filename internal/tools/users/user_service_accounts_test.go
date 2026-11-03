@@ -386,9 +386,9 @@ func TestListServiceAccounts_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 			Email:            "bot@x.test",
 			PublicEmail:      "public@x.test",
 			UnconfirmedEmail: "pending@x.test",
-			External:         new(true),
+			External:         true,
 		},
-		{ID: 8, Username: "deploy-bot", Name: "Deploy Bot", PublicEmail: "deploy@x.test", External: new(false)},
+		{ID: 8, Username: "deploy-bot", Name: "Deploy Bot", PublicEmail: "deploy@x.test", External: false},
 	}
 	if !reflect.DeepEqual(out.Accounts, want) {
 		t.Errorf("accounts = %+v, want %+v", out.Accounts, want)
@@ -679,7 +679,7 @@ func TestUpdateInstanceServiceAccount_Success(t *testing.T) {
 	if out.PublicEmail != "shown@example.com" {
 		t.Errorf("out.PublicEmail = %q, want shown@example.com", out.PublicEmail)
 	}
-	if out.External == nil || !*out.External {
+	if !out.External {
 		t.Errorf("out.External = %v, want the true GitLab sent", out.External)
 	}
 }

@@ -770,49 +770,6 @@ func TestRetrieveAll_Sort(t *testing.T) {
 	}
 }
 
-// TestGroupStorageMoves_UnreadableCapturedErrorMessage verifies that every
-// group storage move handler returns an error rather than a half-filled move
-// when GitLab sends error_message as something that is not a string. The SDK
-// ignores the key its own GroupRepositoryStorageMove does not model, so the
-// read of the captured response is the only thing that can notice, and a failed
-// move published without its message reads as one that failed for no reason.
-func TestGroupStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
-	// A retrieve answers with an array and the rest with an object, so each
-	// case drives a client of its own rather than one shared handler.
-	poisoned := func(body string) *gitlabclient.Client {
-		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			testutil.RespondJSON(w, http.StatusOK, body)
-		}))
-	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "retrieve_all", Call: func() error {
-			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
-			_, err := RetrieveAll(context.Background(), client, ListInput{})
-			return err
-		}},
-		{Name: "retrieve_for_group", Call: func() error {
-			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
-			_, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{GroupID: "7"})
-			return err
-		}},
-		{Name: "get", Call: func() error {
-			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
-			_, err := Get(context.Background(), client, IDInput{ID: 1})
-			return err
-		}},
-		{Name: "get_for_group", Call: func() error {
-			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
-			_, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: "7", ID: 1})
-			return err
-		}},
-		{Name: "schedule", Call: func() error {
-			client := poisoned(`{"id":1,"state":"scheduled","error_message":42}`)
-			_, err := Schedule(context.Background(), client, ScheduleInput{GroupID: "7"})
-			return err
-		}},
-	})
-}
-
 // TestRetrieveForGroup_Sort verifies that RetrieveForGroup forwards the
 // ordering parameters to the GitLab API.
 // The test exercises the GET path of the underlying GitLab API call.

@@ -687,34 +687,38 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 	}
 }
 
-// TestRun_Repository_ReportsTheParamsClientGoV3300CannotSend fixes the cases
-// R-PARAM was built to see on the pinned client-go. It is sensitive to the
-// version on purpose: the stack that bumps client-go to v3.38.0 changes it,
-// and that change is the evidence the scope was run again.
+// TestRun_Repository_ReportsTheParamsClientGoV3381CannotSendOrNoInputOffers
+// fixes the cases R-PARAM was built to see on the pinned client-go. It is
+// sensitive to the version on purpose: each bump of client-go changes it, and
+// that change is the evidence the scope was run again.
 //
-// In v3.30.0 the four merge request lists (the global one, the project's,
-// the group's and a deployment's) take source_project_id and the filters
-// GitLab 19.5 added, which no option struct models: thirteen on every list,
-// the deployment filters and environment on the three ListMergeRequestsOptions
-// and ListGroupMergeRequestsOptions serve, and in on the project's, which
-// ListProjectMergeRequestsOptions leaves out. The system hooks take
-// url_variables and custom_headers, and the project and group hooks
-// url_variables; a project edit takes the three duo_* flags v3.38.0 adds to
-// EditProjectOptions; a registry repository read takes size; every
-// issues_statistics route and the group epic list take not[author_id]; a
-// release read takes include_html_description, which GetRelease, taking no
-// options, cannot send and the redirect release.get_latest follows to the
-// route does not either; and a protected environment's approval rule takes
-// an id, nested under the approval_rules the inventory records, which
-// EnvironmentApprovalRuleOptions does not model. The service account external
-// flag and the four duo flags a create drops are declared.
+// On v3.30.0 the four merge request lists (the global one, the project's, the
+// group's and a deployment's) took source_project_id and the filters GitLab
+// 19.5 added, which no option struct modeled. On the v3.38.1 pin client-go
+// models twelve of them on every list, the deployment filters and environment
+// on the three ListMergeRequestsOptions and ListGroupMergeRequestsOptions
+// serve, in on the project's, and source_project_id on the group's alone, so
+// each of those is not_offered until an input offers it, and source_project_id
+// stays unmodeled on the other three. So are a project edit's three duo_*
+// flags EditProjectOptions models from v3.36.0, a registry repository read's
+// size and the service account's external flag, whose declarations went with
+// the bump. The project and group hooks' url_variables, which the add and edit
+// options model from v3.38.0, are offered now, and no recorded request carries
+// them yet. Still unmodeled are the system hooks' url_variables and
+// custom_headers; every issues_statistics route's and the group epic list's
+// not[author_id]; a release read's include_html_description, which
+// GetRelease, taking no options, cannot send and the redirect
+// release.get_latest follows to the route does not either; and a protected
+// environment's approval rule id, nested under the approval_rules the
+// inventory records, which EnvironmentApprovalRuleOptions does not model. The
+// four duo flags a create drops are declared.
 //
 // The custom header keys of a project hook are carried by the struct its raw
 // request sends: on the add, whose recorded body carries custom_headers,
 // they are covered only because the walk of AddProjectHookOptions models
 // them, and on the edit, whose recorded body does not, the container stands
 // for them with the struct EditProjectHookOptions modeling it.
-func TestRun_Repository_ReportsTheParamsClientGoV3300CannotSend(t *testing.T) {
+func TestRun_Repository_ReportsTheParamsClientGoV3381CannotSendOrNoInputOffers(t *testing.T) {
 	report := repositoryReport(t)
 	reported := map[string]Finding{}
 	for _, finding := range slices.Concat(report.Findings, report.Declared) {
@@ -851,34 +855,37 @@ func notOfferedOnV3300() (offered, declared []routeParam) {
 // and, when a declaration answers it, its category.
 type witnessCase struct{ route, param, class, category string }
 
-// witnessCases are the params the witness test expects on v3.30.0.
+// witnessCases are the params the witness test expects on v3.38.1.
 func witnessCases() []witnessCase {
 	type want = witnessCase
 	var cases []want
 	everyList := []string{
 		"assignee_username", "merge_user_id", "merge_user_username", "merged_after", "merged_before",
 		"not[assignee_id]", "not[assignee_username]", "not[author_id]", "not[milestone]", "not[my_reaction_emoji]",
-		"not[reviewer_id]", "not[reviewer_username]", "source_project_id",
+		"not[reviewer_id]", "not[reviewer_username]",
 	}
 	deployments := []string{"deployed_after", "deployed_before", "environment"}
 	for route, params := range map[string][]string{
 		"GET /merge_requests":                                         slices.Concat(everyList, deployments),
 		"GET /projects/:id/merge_requests":                            slices.Concat(everyList, []string{"in"}),
-		"GET /groups/:id/merge_requests":                              slices.Concat(everyList, deployments),
+		"GET /groups/:id/merge_requests":                              slices.Concat(everyList, deployments, []string{"source_project_id"}),
 		"GET /projects/:id/deployments/:deployment_id/merge_requests": slices.Concat(everyList, deployments),
 	} {
 		for _, param := range params {
-			cases = append(cases, want{route, param, ClassUnmodeled, ""})
+			cases = append(cases, want{route, param, ClassNotOffered, ""})
 		}
 	}
+	for _, route := range []string{"GET /merge_requests", "GET /projects/:id/merge_requests", "GET /projects/:id/deployments/:deployment_id/merge_requests"} {
+		cases = append(cases, want{route, "source_project_id", ClassUnmodeled, ""})
+	}
 	for _, param := range []string{"duo_sast_fp_detection_enabled", "duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled"} {
-		cases = append(cases, want{"PUT /projects/:id", param, ClassUnmodeled, ""})
+		cases = append(cases, want{"PUT /projects/:id", param, ClassNotOffered, ""})
 	}
 	for _, route := range []string{"POST /hooks", "PUT /hooks/:hook_id"} {
 		cases = append(cases, want{route, "url_variables", ClassUnmodeled, ""}, want{route, "custom_headers", ClassUnmodeled, ""})
 	}
 	for _, route := range []string{"POST /projects/:id/hooks", "PUT /projects/:id/hooks/:hook_id", "POST /groups/:id/hooks", "PUT /groups/:id/hooks/:hook_id"} {
-		cases = append(cases, want{route, "url_variables", ClassUnmodeled, ""})
+		cases = append(cases, want{route, "url_variables", ClassOfferedUnrecorded, ""})
 	}
 	for _, route := range []string{"GET /issues_statistics", "GET /groups/:id/issues_statistics", "GET /projects/:id/issues_statistics", "GET /groups/:id/epics"} {
 		cases = append(cases, want{route, "not[author_id]", ClassUnmodeled, ""})
@@ -892,11 +899,11 @@ func witnessCases() []witnessCase {
 		}
 	}
 	cases = append(cases,
-		want{"GET /registry/repositories/:id", "size", ClassUnmodeled, ""},
+		want{"GET /registry/repositories/:id", "size", ClassNotOffered, ""},
 		want{"GET /projects/:id/releases/:tag_name", "include_html_description", ClassUnmodeled, ""},
 		want{"POST /projects/:id/protected_environments", "approval_rules[id]", ClassUnmodeled, ""},
-		want{"POST /service_accounts", "external", ClassUnmodeled, categoryUpstream},
-		want{"PATCH /service_accounts/:user_id", "external", ClassUnmodeled, categoryUpstream},
+		want{"POST /service_accounts", "external", ClassNotOffered, ""},
+		want{"PATCH /service_accounts/:user_id", "external", ClassNotOffered, ""},
 	)
 	return cases
 }

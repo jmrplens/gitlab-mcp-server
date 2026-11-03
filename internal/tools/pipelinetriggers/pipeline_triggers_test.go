@@ -26,9 +26,9 @@ const errExpMissingProjectID = "expected error for missing project_id"
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestRunTrigger_ReadsArchived verifies the triggered pipeline carries, beside
-// what client-go decoded, the archived flag lib/api/entities/ci/pipeline.rb
-// sends and gl.Pipeline does not.
+// TestRunTrigger_ReadsArchived verifies the triggered pipeline carries the
+// archived flag lib/api/entities/ci/pipeline.rb sends, which gl.Pipeline
+// models since client-go v3.36.0.
 func TestRunTrigger_ReadsArchived(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":99,"sha":"abc","ref":"main","status":"created","archived":true}`)
@@ -39,17 +39,22 @@ func TestRunTrigger_ReadsArchived(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if !out.Archived {
-		t.Errorf("RunTrigger() = %+v, want archived read off the captured answer", out)
+		t.Errorf("RunTrigger() = %+v, want the archived GitLab sent", out)
 	}
 }
 
-// TestRunTrigger_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// TestRunTrigger_AnAnswerTheCaptureCannotRead_IsReported verifies the one
 // failure the captured response adds: GitLab's answer decodes for the SDK
-// and not for the field read beside it, and the handler reports it rather
-// than swallowing it.
-func TestRunTrigger_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+// and not for the durations read beside it, and the handler reports it
+// rather than publishing the pipeline without them.
+//
+// client-go's Pipeline models every key the capture reads since v3.36.0, so no
+// value of a well-formed answer fails the capture alone. An answer carrying a
+// second JSON value after the pipeline still does: the SDK's decoder reads the
+// first value and stops, and the capture reads the body whole.
+func TestRunTrigger_AnAnswerTheCaptureCannotRead_IsReported(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":99,"sha":"abc","ref":"main","status":"created","archived":"not-a-bool"}`)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":99,"sha":"abc","ref":"main","status":"created","archived":true} {"id":100}`)
 	}))
 
 	_, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Ref: "main", Token: "tok123"})

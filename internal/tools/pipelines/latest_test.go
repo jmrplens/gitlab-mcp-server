@@ -201,7 +201,7 @@ func TestGetLatest_Answered_IsGitLabsLatestAndSaysNothingMore(t *testing.T) {
 }
 
 // TestGetLatest_Answered_ReadsArchived verifies the latest pipeline, which
-// GitLab renders whole, carries the archived flag off the captured answer.
+// GitLab renders whole, carries the archived flag it sends.
 func TestGetLatest_Answered_ReadsArchived(t *testing.T) {
 	g := newLatestGitLab()
 	g.latestStatus, g.latestBody = 0, `{"id":10,"status":"success","archived":true}`
@@ -211,7 +211,7 @@ func TestGetLatest_Answered_ReadsArchived(t *testing.T) {
 		t.Fatalf("GetLatest() unexpected error: %v", err)
 	}
 	if !out.Archived {
-		t.Errorf("GetLatest() = %+v, want archived read off the captured answer", out)
+		t.Errorf("GetLatest() = %+v, want the archived GitLab sent", out)
 	}
 }
 

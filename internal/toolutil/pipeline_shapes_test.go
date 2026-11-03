@@ -11,6 +11,7 @@ package toolutil
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +105,7 @@ func TestNewPipelineOutput(t *testing.T) {
 	got := NewPipelineOutput(&gl.Pipeline{
 		ID: 200, IID: 3, ProjectID: 1, Status: "success",
 		Source: "push", Ref: "main", Name: "Build", SHA: "deadbeef", BeforeSHA: "cafe",
-		Tag: false, YamlErrors: "none",
+		Tag: false, Archived: true, YamlErrors: "none",
 		User: &gl.BasicUser{
 			ID: 1, Username: "admin", Name: "Admin",
 			State: "active", AvatarURL: "https://gl/a.png", WebURL: "https://gl/admin",
@@ -136,6 +137,20 @@ func TestNewPipelineOutput(t *testing.T) {
 	}
 }
 
+// TestNewPipelineOutput_Archived_IsTheOneClientGoDecoded verifies a head
+// pipeline publishes whether it is archived from gl.Pipeline, which models it
+// since client-go v3.36.0, and does not take the flag beside it for it.
+func TestNewPipelineOutput_Archived_IsTheOneClientGoDecoded(t *testing.T) {
+	for _, archived := range []bool{true, false} {
+		t.Run(strconv.FormatBool(archived), func(t *testing.T) {
+			got := NewPipelineOutput(&gl.Pipeline{ID: 202, Archived: archived, Tag: !archived}, nil)
+			if got.Archived != archived || got.Tag == archived {
+				t.Errorf("archived = %v and tag = %v, want %v and %v as client-go decoded them", got.Archived, got.Tag, archived, !archived)
+			}
+		})
+	}
+}
+
 // TestNewPipelineOutput_Durations_AreTheMeasuresNotTheSDKs verifies the
 // durations come from the measures the captured answer carried, and that a
 // pipeline the capture held no object for publishes none rather than the
@@ -155,8 +170,8 @@ func TestNewPipelineOutput_Durations_AreTheMeasuresNotTheSDKs(t *testing.T) {
 // TestPipelineOutputJSONTags pins the on-wire JSON keys. Any change to the
 // tag set is a breaking change for MCP consumers. PipelineOutput uses
 // `omitempty` only on pointer / time fields; scalar fields (id, iid, status,
-// source, ref, name, sha, before_sha, coverage, tag, yaml_errors, web_url)
-// are always serialized. Pointer fields (User, DetailedStatus, Duration,
+// source, ref, name, sha, before_sha, coverage, tag, archived, yaml_errors,
+// web_url) are always serialized. Pointer fields (User, DetailedStatus, Duration,
 // QueuedDuration) and string-form timestamps use omitempty.
 func TestPipelineOutputJSONTags(t *testing.T) {
 	raw, err := json.Marshal(&PipelineOutput{
@@ -171,7 +186,7 @@ func TestPipelineOutputJSONTags(t *testing.T) {
 		`"id":1`, `"iid":1`, `"project_id":1`, `"status":"success"`,
 		`"source":"push"`, `"ref":"main"`, `"web_url":"w"`,
 		`"name":"Build"`, `"sha":"x"`, `"before_sha":"y"`,
-		`"tag":false`,
+		`"tag":false`, `"archived":false`,
 		`"coverage":""`, `"yaml_errors":""`,
 	} {
 		t.Run(key, func(t *testing.T) {

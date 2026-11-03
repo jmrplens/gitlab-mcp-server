@@ -22,8 +22,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Test seams for the set input's schema derivation and its encoding, which
+// cannot fail for the fixed struct they reflect; the panics exist for the day
+// that changes.
+var (
+	setSchemaFor          = jsonschema.For[SetInput] // test seam
+	marshalSetInputSchema = json.Marshal             // test seam
+)
+
 func setInputSchema() *jsonschema.Schema {
-	schema, err := jsonschema.For[SetInput](nil)
+	schema, err := setSchemaFor(nil)
 	if err != nil {
 		panic(fmt.Sprintf("build feature set input schema: %v; check SetInput struct tags, unsupported field types, or circular schema references", err))
 	}
@@ -39,7 +47,7 @@ func setInputSchema() *jsonschema.Schema {
 }
 
 func setInputSchemaMap() map[string]any {
-	data, err := json.Marshal(setInputSchema())
+	data, err := marshalSetInputSchema(setInputSchema())
 	if err != nil {
 		panic(fmt.Sprintf("marshal feature set input schema: %v; check schema serialization for unsupported values", err))
 	}

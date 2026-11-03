@@ -958,18 +958,19 @@ func TestWithSharedShapes_TheSharedPackage_IsAddedOnlyWithItsSource(t *testing.T
 }
 
 // TestBuildReport_Repository_ReportsTheConvertersOfTheSharedShapes is the
-// witness of the field diff reading internal/toolutil, against client-go
-// v3.30.0, written against nothing the parent of this change lacks so that it
-// fails there on the report rather than on the build.
+// witness of the field diff reading internal/toolutil, against the pinned
+// client-go, written against nothing the parent of the change that added it
+// lacked so that it failed there on the report rather than on the build.
 //
 // A merge request's head_pipeline is filled by toolutil.NewPipelineOutput,
 // which no domain package declares, so gl.Pipeline was paired with nothing and
 // a key client-go adds to it reached no R-OUTPUT finding. The report now
-// carries a toolutil entry, and in v3.30.0 PipelineOutput publishes every key
-// gl.Pipeline deserializes and no other, three of them with a type of its own
-// (the detailed status and the user as the shared shapes, the source as a
-// string): the bump to a client-go whose gl.Pipeline carries archived
-// (v3.36.0) turns this pair into a missing field.
+// carries a toolutil entry, and PipelineOutput publishes every key gl.Pipeline
+// deserializes and no other, three of them with a type of its own (the
+// detailed status and the user as the shared shapes, the source as a string).
+// The bump to v3.38.1, whose gl.Pipeline carries archived (v3.36.0), turned
+// this pair into the missing field it predicted, which PipelineOutput now
+// publishes.
 func TestBuildReport_Repository_ReportsTheConvertersOfTheSharedShapes(t *testing.T) {
 	toolutil := findPackage(t, cachedBuildReport(t, false), "toolutil")
 	if toolutil.OutputPairs == 0 {
@@ -982,7 +983,7 @@ func TestBuildReport_Repository_ReportsTheConvertersOfTheSharedShapes(t *testing
 	}
 	pipeline := toolutil.Gaps[index]
 	if len(pipeline.MissingFields) > 0 || len(pipeline.ExtraFields) > 0 {
-		t.Errorf("PipelineOutput against gl.Pipeline = missing %+v, extra %+v; want the two to carry the same keys in v3.30.0", pipeline.MissingFields, pipeline.ExtraFields)
+		t.Errorf("PipelineOutput against gl.Pipeline = missing %+v, extra %+v; want the two to carry the same keys in v3.38.1", pipeline.MissingFields, pipeline.ExtraFields)
 	}
 	mismatched := make([]string, 0, len(pipeline.TypeMismatches))
 	for _, mismatch := range pipeline.TypeMismatches {
