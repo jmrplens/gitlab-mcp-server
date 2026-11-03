@@ -1295,6 +1295,53 @@ func TestEscapeMdTableCell_LiteralAutolink_IsEscaped(t *testing.T) {
 	}
 }
 
+// TestEscapeMdTableCell_LiteralAutolink_LeavesTheLineModelNone verifies the
+// escape one level up, through the GFM line model the registry gate reads:
+// each value, written as it is in a table cell, opens a literal autolink there,
+// and escaped opens none, so the gate that reads the model would report a
+// formatter that wrote the value unescaped and not one that escaped it.
+func TestEscapeMdTableCell_LiteralAutolink_LeavesTheLineModelNone(t *testing.T) {
+	values := []string{
+		"x](http://attacker.invalid/y)",
+		`<a href="http://attacker.invalid">x</a>`,
+		"see www.attacker.invalid",
+		"mail jose@attacker.example",
+		"HTTPS://attacker.invalid",
+	}
+	for _, v := range values {
+		t.Run(v, func(t *testing.T) {
+			raw := testutil.ScanGFM("| A |\n| --- |\n| " + strings.ReplaceAll(v, "<", "&lt;") + " |\n")
+			if len(raw.LiteralLinks) == 0 {
+				t.Fatalf("the value %q opens no literal autolink as written, so it proves nothing", v)
+			}
+			escaped := testutil.ScanGFM("| A |\n| --- |\n| " + EscapeMdTableCell(v) + " |\n")
+			if len(escaped.LiteralLinks) != 0 {
+				t.Errorf("EscapeMdTableCell(%q) still opens %q", v, escaped.LiteralLinks)
+			}
+		})
+	}
+}
+
+// TestEscapeMdTableCell_CodeSpan_MovesWithTheLine verifies, through the GFM
+// line model the registry gate reads, why a value's code span is no
+// containment of its own: two values on one list line, the first leaving a
+// backtick open and the second closing a span around an address. Written as
+// they are, the open backtick pairs with the second value's first one and the
+// address lands outside every span as a link; escaped, the address is text
+// wherever the spans fall.
+func TestEscapeMdTableCell_CodeSpan_MovesWithTheLine(t *testing.T) {
+	const first, second = "x ` y", "`https://attacker.invalid/y` z"
+	line := func(a, b string) string { return "- **A**: " + a + " **B**: " + b + "\n" }
+	raw := testutil.ScanGFM(line(first, second))
+	if len(raw.LiteralLinks) == 0 {
+		t.Fatalf("the line %q opens no literal autolink as written, so it proves nothing", line(first, second))
+	}
+	escaped := testutil.ScanGFM(line(EscapeMdTableCell(first), EscapeMdTableCell(second)))
+	if len(escaped.LiteralLinks) != 0 {
+		t.Errorf("the escaped line %q still opens %q", line(EscapeMdTableCell(first), EscapeMdTableCell(second)), escaped.LiteralLinks)
+	}
+}
+
 // TestEscapeMdHeading_LiteralAutolink_IsEscaped verifies that the heading
 // escaper escapes a literal autolink the way the cell escaper does, after the
 // leading '#' is gone, so the name a card's heading carries is text there as

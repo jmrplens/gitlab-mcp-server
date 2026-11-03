@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -95,19 +96,24 @@ type GFMDocument struct {
 	// description is not here, because a renderer writes that description as
 	// the image's alt text.
 	//
-	// Links is CommonMark's: an address written as plain text is not one,
-	// although GFM's literal autolinks make a renderer link a www., http://
-	// or https:// address, or an email address, written as text. Read that
-	// way, a GitLab value that carries an address can open a link wherever it
-	// lands as text outside a link's label, whatever escaping the formatters
-	// apply today, which is a question for the escapers rather than a reading
-	// of what they write, so it is not modeled.
+	// Links is CommonMark's: an address written as plain text is not one.
+	// GFM's literal autolinks, which make a renderer link a www., http:// or
+	// https:// address, or an email address, written as text, are
+	// LiteralLinks.
 	Headings []string
 	Items    []string
 	Rows     int
 	Cells    int
 	Links    []string
 	Content  []string
+	// LiteralLinks are GFM's literal autolinks outside fences and quotes, in
+	// the order a renderer writes them, each recorded as the destination a
+	// client opens: an http or https address as written, a www. address after
+	// "http://", and an email address after "mailto:". They are kept apart from
+	// Links because the formatters write none of them on purpose: every one is
+	// an address that reached the page as text, so a rule reads them on their
+	// own. [gfmWalk.literal] says how one is read.
+	LiteralLinks []string
 	// SelfLinks are the inline links, outside fences, quotes and code spans,
 	// whose label is their own destination, [url](url): the address written
 	// twice where the autolink <url> writes it once (issue 1396). Each is
@@ -221,6 +227,48 @@ var (
 	// after it are read as one, which is the escape rule wherever that
 	// character could close the title.
 	gfmResourceCloseRe = regexp.MustCompile(`^(?:[ \t]+(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\((?:[^()\\]|\\.)*\)))?[ \t]*\)`)
+	// gfmLiteralEmailRe reads the longest email address a literal autolink can
+	// open with: a run of the characters a local part holds, an "@", and a
+	// domain of letters, digits, '-' and '_' in which a '.' is taken only when
+	// a letter or a digit follows it. Whether the address is one is decided
+	// on that longest run, which [gfmLiteralEmail] asks, and never on a
+	// shorter one: micromark does not shorten an address to make it link.
+	gfmLiteralEmailRe = regexp.MustCompile(`^[A-Za-z0-9+._-]+@(?:[A-Za-z0-9_-]|\.[A-Za-z0-9])*`)
+	// gfmLiteralWwwRe reads the "www." a www. address opens with, in either
+	// case, and the character after it, without which there is no address.
+	gfmLiteralWwwRe = regexp.MustCompile(`^[Ww]{3}\..`)
+	// gfmLiteralHTTPRe reads the scheme an http or https address opens with,
+	// in any letter case, the "//" after its colon, and the character after
+	// them, which must be neither an ASCII control character, nor whitespace,
+	// nor Unicode punctuation or a symbol. U+0000 is a control character here
+	// and U+FFFD, which micromark reads it as, a symbol: both refuse.
+	gfmLiteralHTTPRe = regexp.MustCompile(`^(?i:https?)://[^\x00-\x20\x7f\pP\pS\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}]`)
+	// gfmTrailRe matches where a literal autolink's domain or path ends: at a
+	// run of trailing punctuation (one of !"')*,.:;?_~, a "]", or a character
+	// reference such as &amp;) that reaches the end of the text, a "<",
+	// whitespace, or a "]" right before a "(" or a "[". The punctuation is
+	// then not part of the address. Anything else after the run makes it part
+	// of the address, as micromark's trail check reads it.
+	gfmTrailRe = regexp.MustCompile(`^(?:[!"')*,.:;?_~]|&[A-Za-z]+;|\])*(?:$|[<\t\n\v\f\r \x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}]|\][(\[])`)
+)
+
+// The character sets a literal autolink is read with. gfmWhitespace is what
+// micromark reads as whitespace, JavaScript's \s: the ASCII tab, line feed,
+// vertical tab, form feed, carriage return and space, the Unicode space
+// separators, the line and paragraph separators, and U+FEFF. gfmPathPunctuation
+// are the characters at which a path asks whether the trail begins.
+// gfmEmailRefuses are the characters an email address cannot follow: one its
+// local part holds, and '/'. gfmWwwFollows are the characters a www. address
+// can follow, besides the start of the text. gfmLetters are the ASCII
+// letters, which an http address cannot follow and an email address must end
+// in. Each is written out whole, gfmEmailRefuses too, for the reason
+// gfmAngleRe is.
+const (
+	gfmWhitespace      = "\t\n\v\f\r \U000000A0\U00001680\U00002000\U00002001\U00002002\U00002003\U00002004\U00002005\U00002006\U00002007\U00002008\U00002009\U0000200A\U00002028\U00002029\U0000202F\U0000205F\U00003000\U0000FEFF"
+	gfmPathPunctuation = `!"&')*,.:;<?]_~`
+	gfmLetters         = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	gfmEmailRefuses    = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-._/"
+	gfmWwwFollows      = " \t(*_[]~"
 )
 
 // gfmCodeSpanPlaceholder stands in for an elided code span: the object
@@ -531,6 +579,9 @@ func (s *gfmScanner) structure() {
 				s.doc.SelfLinks = append(s.doc.SelfLinks, link.dest)
 			}
 		}
+		for _, link := range inline.literals {
+			s.doc.LiteralLinks = append(s.doc.LiteralLinks, link.dest)
+		}
 	}
 }
 
@@ -551,6 +602,7 @@ func (s *gfmScanner) inline(i int, line string) gfmInline {
 		cell := walkInline(segment)
 		bare = append(bare, cell.bare)
 		row.links = append(row.links, cell.links...)
+		row.literals = append(row.literals, cell.literals...)
 		row.html = append(row.html, cell.html...)
 	}
 	row.bare = strings.Join(bare, "|")
@@ -558,12 +610,13 @@ func (s *gfmScanner) inline(i int, line string) gfmInline {
 }
 
 // gfmInline is what one walk read out of a line or a cell: the text with its
-// code spans elided, its links in the order a renderer writes them, and its
-// live raw HTML.
+// code spans elided, its links and its literal autolinks, each in the order a
+// renderer writes them, and its live raw HTML.
 type gfmInline struct {
-	bare  string
-	links []gfmLink
-	html  []string
+	bare     string
+	links    []gfmLink
+	literals []gfmLink
+	html     []string
 }
 
 // gfmLink is one link the walk read: where it opens, which orders it among the
@@ -590,13 +643,14 @@ type gfmOpener struct {
 // strings by length, each length's starts left to right, which is where a
 // span's closing string is looked up; spans counts the spans the walk read.
 type gfmWalk struct {
-	line    string
-	runs    map[int][]int
-	bare    strings.Builder
-	spans   int
-	links   []gfmLink
-	html    []string
-	openers []gfmOpener
+	line     string
+	runs     map[int][]int
+	bare     strings.Builder
+	spans    int
+	links    []gfmLink
+	literals []gfmLink
+	html     []string
+	openers  []gfmOpener
 }
 
 // walkInline reads the inline content of a line, or of one table cell, the way
@@ -629,15 +683,18 @@ type gfmWalk struct {
 // character: a destination and an autolink's address may hold a U+0000, and
 // it is written to the bare text and recorded as written.
 //
+// GFM's literal autolinks are read last, at a byte that begins none of the
+// rest, as [gfmWalk.literal] says, and consume the address they read, so
+// nothing inside one opens anything else.
+//
 // Where a renderer departs from the specification the walk follows the
 // specification: micromark refuses a "!" in the local part of an email
 // autolink and a "/" in an unquoted attribute value, which CommonMark 0.31.2
 // allows, and accepts an unescaped "(" inside a title in parentheses, which
-// CommonMark 0.31.2 refuses. Three things are not modeled:
-// what one line cannot show (a reference link and its definition, a construct
-// that continues onto the next line, raw HTML that opens a block), the limit
-// of 32 nested parentheses micromark puts on a destination, and GFM's literal
-// autolinks, for the reason [GFMDocument.Links] gives.
+// CommonMark 0.31.2 refuses. Two things are not modeled: what one line cannot
+// show (a reference link and its definition, a construct that continues onto
+// the next line, raw HTML that opens a block), and the limit of 32 nested
+// parentheses micromark puts on a destination.
 //
 // The walk ranges over the line's bytes and skips what a construct consumed,
 // and every loop it calls ranges too, so no loop here advances by an amount
@@ -658,13 +715,14 @@ func walkInline(line string) gfmInline {
 		w.bare.WriteByte(line[i])
 	}
 	slices.SortFunc(w.links, func(a, b gfmLink) int { return cmp.Compare(a.at, b.at) })
-	return gfmInline{bare: w.bare.String(), links: w.links, html: w.html}
+	return gfmInline{bare: w.bare.String(), links: w.links, literals: w.literals, html: w.html}
 }
 
 // construct reads whatever begins at byte i and returns the index just past
 // it, with true when it consumed those bytes and wrote them to the bare text
 // itself. A "[" opens a label and is written by the walk, like any byte that
-// begins nothing.
+// begins nothing. A literal autolink is tried last, since none of the other
+// constructs opens with a character one can open with.
 func (w *gfmWalk) construct(i int) (int, bool) {
 	rest := w.line[i:]
 	if escape := gfmEscapeRe.FindString(rest); escape != "" {
@@ -689,7 +747,155 @@ func (w *gfmWalk) construct(i int) (int, bool) {
 	if rest[0] == ']' {
 		return w.closeLabel(i)
 	}
+	if dest, n := w.literal(i); n > 0 {
+		w.literals = append(w.literals, gfmLink{at: i, dest: dest})
+		w.bare.WriteString(rest[:n])
+		return i + n, true
+	}
 	return 0, false
+}
+
+// literal reads the GFM literal autolink that begins at byte i, the way
+// micromark-extension-gfm-autolink-literal 2.1.0 reads one, and returns the
+// destination a client opens and the address's length, or a length of zero
+// when none begins there. Three kinds are tried, in micromark's order:
+//
+//   - an email address, at a character its local part holds that does not
+//     follow one, nor a '/': the destination is "mailto:" and the address;
+//   - a www. address, at the start of the text or after a space, a tab, or one
+//     of "(*_[]~": the destination is "http://" and the address;
+//   - an http or https address, at a scheme that does not follow an ASCII
+//     letter: the destination is the address as written.
+//
+// The character before byte i is the byte before it as written, since that
+// is the character micromark last read whatever construct it closed: the
+// backtick of a span, the '>' of a tag, the character an escape made literal.
+// A byte that ends a multibyte character is none of the characters these
+// rules name, as the character it ends is not.
+//
+// None opens while a "[" or a "![" is still open, which is micromark's rule:
+// it reads no literal autolink after a bracket no "]" has closed yet, a
+// link's label included, so an address in a label is never one.
+func (w *gfmWalk) literal(i int) (dest string, length int) {
+	if len(w.openers) > 0 {
+		return "", 0
+	}
+	previous := ' '
+	if i > 0 {
+		previous = rune(w.line[i-1])
+	}
+	rest := w.line[i:]
+	if !strings.ContainsRune(gfmEmailRefuses, previous) {
+		if n := gfmLiteralEmail(rest); n > 0 {
+			return "mailto:" + rest[:n], n
+		}
+	}
+	if strings.ContainsRune(gfmWwwFollows, previous) && gfmLiteralWwwRe.MatchString(rest) {
+		if n, ok := gfmLiteralAddress(rest); ok {
+			return "http://" + rest[:n], n
+		}
+	}
+	if strings.ContainsRune(gfmLetters, previous) {
+		return "", 0
+	}
+	scheme := gfmLiteralHTTPRe.FindString(rest)
+	if scheme == "" {
+		return "", 0
+	}
+	start := strings.Index(scheme, "//") + 2
+	n, ok := gfmLiteralAddress(rest[start:])
+	if !ok {
+		return "", 0
+	}
+	return rest[:start+n], start + n
+}
+
+// gfmLiteralEmail returns the length of the email address s opens with, or
+// zero when it opens none: the longest run [gfmLiteralEmailRe] reads is one
+// when its domain holds a '.' and its last character is an ASCII letter. A
+// '.' in that domain is always followed by a letter or a digit, so a domain
+// with a dot has the character after it as well.
+func gfmLiteralEmail(s string) int {
+	address := gfmLiteralEmailRe.FindString(s)
+	domain := address[strings.IndexByte(address, '@')+1:]
+	if !strings.Contains(domain, ".") || !strings.ContainsRune(gfmLetters, rune(address[len(address)-1])) {
+		return 0
+	}
+	return len(address)
+}
+
+// gfmLiteralAddress returns the length of the domain and the path s opens
+// with, as a www. address and an http address after its "//" read them, and
+// false when the domain is no domain.
+func gfmLiteralAddress(s string) (int, bool) {
+	n, ok := gfmLiteralDomain(s)
+	if !ok {
+		return 0, false
+	}
+	return n + gfmLiteralPath(s[n:]), true
+}
+
+// gfmLiteralDomain returns the length of the domain s opens with and whether
+// it is one. It runs up to whitespace, or Unicode punctuation or a symbol
+// other than '-', with U+0000 read as the U+FFFD it is to micromark, which is
+// a symbol; a '.' or a '_' is part of it unless the trail begins there
+// ([gfmTrailRe]). It is no domain when its last two segments, the text after
+// its last dot and the text between its last two, hold an underscore. Its
+// first character is never one that ends it, since each caller has read a
+// "w" or the character after "//" already.
+func gfmLiteralDomain(s string) (int, bool) {
+	end, last, lastButOne := len(s), false, false
+	for i, r := range s {
+		if r == '.' || r == '_' {
+			if gfmTrailRe.MatchString(s[i:]) {
+				end = i
+				break
+			}
+			if r == '.' {
+				lastButOne = last
+			}
+			last = r == '_'
+			continue
+		}
+		if strings.ContainsRune(gfmWhitespace, r) || r == 0 || r != '-' && unicode.In(r, unicode.P, unicode.S) {
+			end = i
+			break
+		}
+	}
+	return end, !last && !lastButOne
+}
+
+// gfmLiteralPath returns the length of the path s opens with, after a
+// domain: it runs up to whitespace, or up to a character of
+// [gfmPathPunctuation] where the trail begins. A ")" that closes a "(" the
+// path opened is part of it whatever follows, and one that closes none is
+// part of it only when the trail does not begin there, and is counted as
+// closed all the same, as micromark counts it.
+func gfmLiteralPath(s string) int {
+	open, closed := 0, 0
+	for i, r := range s {
+		if r == '(' {
+			open++
+			continue
+		}
+		if r == ')' && closed < open {
+			closed++
+			continue
+		}
+		if strings.ContainsRune(gfmPathPunctuation, r) {
+			if gfmTrailRe.MatchString(s[i:]) {
+				return i
+			}
+			if r == ')' {
+				closed++
+			}
+			continue
+		}
+		if strings.ContainsRune(gfmWhitespace, r) {
+			return i
+		}
+	}
+	return len(s)
 }
 
 // codeSpan reads the backtick string at byte i: the span it opens, elided
