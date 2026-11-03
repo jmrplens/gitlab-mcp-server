@@ -402,7 +402,7 @@ readable without opening the tracker:
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
 | 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
-| 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No, by us; by another contributor, for the instance service account's `external`, [gitlab-org/api/client-go#2310](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2310), closed by the merge, and for the group's two SHA keys, [gitlab-org/api/client-go#2321](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2321), open | Partly, theirs: [gitlab-org/api/client-go!3102](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3102), merged, for that key and its two parameters, and [gitlab-org/api/client-go!3117](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3117), open, for the two group keys | **Partly, v3.32.0**, not ours: `external` on the instance `ServiceAccount` and on its create and update options; v3.40.0 adds none of the rest; this server pins it since the bump to v3.38.1 | No | Partial: five keys read from the captured response, the instance service account's `external` read off the SDK since the v3.38.1 pin; the merge request author's `bot` and the parameters not yet |
+| 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No, by us; by another contributor, for the instance service account's `external`, [gitlab-org/api/client-go#2310](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2310), closed by the merge, and for the group's two SHA keys, [gitlab-org/api/client-go#2321](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2321), open | Partly, theirs: [gitlab-org/api/client-go!3102](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3102), merged, for that key and its two parameters, and [gitlab-org/api/client-go!3117](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3117), open, for the two group keys | **Partly, v3.32.0**, not ours: `external` on the instance `ServiceAccount` and on its create and update options; v3.40.0 adds none of the rest; this server pins it since the bump to v3.38.1 | No | Partial: six keys read from the captured response, `external` of a group and of a project service account among them, the instance service account's `external` read off the SDK since the v3.38.1 pin; the merge request author's `bot` and the parameters not yet |
 | 134 | client-go | [The rate limit backoff ignores `Retry-After` on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147), open; GitLab Duo approved it on 2026-10-21 after we fixed its finding; on 2026-10-26 a client-go maintainer asked how callers that fail fast on these 429s keep doing so, a client-go code owner preferred an opt-in now and the new default in a later major, and we made it opt-in that day, which reset GitLab Duo's approval, and asked for review again; not reviewed since | No; v3.40.0 still reads `Ratelimit-Reset` alone | No; this server replaces client-go's backoff with its own | Not needed |
 | 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Yes, `admin.settings_update` refuses them by name before anything is sent, as it refuses a key client-go does not model |
 | 136 | client-go | [`ListTopicsOptions` and `CreateTopicOptions` model no `organization_id`](#listtopicsoptions-and-createtopicoptions-model-no-organization_id) | Yes, by another contributor, [gitlab-org/api/client-go#2313](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2313) | Yes, theirs, [gitlab-org/api/client-go!3105](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3105), open | No | No | None; `admin.topic_list` and `admin.topic_create` act on the organization GitLab resolves for the request |
@@ -5259,10 +5259,10 @@ option, and 4.0 makes it the default.
   workaround was, until that pin: partial. The struct tag decides what `encoding/json` writes,
   and a handler gets past it in one of two ways: a request option that
   rewrites the body after client-go has marshalled it (entry 54 says how), or a
-  request the handler builds itself, as `internal/tools/features.Set` does for
+  request the handler builds itself, as `internal/tools/features.Set` did for
   [`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
-  Neither is carried here, and that is a decision rather than a gap. GitLab
-  refuses these nulls, so by the rule
+  Neither was carried here, and that was a decision rather than a gap. GitLab
+  refused these nulls, so by the rule
   [issue 966](https://github.com/jmrplens/gitlab-mcp-server/issues/966) set
   (a request built here only for a field GitLab is shown to mishandle) this
   field qualified for one; the maintainer chose to keep the hint below and
@@ -5286,7 +5286,8 @@ option, and 4.0 makes it the default.
 
 **Where**: `protected_packages.go`, `UpdatePackageProtectionRulesOptions`.
 
-**What**: the struct's two `*string` fields carry no `omitempty`.
+**What**: before v3.38.0 the struct's two `*string` fields carry no
+`omitempty`.
 
 ```go
 type UpdatePackageProtectionRulesOptions struct {
@@ -5306,8 +5307,8 @@ always carries both keys: an update that changes only an access level sends
 GitLab reads that null as blank rather than as "leave this one alone", and the
 rebuilt e2e suite measured it against a live instance: an update naming only
 the pattern is answered `422 Package type can't be blank`, which is why
-`TestPackage_ProtectionRules_Lifecycle` sends the type with every update. The
-other two cases, an update naming only the type and one changing only an
+`TestPackage_ProtectionRules_Lifecycle` sent the type with every update until
+the v3.38.1 pin. The other two cases, an update naming only the type and one changing only an
 access level, were not measured, and the source says what they meet. At
 GitLab 19.4.1-ee the PATCH hands the service
 `declared_params(include_missing: false)`
@@ -5424,7 +5425,8 @@ lines; v3.38.0 is the first release that changes them.
   options after it has marshalled the body (`NewRequestToURL` in `gitlab.go`)
   and an option can read the body and replace it, which is how client-go's own
   GraphQL pagination option works; or a request the handler builds itself, as
-  `features.Set` does for entry 6. Neither is carried, by decision: GitLab
+  `features.Set` did for entry 6 until the v3.38.1 pin. Neither is carried, by
+  decision: GitLab
   mishandles two of these nulls (entry 52's, which it refuses, and `value`,
   which it stores), which by
   [issue 966](https://github.com/jmrplens/gitlab-mcp-server/issues/966)'s own
@@ -5556,13 +5558,13 @@ about the structs its own methods take there. The `export_type` row above,
 which client-go never sends as null, is the rule's reading of a tag rather
 than a request this server sends wrongly, and leaves the report with its tag.
 
-**Why entry 6 is not in this list.** `SetFeatureFlagOptions` is the same
-defect and does not appear, because the audit reads the request this server
-**recorded** and `internal/tools/features.Set` builds its body by hand to
-avoid the bug. The workaround hides the defect from the check that would have
-found it, which is a property worth knowing before trusting the count: the
-types it lists are the ones we still send through the SDK, not every one that
-exists.
+**Why entry 6 is not in this list.** `SetFeatureFlagOptions` was the same
+defect and never appeared, because the audit reads the request this server
+**recorded** and `internal/tools/features.Set` built its body by hand to
+avoid the bug until the v3.38.1 pin. The workaround hid the defect from the
+check that would have found it, which is a property worth knowing before
+trusting the count: the types it lists are the ones we send through the SDK,
+and any carried by a request built here stay out of it.
 
 **Effort**: small, and one merge request covers all nine structs of entries 6,
 52 and these seven. Every case is a struct tag plus a test that the key is
@@ -8392,9 +8394,11 @@ test that each reaches the query only when set.
   report did not name it, since it judges a type against the entities its
   routes annotate and not the entity a nested field renders with. None for
   the twelve parameters, which this server does not offer, as with entry
-  58's three: taking them would mean building the request outside the SDK's
-  option struct. Five of the other six keys are read from the captured
-  response beside the SDK's decode
+  58's three: taking the eleven client-go does not model would mean building
+  the request outside the SDK's option struct, and `external`, which it
+  models from v3.32.0, is a plain `not_offered` finding until the two actions
+  offer it. The other six keys are read from the captured response beside the
+  SDK's decode
   ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)):
   through `toolutil.CapturedProject` for the project, `CapturedGroup` and
   `CapturedGroups` for the group, `CapturedServiceAccount` and
@@ -8402,13 +8406,15 @@ test that each reaches the query only when set.
   packages, `CapturedSSHCertificate` and `CapturedSSHCertificates` for a
   group's SSH certificates, and `CapturedRunner` for a runner's details. Each
   is absent from an older instance's answer rather than published as off or
-  empty. They retire when the structs carry the keys, as the instance service
-  account's `external`, which `users`' own capture read, did at the v3.38.1
-  pin.
+  empty. They retire when the structs carry the keys, as `users`' own capture
+  of the instance service account's `external` did at the v3.38.1 pin;
+  `external` stays captured on the group and project accounts, whose structs
+  do not carry it.
 
 **What**: every key below is absent from the 19.4.1-ee live record and
 present in the 19.5.0-ee one (`docs/development/gitlab-api-live.json`), and
-client-go declares none of them.
+client-go declares none of them but the instance `ServiceAccount`'s
+`external`, from v3.32.0.
 
 - `Project` (`projects.go`) and `Group` (`groups.go`) declare no
   `duo_code_review_decisions_enabled`, which `ee/lib/ee/api/entities/project.rb`
@@ -8421,10 +8427,11 @@ client-go declares none of them.
   own: whether the group's merge requests need a valid commit SHA on the
   merge route, and whether that setting is enforced on every descendant group
   (groups.md).
-- `GroupServiceAccount` (`group_serviceaccounts.go`), `ProjectServiceAccount`
-  (`project_serviceaccounts.go`) and `ServiceAccount` (`users.go`) declare no
+- `GroupServiceAccount` (`group_serviceaccounts.go`) and
+  `ProjectServiceAccount` (`project_serviceaccounts.go`) declare no
   `external`, which `lib/api/entities/service_account.rb` exposes on every
-  account.
+  account. `ServiceAccount` (`users.go`) declares it from v3.32.0, as a plain
+  `bool`.
 - `GroupSSHCertificate` (`group_ssh_certificates.go`) declares no
   `fingerprint`, which `lib/api/entities/ssh_certificate.rb` exposes on every
   certificate as the SHA256 fingerprint of the certificate authority's key,
@@ -8438,7 +8445,7 @@ client-go declares none of them.
   adds to `UserBasic` on every merge request author.
 
 The parameters, each declared on its route in the 19.5.0-ee record and on no
-client-go option struct:
+client-go option struct but the instance service account's `external`:
 
 - `UpdateGroupOptions` lacks `require_sha_for_merge`,
   `lock_require_sha_for_merge`, `duo_code_review_decisions_enabled` and
@@ -8449,8 +8456,9 @@ client-go option struct:
   declares it under `override_params` as well and would not apply it even once
   client-go models it, since the import's tree restorer keeps only the project
   attributes `import_export.yml` permits and this is not one of them.
-- `CreateServiceAccountUserOptions` and `UpdateServiceAccountOptions` lack
-  `external` (`POST /service_accounts`, `PATCH /service_accounts/:user_id`).
+- `CreateServiceAccountUserOptions` and `UpdateServiceAccountOptions` carry
+  `external` from v3.32.0 (`POST /service_accounts`,
+  `PATCH /service_accounts/:user_id`).
 - `SearchOptions` lacks the merge request filters the group and project search
   routes take: `author_username`, `label_name`, `source_branch`,
   `target_branch` and the `not[author_username]`, `not[source_branch]` and
