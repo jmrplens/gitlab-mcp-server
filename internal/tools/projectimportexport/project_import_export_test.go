@@ -410,8 +410,9 @@ func TestImportFromFile_InvalidBase64_Error(t *testing.T) {
 }
 
 // TestGetImportStatus_Success verifies that every published import-status field
-// carries the attribute GitLab sent for it, the documented `created_at` (which
-// gl.ImportStatus mistags as `create_at`) included.
+// carries the attribute GitLab sent for it, the documented `created_at` included,
+// which gl.ImportStatus reads into CreatedAt and not into the deprecated CreateAt
+// it keeps beside it.
 //
 // The fixture spells no two values alike and the import is a failed one, so
 // import_error and correlation_id (the two fields a caller reads to find out
@@ -459,7 +460,7 @@ func TestGetImportStatus_Success(t *testing.T) {
 	if !reflect.DeepEqual(out.FailedRelations, wantRelations) {
 		t.Errorf("FailedRelations = %+v, want %+v", out.FailedRelations, wantRelations)
 	}
-	wantStats := &ImportStatsOutput{Fetched: map[string]int64{"issue": 3, "note": 5}, Imported: map[string]int64{"issue": 2}}
+	wantStats := ImportStatsOutput{Fetched: map[string]int64{"issue": 3, "note": 5}, Imported: map[string]int64{"issue": 2}}
 	if !reflect.DeepEqual(out.Stats, wantStats) {
 		t.Errorf("Stats = %v, want %v", out.Stats, wantStats)
 	}
@@ -478,6 +479,58 @@ func TestGetImportStatus_Success(t *testing.T) {
 		t.Run(tc.field, func(t *testing.T) {
 			if tc.got != tc.want {
 				t.Errorf("%s = %q, want %q", tc.field, tc.got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetImportStatus_Stats_IsPublishedAsGitLabSendsIt pins the JSON of stats
+// for each answer lib/gitlab/github_import/object_counter.rb and
+// lib/api/entities/project_import_status.rb can give: null for an import that
+// is not GitHub's, EMPTY_SUMMARY's two empty maps while a GitHub import has
+// counted nothing, a map with counts beside an empty one, and the empty
+// import_checksums a finished import can keep. An empty map is published as
+// the empty map GitLab sent, and a key with nothing under it is left out, which
+// the Go zero values of the output would blur.
+func TestGetImportStatus_Stats_IsPublishedAsGitLabSendsIt(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		stats string
+		want  string
+	}{
+		{name: "null for any other import", stats: `null`},
+		{name: "no key at all for an older instance"},
+		{name: "empty checksums of a finished import", stats: `{}`},
+		{name: "nothing counted yet", stats: `{"fetched":{},"imported":{}}`, want: `{"fetched":{},"imported":{}}`},
+		{name: "fetched counted first", stats: `{"fetched":{"issue":3},"imported":{}}`, want: `{"fetched":{"issue":3},"imported":{}}`},
+		{name: "both counted", stats: `{"fetched":{"issue":3},"imported":{"issue":2}}`, want: `{"fetched":{"issue":3},"imported":{"issue":2}}`},
+		{name: "one stage alone", stats: `{"imported":{"issue":2}}`, want: `{"imported":{"issue":2}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"id":42,"import_status":"started"}`
+			if tc.stats != "" {
+				body = `{"id":42,"import_status":"started","stats":` + tc.stats + `}`
+			}
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, body)
+			}))
+
+			out, err := GetImportStatus(t.Context(), client, GetImportStatusInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf("GetImportStatus() error: %v", err)
+			}
+			blob, err := json.Marshal(out)
+			if err != nil {
+				t.Fatalf("marshal the output: %v", err)
+			}
+			var published struct {
+				Stats json.RawMessage `json:"stats"`
+			}
+			if err = json.Unmarshal(blob, &published); err != nil {
+				t.Fatalf("read the output back: %v", err)
+			}
+			if string(published.Stats) != tc.want {
+				t.Errorf("stats = %s, want %q in %s", published.Stats, tc.want, blob)
 			}
 		})
 	}
@@ -815,7 +868,7 @@ func TestFormatImportStatusMarkdown_FailedRelationsAndStats(t *testing.T) {
 		FailedRelations: []FailedRelationOutput{
 			{ID: 7, CreatedAt: "2026-03-01T10:05:00Z", ExceptionClass: "NoMethodError", Source: "relation|factory", RelationName: "issues", LineNumber: 3},
 		},
-		Stats: &ImportStatsOutput{Imported: map[string]int64{"note": 1, "issue": 2}, Fetched: map[string]int64{"issue": 3}},
+		Stats: ImportStatsOutput{Imported: map[string]int64{"note": 1, "issue": 2}, Fetched: map[string]int64{"issue": 3}},
 	}))
 	want := "## Import Status: project\n\n" +
 		"- **ID**: 1\n" +
@@ -844,13 +897,13 @@ func TestFormatImportStatusMarkdown_FailedRelationsAndStats(t *testing.T) {
 func TestFormatImportStatusMarkdown_StatsOfOneStageOrNone(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
-		stats *ImportStatsOutput
+		stats ImportStatsOutput
 		want  string
 	}{
-		{name: "no stats", stats: nil},
-		{name: "nothing counted yet", stats: &ImportStatsOutput{Fetched: map[string]int64{}, Imported: map[string]int64{}}},
-		{name: "fetched only", stats: &ImportStatsOutput{Fetched: map[string]int64{"issue": 3}}, want: "| fetched | issue | 3 |\n"},
-		{name: "imported only", stats: &ImportStatsOutput{Imported: map[string]int64{"issue": 2}}, want: "| imported | issue | 2 |\n"},
+		{name: "no stats"},
+		{name: "nothing counted yet", stats: ImportStatsOutput{Fetched: map[string]int64{}, Imported: map[string]int64{}}},
+		{name: "fetched only", stats: ImportStatsOutput{Fetched: map[string]int64{"issue": 3}}, want: "| fetched | issue | 3 |\n"},
+		{name: "imported only", stats: ImportStatsOutput{Imported: map[string]int64{"issue": 2}}, want: "| imported | issue | 2 |\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			md := markdownOf(t, FormatImportStatusMarkdown(ImportStatusOutput{ID: 1, Name: "project", Stats: tc.stats}))
@@ -1031,7 +1084,7 @@ func TestImportStatusToOutput_NoCreatedAtAndNoRelations(t *testing.T) {
 	if out.FailedRelations == nil || len(out.FailedRelations) != 0 {
 		t.Errorf("FailedRelations = %#v, want an empty list", out.FailedRelations)
 	}
-	if out.Stats != nil {
+	if !reflect.DeepEqual(out.Stats, ImportStatsOutput{}) {
 		t.Errorf("Stats = %+v, want none", out.Stats)
 	}
 }

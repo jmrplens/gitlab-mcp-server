@@ -306,15 +306,17 @@ type ImportStatusOutput struct {
 	CorrelationID     string                 `json:"correlation_id,omitempty"`
 	ImportError       string                 `json:"import_error,omitempty"`
 	FailedRelations   []FailedRelationOutput `json:"failed_relations"`
-	Stats             *ImportStatsOutput     `json:"stats,omitempty"`
+	Stats             ImportStatsOutput      `json:"stats,omitzero"`
 }
 
 // ImportStatsOutput mirrors gl.ProjectImportStats: what a GitHub import has
 // fetched and what it has imported so far, per object type. GitLab adds a type
-// only once it counts one, so both maps start empty.
+// only once it counts one, so both maps start empty, and they are spelled
+// omitzero so that an empty one goes out as the empty map GitLab sent while a
+// key it did not send, or an answer with neither, publishes nothing.
 type ImportStatsOutput struct {
-	Fetched  map[string]int64 `json:"fetched,omitempty"`
-	Imported map[string]int64 `json:"imported,omitempty"`
+	Fetched  map[string]int64 `json:"fetched,omitzero"`
+	Imported map[string]int64 `json:"imported,omitzero"`
 }
 
 // FailedRelationOutput is one relation an import could not bring over, as
@@ -360,7 +362,7 @@ func importStatusToOutput(s *gl.ImportStatus) ImportStatusOutput {
 		}
 	}
 	if s.Stats != nil {
-		out.Stats = &ImportStatsOutput{Fetched: s.Stats.Fetched, Imported: s.Stats.Imported}
+		out.Stats = ImportStatsOutput{Fetched: s.Stats.Fetched, Imported: s.Stats.Imported}
 	}
 	return out
 }

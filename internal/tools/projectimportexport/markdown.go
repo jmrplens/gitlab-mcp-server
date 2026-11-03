@@ -68,10 +68,10 @@ func FormatImportStatusMarkdown(out ImportStatusOutput) *mcp.CallToolResult {
 	}
 	// A GitHub import counts what it has fetched and what it has imported, per
 	// object type, and has counted nothing at its start.
-	if s := out.Stats; s != nil && len(s.Fetched)+len(s.Imported) > 0 {
+	if len(out.Stats.Fetched)+len(out.Stats.Imported) > 0 {
 		t := c.Table("Import Statistics", "Stage", "Object", "Count")
-		importStatsRows(t, "fetched", s.Fetched)
-		importStatsRows(t, "imported", s.Imported)
+		importStatsRows(t, "fetched", out.Stats.Fetched)
+		importStatsRows(t, "imported", out.Stats.Imported)
 	}
 	c.End("Monitor import progress by checking status periodically")
 	return toolutil.ToolResultWithMarkdown(b.String())
