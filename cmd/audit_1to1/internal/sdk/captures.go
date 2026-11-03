@@ -56,8 +56,9 @@ const (
 
 // capturesReport is the captures section of the report.
 type capturesReport struct {
-	// Types are the structs a tool package decodes off a captured response,
-	// each with the client-go structs decoded from the same response.
+	// Types are the structs a tool, resource or prompt package decodes off a
+	// captured response, each with the client-go structs decoded from the
+	// same response.
 	Types []capturedType `json:"types"`
 	// Keys are the keys a captured struct reads that a client-go struct it
 	// is paired with models too, each with what answers it.
@@ -118,14 +119,15 @@ type capturePair struct {
 	sdk      *types.Named
 }
 
-// captureWalk finds what the tool packages and the shared toolutil package
-// decode off a captured response and what each is paired with.
+// captureWalk finds what the tool packages, the resource and prompt packages
+// and the shared toolutil package decode off a captured response and what
+// each is paired with.
 type captureWalk struct {
 	sdk waits.SDK
 	// module is the import path every package of the repository's own
 	// starts with.
 	module string
-	// capture is the capture's type, nil when no tool package captures.
+	// capture is the capture's type, nil when no walked package captures.
 	capture *types.Named
 	// responses holds every client-go struct a service method answers
 	// with, and every one such a struct holds, which is what a response is
@@ -151,12 +153,16 @@ type captureWalk struct {
 	pairs map[capturePair]map[string]bool
 }
 
-// analyzeCaptures walks pkgs and the shared toolutil package for the structs
+// analyzeCaptures walks the tool packages pkgs, the resource and prompt
+// packages capabilities and the shared toolutil package for the structs
 // decoded off a captured response, pairs each with the client-go structs
 // decoded from the same response, and holds every key both read to a
-// declaration.
-func analyzeCaptures(pkgs []*packages.Package, clientGo *types.Package, declared []captureDeclaration) (report capturesReport, stale []string) {
-	walk := newCaptureWalk(pkgs, clientGo)
+// declaration. The capability packages are walked as a tool package is,
+// since a struct of their own decoded off a capture, or a pairing of a
+// shared struct only they make, escapes a walk of the tool packages alone
+// (issue 1601).
+func analyzeCaptures(pkgs, capabilities []*packages.Package, clientGo *types.Package, declared []captureDeclaration) (report capturesReport, stale []string) {
+	walk := newCaptureWalk(slices.Concat(pkgs, capabilities), clientGo)
 	return buildCaptures(walk, declared)
 }
 
@@ -195,7 +201,7 @@ func newCaptureWalk(pkgs []*packages.Package, clientGo *types.Package) *captureW
 	return walk
 }
 
-// toolutilSource returns the shared toolutil package the tool packages
+// toolutilSource returns the shared toolutil package the walked packages
 // import, which the load carries with its syntax, nil when none imports it.
 func toolutilSource(pkgs []*packages.Package) *packages.Package {
 	for _, pkg := range pkgs {
@@ -273,8 +279,9 @@ func captureElement(t types.Type) types.Type {
 	return t
 }
 
-// toolBody is one function body of a tool package or of the shared toolutil
-// package, with what reading it needs.
+// toolBody is one function body of a walked package (a tool, resource or
+// prompt package) or of the shared toolutil package, with what reading it
+// needs.
 type toolBody struct {
 	fn   funcBody
 	info *types.Info

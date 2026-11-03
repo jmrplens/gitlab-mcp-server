@@ -515,14 +515,16 @@ var sizeKeptForPresence = []captureDeclaration{{
 }}
 
 // analyzeCapturesFixture loads the stand-in tree with the SDK put through sdk
-// and builds the section with declared.
+// and builds the section with declared, as buildReport does: the tool
+// packages and, from the same load, the resource and prompt packages the
+// tree has.
 func analyzeCapturesFixture(t *testing.T, sdk *strings.Replacer, extra map[string]string, declared []captureDeclaration) (capturesReport, []string) {
 	t.Helper()
 	files := capturesFixtureFiles(sdk)
 	maps.Copy(files, extra)
 	root := t.TempDir()
 	writeFiles(t, root, files)
-	pkgs, err := shared.LoadToolPackages(root)
+	pkgs, capabilities, err := shared.LoadToolAndCapabilityPackages(root)
 	if err != nil {
 		t.Fatalf("load the fixture: %v", err)
 	}
@@ -530,7 +532,7 @@ func analyzeCapturesFixture(t *testing.T, sdk *strings.Replacer, extra map[strin
 	if err != nil {
 		t.Fatalf("client-go types: %v", err)
 	}
-	return analyzeCaptures(pkgs, clientGo, declared)
+	return analyzeCaptures(pkgs, capabilities, clientGo, declared)
 }
 
 // standInDeclarations answer the keys the stand-in's captures share with
@@ -740,6 +742,163 @@ func Details(ctx context.Context, c *gl.Client) error {
 	}
 }
 
+// capturesDetailsReader is a reader of the shared package that only the
+// stand-in prompt calls, so the one pairing of what it decodes is made
+// outside the tool packages.
+const capturesDetailsReader = `package toolutil
+
+import gitlabclient "example.com/fixture/internal/gitlab"
+
+type DetailsExtra struct {
+	ID      *int64 ~json:"id"~
+	Comment string ~json:"comment"~
+}
+
+func CapturedDetails(capture *gitlabclient.ResponseCapture) (DetailsExtra, error) {
+	return capturedOne[DetailsExtra](capture)
+}
+`
+
+// capturesResources is the stand-in for internal/resources: a resource
+// handler, registered as a function literal as the real ones are, that
+// decodes a struct of the package's own off the capture beside the widget it
+// fetched, and a read of a widget through the shared reader and converter
+// the tool package uses too, as the job resources read the job's measures.
+const capturesResources = `package resources
+
+import (
+	"context"
+
+	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
+	gitlabclient "example.com/fixture/internal/gitlab"
+	"example.com/fixture/internal/toolutil"
+)
+
+type widgetResource struct {
+	Name  string ~json:"name"~
+	Color string ~json:"color"~
+}
+
+func register(read func(context.Context) error) {}
+
+func Register(c *gl.Client) {
+	register(func(ctx context.Context) error {
+		ctx, captured := gitlabclient.WithResponseCapture(ctx)
+		_, _, _ = c.Widgets.GetWidget(1, gl.WithContext(ctx))
+		var extra widgetResource
+		return captured.Decode(&extra)
+	})
+}
+
+func Widget(ctx context.Context, c *gl.Client) (string, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	w, _, err := c.Widgets.GetWidget(1, gl.WithContext(ctx))
+	if err != nil {
+		return "", err
+	}
+	extra, err := toolutil.CapturedWidget(captured)
+	if err != nil {
+		return "", err
+	}
+	return toolutil.WidgetOutput(w, extra), nil
+}
+`
+
+// capturesPrompts is the stand-in for internal/prompts: a prompt that
+// decodes rows of the package's own off a list of gadgets, and reads the
+// shared details reader beside the widget's details, a pairing no tool
+// package makes.
+const capturesPrompts = `package prompts
+
+import (
+	"context"
+
+	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
+	gitlabclient "example.com/fixture/internal/gitlab"
+	"example.com/fixture/internal/toolutil"
+)
+
+type gadgetRow struct {
+	ID    *int64 ~json:"id"~
+	Stars int    ~json:"stars"~
+}
+
+func Scorecard(ctx context.Context, c *gl.Client) error {
+	gadgetCtx, gadgets := gitlabclient.WithResponseCapture(ctx)
+	_, _, _ = c.Widgets.ListGadgets(gl.WithContext(gadgetCtx))
+	var rows []gadgetRow
+	if err := gadgets.Decode(&rows); err != nil {
+		return err
+	}
+	detailsCtx, details := gitlabclient.WithResponseCapture(ctx)
+	_, _, _ = c.Widgets.GetWidgetDetails(1, gl.WithContext(detailsCtx))
+	_, err := toolutil.CapturedDetails(details)
+	return err
+}
+`
+
+// TestAnalyzeCaptures_TheResourceAndPromptPackages_AreWalkedAsAToolPackageIs
+// verifies that the walk reads internal/resources and internal/prompts as it
+// reads a tool package (issue 1601). A struct of their own decoded off a
+// capture, in a resource handler registered as a function literal and in a
+// prompt, is paired with what was sent under the capture; a shared reader
+// and converter they call add their function to the sites of the pairing the
+// tool package makes too; and a shared struct only they decode beside a
+// client-go struct is paired there, not listed as a pairing the walk does
+// not see. Each key such a struct shares with the SDK is then held to a
+// declaration, and none answers these three.
+func TestAnalyzeCaptures_TheResourceAndPromptPackages_AreWalkedAsAToolPackageIs(t *testing.T) {
+	report, stale := analyzeCapturesFixture(t, nil, map[string]string{
+		"internal/toolutil/details.go":    strings.ReplaceAll(capturesDetailsReader, "~", "`"),
+		"internal/resources/resources.go": strings.ReplaceAll(capturesResources, "~", "`"),
+		"internal/prompts/prompts.go":     strings.ReplaceAll(capturesPrompts, "~", "`"),
+	}, standInDeclarations)
+	want := map[string]capturedType{
+		"prompts.gadgetRow":        {Type: "prompts.gadgetRow", Pairs: []string{"Gadget"}, Sites: []string{"prompts.Scorecard"}},
+		"resources.widgetResource": {Type: "resources.widgetResource", Pairs: []string{"Widget"}, Sites: []string{"resources.Register"}},
+		"toolutil.DetailsExtra":    {Type: "toolutil.DetailsExtra", Pairs: []string{"WidgetDetails"}, Sites: []string{"prompts.Scorecard"}},
+		"toolutil.WidgetExtra": {
+			Type: "toolutil.WidgetExtra", Pairs: []string{"Widget"},
+			Sites: []string{"resources.Widget", "toolutil.WidgetOutput", "widgets.Get", "widgets.Twice"},
+		},
+	}
+	got := map[string]capturedType{}
+	for _, captured := range report.Types {
+		if _, pinned := want[captured.Type]; pinned {
+			got[captured.Type] = captured
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("types =\n%+v\nwant\n%+v", got, want)
+	}
+	var keys []string
+	for _, key := range report.Keys {
+		keys = append(keys, key.Type+"."+key.Key+" "+key.Status)
+	}
+	wantKeys := []string{
+		"prompts.gadgetRow.id redundant_capture",
+		"resources.widgetResource.name redundant_capture",
+		"toolutil.DetailsExtra.id redundant_capture",
+		"toolutil.WidgetExtra.size kept",
+		"toolutil.ownerRow.owner.size kept",
+		"widgets.Literal.struct{Name}.name kept",
+		"widgets.gadgetExtra.owner.name kept",
+	}
+	if !slices.Equal(keys, wantKeys) {
+		t.Errorf("keys = %q, want %q", keys, wantKeys)
+	}
+	var unpaired []string
+	for _, captured := range report.Unpaired {
+		unpaired = append(unpaired, captured.Type)
+	}
+	if want := []string{"widgets.countExtra", "widgets.deleteExtra", "widgets.fieldedExtra", "widgets.mixedExtra"}; !slices.Equal(unpaired, want) {
+		t.Errorf("unpaired = %q, want only the tool package's %q", unpaired, want)
+	}
+	if len(stale) != 0 {
+		t.Errorf("stale = %q, want none", stale)
+	}
+}
+
 // TestAnalyzeCaptures_NoPackageCaptures_FindsNothing verifies that a tree
 // whose tool packages import no capture has nothing to pair, and that every
 // declaration is then stale.
@@ -803,17 +962,46 @@ func TestSummarizeCaptures_EachStatus_CountsOnce(t *testing.T) {
 // plain JSON so that it decodes a report with no such section too.
 type capturesWitness struct {
 	Captures *struct {
-		Types []struct {
-			Type  string
-			Pairs []string
-		}
-		Keys []struct {
+		Types []witnessType
+		Keys  []struct {
 			Type, Key, Status, Declared, Category string
 		}
 		Unpaired []struct {
 			Type, Status string
 		}
 	} `json:"captures"`
+}
+
+// witnessType is one captured struct of the report the witness reads.
+type witnessType struct {
+	Type  string
+	Pairs []string
+	Sites []string
+}
+
+// assertWitnessTypes holds the captured structs of the report to what the
+// witness expects of them: each struct witnessPairs names paired with what
+// it names, and each struct witnessReadIn names paired at a site in the
+// package it names.
+func assertWitnessTypes(t *testing.T, types []witnessType) {
+	t.Helper()
+	unseen := maps.Clone(witnessPairs)
+	unread := maps.Clone(witnessReadIn)
+	for _, captured := range types {
+		if want, pinned := witnessPairs[captured.Type]; pinned && strings.Join(captured.Pairs, " ") != want {
+			t.Errorf("%s pairs %q, want %q", captured.Type, captured.Pairs, want)
+		}
+		delete(unseen, captured.Type)
+		if prefix, pinned := unread[captured.Type]; pinned && slices.ContainsFunc(captured.Sites, func(site string) bool { return strings.HasPrefix(site, prefix) }) {
+			delete(unread, captured.Type)
+		}
+	}
+	for _, missing := range slices.Sorted(maps.Keys(unseen)) {
+		t.Errorf("%s is paired with nothing, want it paired", missing)
+	}
+	for _, missing := range slices.Sorted(maps.Keys(unread)) {
+		t.Errorf("%s is paired at no site in %s, want the walk to read that package", missing, unread[missing])
+	}
 }
 
 // witnessKept is the status of a key a declaration answers while its
@@ -835,6 +1023,16 @@ var witnessPairs = map[string]string{
 	"toolutil.nestedUserExtra":                    "MergeRequestReviewer ProjectStarrer",
 	"toolutil.CapturedCompareDiffs.struct{Diffs}": "Compare",
 	"search.WikiBlobOutput":                       "Wiki",
+}
+
+// witnessReadIn is where, beside the tool packages, the witness expects the
+// walk to read a pairing of a shared struct: the measures of a job in the job
+// resources, and the extra of a protected branch in the audit prompt's
+// scorecard (issue 1601). Each names the package prefix one of the struct's
+// sites carries.
+var witnessReadIn = map[string]string{
+	"toolutil.JobMeasures":          "resources.",
+	"toolutil.ProtectedBranchExtra": "prompts.",
 }
 
 // witnessUnpaired is what the witness expects of the structs a capture is
@@ -913,7 +1111,9 @@ var witnessDeclared = map[string]string{
 // GitLab sends them, are read off its decode now. A reader that hands back
 // an object from inside the answer is paired at that object's depth, and
 // every struct a capture is decoded into is paired or has no SDK half. The
-// bump stack is where the thirty appear and this list changes.
+// resource and prompt packages capture too, and their pairings are read
+// where they make them. The bump stack is where the thirty appear and this
+// list changes.
 //
 // It reads the report as plain JSON and spells the status it expects, so
 // copied on its own into a tree that has no such section it compiles and
@@ -934,16 +1134,7 @@ func TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3300(t *testi
 	if rep.Captures == nil {
 		t.Fatal("the sdk report has no captures section: nothing holds a key a capture reads to the client-go struct decoded beside it")
 	}
-	unseen := maps.Clone(witnessPairs)
-	for _, captured := range rep.Captures.Types {
-		if want, pinned := witnessPairs[captured.Type]; pinned && strings.Join(captured.Pairs, " ") != want {
-			t.Errorf("%s pairs %q, want %q", captured.Type, captured.Pairs, want)
-		}
-		delete(unseen, captured.Type)
-	}
-	for _, missing := range slices.Sorted(maps.Keys(unseen)) {
-		t.Errorf("%s is paired with nothing, want it paired", missing)
-	}
+	assertWitnessTypes(t, rep.Captures.Types)
 	var unpaired []string
 	for _, captured := range rep.Captures.Unpaired {
 		unpaired = append(unpaired, captured.Type+" "+captured.Status)
