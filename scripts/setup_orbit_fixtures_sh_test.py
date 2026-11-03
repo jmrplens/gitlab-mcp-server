@@ -377,6 +377,36 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertIn("ORBIT_FIXTURES_VISIBILITY=private is not allowed", result.stderr)
         self.assertEqual(self.requests("GET"), [], "the refusal must come before any API call")
 
+    def test_a_private_visibility_is_refused_under_an_uppercase_jmrp_oss(self):
+        # GitLab resolves group and project paths case-insensitively, so a
+        # differently cased namespace reaches the same projects and must not
+        # slip past the public-only guard.
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = "JMRP-OSS/Orbit-Fixtures"
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = "private"
+        result = self.run_script(existing_fixtures("jmrp-oss/orbit-fixtures"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ORBIT_FIXTURES_VISIBILITY=private is not allowed", result.stderr)
+        self.assertEqual(self.requests("GET"), [], "the refusal must come before any API call")
+
+    def test_the_visibility_is_json_encoded_in_the_update_body(self):
+        # A configured visibility carrying JSON syntax must stay one string in
+        # the PUT body and add no field of its own.
+        visibility = 'private", "issues_access_level": "disabled'
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = visibility
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "public"}
+        routes["PUT " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": visibility}
+        routes["PUT " + API + "/projects/%d" % SEC_ID] = {"id": SEC_ID, "visibility": visibility}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        updated = [r["path"] for r in self.requests("PUT")]
+        self.assertEqual(
+            updated,
+            [API + "/projects/%d" % KG_ID, API + "/projects/%d" % SEC_ID],
+        )
+        for row in self.request_bodies("PUT"):
+            self.assertEqual(json.loads(row["body"]), {"visibility": visibility})
+
 
 if __name__ == "__main__":
     unittest.main()

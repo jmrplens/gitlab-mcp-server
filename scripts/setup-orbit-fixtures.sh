@@ -80,7 +80,9 @@ VISIBILITY="${ORBIT_FIXTURES_VISIBILITY:-public}"
 # #1533: jmrp-oss allows exactly one private project, and these fixtures are
 # public. Refuse a non-public visibility up front: the script now sets the
 # visibility of projects it did not create, so a typo would flip both fixtures.
-case "$NAMESPACE" in
+# GitLab resolves paths case-insensitively, so the guard compares lowercased,
+# or JMRP-OSS/... would reach the same projects and skip the check.
+case "$(printf '%s' "$NAMESPACE" | tr '[:upper:]' '[:lower:]')" in
   jmrp-oss | jmrp-oss/*)
     if [ "$VISIBILITY" != "public" ]; then
       echo "error: ORBIT_FIXTURES_VISIBILITY=$VISIBILITY is not allowed under $NAMESPACE:" >&2
@@ -226,7 +228,10 @@ except Exception: pass' 2>/dev/null)
   esac
   if [ "$current_visibility" != "$VISIBILITY" ]; then
     echo "    → visibility $current_visibility → $VISIBILITY" >&2
-    api_request PUT "/projects/$project_id" "{\"visibility\": \"$VISIBILITY\"}"
+    # The body is built by json.dumps, as with commit messages below, so a
+    # configured value carrying JSON syntax stays one string and adds no field.
+    visibility_body=$(VISIBILITY="$VISIBILITY" python3 -c 'import json, os; print(json.dumps({"visibility": os.environ["VISIBILITY"]}))')
+    api_request PUT "/projects/$project_id" "$visibility_body"
     if [ "$API_STATUS" -lt 200 ] || [ "$API_STATUS" -ge 300 ]; then
       echo "    ✗ could not set visibility (HTTP $API_STATUS): $API_BODY" >&2
       return 1
