@@ -51,6 +51,11 @@ type Method struct {
 	Options []string
 	// Routes is every REST request the method can send, sorted.
 	Routes []Route
+	// NilGuards names, per route of Routes the method sends only behind a nil
+	// check of its own parameters, the checks every way of sending it passes
+	// through. A route it does not name is sent whatever the method is handed
+	// as far as the reading can tell.
+	NilGuards map[Route][]NilGuard
 	// Constructors names, sorted, the constructors the method and what it
 	// delegates to can build a REST request with: UploadRequest for a call
 	// of do handed withUpload and for a legacy UploadRequest, NewRequest for

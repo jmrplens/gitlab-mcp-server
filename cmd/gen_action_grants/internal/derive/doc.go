@@ -39,9 +39,15 @@
 //     check after a request does not make the request optional.
 //   - A function literal runs where it is written.
 //   - A client-go method that can send several routes sends one of them per
-//     call (the label methods pick by name or by ID), and one that posts
-//     several GraphQL documents posts all of them (a work item delete reads
-//     the item's ID, then deletes it).
+//     call, and one that posts several GraphQL documents posts all of them (a
+//     work item delete reads the item's ID, then deletes it). A route behind
+//     a nil check of a parameter is left out where the call's argument cannot
+//     pass the check: the label update and delete send one route when lid is
+//     nil and another when it is not, and a handler that hands lid a string
+//     only ever sends the second. An argument that can hold nil, a pointer
+//     field among them, is read as either, and so are a parameter its helper
+//     assigns, ranges into or takes the address of, a value of a type parameter
+//     no call handed, and a method named without being called.
 //
 // Where the syntax is wrong, the author says so beside the request, and the
 // directive applies to every action that reaches the statement it is written

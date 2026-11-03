@@ -763,6 +763,23 @@ func TestIndexMethods_AMethodSendingOneRouteTwice_NamesItOnce(t *testing.T) {
 	}
 }
 
+// TestIndexRecord_AnActionSendingOneRouteTwice_NamesItOnce verifies an action
+// the record holds two requests of one route for reaches it once, beside
+// another action that reaches it too.
+func TestIndexRecord_AnActionSendingOneRouteTwice_NamesItOnce(t *testing.T) {
+	const route = "GET /widgets"
+	j := newJudge(judgeInput{
+		live: apilive.Document{Routes: []apilive.Route{{Method: http.MethodGet, Path: apilive.EndpointPrefix + "/widgets"}}},
+		record: actionrequests.Record{Actions: []actionrequests.RecordAction{
+			{ID: "widget.other", Requests: []actionrequests.RecordRequest{rest(route)}},
+			{ID: "widget.twice", Requests: []actionrequests.RecordRequest{rest(route), rest(route)}},
+		}},
+	})
+	if got := j.reached[route]; !slices.Equal(got, []string{"widget.other", "widget.twice"}) {
+		t.Errorf("reached = %v, want each action named once", got)
+	}
+}
+
 // TestIsInternal_OnlyGitLabsInternalAPI_IsInternal verifies the internal API
 // is its root and what is under it, and not a segment that merely begins
 // with its name or a route that holds it further down.
@@ -1094,7 +1111,7 @@ func TestRun_Repository_AdjudicatesEveryRouteNoActionReaches(t *testing.T) {
 			mislabeled = append(mislabeled, route.Route)
 		}
 	}
-	want := map[string]int{categoryTracked: 534, categoryClientProtocol: 150, categoryCoveredByGraphQL: 49}
+	want := map[string]int{categoryTracked: 538, categoryClientProtocol: 150, categoryCoveredByGraphQL: 49}
 	if !reflect.DeepEqual(categories, want) || len(issues) != 32 || !issues[issueVirtualRegistryRoutes] || !issues[issueDuoRoutes] {
 		t.Errorf("declared %v under %d issues; want %v under one issue for each of 30 catalog domains and of the virtual registries and GitLab Duo, which it does not hold yet", categories, len(issues), want)
 	}

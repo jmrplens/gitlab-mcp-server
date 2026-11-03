@@ -40,8 +40,10 @@
 // field GitLab answers only to api, every mutation api, every route whose
 // skip reason says GitLab authenticates another credential no scope of the
 // token, and every row a known scope that the request record agrees with and
-// that no way of the action undercuts. It runs where the other
-// committed-artifact gates run, under the FRESHNESS deferral in CI.
+// that no way of the action undercuts. It also fails on a slash declaration no
+// recorded row is placed through (apilive.SlashPlaceholders), the one
+// declaration table it reads. It runs where the other committed-artifact gates
+// run, under the FRESHNESS deferral in CI.
 //
 // # What it reports and never gates
 //

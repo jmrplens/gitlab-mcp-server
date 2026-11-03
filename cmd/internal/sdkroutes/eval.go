@@ -49,6 +49,7 @@ func (r *reading) resolve(entry *function) Method {
 		Many:    entry.many,
 		Options: entry.options,
 	}
+	guards := routeGuards{}
 	r.walk(entry, nil, map[string]bool{}, func(fn *function, env map[string]string) {
 		method.GraphQL = method.GraphQL || fn.graphQL
 		method.Constructors = append(method.Constructors, fn.constructors()...)
@@ -56,16 +57,22 @@ func (r *reading) resolve(entry *function) Method {
 		for _, use := range fn.templates {
 			paths, unresolved := r.templatePaths(fn, use, env)
 			for _, path := range paths {
-				method.Routes = append(method.Routes, Route{Method: verbOf(fn.verb), Path: path})
+				route := Route{Method: verbOf(fn.verb), Path: path}
+				method.Routes = append(method.Routes, route)
+				guards.note(route, ownGuards(fn, entry, use))
 			}
 			method.Unresolved = append(method.Unresolved, unresolved...)
 		}
 		for _, use := range fn.legacy {
 			routes, unresolved := r.legacyRoutes(fn, use, env)
+			for _, route := range routes {
+				guards.note(route, nil)
+			}
 			method.Routes = append(method.Routes, routes...)
 			method.Unresolved = append(method.Unresolved, unresolved...)
 		}
 	})
+	method.NilGuards = guards.held()
 	method.Routes = sortedRoutes(method.Routes)
 	method.Unresolved = sortedUnique(method.Unresolved)
 	method.Constructors = sortedUnique(method.Constructors)
@@ -485,21 +492,22 @@ func limit(values []string) []string {
 
 // substitute replaces every format verb of a format string with the next
 // value, [unknown] once the values run out, and unescapes a doubled percent.
+//
+// It reads the format by what is left of it, so every turn of the loop consumes
+// a percent sign and no change to a position can make it read one again.
 func substitute(format string, values []string) string {
 	var builder strings.Builder
 	next := 0
-	for i := 0; i < len(format); i++ {
-		if format[i] != '%' {
-			builder.WriteByte(format[i])
-			continue
+	for {
+		literal, after, isVerb := strings.Cut(format, "%")
+		builder.WriteString(literal)
+		if !isVerb {
+			return builder.String()
 		}
-		j := i + 1
-		for j < len(format) && strings.IndexByte(verbFlags, format[j]) >= 0 {
-			j++
-		}
-		if j < len(format) && format[j] == '%' {
+		format = strings.TrimLeft(after, verbFlags)
+		if strings.HasPrefix(format, "%") {
 			builder.WriteByte('%')
-			i = j
+			format = format[1:]
 			continue
 		}
 		value := unknown
@@ -508,9 +516,9 @@ func substitute(format string, values []string) string {
 		}
 		next++
 		builder.WriteString(value)
-		i = j
+		// The verb's letter, unless the format ended before it.
+		format = format[min(1, len(format)):]
 	}
-	return builder.String()
 }
 
 // shape reduces a formatted path to a route shape: a segment that is nothing

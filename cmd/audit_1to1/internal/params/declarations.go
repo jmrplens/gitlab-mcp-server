@@ -29,11 +29,6 @@ const (
 	// to the route, which no caller of an action chooses. It answers a param
 	// no input offers alone.
 	categoryWebhookPayload = "webhook-payload"
-	// categoryBranchNotTaken is a param of a route the client-go method
-	// sends only for an argument the handler never passes, so the action
-	// never sends that route, and what its input offers goes to the route
-	// the method takes instead.
-	categoryBranchNotTaken = "branch-not-taken"
 )
 
 // anySegment and anyParam are the wildcards a declaration's route and param
@@ -68,9 +63,7 @@ type paramDeclaration struct {
 // A param GitLab drops, or a payload another service posts, is one no input
 // should offer, so those two answer a param no input offers and never an
 // offered one: an input that starts offering a key GitLab drops is a finding
-// again rather than an offer the declaration hides. A branch not taken
-// answers any class, since what its route's input offers goes to the route
-// the method takes instead.
+// again rather than an offer the declaration hides.
 var answeredClasses = map[string][]string{
 	categoryUpstream:           {ClassUnmodeled},
 	categoryMapInput:           {ClassNotOffered, ClassUnjudged},
@@ -113,7 +106,7 @@ func answer(declared []paramDeclaration, finding Finding) (int, bool) {
 
 // knownCategories is every category a declaration may name.
 var knownCategories = []string{
-	categoryUpstream, categoryDeclaredNotApplied, categoryMapInput, categoryWebhookPayload, categoryBranchNotTaken,
+	categoryUpstream, categoryDeclaredNotApplied, categoryMapInput, categoryWebhookPayload,
 }
 
 // staleDeclarations names, sorted, every declaration that answers no
@@ -189,16 +182,8 @@ func paramDeclarations() []paramDeclaration {
 		reasonRow133Duo     = "the project create, create-for-user and edit options lack duo_code_review_decisions_enabled"
 		reasonRow133Account = "CreateServiceAccountUserOptions and UpdateServiceAccountOptions lack external"
 		reasonRow133Search  = "SearchOptions lacks the merge request filters the group and project search routes take"
-		reasonLabelRoutes   = "client-go's UpdateLabel, DeleteLabel, UpdateGroupLabel and DeleteGroupLabel send the " +
-			"collection route, which selects the label by the label_id or name of the body or the query, only for a " +
-			"nil label argument; labels.labelSelector always hands them label_id or the name, and grouplabels always " +
-			"hands them label_id, so each action sends the route that names the label in its path alone"
 	)
 	declared := []paramDeclaration{
-		{Route: "PUT /projects/:id/labels", Param: anyParam, Category: categoryBranchNotTaken, Reason: reasonLabelRoutes},
-		{Route: "DELETE /projects/:id/labels", Param: anyParam, Category: categoryBranchNotTaken, Reason: reasonLabelRoutes},
-		{Route: "PUT /groups/:id/labels", Param: anyParam, Category: categoryBranchNotTaken, Reason: reasonLabelRoutes},
-		{Route: "DELETE /groups/:id/labels", Param: anyParam, Category: categoryBranchNotTaken, Reason: reasonLabelRoutes},
 		{Route: "PUT /application/settings", Param: anyParam, Category: categoryMapInput, Reason: reasonSettingsMap},
 		{Route: "PUT /projects/:id/integrations/*", Param: anyParam, Category: categoryMapInput, Reason: reasonIntegrationMap},
 		{Route: "PUT /groups/:id/integrations/*", Param: anyParam, Category: categoryMapInput, Reason: reasonIntegrationMap},

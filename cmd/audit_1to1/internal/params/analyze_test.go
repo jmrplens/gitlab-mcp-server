@@ -707,9 +707,7 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 // route does not either; and a protected environment's approval rule takes
 // an id, nested under the approval_rules the inventory records, which
 // EnvironmentApprovalRuleOptions does not model. The service account external
-// flag and the four duo flags a create drops are declared, and so is every
-// param of the four label collection routes, which client-go takes only for
-// a label argument the handlers never leave nil.
+// flag and the four duo flags a create drops are declared.
 //
 // The custom header keys of a project hook are carried by the struct its raw
 // request sends: on the add, whose recorded body carries custom_headers,
@@ -899,10 +897,6 @@ func witnessCases() []witnessCase {
 		want{"POST /projects/:id/protected_environments", "approval_rules[id]", ClassUnmodeled, ""},
 		want{"POST /service_accounts", "external", ClassUnmodeled, categoryUpstream},
 		want{"PATCH /service_accounts/:user_id", "external", ClassUnmodeled, categoryUpstream},
-		want{"PUT /projects/:id/labels", "label_id", ClassOfferedUnrecorded, categoryBranchNotTaken},
-		want{"DELETE /projects/:id/labels", "label_id", ClassOfferedUnrecorded, categoryBranchNotTaken},
-		want{"PUT /groups/:id/labels", "label_id", ClassOfferedUnrecorded, categoryBranchNotTaken},
-		want{"DELETE /groups/:id/labels", "name", ClassNotOffered, categoryBranchNotTaken},
 	)
 	return cases
 }

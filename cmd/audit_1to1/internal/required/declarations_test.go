@@ -16,8 +16,7 @@ func TestDeclaredRequiredness_EveryEntryNamesADirectionACategoryAndAReason(t *te
 	directions := map[string]bool{DirectionGitLabRequires: true, DirectionGitLabOptional: true}
 	categories := map[string]bool{
 		categoryConditional: true, categoryHandlerDefault: true, categoryOneAlternative: true,
-		categorySoleAttribute: true, categorySDKPositional: true, categoryModelRequires: true,
-		categorySDKSendsNull: true,
+		categorySoleAttribute: true, categoryModelRequires: true, categorySDKSendsNull: true,
 	}
 	declared := declaredRequiredness()
 	if len(declared) == 0 {

@@ -160,6 +160,9 @@ func (mainSDK) Placements(method string) []derive.Placement {
 	return out
 }
 
+// NilChecks answers none: neither method sits any route behind a nil check.
+func (mainSDK) NilChecks(string) map[string][]derive.NilCheck { return nil }
+
 // mainRecord is the live record the fixture is joined to: the project read
 // and delete, and no GraphQL mutation.
 func mainRecord() *apilive.Document {

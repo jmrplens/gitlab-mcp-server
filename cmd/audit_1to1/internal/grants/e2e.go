@@ -32,14 +32,19 @@ import (
 // lead that the derivation under-approximates, which is the one error that
 // would let a grant check withhold too little. A route the table does not
 // name at all arrives as its method alone and is a lead of its own, since
-// nothing in the table can be judged against it. It reports and never gates,
-// for the reasons R-PATH's end-to-end observation gives.
+// nothing in the table can be judged against it. What it finds reports and
+// never gates, for the reasons R-PATH's end-to-end observation gives.
+//
+// Absent is not the same as unreadable, though, here as there. A run that names
+// no directory asks nothing, and a run that names one asked for this answer, so
+// a directory that cannot be read fails the run (issue 1688). It used to exit 0
+// with the reason inside the report, which reads like a run with nothing to
+// say about any action.
 type E2ECheck struct {
-	// Ran is whether a record was read at all; Error says why not, when one
-	// was asked for and could not be read.
+	// Ran is whether a record was read at all, which is a run that named a
+	// directory.
 	Ran       bool   `json:"ran"`
 	Directory string `json:"directory,omitempty"`
-	Error     string `json:"error,omitempty"`
 	Grain     string `json:"grain,omitempty"`
 	// Compared counts the actions of the request record a dispatch ran and
 	// the server did not decline, and Consistent those no lead below names.
@@ -104,17 +109,17 @@ type observation struct {
 }
 
 // e2eCheck folds the dispatch lines of a recorded run into the per-action
-// comparison. An empty directory is not an error: no end-to-end record was
-// offered, which is every run outside a Docker session.
-func e2eCheck(dir string, record actionrequests.Record) E2ECheck {
+// comparison. An empty directory name is not an error: no end-to-end record
+// was offered, which is every run outside a Docker session. A directory named
+// and not readable is, for the reason [E2ECheck] gives.
+func e2eCheck(dir string, record actionrequests.Record) (E2ECheck, error) {
 	if dir == "" {
-		return E2ECheck{}
+		return E2ECheck{}, nil
 	}
 	check := E2ECheck{Ran: true, Directory: dir, Grain: e2eGrain}
 	records, err := readE2ECalls(dir)
 	if err != nil {
-		check.Error = fmt.Sprintf("read the end-to-end call record: %v", err)
-		return check
+		return E2ECheck{}, fmt.Errorf("read the end-to-end call record: %w", err)
 	}
 	actions := map[string]actionrequests.RecordAction{}
 	for _, action := range record.Actions {
@@ -137,7 +142,7 @@ func e2eCheck(dir string, record actionrequests.Record) E2ECheck {
 			check.Consistent++
 		}
 	}
-	return check
+	return check, nil
 }
 
 // judge files every lead one action's observation raises, and reports whether

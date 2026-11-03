@@ -89,6 +89,10 @@ type JoinQuality struct {
 	// Loose matched only after a literal segment of ours was accepted where
 	// GitLab's document has a placeholder.
 	Loose int `json:"loose"`
+	// Across matched only through a segment of the route that holds what ours
+	// spells: a splat, whose name no spelling of ours shares and which may hold
+	// several segments, or a placeholder declared to take a slash.
+	Across int `json:"across"`
 	// Unmatched found no operation at all. GitLab's document covers 1847
 	// operations and not every endpoint this server calls, so an unmatched row
 	// is not by itself a finding.
@@ -182,6 +186,8 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 				segments[literal] = segment
 			}
 			segment.Count++
+		case matchAcross:
+			check.Join.Across++
 		default:
 			check.Join.Unmatched++
 			continue
@@ -295,6 +301,7 @@ const (
 	matchNone matchQuality = iota
 	matchExact
 	matchLoose
+	matchAcross
 )
 
 // operation is one endpoint of the live record in the shape the joins here ask
@@ -379,6 +386,9 @@ type operationIndex struct {
 	// routes can share a shape, so the value is the union of their responses:
 	// taking one arbitrarily would report the other's fields as unpublished.
 	byShape map[string]operation
+	// routes finds the route of a path a segment of the route holds more of
+	// than one, which neither key above can spell.
+	routes *apilive.RouteIndex
 	// record is what the index was built from, kept for the entity a
 	// declaration names for a route the record annotates with none
 	// ([operationIndex.as]).
@@ -400,6 +410,7 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 	index := &operationIndex{
 		byPath:  make(map[string]operation, len(record.Routes)),
 		byShape: make(map[string]operation, len(record.Routes)),
+		routes:  apilive.NewRouteIndex(record.Routes),
 		record:  record,
 	}
 	for _, route := range record.Routes {
@@ -588,7 +599,10 @@ func unionEntityOf(a, b map[string]string) map[string]string {
 // lookup finds the operation a recorded request names, and says how. When the
 // match needed a literal segment of ours to stand where Grape has a
 // placeholder, that segment is returned: it is a fixture value the recorder
-// failed to recognize as an identifier.
+// failed to recognize as an identifier. A route's splat is no placeholder to
+// either key, so a path one holds is found last, through the one reading of
+// the routes that knows what a splat takes, which leaves the two rules above
+// as they stand: it finds no route with no splat and no declared placeholder.
 func (index *operationIndex) lookup(method, path string) (operation, matchQuality, string) {
 	if found, ok := index.byPath[method+" "+path]; ok {
 		return found, matchExact, ""
@@ -611,6 +625,11 @@ func (index *operationIndex) lookup(method, path string) (operation, matchQualit
 		if found, ok := index.byShape[method+" "+pathShape(strings.Join(trial, "/"))]; ok {
 			return found, matchLoose, segment
 		}
+	}
+	if route, _ := index.routes.MatchAcross(method, path, apilive.SlashPlaceholders); route != nil {
+		// Every spelling of a route is indexed as that route, so the first
+		// answers for it.
+		return index.byPath[method+" "+apilive.ExpandOptional(apilive.NormalizePath(route.Path))[0]], matchAcross, ""
 	}
 	return operation{}, matchNone, ""
 }

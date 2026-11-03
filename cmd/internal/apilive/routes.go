@@ -3,7 +3,10 @@
 
 package apilive
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // This file is how a request this server sends is found among the record's
 // routes, and how a route is named once it is found. Two readers ask it: the
@@ -12,7 +15,10 @@ import "strings"
 // every route the unit suite recorded so the two can be held to each other. A
 // second copy of the rule in either would let the two disagree about which
 // route a request is, which is the one thing their comparison assumes they
-// agree on.
+// agree on. A recorded path holds what a route's splat only stands for, so
+// R-GRANT and R-PATH also ask [RouteIndex.MatchAcross] of what no spelling of
+// the path's own length meets; the derivation places spellings of its own,
+// which never need it.
 
 // RouteName spells a record route the way the fine-grained table and the
 // request record name it: the verb and the path under the API prefix, with
@@ -28,8 +34,9 @@ type RouteIndex struct {
 }
 
 // spelled is one spelling of a record route: its path with optional segments
-// taken or left out, and identifiers collapsed.
+// taken or left out, as written and with identifiers collapsed.
 type spelled struct {
+	written  []string
 	segments []string
 	route    *Route
 }
@@ -46,7 +53,11 @@ func NewRouteIndex(routes []Route) *RouteIndex {
 			continue
 		}
 		for _, variant := range ExpandOptional(path) {
-			index.byMethod[route.Method] = append(index.byMethod[route.Method], spelled{segments: PathSegments(variant), route: route})
+			index.byMethod[route.Method] = append(index.byMethod[route.Method], spelled{
+				written:  strings.Split(strings.Trim(variant, "/"), "/"),
+				segments: PathSegments(variant),
+				route:    route,
+			})
 		}
 	}
 	return index
@@ -132,6 +143,110 @@ func (index *RouteIndex) Match(method, path string) (*Route, bool) {
 		}
 	}
 	return best, best != nil
+}
+
+// SlashPlaceholder names a placeholder of a record route that GitLab lets hold
+// a slash. Grape says so in the route's requirements, which the record does
+// not carry, so a route reads as though every placeholder of it took one
+// segment and only a declaration can say otherwise.
+type SlashPlaceholder struct {
+	// Route is the route as [RouteName] spells it, and Param the placeholder
+	// without its colon.
+	Route string
+	Param string
+	// Reason says where GitLab declares it.
+	Reason string
+}
+
+// SlashPlaceholders are the placeholders of the live record known to take a
+// slash and that a recorded request sends one to. R-GRANT fails on a row no
+// recorded request is placed through, which is why the raw route beside this
+// one has none: lib/api/ci/job_artifacts.rb mounts it with the same
+// requirement, and no recorded request sends it a slashed ref.
+var SlashPlaceholders = []SlashPlaceholder{{
+	Route:  "GET /projects/:id/jobs/artifacts/:ref_name/download",
+	Param:  "ref_name",
+	Reason: "lib/api/ci/job_artifacts.rb at v19.5.0-ee mounts it with requirements: { ref_name: /.+/ }, and job.download_artifacts sends a branch named feature/x as the two segments toolutil.EscapePathSegments escapes one by one",
+}}
+
+// MatchAcross finds the record route a concrete path is when a segment of the
+// route may take more than one of the path's, which [RouteIndex.Match] cannot
+// say: a splat takes one or more (*artifact_path holds build/output/report.txt),
+// and so does a placeholder slashes names. It answers the declaration the path
+// was placed through, nil when a splat alone placed it, and no route for a path
+// that meets none. A spelling takes part only when it holds such a segment, an
+// optional group taken or left out, and the one with the most literal segments
+// wins, the first in the record's order among equally many. A spelling with no
+// literal segment never meets anything: that is Grape's catch-all, which any
+// path would meet and which says nothing about the path.
+func (index *RouteIndex) MatchAcross(method, path string, slashes []SlashPlaceholder) (*Route, *SlashPlaceholder) {
+	requested := PathSegments(path)
+	if route := index.closestAcross(method, requested, nil); route != nil {
+		return route, nil
+	}
+	for i := range slashes {
+		if route := index.closestAcross(method, requested, &slashes[i]); route != nil {
+			return route, &slashes[i]
+		}
+	}
+	return nil, nil
+}
+
+// closestAcross is the route of the closest spelling that meets a requested
+// path, with one declaration's placeholder taking more than one segment when
+// slash names one.
+func (index *RouteIndex) closestAcross(method string, requested []string, slash *SlashPlaceholder) *Route {
+	var best *Route
+	bestLiterals := 0
+	for _, candidate := range index.byMethod[method] {
+		literals := candidate.literals()
+		wide := candidate.wide(slash)
+		if literals > bestLiterals && slices.Contains(wide, true) && across(candidate.segments, wide, requested) {
+			best, bestLiterals = candidate.route, literals
+		}
+	}
+	return best
+}
+
+// literals counts the segments of a spelling that are no placeholder.
+func (s spelled) literals() int {
+	count := 0
+	for _, segment := range s.segments {
+		if segment != ":" {
+			count++
+		}
+	}
+	return count
+}
+
+// wide says, by position, which segments of a spelling may take more than one
+// of a path's: its splats, and the placeholder a declaration of its route
+// names.
+func (s spelled) wide(slash *SlashPlaceholder) []bool {
+	declared := slash != nil && slash.Route == RouteName(s.route)
+	wide := make([]bool, len(s.written))
+	for i, segment := range s.written {
+		wide[i] = strings.HasPrefix(segment, "*") || (declared && segment == ":"+slash.Param)
+	}
+	return wide
+}
+
+// across reports whether a record spelling meets a requested path, each wide
+// segment taking one or more of the path's and any other exactly one, as
+// [agree] reads one.
+func across(record []string, wide []bool, requested []string) bool {
+	if len(record) == 0 || len(requested) == 0 {
+		return len(record) == len(requested)
+	}
+	if !wide[0] {
+		return (record[0] == requested[0] || record[0] == ":") && across(record[1:], wide[1:], requested[1:])
+	}
+	for taken := 1; taken <= len(requested); taken++ {
+		if across(record[1:], wide[1:], requested[taken:]) {
+			return true
+		}
+	}
+	return false
 }
 
 // Placeholders names, by the position of each segment of a path a request

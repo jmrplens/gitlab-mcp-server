@@ -173,14 +173,16 @@ func TestRequestName_NamesEachKindByWhatALookupUses(t *testing.T) {
 // boundary it may be held at: one at the project, one at the group, and one
 // whose additional scope is public at another boundary than its primary
 // requirement. A skipped route, its groups public or not, a GraphQL
-// operation, a route whose primary requirement is not public, one whose
-// additional scope is not, and one holding a public permission beside a
-// private one are left out; a table carrying no evaluated set lists nothing.
+// operation, with groups public or none, a route whose primary requirement is
+// not public, one whose additional scope is not, and one holding a public
+// permission beside a private one are left out; a table carrying no evaluated
+// set lists nothing.
 func TestPublicOperations_ListsWhatAPublicResourceServesWithNoGrant(t *testing.T) {
 	table := fixtureTable()
 	table.Operations = append(table.Operations,
 		finegrained.Operation{Name: "POST /projects/:id/other", Groups: []uint32{0, 1}},
 		finegrained.Operation{Name: "GET /projects/:id/skipped", Groups: []uint32{0}, Skip: true},
+		finegrained.Operation{Name: "mutation grouped (m)", Groups: []uint32{0}},
 	)
 	// z.other reaches the public listing twice, through two of its ways, and
 	// is named once.
@@ -202,7 +204,7 @@ func TestPublicOperations_ListsWhatAPublicResourceServesWithNoGrant(t *testing.T
 // TestPublicAt_ReadsEachBoundaryAGroupMayBeHeldAt verifies a group public at
 // both boundaries it may be held at, at the one of them its permissions are
 // public on, and at neither when the boundary it is held at has no public set
-// of it.
+// of it, or one of its permissions, the first or a later one, is not public.
 func TestPublicAt_ReadsEachBoundaryAGroupMayBeHeldAt(t *testing.T) {
 	table := fixtureTable()
 	table.PublicAnonymous[finegrained.PublicGroup] = []uint64{1<<permReadIssue | 1<<permReadNamespace}
@@ -210,6 +212,7 @@ func TestPublicAt_ReadsEachBoundaryAGroupMayBeHeldAt(t *testing.T) {
 		finegrained.Group{Perms: []uint16{permReadIssue}, Any: finegrained.BoundaryProject | finegrained.BoundaryGroup},
 		finegrained.Group{Perms: []uint16{permReadNamespace}, Any: finegrained.BoundaryProject | finegrained.BoundaryGroup},
 		finegrained.Group{Perms: []uint16{permReadIssue}, Any: finegrained.BoundaryUser},
+		finegrained.Group{Perms: []uint16{permUpdateIssue, permReadIssue}, Any: finegrained.BoundaryProject},
 	)
 	cases := []struct {
 		name  string
@@ -220,6 +223,7 @@ func TestPublicAt_ReadsEachBoundaryAGroupMayBeHeldAt(t *testing.T) {
 		{name: "group_only", group: 6, want: finegrained.BoundaryGroup},
 		{name: "a_boundary_with_no_public_set", group: 7},
 		{name: "not_every_permission", group: 3},
+		{name: "not_the_first_permission", group: 8},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
