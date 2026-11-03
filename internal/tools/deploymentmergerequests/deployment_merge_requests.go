@@ -61,6 +61,21 @@ type ListInput struct {
 	Draft               *bool                      `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
 	NonArchived         *bool                      `json:"non_archived,omitempty"    jsonschema:"Return merge requests from non-archived projects only. Default is true"`
 	In                  string                     `json:"in,omitempty"              jsonschema:"Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description"`
+	Environment         string                     `json:"environment,omitempty"     jsonschema:"Filter by MRs deployed to this environment name"`
+	DeployedAfter       string                     `json:"deployed_after,omitempty"  jsonschema:"Return MRs deployed after date (ISO 8601)"`
+	DeployedBefore      string                     `json:"deployed_before,omitempty" jsonschema:"Return MRs deployed before date (ISO 8601)"`
+	AssigneeUsername    []string                   `json:"assignee_username,omitempty"     jsonschema:"Filter by assignee usernames: MRs assigned to all of them. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate). Cannot be combined with assignee_id"`
+	MergeUserID         int64                      `json:"merge_user_id,omitempty"         jsonschema:"Filter by the user ID of who merged the MR. Cannot be combined with merge_user_username"`
+	MergeUserUsername   string                     `json:"merge_user_username,omitempty"   jsonschema:"Filter by the username of who merged the MR. Cannot be combined with merge_user_id"`
+	MergedAfter         string                     `json:"merged_after,omitempty"          jsonschema:"Return MRs merged on or after this time (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	MergedBefore        string                     `json:"merged_before,omitempty"         jsonschema:"Return MRs merged on or before this time (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	NotAssigneeID       int64                      `json:"not_assignee_id,omitempty"       jsonschema:"Exclude MRs assigned to this user ID"`
+	NotAssigneeUsername []string                   `json:"not_assignee_username,omitempty" jsonschema:"Exclude MRs assigned to these usernames. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate)"`
+	NotAuthorID         int64                      `json:"not_author_id,omitempty"         jsonschema:"Exclude MRs authored by this user ID"`
+	NotMilestone        string                     `json:"not_milestone,omitempty"         jsonschema:"Exclude MRs in this milestone (its title)"`
+	NotMyReactionEmoji  string                     `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	NotReviewerID       int64                      `json:"not_reviewer_id,omitempty"       jsonschema:"Exclude MRs with this user ID as a reviewer"`
+	NotReviewerUsername string                     `json:"not_reviewer_username,omitempty" jsonschema:"Exclude MRs with this username as a reviewer"`
 
 	toolutil.PaginationInput
 }
@@ -159,6 +174,11 @@ func applyStringFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 		{input.MyReactionEmoji, &opts.MyReactionEmoji},
 		{input.WIP, &opts.WIP},
 		{input.In, &opts.In},
+		{input.Environment, &opts.Environment},
+		{input.MergeUserUsername, &opts.MergeUserUsername},
+		{input.NotMilestone, &opts.NotMilestone},
+		{input.NotMyReactionEmoji, &opts.NotMyReactionEmoji},
+		{input.NotReviewerUsername, &opts.NotReviewerUsername},
 	}
 	for _, f := range filters {
 		if f.value != "" {
@@ -168,16 +188,22 @@ func applyStringFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 	}
 }
 
-// applyLabelAndBoolFilters sets the label-name list filters and the two
-// boolean toggles (draft and non-archived), each of which is left unset when
-// the caller supplied no value, so GitLab applies its own default rather than
-// ours.
+// applyLabelAndBoolFilters sets the label-name and assignee username list
+// filters and the two boolean toggles (draft and non-archived), each of which
+// is left unset when the caller supplied no value, so GitLab applies its own
+// default rather than ours.
 func applyLabelAndBoolFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 	if labels := labelOptions(input.Labels); labels != nil {
 		opts.Labels = labels
 	}
 	if labels := labelOptions(input.NotLabels); labels != nil {
 		opts.NotLabels = labels
+	}
+	if len(input.AssigneeUsername) > 0 {
+		opts.AssigneeUsername = &input.AssigneeUsername
+	}
+	if len(input.NotAssigneeUsername) > 0 {
+		opts.NotAssigneeUsername = &input.NotAssigneeUsername
 	}
 	if input.Draft != nil {
 		opts.Draft = input.Draft
@@ -198,24 +224,43 @@ func applyIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) error {
 	if err := applyUserIDFilters(input, opts); err != nil {
 		return err
 	}
-	if len(input.ApproverIDs) > 0 {
-		converted, err := input.ApproverIDs.ApproverIDsValue()
-		if err != nil {
-			return fmt.Errorf("approver_ids: %w", err)
-		}
-		opts.ApproverIDs = converted
+	// An empty approver filter converts to nil, which leaves the option unset.
+	approvers, err := input.ApproverIDs.ApproverIDsValue()
+	if err != nil {
+		return fmt.Errorf("approver_ids: %w", err)
 	}
-	if len(input.ApprovedByIDs) > 0 {
-		converted, err := input.ApprovedByIDs.ApproverIDsValue()
-		if err != nil {
-			return fmt.Errorf("approved_by_ids: %w", err)
-		}
-		opts.ApprovedByIDs = converted
+	opts.ApproverIDs = approvers
+	approvedBy, err := input.ApprovedByIDs.ApproverIDsValue()
+	if err != nil {
+		return fmt.Errorf("approved_by_ids: %w", err)
 	}
+	opts.ApprovedByIDs = approvedBy
 	if len(input.ApprovedByUsernames) > 0 {
 		opts.ApprovedByUsernames = &input.ApprovedByUsernames
 	}
+	applyMergeAndNegatedIDFilters(input, opts)
 	return nil
+}
+
+// applyMergeAndNegatedIDFilters sets the user-ID filters client-go's list
+// options model from v3.33.0, each only when the caller gave it: who merged
+// the merge request, and the negated author, reviewer and assignee. The
+// negated assignee takes a user ID alone: GitLab declares None and Any for it
+// as for assignee_id, and Issuables::AssigneeFilter#by_negated_assignee reads
+// either as a user ID no user has, which excludes nobody.
+func applyMergeAndNegatedIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
+	if input.MergeUserID != 0 {
+		opts.MergeUserID = new(input.MergeUserID)
+	}
+	if input.NotAuthorID != 0 {
+		opts.NotAuthorID = new(input.NotAuthorID)
+	}
+	if input.NotReviewerID != 0 {
+		opts.NotReviewerID = new(input.NotReviewerID)
+	}
+	if input.NotAssigneeID != 0 {
+		opts.NotAssigneeID = gl.AssigneeID(input.NotAssigneeID)
+	}
 }
 
 // applyUserIDFilters sets the assignee and reviewer filters, each a user ID,
@@ -234,14 +279,19 @@ func applyUserIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) erro
 	return nil
 }
 
-// applyDateFilters parses the created and updated bounds, setting each one
-// supplied and refusing the call on the first that does not parse.
+// applyDateFilters parses the created, updated, deployed and merged bounds,
+// setting each one supplied and refusing the call on the first that does not
+// parse.
 func applyDateFilters(input ListInput, opts *gl.ListMergeRequestsOptions) error {
 	return toolutil.ParseTimeInputs(
 		toolutil.TimeInput{Field: "created_after", Value: input.CreatedAfter, Dest: &opts.CreatedAfter},
 		toolutil.TimeInput{Field: "created_before", Value: input.CreatedBefore, Dest: &opts.CreatedBefore},
 		toolutil.TimeInput{Field: "updated_after", Value: input.UpdatedAfter, Dest: &opts.UpdatedAfter},
 		toolutil.TimeInput{Field: "updated_before", Value: input.UpdatedBefore, Dest: &opts.UpdatedBefore},
+		toolutil.TimeInput{Field: "deployed_after", Value: input.DeployedAfter, Dest: &opts.DeployedAfter},
+		toolutil.TimeInput{Field: "deployed_before", Value: input.DeployedBefore, Dest: &opts.DeployedBefore},
+		toolutil.TimeInput{Field: "merged_after", Value: input.MergedAfter, Dest: &opts.MergedAfter},
+		toolutil.TimeInput{Field: "merged_before", Value: input.MergedBefore, Dest: &opts.MergedBefore},
 	)
 }
 

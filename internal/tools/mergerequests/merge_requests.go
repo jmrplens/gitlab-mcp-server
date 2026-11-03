@@ -132,6 +132,19 @@ type ListInput struct {
 	UpdatedBefore          string                     `json:"updated_before,omitempty" jsonschema:"Return MRs updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
 	DeployedAfter          string                     `json:"deployed_after,omitempty"  jsonschema:"Return MRs deployed after date (ISO 8601 format)"`
 	DeployedBefore         string                     `json:"deployed_before,omitempty" jsonschema:"Return MRs deployed before date (ISO 8601 format)"`
+	In                     string                     `json:"in,omitempty"            jsonschema:"Fields the search parameter matches: title, description, or both joined with a comma (title,description, GitLab's default)"`
+	AssigneeUsername       []string                   `json:"assignee_username,omitempty"     jsonschema:"Filter by assignee usernames: MRs assigned to all of them. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate). Cannot be combined with assignee_id"`
+	MergeUserID            int64                      `json:"merge_user_id,omitempty"         jsonschema:"Filter by the user ID of who merged the MR. Cannot be combined with merge_user_username"`
+	MergeUserUsername      string                     `json:"merge_user_username,omitempty"   jsonschema:"Filter by the username of who merged the MR. Cannot be combined with merge_user_id"`
+	MergedAfter            string                     `json:"merged_after,omitempty"          jsonschema:"Return MRs merged on or after this time (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	MergedBefore           string                     `json:"merged_before,omitempty"         jsonschema:"Return MRs merged on or before this time (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	NotAssigneeID          int64                      `json:"not_assignee_id,omitempty"       jsonschema:"Exclude MRs assigned to this user ID"`
+	NotAssigneeUsername    []string                   `json:"not_assignee_username,omitempty" jsonschema:"Exclude MRs assigned to these usernames. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate)"`
+	NotAuthorID            int64                      `json:"not_author_id,omitempty"         jsonschema:"Exclude MRs authored by this user ID"`
+	NotMilestone           string                     `json:"not_milestone,omitempty"         jsonschema:"Exclude MRs in this milestone (its title)"`
+	NotMyReactionEmoji     string                     `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	NotReviewerID          int64                      `json:"not_reviewer_id,omitempty"       jsonschema:"Exclude MRs with this user ID as a reviewer"`
+	NotReviewerUsername    string                     `json:"not_reviewer_username,omitempty" jsonschema:"Exclude MRs with this username as a reviewer"`
 	OrderBy                string                     `json:"order_by,omitempty"      jsonschema:"Order by field (created_at, updated_at, title)"`
 	Sort                   string                     `json:"sort,omitempty"          jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -181,6 +194,28 @@ type mergeRequestListFilters struct {
 	Sort                string
 	Page                int
 	PerPage             int
+	mergeAndNegated
+}
+
+// mergeAndNegated are the filters every merge request list takes that
+// client-go's list options model from v3.33.0, and source_project_id, which
+// only the group list's options model: who merged a merge request and when,
+// the assignee usernames, and the negated filters. A list whose options lack
+// one leaves it unset on its side.
+type mergeAndNegated struct {
+	AssigneeUsername    []string
+	NotAssigneeUsername []string
+	MergeUserID         int64
+	NotAssigneeID       int64
+	NotAuthorID         int64
+	NotReviewerID       int64
+	SourceProjectID     int64
+	MergeUserUsername   string
+	NotMilestone        string
+	NotMyReactionEmoji  string
+	NotReviewerUsername string
+	MergedAfter         string
+	MergedBefore        string
 }
 
 // mergeRequestListTarget is the set of setters one listing's options accept.
@@ -223,6 +258,19 @@ type mergeRequestListTarget struct {
 	orderBy             func(*string)
 	sort                func(*string)
 	listOptions         *gl.ListOptions
+	assigneeUsername    func([]string)
+	notAssigneeUsername func([]string)
+	mergeUserID         func(int64)
+	notAssigneeID       func(int64)
+	notAuthorID         func(int64)
+	notReviewerID       func(int64)
+	sourceProjectID     func(int64)
+	mergeUserUsername   func(*string)
+	notMilestone        func(*string)
+	notMyReactionEmoji  func(*string)
+	notReviewerUsername func(*string)
+	mergedAfter         func(*time.Time)
+	mergedBefore        func(*time.Time)
 }
 
 // mergeRequestOutput converts a merge request the SDK has just decoded, filling
@@ -279,6 +327,7 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	setString(input.OrderBy, target.orderBy)
 	setString(input.Sort, target.sort)
 	setInt64(input.AuthorID, target.authorID)
+	applyMergeAndNegatedFilters(input.mergeAndNegated, target)
 	if err := applyUserIDFilters(input, target); err != nil {
 		return err
 	}
@@ -318,6 +367,8 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 		{"updated_before", input.UpdatedBefore, target.updatedBefore},
 		{"deployed_after", input.DeployedAfter, target.deployedAfter},
 		{"deployed_before", input.DeployedBefore, target.deployedBefore},
+		{"merged_after", input.MergedAfter, target.mergedAfter},
+		{"merged_before", input.MergedBefore, target.mergedBefore},
 	}
 	for _, filter := range timeFilters {
 		if err := setTime(filter.field, filter.value, filter.setter); err != nil {
@@ -326,6 +377,23 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	}
 	toolutil.ApplyListOptions(target.listOptions, toolutil.PaginationInput{Page: input.Page, PerPage: input.PerPage}, toolutil.KeysetPaginationInput{})
 	return nil
+}
+
+// applyMergeAndNegatedFilters sets the filters client-go's list options model
+// from v3.33.0, each only when the caller gave it, and source_project_id. The
+// two time bounds among them are parsed with the other time filters.
+func applyMergeAndNegatedFilters(input mergeAndNegated, target mergeRequestListTarget) {
+	setStringSlice(input.AssigneeUsername, target.assigneeUsername)
+	setStringSlice(input.NotAssigneeUsername, target.notAssigneeUsername)
+	setInt64(input.MergeUserID, target.mergeUserID)
+	setInt64(input.NotAssigneeID, target.notAssigneeID)
+	setInt64(input.NotAuthorID, target.notAuthorID)
+	setInt64(input.NotReviewerID, target.notReviewerID)
+	setInt64(input.SourceProjectID, target.sourceProjectID)
+	setString(input.MergeUserUsername, target.mergeUserUsername)
+	setString(input.NotMilestone, target.notMilestone)
+	setString(input.NotMyReactionEmoji, target.notMyReactionEmoji)
+	setString(input.NotReviewerUsername, target.notReviewerUsername)
 }
 
 // applyUserIDFilters sets the assignee and reviewer filters, each a user ID,
@@ -761,6 +829,12 @@ func buildListOptions(input ListInput) (*gl.ListProjectMergeRequestsOptions, err
 	return opts, nil
 }
 
+// projectMRListFilters reads the project list input, field for field what
+// [globalMRListFilters] reads of the global one since both offer the filters
+// client-go v3.33.0 models; see [groupMRListFilters] for why the three are
+// not one function.
+//
+//nolint:dupl // ListInput and ListGlobalInput are two published tool schemas whose fields happen to share names; the only way to share this body is an embedded input struct, which would reshape both schemas.
 func projectMRListFilters(input ListInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
@@ -772,8 +846,13 @@ func projectMRListFilters(input ListInput) mergeRequestListFilters {
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter,
 		CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
-		DeployedAfter: input.DeployedAfter, DeployedBefore: input.DeployedBefore,
+		DeployedAfter: input.DeployedAfter, DeployedBefore: input.DeployedBefore, In: input.In,
 		OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+		AssigneeUsername: input.AssigneeUsername, NotAssigneeUsername: input.NotAssigneeUsername,
+		MergeUserID: input.MergeUserID, NotAssigneeID: input.NotAssigneeID, NotAuthorID: input.NotAuthorID,
+		NotReviewerID: input.NotReviewerID, MergeUserUsername: input.MergeUserUsername, NotMilestone: input.NotMilestone,
+		NotMyReactionEmoji: input.NotMyReactionEmoji, NotReviewerUsername: input.NotReviewerUsername,
+		MergedAfter: input.MergedAfter, MergedBefore: input.MergedBefore,
 	}
 }
 
@@ -787,7 +866,12 @@ func projectMergeRequestListTarget(opts *gl.ListProjectMergeRequestsOptions) mer
 		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
 		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, deployedAfter: &opts.DeployedAfter, deployedBefore: &opts.DeployedBefore,
-		orderBy: &opts.OrderBy, sort: &opts.Sort, listOptions: &opts.ListOptions,
+		orderBy: &opts.OrderBy, sort: &opts.Sort, listOptions: &opts.ListOptions, in: &opts.In,
+		assigneeUsername: &opts.AssigneeUsername, notAssigneeUsername: &opts.NotAssigneeUsername,
+		mergeUserID: &opts.MergeUserID, notAssigneeID: &opts.NotAssigneeID, notAuthorID: &opts.NotAuthorID,
+		notReviewerID: &opts.NotReviewerID, mergeUserUsername: &opts.MergeUserUsername, notMilestone: &opts.NotMilestone,
+		notMyReactionEmoji: &opts.NotMyReactionEmoji, notReviewerUsername: &opts.NotReviewerUsername,
+		mergedAfter: &opts.MergedAfter, mergedBefore: &opts.MergedBefore,
 	})
 }
 
@@ -1346,6 +1430,21 @@ type ListGlobalInput struct {
 	CreatedBefore          string                     `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601)"`
 	UpdatedAfter           string                     `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601)"`
 	UpdatedBefore          string                     `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601)"`
+	Environment            string                     `json:"environment,omitempty"     jsonschema:"Filter by MRs deployed to this environment name"`
+	DeployedAfter          string                     `json:"deployed_after,omitempty"  jsonschema:"Return MRs deployed after date (ISO 8601)"`
+	DeployedBefore         string                     `json:"deployed_before,omitempty" jsonschema:"Return MRs deployed before date (ISO 8601)"`
+	AssigneeUsername       []string                   `json:"assignee_username,omitempty"     jsonschema:"Filter by assignee usernames: MRs assigned to all of them. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate). Cannot be combined with assignee_id"`
+	MergeUserID            int64                      `json:"merge_user_id,omitempty"         jsonschema:"Filter by the user ID of who merged the MR. Cannot be combined with merge_user_username"`
+	MergeUserUsername      string                     `json:"merge_user_username,omitempty"   jsonschema:"Filter by the username of who merged the MR. Cannot be combined with merge_user_id"`
+	MergedAfter            string                     `json:"merged_after,omitempty"          jsonschema:"Return MRs merged on or after this time (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	MergedBefore           string                     `json:"merged_before,omitempty"         jsonschema:"Return MRs merged on or before this time (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	NotAssigneeID          int64                      `json:"not_assignee_id,omitempty"       jsonschema:"Exclude MRs assigned to this user ID"`
+	NotAssigneeUsername    []string                   `json:"not_assignee_username,omitempty" jsonschema:"Exclude MRs assigned to these usernames. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate)"`
+	NotAuthorID            int64                      `json:"not_author_id,omitempty"         jsonschema:"Exclude MRs authored by this user ID"`
+	NotMilestone           string                     `json:"not_milestone,omitempty"         jsonschema:"Exclude MRs in this milestone (its title)"`
+	NotMyReactionEmoji     string                     `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	NotReviewerID          int64                      `json:"not_reviewer_id,omitempty"       jsonschema:"Exclude MRs with this user ID as a reviewer"`
+	NotReviewerUsername    string                     `json:"not_reviewer_username,omitempty" jsonschema:"Exclude MRs with this username as a reviewer"`
 	OrderBy                string                     `json:"order_by,omitempty"        jsonschema:"Order by field (created_at, updated_at)"`
 	Sort                   string                     `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -1385,9 +1484,9 @@ func buildGlobalListOptions(input ListGlobalInput) (*gl.ListMergeRequestsOptions
 }
 
 // globalMRListFilters reads the global list input; see [groupMRListFilters]
-// for why its twin is not a copy of it.
+// for why its twins are not copies of it.
 //
-//nolint:dupl // ListGlobalInput and ListGroupInput are two published tool schemas whose fields happen to share names; the only way to share this body is an embedded input struct, which would reshape both schemas.
+//nolint:dupl // ListGlobalInput, ListInput and ListGroupInput are published tool schemas whose fields happen to share names; the only way to share this body is an embedded input struct, which would reshape them.
 func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
@@ -1399,6 +1498,12 @@ func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+		Environment: input.Environment, DeployedAfter: input.DeployedAfter, DeployedBefore: input.DeployedBefore,
+		AssigneeUsername: input.AssigneeUsername, NotAssigneeUsername: input.NotAssigneeUsername,
+		MergeUserID: input.MergeUserID, NotAssigneeID: input.NotAssigneeID, NotAuthorID: input.NotAuthorID,
+		NotReviewerID: input.NotReviewerID, MergeUserUsername: input.MergeUserUsername, NotMilestone: input.NotMilestone,
+		NotMyReactionEmoji: input.NotMyReactionEmoji, NotReviewerUsername: input.NotReviewerUsername,
+		MergedAfter: input.MergedAfter, MergedBefore: input.MergedBefore,
 	}
 }
 
@@ -1414,6 +1519,12 @@ func globalMergeRequestListTarget(opts *gl.ListMergeRequestsOptions) mergeReques
 		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort,
 		listOptions: &opts.ListOptions,
+		environment: &opts.Environment, deployedAfter: &opts.DeployedAfter, deployedBefore: &opts.DeployedBefore,
+		assigneeUsername: &opts.AssigneeUsername, notAssigneeUsername: &opts.NotAssigneeUsername,
+		mergeUserID: &opts.MergeUserID, notAssigneeID: &opts.NotAssigneeID, notAuthorID: &opts.NotAuthorID,
+		notReviewerID: &opts.NotReviewerID, mergeUserUsername: &opts.MergeUserUsername, notMilestone: &opts.NotMilestone,
+		notMyReactionEmoji: &opts.NotMyReactionEmoji, notReviewerUsername: &opts.NotReviewerUsername,
+		mergedAfter: &opts.MergedAfter, mergedBefore: &opts.MergedBefore,
 	})
 }
 
@@ -1453,6 +1564,19 @@ type mergeRequestListTargetFields struct {
 	orderBy             **string
 	sort                **string
 	listOptions         *gl.ListOptions
+	assigneeUsername    **[]string
+	notAssigneeUsername **[]string
+	mergeUserID         **int64
+	notAssigneeID       **gl.AssigneeIDValue
+	notAuthorID         **int64
+	notReviewerID       **int64
+	sourceProjectID     **int64
+	mergeUserUsername   **string
+	notMilestone        **string
+	notMyReactionEmoji  **string
+	notReviewerUsername **string
+	mergedAfter         **time.Time
+	mergedBefore        **time.Time
 }
 
 func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequestListTarget {
@@ -1473,6 +1597,13 @@ func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequest
 		updatedAfter: setTimePtr(fields.updatedAfter), updatedBefore: setTimePtr(fields.updatedBefore),
 		deployedAfter: setTimePtr(fields.deployedAfter), deployedBefore: setTimePtr(fields.deployedBefore),
 		orderBy: setStringPtr(fields.orderBy), sort: setStringPtr(fields.sort), listOptions: fields.listOptions,
+		assigneeUsername: setStringSlicePtr(fields.assigneeUsername), notAssigneeUsername: setStringSlicePtr(fields.notAssigneeUsername),
+		mergeUserID: setInt64Ptr(fields.mergeUserID), notAssigneeID: setUserAssigneeIDPtr(fields.notAssigneeID),
+		notAuthorID: setInt64Ptr(fields.notAuthorID), notReviewerID: setInt64Ptr(fields.notReviewerID),
+		sourceProjectID: setInt64Ptr(fields.sourceProjectID), mergeUserUsername: setStringPtr(fields.mergeUserUsername),
+		notMilestone: setStringPtr(fields.notMilestone), notMyReactionEmoji: setStringPtr(fields.notMyReactionEmoji),
+		notReviewerUsername: setStringPtr(fields.notReviewerUsername),
+		mergedAfter:         setTimePtr(fields.mergedAfter), mergedBefore: setTimePtr(fields.mergedBefore),
 	}
 }
 
@@ -1483,6 +1614,15 @@ func setInt64Ptr(target **int64) func(int64) {
 		v := value
 		*target = &v
 	}
+}
+
+// setUserAssigneeIDPtr returns a setter that stores a user ID as the SDK's
+// assignee filter value. The negated assignee filter takes a user ID alone:
+// GitLab declares None and Any for it as for assignee_id, and
+// Issuables::AssigneeFilter#by_negated_assignee reads either as a user ID no
+// user has, which excludes nobody.
+func setUserAssigneeIDPtr(target **gl.AssigneeIDValue) func(int64) {
+	return func(value int64) { *target = gl.AssigneeID(value) }
 }
 
 // setAssigneeIDPtr returns a setter that stores an assignee filter, a user ID
@@ -1556,6 +1696,22 @@ type ListGroupInput struct {
 	CreatedBefore          string                     `json:"created_before,omitempty"    jsonschema:"Return MRs created before date (ISO 8601)"`
 	UpdatedAfter           string                     `json:"updated_after,omitempty"     jsonschema:"Return MRs updated after date (ISO 8601)"`
 	UpdatedBefore          string                     `json:"updated_before,omitempty"    jsonschema:"Return MRs updated before date (ISO 8601)"`
+	Environment            string                     `json:"environment,omitempty"       jsonschema:"Filter by MRs deployed to this environment name"`
+	DeployedAfter          string                     `json:"deployed_after,omitempty"    jsonschema:"Return MRs deployed after date (ISO 8601)"`
+	DeployedBefore         string                     `json:"deployed_before,omitempty"   jsonschema:"Return MRs deployed before date (ISO 8601)"`
+	SourceProjectID        int64                      `json:"source_project_id,omitempty" jsonschema:"Filter by the ID of the project the MR's source branch is in"`
+	AssigneeUsername       []string                   `json:"assignee_username,omitempty"     jsonschema:"Filter by assignee usernames: MRs assigned to all of them. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate). Cannot be combined with assignee_id"`
+	MergeUserID            int64                      `json:"merge_user_id,omitempty"         jsonschema:"Filter by the user ID of who merged the MR. Cannot be combined with merge_user_username"`
+	MergeUserUsername      string                     `json:"merge_user_username,omitempty"   jsonschema:"Filter by the username of who merged the MR. Cannot be combined with merge_user_id"`
+	MergedAfter            string                     `json:"merged_after,omitempty"          jsonschema:"Return MRs merged on or after this time (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	MergedBefore           string                     `json:"merged_before,omitempty"         jsonschema:"Return MRs merged on or before this time (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	NotAssigneeID          int64                      `json:"not_assignee_id,omitempty"       jsonschema:"Exclude MRs assigned to this user ID"`
+	NotAssigneeUsername    []string                   `json:"not_assignee_username,omitempty" jsonschema:"Exclude MRs assigned to these usernames. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate)"`
+	NotAuthorID            int64                      `json:"not_author_id,omitempty"         jsonschema:"Exclude MRs authored by this user ID"`
+	NotMilestone           string                     `json:"not_milestone,omitempty"         jsonschema:"Exclude MRs in this milestone (its title)"`
+	NotMyReactionEmoji     string                     `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	NotReviewerID          int64                      `json:"not_reviewer_id,omitempty"       jsonschema:"Exclude MRs with this user ID as a reviewer"`
+	NotReviewerUsername    string                     `json:"not_reviewer_username,omitempty" jsonschema:"Exclude MRs with this username as a reviewer"`
 	OrderBy                string                     `json:"order_by,omitempty"          jsonschema:"Order by field (created_at, updated_at)"`
 	Sort                   string                     `json:"sort,omitempty"              jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
@@ -1591,14 +1747,11 @@ func buildGroupListOptions(input ListGroupInput) (*gl.ListGroupMergeRequestsOpti
 	return opts, nil
 }
 
-// groupMRListFilters is textually identical to [globalMRListFilters] and is
-// not a copy of it: the two read different input types, whose fields happen to
-// carry the same names, and they diverged by one line until the `approved`
-// filter left with client-go v3. Unifying them would mean an embedded input
-// struct shared by two published tool schemas, which is a larger change than
-// the repetition costs.
-//
-//nolint:dupl // ListGroupInput and ListGlobalInput are two published tool schemas whose fields happen to share names; the only way to share this body is an embedded input struct, which would reshape both schemas.
+// groupMRListFilters differs from [globalMRListFilters] by source_project_id
+// alone, which only the group list's options model, and is not a copy of it:
+// the two read different input types, whose fields happen to carry the same
+// names. Unifying them would mean an embedded input struct shared by two
+// published tool schemas, which is a larger change than the repetition costs.
 func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
@@ -1610,6 +1763,12 @@ func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+		Environment: input.Environment, DeployedAfter: input.DeployedAfter, DeployedBefore: input.DeployedBefore,
+		AssigneeUsername: input.AssigneeUsername, NotAssigneeUsername: input.NotAssigneeUsername,
+		MergeUserID: input.MergeUserID, NotAssigneeID: input.NotAssigneeID, NotAuthorID: input.NotAuthorID,
+		NotReviewerID: input.NotReviewerID, MergeUserUsername: input.MergeUserUsername, NotMilestone: input.NotMilestone,
+		NotMyReactionEmoji: input.NotMyReactionEmoji, NotReviewerUsername: input.NotReviewerUsername,
+		MergedAfter: input.MergedAfter, MergedBefore: input.MergedBefore, SourceProjectID: input.SourceProjectID,
 	}
 }
 
@@ -1624,6 +1783,12 @@ func groupMergeRequestListTarget(opts *gl.ListGroupMergeRequestsOptions) mergeRe
 		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort,
 		listOptions: &opts.ListOptions,
+		environment: &opts.Environment, deployedAfter: &opts.DeployedAfter, deployedBefore: &opts.DeployedBefore,
+		assigneeUsername: &opts.AssigneeUsername, notAssigneeUsername: &opts.NotAssigneeUsername,
+		mergeUserID: &opts.MergeUserID, notAssigneeID: &opts.NotAssigneeID, notAuthorID: &opts.NotAuthorID,
+		notReviewerID: &opts.NotReviewerID, mergeUserUsername: &opts.MergeUserUsername, notMilestone: &opts.NotMilestone,
+		notMyReactionEmoji: &opts.NotMyReactionEmoji, notReviewerUsername: &opts.NotReviewerUsername,
+		mergedAfter: &opts.MergedAfter, mergedBefore: &opts.MergedBefore, sourceProjectID: &opts.SourceProjectID,
 	})
 }
 
