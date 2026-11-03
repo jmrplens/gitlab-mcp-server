@@ -23,9 +23,9 @@ const doName = "Do"
 
 // rawCaller is one call of a function that forwards its own verb or options
 // parameter to a raw request it builds (doProjectRequest[T],
-// rawMutateApprovalRule, groupboards.newRawRequest): where the call is, and
-// the verb and the static type of the options the request then carries,
-// empty when not a constant and for nil.
+// rawMutateApprovalRule): where the call is, and the verb and the static type
+// of the options the request then carries, empty when not a constant and for
+// nil.
 type rawCaller struct {
 	Site    string `json:"site"`
 	Verb    string `json:"verb,omitempty"`

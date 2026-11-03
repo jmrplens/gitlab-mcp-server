@@ -9,6 +9,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -1955,11 +1956,10 @@ func TestRepositoryTree_NodeFieldsComeFromTheirOwnKeys(t *testing.T) {
 
 // TestRepositoryTree_WithLastCommit_PublishesEachEntrysCommit verifies that
 // with_last_commit reaches GitLab only when the caller set it, and that each
-// entry's last commit is published whole when it did, read off the captured
-// answer since client-go's TreeNode has no field for it; an entry GitLab sent
-// none for keeps none. The commit carries trailers in the shape GitLab sends
-// them, extended_trailers mapping each to the list of its values, which
-// client-go's Commit cannot decode.
+// entry's last commit is published whole when it did; an entry GitLab sent none
+// for keeps none. The commit carries trailers in the shape GitLab sends them,
+// extended_trailers mapping each to the list of its values, which client-go
+// decodes from v3.40.3 and on v3.39.0 to v3.40.2 failed the whole page on.
 func TestRepositoryTree_WithLastCommit_PublishesEachEntrysCommit(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -1999,9 +1999,10 @@ func TestRepositoryTree_WithLastCommit_PublishesEachEntrysCommit(t *testing.T) {
 	}
 }
 
-// treeWithLastCommits lists a tree whose first entry GitLab answers with a
-// last commit and whose second it answers without one, and returns the
-// with_last_commit value the request carried beside the listing.
+// treeWithLastCommits lists a tree whose first entry GitLab answers with a last
+// commit when the request asked for one, as lib/api/entities/tree_object.rb does,
+// and whose second it answers without one, and returns the with_last_commit value
+// the request carried beside the listing.
 func treeWithLastCommits(t *testing.T, with bool) (string, TreeOutput) {
 	t.Helper()
 	const lastCommit = `{"id":"c0ffee0000","short_id":"c0ffee0","title":"Touch the readme","message":"Touch the readme",` +
@@ -2015,9 +2016,11 @@ func treeWithLastCommits(t *testing.T, with bool) (string, TreeOutput) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		asked := r.URL.Query().Get("with_last_commit")
 		sent.Store(&asked)
-		testutil.RespondJSON(w, http.StatusOK, `[`+
-			`{"id":"a1","name":"README.md","type":"blob","path":"README.md","mode":"100644","last_commit":`+lastCommit+`},`+
-			`{"id":"a2","name":"src","type":"tree","path":"src","mode":"040000"}]`)
+		first := `{"id":"a1","name":"README.md","type":"blob","path":"README.md","mode":"100644"}`
+		if asked == "true" {
+			first = `{"id":"a1","name":"README.md","type":"blob","path":"README.md","mode":"100644","last_commit":` + lastCommit + `}`
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+first+`,{"id":"a2","name":"src","type":"tree","path":"src","mode":"040000"}]`)
 	}))
 
 	out, err := Tree(t.Context(), client, TreeInput{ProjectID: "42", WithLastCommit: with})
@@ -2042,15 +2045,14 @@ func TestRepositoryTree_WithLastCommitAndRecursive_IsRefused(t *testing.T) {
 }
 
 // TestRepositoryTree_UndecodableLastCommit_IsAnError verifies that a last
-// commit that does not decode is reported rather than dropped: client-go reads
-// no last_commit, so only this server's read of the captured answer meets it.
+// commit that does not decode is reported rather than dropped.
 func TestRepositoryTree_UndecodableLastCommit_IsAnError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":"a1","name":"README.md","type":"blob","path":"README.md","mode":"100644","last_commit":"not a commit"}]`)
 	}))
 	_, err := Tree(t.Context(), client, TreeInput{ProjectID: "42", WithLastCommit: true})
 	if err == nil || !strings.Contains(err.Error(), "repositoryTree") {
-		t.Fatalf("Tree() error = %v, want the failed read of the captured tree", err)
+		t.Fatalf("Tree() error = %v, want the failed read of the tree", err)
 	}
 }
 
@@ -2183,16 +2185,15 @@ func TestRepositoryMergeBase_RefsReachTheRequest(t *testing.T) {
 
 // trailedCommitJSON is a commit as GitLab answers it once its trailers were
 // parsed: extended_trailers maps each trailer to the list of all of its
-// values, the shape client-go's Commit cannot decode.
+// values.
 const trailedCommitJSON = `{"id":"abc123","short_id":"abc123d","title":"feat: signed twice",` +
 	`"trailers":{"Signed-off-by":"Bob"},"extended_trailers":{"Signed-off-by":["Ada","Bob"]}}`
 
 // TestRepositoryCompareAndMergeBase_CommitsWithTrailers_PublishTheListsGitLabSent
 // holds the two repository actions that publish commits.Output to the
 // reading issue 1026 asked for: a comparison's commits and a merge base carry
-// extended_trailers as lists, client-go fails to decode the whole answer, and
-// the action still returns every commit with every value of each trailer, the
-// comparison its diffs and flags too.
+// extended_trailers as lists, and the action returns every commit with every
+// value of each trailer, the comparison its diffs and flags too.
 func TestRepositoryCompareAndMergeBase_CommitsWithTrailers_PublishTheListsGitLabSent(t *testing.T) {
 	want := map[string][]string{"Signed-off-by": {"Ada", "Bob"}}
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2232,10 +2233,8 @@ func TestRepositoryCompareAndMergeBase_CommitsWithTrailers_PublishTheListsGitLab
 }
 
 // TestRepositoryCompareAndMergeBase_AnswerNoTypeHolds_ReportTheDecodeFailure
-// pins the other side of passing over client-go's decode failure: an answer
-// that fits neither client-go's struct nor this server's (a commit id that is
-// a number) is not published as an empty comparison or commit; both actions
-// report the decode failure of the capture instead.
+// pins that an answer client-go's struct cannot hold (a commit id that is a
+// number) is not published as an empty comparison or commit.
 func TestRepositoryCompareAndMergeBase_AnswerNoTypeHolds_ReportTheDecodeFailure(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRepoCompare {
@@ -2260,11 +2259,8 @@ func TestRepositoryCompareAndMergeBase_AnswerNoTypeHolds_ReportTheDecodeFailure(
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.call()
-			if err == nil {
-				t.Fatal("expected the decode failure, got nil")
-			}
-			if !strings.Contains(err.Error(), "decode the captured response") {
-				t.Errorf("error = %v, want the capture's decode failure", err)
+			if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+				t.Fatalf("error = %v, want client-go's decode failure", err)
 			}
 		})
 	}

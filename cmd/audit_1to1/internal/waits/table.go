@@ -108,36 +108,6 @@ var upstreamWaits = []Entry{
 		Reason: "epics.rawListEpics issues raw GETs for groups/:id/epics and .../:epic_iid/epics: the wrapper's Epic type omits twelve documented response fields, its EpicAuthor the locked and public_email the author carries, and it types labels []string, so the documented with_labels_details parameter makes the response undecodable. The other four epic actions take the Work Items GraphQL API, which the interface's own upstream doc comment directs to",
 	},
 	{
-		Row: 34, Category: CategoryUpstream,
-		Sites:    []string{"projectimportexport.rawGetImportStatus", "projectimportexport.rawImportFromFile"},
-		Replaces: []string{"ProjectImportExport.ImportStatus", "ProjectImportExport.ImportFromFile"},
-		Predicates: []Predicate{
-			TagName{Type: "ImportStatus", Field: "CreateAt", Encoder: EncoderJSON, Want: "created_at"},
-			LacksKey{Type: "ImportStatus", Key: "failed_relations"},
-			LacksKey{Type: "ImportStatus", Key: "stats"},
-		},
-		Reason: "ImportStatus tags its timestamp create_at where GitLab sends created_at, so it never decodes, and models neither failed_relations nor stats; both import status routes are read through a decode of their own",
-	},
-	{
-		Row: 34, Category: CategoryUpstream,
-		Sites:      []string{"pipelineschedules.rawGetSchedule"},
-		Replaces:   []string{"PipelineSchedules.GetPipelineSchedule"},
-		Predicates: []Predicate{LacksKey{Type: "PipelineSchedule", Key: "variables.raw"}},
-		Reason:     "PipelineVariable has no raw, which GitLab sends on each variable of a schedule, so the schedule read decodes its variables itself",
-	},
-	{
-		Row: 34, Category: CategoryUpstream,
-		Sites:      []string{"repository.withLastCommitParam"},
-		Predicates: []Predicate{LacksKey{Type: "ListTreeOptions", Key: "with_last_commit"}},
-		Reason:     "ListTreeOptions has no with_last_commit, the parameter GitLab 19.3 added to the tree route, so repository.tree adds it to the query client-go encoded",
-	},
-	{
-		Row: 46, Category: CategoryUpstream,
-		Sites:      []string{"mergerequests.postCancelAutoMerge"},
-		Predicates: []Predicate{NoMethodFor{Route: "POST /projects/:/merge_requests/:/cancel_auto_merge"}},
-		Reason:     "client-go has no method for cancel_auto_merge, the route GitLab 19.5 added (gitlab-org/api/client-go!3101 adds MergeRequests.CancelAutoMerge), so the cancel posts to it itself on an instance that serves it",
-	},
-	{
 		Row: 58, Category: CategoryUpstream,
 		Sites:      []string{"projects.doProjectRequest"},
 		Replaces:   []string{"Projects.AddProjectHook", "Projects.EditProjectHook", "Projects.GetProjectHook", "Projects.ListProjectHooks"},
@@ -158,22 +128,6 @@ var upstreamWaits = []Entry{
 		Sites:      []string{"fixture.createFineGrainedToken"},
 		Predicates: []Predicate{LacksKey{Type: "CreatePersonalAccessTokenForCurrentUserOptions", Key: "granular_scopes"}},
 		Reason:     "no client-go create option carries granular_scopes, so the e2e fixture builds the fine-grained token creation through NewRequest",
-	},
-	{
-		Row: 95, Category: CategoryUpstream,
-		Sites:      []string{"groupmilestones.includeDescendants"},
-		Predicates: []Predicate{TagName{Type: "ListGroupMilestonesOptions", Field: "IncludeDescendents", Encoder: EncoderQuery, Want: "include_descendants"}},
-		Reason:     "ListGroupMilestonesOptions spells the parameter include_descendents, a key GitLab ignores, so the group milestone list adds include_descendants to the query itself",
-	},
-	{
-		Row: 98, Category: CategoryUpstream,
-		Sites:    []string{"groupboards.newRawRequest"},
-		Replaces: []string{"GroupIssueBoards.UpdateIssueBoard"},
-		Predicates: []Predicate{
-			LacksKey{Type: "UpdateGroupIssueBoardOptions", Key: "hide_backlog_list"},
-			LacksKey{Type: "UpdateGroupIssueBoardOptions", Key: "hide_closed_list"},
-		},
-		Reason: "UpdateGroupIssueBoardOptions models neither list switch the group board update takes, so group.group_board_update sends the PUT itself in a body that embeds the options",
 	},
 	{
 		Row: 115, Category: CategoryUpstream,

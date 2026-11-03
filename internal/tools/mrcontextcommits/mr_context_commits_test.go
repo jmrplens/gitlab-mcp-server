@@ -9,7 +9,6 @@ package mrcontextcommits
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -420,9 +419,8 @@ var fullCommitItem = CommitItem{
 // TestHandlers_PublishEveryCommitKey verifies that both routes answering with
 // commits publish every key of the commit entity, each from its own field: a
 // value copied into the wrong key would make the item differ. The commit
-// carries trailers, which client-go's Commit cannot decode (its
-// extended_trailers is a map of strings), so the answer is published only
-// because it is read from the captured response in the shape GitLab sends.
+// carries trailers in the shape GitLab sends, each mapped to the list of its
+// values.
 func TestHandlers_PublishEveryCommitKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "["+fullCommitJSON+"]")
@@ -639,12 +637,10 @@ func TestList_AuthorNoAccountHolds_IsAbsent(t *testing.T) {
 	}
 }
 
-// TestHandlers_AnswerNoTypeReads_IsAnError verifies that an answer neither
-// client-go's Commit nor this package's own row can decode is reported under
-// the operation's name rather than published empty: passing over client-go's
-// failure to read a trailer must not pass over a body nothing can read. And a
-// body that is not JSON at all is client-go's error to report, with the
-// route's hint, since no type of this package's could read it either.
+// TestHandlers_AnswerNoTypeReads_IsAnError verifies that an answer client-go's
+// Commit cannot decode, a key of the list's CommitWithLink only the capture reads
+// that does not fit it, or a body that is not JSON at all, is reported under the
+// operation's name rather than published empty.
 func TestHandlers_AnswerNoTypeReads_IsAnError(t *testing.T) {
 	cases := []struct {
 		name string
@@ -664,6 +660,14 @@ func TestHandlers_AnswerNoTypeReads_IsAnError(t *testing.T) {
 			out, err := List(t.Context(), c, ListInput{ProjectID: "1", MergeRequest: 10})
 			return out.Commits, err
 		}, "list_mr_context_commits: "},
+		{"list, author a string", `[{"id":"a1","author":"ada"}]`, func(c *gitlabclient.Client) ([]CommitItem, error) {
+			out, err := List(t.Context(), c, ListInput{ProjectID: "1", MergeRequest: 10})
+			return out.Commits, err
+		}, "list_mr_context_commits: "},
+		{"create, author a string", `[{"id":"a1","author":"ada"}]`, func(c *gitlabclient.Client) ([]CommitItem, error) {
+			out, err := Create(t.Context(), c, CreateInput{ProjectID: "1", MergeRequest: 10, Commits: []string{"abc"}})
+			return out.Commits, err
+		}, "create_mr_context_commits: "},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -676,30 +680,6 @@ func TestHandlers_AnswerNoTypeReads_IsAnError(t *testing.T) {
 			}
 			if commits != nil {
 				t.Errorf("commits = %+v, want none beside the error", commits)
-			}
-		})
-	}
-}
-
-// TestMisreadByClientGo pins which errors the handlers pass over to read the
-// capture instead: a type mismatch in client-go's decoder, however wrapped,
-// and nothing else.
-func TestMisreadByClientGo(t *testing.T) {
-	var typeErr error = &json.UnmarshalTypeError{Value: "array", Field: "extended_trailers"}
-	cases := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{"type mismatch", typeErr, true},
-		{"wrapped type mismatch", fmt.Errorf("decode: %w", typeErr), true},
-		{"syntax error", &json.SyntaxError{}, false},
-		{"other error", errors.New("403 Forbidden"), false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := misreadByClientGo(tc.err); got != tc.want {
-				t.Errorf("misreadByClientGo(%v) = %t, want %t", tc.err, got, tc.want)
 			}
 		})
 	}

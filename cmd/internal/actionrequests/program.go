@@ -245,7 +245,7 @@ func (p *Program) indexFunctions(pkg *packages.Package) {
 //
 // A handler reaches a request through a package-level variable in three shapes
 // this tree writes: a test seam holding a function literal
-// (`var newRawRequest = func(...)` in the group boards), a dispatch table of
+// (`var newDownloadRequest = func(...)` in the packages), a dispatch table of
 // literals selected by a key (`integrationGetters`), and a method expression
 // (`var newRequest = (*gl.Client).NewRequest` in commits). A body that names
 // the variable reaches whatever its initializer names, which is what the

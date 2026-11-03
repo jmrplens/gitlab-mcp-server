@@ -363,61 +363,33 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "board",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedBoard(c) },
-			body: `{"id":1,"group":{"id":4,"name":"Acme","web_url":"https://example/groups/acme"},` +
-				`"lists":[{"id":7,"limit_metric":"issue_count"},{"id":8,"limit_metric":null},{"id":9,"limit_metric":"issue_weights"}]}`,
+			body: `{"id":1,"group":{"id":4,"name":"Acme","web_url":"https://example/groups/acme"}}`,
 			want: func(v any) bool {
 				e, _ := v.(BoardExtra)
-				return e.Group != nil && e.Group.ID == 4 && e.Group.WebURL == "https://example/groups/acme" &&
-					reflect.DeepEqual(e.Lists, []BoardListExtra{{LimitMetric: "issue_count"}, {}, {LimitMetric: "issue_weights"}})
+				return e.Group != nil && e.Group.ID == 4 && e.Group.WebURL == "https://example/groups/acme"
 			},
 		},
 		{
-			// The two switches differ, so a reader that read one key into the
-			// other's field is caught, and the board is scoped to weight 0,
-			// which is a scope of its own and has to stay apart from null.
+			// The board is scoped to weight 0, which is a scope of its own and
+			// has to stay apart from null.
 			name: "group board",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedGroupBoard(c) },
-			body: `{"id":1,"hide_backlog_list":false,"hide_closed_list":true,"weight":0,` +
-				`"assignee":{"id":3,"username":"ada","name":"Ada","state":"active","avatar_url":"https://example/a.png","web_url":"https://example/ada"},` +
-				`"lists":[{"id":7,"limit_metric":"issue_count"},{"id":8,"limit_metric":null}]}`,
+			body: `{"id":1,"weight":0}`,
 			want: func(v any) bool {
 				e, _ := v.(GroupBoardExtra)
-				return reflect.DeepEqual(e, GroupBoardExtra{
-					HideClosedList: true,
-					Assignee: &BoardUserOutput{
-						ID: 3, Username: "ada", Name: "Ada", State: "active",
-						AvatarURL: "https://example/a.png", WebURL: "https://example/ada",
-					},
-					Weight: new(int64(0)),
-					Lists:  []BoardListExtra{{LimitMetric: "issue_count"}, {}},
-				})
+				return reflect.DeepEqual(e, GroupBoardExtra{Weight: new(int64(0))})
 			},
 		},
 		{
-			// A board with no assignee and no weight scope, which GitLab sends
-			// as null, reads as neither.
+			// A board with no weight scope, which GitLab sends as null, reads as
+			// none.
 			name: "group board with no scope",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedGroupBoard(c) },
-			body: `{"id":1,"hide_backlog_list":true,"hide_closed_list":false,"assignee":null,"weight":null,"lists":[]}`,
+			body: `{"id":1,"weight":null}`,
 			want: func(v any) bool {
 				e, _ := v.(GroupBoardExtra)
-				return reflect.DeepEqual(e, GroupBoardExtra{HideBacklogList: true, Lists: []BoardListExtra{}})
+				return e.Weight == nil
 			},
-		},
-		{
-			name: "milestone",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedMilestone(c) },
-			body: `{"id":1,"web_url":"https://example/m/1","project_id":9}`,
-			want: func(v any) bool {
-				e, _ := v.(MilestoneExtra)
-				return e.ProjectID == 9
-			},
-		},
-		{
-			name: "board list",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedBoardList(c) },
-			body: `{"id":1,"limit_metric":"all_metrics"}`,
-			want: func(v any) bool { e, _ := v.(BoardListExtra); return e.LimitMetric == "all_metrics" },
 		},
 		{
 			name: "CI variable",
@@ -703,14 +675,6 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"bridges", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedBridges(c, n)
-			return len(x), e
-		}},
-		{"milestones", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedMilestones(c, n)
-			return len(x), e
-		}},
-		{"board lists", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedBoardLists(c, n)
 			return len(x), e
 		}},
 		{"CI variables", func(c *gitlabclient.ResponseCapture, n int) (int, error) {

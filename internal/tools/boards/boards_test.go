@@ -18,8 +18,6 @@ import (
 	"strings"
 	"testing"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v3"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -470,11 +468,10 @@ type columnMetric struct {
 }
 
 // TestBoards_EachColumnCarriesItsOwnLimitMetric verifies that every handler
-// answering with a whole board publishes each column's limit_metric, the one
-// key of a column client-go's BoardList does not model, on the column it was
-// sent with and in the order GitLab sent the columns. The list, create and
-// update answers read only the board's group off the captured response and
-// published every column without its metric (issue 1256).
+// answering with a whole board publishes each column's limit_metric on the
+// column it was sent with and in the order GitLab sent the columns. The list,
+// create and update answers once published every column without its metric
+// (issue 1256).
 func TestBoards_EachColumnCarriesItsOwnLimitMetric(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -554,10 +551,9 @@ func boardListWithMetricOutput() BoardListOutput {
 }
 
 // TestBoardLists_EveryListAnswerCarriesTheLimitMetric pins the whole column
-// each list handler publishes, the limit_metric read beside client-go's
-// BoardList among it. The get, create and update answers decoded through the
-// SDK alone and published the column without its metric (issue 1256), which a
-// spot check of the id could not notice.
+// each list handler publishes, the limit_metric among it. The get, create and
+// update answers once published the column without its metric (issue 1256),
+// which a spot check of the id could not notice.
 func TestBoardLists_EveryListAnswerCarriesTheLimitMetric(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoardLists, func(w http.ResponseWriter, r *http.Request) {
@@ -605,78 +601,6 @@ func TestBoardLists_EveryListAnswerCarriesTheLimitMetric(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestConvertBoard_ColumnWithNoCapturedExtraHasNoMetric holds the join of a
-// board's columns to what was read beside them by position: a column the
-// captured board holds nothing for is published without a metric rather than
-// with another column's, and never indexes past what was read. The SDK and the
-// captured read decode the same bytes, so no answer of GitLab's reaches this
-// through a handler.
-func TestConvertBoard_ColumnWithNoCapturedExtraHasNoMetric(t *testing.T) {
-	board := &gl.IssueBoard{ID: 1, Lists: []*gl.BoardList{{ID: 100}, {ID: 101}}}
-	extra := toolutil.BoardExtra{Lists: []toolutil.BoardListExtra{{LimitMetric: "issue_count"}}}
-
-	out := convertBoard(board, extra)
-
-	got := make([]columnMetric, 0, len(out.Lists))
-	for _, list := range out.Lists {
-		got = append(got, columnMetric{list.ID, list.LimitMetric})
-	}
-	if want := []columnMetric{{100, "issue_count"}, {101, ""}}; !reflect.DeepEqual(got, want) {
-		t.Errorf("columns = %+v, want %+v", got, want)
-	}
-}
-
-// TestBoards_UnreadableCapturedLimitMetric verifies that every handler reading
-// a column's limit_metric off the captured answer returns an error rather than
-// a column without it when GitLab sends the metric as something that is not a
-// string. The SDK ignores the key its own BoardList does not model, so the
-// captured read is the only thing that can notice.
-func TestBoards_UnreadableCapturedLimitMetric(t *testing.T) {
-	// A list answers with an array and the rest with an object, so each case
-	// drives a client of its own rather than one shared handler.
-	poisoned := func(body string) *gitlabclient.Client {
-		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			testutil.RespondJSON(w, http.StatusOK, body)
-		}))
-	}
-	const column = `{"id":100,"position":0,"limit_metric":42}`
-	const board = `{"id":1,"name":"dev","lists":[` + column + `]}`
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "board list", Call: func() error {
-			_, err := ListBoards(t.Context(), poisoned(`[`+board+`]`), ListBoardsInput{ProjectID: "10"})
-			return err
-		}},
-		{Name: "board get", Call: func() error {
-			_, err := GetBoard(t.Context(), poisoned(board), GetBoardInput{ProjectID: "10", BoardID: 1})
-			return err
-		}},
-		{Name: "board create", Call: func() error {
-			_, err := CreateBoard(t.Context(), poisoned(board), CreateBoardInput{ProjectID: "10", Name: "dev"})
-			return err
-		}},
-		{Name: "board update", Call: func() error {
-			_, err := UpdateBoard(t.Context(), poisoned(board), UpdateBoardInput{ProjectID: "10", BoardID: 1, Name: "dev"})
-			return err
-		}},
-		{Name: "column list", Call: func() error {
-			_, err := ListBoardLists(t.Context(), poisoned(`[`+column+`]`), ListBoardListsInput{ProjectID: "10", BoardID: 1})
-			return err
-		}},
-		{Name: "column get", Call: func() error {
-			_, err := GetBoardList(t.Context(), poisoned(column), GetBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
-			return err
-		}},
-		{Name: "column create", Call: func() error {
-			_, err := CreateBoardList(t.Context(), poisoned(column), CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20})
-			return err
-		}},
-		{Name: "column update", Call: func() error {
-			_, err := UpdateBoardList(t.Context(), poisoned(column), UpdateBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100, Position: 2})
-			return err
-		}},
-	})
 }
 
 // TestListBoardLists_MissingParams verifies that ListBoardLists_MissingParams returns a wrapped error when the GitLab API responds with an error status.

@@ -12,9 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -71,38 +69,12 @@ type TreeCommitOutput struct {
 	WebURL           string              `json:"web_url,omitempty"`
 }
 
-// treeObjectExtra is the key of lib/api/entities/tree_object.rb that
-// client-go's TreeNode does not model: the commit that last changed the entry,
-// rendered through the commit entity when the request passed with_last_commit.
-type treeObjectExtra struct {
-	LastCommit *treeCommit `json:"last_commit"`
-}
-
-// treeCommit is a tree entry's last commit as GitLab sends it. It is decoded
-// here rather than into client-go's Commit, which declares extended_trailers a
-// map of strings and so cannot hold the map of lists GitLab sends: one entry
-// whose commit carried a trailer would fail the read of the whole page.
-type treeCommit struct {
-	ID               string              `json:"id"`
-	ShortID          string              `json:"short_id"`
-	Title            string              `json:"title"`
-	Message          string              `json:"message"`
-	AuthorName       string              `json:"author_name"`
-	AuthorEmail      string              `json:"author_email"`
-	AuthoredDate     *time.Time          `json:"authored_date"`
-	CommitterName    string              `json:"committer_name"`
-	CommitterEmail   string              `json:"committer_email"`
-	CommittedDate    *time.Time          `json:"committed_date"`
-	CreatedAt        *time.Time          `json:"created_at"`
-	ParentIDs        []string            `json:"parent_ids"`
-	Trailers         map[string]string   `json:"trailers"`
-	ExtendedTrailers map[string][]string `json:"extended_trailers"`
-	WebURL           string              `json:"web_url"`
-}
-
 // toTreeCommitOutput converts an entry's last commit, its three instants in
-// RFC 3339 as every other date here.
-func toTreeCommitOutput(c *treeCommit) *TreeCommitOutput {
+// RFC 3339 as every other date here, or nil for an entry GitLab sent none for.
+func toTreeCommitOutput(c *gl.Commit) *TreeCommitOutput {
+	if c == nil {
+		return nil
+	}
 	return &TreeCommitOutput{
 		ID:               c.ID,
 		ShortID:          c.ShortID,
@@ -119,21 +91,6 @@ func toTreeCommitOutput(c *treeCommit) *TreeCommitOutput {
 		Trailers:         c.Trailers,
 		ExtendedTrailers: c.ExtendedTrailers,
 		WebURL:           c.WebURL,
-	}
-}
-
-// withLastCommitParam asks the tree route for each entry's last commit when
-// want is set. The parameter arrived in GitLab 19.3 and client-go's
-// ListTreeOptions does not model it, so it is added to the query client-go
-// encoded; unset, the request is left as it was.
-func withLastCommitParam(want bool) gl.RequestOptionFunc {
-	return func(req *retryablehttp.Request) error {
-		if want {
-			query := req.URL.Query()
-			query.Set("with_last_commit", "true")
-			req.URL.RawQuery = query.Encode()
-		}
-		return nil
 	}
 }
 
@@ -166,6 +123,9 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 	if input.Recursive {
 		opts.Recursive = new(true)
 	}
+	if input.WithLastCommit {
+		opts.WithLastCommit = new(true)
+	}
 	if input.OrderBy != "" {
 		opts.OrderBy = input.OrderBy
 	}
@@ -174,11 +134,7 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
-	var captured *gitlabclient.ResponseCapture
-	if input.WithLastCommit {
-		ctx, captured = gitlabclient.WithResponseCapture(ctx)
-	}
-	nodes, resp, err := client.GL().Repositories.ListTree(string(input.ProjectID), opts, gl.WithContext(ctx), withLastCommitParam(input.WithLastCommit), toolutil.KeysetContinuation(input.KeysetPaginationInput))
+	nodes, resp, err := client.GL().Repositories.ListTree(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
 	if err != nil {
 		return TreeOutput{}, toolutil.WrapErrWithStatusHint("repositoryTree", err, http.StatusNotFound,
 			"verify project_id and ref (branch/tag/SHA) with branch.list or tag.list; check the path exists in the tree")
@@ -187,24 +143,12 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 	out := make([]TreeNodeOutput, len(nodes))
 	for i, n := range nodes {
 		out[i] = TreeNodeOutput{
-			ID:   n.ID,
-			Name: n.Name,
-			Type: n.Type,
-			Path: n.Path,
-			Mode: n.Mode,
-		}
-	}
-	if captured != nil {
-		// The SDK decoded the same array into nodes, so rows holds one entry
-		// per node, in the same order.
-		var rows []treeObjectExtra
-		if err = captured.Decode(&rows); err != nil {
-			return TreeOutput{}, toolutil.WrapErr("repositoryTree", err)
-		}
-		for i, row := range rows {
-			if row.LastCommit != nil {
-				out[i].LastCommit = toTreeCommitOutput(row.LastCommit)
-			}
+			ID:         n.ID,
+			Name:       n.Name,
+			Type:       n.Type,
+			Path:       n.Path,
+			Mode:       n.Mode,
+			LastCommit: toTreeCommitOutput(n.LastCommit),
 		}
 	}
 	return TreeOutput{Tree: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
@@ -258,24 +202,19 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, _, err := client.GL().Repositories.Compare(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil && !commits.MisreadByClientGo(err) {
+	cmp, _, err := client.GL().Repositories.Compare(string(input.ProjectID), opts, gl.WithContext(ctx))
+	if err != nil {
 		return CompareOutput{}, toolutil.WrapErrWithStatusHint("repositoryCompare", err, http.StatusNotFound,
 			"verify both 'from' and 'to' refs exist (branch name, tag name, or commit SHA) using branch.list or tag.list")
 	}
-	var answer capturedCompare
-	if err = captured.Decode(&answer); err != nil {
-		return CompareOutput{}, toolutil.WrapErr("repositoryCompare", err)
-	}
-	cmp := &answer.Compare
 	extras, err := toolutil.CapturedCompareDiffs(captured, len(cmp.Diffs))
 	if err != nil {
 		return CompareOutput{}, toolutil.WrapErr("repositoryCompare", err)
 	}
 
-	commitList := make([]commits.Output, len(answer.Commits))
-	for i := range answer.Commits {
-		commitList[i] = commits.OutputFromCaptured(&answer.Commits[i])
+	commitList := make([]commits.Output, len(cmp.Commits))
+	for i, c := range cmp.Commits {
+		commitList[i] = commits.ToOutput(c)
 	}
 
 	diffs := make([]toolutil.DiffOutput, len(cmp.Diffs))
@@ -284,8 +223,8 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 	}
 
 	var baseCommit *commits.Output
-	if answer.Commit != nil {
-		c := commits.OutputFromCaptured(answer.Commit)
+	if cmp.Commit != nil {
+		c := commits.ToOutput(cmp.Commit)
 		baseCommit = &c
 	}
 
@@ -297,17 +236,6 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 		CompareSameRef: cmp.CompareSameRef,
 		WebURL:         cmp.WebURL,
 	}, nil
-}
-
-// capturedCompare is a comparison as GitLab sends it, read off the captured
-// response. Its two commit keys are taken over from client-go's Compare,
-// whose Commit cannot hold extended_trailers as GitLab sends them (see
-// [commits.Captured]); encoding/json decodes a key into the shallowest field
-// that names it, so the embedded Compare's own commits stay empty.
-type capturedCompare struct {
-	gl.Compare
-	Commit  *commits.Captured  `json:"commit"`
-	Commits []commits.Captured `json:"commits"`
 }
 
 // ---------------------------------------------------------------------------
@@ -396,17 +324,12 @@ func MergeBase(ctx context.Context, client *gitlabclient.Client, input MergeBase
 	opts := &gl.MergeBaseOptions{
 		Ref: new(input.Refs),
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, _, err := client.GL().Repositories.MergeBase(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil && !commits.MisreadByClientGo(err) {
+	commit, _, err := client.GL().Repositories.MergeBase(string(input.ProjectID), opts, gl.WithContext(ctx))
+	if err != nil {
 		return commits.Output{}, toolutil.WrapErrWithStatusHint("repositoryMergeBase", err, http.StatusNotFound,
 			"verify all refs exist and share common history; refs must be branch/tag names or commit SHAs")
 	}
-	out, err := commits.CapturedOutput(captured)
-	if err != nil {
-		return commits.Output{}, toolutil.WrapErr("repositoryMergeBase", err)
-	}
-	return out, nil
+	return commits.ToOutput(commit), nil
 }
 
 // ---------------------------------------------------------------------------

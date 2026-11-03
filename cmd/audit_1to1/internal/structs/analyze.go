@@ -427,16 +427,6 @@ var docOmittedFields = &declarationTable{name: "docOmittedFields", entries: map[
 // expression and no test can execute a constant to catch it.
 const docApprovalsBeforeMergeNeverSent = "lib/api/entities/merge_request_approvals.rb (the four keys present_approval renders on Community Edition) and ee/lib/api/entities/approval_state.rb (what ee/lib/ee/api/merge_request_approvals.rb renders on every Enterprise build instead) expose no approvals_before_merge; the key is the merge request's, exposed by ee/lib/ee/api/entities/merge_request_basic.rb"
 
-// docGroupBoardUpdate cites the update example of the group board page, the
-// one that prints all four board keys gl.GroupIssueBoard leaves out with a
-// value: the two list switches, the assignee and the weight. The create
-// example prints the four as well, its assignee and weight as null.
-const docGroupBoardUpdate = "group_boards.md#update-a-group-issue-board"
-
-// docGroupBoardListMetric cites the project page for a group column's
-// limit_metric, since the group page prints no column that carries one.
-const docGroupBoardListMetric = "boards.md#list-all-board-lists-in-an-issue-board (ee/lib/ee/api/entities/list.rb exposes limit_metric on every column whose board has work-in-progress limits available, a group's included; group_boards.md prints no such column)"
-
 // docApprovalStateInvalidRules cites the entity that sends the one key of the
 // Enterprise approval state client-go does not declare.
 const docApprovalStateInvalidRules = "ee/lib/api/entities/approval_state.rb exposes invalid_approvers_rules (Entities::ApprovalRuleShort: id, name, rule_type), which every Enterprise build answers the approvals GET, the approve and the unapprove with; gl.MergeRequestApprovals does not declare it, so it is read off the captured answer (ADR-0021)"
@@ -477,26 +467,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"jobs.RunnerObject.paused":      docJobsSingle,
 	"jobs.RunnerObject.runner_type": docJobsSingle,
 	"jobs.RunnerObject.status":      docJobsSingle,
-
-	// boards — limit_metric is documented in doc/api/boards.md on each board list
-	// (all_metrics / issue_count / issue_weights, or null) but absent from
-	// gl.BoardList; read from the captured response beside the SDK's decode
-	// on every board and list answer (ADR-0021, toolutil.BoardExtra and
-	// CapturedBoardList).
-	"boards.BoardListOutput.limit_metric": "boards.md#list-all-board-lists-in-an-issue-board",
-
-	// groupboards: the four board keys gl.GroupIssueBoard does not declare,
-	// which the update page prints, and each column's limit_metric, which
-	// gl.BoardList does not declare either. Every group board answer reads
-	// them off the captured response beside the SDK's decode (ADR-0021,
-	// toolutil.GroupBoardExtra, issue 1283), and the column answers read the
-	// metric the same way (toolutil.CapturedBoardList). Recorded in
-	// docs/development/upstream-bugs.md (row 101).
-	"groupboards.GroupBoardOutput.hide_backlog_list": docGroupBoardUpdate,
-	"groupboards.GroupBoardOutput.hide_closed_list":  docGroupBoardUpdate,
-	"groupboards.GroupBoardOutput.assignee":          docGroupBoardUpdate,
-	"groupboards.GroupBoardOutput.weight":            docGroupBoardUpdate,
-	"groupboards.BoardListOutput.limit_metric":       docGroupBoardListMetric,
 
 	// deployments — deployable.project {ci_job_token_scope_enabled} is documented in
 	// doc/api/deployments.md but absent from gl.DeploymentDeployable; fetched via raw
@@ -668,7 +638,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"projects.Output.duo_foundational_flows_enabled":               docProjectsGet,
 	"projects.Output.duo_remote_flows_enabled":                     docProjectsGet,
 	"projects.Output.max_pipelines_per_merge_train":                docProjectsGet,
-	"projects.Output.only_allow_merge_if_all_status_checks_passed": docProjectsGet,
 	"projects.Output.repository_object_format":                     docProjectsGet,
 	"projects.Output.secret_push_protection_enabled":               docProjectsGet,
 	"projects.Output.security_policy_pipeline_must_succeed":        docProjectsGet,
@@ -984,13 +953,12 @@ func (r *diffRun) isAcceptedExtraOutput(pkg, mcpType, tag string) bool {
 var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", entries: map[string]string{
 	// Deliberate json-key renames: the SDK param is exposed under a clearer/doc-correct
 	// MCP key and wired to the SDK field.
-	"branches.CreateInput.branch":                   "exposed as branch_name (wired to opts.Branch)",
-	"branches.ProtectInput.name":                    "exposed as branch_name (wired to opts.Name)",
-	"tags.ProtectTagInput.name":                     "exposed as tag_name (wired to opts.Name)",
-	"epics.ListInput.include_ancestor_groups":       "exposed as include_ancestors (wired to opts.IncludeAncestorGroups)",
-	"epics.ListInput.include_descendant_groups":     "exposed as include_descendants (wired to opts.IncludeDescendantGroups)",
-	"epics.ListInput.labels":                        "exposed as label_name []string (wired to opts.Labels)",
-	"groupmilestones.ListInput.include_descendents": "exposed as include_descendants, the param GitLab declares, and sent through a request option of its own: the SDK's url tag misspells it include_descendents, which GitLab ignores (upstream register row 95)",
+	"branches.CreateInput.branch":               "exposed as branch_name (wired to opts.Branch)",
+	"branches.ProtectInput.name":                "exposed as branch_name (wired to opts.Name)",
+	"tags.ProtectTagInput.name":                 "exposed as tag_name (wired to opts.Name)",
+	"epics.ListInput.include_ancestor_groups":   "exposed as include_ancestors (wired to opts.IncludeAncestorGroups)",
+	"epics.ListInput.include_descendant_groups": "exposed as include_descendants (wired to opts.IncludeDescendantGroups)",
+	"epics.ListInput.labels":                    "exposed as label_name []string (wired to opts.Labels)",
 
 	// Phantom widget inputs: gl.*WorkItemOptions is the options struct of every
 	// work item type, and an Epic carries neither the STATUS, ITERATION nor

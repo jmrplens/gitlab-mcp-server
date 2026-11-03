@@ -8,10 +8,9 @@
 // they did: the listing holds the board the create made and the read answers
 // it, and after the delete the listing no longer holds it. It also covers
 // what only a licensed instance sends on a group board, the assignee and
-// weight it is scoped to and the metric each limited column is counted by,
-// which every answer carrying a board reads off the captured response (issue
-// 1283), and the text of the board listing, which names each limited column
-// with its ceilings and its metric (issue 1284). The column actions, and the
+// weight it is scoped to and the metric each limited column is counted by
+// (issue 1283), and the text of the board listing, which names each limited
+// column with its ceilings and its metric (issue 1284). The column actions, and the
 // reads and the rename of a board the fixture library built, are Free and
 // live in the common package.
 
@@ -95,23 +94,20 @@ type groupBoardKeys struct {
 	metrics                 map[int64]string
 }
 
-// TestGroupBoards_ScopedBoardWithLimitedColumns_EveryBoardAnswerCarriesTheCapturedKeys
+// TestGroupBoards_ScopedBoardWithLimitedColumns_EveryBoardAnswerCarriesTheScope
 // creates a group board on every surface, gives it two label columns limited
 // through GitLab's own mutation, one counted by weight and one by issues
 // (the REST update of a column takes its position alone), scopes the board to
 // the caller and to a weight and hides its Open list while leaving its Closed
 // one shown, and holds each answer that carries the board to all of it: the
-// create, the update, the read and the listing. client-go's GroupIssueBoard
-// models none of the two switches, the assignee and the weight, and its
-// BoardList no metric, so every one of them reaches the answer only from the
-// captured response (issue 1283). The create can hold only what a new board
-// has, both lists shown and no scope; the two switches differ everywhere
+// create, the update, the read and the listing (issue 1283). The create can
+// hold only what a new board has, both lists shown and no scope; the two switches differ everywhere
 // after it, so an answer that read one into the other is caught. The
 // listing's text is held as well, to a Column Limits row for each of the two
 // columns, since until issue 1284 it said only how many columns the board
 // has. Scoped boards and work-in-progress limits are licensed, which is why
 // the scenario lives here.
-func TestGroupBoards_ScopedBoardWithLimitedColumns_EveryBoardAnswerCarriesTheCapturedKeys(t *testing.T) {
+func TestGroupBoards_ScopedBoardWithLimitedColumns_EveryBoardAnswerCarriesTheScope(t *testing.T) {
 	e := harness.New(t)
 
 	me, _, err := e.Client().GL().Users.CurrentUser(gl.WithContext(e.Ctx))

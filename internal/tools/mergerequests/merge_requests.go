@@ -1170,17 +1170,7 @@ func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestIt
 }
 
 // Commits retrieves the list of commits in a merge request.
-//
-// The page is read from the captured response (ADR-0021), as
-// [commits.List] reads its own: a commit whose trailers GitLab parsed carries
-// extended_trailers as lists, which client-go's Commit cannot decode, and
-// client-go then returns no page at all. Its failure to read an answer GitLab
-// gave is passed over ([commits.MisreadByClientGo]) and the capture decoded
-// instead; an answer the capture cannot hold either is reported, and the
-// response client-go hands back with its failure still carries the page's
-// headers.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	return listMergeRequestItems(ctx, mergeRequestItemsListArgs{
 		projectID: input.ProjectID, mrIID: input.MRIID, operation: "mrCommits",
 		listOpts: mrItemListOptions{
@@ -1193,13 +1183,13 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Commit, *gl.Response, error) {
 			listOptions := &gl.GetMergeRequestCommitsOptions{}
 			lo.applyTo(&listOptions.ListOptions)
-			items, resp, err := client.GL().MergeRequests.GetMergeRequestCommits(projectID, mrIID, listOptions, opts...)
-			if commits.MisreadByClientGo(err) {
-				return items, resp, nil
+			return client.GL().MergeRequests.GetMergeRequestCommits(projectID, mrIID, listOptions, opts...)
+		}, func(page []*gl.Commit) ([]commits.Output, error) {
+			out := make([]commits.Output, len(page))
+			for i, c := range page {
+				out[i] = commits.ToOutput(c)
 			}
-			return items, resp, err
-		}, func([]*gl.Commit) ([]commits.Output, error) {
-			return commits.CapturedOutputs(captured)
+			return out, nil
 		}, func(out []commits.Output, pagination toolutil.PaginationOutput) CommitsOutput {
 			return CommitsOutput{Commits: out, Pagination: pagination}
 		})
@@ -1998,6 +1988,7 @@ func cancelMergeWhenPipelineSucceedsRoute(ctx context.Context, client *gitlabcli
 	// The capture rides its own context so the fall-back Get below starts from
 	// the caller's, with a capture of its own.
 	callCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	//nolint:staticcheck // SA1019: an instance older than GitLab 19.5 serves only this route, and CancelAutoMerge answers 404 there
 	mr, _, err := client.GL().MergeRequests.CancelMergeWhenPipelineSucceeds(string(input.ProjectID), input.MRIID, gl.WithContext(callCtx))
 	if err != nil {
 		return Output{}, cancelAutoMergeFailure(err, http.StatusMethodNotAllowed, http.StatusNotAcceptable)
@@ -2013,36 +2004,17 @@ func cancelMergeWhenPipelineSucceedsRoute(ctx context.Context, client *gitlabcli
 
 // cancelAutoMergeRoute cancels an auto-merge through cancel_auto_merge, the
 // route GitLab 19.5 added, which answers with the merge request, so nothing is
-// read back. Only a 404 falls back to the deprecated route, whose error is
-// reported if it also fails.
-//
-// client-go has no method for it yet (gitlab-org/api/client-go!3101 adds
-// MergeRequests.CancelAutoMerge, and no release carries it), so the request is
-// the handler's own, the way invites.postInvitation makes one; it moves to the
-// method in its own change once a client-go release carries it.
+// read back, and converts it with the fields client-go does not model read off
+// the captured answer. Only a 404 falls back to the deprecated route, whose
+// error is reported if it also fails.
 func cancelAutoMergeRoute(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
-	out, err := postCancelAutoMerge(ctx, client,
-		fmt.Sprintf("projects/%s/merge_requests/%d/cancel_auto_merge", gl.PathEscape(string(input.ProjectID)), input.MRIID))
+	callCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	mr, _, err := client.GL().MergeRequests.CancelAutoMerge(string(input.ProjectID), input.MRIID, gl.WithContext(callCtx))
 	if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 		//gitlab:request optional: the deprecated route is sent only when cancel_auto_merge answered 404, as an older node does during a rolling upgrade
 		return cancelMergeWhenPipelineSucceedsRoute(ctx, client, input)
 	}
-	return out, err
-}
-
-// postCancelAutoMerge posts the cancel to path and converts the merge request
-// it answers with, the fields client-go does not model read off the captured
-// answer. The path is a parameter so a test can hand it one client-go cannot
-// build a request for, which no input reaches: gl.PathEscape has escaped the
-// project, and the IID is a number.
-func postCancelAutoMerge(ctx context.Context, client *gitlabclient.Client, path string) (Output, error) {
-	callCtx, captured := gitlabclient.WithResponseCapture(ctx)
-	req, err := client.GL().NewRequest(http.MethodPost, path, nil, []gl.RequestOptionFunc{gl.WithContext(callCtx)})
 	if err != nil {
-		return Output{}, toolutil.WrapErr(opCancelAutoMerge, err)
-	}
-	mr := new(gl.MergeRequest)
-	if _, err = client.GL().Do(req, mr); err != nil {
 		return Output{}, cancelAutoMergeFailure(err, http.StatusConflict)
 	}
 	return mergeRequestOutput(opCancelAutoMerge, mr, captured)

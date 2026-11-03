@@ -71,10 +71,8 @@ func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
 // BasicUserOutput is a documented reference subset per doc/api/group_boards.md.
 // The board's `assignee` object in the documented update-board response shows
 // only id, name, username, state, avatar_url, and web_url; gl.BasicUser's
-// created_at is not part of the documented board assignee shape. The
-// board-level assignee is read off the captured answer straight into this
-// shape ([toolutil.GroupBoardExtra]), as gl.GroupIssueBoard omits the
-// assignee field entirely. Canonical shape shared via toolutil.
+// created_at is not part of the documented board assignee shape. Canonical shape
+// shared via toolutil.
 type BasicUserOutput = toolutil.BoardUserOutput
 
 // LabelDetailsOutput is a documented reference subset per

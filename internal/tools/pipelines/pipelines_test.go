@@ -584,24 +584,21 @@ func TestGetVariables_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVariables() unexpected error: %v", err)
 	}
-	// raw differs across the three, so a capture paired with the wrong
-	// variable, or not read at all, fails one of the rows; the third carries
-	// none, as an instance older than the column answers, and publishes none.
+	// raw differs across the rows; the third carries none, as an instance older
+	// than the column answers, and reads as false.
 	want := []VariableOutput{
-		{Key: "CI_VAR", Value: "hello", VariableType: "env_var", Raw: new(false)},
-		{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: new(true)},
-		{Key: "OLD_VAR", Value: "legacy", VariableType: "env_var"},
+		{Key: "CI_VAR", Value: "hello", VariableType: "env_var", Raw: false},
+		{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: true},
+		{Key: "OLD_VAR", Value: "legacy", VariableType: "env_var", Raw: false},
 	}
 	if !reflect.DeepEqual(out.Variables, want) {
 		t.Errorf("Variables = %+v, want %+v", out.Variables, want)
 	}
 }
 
-// TestGetVariables_UndecodableCapture_IsAnError asserts that an answer whose
-// raw flag is not a boolean is reported rather than published as false:
-// client-go models no raw key and decodes the rest, so only the capture's read
-// can refuse it.
-func TestGetVariables_UndecodableCapture_IsAnError(t *testing.T) {
+// TestGetVariables_UndecodableRaw_IsAnError asserts that an answer whose raw
+// flag is not a boolean is reported rather than published as false.
+func TestGetVariables_UndecodableRaw_IsAnError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"CI_VAR","value":"hello","variable_type":"env_var","raw":"yes"}]`)
 	}))
@@ -1777,17 +1774,15 @@ func TestFormatDetailMarkdown_DetailedStatusOnlyWhenItSaysMore(t *testing.T) {
 func TestFormatVariablesMarkdown_WithData(t *testing.T) {
 	out := VariablesOutput{
 		Variables: []VariableOutput{
-			{Key: "CI_VAR", Value: "hello", VariableType: "env_var", Raw: new(false)},
-			{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: new(true)},
-			{Key: "OLD_VAR", Value: "legacy", VariableType: "env_var"},
+			{Key: "CI_VAR", Value: "hello", VariableType: "env_var", Raw: false},
+			{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file", Raw: true},
 		},
 	}
-	want := "## Pipeline Variables (3)\n\n" +
+	want := "## Pipeline Variables (2)\n\n" +
 		"| Key | Value | Type | Raw |\n" +
 		"| --- | --- | --- | --- |\n" +
 		"| CI_VAR | hello | env_var | " + toolutil.BoolEmoji(false) + " |\n" +
 		"| SECRET_FILE | /tmp/secret | file | " + toolutil.BoolEmoji(true) + " |\n" +
-		"| OLD_VAR | legacy | env_var |  |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'pipeline.get' to see the pipeline these variables ran\n"
 	if got := FormatVariablesMarkdown(out); got != want {

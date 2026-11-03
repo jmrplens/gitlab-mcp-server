@@ -49,8 +49,7 @@ type CreateInput struct {
 //
 // extended_trailers maps each trailer to the list of its values, which is how
 // Gitlab::Git::Commit#parse_commit_trailers builds it and how
-// lib/api/entities/commit.rb documents it; client-go's Commit declares it a
-// map of strings, so it is read off the captured response ([Captured]).
+// lib/api/entities/commit.rb documents it.
 type Output struct {
 	toolutil.HintableOutput
 	ID               string              `json:"id"`
@@ -72,67 +71,6 @@ type Output struct {
 	ExtendedTrailers map[string][]string `json:"extended_trailers,omitempty"`
 	LastPipeline     *LastPipelineOutput `json:"last_pipeline,omitempty"`
 	Stats            *CommitStatsOutput  `json:"stats,omitempty"`
-}
-
-// Captured is one commit as GitLab sends it, read off the captured response
-// (ADR-0021) as client-go's Commit reads it, except for extended_trailers,
-// which the field here takes over. lib/api/entities/commit.rb exposes it as
-// each trailer mapped to the list of its values, and client-go's Commit
-// declares it a map of strings: a commit carrying a trailer fails in
-// client-go's decoder, which then returns no commit at all, and a page
-// holding one such commit fails as a whole. encoding/json decodes a key into
-// the shallowest field that names it, so the embedded Commit's own field
-// stays empty.
-//
-// It is exported for the handlers of other packages that publish [Output]
-// from an answer of their own carrying commits, a comparison's among them.
-type Captured struct {
-	gl.Commit
-	ExtendedTrailers map[string][]string `json:"extended_trailers"`
-}
-
-// MisreadByClientGo reports whether err is client-go failing to decode an
-// answer GitLab gave successfully into a struct of its own that cannot hold
-// it, which is what a commit carrying a trailer produces (see [Captured]).
-// Such an answer is read from the capture by a type that can hold it, so the
-// failure is not the handler's; any other error is. When the answer does not
-// fit that type either, decoding the capture fails and the handler reports
-// that instead.
-func MisreadByClientGo(err error) bool {
-	var typeErr *json.UnmarshalTypeError
-	return errors.As(err, &typeErr)
-}
-
-// OutputFromCaptured converts a commit read off the captured response,
-// extended_trailers included.
-func OutputFromCaptured(c *Captured) Output {
-	out := ToOutput(&c.Commit)
-	out.ExtendedTrailers = c.ExtendedTrailers
-	return out
-}
-
-// CapturedOutput decodes the one commit a route answered with from the
-// captured response.
-func CapturedOutput(captured *gitlabclient.ResponseCapture) (Output, error) {
-	var c Captured
-	if err := captured.Decode(&c); err != nil {
-		return Output{}, err
-	}
-	return OutputFromCaptured(&c), nil
-}
-
-// CapturedOutputs decodes the page of commits a route answered with from the
-// captured response, in order.
-func CapturedOutputs(captured *gitlabclient.ResponseCapture) ([]Output, error) {
-	var rows []Captured
-	if err := captured.Decode(&rows); err != nil {
-		return nil, err
-	}
-	out := make([]Output, len(rows))
-	for i := range rows {
-		out[i] = OutputFromCaptured(&rows[i])
-	}
-	return out, nil
 }
 
 // CommitStatsOutput mirrors gl.CommitStats: line additions/deletions/total
@@ -240,19 +178,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.Force = new(true)
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, _, err := client.GL().Commits.CreateCommit(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil && !MisreadByClientGo(err) {
+	commit, _, err := client.GL().Commits.CreateCommit(string(input.ProjectID), opts, gl.WithContext(ctx))
+	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("commitCreate", err, "check that the branch exists, file paths are valid, and required content is provided for create/update actions")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("commitCreate", err)
 	}
-	out, err := CapturedOutput(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("commitCreate", err)
-	}
-	return out, nil
+	return ToOutput(commit), nil
 }
 
 // commitFields holds the gl.Commit values shared by Output and DetailOutput.
@@ -267,32 +200,29 @@ type commitFields struct {
 	projectID                                      int64
 	parentIDs                                      []string
 	trailers                                       map[string]string
+	extendedTrailers                               map[string][]string
 	lastPipeline                                   *LastPipelineOutput
 	stats                                          *CommitStatsOutput
 }
 
 // commitToFields maps a gl.Commit into the shared commitFields intermediate,
 // stringifying timestamps and projecting nested objects.
-//
-// extended_trailers is not among them: client-go's Commit declares it a map
-// of strings, which cannot hold the lists GitLab sends, so a Commit it decoded
-// carried none (a commit carrying one fails its decode). It is read off the
-// captured response instead ([Captured]).
 func commitToFields(c *gl.Commit) commitFields {
 	f := commitFields{
-		id:             c.ID,
-		shortID:        c.ShortID,
-		title:          c.Title,
-		message:        c.Message,
-		authorName:     c.AuthorName,
-		authorEmail:    c.AuthorEmail,
-		committerName:  c.CommitterName,
-		committerEmail: c.CommitterEmail,
-		webURL:         c.WebURL,
-		parentIDs:      c.ParentIDs,
-		projectID:      c.ProjectID,
-		trailers:       c.Trailers,
-		lastPipeline:   pipelineInfoToOutput(c.LastPipeline),
+		id:               c.ID,
+		shortID:          c.ShortID,
+		title:            c.Title,
+		message:          c.Message,
+		authorName:       c.AuthorName,
+		authorEmail:      c.AuthorEmail,
+		committerName:    c.CommitterName,
+		committerEmail:   c.CommitterEmail,
+		webURL:           c.WebURL,
+		parentIDs:        c.ParentIDs,
+		projectID:        c.ProjectID,
+		trailers:         c.Trailers,
+		extendedTrailers: c.ExtendedTrailers,
+		lastPipeline:     pipelineInfoToOutput(c.LastPipeline),
 	}
 	// The three timestamps go out in the wire form every other date this server
 	// publishes takes. Go's default layout, which these used to carry, is not
@@ -316,31 +246,29 @@ func commitToFields(c *gl.Commit) commitFields {
 }
 
 // ToOutput converts a GitLab API [gl.Commit] to the list/summary MCP tool
-// output format, mirroring the full commit payload but for extended_trailers,
-// which a Commit client-go decoded cannot hold (see [commitToFields]). A
-// handler that holds the captured response converts with
-// [OutputFromCaptured], which adds them.
+// output format, mirroring the full commit payload.
 func ToOutput(c *gl.Commit) Output {
 	f := commitToFields(c)
 	return Output{
-		ID:             f.id,
-		ShortID:        f.shortID,
-		Title:          f.title,
-		Message:        f.message,
-		AuthorName:     f.authorName,
-		AuthorEmail:    f.authorEmail,
-		AuthoredDate:   f.authoredDate,
-		CommitterName:  f.committerName,
-		CommitterEmail: f.committerEmail,
-		CommittedDate:  f.committedDate,
-		CreatedAt:      f.createdAt,
-		WebURL:         f.webURL,
-		ParentIDs:      f.parentIDs,
-		Status:         f.status,
-		ProjectID:      f.projectID,
-		Trailers:       f.trailers,
-		LastPipeline:   f.lastPipeline,
-		Stats:          f.stats,
+		ID:               f.id,
+		ShortID:          f.shortID,
+		Title:            f.title,
+		Message:          f.message,
+		AuthorName:       f.authorName,
+		AuthorEmail:      f.authorEmail,
+		AuthoredDate:     f.authoredDate,
+		CommitterName:    f.committerName,
+		CommitterEmail:   f.committerEmail,
+		CommittedDate:    f.committedDate,
+		CreatedAt:        f.createdAt,
+		WebURL:           f.webURL,
+		ParentIDs:        f.parentIDs,
+		Status:           f.status,
+		ProjectID:        f.projectID,
+		Trailers:         f.trailers,
+		ExtendedTrailers: f.extendedTrailers,
+		LastPipeline:     f.lastPipeline,
+		Stats:            f.stats,
 	}
 }
 
@@ -417,20 +345,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Trailers = new(true)
 	}
 
-	// With trailers set, GitLab parses every commit's trailers and sends
-	// extended_trailers as lists, which client-go cannot decode: the page is
-	// read from the capture, and client-go's failure to read it is passed over.
-	// The response it hands back with that failure still carries the page's
-	// headers.
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, resp, err := client.GL().Commits.ListCommits(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
-	if err != nil && !MisreadByClientGo(err) {
+	page, resp, err := client.GL().Commits.ListCommits(string(input.ProjectID), opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
+	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("commitList", err, http.StatusNotFound,
 			"verify project_id with project.get and ref_name (branch/tag/SHA) with branch.list or tag.list")
 	}
-	out, err := CapturedOutputs(captured)
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("commitList", err)
+	out := make([]Output, len(page))
+	for i, c := range page {
+		out[i] = ToOutput(c)
 	}
 	return ListOutput{Commits: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -444,8 +366,7 @@ type GetInput struct {
 }
 
 // DetailOutput represents a single commit with full details. It mirrors the
-// full gl.Commit payload (C-IMPORTS), extended_trailers typed as GitLab sends
-// it (see [Output]).
+// full gl.Commit payload (C-IMPORTS).
 type DetailOutput struct {
 	toolutil.HintableOutput
 	ID               string              `json:"id"`
@@ -495,46 +416,39 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 	if input.Stats {
 		opts = &gl.GetCommitOptions{Stats: new(true)}
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, _, err := client.GL().Commits.GetCommit(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
-	if err != nil && !MisreadByClientGo(err) {
+	commit, _, err := client.GL().Commits.GetCommit(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
+	if err != nil {
 		return DetailOutput{}, toolutil.WrapErrWithStatusHint("commitGet", err, http.StatusNotFound,
 			"verify SHA exists in this project (use full or short SHA, branch name, or tag name)")
 	}
-	var c Captured
-	if err = captured.Decode(&c); err != nil {
-		return DetailOutput{}, toolutil.WrapErr("commitGet", err)
-	}
-	out := detailToOutput(&c.Commit)
-	out.ExtendedTrailers = c.ExtendedTrailers
-	return out, nil
+	return detailToOutput(commit), nil
 }
 
 // detailToOutput converts a GitLab API [gl.Commit] to the detailed MCP
 // output format, mirroring the full commit payload including trailers,
-// last pipeline, and optional stats, but for extended_trailers, which the
-// handler adds from the captured response (see [commitToFields]).
+// last pipeline, and optional stats.
 func detailToOutput(c *gl.Commit) DetailOutput {
 	f := commitToFields(c)
 	return DetailOutput{
-		ID:             f.id,
-		ShortID:        f.shortID,
-		Title:          f.title,
-		Message:        f.message,
-		AuthorName:     f.authorName,
-		AuthorEmail:    f.authorEmail,
-		AuthoredDate:   f.authoredDate,
-		CommitterName:  f.committerName,
-		CommitterEmail: f.committerEmail,
-		CommittedDate:  f.committedDate,
-		CreatedAt:      f.createdAt,
-		WebURL:         f.webURL,
-		ParentIDs:      f.parentIDs,
-		Status:         f.status,
-		ProjectID:      f.projectID,
-		Trailers:       f.trailers,
-		LastPipeline:   f.lastPipeline,
-		Stats:          f.stats,
+		ID:               f.id,
+		ShortID:          f.shortID,
+		Title:            f.title,
+		Message:          f.message,
+		AuthorName:       f.authorName,
+		AuthorEmail:      f.authorEmail,
+		AuthoredDate:     f.authoredDate,
+		CommitterName:    f.committerName,
+		CommitterEmail:   f.committerEmail,
+		CommittedDate:    f.committedDate,
+		CreatedAt:        f.createdAt,
+		WebURL:           f.webURL,
+		ParentIDs:        f.parentIDs,
+		Status:           f.status,
+		ProjectID:        f.projectID,
+		Trailers:         f.trailers,
+		ExtendedTrailers: f.extendedTrailers,
+		LastPipeline:     f.lastPipeline,
+		Stats:            f.stats,
 	}
 }
 
@@ -1072,9 +986,8 @@ func CherryPick(ctx context.Context, client *gitlabclient.Client, input CherryPi
 	if input.Message != "" {
 		opts.Message = new(input.Message)
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, _, err := client.GL().Commits.CherryPickCommit(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
-	if err != nil && !MisreadByClientGo(err) {
+	commit, _, err := client.GL().Commits.CherryPickCommit(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
+	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("cherryPickCommit", err, "the commit may produce an empty cherry-pick or the branch may not exist")
@@ -1084,11 +997,7 @@ func CherryPick(ctx context.Context, client *gitlabclient.Client, input CherryPi
 			return Output{}, toolutil.WrapErrWithMessage("cherryPickCommit", err)
 		}
 	}
-	out, err := CapturedOutput(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("cherryPickCommit", err)
-	}
-	return out, nil
+	return ToOutput(commit), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1113,9 +1022,8 @@ func Revert(ctx context.Context, client *gitlabclient.Client, input RevertInput)
 	opts := &gl.RevertCommitOptions{
 		Branch: new(input.Branch),
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, _, err := client.GL().Commits.RevertCommit(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
-	if err != nil && !MisreadByClientGo(err) {
+	commit, _, err := client.GL().Commits.RevertCommit(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
+	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("revertCommit", err, "the commit may already be reverted or the branch may not exist")
@@ -1125,11 +1033,7 @@ func Revert(ctx context.Context, client *gitlabclient.Client, input RevertInput)
 			return Output{}, toolutil.WrapErrWithMessage("revertCommit", err)
 		}
 	}
-	out, err := CapturedOutput(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("revertCommit", err)
-	}
-	return out, nil
+	return ToOutput(commit), nil
 }
 
 // ---------------------------------------------------------------------------

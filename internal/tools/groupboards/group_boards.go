@@ -5,10 +5,8 @@ package groupboards
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
-	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -21,12 +19,9 @@ import (
 
 // GroupBoardOutput represents a GitLab group issue board. Nested objects
 // (group, milestone, assignee, labels, lists) mirror the documented
-// group_boards.md response sub-objects (see shapes.go). The hide_backlog_list,
-// hide_closed_list, assignee and weight fields are documented by the API but
-// absent from client-go's gl.GroupIssueBoard struct, so every handler that
-// answers with a board reads them off the captured answer
-// ([toolutil.GroupBoardExtra]) and they stay version-tolerant (absent on older
-// instances → zero value, omitted from the envelope).
+// group_boards.md response sub-objects (see shapes.go). The weight is read off
+// the captured answer ([toolutil.GroupBoardExtra]) since gl.GroupIssueBoard
+// reads the null of a board with no weight scope as weight 0.
 type GroupBoardOutput struct {
 	toolutil.HintableOutput
 	ID              int64                 `json:"id"`
@@ -77,90 +72,38 @@ type ListBoardListsOutput struct {
 }
 
 // ---------------------------------------------------------------------------
-// The update's request of its own
-// ---------------------------------------------------------------------------.
-
-// newRawRequest builds the request of the one handler that bypasses its
-// client-go wrapper, the board update. It is a package variable so tests can
-// exercise the request-construction failure branch, which no valid input
-// reaches at runtime (PathEscape sanitizes everything interpolated into the
-// path).
-var newRawRequest = func(ctx context.Context, client *gitlabclient.Client, method, path string, opts any) (*retryablehttp.Request, error) {
-	return client.GL().NewRequest(method, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
-}
-
-// updateGroupBoardBody is the body of a group board update: every field
-// client-go's UpdateGroupIssueBoardOptions models, and the two list switches
-// GitLab's route takes on every tier and that struct does not (register row 98
-// of docs/development/upstream-bugs.md). A switch left nil is left out, so
-// GitLab keeps that list as it is. The type retires when a client-go release
-// models the switches.
-type updateGroupBoardBody struct {
-	gl.UpdateGroupIssueBoardOptions
-	HideBacklogList *bool `url:"hide_backlog_list,omitempty" json:"hide_backlog_list,omitempty"`
-	HideClosedList  *bool `url:"hide_closed_list,omitempty" json:"hide_closed_list,omitempty"`
-}
-
-// rawUpdateGroupBoard issues a raw REST PUT updating a group issue board with
-// the body [updateGroupBoardBody] carries, decoding the answer into
-// client-go's gl.GroupIssueBoard as its UpdateIssueBoard would. What that
-// struct does not model is read by the caller off the captured answer, like
-// every other group board answer, so ctx is the context the capture was taken
-// under.
-func rawUpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64, opts *updateGroupBoardBody) (*gl.GroupIssueBoard, error) {
-	path := fmt.Sprintf("groups/%s/boards/%d", gl.PathEscape(groupID), boardID)
-	req, err := newRawRequest(ctx, client, http.MethodPut, path, opts)
-	if err != nil {
-		return nil, err
-	}
-	board := new(gl.GroupIssueBoard)
-	_, err = client.GL().Do(req, board)
-	return board, err
-}
-
-// ---------------------------------------------------------------------------
 // Converters
 // ---------------------------------------------------------------------------.
 
-// convertGroupBoard maps a GitLab group issue board into MCP output. The
-// group, milestone, labels and columns come from client-go's decode; the
-// documented hide_backlog_list, hide_closed_list, assignee and weight fields
-// gl.GroupIssueBoard omits, and each column's limit_metric, come from what was
-// read off the captured answer beside it. The columns are joined to what was
-// read beside them by position, since both decode the same bytes; a column
-// the captured board holds nothing for is published without a metric rather
-// than with another column's.
+// convertGroupBoard maps a GitLab group issue board into MCP output: everything
+// comes from client-go's decode but the weight the board is scoped to, which is
+// read off the captured answer beside it.
 func convertGroupBoard(b *gl.GroupIssueBoard, extra toolutil.GroupBoardExtra) GroupBoardOutput {
 	out := GroupBoardOutput{
 		ID:              b.ID,
 		Name:            b.Name,
 		Group:           groupRefOutput(b.Group),
 		Milestone:       milestoneOutput(b.Milestone),
-		Assignee:        extra.Assignee,
+		Assignee:        toolutil.NewBoardUserOutput(b.Assignee),
 		Weight:          extra.Weight,
 		Labels:          groupLabelOutputs(b.Labels),
-		HideBacklogList: extra.HideBacklogList,
-		HideClosedList:  extra.HideClosedList,
+		HideBacklogList: b.HideBacklogList,
+		HideClosedList:  b.HideClosedList,
 	}
-	for i, l := range b.Lists {
-		var listExtra toolutil.BoardListExtra
-		if i < len(extra.Lists) {
-			listExtra = extra.Lists[i]
-		}
-		out.Lists = append(out.Lists, convertBoardList(l, listExtra))
+	for _, l := range b.Lists {
+		out.Lists = append(out.Lists, convertBoardList(l))
 	}
 	return out
 }
 
-// convertBoardList maps a GitLab board list into group board MCP output,
-// filling from the decoded list and from what was read beside it.
-func convertBoardList(l *gl.BoardList, extra toolutil.BoardListExtra) BoardListOutput {
+// convertBoardList maps a GitLab board list into group board MCP output.
+func convertBoardList(l *gl.BoardList) BoardListOutput {
 	return BoardListOutput{
 		ID:             l.ID,
 		Assignee:       boardListAssigneeOutput(l.Assignee),
 		Iteration:      iterationOutput(l.Iteration),
 		Label:          labelOutput(l.Label),
-		LimitMetric:    extra.LimitMetric,
+		LimitMetric:    l.LimitMetric,
 		MaxIssueCount:  l.MaxIssueCount,
 		MaxIssueWeight: l.MaxIssueWeight,
 		Milestone:      milestoneOutput(l.Milestone),
@@ -328,9 +271,7 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 // HideBacklogList and HideClosedList carry no tier tag, since GitLab takes
 // both on every tier (update_params_ce in lib/api/boards_responses.rb), and are
 // pointers because false shows a list again and has to reach GitLab rather
-// than be read as unset. client-go's UpdateGroupIssueBoardOptions models
-// neither (register row 98 of docs/development/upstream-bugs.md), so they go
-// out in [updateGroupBoardBody] (issue 1241).
+// than be read as unset (issue 1241).
 type UpdateGroupBoardInput struct {
 	GroupID         toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	BoardID         int64                `json:"board_id" jsonschema:"Board ID,required"`
@@ -351,7 +292,7 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 	if input.BoardID == 0 {
 		return GroupBoardOutput{}, toolutil.WrapErrWithMessage("group_board_update", toolutil.ErrFieldRequired("board_id"))
 	}
-	opts := &updateGroupBoardBody{HideBacklogList: input.HideBacklogList, HideClosedList: input.HideClosedList}
+	opts := &gl.UpdateGroupIssueBoardOptions{HideBacklogList: input.HideBacklogList, HideClosedList: input.HideClosedList}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
@@ -366,11 +307,8 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 	if input.Weight != nil {
 		opts.Weight = input.Weight
 	}
-	// A request of its own so the two list switches reach GitLab, read like
-	// every other group board answer: what gl.GroupIssueBoard does not model
-	// comes off the captured answer.
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	board, err := rawUpdateGroupBoard(ctx, client, string(input.GroupID), input.BoardID, opts)
+	board, _, err := client.GL().GroupIssueBoards.UpdateIssueBoard(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		// Nothing this input sends is refused, so no hint is written for one
 		// and anything but a permission refusal or a 404 is reported in
@@ -447,19 +385,14 @@ func ListGroupBoardLists(ctx context.Context, client *gitlabclient.Client, input
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	lists, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoardLists(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListBoardListsOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_list", err, http.StatusNotFound,
 			"board_id not found on this group. Use group.group_board_list to discover board IDs")
 	}
-	extras, err := toolutil.CapturedBoardLists(captured, len(lists))
-	if err != nil {
-		return ListBoardListsOutput{}, toolutil.WrapErr("group_board_list_list", err)
-	}
 	out := ListBoardListsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for i, l := range lists {
-		out.Lists = append(out.Lists, convertBoardList(l, extras[i]))
+	for _, l := range lists {
+		out.Lists = append(out.Lists, convertBoardList(l))
 	}
 	return out, nil
 }
@@ -482,17 +415,12 @@ func GetGroupBoardList(ctx context.Context, client *gitlabclient.Client, input G
 	if input.ListID == 0 {
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_get", toolutil.ErrFieldRequired("list_id"))
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.GetGroupIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_get", err, http.StatusNotFound,
 			"list_id not found on this board. Use group.group_board_list_lists to discover list IDs (each list represents a label column)")
 	}
-	extra, err := toolutil.CapturedBoardList(captured)
-	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErr("group_board_list_get", err)
-	}
-	return convertBoardList(list, extra), nil
+	return convertBoardList(list), nil
 }
 
 // CreateGroupBoardListInput represents input for creating a group board list.
@@ -516,23 +444,18 @@ func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := &gl.CreateGroupIssueBoardListOptions{
 		LabelID: new(input.LabelID),
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.CreateGroupIssueBoardList(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, createGroupBoardListError(err)
 	}
-	extra, err := toolutil.CapturedBoardList(captured)
-	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErr("group_board_list_create", err)
-	}
-	return convertBoardList(list, extra), nil
+	return convertBoardList(list), nil
 }
 
 // createGroupBoardListError wraps GitLab's refusal of a column creation with
 // the hint its cause calls for, in terms of the one parameter the input
 // offers. GitLab's route also takes assignee_id, milestone_id and iteration_id
-// on a licensed instance, but client-go's CreateGroupIssueBoardListOptions
-// carries label_id alone, so neither hint may send a model after the others.
+// on a licensed instance, but this action offers label_id alone, so neither
+// hint may send a model after the others.
 //
 // What GitLab answers, read at v19.4.1-ee: a label this group cannot use and a
 // second list for a label the board already has a list for are both a 400
@@ -579,7 +502,6 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := &gl.UpdateGroupIssueBoardListOptions{
 		Position: new(input.Position),
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.UpdateIssueBoardList(
 		string(input.GroupID), input.BoardID, input.ListID, opts, gl.WithContext(ctx),
 	)
@@ -587,11 +509,7 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 		return BoardListOutput{}, groupBoardRefusal("group_board_list_update", err, groupBoardListsHint,
 			"list_id not found on this board (only the position can be updated; recreate the list to change its scope)")
 	}
-	extra, err := toolutil.CapturedBoardList(captured)
-	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErr("group_board_list_update", err)
-	}
-	return convertBoardList(list, extra), nil
+	return convertBoardList(list), nil
 }
 
 // DeleteGroupBoardListInput represents input for deleting a group board list.

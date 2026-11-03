@@ -5,6 +5,7 @@ package search
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -105,10 +106,17 @@ type scopedSearchArgs[T any] struct {
 	refusalHint func(error) string
 	// capturesPage marks a caller that reads the page from the captured
 	// response (ADR-0021) rather than from what client-go decoded. client-go
-	// failing to decode an answer GitLab gave ([commits.MisreadByClientGo])
-	// is then not the search's failure: the error is dropped and the response
-	// kept, so the page's headers still reach the output.
+	// failing to decode an answer GitLab gave ([misreadByClientGo]) is then
+	// not the search's failure: the error is dropped and the response kept, so
+	// the page's headers still reach the output.
 	capturesPage bool
+}
+
+// misreadByClientGo reports whether err is client-go failing to decode an
+// answer GitLab gave successfully into a struct of its own that cannot hold it.
+func misreadByClientGo(err error) bool {
+	_, ok := errors.AsType[*json.UnmarshalTypeError](err)
+	return ok
 }
 
 func runScopedSearch[T any](ctx context.Context, args scopedSearchArgs[T]) ([]T, *gl.Response, error) {
@@ -125,7 +133,7 @@ func runScopedSearch[T any](ctx context.Context, args scopedSearchArgs[T]) ([]T,
 	}
 
 	items, resp, err := args.search(ctx, opts)
-	if err != nil && (!args.capturesPage || !commits.MisreadByClientGo(err)) {
+	if err != nil && (!args.capturesPage || !misreadByClientGo(err)) {
 		return nil, nil, args.wrap(err)
 	}
 	return items, resp, nil
@@ -390,28 +398,19 @@ type CommitsOutput struct {
 
 // Commits searches for commits in GitLab.
 // Scope priority: project_id > group_id > global.
-//
-// The page is read from the captured response (ADR-0021), as
-// [commits.List] reads its own: a commit whose trailers GitLab parsed carries
-// extended_trailers as lists, which client-go's Commit cannot decode, and
-// client-go then returns no page at all. Its failure to read an answer GitLab
-// gave is passed over ([commits.MisreadByClientGo]) and the capture decoded
-// instead; an answer the capture cannot hold either is reported.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
 	searchClient := client.GL().Search
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Commit]{
+	page, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Commit]{
 		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, ref: input.Ref, page: input.Page, perPage: input.PerPage,
 		searchType: input.SearchType, operation: "searchCommits", projectSearch: searchClient.CommitsByProject,
 		groupSearch: searchClient.CommitsByGroup, globalSearch: searchClient.Commits,
-		capturesPage: true,
 	})
 	if err != nil {
 		return CommitsOutput{}, err
 	}
-	out, err := commits.CapturedOutputs(captured)
-	if err != nil {
-		return CommitsOutput{}, toolutil.WrapErr("searchCommits", err)
+	out := make([]commits.Output, len(page))
+	for i, c := range page {
+		out[i] = commits.ToOutput(c)
 	}
 	return CommitsOutput{Commits: out, Pagination: searchPagination(resp, len(out))}, nil
 }

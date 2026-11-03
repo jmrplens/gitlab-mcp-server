@@ -1043,17 +1043,11 @@ var witnessUnpaired = []string{
 	"toolutil.DeploymentApprovalOutput answers_no_struct",
 }
 
-// witnessDeclared is what the witness expects of the captures on v3.38.1:
+// witnessDeclared is what the witness expects of the captures on v3.40.3:
 // each declaration by the type and key it is written on, with its category
 // and how many keys both a capture and the client-go struct beside it read
 // it answers.
 var witnessDeclared = map[string]string{
-	"branches.capturedBranch.commit.extended_trailers":                        "kept-for-value 1",
-	"commits.Captured.extended_trailers":                                      "kept-for-value 1",
-	"mrchanges.capturedDiffVersion.commits.extended_trailers":                 "kept-for-value 1",
-	"mrcontextcommits.capturedCommit.extended_trailers":                       "kept-for-value 1",
-	"repository.capturedCompare.commit.extended_trailers":                     "kept-for-value 1",
-	"repository.capturedCompare.commits.extended_trailers":                    "kept-for-value 1",
 	"toolutil.DiscussionExtra.notes.confidential":                             "kept-for-value 1",
 	"toolutil.NoteExtra.confidential":                                         "kept-for-value 1",
 	"mrdraftnotes.capturedDraft.position":                                     "kept-for-value 1",
@@ -1063,6 +1057,7 @@ var witnessDeclared = map[string]string{
 	"mergetrains.trainMeasures.pipeline.queued_duration":                      "kept-for-null 1",
 	"resourceevents.capturedWeight.weight":                                    "kept-for-null 1",
 	"toolutil.BoardExtra.weight":                                              "kept-for-null 1",
+	"toolutil.GroupBoardExtra.weight":                                         "kept-for-null 1",
 	"toolutil.BridgeExtra.coverage":                                           "kept-for-null 1",
 	"toolutil.BridgeExtra.duration":                                           "kept-for-null 1",
 	"toolutil.BridgeExtra.queued_duration":                                    "kept-for-null 1",
@@ -1092,6 +1087,7 @@ var witnessDeclared = map[string]string{
 	"toolutil.ProjectExtra.duo_sast_fp_detection_enabled":                     "kept-for-presence 1",
 	"toolutil.ProjectExtra.duo_sast_vr_workflow_enabled":                      "kept-for-presence 1",
 	"toolutil.ProjectExtra.duo_secret_detection_fp_enabled":                   "kept-for-presence 1",
+	"toolutil.ProjectExtra.only_allow_merge_if_all_status_checks_passed":      "kept-for-presence 1",
 	"users.serviceAccountExtra.external":                                      "kept-for-presence 1",
 	"toolutil.MemberExtra.group_saml_identity":                                "kept-for-sibling-pairing 3",
 	"toolutil.MemberExtra.public_email":                                       "kept-for-sibling-pairing 1",
@@ -1104,7 +1100,7 @@ var witnessDeclared = map[string]string{
 	"mrapprovals.enterpriseApprovalCapture.suggested_approvers":               "kept-with-its-object 6",
 }
 
-// TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3381 is the
+// TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3403 is the
 // witness on the real tree. A struct a handler decodes off a captured
 // response (ADR-0021) reads keys the client-go struct decoded from the same
 // answer does not model, and nothing asked whether it also reads keys the
@@ -1112,22 +1108,29 @@ var witnessDeclared = map[string]string{
 // reason a predicate on the pinned SDK says: the approval state's two
 // timestamps and its pending rules, which client-go decodes as GitLab sends
 // them, had been retired already. client-go v3.31 to v3.38 model thirty more,
-// and on the v3.38.1 pin twenty-six of them are read off the SDK's decode
+// and on the v3.38.1 pin twenty-six of them were read off the SDK's decode
 // and their captures retired (the plan limits and their history, a
 // pipeline's archived, a registry repository's size and delete path, a
 // storage move's error message), while the three Duo flags of a project and
 // an instance service account's external, which an instance before 19.5
 // leaves out, are kept for their presence, which the SDK's plain booleans
-// cannot tell from false. A reader that hands back an object
-// from inside the answer is paired at that object's depth, and every struct a
-// capture is decoded into is paired or has no SDK half. The resource and
-// prompt packages capture too, and their pairings are read where they make
-// them.
+// cannot tell from false. client-go v3.39 to v3.40.3 model
+// forty-two more. Six are the commits read whole for their extended_trailers,
+// which v3.40.3 decodes as the lists GitLab sends, and thirty-four go to the
+// SDK's decode with them (a tree entry's last commit, a variable's raw, a
+// submodule commit's detail, a board column's limit_metric, a group board's
+// switches and assignee, a descendant milestone's project). A group board's
+// weight, which reads the null of no scope as 0 like a project board's, is kept
+// for its null, and a project's external status checks flag, behind a license
+// like the Duo ones, for its presence. A reader that hands back an object from
+// inside the answer is paired at that object's depth, and every struct a capture
+// is decoded into is paired or has no SDK half. The resource and prompt packages
+// capture too, and their pairings are read where they make them.
 //
 // It reads the report as plain JSON and spells the status it expects, so
 // copied on its own into a tree that has no such section it compiles and
 // fails there, which is the point.
-func TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3381(t *testing.T) {
+func TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3403(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repository root: %v", err)

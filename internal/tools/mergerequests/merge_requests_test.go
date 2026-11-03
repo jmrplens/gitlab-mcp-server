@@ -602,22 +602,16 @@ func TestMRCommits_EmptyProjectID(t *testing.T) {
 
 // mrTrailedCommitJSON is a merge request commit as GitLab answers it once its
 // trailers were parsed: trailers keeps the last value of each trailer, and
-// extended_trailers maps each trailer to the list of all of its values, the
-// shape client-go's Commit cannot decode (row 69 of
-// docs/development/upstream-bugs.md).
+// extended_trailers maps each trailer to the list of all of its values.
 const mrTrailedCommitJSON = `{"id":"a1b2c3","short_id":"a1b2c3","title":"feat: signed twice","web_url":"https://gitlab.example.com/-/commit/a1b2c3",` +
 	`"trailers":{"Signed-off-by":"Bob <bob@example.com>","Reviewed-by":"Carol <carol@example.com>"},` +
 	`"extended_trailers":{"Signed-off-by":["Alice <alice@example.com>","Bob <bob@example.com>"],"Reviewed-by":["Carol <carol@example.com>"]}}`
 
 // TestMRCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer holds
-// merge_request.commits to the reading issue 1026 gave the commit list: a page
-// carrying a commit whose extended_trailers are lists makes client-go fail the
-// whole page ("cannot unmarshal array into Go struct field
-// .0.extended_trailers.Signed-off-by of type string"), so the page is read off
-// the captured response. The trailed commit keeps both of its
-// Signed-off-by values, the commit beside it keeps its empty map, and the
-// pagination headers of the answer client-go failed to decode still reach the
-// output.
+// merge_request.commits to the reading issue 1026 gave the commit list: on a
+// page carrying a commit whose extended_trailers are lists, the trailed commit
+// keeps both of its Signed-off-by values, the commit beside it keeps its empty
+// map, and the pagination headers reach the output.
 func TestMRCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != pathMR1+"/commits" {
@@ -658,29 +652,23 @@ func TestMRCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer(t *testing.T) {
 	}
 }
 
-// TestMRCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure pins the other
-// side of passing over client-go's decode failure: an answer that fits neither
-// client-go's Commit nor this server's type (an id that is a number) is not
-// published as an empty page. Decoding the capture fails as well, and the
-// handler reports that failure.
+// TestMRCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure pins that an
+// answer client-go's Commit cannot hold (an id that is a number) is not
+// published as an empty page.
 func TestMRCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":5}]`)
 	}))
 
 	_, err := Commits(context.Background(), client, CommitsInput{ProjectID: testProjectID, MRIID: 1})
-	if err == nil {
-		t.Fatal("expected the decode failure, got nil")
-	}
-	if !strings.Contains(err.Error(), "decode the captured response") {
-		t.Errorf("error = %v, want the capture's decode failure", err)
+	if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		t.Fatalf("error = %v, want client-go's decode failure", err)
 	}
 }
 
 // TestMRCommits_Refused_ReportsTheRefusalWithItsHint holds the error client-go
-// returns for a refusal apart from the decode failure the handler passes over:
-// a 404 is reported as GitLab's refusal, with the hint that names the
-// identifiers to check, and never as a capture that failed to decode.
+// returns for a refusal: a 404 is reported as GitLab's refusal, with the hint
+// that names the identifiers to check.
 func TestMRCommits_Refused_ReportsTheRefusalWithItsHint(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
@@ -695,9 +683,6 @@ func TestMRCommits_Refused_ReportsTheRefusalWithItsHint(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "merge_request.get") {
 		t.Errorf("error = %v, want the hint naming merge_request.get", err)
-	}
-	if strings.Contains(err.Error(), "decode the captured response") {
-		t.Errorf("error = %v, want the refusal rather than a decode failure", err)
 	}
 }
 
@@ -2420,10 +2405,10 @@ func TestCancelAutoMerge_VersionUnknown_TheVersionReadCarriesTheCallersContext(t
 	}
 }
 
-// TestCancelAutoMergeRoute_CarriesTheCallersContext verifies the request of
-// the handler's own that cancel_auto_merge is sent as carries the caller's
-// context. It is called directly because through the handler it is never the
-// first request on a client that holds no version.
+// TestCancelAutoMergeRoute_CarriesTheCallersContext verifies the request
+// cancel_auto_merge is sent as carries the caller's context. It is called
+// directly because through the handler it is never the first request on a client
+// that holds no version.
 func TestCancelAutoMergeRoute_CarriesTheCallersContext(t *testing.T) {
 	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, mrAfterCancelJSON)
@@ -2432,19 +2417,6 @@ func TestCancelAutoMergeRoute_CarriesTheCallersContext(t *testing.T) {
 	_, err := cancelAutoMergeRoute(ctx, client, GetInput{ProjectID: testProjectID, MRIID: 1})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelAutoMergeRoute() error = %v, want context.Canceled", err)
-	}
-}
-
-// TestPostCancelAutoMerge_AnUnbuildablePath_SendsNothing verifies that a path
-// client-go cannot build a request for is the operation's error and sends
-// nothing. No input reaches it, since the project is escaped and the IID is a
-// number, so the test hands the path in.
-func TestPostCancelAutoMerge_AnUnbuildablePath_SendsNothing(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-
-	_, err := postCancelAutoMerge(t.Context(), client, "projects/%zz/merge_requests/1/cancel_auto_merge")
-	if err == nil || !strings.HasPrefix(err.Error(), opCancelAutoMerge+":") {
-		t.Fatalf("postCancelAutoMerge() error = %v, want the operation's error", err)
 	}
 }
 

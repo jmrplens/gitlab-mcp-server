@@ -879,7 +879,7 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 // On v3.30.0, GET /pipelines and the two placeholder reassignment routes of
 // a group were answered by tracked family rows, and no client-go method sent
 // them. v3.37.0 delivered both upstream: Pipelines.ListUserPipelines and the
-// GroupPlaceholderReassignments service. On the v3.38.1 pin the service is
+// GroupPlaceholderReassignments service. Since the v3.38.1 pin the service is
 // declared UNWRAPPED_TRACKED, so the two placeholder routes inherit that
 // decision with the issue it names and the family row that answered them is
 // gone, while GET /pipelines stays tracked until an action lists the user's
@@ -1084,7 +1084,7 @@ var protocolDownloads = map[string]string{
 
 // TestRun_Repository_AdjudicatesEveryRouteNoActionReaches fixes the triage of
 // the routes no action reaches on the pinned record (19.5.0) and client-go
-// v3.38.1, where the two placeholder reassignment routes left the tracked
+// v3.40.3, where the two placeholder reassignment routes have left the tracked
 // count, inherited from the decision on the service v3.37.0 added for them.
 // No route is left a finding: a REST route whose operation an
 // action does over GraphQL is covered-by-graphql, a package manager's or

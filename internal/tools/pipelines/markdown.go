@@ -188,15 +188,6 @@ func detailedStatusLabel(p DetailOutput) string {
 	return label
 }
 
-// rawCell renders the raw flag GitLab sent for a variable, and leaves the cell
-// empty where it sent none rather than print a false nobody stated.
-func rawCell(raw *bool) string {
-	if raw == nil {
-		return ""
-	}
-	return toolutil.BoolEmoji(*raw)
-}
-
 // FormatVariablesMarkdown renders a pipeline's variables as a Markdown table.
 func FormatVariablesMarkdown(out VariablesOutput) string {
 	if len(out.Variables) == 0 {
@@ -210,7 +201,7 @@ func FormatVariablesMarkdown(out VariablesOutput) string {
 			toolutil.EscapeMdTableCell(v.Key),
 			toolutil.EscapeMdTableCell(v.Value),
 			toolutil.EscapeMdTableCell(v.VariableType),
-			rawCell(v.Raw),
+			toolutil.BoolEmoji(v.Raw),
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,

@@ -1031,7 +1031,7 @@ func TestToProjectEventOutput_FullMirror(t *testing.T) {
 					ID: "c1", ShortID: "c", Title: "t", AuthorName: "an", AuthorEmail: "ae",
 					AuthoredDate: &ts, CommitterName: "cn", CommitterEmail: "ce", CommittedDate: &ts, CreatedAt: &ts,
 					Message: "m", ParentIDs: []string{"p"}, ProjectID: 2, WebURL: "wu",
-					Trailers: map[string]string{"k": "v"}, ExtendedTrailers: map[string]string{"k2": "v2"},
+					Trailers: map[string]string{"k": "v"}, ExtendedTrailers: map[string][]string{"k2": {"v2"}},
 					Stats:        &gl.CommitStats{Additions: 1, Deletions: 2, Total: 3},
 					Status:       &status,
 					LastPipeline: &gl.PipelineInfo{ID: 100, IID: 1, ProjectID: 2, Status: "success", Source: "push", Ref: "main", SHA: "sha", Name: "p", WebURL: "wu", UpdatedAt: &ts, CreatedAt: &ts},

@@ -605,15 +605,13 @@ type BasicGroupDetailsOutput struct {
 }
 
 // BoardExtra is that reference on the board, which GitLab exposes under no
-// condition and leaves null on a board that belongs to a project, what each
-// of the board's lists carries beside client-go's BoardList, in the order
-// GitLab sent the lists, and the weight the board is scoped to as GitLab sent
-// it: null for a board with no weight scope, which client-go's IssueBoard
-// decodes as int64 and so reads as a board scoped to weight 0 (register row
-// 116 of docs/development/upstream-bugs.md).
+// condition and leaves null on a board that belongs to a project, and the
+// weight the board is scoped to as GitLab sent it: null for a board with no
+// weight scope, which client-go's IssueBoard decodes as int64 and so reads as a
+// board scoped to weight 0 (register row 116 of
+// docs/development/upstream-bugs.md).
 type BoardExtra struct {
 	Group  *BasicGroupDetailsOutput `json:"group"`
-	Lists  []BoardListExtra         `json:"lists"`
 	Weight *int64                   `json:"weight"`
 }
 
@@ -628,24 +626,15 @@ func CapturedBoards(capture *gitlabclient.ResponseCapture, decoded int) ([]Board
 	return capturedList[BoardExtra](capture, decoded, "boards")
 }
 
-// GroupBoardExtra is what GitLab's board entity sends on a group's board that
-// client-go's GroupIssueBoard does not carry (register row 101 of
-// docs/development/upstream-bugs.md): the two list switches, exposed on every
-// board; the assignee and the weight the board is scoped to, exposed where
-// scoped boards are licensed and null on a board scoped to neither, the weight
-// kept a pointer because 0 is a scope of its own; and what each of the board's
-// lists carries beside client-go's BoardList, in the order GitLab sent the
-// lists.
+// GroupBoardExtra is the weight a group's board is scoped to as GitLab sent it:
+// null for a board with no weight scope, which client-go's GroupIssueBoard
+// decodes as int64 and so reads as a board scoped to weight 0, a scope of its
+// own (register row 116 of docs/development/upstream-bugs.md).
 //
-// It is a shape of its own rather than [BoardExtra] because the two structs
-// miss different keys: IssueBoard models the switches and the assignee, and
-// lacks the board's group, which GroupIssueBoard models.
+// It is a shape of its own rather than [BoardExtra] because GroupIssueBoard
+// models the board's group, which IssueBoard lacks.
 type GroupBoardExtra struct {
-	HideBacklogList bool             `json:"hide_backlog_list"`
-	HideClosedList  bool             `json:"hide_closed_list"`
-	Assignee        *BoardUserOutput `json:"assignee"`
-	Weight          *int64           `json:"weight"`
-	Lists           []BoardListExtra `json:"lists"`
+	Weight *int64 `json:"weight"`
 }
 
 // CapturedGroupBoard reads it off the captured answer to a request for one
@@ -677,48 +666,6 @@ type BridgeExtra struct {
 // extra per bridge in order, the count held to what the SDK decoded.
 func CapturedBridges(capture *gitlabclient.ResponseCapture, decoded int) ([]BridgeExtra, error) {
 	return capturedList[BridgeExtra](capture, decoded, "bridges")
-}
-
-// MilestoneExtra is what GitLab's milestone entity sends that a group
-// milestone struct does not carry: the project a project-scoped milestone
-// belongs to, exposed only when there is one, so a group milestone leaves it
-// zero. A group's milestone list asked for include_descendants returns the
-// milestones of the group's projects as well, which carry it. client-go's
-// GroupMilestone decodes the milestone's own page, the other key this used
-// to read, as of v3.26.0.
-type MilestoneExtra struct {
-	ProjectID int64 `json:"project_id"`
-}
-
-// CapturedMilestone reads it off the captured answer to a request for one
-// milestone.
-func CapturedMilestone(capture *gitlabclient.ResponseCapture) (MilestoneExtra, error) {
-	return capturedOne[MilestoneExtra](capture)
-}
-
-// CapturedMilestones reads the same off a list answer, one extra per milestone
-// in order, the count held to what the SDK decoded.
-func CapturedMilestones(capture *gitlabclient.ResponseCapture, decoded int) ([]MilestoneExtra, error) {
-	return capturedList[MilestoneExtra](capture, decoded, "milestones")
-}
-
-// BoardListExtra is the metric a board list limits its work in progress by,
-// which GitLab exposes only on a list whose board has work-in-progress limits
-// available, so it is empty everywhere else.
-type BoardListExtra struct {
-	LimitMetric string `json:"limit_metric"`
-}
-
-// CapturedBoardList reads it off the captured answer to a request for one
-// board list.
-func CapturedBoardList(capture *gitlabclient.ResponseCapture) (BoardListExtra, error) {
-	return capturedOne[BoardListExtra](capture)
-}
-
-// CapturedBoardLists reads the same off a list answer, one extra per board
-// list in order, the count held to what the SDK decoded.
-func CapturedBoardLists(capture *gitlabclient.ResponseCapture, decoded int) ([]BoardListExtra, error) {
-	return capturedList[BoardListExtra](capture, decoded, "board lists")
 }
 
 // CIVariableExtra is what GitLab's CI variable entity sends that the instance
@@ -1403,9 +1350,10 @@ func CapturedIssues(capture *gitlabclient.ResponseCapture, decoded int) ([]Issue
 // practice: the first four are absent whenever the caller asked for the
 // simple form, which renders BasicProjectDetails instead, and the rest are
 // gated on a licensed feature, on an ability, or on GitLab.com. Three of the
-// Duo flags client-go's Project models from v3.36.0 as plain booleans, which
-// read the key a lower-tier answer leaves out as false, so they stay here to
-// keep an absent flag apart from one switched off.
+// Duo flags client-go's Project models from v3.36.0, and the external status
+// checks flag from v3.40.1, as plain booleans, which read the key a lower-tier
+// answer leaves out as false, so they stay here to keep an absent flag apart
+// from one switched off.
 //
 // The tiers here are read from the licensed feature each lambda names rather
 // than from the audit's resolved tier, because gen_api_live captures a

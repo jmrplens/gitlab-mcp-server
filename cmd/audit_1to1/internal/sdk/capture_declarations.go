@@ -120,7 +120,7 @@ var captureCategories = map[string]captureCategory{
 
 // captureDeclarations answers every key the captures share with the
 // client-go struct beside them on the pinned SDK.
-var captureDeclarations = slices.Concat(trailerCaptures, nullCaptures, presenceCaptures, valueCaptures, siblingCaptures, objectCaptures)
+var captureDeclarations = slices.Concat(nullCaptures, presenceCaptures, valueCaptures, siblingCaptures, objectCaptures)
 
 // The captured types several declarations are written on, spelled with their
 // package's name as a declaration's Type is.
@@ -132,23 +132,6 @@ const (
 	capturedNamespaceExtra     = "toolutil.NamespaceExtra"
 	capturedEnterpriseApproval = "mrapprovals.enterpriseApprovalCapture"
 )
-
-// trailerReason is why a commit's extended_trailers is read off the capture.
-const trailerReason = "client-go's Commit declares extended_trailers a map of strings where GitLab sends each trailer's list of values, so its decoder fails on a commit carrying one (register row 69)"
-
-// trailerKind is the type client-go declares extended_trailers with.
-var trailerKind = waits.FieldKind{Type: "Commit", Field: "ExtendedTrailers", Kind: "map[string]string"}
-
-// trailerCaptures are the commits read whole off a capture for their
-// extended_trailers, alone or inside the answer that carries them.
-var trailerCaptures = []captureDeclaration{
-	{Type: "branches.capturedBranch", Key: "commit.extended_trailers", Category: keptForValue, Predicates: []waits.Predicate{trailerKind}, Reason: trailerReason},
-	{Type: "commits.Captured", Key: "extended_trailers", Category: keptForValue, Predicates: []waits.Predicate{trailerKind}, Reason: trailerReason},
-	{Type: "mrchanges.capturedDiffVersion", Key: "commits.extended_trailers", Category: keptForValue, Predicates: []waits.Predicate{trailerKind}, Reason: trailerReason},
-	{Type: "mrcontextcommits.capturedCommit", Key: "extended_trailers", Category: keptForValue, Predicates: []waits.Predicate{trailerKind}, Reason: trailerReason},
-	{Type: "repository.capturedCompare", Key: "commit.extended_trailers", Category: keptForValue, Predicates: []waits.Predicate{trailerKind}, Reason: trailerReason},
-	{Type: "repository.capturedCompare", Key: "commits.extended_trailers", Category: keptForValue, Predicates: []waits.Predicate{trailerKind}, Reason: trailerReason},
-}
 
 // measureReason is why a measure GitLab sends as null is read off the
 // capture.
@@ -176,6 +159,8 @@ var nullCaptures = []captureDeclaration{
 		waits.FieldKind{Type: "WeightEvent", Field: "Weight", Kind: "int64"}),
 	nullCapture("toolutil.BoardExtra", "weight", "GitLab sends null for a board with no weight scope, which client-go decodes as a board scoped to weight 0 (register row 116)",
 		waits.FieldKind{Type: "IssueBoard", Field: "Weight", Kind: "int64"}),
+	nullCapture("toolutil.GroupBoardExtra", "weight", "GitLab sends null for a group board with no weight scope, which client-go decodes as a board scoped to weight 0 (register row 116)",
+		waits.FieldKind{Type: "GroupIssueBoard", Field: "Weight", Kind: "int64"}),
 	nullCapture(capturedBridgeExtra, "coverage", measureReason,
 		waits.FieldKind{Type: "Bridge", Field: "Coverage", Kind: "float64"}, waits.FieldKind{Type: "TriggerJob", Field: "Coverage", Kind: "float64"}),
 	nullCapture(capturedBridgeExtra, "duration", measureReason,
@@ -218,13 +203,17 @@ func presenceCapture(key, field, kind string) captureDeclaration {
 // capture.
 const duoFlagReason = "ee/lib/ee/api/entities/project.rb sends the flag only on a project whose license carries ai_features, the secret detection one only while the duo_secret_detection_false_positive feature flag is on too, and client-go's Project, which models it from v3.36.0, decodes the key an answer leaves out as false, a value a licensed answer also carries"
 
+// statusChecksFlagReason is why a project's external status checks flag is
+// read off the capture.
+const statusChecksFlagReason = "ee/lib/ee/api/entities/project.rb sends the flag only on a project whose license carries external_status_checks, and client-go's Project, which models it from v3.40.1, decodes the key an answer leaves out as false, a value a licensed answer also carries"
+
 // projectFlagCapture declares a flag of the project entity kept for its
 // presence.
-func projectFlagCapture(key, field string) captureDeclaration {
+func projectFlagCapture(key, field, reason string) captureDeclaration {
 	return captureDeclaration{
 		Type: "toolutil.ProjectExtra", Key: key, Category: keptForPresence,
 		Predicates: []waits.Predicate{waits.FieldKind{Type: "Project", Field: field, Kind: "bool"}},
-		Reason:     duoFlagReason,
+		Reason:     reason,
 	}
 }
 
@@ -242,7 +231,7 @@ var serviceAccountExternal = captureDeclaration{
 
 // presenceCaptures are the keys an answer leaves out where client-go decodes
 // a value that is not a pointer: a Community Edition answer's approval state,
-// a project's Duo flags outside the license that sends them, and an instance
+// a project's flags outside the license that sends them, and an instance
 // service account's external flag before 19.5.
 var presenceCaptures = []captureDeclaration{
 	serviceAccountExternal,
@@ -259,9 +248,10 @@ var presenceCaptures = []captureDeclaration{
 	presenceCapture("require_password_to_approve", "RequirePasswordToApprove", "bool"),
 	presenceCapture("state", "State", "string"),
 	presenceCapture("title", "Title", "string"),
-	projectFlagCapture("duo_sast_fp_detection_enabled", "DuoSASTFPDetectionEnabled"),
-	projectFlagCapture("duo_sast_vr_workflow_enabled", "DuoSASTVRWorkflowEnabled"),
-	projectFlagCapture("duo_secret_detection_fp_enabled", "DuoSecretDetectionFPEnabled"),
+	projectFlagCapture("duo_sast_fp_detection_enabled", "DuoSASTFPDetectionEnabled", duoFlagReason),
+	projectFlagCapture("duo_sast_vr_workflow_enabled", "DuoSASTVRWorkflowEnabled", duoFlagReason),
+	projectFlagCapture("duo_secret_detection_fp_enabled", "DuoSecretDetectionFPEnabled", duoFlagReason),
+	projectFlagCapture("only_allow_merge_if_all_status_checks_passed", "OnlyAllowMergeIfAllStatusChecksPassed", statusChecksFlagReason),
 }
 
 // confidentialReason is why a note's confidential is read off the capture.

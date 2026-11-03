@@ -66,23 +66,23 @@ func FormatImportStatusMarkdown(out ImportStatusOutput) *mcp.CallToolResult {
 			)
 		}
 	}
-	// A GitHub import counts what it has fetched and what it has imported,
-	// per object type; the rows are sorted so the table reads the same on
-	// every call.
-	if len(out.Stats) > 0 {
+	// A GitHub import counts what it has fetched and what it has imported, per
+	// object type, and has counted nothing at its start.
+	if s := out.Stats; s != nil && len(s.Fetched)+len(s.Imported) > 0 {
 		t := c.Table("Import Statistics", "Stage", "Object", "Count")
-		for _, stage := range slices.Sorted(maps.Keys(out.Stats)) {
-			for _, object := range slices.Sorted(maps.Keys(out.Stats[stage])) {
-				t.Row(
-					toolutil.EscapeMdTableCell(stage),
-					toolutil.EscapeMdTableCell(object),
-					strconv.FormatInt(out.Stats[stage][object], 10),
-				)
-			}
-		}
+		importStatsRows(t, "fetched", s.Fetched)
+		importStatsRows(t, "imported", s.Imported)
 	}
 	c.End("Monitor import progress by checking status periodically")
 	return toolutil.ToolResultWithMarkdown(b.String())
+}
+
+// importStatsRows writes one stage's counts, sorted so the table reads the same
+// on every call.
+func importStatsRows(t *toolutil.CardTable, stage string, counts map[string]int64) {
+	for _, object := range slices.Sorted(maps.Keys(counts)) {
+		t.Row(stage, toolutil.EscapeMdTableCell(object), strconv.FormatInt(counts[object], 10))
+	}
 }
 
 // statusCard opens the card both status answers share: the title names which
