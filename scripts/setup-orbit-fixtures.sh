@@ -4,7 +4,8 @@
 
 # setup-orbit-fixtures.sh — create reproducible Orbit knowledge-graph
 # fixtures in any GitLab.com group. Idempotent: re-running it on an
-# already-provisioned namespace is a no-op.
+# already-provisioned namespace reconciles it: missing pieces are created
+# and the rest left alone.
 #
 # Usage:
 #   GITLAB_COM_TOKEN=glpat-... \
@@ -22,8 +23,8 @@
 # Flags:
 #   --mirror-cli    additionally mirror gitlab-org/cli (the glab CLI) as
 #                   <namespace>/glab-mirror. The mirror brings real data:
-#                   real MRs, real CI, real code, real branches. Skipped
-#                   on re-runs.
+#                   real MRs, real CI, real code, real branches. An existing
+#                   mirror is reconciled, not pushed again.
 #   --skip-mirror   do not mirror gitlab-org/cli even if it does not
 #                   exist. Used by CI to avoid the ~10 min mirror step.
 #
@@ -99,19 +100,39 @@ H_JSON=(-H "Content-Type: application/json")
 
 # ─── Helpers ───────────────────────────────────────────────────────────
 
-# api_post PATH JSON  →  echoes the response body
+# Every request has a deadline: a connection GitLab accepts but never answers
+# would otherwise block the run with no way to tell it apart from a slow one.
+CURL_TIMEOUTS=(--connect-timeout 10 --max-time 120)
+
+# api_post PATH JSON  ->  echoes the response body
 api_post() {
-  curl -sS -X POST "${H_AUTH[@]}" "${H_JSON[@]}" "$API$1" -d "$2"
+  curl -sS "${CURL_TIMEOUTS[@]}" -X POST "${H_AUTH[@]}" "${H_JSON[@]}" "$API$1" -d "$2"
 }
 
-# api_get PATH  →  echoes the response body
+# api_get PATH  ->  echoes the response body
 api_get() {
-  curl -sS "${H_AUTH[@]}" "$API$1"
+  curl -sS "${CURL_TIMEOUTS[@]}" "${H_AUTH[@]}" "$API$1"
 }
 
-# api_put PATH JSON  →  echoes the response body
+# api_put PATH JSON  ->  echoes the response body
 api_put() {
-  curl -sS -X PUT "${H_AUTH[@]}" "${H_JSON[@]}" "$API$1" -d "$2"
+  curl -sS "${CURL_TIMEOUTS[@]}" -X PUT "${H_AUTH[@]}" "${H_JSON[@]}" "$API$1" -d "$2"
+}
+
+# api_request METHOD PATH [JSON]  ->  sets API_STATUS and API_BODY
+#   The helpers above run in a command substitution, so a status set there
+#   would be lost; this one runs in the caller's shell. curl exits 0 for an
+#   HTTP error response, and a write GitLab refused must not be reported as
+#   applied, so the status is checked before anything is printed as done.
+api_request() {
+  local method="$1" path="$2" body="${3:-}" response
+  if [ -n "$body" ]; then
+    response=$(curl -sS "${CURL_TIMEOUTS[@]}" -X "$method" "${H_AUTH[@]}" "${H_JSON[@]}" "$API$path" -d "$body" -w '\n%{http_code}')
+  else
+    response=$(curl -sS "${CURL_TIMEOUTS[@]}" -X "$method" "${H_AUTH[@]}" "$API$path" -w '\n%{http_code}')
+  fi
+  API_STATUS=${response##*$'\n'}
+  API_BODY=${response%$'\n'*}
 }
 
 # ensure_resource GET_PATH JSON
@@ -183,21 +204,73 @@ reconcile_existing_project() {
   local project_id="$1"
   local fixture_dir="$2"
 
+  # A read that failed must not become an empty visibility, which would look
+  # like a mismatch and PUT public: that would expose a private project whose
+  # state was simply unreadable. Stop instead.
+  api_request GET "/projects/$project_id"
+  if [ "$API_STATUS" != "200" ]; then
+    echo "    ✗ cannot read project $project_id (HTTP $API_STATUS); not reconciling" >&2
+    return 1
+  fi
   local current_visibility
-  current_visibility=$(api_get "/projects/$project_id" | python3 -c 'import sys,json
+  current_visibility=$(printf '%s' "$API_BODY" | python3 -c 'import sys,json
 try:
     print(json.load(sys.stdin).get("visibility",""))
 except Exception: pass' 2>/dev/null)
+  case "$current_visibility" in
+    public | internal | private) ;;
+    *)
+      echo "    ✗ project $project_id has no readable visibility; not reconciling" >&2
+      return 1
+      ;;
+  esac
   if [ "$current_visibility" != "$VISIBILITY" ]; then
-    echo "    → visibility ${current_visibility:-unknown} → $VISIBILITY" >&2
-    api_put "/projects/$project_id" "{\"visibility\": \"$VISIBILITY\"}" >/dev/null
+    echo "    → visibility $current_visibility → $VISIBILITY" >&2
+    api_request PUT "/projects/$project_id" "{\"visibility\": \"$VISIBILITY\"}"
+    if [ "$API_STATUS" -lt 200 ] || [ "$API_STATUS" -ge 300 ]; then
+      echo "    ✗ could not set visibility (HTTP $API_STATUS): $API_BODY" >&2
+      return 1
+    fi
   fi
 
-  # The repository tree lists the paths the project already holds. A route
-  # that cannot be read is reported, never guessed at: writing a file that
-  # already exists would be a spurious commit on every re-run.
-  local tree missing
-  tree=$(api_get "/projects/$project_id/repository/tree?recursive=true&per_page=100")
+  # The repository tree lists the paths the project already holds. Every page
+  # is read: one page of 100 is not the whole tree, and a fixture path past
+  # the first page would be created again on every run. A route that cannot be
+  # read stops reconciliation, never guessed at.
+  local page=1 pages="" body count tree missing
+  while :; do
+    api_request GET "/projects/$project_id/repository/tree?recursive=true&per_page=100&page=$page"
+    if [ "$API_STATUS" != "200" ]; then
+      echo "    ✗ cannot list the project's files (HTTP $API_STATUS); not reconciling" >&2
+      return 1
+    fi
+    body="$API_BODY"
+    count=$(printf '%s' "$body" | python3 -c 'import sys,json
+try:
+    answer = json.load(sys.stdin)
+    print(len(answer) if isinstance(answer, list) else "ERR")
+except Exception:
+    print("ERR")')
+    if [ "$count" = "ERR" ]; then
+      echo "    ✗ the project's file list is unreadable; not reconciling" >&2
+      return 1
+    fi
+    [ "$count" -eq 0 ] && break
+    pages+="$body"$'
+'
+    [ "$count" -lt 100 ] && break
+    page=$((page + 1))
+  done
+  tree=$(printf '%s' "$pages" | python3 -c 'import json,sys
+entries = []
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    answer = json.loads(line)
+    if isinstance(answer, list):
+        entries.extend(answer)
+print(json.dumps(entries))')
   missing=$(FIXTURE_DIR="$fixture_dir" TREE="$tree" python3 - <<'PY'
 import json
 import os
@@ -239,8 +312,11 @@ PY
 print(urllib.parse.quote(sys.stdin.read(), safe=""))')
     content_b64=$(python3 -c 'import base64,sys
 print(base64.b64encode(open(sys.argv[1], "rb").read()).decode())' "$fixture_dir/$rel")
-    api_post "/projects/$project_id/repository/files/$encoded" \
-      "{\"branch\": \"main\", \"encoding\": \"base64\", \"content\": \"$content_b64\", \"commit_message\": \"Add $rel\"}" >/dev/null
+    api_request POST "/projects/$project_id/repository/files/$encoded"       "{\"branch\": \"main\", \"encoding\": \"base64\", \"content\": \"$content_b64\", \"commit_message\": \"Add $rel\"}"
+    if [ "$API_STATUS" -lt 200 ] || [ "$API_STATUS" -ge 300 ]; then
+      echo "    ✗ could not create $rel (HTTP $API_STATUS): $API_BODY" >&2
+      return 1
+    fi
     echo "    → added $rel" >&2
   done <<< "$missing"
 }
@@ -271,7 +347,9 @@ except Exception: pass' 2>/dev/null)
 
   if [ -n "$existing_id" ] && [ "$existing_id" -gt 0 ] 2>/dev/null; then
     echo "    ✓ project exists: $NAMESPACE/$path (id=$existing_id)" >&2
-    reconcile_existing_project "$existing_id" "$fixture_dir"
+    # Command substitutions run without errexit unless inherit_errexit is on,
+    # so a failed reconciliation has to be returned explicitly.
+    reconcile_existing_project "$existing_id" "$fixture_dir" || return 1
     echo "$existing_id"
     return 0
   fi
@@ -552,4 +630,4 @@ fi
 echo ""
 echo "The Orbit knowledge graph indexer will pick up the new content"
 echo "within a few minutes. Re-run this script at any time — it is"
-echo "idempotent and skips already-created resources."
+echo "idempotent: existing resources are reconciled, not created again."

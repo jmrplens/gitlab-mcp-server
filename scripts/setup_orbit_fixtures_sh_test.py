@@ -50,27 +50,34 @@ SEC_ID = 20
 
 # The routes live one file each under CURL_ROUTES, named by route_file.
 CURL = """#!/usr/bin/env bash
-method=GET url=
+method=GET url= want_status=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -X) method=$2; shift 2 ;;
     -H|-d) shift 2 ;;
+    -w) want_status=1; shift 2 ;;
+    --connect-timeout|--max-time) shift 2 ;;
     http*) url=$1; shift ;;
     *) shift ;;
   esac
 done
 path=${url#*://}
 path=/${path#*/}
-path=${path%%\\?*}
-printf '%s %s\\n' "$method" "$path" >> "$CURL_LOG"
+path=${path%%\?*}
+printf '%s %s\n' "$method" "$path" >> "$CURL_LOG"
 key="$method $path"
 key=${key// /_}
-key=${key//\\//!}
+key=${key//\//!}
+status=404
 if [ -f "$CURL_ROUTES/$key" ]; then
   cat "$CURL_ROUTES/$key"
+  status=200
+  [ -f "$CURL_ROUTES/$key.status" ] && status=$(cat "$CURL_ROUTES/$key.status")
 else
   printf '%s' '{"message":"404 Not Found"}'
 fi
+[ "$want_status" = 1 ] && printf '\n%s' "$status"
+exit 0
 """
 
 
@@ -153,8 +160,12 @@ class SetupOrbitFixturesTest(unittest.TestCase):
     def run_script(self, routes):
         os.mkdir(self.routes)
         for key, answer in routes.items():
+            status, body = answer if isinstance(answer, tuple) else (200, answer)
             with open(os.path.join(self.routes, route_file(key)), "w") as f:
-                json.dump(answer, f)
+                json.dump(body, f)
+            if status != 200:
+                with open(os.path.join(self.routes, route_file(key) + ".status"), "w") as f:
+                    f.write(str(status))
         return subprocess.run(
             [BASH, SCRIPT, "--skip-mirror"], env=self.env, capture_output=True, text=True, timeout=600
         )
@@ -230,6 +241,9 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         routes = existing_fixtures()
         files = [{"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"]
         routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = files
+        routes["POST " + API + "/projects/%d/repository/files/LICENSE" % KG_ID] = {
+            "file_path": "LICENSE"
+        }
         result = self.run_script(routes)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         created = [r["path"] for r in self.requests("POST") if "/repository/files/" in r["path"]]
@@ -241,11 +255,60 @@ class SetupOrbitFixturesTest(unittest.TestCase):
     def test_an_existing_private_project_is_made_public(self):
         routes = existing_fixtures()
         routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "private"}
+        routes["PUT " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "public"}
         result = self.run_script(routes)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         updated = [r["path"] for r in self.requests("PUT")]
         self.assertEqual(updated, [API + "/projects/%d" % KG_ID])
         self.assertIn("visibility private → public", result.stderr)
+
+    def test_unreadable_project_details_stop_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = (500, {"message": "boom"})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot read project", result.stderr)
+        self.assertEqual(self.requests("PUT"), [], "no visibility may be written from an unreadable project")
+
+    def test_a_project_without_a_visibility_is_not_made_public(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID}
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no readable visibility", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+
+    def test_a_refused_visibility_update_stops_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "private"}
+        routes["PUT " + API + "/projects/%d" % KG_ID] = (403, {"message": "forbidden"})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("could not set visibility", result.stderr)
+        self.assertNotIn("added LICENSE", result.stderr)
+
+    def test_an_unreadable_tree_stops_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = (500, {"message": "boom"})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot list the project's files", result.stderr)
+        self.assertEqual(
+            [r for r in self.requests("POST") if "/repository/files/" in r["path"]], []
+        )
+
+    def test_a_refused_file_creation_stops_reconciliation(self):
+        routes = existing_fixtures()
+        files = [{"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"]
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = files
+        routes["POST " + API + "/projects/%d/repository/files/LICENSE" % KG_ID] = (
+            400,
+            {"message": "bad request"},
+        )
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("could not create LICENSE", result.stderr)
+        self.assertNotIn("added LICENSE", result.stderr)
 
     def test_a_private_visibility_is_refused_under_jmrp_oss(self):
         self.env["ORBIT_FIXTURES_NAMESPACE"] = "jmrp-oss/orbit-fixtures"

@@ -127,12 +127,12 @@ ORBIT_FIXTURES_NAMESPACE=mynamespace \
 ./scripts/setup-orbit-fixtures.sh
 ```
 
-The script is **idempotent**: it checks for existing resources via the
-API and skips them. Re-running it on an already-provisioned namespace is
-otherwise a no-op, but a project that already exists is brought into
-line rather than left alone: its visibility is set and any fixture file
-it lacks is added, the `LICENSE` first (a project provisioned before the
-licence existed, or one whose first push failed, is repaired this way).
+The script is **idempotent**: it checks for existing resources through
+the API and leaves those in place. A project that already exists is
+reconciled rather than skipped: its visibility is set and any fixture
+file it lacks is added, the `LICENSE` first (a project provisioned before
+the licence existed, or one whose first push failed, is repaired this
+way). A rerun that finds everything in line changes nothing.
 The namespace may be a subgroup, as the default
 `jmrp-oss/orbit-fixtures` is: the script looks each project up by its
 full path with every slash encoded. It creates the projects public, as
