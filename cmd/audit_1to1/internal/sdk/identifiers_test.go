@@ -1221,13 +1221,10 @@ func TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept(t 
 }
 
 // witnessIdentifierArguments is what the witness expects of every integer a
-// handler hands a client-go parameter of type any on v3.30.0: by site,
+// handler hands a client-go parameter of type any on v3.40.3: by site,
 // method and input field, its status and the record's route and
 // placeholder, spelled as the report spells them.
 var witnessIdentifierArguments = map[string]string{
-	"users.GetStatus Users.GetUserStatus users.GetStatusInput.UserID":                                                                           "declared tracked GET /users/:user_id/status user_id name-or-path",
-	"users.ListContributionEvents Users.ListUserContributionEvents users.ListContributionEventsInput.UserID":                                    "declared tracked GET /users/:id/events id name-or-path",
-	"users.ListSSHKeysForUser Users.ListSSHKeysForUser users.ListSSHKeysForUserInput.UserID":                                                    "declared tracked GET /users/:user_id/keys user_id name-or-path",
 	"containerregistry.GetRepository ContainerRegistry.GetSingleRegistryRepository containerregistry.GetRepositoryInput.RepositoryID":           "id_only  GET /registry/repositories/:id id id",
 	"runners.Get Runners.GetRunnerDetails runners.GetInput.RunnerID":                                                                            "id_only  GET /runners/:id id id",
 	"runners.ListJobs Runners.ListRunnerJobs runners.ListJobsInput.RunnerID":                                                                    "id_only  GET /runners/:id/jobs id id",
@@ -1240,7 +1237,7 @@ var witnessIdentifierArguments = map[string]string{
 	"jobtokenscope.RemoveProjectAllowlist JobTokenScope.RemoveProjectFromJobScopeAllowList jobtokenscope.RemoveProjectAllowlistInput.ProjectID": "id_only  DELETE /projects/:id/job_token_scope/allowlist/:target_project_id id id",
 }
 
-// witnessSDKNarrowed is what the witness expects client-go v3.30.1 to
+// witnessSDKNarrowed is what the witness expects client-go v3.40.3 to
 // narrow: each method and parameter that takes an int64 where the record
 // says the group's, the project's or the user's ID or path is taken, every
 // one of them called by a handler, answered by a declaration and read from an
@@ -1275,28 +1272,29 @@ type identifiersWitness struct {
 	}
 }
 
-// TestRun_Repository_DeclaresTheUserIdentifiersThatTakeAUsernameAtClientGoV3300
+// TestRun_Repository_HandsAnIntegerOnlyWhereGitLabTakesAnIDAtClientGoV3403
 // is the witness on the real tree. GitLab takes the ID or the username of a
 // user at GET /users/:id/events, /users/:user_id/status and
-// /users/:user_id/keys, and client-go takes any there, while
+// /users/:user_id/keys, and client-go takes any there. On v3.30.0
 // user.contribution_events, user.get_status and user.ssh_keys_for_user
-// offer user_id as an integer alone: nothing compared what a handler hands
-// such a parameter with what the record says the placeholder takes. The
-// three are declared tracked until the inputs are widened, and the six
-// other integers handed to a parameter of type any fill a placeholder the
-// record says takes an ID alone. Beside them client-go narrows eighteen
-// parameters itself, the custom attributes and repository storage moves of
-// a group, a project or a user taking an int64 where the record says an ID
-// or a path, and each is answered by the action that reads a name into its
-// ID before the call. Both lists come out the same on client-go v3.38.0: B4 of
-// the bump stack widens the three inputs, which turns their declarations stale
-// and drops them from the arguments, and the narrowings change only when
-// client-go widens those parameters, which turns theirs stale too.
+// offered user_id as an integer alone, which nothing had compared with what
+// the record says the placeholder takes, and the three were declared tracked
+// until the inputs were widened. They take an ID or a username since issue
+// 1602 and hand client-go the string the caller wrote, so they are no longer
+// integers handed to a parameter of type any and no declaration answers
+// them: the ten integers left fill a placeholder the record says takes an ID
+// alone. Beside them client-go narrows eighteen parameters itself, the
+// custom attributes and repository storage moves of a group, a project or a
+// user taking an int64 where the record says an ID or a path, and each is
+// answered by the action that reads a name into its ID before the call. The
+// pin moved from v3.30.0 to v3.40.3 without changing that list; it changes
+// only when client-go widens those parameters, which turns their
+// declarations stale too.
 //
 // It reads the report as plain JSON and spells what it expects, so copied
 // on its own into a tree that has no such section it compiles and fails
 // there, which is the point.
-func TestRun_Repository_DeclaresTheUserIdentifiersThatTakeAUsernameAtClientGoV3300(t *testing.T) {
+func TestRun_Repository_HandsAnIntegerOnlyWhereGitLabTakesAnIDAtClientGoV3403(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repository root: %v", err)

@@ -15,17 +15,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// ListSSHKeysForUserInput holds parameters for listing SSH keys for a specific user.
+// ListSSHKeysForUserInput holds parameters for listing SSH keys for a specific
+// user. GET /users/:user_id/keys resolves the user by ID or by username, so
+// user_id takes either.
 type ListSSHKeysForUserInput struct {
-	UserID  int64  `json:"user_id" jsonschema:"The ID of the user,required"`
-	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
-	Sort    string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
+	UserID  toolutil.StringOrInt `json:"user_id" jsonschema:"The ID or username of the user,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }
 
 // ListSSHKeysForUser retrieves SSH keys for a specific user.
 func ListSSHKeysForUser(ctx context.Context, client *gitlabclient.Client, input ListSSHKeysForUserInput) (SSHKeyListOutput, error) {
-	if input.UserID == 0 {
+	if input.UserID == "" {
 		return SSHKeyListOutput{}, errors.New("list_ssh_keys_for_user: user_id is required")
 	}
 	if err := ctx.Err(); err != nil {
@@ -36,10 +38,13 @@ func ListSSHKeysForUser(ctx context.Context, client *gitlabclient.Client, input 
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
-	keys, resp, err := client.GL().Users.ListSSHKeysForUser(input.UserID, opts, gl.WithContext(ctx))
+	keys, resp, err := client.GL().Users.ListSSHKeysForUser(input.UserID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
+		// No one action verifies both spellings of user_id: user.get takes an
+		// ID alone, and user.list has no filter by ID but filters by exact
+		// username. So the hint names the action for each.
 		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list_ssh_keys_for_user", err, http.StatusNotFound,
-			"verify user_id with user.get; the user may have no SSH keys")
+			"verify user_id with user.get when it is an ID, or with user.list (username filter) when it is a username; the user may have no SSH keys")
 	}
 
 	out := make([]SSHKeyOutput, 0, len(keys))

@@ -303,17 +303,19 @@ type StatusOutput struct {
 }
 
 // GetStatusInput holds parameters for retrieving a user's status.
+// GET /users/:user_id/status resolves the user by ID or by username, so
+// user_id takes either.
 type GetStatusInput struct {
-	UserID int64 `json:"user_id" jsonschema:"The ID of the user whose status to retrieve,required"`
+	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"The ID or username of the user whose status to retrieve,required"`
 }
 
 // GetStatus retrieves the status of a specific user.
 func GetStatus(ctx context.Context, client *gitlabclient.Client, input GetStatusInput) (StatusOutput, error) {
-	if input.UserID == 0 {
+	if input.UserID == "" {
 		return StatusOutput{}, errors.New("get_user_status: user_id is required")
 	}
 
-	s, _, err := client.GL().Users.GetUserStatus(input.UserID, gl.WithContext(ctx))
+	s, _, err := client.GL().Users.GetUserStatus(input.UserID.String(), gl.WithContext(ctx))
 	if err != nil {
 		return StatusOutput{}, toolutil.WrapErrWithStatusHint("get_user_status", err, http.StatusNotFound,
 			"verify user_id or username; status may be empty if the user has not set one")
@@ -475,22 +477,24 @@ type ContributionEventsOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ListContributionEventsInput holds parameters for listing user contribution events.
+// ListContributionEventsInput holds parameters for listing user contribution
+// events. GET /users/:id/events resolves the user by ID or by username, so
+// user_id takes either.
 type ListContributionEventsInput struct {
-	UserID     int64  `json:"user_id" jsonschema:"The ID of the user whose events to retrieve,required"`
-	Action     string `json:"action,omitempty" jsonschema:"Filter by event action type"`
-	TargetType string `json:"target_type,omitempty" jsonschema:"Filter by event target type"`
-	Before     string `json:"before,omitempty" jsonschema:"Only events before this date (YYYY-MM-DD)"`
-	After      string `json:"after,omitempty" jsonschema:"Only events after this date (YYYY-MM-DD)"`
-	Scope      string `json:"scope,omitempty" jsonschema:"Include all events across a user's projects (e.g. 'all')"`
-	OrderBy    string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
-	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
+	UserID     toolutil.StringOrInt `json:"user_id" jsonschema:"The ID or username of the user whose events to retrieve,required"`
+	Action     string               `json:"action,omitempty" jsonschema:"Filter by event action type"`
+	TargetType string               `json:"target_type,omitempty" jsonschema:"Filter by event target type"`
+	Before     string               `json:"before,omitempty" jsonschema:"Only events before this date (YYYY-MM-DD)"`
+	After      string               `json:"after,omitempty" jsonschema:"Only events after this date (YYYY-MM-DD)"`
+	Scope      string               `json:"scope,omitempty" jsonschema:"Include all events across a user's projects (e.g. 'all')"`
+	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort       string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 }
 
 // ListContributionEvents retrieves contribution events for a user.
 func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, input ListContributionEventsInput) (ContributionEventsOutput, error) {
-	if input.UserID == 0 {
+	if input.UserID == "" {
 		return ContributionEventsOutput{}, errors.New("list_contribution_events: user_id is required")
 	}
 	if err := events.CheckActionFilter(input.Action); err != nil {
@@ -526,7 +530,7 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 		opts.Sort = new(input.Sort)
 	}
 
-	contributions, resp, err := client.GL().Users.ListUserContributionEvents(input.UserID, opts, gl.WithContext(ctx))
+	contributions, resp, err := client.GL().Users.ListUserContributionEvents(input.UserID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ContributionEventsOutput{}, toolutil.WrapErrWithStatusHint("list_contribution_events", err, http.StatusForbidden,
 			"verify user_id and that the user's contribution events are visible to your token; private profiles are not visible")

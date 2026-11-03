@@ -31,26 +31,12 @@ type identifierDeclaration struct {
 	Reason   string
 }
 
-// userIdentifiersIssue is the issue that widens the three user inputs
-// below to an ID or a username.
-const userIdentifiersIssue = 1602
-
 // identifierDeclarations answers the input fields that narrow a placeholder
-// GitLab takes a name or a path in.
-var identifierDeclarations = []identifierDeclaration{
-	{
-		Input: "users.ListContributionEventsInput.UserID", Category: identifierTracked, Issue: userIdentifiersIssue,
-		Reason: "GET /users/:id/events takes the ID or the username of the user (gitlab-api-live.json, 19.5.0-ee; doc/api/events.md) and ListUserContributionEvents takes any, while user.contribution_events offers user_id as an integer alone",
-	},
-	{
-		Input: "users.GetStatusInput.UserID", Category: identifierTracked, Issue: userIdentifiersIssue,
-		Reason: "GET /users/:user_id/status takes the ID or the username of the user (gitlab-api-live.json, 19.5.0-ee; doc/api/users.md) and GetUserStatus takes any, while user.get_status offers user_id as an integer alone",
-	},
-	{
-		Input: "users.ListSSHKeysForUserInput.UserID", Category: identifierTracked, Issue: userIdentifiersIssue,
-		Reason: "GET /users/:user_id/keys takes the ID or the username of the user (gitlab-api-live.json, 19.5.0-ee; doc/api/user_keys.md) and ListSSHKeysForUser takes any, while user.ssh_keys_for_user offers user_id as an integer alone",
-	},
-}
+// GitLab takes a name or a path in. It is empty: the three user inputs it
+// declared tracked (user.contribution_events, user.get_status and
+// user.ssh_keys_for_user) take an ID or a username since issue 1602, so no
+// integer a handler hands client-go fills such a placeholder.
+var identifierDeclarations = []identifierDeclaration{}
 
 // identifierNeeds says what a declaration lacks, empty when it lacks
 // nothing: a reason, a category the table defines, and what the category

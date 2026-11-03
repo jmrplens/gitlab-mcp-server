@@ -27,7 +27,7 @@ func TestListSSHKeysForUser_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := ListSSHKeysForUser(context.Background(), client, ListSSHKeysForUserInput{UserID: 42})
+	out, err := ListSSHKeysForUser(context.Background(), client, ListSSHKeysForUserInput{UserID: "42"})
 	if err != nil {
 		t.Fatalf("ListSSHKeysForUser() unexpected error: %v", err)
 	}
@@ -348,16 +348,22 @@ func TestDeleteSSHKeyForUser_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListSSHKeysForUser_MissingUserID verifies validation for zero user_id.
+// TestListSSHKeysForUser_MissingUserID verifies validation for an empty
+// user_id, refused before any request.
 func TestListSSHKeysForUser_MissingUserID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ListSSHKeysForUser(context.Background(), client, ListSSHKeysForUserInput{})
-	if err == nil {
-		t.Fatal("expected error for missing user_id, got nil")
+	if err == nil || !strings.Contains(err.Error(), "user_id is required") {
+		t.Fatalf("error = %v, want the refusal of a missing user_id", err)
 	}
+}
+
+// TestListSSHKeysForUser_IDOrUsername_NamesTheUserInThePath verifies that
+// user_id takes the ID or the username of the user, as GET
+// /users/:user_id/keys does, and reaches the path as the caller wrote it.
+func TestListSSHKeysForUser_IDOrUsername_NamesTheUserInThePath(t *testing.T) {
+	assertUserIdentifierReachesThePath(t, ListSSHKeysForUser, "/keys", `[]`)
 }
 
 // TestListSSHKeysForUser_APIError verifies error handling on API failure.
@@ -366,9 +372,44 @@ func TestListSSHKeysForUser_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 
-	_, err := ListSSHKeysForUser(context.Background(), client, ListSSHKeysForUserInput{UserID: 42})
+	_, err := ListSSHKeysForUser(context.Background(), client, ListSSHKeysForUserInput{UserID: "42"})
 	if err == nil {
 		t.Fatal("expected error for API failure, got nil")
+	}
+}
+
+// TestListSSHKeysForUser_NotFound_HintNamesTheActionForEachSpelling verifies
+// the 404 hint of the listing names an action that can verify each spelling
+// user_id takes: user.get for an ID, since user.list has no filter by ID, and
+// user.list by its exact username filter for a username, since user.get
+// takes an ID alone. A hint naming one of them would send a model that wrote
+// the other spelling to an action that cannot check it. The hint is advice
+// about a missing user, so a 403 does not carry it.
+func TestListSSHKeysForUser_NotFound_HintNamesTheActionForEachSpelling(t *testing.T) {
+	const want = "Suggestion: verify user_id with user.get when it is an ID, " +
+		"or with user.list (username filter) when it is a username"
+
+	for _, tt := range []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"not found", http.StatusNotFound, true},
+		{"forbidden", http.StatusForbidden, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"nope"}`)
+			}))
+
+			_, err := ListSSHKeysForUser(context.Background(), client, ListSSHKeysForUserInput{UserID: "42"})
+			if err == nil {
+				t.Fatal("expected error for API failure, got nil")
+			}
+			if got := strings.Contains(err.Error(), want); got != tt.wantHint {
+				t.Errorf("error %q carries the hint = %t, want %t (%q)", err, got, tt.wantHint, want)
+			}
+		})
 	}
 }
 
@@ -380,7 +421,7 @@ func TestListSSHKeysForUser_CancelledContext(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := ListSSHKeysForUser(ctx, client, ListSSHKeysForUserInput{UserID: 42})
+	_, err := ListSSHKeysForUser(ctx, client, ListSSHKeysForUserInput{UserID: "42"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
 	}
@@ -545,7 +586,7 @@ func TestSSHKeyHandlers_PublishTheLastUse(t *testing.T) {
 			return firstKey(out), err
 		}},
 		{"list for user", `[` + object + `]`, func(c *gitlabclient.Client) (SSHKeyOutput, error) {
-			out, err := ListSSHKeysForUser(context.Background(), c, ListSSHKeysForUserInput{UserID: 42})
+			out, err := ListSSHKeysForUser(context.Background(), c, ListSSHKeysForUserInput{UserID: "42"})
 			return firstKey(out), err
 		}},
 		{"get", object, func(c *gitlabclient.Client) (SSHKeyOutput, error) {
@@ -603,7 +644,7 @@ func TestSSHKeyHandlers_AnUnreadableKey_IsRefused(t *testing.T) {
 		call     func(client *gitlabclient.Client) error
 	}{
 		{"list for user", `[` + object + `]`, func(c *gitlabclient.Client) error {
-			_, err := ListSSHKeysForUser(context.Background(), c, ListSSHKeysForUserInput{UserID: 42})
+			_, err := ListSSHKeysForUser(context.Background(), c, ListSSHKeysForUserInput{UserID: "42"})
 			return err
 		}},
 		{"get", object, func(c *gitlabclient.Client) error {

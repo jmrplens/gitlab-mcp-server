@@ -99,8 +99,9 @@ func TestUserAccount_ListAndGet_FindTheRunUser(t *testing.T) {
 
 // TestUserAccount_CountsFeedAndAvatar_AnswerForTheRunUser reads the
 // association counts and the contribution events of the run user, which the
-// shared World gives an issue, a merge request and a push to count, and
-// resolves an avatar for an address nobody owns.
+// shared World gives an issue, a merge request and a push to count, the events
+// both by user ID and by username, and resolves an avatar for an address
+// nobody owns.
 //
 // Replaces: TestMeta_UserSelf
 func TestUserAccount_CountsFeedAndAvatar_AnswerForTheRunUser(t *testing.T) {
@@ -124,6 +125,11 @@ func TestUserAccount_CountsFeedAndAvatar_AnswerForTheRunUser(t *testing.T) {
 			if event.ActionName == "" {
 				e.T.Errorf("contribution event %d carries no action name: %+v", event.ID, event)
 			}
+		}
+
+		byName := harness.Do[users.ContributionEventsOutput](s, actionUserContributionEvents, map[string]any{"user_id": rt.Username})
+		if len(byName.Events) == 0 {
+			e.T.Errorf("contribution_events by username %q answered no event for the run user, and the World was built by it", rt.Username)
 		}
 
 		found := harness.Do[avatar.GetOutput](s, actionUserAvatarGet, map[string]any{"email": avatarLookupEmail, "size": avatarLookupSize})
@@ -203,9 +209,9 @@ func TestUserAccount_AdminReads_MembershipsAndActivities(t *testing.T) {
 }
 
 // TestUserStatus_SetAndReadBack_RoundTrips sets the run user's status on
-// every surface and reads it back twice, as the current user's status and
-// by user ID, holding the current-user lock and restoring the status that
-// was there before.
+// every surface and reads it back three times, as the current user's status,
+// by user ID and by username, holding the current-user lock and restoring the
+// status that was there before.
 //
 // Replaces: TestMeta_UserSelf
 func TestUserStatus_SetAndReadBack_RoundTrips(t *testing.T) {
@@ -230,6 +236,11 @@ func TestUserStatus_SetAndReadBack_RoundTrips(t *testing.T) {
 		got := harness.Do[users.StatusOutput](s, actionUserGetStatus, map[string]any{"user_id": rt.UserID})
 		if got.Emoji != statusEmoji || got.Message != message {
 			e.T.Errorf("get_status of user %d answered emoji %q message %q, want %q %q", rt.UserID, got.Emoji, got.Message, statusEmoji, message)
+		}
+
+		byName := harness.Do[users.StatusOutput](s, actionUserGetStatus, map[string]any{"user_id": rt.Username})
+		if byName.Emoji != statusEmoji || byName.Message != message {
+			e.T.Errorf("get_status of user %q answered emoji %q message %q, want %q %q", rt.Username, byName.Emoji, byName.Message, statusEmoji, message)
 		}
 	})
 }
