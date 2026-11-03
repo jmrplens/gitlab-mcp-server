@@ -306,5 +306,12 @@ func declaredAliases() map[aliasKey]paramAlias {
 			Reason: "the query param search of every search route is what the input names query, its scope being the action itself",
 		}
 	}
+	for _, action := range []string{"list", "get", "set", "delete"} {
+		aliased[aliasKey{action: "admin.custom_attr_" + action, param: "id"}] = paramAlias{
+			Field: "resource_id",
+			Reason: "the :id of a custom attribute route is resource_id, or the ID in the answer of a lookup of it, and the lookup " +
+				"is handed resource_type as well, which says which read to send, so the record names no one field for it",
+		}
+	}
 	return aliased
 }

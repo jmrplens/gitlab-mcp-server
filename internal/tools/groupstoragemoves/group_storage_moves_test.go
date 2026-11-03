@@ -7,8 +7,11 @@ package groupstoragemoves
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -104,7 +107,7 @@ func TestRetrieveForGroup_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{GroupID: 10})
+	out, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{GroupID: "10"})
 	if err != nil {
 		t.Fatalf("RetrieveForGroup() error: %v", err)
 	}
@@ -183,7 +186,7 @@ func TestGetForGroup_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: 10, ID: 1})
+	out, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: "10", ID: 1})
 	if err != nil {
 		t.Fatalf("GetForGroup() error: %v", err)
 	}
@@ -214,7 +217,7 @@ func TestGetForGroup_MissingID(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 
-	_, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: 10})
+	_, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal("expected error for missing id")
 	}
@@ -233,7 +236,7 @@ func TestSchedule_Success(t *testing.T) {
 	}))
 
 	dest := "storage2"
-	out, err := Schedule(context.Background(), client, ScheduleInput{GroupID: 10, DestinationStorageName: &dest})
+	out, err := Schedule(context.Background(), client, ScheduleInput{GroupID: "10", DestinationStorageName: &dest})
 	if err != nil {
 		t.Fatalf("Schedule() error: %v", err)
 	}
@@ -356,7 +359,7 @@ func TestRetrieveForGroup_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 
-	_, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{GroupID: 10})
+	_, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal("expected error on API failure")
 	}
@@ -372,7 +375,7 @@ func TestRetrieveForGroup_ContextCanceled(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := RetrieveForGroup(ctx, client, ListForGroupInput{GroupID: 10})
+	_, err := RetrieveForGroup(ctx, client, ListForGroupInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
 	}
@@ -394,7 +397,7 @@ func TestRetrieveForGroup_Pagination(t *testing.T) {
 	}))
 
 	out, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{
-		GroupID: 10,
+		GroupID: "10",
 		Page:    3, PerPage: 10,
 	})
 	if err != nil {
@@ -446,7 +449,7 @@ func TestGetForGroup_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	_, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: 10, ID: 999})
+	_, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: "10", ID: 999})
 	if err == nil {
 		t.Fatal("expected error on API failure")
 	}
@@ -462,7 +465,7 @@ func TestGetForGroup_ContextCanceled(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := GetForGroup(ctx, client, GroupMoveInput{GroupID: 10, ID: 1})
+	_, err := GetForGroup(ctx, client, GroupMoveInput{GroupID: "10", ID: 1})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
 	}
@@ -476,7 +479,7 @@ func TestSchedule_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 
-	_, err := Schedule(context.Background(), client, ScheduleInput{GroupID: 10})
+	_, err := Schedule(context.Background(), client, ScheduleInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal("expected error on API failure")
 	}
@@ -492,7 +495,7 @@ func TestSchedule_ContextCanceled(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := Schedule(ctx, client, ScheduleInput{GroupID: 10})
+	_, err := Schedule(ctx, client, ScheduleInput{GroupID: "10"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
 	}
@@ -508,7 +511,7 @@ func TestSchedule_NilDestination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, storageMoveJSON)
 	}))
 
-	out, err := Schedule(context.Background(), client, ScheduleInput{GroupID: 10})
+	out, err := Schedule(context.Background(), client, ScheduleInput{GroupID: "10"})
 	if err != nil {
 		t.Fatalf("Schedule() error: %v", err)
 	}
@@ -789,7 +792,7 @@ func TestGroupStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
 		}},
 		{Name: "retrieve_for_group", Call: func() error {
 			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
-			_, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{GroupID: 7})
+			_, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{GroupID: "7"})
 			return err
 		}},
 		{Name: "get", Call: func() error {
@@ -799,12 +802,12 @@ func TestGroupStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
 		}},
 		{Name: "get_for_group", Call: func() error {
 			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
-			_, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: 7, ID: 1})
+			_, err := GetForGroup(context.Background(), client, GroupMoveInput{GroupID: "7", ID: 1})
 			return err
 		}},
 		{Name: "schedule", Call: func() error {
 			client := poisoned(`{"id":1,"state":"scheduled","error_message":42}`)
-			_, err := Schedule(context.Background(), client, ScheduleInput{GroupID: 7})
+			_, err := Schedule(context.Background(), client, ScheduleInput{GroupID: "7"})
 			return err
 		}},
 	})
@@ -824,7 +827,7 @@ func TestRetrieveForGroup_Sort(t *testing.T) {
 	}))
 
 	out, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{
-		GroupID: 10,
+		GroupID: "10",
 		OrderBy: "id",
 		Sort:    "asc",
 	})
@@ -870,9 +873,9 @@ func TestGroupStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *test
 		{
 			name:   "retrieve_for_group",
 			status: http.StatusNotFound,
-			hint:   "requires admin + Premium/Ultimate; verify group_id (numeric) exists; only storage moves for the given group are returned",
+			hint:   "requires admin + Premium/Ultimate; verify group_id exists; only storage moves for the given group are returned",
 			call: func(c *gitlabclient.Client) error {
-				_, err := RetrieveForGroup(context.Background(), c, ListForGroupInput{GroupID: 10})
+				_, err := RetrieveForGroup(context.Background(), c, ListForGroupInput{GroupID: "10"})
 				return err
 			},
 		},
@@ -890,7 +893,7 @@ func TestGroupStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *test
 			status: http.StatusNotFound,
 			hint:   "requires admin + Premium/Ultimate; verify the group_id + id pair with storage_move.retrieve_group, which lists this group's own moves; a move id belonging to another group answers 404 here, and the record may have been pruned after completion",
 			call: func(c *gitlabclient.Client) error {
-				_, err := GetForGroup(context.Background(), c, GroupMoveInput{GroupID: 10, ID: 1})
+				_, err := GetForGroup(context.Background(), c, GroupMoveInput{GroupID: "10", ID: 1})
 				return err
 			},
 		},
@@ -899,7 +902,7 @@ func TestGroupStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *test
 			status: http.StatusBadRequest,
 			hint:   "requires admin + Premium/Ultimate; destination_storage_name must reference an existing Gitaly shard; cannot move to the same shard",
 			call: func(c *gitlabclient.Client) error {
-				_, err := Schedule(context.Background(), c, ScheduleInput{GroupID: 10})
+				_, err := Schedule(context.Background(), c, ScheduleInput{GroupID: "10"})
 				return err
 			},
 		},
@@ -938,5 +941,169 @@ func TestGroupStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *test
 				t.Errorf("the status-%d guidance is offered for a 500 too, which advises about a refusal that did not happen: %v", tc.status, err)
 			}
 		})
+	}
+}
+
+// requestLog records each request a mock receives as its method and escaped path,
+// with its query, in the order they arrive, from the goroutines it answers them
+// on.
+type requestLog struct {
+	mu   sync.Mutex
+	sent []string
+	// query is the raw query of the first request.
+	query string
+}
+
+// add records one request.
+func (l *requestLog) add(r *http.Request) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(l.sent) == 0 {
+		l.query = r.URL.RawQuery
+	}
+	l.sent = append(l.sent, r.Method+" "+r.URL.EscapedPath())
+}
+
+// requests lists what was recorded.
+func (l *requestLog) requests() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.sent)
+}
+
+// groupScopedCalls is one call of each handler whose route names the group, with
+// the route it reaches once the group is known.
+var groupScopedCalls = []struct {
+	name, route string
+	call        func(ctx context.Context, client *gitlabclient.Client, group toolutil.StringOrInt) error
+}{
+	{"retrieve_for_group", "GET /api/v4/groups/42/repository_storage_moves", func(ctx context.Context, client *gitlabclient.Client, group toolutil.StringOrInt) error {
+		_, err := RetrieveForGroup(ctx, client, ListForGroupInput{GroupID: group})
+		return err
+	}},
+	{"get_for_group", "GET /api/v4/groups/42/repository_storage_moves/1", func(ctx context.Context, client *gitlabclient.Client, group toolutil.StringOrInt) error {
+		_, err := GetForGroup(ctx, client, GroupMoveInput{GroupID: group, ID: 1})
+		return err
+	}},
+	{"schedule", "POST /api/v4/groups/42/repository_storage_moves", func(ctx context.Context, client *gitlabclient.Client, group toolutil.StringOrInt) error {
+		_, err := Schedule(ctx, client, ScheduleInput{GroupID: group})
+		return err
+	}},
+}
+
+// groupAnswer answers the lookup with the group and any other route with a move,
+// or a list of one on the route that lists.
+func groupAnswer(requests *requestLog) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requests.add(r)
+		switch {
+		case r.URL.EscapedPath() == "/api/v4/groups/top%2Fsub":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42}`)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "repository_storage_moves"):
+			testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, storageMoveJSON)
+		}
+	}
+}
+
+// TestGroupScoped_APath_IsReadIntoItsIDThenTheRouteIsCalled verifies each handler
+// sends one read of the path, without the projects GitLab would add to it, and
+// then its route under the ID the read found: client-go's method takes an integer
+// and GitLab takes the path.
+func TestGroupScoped_APath_IsReadIntoItsIDThenTheRouteIsCalled(t *testing.T) {
+	for _, tc := range groupScopedCalls {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests requestLog
+			client := testutil.NewTestClient(t, groupAnswer(&requests))
+			if err := tc.call(t.Context(), client, "top/sub"); err != nil {
+				t.Fatalf("handler error: %v", err)
+			}
+			want := []string{"GET /api/v4/groups/top%2Fsub", tc.route}
+			if got := requests.requests(); !slices.Equal(got, want) {
+				t.Errorf("requests = %q, want %q", got, want)
+			}
+			if requests.query != "with_projects=false" {
+				t.Errorf("the read's query = %q, want with_projects=false", requests.query)
+			}
+		})
+	}
+}
+
+// TestGroupScoped_ANumber_SendsNoLookup verifies a number goes straight to the
+// route, so a caller that names a group by its ID pays for no second request.
+func TestGroupScoped_ANumber_SendsNoLookup(t *testing.T) {
+	for _, tc := range groupScopedCalls {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests requestLog
+			client := testutil.NewTestClient(t, groupAnswer(&requests))
+			if err := tc.call(t.Context(), client, "42"); err != nil {
+				t.Fatalf("handler error: %v", err)
+			}
+			if got := requests.requests(); !slices.Equal(got, []string{tc.route}) {
+				t.Errorf("requests = %q, want only %q", got, tc.route)
+			}
+		})
+	}
+}
+
+// TestResolveGroupID_AValueNoGroupCanHave_IsRefusedWithoutARequest verifies
+// nothing, zero and a negative number name the field and send nothing, and the
+// lowest number a group can carry goes through.
+func TestResolveGroupID_AValueNoGroupCanHave_IsRefusedWithoutARequest(t *testing.T) {
+	for _, value := range []toolutil.StringOrInt{"", "0", "-1"} {
+		t.Run("refused "+string(value), func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			id, err := resolveGroupID(t.Context(), client, "operation", value)
+			if err == nil || !strings.Contains(err.Error(), "group_id is required") || id != 0 {
+				t.Errorf("resolveGroupID(%q) = %d, %v, want 0 and group_id is required", value, id, err)
+			}
+		})
+	}
+	t.Run("the lowest ID", func(t *testing.T) {
+		client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+		id, err := resolveGroupID(t.Context(), client, "operation", "1")
+		if err != nil || id != 1 {
+			t.Errorf("resolveGroupID(1) = %d, %v, want 1 and no error", id, err)
+		}
+	})
+}
+
+// TestResolveGroupID_CarriesTheContext verifies the read passes the caller's
+// context, which client-go takes only as a request option.
+func TestResolveGroupID_CarriesTheContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":42}`)
+	})
+	if _, err := resolveGroupID(ctx, client, "operation", "top/sub"); !errors.Is(err, context.Canceled) {
+		t.Errorf("resolveGroupID() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestResolveGroupID_EachRefusal_ComesToWhatItMeans verifies the two ends of a
+// failed read: GitLab's 404 is a path that names nothing, keeping the answer behind
+// it, and any other status stays GitLab's refusal under the operation's label.
+func TestResolveGroupID_EachRefusal_ComesToWhatItMeans(t *testing.T) {
+	respond := func(status int) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, status, `{"message":"refused"}`)
+		}))
+	}
+
+	_, err := resolveGroupID(t.Context(), respond(http.StatusNotFound), "operation", "a/b")
+	miss, ok := errors.AsType[*unresolvedError](err)
+	if !ok {
+		t.Fatalf("a 404 = %v, want an unresolved path", err)
+	}
+	if miss.path != "a/b" || !toolutil.IsHTTPStatus(miss, http.StatusNotFound) {
+		t.Errorf("unresolved = %+v, want the path a/b and GitLab's 404", miss)
+	}
+	if want := `no group with the path "a/b" was found`; miss.Error() != want {
+		t.Errorf("Error() = %q, want %q", miss.Error(), want)
+	}
+
+	_, err = resolveGroupID(t.Context(), respond(http.StatusForbidden), "operation", "a/b")
+	if _, isMiss := errors.AsType[*unresolvedError](err); isMiss || !strings.HasPrefix(err.Error(), "operation:") {
+		t.Errorf("a 403 = %#v, want GitLab's refusal under the operation's label", err)
 	}
 }

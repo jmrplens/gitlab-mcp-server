@@ -4869,9 +4869,30 @@
       "package": "internal/tools/customattributes",
       "kind": "rest",
       "method": "GET",
+      "path": "/groups/:group_id",
+      "query": [
+        "with_projects"
+      ],
+      "identifiers": {
+        ":group_id": 4
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "GET",
       "path": "/groups/:group_id/custom_attributes",
       "identifiers": {
-        ":group_id": 2
+        ":group_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/custom_attributes/dept",
+      "identifiers": {
+        ":group_id": 1
       }
     },
     {
@@ -4879,6 +4900,19 @@
       "kind": "rest",
       "method": "GET",
       "path": "/groups/:group_id/custom_attributes/dept",
+      "identifiers": {
+        ":group_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/custom_attributes/dept",
+      "body": [
+        "key",
+        "value"
+      ],
       "identifiers": {
         ":group_id": 1
       }
@@ -4918,9 +4952,36 @@
       "package": "internal/tools/customattributes",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id",
+      "identifiers": {
+        ":project_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/custom_attributes",
       "identifiers": {
-        ":project_id": 2
+        ":project_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/custom_attributes/dept",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/custom_attributes/dept",
+      "identifiers": {
+        ":project_id": 1
       }
     },
     {
@@ -4933,7 +4994,7 @@
         "value"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -4984,9 +5045,18 @@
       "package": "internal/tools/customattributes",
       "kind": "rest",
       "method": "GET",
+      "path": "/users",
+      "query": [
+        "username"
+      ]
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "GET",
       "path": "/users/:user_id/custom_attributes",
       "identifiers": {
-        ":user_id": 1
+        ":user_id": 2
       }
     },
     {
@@ -4995,7 +5065,7 @@
       "method": "DELETE",
       "path": "/users/:user_id/custom_attributes/dept",
       "identifiers": {
-        ":user_id": 1
+        ":user_id": 2
       }
     },
     {
@@ -5003,6 +5073,19 @@
       "kind": "rest",
       "method": "GET",
       "path": "/users/:user_id/custom_attributes/dept",
+      "identifiers": {
+        ":user_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/users/:user_id/custom_attributes/dept",
+      "body": [
+        "key",
+        "value"
+      ],
       "identifiers": {
         ":user_id": 1
       }
@@ -9835,6 +9918,18 @@
       "path": "/group_repository_storage_moves/:group_repository_storage_move_id",
       "identifiers": {
         ":group_repository_storage_move_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/groupstoragemoves",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id",
+      "query": [
+        "with_projects"
+      ],
+      "identifiers": {
+        ":group_id": 3
       }
     },
     {
@@ -16709,6 +16804,15 @@
       "path": "/project_repository_storage_moves/:project_repository_storage_move_id",
       "identifiers": {
         ":project_repository_storage_move_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/projectstoragemoves",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id",
+      "identifiers": {
+        ":project_id": 3
       }
     },
     {

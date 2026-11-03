@@ -1165,6 +1165,14 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLDAPGroupProbe},
 	{Package: accessRequestsPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonMinimalAccessGroupProbe},
 
+	// The reads a name goes through on the three packages client-go narrows
+	// (register row 158): each keeps the ID of the answer and nothing else.
+	{Package: customAttributesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonNameLookup},
+	{Package: customAttributesPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonNameLookup},
+	{Package: customAttributesPkg, Entity: userBasicEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonNameLookup},
+	{Package: projectStorageMovesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonNameLookup},
+	{Package: groupStorageMovesPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonNameLookup},
+
 	// The current user, which one package reads for the caller's id and the
 	// other to prove the credential.
 	{Package: toolsDir + "/awardemoji", Entity: userPublicEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonAwardEmojiCurrentUser},
@@ -1326,6 +1334,20 @@ const reasonGraphQLProjectProbe = "the package reads GET /projects/:id only when
 	"project and no top-level error, to tell a project whose security data is empty or not licensed (an empty page) from " +
 	"a path that names no project (the error), and returns nothing of the answer. project.get is the action that answers " +
 	"with a project."
+
+// customAttributesPkg, projectStorageMovesPkg and groupStorageMovesPkg name the
+// three packages that read a name into the integer client-go's methods take,
+// each one literal for the reason [paginationGrain] gives.
+const (
+	customAttributesPkg    = "internal/tools/customattributes"
+	projectStorageMovesPkg = "internal/tools/projectstoragemoves"
+	groupStorageMovesPkg   = "internal/tools/groupstoragemoves"
+)
+
+// reasonNameLookup answers the read of a project, a group or a user a caller
+// named by its path or username, on the routes that take a name and whose
+// client-go method takes an integer, as one literal for the same reason.
+const reasonNameLookup = "client-go types the parameter of the custom attribute and repository storage move methods as an int64 where GitLab takes a name as well (docs/development/upstream-bugs.md, row 158), so a handler given a path or a username reads it through GET /projects/:id, GET /groups/:id or GET /users first. It keeps the ID of the answer and returns nothing else: project.get, group.get and user.list are the actions that answer with those objects."
 
 // reasonLDAPGroupProbe answers the group the LDAP link listing reads when its
 // own route answered 404.

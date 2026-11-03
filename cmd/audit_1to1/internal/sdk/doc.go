@@ -71,9 +71,11 @@
 // why. So does an integer whose trace stops where the walk cannot follow it,
 // and a method value the walk does not follow to its calls, until the walk
 // is taught the shape. The record is a pinned oracle a stack never
-// regenerates, so reading it does not defer the scope. The rule lists beside
-// them the integer parameters client-go itself narrows, which only an
-// upstream change widens.
+// regenerates, so reading it does not defer the scope. The rule holds beside
+// them the integer parameters client-go itself narrows, which only an upstream
+// change widens: each one a handler calls needs a declaration naming the action
+// that reads a name into the integer, and fails the gate while an integer reaches
+// it from an input that offers no name.
 //
 // Unlike the three candidate-backlog scopes, this one is a gate: Run reports
 // whether the tree is clean, and the command exits non-zero when it is not.

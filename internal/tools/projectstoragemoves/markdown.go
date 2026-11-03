@@ -6,8 +6,30 @@ package projectstoragemoves
 import (
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// unresolvedOutput is what an action answers when the path in project_id names
+// nothing GitLab could find.
+type unresolvedOutput struct {
+	Path string `json:"path"`
+}
+
+// formatUnresolved renders the not-found result of a path nothing answers to.
+// The second hint is GitLab's own difference: the storage move routes widen
+// find_project to a project hidden or pending deletion so that one can still be
+// moved, and the read a path goes through does not. Such a project is named by
+// its numeric ID, which the project list gives an administrator, the only
+// caller these routes admit, with include_pending_delete and, on Premium and
+// Ultimate, include_hidden. The storage move list cannot give it, since it holds
+// only projects that were moved before.
+func formatUnresolved(out unresolvedOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Project", out.Path,
+		"Use project.list to find the project's full path",
+		toolutil.HintAction("project.list", "find the numeric ID of a project hidden or pending deletion, the only way GitLab finds one here: set include_pending_delete=true, and include_hidden=true on Premium and Ultimate"))
+}
 
 // FormatOutputMarkdown renders one project storage move as a card, through the
 // renderer the group and snippet storage-move packages already share.
@@ -58,4 +80,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)      // Output
 	toolutil.RegisterMarkdown(FormatListMarkdown)        // ListOutput
 	toolutil.RegisterMarkdown(FormatScheduleAllMarkdown) // ScheduleAllOutput
+	toolutil.RegisterMarkdownResult(formatUnresolved)    // unresolvedOutput
 }

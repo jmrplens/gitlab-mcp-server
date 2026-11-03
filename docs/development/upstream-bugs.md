@@ -110,6 +110,7 @@ for the fork, branch, fix, test and MR workflow.
   - [Five response structs miss keys this server reads through a raw request instead](#five-response-structs-miss-keys-this-server-reads-through-a-raw-request-instead)
   - [Routes this server or its e2e suite sends have no client-go method, or one that takes no options](#routes-this-server-or-its-e2e-suite-sends-have-no-client-go-method-or-one-that-takes-no-options)
   - [`UploadRequest` writes only the first value of each field](#uploadrequest-writes-only-the-first-value-of-each-field)
+  - [Eighteen methods take an int64 where GitLab takes a name or a path](#eighteen-methods-take-an-int64-where-gitlab-takes-a-name-or-a-path)
 - [MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)](#mcp-go-sdk-githubcommodelcontextprotocolgo-sdk)
   - [No keep-alive interval for SSE streams on StreamableHTTPOptions](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions)
   - [A malformed message ends the session instead of answering -32700](#a-malformed-message-ends-the-session-instead-of-answering--32700)
@@ -424,6 +425,7 @@ readable without opening the tracker:
 | 155 | gitlab-org/gitlab | [A project update with only `mirror_branch_regex` is refused as sending nothing](#a-project-update-that-sends-only-mirror_branch_regex-is-refused-as-sending-nothing) | Yes, by the merge request | Yes, [gitlab-org/gitlab!266909](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266909), opened and readied on 2026-11-02; its first reviewer found it good the same day and asked a second for a review before merging, with no approval yet; it adds all four pull mirror params the list leaves out | No | No | None yet; refusing the field alone before the request is part of issue 1306 |
 | 156 | gitlab-org/gitlab | [A service account update with an empty email keeps the address, as GitLab intends](#a-service-account-update-with-an-empty-email-keeps-the-address-as-gitlab-intends) | Not needed: GitLab drops a blank value on purpose since [gitlab-org/gitlab!215942](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215942), merged on 2025-12-15; unsetting the address is another user's open feature request, [gitlab-org/gitlab#631255](https://gitlab.com/gitlab-org/gitlab/-/issues/631255) | No, and none is coming from here | No, works as intended upstream | No | None needed: the three service account updates send `email` only when it is set |
 | 157 | gitlab-org/gitlab | [The job token allowlist writes refuse a project path their page says they accept](#the-job-token-allowlist-writes-refuse-a-project-path-their-page-says-they-accept) | No; a fix is to be prepared, and its merge request is linked here when opened | No | No | No | Yes, the four allowlist writes take `project_id` as the numeric ID alone |
+| 158 | client-go | [Eighteen methods take an int64 where GitLab takes a name or a path](#eighteen-methods-take-an-int64-where-gitlab-takes-a-name-or-a-path) | No | No | No | No | Yes, `admin.custom_attr_*` and the six `storage_move.*` actions that name a project or a group read a name into its ID with one more request first |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -8975,6 +8977,58 @@ in the allowlist beside an avatar, and the mock read one.
 
 **Effort**: small: one part per value in `UploadRequest`, under a name a
 list can be read back from, and a test.
+
+### Eighteen methods take an int64 where GitLab takes a name or a path
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no, at v3.30.1, the version `go.mod` pins, or at v3.42.0, the
+  newest on 2026-11-03.
+- **Blocking**: no.
+- **Workaround**: yes, one read in front of each. An action given a name
+  reads it into its ID and then calls the method, and an action given a
+  number sends no read. The read is `Projects.GetProject`, `Groups.GetGroup`
+  with `with_projects=false`, or `Users.ListUsers` with `username`. What
+  retires it is client-go typing the parameter as `any`, which the sdk gate
+  reports: `narrowingDeclarations` in
+  `cmd/audit_1to1/internal/sdk/identifier_narrowings.go` holds a declaration
+  for each method, and one whose method is no longer narrowed fails the gate.
+
+**Where**: `custom_attributes.go` and the two repository storage move files.
+
+| Service                        | Methods                                                                                                                 | Parameter       |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `CustomAttributes`             | `ListCustomUserAttributes`, `GetCustomUserAttribute`, `SetCustomUserAttribute`, `DeleteCustomUserAttribute`             | `user int64`    |
+| `CustomAttributes`             | `ListCustomGroupAttributes`, `GetCustomGroupAttribute`, `SetCustomGroupAttribute`, `DeleteCustomGroupAttribute`         | `group int64`   |
+| `CustomAttributes`             | `ListCustomProjectAttributes`, `GetCustomProjectAttribute`, `SetCustomProjectAttribute`, `DeleteCustomProjectAttribute` | `project int64` |
+| `GroupRepositoryStorageMove`   | `RetrieveAllStorageMovesForGroup`, `GetStorageMoveForGroup`, `ScheduleStorageMoveForGroup`                              | `group int64`   |
+| `ProjectRepositoryStorageMove` | `RetrieveAllStorageMovesForProject`, `GetStorageMoveForProject`, `ScheduleStorageMoveForProject`                        | `project int64` |
+
+GitLab takes a name at every one of them. `lib/api/custom_attributes_endpoints.rb`
+declares `requires :id, types: [String, Integer]` and reads the resource through
+`find_user`, `find_group` or `find_project`, and `find_user` is
+`UserFinder#find_by_id_or_username`, whatever the description's "URL-encoded path
+of the user" says. The project moves declare the same types and read `user_project`,
+and the group moves declare `type: String` and read `user_group` (all at
+`v19.5.0-ee`). The rest of client-go takes `any` at the same routes' siblings, and
+these two services do not.
+
+**What** it costs this server is a request. It also leaves one case the read
+cannot reach: `lib/api/project_repository_storage_moves.rb` widens
+`find_project_scopes` to `Project` so that a project hidden or pending deletion can
+still be moved, and `GET /projects/:id`, which the read sends, does not find one.
+Such a project is named by its numeric ID, as the not-found result says, and
+`project.list` gives an administrator that ID with `include_pending_delete` and, on
+Premium and Ultimate, `include_hidden`. Once client-go takes `any`, the path goes
+straight to the route and that case goes away.
+
+**How we found it**: the sdk gate lists every integer parameter of a client-go
+method that fills a placeholder the live API record says takes a name or a path.
+It listed these eighteen and nothing answered them until this entry.
+
+**Effort**: small: `any` in eighteen signatures and the four private helpers, with
+`parseID`. It changes three service interfaces, which a caller's mock implements, so
+it goes in a major version.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

@@ -23,10 +23,17 @@ import (
 // missingStorage is a Gitaly storage name no instance has.
 const missingStorage = "e2e-missing-storage"
 
+// missingGroupPath is a group path nothing on an instance answers to.
+const missingGroupPath = "e2e-no-such-namespace/no-such-group"
+
 // TestGroupStorageMoves_SingleStorage_ListsRefusesAndCannotSchedule lists
-// the group storage moves at both scopes on every surface, reads a move
-// that does not exist both ways, and asks for a move to a storage the
-// instance lacks, alone and for every group.
+// the group storage moves at both scopes on every surface, by the group's ID
+// and by its path, reads a move that does not exist both ways, asks for the
+// moves of a path nothing answers to, and asks for a move to a storage the
+// instance lacks, alone, naming the group by its path, and for every group.
+//
+// client-go's methods take an integer where GitLab takes the path as well, so
+// each action reads a path into its ID first, and an ID sends no such read.
 //
 // Replaces: TestMeta_StorageMoves, TestMeta_GroupStorageMoves_Graceful404
 func TestGroupStorageMoves_SingleStorage_ListsRefusesAndCannotSchedule(t *testing.T) {
@@ -43,14 +50,22 @@ func TestGroupStorageMoves_SingleStorage_ListsRefusesAndCannotSchedule(t *testin
 		if len(mine.Moves) != 0 {
 			e.T.Errorf("a fresh group lists %d storage moves: %+v", len(mine.Moves), mine.Moves)
 		}
+		minePath := harness.Do[groupstoragemoves.ListOutput](s, actionStorageMoveRetrieveGroup, map[string]any{"group_id": group.Path})
+		if len(minePath.Moves) != 0 {
+			e.T.Errorf("a fresh group by its path lists %d storage moves: %+v", len(minePath.Moves), minePath.Moves)
+		}
 
 		refused := harness.Refused(s, actionStorageMoveGetGroup, map[string]any{"id": missingID}, harness.FailureNotFound)
 		assertMentions(e, "the read of a missing group move", refused, "storage move")
 		refused = harness.Refused(s, actionStorageMoveGetGroupForGroup, map[string]any{"group_id": group.ID, "id": missingID}, harness.FailureNotFound)
 		assertMentions(e, "the read of a missing move of the group", refused, "storage move")
+		refused = harness.Refused(s, actionStorageMoveGetGroupForGroup, map[string]any{"group_id": group.Path, "id": missingID}, harness.FailureNotFound)
+		assertMentions(e, "the read of a missing move of the group by its path", refused, "storage move")
+		refused = harness.Refused(s, actionStorageMoveRetrieveGroup, map[string]any{"group_id": missingGroupPath}, harness.FailureNotFound)
+		assertMentions(e, "a path nothing answers to", refused, missingGroupPath)
 
 		refused = harness.ExpectToolError(s, actionStorageMoveScheduleGroup, map[string]any{
-			"group_id": group.ID, "destination_storage_name": missingStorage,
+			"group_id": group.Path, "destination_storage_name": missingStorage,
 		}, "storage")
 		e.T.Logf("a move to a storage the instance lacks is refused: %s", firstLine(refused))
 		refused = harness.ExpectToolError(s, actionStorageMoveScheduleAllGroup, map[string]any{
