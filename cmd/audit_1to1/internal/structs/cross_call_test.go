@@ -6,6 +6,7 @@ package structs
 import (
 	"go/ast"
 	"go/types"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -1516,6 +1517,235 @@ func TestSentStructs_ASelectorTheTypeCheckerDidNotResolve_SendsNothing(t *testin
 
 	if sent := sentStructs(info, body); len(sent) != 0 {
 		t.Errorf("sentStructs = %v, want nothing", sent)
+	}
+}
+
+// lookupsSource is a tool package of functions that are no handler, each
+// taking an input a model sends and building options that read nothing of
+// it, beside helpers of the package that send options of the same type: the
+// shapes that tell a literal such a function sends, a lookup of its own,
+// from one it builds for whoever calls it.
+const lookupsSource = `package lookups
+
+import gl "` + fixtureSDKPath + `"
+
+// listWith sends the options it is handed.
+func listWith(c *gl.Client, opts *gl.ListWidgetsOptions) error {
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+// warm lists with options of its own, and is handed none.
+func warm(c *gl.Client) error {
+	search := "warm"
+	return listWith(c, &gl.ListWidgetsOptions{Search: &search})
+}
+
+// inspect reads the options it is handed and sends nothing.
+func inspect(opts *gl.ListWidgetsOptions) bool { return opts.Search != nil }
+
+// relay hands the options it is handed to itself, and then to listWith.
+func relay(c *gl.Client, opts *gl.ListWidgetsOptions, n int) error {
+	if n > 0 {
+		return relay(c, opts, max(n-1, 0))
+	}
+	return listWith(c, opts)
+}
+
+// spin hands the options it is handed to itself alone.
+func spin(opts *gl.ListWidgetsOptions, n int) bool { return n > 0 && spin(opts, n-1) }
+
+// lister holds the client a list goes out through.
+type lister struct {
+	c *gl.Client
+}
+
+// blind gives the options it is handed no name and lists with its own.
+func (l lister) blind(*gl.ListWidgetsOptions) error {
+	return listWith(l.c, &gl.ListWidgetsOptions{})
+}
+
+// query embeds the options beside the client that sends them.
+type query struct {
+	gl.ListWidgetsOptions
+	c *gl.Client
+}
+
+// send hands the options the query embeds on to listWith.
+func (q *query) send() error { return listWith(q.c, &q.ListWidgetsOptions) }
+
+// holder carries the options in a field.
+type holder struct {
+	opts *gl.ListWidgetsOptions
+}
+
+// listHeld sends the options the holder carries.
+func listHeld(c *gl.Client, h holder) error { return listWith(c, h.opts) }
+
+type DetachedInput struct {
+	Search string ~json:"search"~
+}
+
+// detached lists with options of its own through a helper, and builds
+// others its caller sends.
+func detached(c *gl.Client, in DetachedInput) *gl.ListWidgetsOptions {
+	search := "own"
+	own := &gl.ListWidgetsOptions{Search: &search}
+	if listWith(c, own) != nil {
+		return nil
+	}
+	return &gl.ListWidgetsOptions{}
+}
+
+type InspectedInput struct {
+	Search string ~json:"search"~
+}
+
+// inspected hands the options it builds to a helper that sends nothing, and
+// warms beside them.
+func inspected(c *gl.Client, in InspectedInput) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{}
+	if !inspect(opts) && warm(c) != nil {
+		return nil
+	}
+	return opts
+}
+
+type SpunInput struct {
+	Search string ~json:"search"~
+}
+
+// spun hands the options it builds to a helper that hands them only to
+// itself, and warms beside them.
+func spun(c *gl.Client, in SpunInput) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{}
+	if spin(opts, 2) || warm(c) != nil {
+		return nil
+	}
+	return opts
+}
+
+type BlindInput struct {
+	Search string ~json:"search"~
+}
+
+// blinded hands the options it builds to a helper that drops them, and
+// drops what the helper answers.
+func blinded(c *gl.Client, in BlindInput) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{}
+	_ = (lister{c: c}).blind(opts)
+	return opts
+}
+
+type InPlaceInput struct {
+	Search string ~json:"search"~
+}
+
+// inPlace hands the options it builds to listWith in place.
+func inPlace(c *gl.Client, in InPlaceInput) error {
+	return listWith(c, &gl.ListWidgetsOptions{})
+}
+
+type RelayedInput struct {
+	Search string ~json:"search"~
+}
+
+// relayed hands the options it builds, through a variable declared before
+// it is assigned them, to a helper that sends them through itself and
+// listWith, and then, beside it, to one that reads them.
+func relayed(c *gl.Client, in RelayedInput) bool {
+	var opts *gl.ListWidgetsOptions
+	opts = &gl.ListWidgetsOptions{}
+	return relay(c, opts, 2) != nil || inspect(opts)
+}
+
+type QueriedInput struct {
+	Search string ~json:"search"~
+}
+
+// queried calls a method on the query it builds, which hands what its
+// receiver embeds on to listWith.
+func queried(c *gl.Client, in QueriedInput) error {
+	q := &query{c: c}
+	return q.send()
+}
+
+type HeldInput struct {
+	Search string ~json:"search"~
+}
+
+// held builds the options inside a holder it hands to a helper that sends
+// them.
+func held(c *gl.Client, in HeldInput) error {
+	h := holder{opts: &gl.ListWidgetsOptions{}}
+	return listHeld(c, h)
+}
+
+type DirectInput struct {
+	Search string ~json:"search"~
+}
+
+// direct lists with options of its own and builds others it sends nowhere.
+func direct(c *gl.Client, in DirectInput) *gl.ListWidgetsOptions {
+	search := "direct"
+	if _, err := c.Widgets.ListWidgets(&gl.ListWidgetsOptions{Search: &search}); err != nil {
+		return nil
+	}
+	return &gl.ListWidgetsOptions{}
+}
+`
+
+// TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHandedOn
+// verifies when a literal that reads nothing of the input of a function
+// that is no handler is a lookup of the function's own, and so paired with
+// nothing. It is when the function references a service method that takes
+// the literal's type itself, as direct does whatever it sends, and when it
+// hands the literal on to a helper of its package that sends it: in place,
+// through a variable, inside another value, as the receiver of a method,
+// and however many calls down, a helper that hands it to itself first
+// included, whatever the function hands it to afterwards. A helper that
+// sends options of the same type it is never handed is no send of the
+// literal, whether the helper builds them or the function hands it other
+// options of its own, nor is one it is handed to that reads it, that hands
+// it only to itself, or that gives it no name, so each of those builders
+// pairs its literal with its input, as one that sends nothing does.
+func TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHandedOn(t *testing.T) {
+	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/lookups", source: lookupsSource})[0]
+
+	inputs, _ := discoverPairs(pkg)
+
+	cases := []struct {
+		name   string
+		input  string
+		paired bool
+	}{
+		{name: "beside other options of its own a helper sends", input: "DetachedInput", paired: true},
+		{name: "handed to a helper that reads it", input: "InspectedInput", paired: true},
+		{name: "handed to a helper that hands it only to itself", input: "SpunInput", paired: true},
+		{name: "handed to a helper that gives it no name", input: "BlindInput", paired: true},
+		{name: "handed in place to a helper that sends it", input: "InPlaceInput"},
+		{name: "handed through a variable, two calls down", input: "RelayedInput"},
+		{name: "the receiver of a method that hands it on", input: "QueriedInput"},
+		{name: "inside a value handed to a helper that sends it", input: "HeldInput"},
+		{name: "built by a function that sends its type itself", input: "DirectInput"},
+	}
+	paired := 0
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pair, found := inputs[[2]string{tc.input, "ListWidgetsOptions"}]
+			if found != tc.paired {
+				t.Errorf("%s paired with ListWidgetsOptions = %t, want %t", tc.input, found, tc.paired)
+			}
+			if found && pair.via != "" {
+				t.Errorf("%s is paired via %q, want the function's own literal", tc.input, pair.via)
+			}
+		})
+		if tc.paired {
+			paired++
+		}
+	}
+	if len(inputs) != paired {
+		t.Errorf("discoverPairs = %v, want only the %d pairs the cases name", slices.Collect(maps.Keys(inputs)), paired)
 	}
 }
 

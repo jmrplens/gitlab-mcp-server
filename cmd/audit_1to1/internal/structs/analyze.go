@@ -1959,11 +1959,12 @@ func recordConverter(mcpNamed *types.Named, mcpStruct *types.Struct, mcpName str
 // pipelines.pipelineFailure is neither: it takes the wait's input, answers
 // with an error alone and lists the failed jobs with constants, and the job
 // list it sends is no request the wait's input describes. It sends the list
-// whether it calls the service itself or a function of decls, the
-// functions of the package with a body, that does, however deep the chain.
-// A builder that sends nothing (systemhooks.hookAddOptions) builds for its
-// input however the literal is filled, a helper call that fills it
-// included.
+// whether it calls the service itself or hands the literal to a function of
+// decls, the functions of the package with a body, that does, however deep
+// the chain. A builder that sends nothing (systemhooks.hookAddOptions)
+// builds for its input however the literal is filled, a helper call that
+// fills it included, and so does one whose helpers send only options of
+// their own, which it never hands them.
 func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, decls map[*types.Func]*ast.FuncDecl, out map[[2]string]structPair) {
 	if fn.Body == nil {
 		return
@@ -1974,9 +1975,8 @@ func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, decls map[*ty
 	}
 	handler := isHandler(pkg.TypesInfo, fn)
 	var reading map[*ast.CompositeLit]bool
-	var sent map[*types.TypeName]bool
 	if !handler {
-		reading, sent = readingLiterals(pkg.TypesInfo, fn.Body, input, decls), sentThrough(pkg.TypesInfo, fn.Body, decls)
+		reading = readingLiterals(pkg.TypesInfo, fn.Body, input, decls)
 	}
 	ast.Inspect(fn.Body, func(node ast.Node) bool {
 		lit, isLit := node.(*ast.CompositeLit)
@@ -1984,7 +1984,7 @@ func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, decls map[*ty
 			return true
 		}
 		for _, named := range builtRequests(pkg.TypesInfo.TypeOf(lit)) {
-			if !handler && !reading[lit] && sent[named.Obj()] {
+			if !handler && !reading[lit] && sentThrough(pkg.TypesInfo, fn.Body, lit, named.Obj(), decls) {
 				continue
 			}
 			_, st, _ := derefNamedStruct(named)

@@ -725,32 +725,127 @@ func sentStructs(info *types.Info, body *ast.BlockStmt) map[*types.TypeName]bool
 	return sent
 }
 
-// sentThrough returns what [sentStructs] returns for body and for the body
-// of every function of decls that body calls, and that one calls in turn,
-// each read once: a function that hands what it builds to a helper of its
-// package sends it as surely as one that calls the service itself.
-func sentThrough(info *types.Info, body *ast.BlockStmt, decls map[*types.Func]*ast.FuncDecl) map[*types.TypeName]bool {
-	sent := map[*types.TypeName]bool{}
-	read := map[*ast.BlockStmt]bool{}
-	var walk func(*ast.BlockStmt)
-	walk = func(block *ast.BlockStmt) {
-		if read[block] {
-			return
-		}
-		read[block] = true
-		maps.Copy(sent, sentStructs(info, block))
-		ast.Inspect(block, func(node ast.Node) bool {
-			if call, isCall := node.(*ast.CallExpr); isCall {
-				fn, _ := calledFunc(info, call)
-				if decl := calleeDecl(fn, decls); decl != nil {
-					walk(decl.Body)
-				}
-			}
-			return true
-		})
+// sentThrough reports whether body sends name, the type lit builds, lit
+// being one of body's literals: when body references a service method that
+// takes it, as [sentStructs] reads a body, whatever that method is handed,
+// and when body hands lit on to a function of decls that sends what it is
+// handed, however many calls down. A function that hands what it builds to
+// a helper of its package sends it as surely as one that calls the service
+// itself, and a helper it never hands it to sends nothing of it, whatever
+// that helper lists with options of its own.
+func sentThrough(info *types.Info, body *ast.BlockStmt, lit *ast.CompositeLit, name *types.TypeName, decls map[*types.Func]*ast.FuncDecl) bool {
+	if sentStructs(info, body)[name] {
+		return true
 	}
-	walk(body)
-	return sent
+	holding := holdingLiteral(info, body, lit)
+	handed := func(expr ast.Expr) bool { return containsNode(expr, lit) || reads(info, expr, holding) }
+	sends := literalSends{info: info, name: name, decls: decls, read: map[*types.Var]bool{}}
+	return sends.handsOn(body, handed)
+}
+
+// literalSends follows one literal down the functions of decls it is handed
+// to, asking whether one of them sends name, the type it builds. read are
+// the entries already followed, so a function reached again through its own
+// calls with the same entry is followed once.
+type literalSends struct {
+	info  *types.Info
+	name  *types.TypeName
+	decls map[*types.Func]*ast.FuncDecl
+	read  map[*types.Var]bool
+}
+
+// handsOn reports whether body hands what handed says holds the literal to a
+// function of decls that sends it, as its receiver or as an argument.
+func (s literalSends) handsOn(body *ast.BlockStmt, handed func(ast.Expr) bool) bool {
+	found := false
+	ast.Inspect(body, func(node ast.Node) bool {
+		if call, isCall := node.(*ast.CallExpr); isCall && !found {
+			found = s.callSends(call, handed)
+		}
+		return !found
+	})
+	return found
+}
+
+// callSends reports whether call calls a function of decls that sends what
+// it is handed in an entry the call hands the literal in.
+func (s literalSends) callSends(call *ast.CallExpr, handed func(ast.Expr) bool) bool {
+	fn, receiver := calledFunc(s.info, call)
+	decl := calleeDecl(fn, s.decls)
+	if decl == nil {
+		return false
+	}
+	for _, entry := range handedEntries(fn.Signature(), receiver, call.Args, handed) {
+		if s.sends(decl, entryVar(s.info, decl, entry)) {
+			return true
+		}
+	}
+	return false
+}
+
+// sends reports whether the function declared as decl sends what it is
+// handed in the entry variable is bound to: its body references a service
+// method that takes name, or hands variable, or something holding it, on to
+// a function that sends it. An entry with no name hands nothing on.
+func (s literalSends) sends(decl *ast.FuncDecl, variable *types.Var) bool {
+	if sentStructs(s.info, decl.Body)[s.name] {
+		return true
+	}
+	if variable == nil || s.read[variable] {
+		return false
+	}
+	s.read[variable] = true
+	holding := holdIntermediates(s.info, decl.Body, variable, nil, nil).from
+	return s.handsOn(decl.Body, func(expr ast.Expr) bool { return reads(s.info, expr, holding) })
+}
+
+// entryVar returns the variable decl binds its entry to: its receiver's at
+// [receiverEntry], a parameter's at its position, nil for one with no name.
+func entryVar(info *types.Info, decl *ast.FuncDecl, entry int) *types.Var {
+	if entry == receiverEntry {
+		return receiverVar(info, decl)
+	}
+	return paramEntry(info, decl, entry)
+}
+
+// holdingLiteral returns the variables of body that hold lit: one it is
+// assigned to, by itself or inside another value, and one assigned a value
+// read off such a variable, however many assignments down.
+func holdingLiteral(info *types.Info, body *ast.BlockStmt, lit *ast.CompositeLit) map[*types.Var]bool {
+	held := &intermediates{info: info, from: map[*types.Var]bool{}, beside: map[*ast.Ident]bool{}, reading: map[*types.Func]bool{}}
+	assigned := func(lhs, rhs []ast.Expr) {
+		for i, target := range lhs {
+			if variable := rootVar(info, target); variable != nil && containsNode(assignedValue(rhs, i), lit) {
+				held.from[variable] = true
+			}
+		}
+	}
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.AssignStmt:
+			assigned(typed.Lhs, typed.Rhs)
+		case *ast.ValueSpec:
+			assigned(specNames(typed), typed.Values)
+		}
+		return true
+	})
+	held.hold(body)
+	return held.from
+}
+
+// containsNode reports whether target is expr or one of the nodes under it.
+// A nil expr, the value a declaration that assigns none gives its names,
+// contains nothing.
+func containsNode(expr ast.Expr, target ast.Node) bool {
+	if expr == nil {
+		return false
+	}
+	found := false
+	ast.Inspect(expr, func(node ast.Node) bool {
+		found = found || node == target
+		return !found
+	})
+	return found
 }
 
 // referencesService reports whether body names a method of a client-go
