@@ -4,8 +4,8 @@
 
 # setup-orbit-fixtures.sh — create reproducible Orbit knowledge-graph
 # fixtures in any GitLab.com group. Idempotent: re-running it on an
-# already-provisioned namespace reconciles it: missing pieces are created
-# and the rest left alone.
+# already-provisioned namespace reconciles it: missing pieces are created,
+# each project is set to ORBIT_FIXTURES_VISIBILITY, and the rest left alone.
 #
 # Usage:
 #   GITLAB_COM_TOKEN=glpat-... \
@@ -116,11 +116,6 @@ api_get() {
   curl -sS "${CURL_TIMEOUTS[@]}" "${H_AUTH[@]}" "$API$1"
 }
 
-# api_put PATH JSON  ->  echoes the response body
-api_put() {
-  curl -sS "${CURL_TIMEOUTS[@]}" -X PUT "${H_AUTH[@]}" "${H_JSON[@]}" "$API$1" -d "$2"
-}
-
 # api_request METHOD PATH [JSON]  ->  sets API_STATUS and API_BODY
 #   The helpers above run in a command substitution, so a status set there
 #   would be lost; this one runs in the caller's shell. curl exits 0 for an
@@ -135,6 +130,17 @@ api_request() {
   fi
   API_STATUS=${response##*$'\n'}
   API_BODY=${response%$'\n'*}
+}
+
+# api_ok  ->  whether the last api_request was answered with a 2xx
+#   A string match: a curl that never ran or was killed (an argument over the
+#   kernel's limit, an OOM kill) leaves API_STATUS empty or not a number, and
+#   [ "" -lt 200 ] is an error, which an if reads as false.
+api_ok() {
+  case "$API_STATUS" in
+    2[0-9][0-9]) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # ensure_resource GET_PATH JSON
@@ -196,12 +202,13 @@ echo "    namespace id: $NAMESPACE_ID"
 # ─── Project creation (pushes local source tree via git) ───────────────
 
 # reconcile_existing_project ID FIXTURE_DIR
-#   Brings a fixture project that already exists into line (#1533): sets the
-#   visibility, then creates by API the fixture files the project lacks,
-#   the LICENSE first, since jmrp-oss requires an OSI licence on every
-#   project. A re-run used to leave an existing project untouched, so one
-#   provisioned before its LICENSE existed, a private one, and one whose
-#   first push failed all stayed broken while the run reported success.
+#   Brings a fixture project that already exists into line (#1533): creates
+#   by API the fixture files the project lacks, then sets the visibility, since
+#   jmrp-oss requires an OSI license on every project and a run that stops
+#   halfway must not have made public a project still without one. A re-run
+#   used to leave an existing project untouched, so one provisioned before its
+#   LICENSE existed, a private one, and one whose first push failed all stayed
+#   broken while the run reported success.
 reconcile_existing_project() {
   local project_id="$1"
   local fixture_dir="$2"
@@ -226,25 +233,39 @@ except Exception: pass' 2>/dev/null)
       return 1
       ;;
   esac
+  # A mirror has no fixture files to compare, and its tree is the upstream
+  # project's: thousands of entries read for nothing.
+  if [ -n "$fixture_dir" ]; then
+    add_missing_fixture_files "$project_id" "$fixture_dir" || return 1
+  fi
   if [ "$current_visibility" != "$VISIBILITY" ]; then
-    echo "    → visibility $current_visibility → $VISIBILITY" >&2
-    # The body is built by json.dumps, as with commit messages below, so a
-    # configured value carrying JSON syntax stays one string and adds no field.
+    # The body is built by json.dumps, as the commit's is below, so a configured
+    # value carrying JSON syntax stays one string and adds no field.
+    local visibility_body
     visibility_body=$(VISIBILITY="$VISIBILITY" python3 -c 'import json, os; print(json.dumps({"visibility": os.environ["VISIBILITY"]}))')
     api_request PUT "/projects/$project_id" "$visibility_body"
-    if [ "$API_STATUS" -lt 200 ] || [ "$API_STATUS" -ge 300 ]; then
+    if ! api_ok; then
       echo "    ✗ could not set visibility (HTTP $API_STATUS): $API_BODY" >&2
       return 1
     fi
+    echo "    → visibility $current_visibility → $VISIBILITY" >&2
   fi
+}
+
+# add_missing_fixture_files ID FIXTURE_DIR
+#   Creates in one commit the files git tracks in the fixture that branch main
+#   of the project lacks.
+add_missing_fixture_files() {
+  local project_id="$1"
+  local fixture_dir="$2"
 
   # The repository tree lists the paths the project already holds. Every page
   # is read: one page of 100 is not the whole tree, and a fixture path past
   # the first page would be created again on every run. A route that cannot be
   # read stops reconciliation, never guessed at.
-  local page=1 pages="" body count tree missing
+  local page=1 pages="" body count payload
   while :; do
-    api_request GET "/projects/$project_id/repository/tree?recursive=true&per_page=100&page=$page"
+    api_request GET "/projects/$project_id/repository/tree?ref=main&recursive=true&per_page=100&page=$page"
     if [ "$API_STATUS" != "200" ]; then
       echo "    ✗ cannot list the project's files (HTTP $API_STATUS); not reconciling" >&2
       return 1
@@ -261,82 +282,60 @@ except Exception:
       return 1
     fi
     [ "$count" -eq 0 ] && break
-    pages+="$body"$'
-'
+    pages+="$body"$'\n'
     [ "$count" -lt 100 ] && break
     page=$((page + 1))
   done
-  tree=$(printf '%s' "$pages" | python3 -c 'import json,sys
-entries = []
+  # The files git tracks, never whatever else the disk holds: these projects are
+  # public, and a local .env or __pycache__ must not reach them. The answer goes
+  # in on stdin, never in the environment, where a variable over the kernel's
+  # 128 KiB per-string limit stops python3 from starting. Any failure stops the
+  # run, so that no payload can only mean the comparison ran.
+  #
+  # One commit, and one request: .gitlab-ci.yml is among the fixture files, so a
+  # commit per file would start a pipeline per file, each on a partial tree, and
+  # a stop halfway would leave part of a fixture behind. A project holding
+  # GitLab's README alone is one whose first push failed, the push that removes
+  # that README, so there it is replaced. The LICENSE stays first in the list,
+  # though nothing lands before anything else in one commit.
+  payload=$(printf '%s' "$pages" | FIXTURE_DIR="$fixture_dir" python3 -c 'import base64,json,os,subprocess,sys
+present = set()
 for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    answer = json.loads(line)
-    if isinstance(answer, list):
-        entries.extend(answer)
-print(json.dumps(entries))')
-  missing=$(FIXTURE_DIR="$fixture_dir" TREE="$tree" python3 - <<'PY'
-import json
-import os
-import sys
-
-tree = os.environ.get("TREE", "")
-try:
-    entries = json.loads(tree)
-except Exception:
-    print("UNREADABLE")
-    raise SystemExit(0)
-if not isinstance(entries, list):
-    print("UNREADABLE")
-    raise SystemExit(0)
-present = {e.get("path", "") for e in entries if isinstance(e, dict)}
+    if line.strip():
+        present.update(e["path"] for e in json.loads(line) if e.get("type") != "tree")
 fixture_dir = os.environ["FIXTURE_DIR"]
-found = []
-for root, _dirs, names in os.walk(fixture_dir):
-    for name in names:
-        rel = os.path.relpath(os.path.join(root, name), fixture_dir).replace(os.sep, "/")
-        if rel not in present:
-            found.append(rel)
-found.sort(key=lambda rel: (rel != "LICENSE", rel))
-sys.stdout.buffer.write(("\n".join(found)).encode())
-PY
-)
-  if [ "$missing" = "UNREADABLE" ]; then
-    echo "    ! cannot list the project's files; leaving them as they are" >&2
-    return 0
-  fi
-  if [ -z "$missing" ]; then
+listed = subprocess.run(["git", "ls-files", "-z"], cwd=fixture_dir, check=True, stdout=subprocess.PIPE).stdout
+tracked = [rel for rel in listed.decode().split("\0") if rel]
+replaced = ["README.md"] if present == {"README.md"} else []
+actions = []
+for rel in sorted(tracked, key=lambda rel: (rel != "LICENSE", rel)):
+    if rel in replaced or rel not in present:
+        with open(os.path.join(fixture_dir, rel), "rb") as f:
+            content = base64.b64encode(f.read()).decode()
+        actions.append({"action": "update" if rel in replaced else "create", "file_path": rel, "encoding": "base64", "content": content})
+if actions:
+    print(json.dumps({"branch": "main", "commit_message": "Add the fixture files this project lacks", "actions": actions}))') || {
+    echo "    ✗ cannot compare the project's files with the fixture; not reconciling" >&2
+    return 1
+  }
+  if [ -z "$payload" ]; then
     echo "    ✓ project files are in line" >&2
     return 0
   fi
-  local rel encoded content_b64
-  while IFS= read -r rel; do
-    # Python's text stdout ends lines with CRLF on Windows; the path itself
-    # never ends with a CR.
-    rel=${rel%$''}
-    [ -z "$rel" ] && continue
-    encoded=$(printf %s "$rel" | python3 -c 'import sys,urllib.parse
-print(urllib.parse.quote(sys.stdin.read(), safe=""))')
-    content_b64=$(python3 -c 'import base64,sys
-print(base64.b64encode(open(sys.argv[1], "rb").read()).decode())' "$fixture_dir/$rel")
-    # Escape the path for JSON: a fixture name with a quote or backslash
-    # would otherwise make the commit message invalid.
-    commit_message=$(REL="$rel" python3 -c 'import json, os; print(json.dumps("Add " + os.environ["REL"]))')
-    api_request POST "/projects/$project_id/repository/files/$encoded" \
-      "{\"branch\": \"main\", \"encoding\": \"base64\", \"content\": \"$content_b64\", \"commit_message\": $commit_message}"
-    if [ "$API_STATUS" -lt 200 ] || [ "$API_STATUS" -ge 300 ]; then
-      echo "    ✗ could not create $rel (HTTP $API_STATUS): $API_BODY" >&2
-      return 1
-    fi
-    echo "    → added $rel" >&2
-  done <<< "$missing"
+  api_request POST "/projects/$project_id/repository/commits" "$payload"
+  if ! api_ok; then
+    echo "    ✗ could not add the missing fixture files (HTTP $API_STATUS): $API_BODY" >&2
+    return 1
+  fi
+  printf '%s' "$payload" | python3 -c 'import json,sys
+for action in json.load(sys.stdin)["actions"]:
+    print("    → %s %s" % ("replaced" if action["action"] == "update" else "added", action["file_path"]), file=sys.stderr)'
 }
 
 # create_or_skip_project NAME PATH FIXTURE_DIR DESCRIPTION [MIRROR_FROM]
-#   - If the project does not exist, creates it.
-#   - If it exists, reconciles it (visibility and missing fixture files) and
-#     echoes the existing id to stdout (so callers can capture it with $()).
+#   - If the project exists, reconciles it (visibility and missing fixture
+#     files) and echoes the existing id to stdout (so callers can capture it
+#     with $()).
 #   - Otherwise, creates the project, clones it locally, copies the
 #     fixture content, commits, and pushes.
 create_or_skip_project() {
@@ -642,4 +641,5 @@ fi
 echo ""
 echo "The Orbit knowledge graph indexer will pick up the new content"
 echo "within a few minutes. Re-run this script at any time — it is"
-echo "idempotent: existing resources are reconciled, not created again."
+echo "idempotent: an existing project is brought into line, and any other"
+echo "existing resource is left as it is."

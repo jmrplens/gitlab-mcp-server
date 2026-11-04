@@ -45,10 +45,10 @@ subgroups included, so every project added to `jmrp-oss` follows them:
 - **Every project carries an OSI-approved license.** Both fixture
   projects carry this repository's MIT `LICENSE`, and
   `test/fixtures/orbit/{kg,security}-fixtures/LICENSE` is the same file,
-  so a project the setup script provisions again carries it too. The
-  script leaves a project that already exists as it is, so one
-  provisioned before the file was added takes it only by a push of its
-  own, which is how both fixtures took theirs on 2026-10-26. GitLab
+  so a project the setup script provisions again carries it too, and a
+  rerun adds it to a project that already exists without it. Both
+  fixtures took theirs on 2026-10-26 by a push of their own, before the
+  script did that. GitLab
   reports the license it detects as `license.key` of
   `GET /projects/:id?license=true`; check it before moving a project in,
   a fork above all, since a repository that mixes licenses may not be
@@ -129,10 +129,12 @@ ORBIT_FIXTURES_NAMESPACE=mynamespace \
 
 The script is **idempotent**: it checks for existing resources through
 the API and leaves those in place. A project that already exists is
-reconciled rather than skipped: its visibility is set and any fixture
-file it lacks is added, the `LICENSE` first (a project provisioned before
-the licence existed, or one whose first push failed, is repaired this
-way). A rerun that finds everything in line changes nothing.
+reconciled rather than skipped: every fixture file git tracks that it
+lacks is added in one commit, and then its visibility is set. A project
+holding GitLab's README alone, which is what a first push that failed
+leaves, takes the fixture's README in that commit too, and one
+provisioned before the `LICENSE` existed takes the `LICENSE`. A rerun
+that finds everything in line changes nothing.
 The namespace may be a subgroup, as the default
 `jmrp-oss/orbit-fixtures` is: the script looks each project up by its
 full path with every slash encoded. It creates the projects public, as
@@ -184,7 +186,7 @@ ORBIT_FIXTURES_NAMESPACE=mynamespace \
 ```
 
 Re-runs are safe: the mirror step checks for project existence and
-skips if already present.
+pushes nothing to one already present, whose visibility alone it sets.
 
 ## Indexer behavior
 
