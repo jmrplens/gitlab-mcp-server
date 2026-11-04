@@ -2567,8 +2567,10 @@ jobs:
       # with its version and its cause, read from the submission's output,
       # where a reader of the run sees them. No other job of this workflow
       # needs this one, so every other channel has published or publishes
-      # whatever happens here. In a rehearsal the submission is skipped, and
-      # so is this step.
+      # whatever happens here, and gitlab-mirror.yml, which runs when this
+      # workflow completes, takes a failed run as it takes one that
+      # succeeded. In a rehearsal the submission is skipped, and so is this
+      # step.
       - name: Fail the job when the submission failed
         if: steps.submit.outcome == 'failure'
         env:
