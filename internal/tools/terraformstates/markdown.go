@@ -10,19 +10,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// hintLockNeedsCLI is what a reader has to know about locking a state through
-// this server: `gitlab_lock_terraform_state` cannot work, because client-go
-// sends no Terraform lock-info body and GitLab rejects the call with 400.
-// Saying so where the lock is mentioned is the point; pointing at the tool
-// instead sent a reader to a call that always fails.
+// The lock sentences the cards close with. A lock is taken under an ID the
+// caller chooses, and released by that ID or, without one, whatever its ID
+// is, which is how a stale lock is cleared.
 //
 // Each is one literal rather than two joined with a plus: a package-level
 // declaration carries no coverage counter, so a mutation run files the
 // arithmetic mutant on that plus as not covered, and no test can kill it,
 // since subtracting one string from another does not compile.
 const (
-	hintLockNeedsCLI    = "Locking a state needs the terraform CLI against the GitLab HTTP backend: `admin.terraform_state_lock` sends no lock-info body, which GitLab refuses"
-	hintUnlockStaleLock = "Use `admin.terraform_state_unlock` to clear a stale lock"
+	hintLockState       = "Use `admin.terraform_state_lock` with a lock_id of your choosing to lock it"
+	hintUnlockStaleLock = "Use `admin.terraform_state_unlock` to release its lock, with the lock_id it was taken under, or with none to clear a stale lock"
+	hintUnlockThisLock  = "Use `admin.terraform_state_unlock` with this lock_id to release the lock"
+	hintCheckUnlocked   = "Use `admin.terraform_state_get` to check that the state is no longer locked"
 )
 
 // FormatListMarkdown formats a page of Terraform states as markdown.
@@ -129,7 +129,7 @@ func FormatStateMarkdown(s StateItem) string {
 		c.Note("GitLab has deleted this state and removes it in the background; until then it can still be read.")
 	}
 	c.End(
-		hintLockNeedsCLI,
+		hintLockState,
 		hintUnlockStaleLock,
 		"Use `admin.terraform_state_delete` to remove it",
 	)
@@ -146,13 +146,34 @@ func stateHeading(name string) string {
 	return "Terraform State: " + name
 }
 
-// FormatLockMarkdown formats a lock/unlock result as the card of one object.
+// FormatLockMarkdown formats the lock GitLab took as the card of one object:
+// the ID it is held under, its holder and when it was taken, which are what
+// GitLab recorded, and the four other keys of the lock info as GitLab
+// answered them back, each only when set.
 func FormatLockMarkdown(out LockOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Terraform State Lock")
 	c.Bool("Success", out.Success)
 	c.Field("Message", out.Message)
-	c.End(hintLockNeedsCLI, hintUnlockStaleLock)
+	c.Code("Lock ID", out.LockID)
+	c.Field("Holder", out.Who)
+	c.Time("Created", out.Created)
+	c.Field("Operation", out.Operation)
+	c.Field("Info", out.Info)
+	c.Field("Terraform Version", out.Version)
+	c.Code("Path", out.Path)
+	c.End(hintUnlockThisLock)
+	return b.String()
+}
+
+// FormatUnlockMarkdown formats the release of a lock as the card of one
+// object.
+func FormatUnlockMarkdown(out UnlockOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Terraform State Unlock")
+	c.Bool("Success", out.Success)
+	c.Field("Message", out.Message)
+	c.End(hintCheckUnlocked)
 	return b.String()
 }
 
@@ -160,4 +181,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatStateMarkdown)
 	toolutil.RegisterMarkdown(FormatLockMarkdown)
+	toolutil.RegisterMarkdown(FormatUnlockMarkdown)
 }

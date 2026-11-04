@@ -419,7 +419,7 @@ readable without opening the tracker:
 | 147 | client-go | [`Orbit.GetDsl` sends a route GitLab.com removed](#orbitgetdsl-sends-get-orbitschemadsl-which-gitlabcom-removed) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3161](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3161), merged, beside row 144 | **Yes, v3.40.1**: it deprecates the method for removal in v4.0 | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.DSL` sends `list_commands` to the Orbit MCP endpoint |
 | 148 | client-go | [`Orbit.GetGraphStatus` sends a route GitLab.com removed](#orbitgetgraphstatus-sends-get-orbitgraph_status-which-gitlabcom-removed) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3161](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3161), merged, beside row 144 | **Yes, v3.40.1**: it deprecates the method for removal in v4.0 | No here; yes for the SDK's callers, answered 404 | Yes, `orbit.GraphStatus` reads GraphQL `Group.orbit` and `Project.orbit` |
 | 149 | client-go | [Five response structs miss keys this server reads through a raw request instead](#five-response-structs-miss-keys-this-server-reads-through-a-raw-request-instead) | No | No | No | No | Yes, the deployment, job, approval rule, commit signature and epic board reads decode into structs of their own |
-| 150 | client-go | [Routes this server or its e2e suite sends have no client-go method, or one that takes no options](#routes-this-server-or-its-e2e-suite-sends-have-no-client-go-method-or-one-that-takes-no-options) | No | No | No | No | Yes, the Orbit reads of the MCP endpoint, the e2e fixture and the model registry scenario send their own request, and eighteen paginated lists write their query through a request option |
+| 150 | client-go | [Routes this server or its e2e suite sends have no client-go method, or one that takes no options](#routes-this-server-or-its-e2e-suite-sends-have-no-client-go-method-or-one-that-takes-no-options) | No | No | No | No | Yes, the Orbit reads of the MCP endpoint, the e2e fixture and the model registry scenario send their own request, eighteen paginated lists write their query through a request option, and the Terraform state lock and unlock write the lock info and the lock ID through one |
 | 151 | client-go | [`UploadRequest` writes only the first value of each field](#uploadrequest-writes-only-the-first-value-of-each-field) | No | No | No | No | Yes, the project and group creates send a list beside an avatar as one comma-separated value, and the group create refuses its alert list beside one; a unit test pins the behaviour |
 | 152 | gitlab-org/gitlab | [A merge request creation can be refused for a branch that exists](#a-merge-request-creation-can-be-refused-for-a-branch-that-exists-from-a-stale-branch-name-cache) | Yes, by GitLab, [gitlab-org/gitlab#506430](https://gitlab.com/gitlab-org/gitlab/-/issues/506430), open | No | No | No; it failed the e2e suite, not a tool | Yes, in the e2e fixture: `fixture.NewMergeRequest` tries the refusal again once the branch name cache lists the branch |
 | 153 | gobco | [gobco drops `GOPATH` from the `go test` it runs](#gobco-drops-gopath-from-its-go-test-which-then-reads-another-module-cache) | No | No | No | No; where `GOPATH` is not the default, that `go test` reads another module cache and needs the network to fill it | Yes, `scripts/coverage-conditions.sh` hands gobco `GOMODCACHE` as `go env` reports it, until a gobco release passes `GOPATH` on |
@@ -8932,7 +8932,7 @@ measures made pointers, each with its response test.
 
 - **Reported**: no.
 - **In review**: no.
-- **Merged**: no, at v3.30.0, the version `go.mod` pins, or at v3.38.0.
+- **Merged**: no, at v3.40.3, the version `go.mod` pins.
 - **Blocking**: no.
 - **Workaround**: yes, a request of our own or a request option for each,
   each an entry of the upstream wait table (`cmd/audit_1to1/internal/waits`)
@@ -8940,6 +8940,18 @@ measures made pointers, each with its response test.
 
 **Where** and **What**:
 
+- `TerraformStates.Lock` takes no options struct and sends no body, and
+  `POST /projects/:id/terraform/state/:name/lock` requires the seven keys of
+  the lock info terraform's HTTP backend writes (`ID`, `Operation`, `Info`,
+  `Who`, `Version`, `Created` and `Path`, `lib/api/terraform/state.rb`), so
+  GitLab answered every `admin.terraform_state_lock` with `400 ID is missing`
+  until the lock wrote the lock info into the body through a request option
+  (`internal/tools/terraformstates`, `lockInfoBody`, issue 1597). The method
+  decodes nothing either, so the lock GitLab answers with, its ID, its holder
+  and when it was taken, is read from the captured response.
+  `TerraformStates.Unlock` takes no options as well, and the route reads an
+  optional `ID` and releases the lock only when it matches, so the unlock
+  writes the caller's `lock_id` into the query the same way (`lockIDQuery`).
 - `POST /orbit/mcp`, GitLab's Orbit MCP endpoint, which `orbit.tools`,
   `orbit.dsl` and the llm text of `orbit.schema` read since GitLab.com
   removed `GET /orbit/tools`, `GET /orbit/schema/dsl` and `GET /orbit/schema`,
@@ -8979,9 +8991,14 @@ measures made pointers, each with its response test.
 entry gives. The sixteen were declared a raw reason of their own until a
 review of the table asked why a method that takes no options waits on
 nothing upstream, when the upload and certificate lists, the same gap, did.
+The Terraform lock was R-PARAM's: it reported the seven keys as params of
+the lock route that client-go does not model, left undeclared on purpose so
+that the action GitLab refused on every call stayed in sight.
 
 **Effort**: small to medium: two methods, and an options struct, or a
-`ListOptions` parameter, for each of the eighteen lists.
+`ListOptions` parameter, for each of the eighteen lists, and an options
+struct for the lock and the unlock, with the lock info decoded as the lock's
+answer.
 
 ### `UploadRequest` writes only the first value of each field
 

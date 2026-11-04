@@ -1036,10 +1036,12 @@ var witnessReadIn = map[string]string{
 }
 
 // witnessUnpaired is what the witness expects of the structs a capture is
-// decoded into that the walk pairs with nothing: the two decoded beside a
-// service method that answers with the response and the error alone.
+// decoded into that the walk pairs with nothing: the three decoded beside a
+// service method that answers with the response and the error alone, the
+// Terraform state lock's among them (issue 1597).
 var witnessUnpaired = []string{
 	"projects.shareLink answers_no_struct",
+	"terraformstates.lockInfo answers_no_struct",
 	"toolutil.DeploymentApprovalOutput answers_no_struct",
 }
 

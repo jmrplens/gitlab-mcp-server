@@ -328,6 +328,18 @@ var upstreamWaits = []Entry{
 		Predicates: []Predicate{TakesNoOptions{Method: "GroupSSHCertificates.ListGroupSSHCertificates"}},
 		Reason:     "ListGroupSSHCertificates takes no options, so the certificate list writes its paging into the query through a request option",
 	},
+	{
+		Row: 150, Category: CategoryUpstream,
+		Sites:      []string{"terraformstates.lockInfoBody"},
+		Predicates: []Predicate{TakesNoOptions{Method: "TerraformStates.Lock"}},
+		Reason:     "TerraformStates.Lock takes no options and sends no body, and GitLab refuses a lock without the seven keys of terraform's lock info with 400, so admin.terraform_state_lock writes the lock info into the body through a request option",
+	},
+	{
+		Row: 150, Category: CategoryUpstream,
+		Sites:      []string{"terraformstates.lockIDQuery"},
+		Predicates: []Predicate{TakesNoOptions{Method: "TerraformStates.Unlock"}},
+		Reason:     "TerraformStates.Unlock takes no options, so admin.terraform_state_unlock writes the lock ID GitLab matches the lock against into the query through a request option, only when the caller gives one",
+	},
 }
 
 // rawReasons are the raw requests and request options that wait on nothing

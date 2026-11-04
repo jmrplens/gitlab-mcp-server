@@ -5,11 +5,15 @@ package terraformstates
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -336,40 +340,189 @@ func DeleteVersion(ctx context.Context, client *gitlabclient.Client, input Delet
 
 // Lock.
 
-// LockInput contains parameters for locking a Terraform state.
+// LockInput contains parameters for locking a Terraform state: the state, and
+// the lock info Terraform's HTTP backend writes when it takes a lock.
+// lib/api/terraform/state.rb requires all seven keys of the lock info, and
+// keeps only the ID: the holder and the time are the token's user and the
+// moment GitLab took the lock, and the other four are answered back as sent.
+// So the ID is the one a caller must choose, and each of the other six is sent
+// empty when the caller leaves it out, which GitLab takes as present.
 type LockInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Name      string               `json:"name" jsonschema:"Terraform state name,required"`
+	LockID    string               `json:"lock_id" jsonschema:"ID to take the lock under, up to 255 characters, such as a UUID, which is what terraform generates. An unlock that names the lock, and a state write while it is held, pass this ID,required"`
+	Operation string               `json:"operation,omitempty" jsonschema:"Terraform operation the lock is taken for, such as OperationTypeApply. GitLab answers it back and does not store it"`
+	Info      string               `json:"info,omitempty" jsonschema:"Free text about the lock. GitLab answers it back and does not store it"`
+	Who       string               `json:"who,omitempty" jsonschema:"Who takes the lock, as terraform writes it (user@host). GitLab records the token's user as the holder and answers with that username instead"`
+	Version   string               `json:"version,omitempty" jsonschema:"Terraform version that takes the lock. GitLab answers it back and does not store it"`
+	Created   string               `json:"created,omitempty" jsonschema:"When the lock was created, as terraform writes it. GitLab records the moment it takes the lock and answers with that instead"`
+	Path      string               `json:"path,omitempty" jsonschema:"Path of the state the lock covers, as terraform writes it, usually empty. GitLab answers it back and does not store it"`
 }
 
-// LockOutput represents the result of a lock operation.
+// LockOutput represents the lock GitLab took: the lock info it answered
+// with, whose ID, holder and creation time are the ones it recorded.
 type LockOutput struct {
+	toolutil.HintableOutput
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	LockID    string `json:"lock_id"`
+	Who       string `json:"who,omitempty"`
+	Created   string `json:"created,omitempty"`
+	Operation string `json:"operation,omitempty"`
+	Info      string `json:"info,omitempty"`
+	Version   string `json:"version,omitempty"`
+	Path      string `json:"path,omitempty"`
+}
+
+// lockInfo is the lock info of Terraform's HTTP backend, spelled as GitLab's
+// lock route reads it from the body and answers it.
+type lockInfo struct {
+	ID        string `json:"ID"`
+	Operation string `json:"Operation"`
+	Info      string `json:"Info"`
+	Who       string `json:"Who"`
+	Version   string `json:"Version"`
+	Created   string `json:"Created"`
+	Path      string `json:"Path"`
+}
+
+// lockOperation labels every error the lock reports.
+const lockOperation = "gitlab_lock_terraform_state"
+
+// lockConflictHint is what a caller can do when the state is already locked
+// and GitLab's answer names no lock to release.
+//
+// It and the two hints below are one literal each rather than two joined with
+// a plus: a package-level declaration carries no coverage counter, so a
+// mutation run files the arithmetic mutant on that plus as not covered, and
+// no test can kill it, since subtracting one string from another does not
+// compile.
+const lockConflictHint = "the state is already locked; release the lock with admin.terraform_state_unlock, passing the lock_id it was taken under, or no lock_id to release it whatever its ID"
+
+// lockHeldHint is lockConflictHint for the lock GitLab's answer names: its
+// ID, which an unlock can release it by, its holder and when it was taken.
+const lockHeldHint = "the state is already locked under lock ID %q, held by %s since %s; release it with admin.terraform_state_unlock, passing that ID as lock_id, or no lock_id to release it whatever its ID"
+
+// Lock locks a Terraform state with the lock info the caller gives.
+//
+// TerraformStates.Lock takes no options and sends no body, and GitLab refuses
+// a lock without the lock info with 400 (upstream-bugs row 150), so the lock
+// info is written into the body through a request option, and the lock GitLab
+// answers with, which the method does not decode, is read from the captured
+// response (ADR-0021).
+func Lock(ctx context.Context, client *gitlabclient.Client, input LockInput) (LockOutput, error) {
+	if strings.TrimSpace(input.LockID) == "" {
+		return LockOutput{}, toolutil.ErrRequiredString(lockOperation, "lock_id")
+	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	_, err := client.GL().TerraformStates.Lock(string(input.ProjectID), input.Name, gl.WithContext(ctx), lockInfoBody(lockInfo{
+		ID:        input.LockID,
+		Operation: input.Operation,
+		Info:      input.Info,
+		Who:       input.Who,
+		Version:   input.Version,
+		Created:   input.Created,
+		Path:      input.Path,
+	}))
+	if err != nil {
+		return LockOutput{}, toolutil.WrapErrWithStatusHint(lockOperation, err, http.StatusConflict, conflictHint(captured))
+	}
+	var lock lockInfo
+	if err = captured.Decode(&lock); err != nil {
+		return LockOutput{}, toolutil.WrapErr(lockOperation, fmt.Errorf("GitLab accepted the lock, but its answer is not the lock info: %w; read the state with admin.terraform_state_get to see whether it is locked", err))
+	}
+	return LockOutput{
+		Success:   true,
+		Message:   fmt.Sprintf("State '%s' locked", input.Name),
+		LockID:    lock.ID,
+		Who:       lock.Who,
+		Created:   lock.Created,
+		Operation: lock.Operation,
+		Info:      lock.Info,
+		Version:   lock.Version,
+		Path:      lock.Path,
+	}, nil
+}
+
+// conflictHint is the hint a refused lock carries when GitLab answered 409:
+// lib/api/terraform/state.rb answers it with the lock the state is held
+// under, whose ID, holder and time the hint names, so the caller can release
+// that lock by its ID rather than whatever lock there is. The answer is read
+// from the capture, since the error leaves out a body that is not one of
+// GitLab's error messages; an answer that names no lock leaves the hint
+// general.
+func conflictHint(captured *gitlabclient.ResponseCapture) string {
+	var held lockInfo
+	if err := captured.Decode(&held); err != nil || held.ID == "" {
+		return lockConflictHint
+	}
+	return fmt.Sprintf(lockHeldHint, held.ID, held.Who, held.Created)
+}
+
+// lockInfoBody returns the request option that writes info as the JSON body
+// of TerraformStates.Lock, which takes no options and so sends none.
+func lockInfoBody(info lockInfo) gl.RequestOptionFunc {
+	return func(req *retryablehttp.Request) error {
+		body, marshalErr := json.Marshal(info)
+		// A struct of strings marshals without error, and SetBody takes a
+		// byte slice without one; both are joined rather than branched on so
+		// that neither impossible failure is left untested.
+		return errors.Join(marshalErr, req.SetBody(body))
+	}
+}
+
+// Unlock.
+
+// UnlockInput contains parameters for releasing the lock of a Terraform
+// state.
+type UnlockInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Name      string               `json:"name" jsonschema:"Terraform state name,required"`
+	LockID    string               `json:"lock_id,omitempty" jsonschema:"ID the lock was taken under. GitLab releases the lock only when it matches and answers 409 when it does not. Leave it out to release the lock whatever its ID, as terraform force-unlock does"`
+}
+
+// UnlockOutput represents the result of releasing a lock. GitLab answers the
+// release with no body.
+type UnlockOutput struct {
 	toolutil.HintableOutput
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// Lock locks a Terraform state.
-func Lock(ctx context.Context, client *gitlabclient.Client, input LockInput) (LockOutput, error) {
-	_, err := client.GL().TerraformStates.Lock(string(input.ProjectID), input.Name, gl.WithContext(ctx))
+// unlockOperation labels every error the unlock reports.
+const unlockOperation = "gitlab_unlock_terraform_state"
+
+// unlockConflictHint is what a caller can do when GitLab refuses to release a
+// lock taken under another ID.
+const unlockConflictHint = "the lock is held under another ID: pass the lock_id it was taken under, or leave lock_id out to release it whatever its ID"
+
+// Unlock releases the lock of a Terraform state, the one taken under the
+// caller's lock ID when it gives one and any lock when it does not.
+//
+// TerraformStates.Unlock takes no options, so the lock ID GitLab matches the
+// lock against is written into the query through a request option
+// (upstream-bugs row 150).
+func Unlock(ctx context.Context, client *gitlabclient.Client, input UnlockInput) (UnlockOutput, error) {
+	_, err := client.GL().TerraformStates.Unlock(string(input.ProjectID), input.Name, gl.WithContext(ctx), lockIDQuery(input.LockID))
 	if err != nil {
-		// client-go sends no Terraform lock-info body, so GitLab always
-		// rejects this call with 400; point to the working alternatives.
-		return LockOutput{}, toolutil.WrapErrWithStatusHint("gitlab_lock_terraform_state", err, http.StatusBadRequest,
-			"the Go client sends no Terraform lock-info body, so GitLab always rejects this call with 400. Run the terraform CLI against the GitLab HTTP backend for real locking; admin.terraform_state_unlock still works to clear stale locks")
+		return UnlockOutput{}, toolutil.WrapErrWithStatusHint(unlockOperation, err, http.StatusConflict, unlockConflictHint)
 	}
-	return LockOutput{Success: true, Message: fmt.Sprintf("State '%s' locked", input.Name)}, nil
+	return UnlockOutput{Success: true, Message: fmt.Sprintf("State '%s' unlocked", input.Name)}, nil
 }
 
-// Unlock.
-
-// Unlock unlocks a Terraform state.
-func Unlock(ctx context.Context, client *gitlabclient.Client, input LockInput) (LockOutput, error) {
-	_, err := client.GL().TerraformStates.Unlock(string(input.ProjectID), input.Name, gl.WithContext(ctx))
-	if err != nil {
-		return LockOutput{}, toolutil.WrapErrWithMessage("gitlab_unlock_terraform_state", err)
+// lockIDQuery returns the request option that writes lockID into the query
+// of TerraformStates.Unlock, and none for an empty one, which is how GitLab
+// is asked to release the lock whatever its ID.
+func lockIDQuery(lockID string) gl.RequestOptionFunc {
+	if lockID == "" {
+		return nil
 	}
-	return LockOutput{Success: true, Message: fmt.Sprintf("State '%s' unlocked", input.Name)}, nil
+	return func(req *retryablehttp.Request) error {
+		query := req.URL.Query()
+		query.Set("ID", lockID)
+		req.URL.RawQuery = query.Encode()
+		return nil
+	}
 }
 
 // formatters.

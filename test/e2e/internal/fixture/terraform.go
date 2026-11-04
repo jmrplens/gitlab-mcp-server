@@ -82,11 +82,11 @@ const terraformLockID = "e2e-fixture-lock"
 // LockTerraformState takes the state's lock, so that a case asked to clear one
 // has a lock to clear.
 //
-// It goes through the raw backend for the reason the push does, and the reason
-// is sharper here: the lock action this server publishes sends no Terraform
-// lock-info body, so GitLab refuses every call it makes, and a fixture that
-// locked through the tool under test would be asserting on a refusal. The
-// body below is the one Terraform's HTTP backend sends.
+// It goes through the raw backend, as the push does, rather than through the
+// lock action this server publishes: the model evaluation it seeds for asks a
+// model to clear a lock, and a lock taken by the action under evaluation would
+// make the seed depend on the surface it is there to measure. The body below
+// is the one Terraform's HTTP backend sends.
 func LockTerraformState(e *harness.Env, project Project, name string) {
 	e.T.Helper()
 

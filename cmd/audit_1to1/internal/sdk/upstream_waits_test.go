@@ -1536,7 +1536,8 @@ type witnessCaller struct {
 // options and wait on client-go like the upload and certificate lists, and
 // the project hook forwarder is called with the struct and verb each hook
 // action sends, which R-PARAM reads in place of its any. The bump stack
-// updates this list.
+// updates this list, and on the v3.40.3 pin it holds the Terraform state
+// lock and unlock too, whose methods take no options either.
 //
 // It reads the report as plain JSON and spells the forms as the report does,
 // so it compiles and says the same thing on a tree whose walk reads none of
@@ -1615,6 +1616,26 @@ func TestRun_Repository_HoldsEveryKeyARawRequestCarriesBesideClientGo(t *testing
 			t.Errorf("PaginationRequestOption is handed to %q and answered by %q, want sixteen methods and row 150", paging.PassedTo, paging.AnsweredBy)
 		}
 	})
+	checkTerraformLockOptions(t, bySite)
+}
+
+// checkTerraformLockOptions holds the Terraform state lock and unlock (issue
+// 1597) to what the witness reads of them: neither method takes options, so
+// the lock info and the lock ID go out through a request option each, handed
+// to its own method and answered by row 150.
+func checkTerraformLockOptions(t *testing.T, bySite map[string]supersetWitness) {
+	t.Helper()
+	for site, method := range map[string]string{
+		"terraformstates.lockInfoBody": "TerraformStates.Lock",
+		"terraformstates.lockIDQuery":  "TerraformStates.Unlock",
+	} {
+		t.Run(site, func(t *testing.T) {
+			option := bySite["request-option "+site]
+			if !slices.Equal(option.PassedTo, []string{method}) || !slices.Equal(option.AnsweredBy, []string{"row 150"}) {
+				t.Errorf("%s is handed to %q and answered by %q, want %s alone and row 150", site, option.PassedTo, option.AnsweredBy, method)
+			}
+		})
+	}
 }
 
 // TestRun_Repository_EveryWorkaroundIsAnsweredAndEveryEntryHolds verifies
@@ -1638,7 +1659,7 @@ func TestRun_Repository_EveryWorkaroundIsAnsweredAndEveryEntryHolds(t *testing.T
 				found.Form, found.Site, found.AnsweredBy, found.UnansweredKeys, found.UnansweredNeeds, found.UnansweredMethods, found.KeysUnread)
 		}
 	}
-	want := map[string]int{formRawRequest: 22, formRequestOption: 11, formBodyEdit: 9, formFixtureRawRequest: 4, formScenarioRawRequest: 1}
+	want := map[string]int{formRawRequest: 22, formRequestOption: 13, formBodyEdit: 9, formFixtureRawRequest: 4, formScenarioRawRequest: 1}
 	if !reflect.DeepEqual(forms, want) {
 		t.Errorf("forms = %v, want %v", forms, want)
 	}

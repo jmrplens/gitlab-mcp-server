@@ -79,6 +79,12 @@ func declaredRequiredness() map[declarationKey]declaration {
 			"and line_type then defaults to new; a comment on the whole commit takes neither"
 		reasonSubmoduleRef = "GET .../repository/files/:file_path requires ref; the handler sends HEAD when the " +
 			"caller gives none, which is the default branch the schema promises"
+		reasonLockInfo = "POST .../terraform/state/:name/lock requires every key of terraform's lock info and keeps " +
+			"only the ID: lib/api/terraform/state.rb answers Operation, Info, Version and Path back as sent, and Who " +
+			"and Created from the lock it records; the handler sends the key empty when the caller gives none, " +
+			"which Grape's requires takes as present"
+		// actionTerraformStateLock keys the six lock info declarations below.
+		actionTerraformStateLock = "admin.terraform_state_lock"
 	)
 	return map[declarationKey]declaration{
 		// Notes and discussion notes: the one attribute the update changes.
@@ -146,6 +152,14 @@ func declaredRequiredness() map[declarationKey]declaration {
 		{action: "repository.read_submodule_file", field: "ref"}: {DirectionGitLabRequires, categoryHandlerDefault, reasonSubmoduleRef},
 		{action: "project.label_update", field: "name"}:          {DirectionGitLabRequires, categoryHandlerDefault, reasonLabelSelector},
 		{action: "project.label_delete", field: "name"}:          {DirectionGitLabRequires, categoryHandlerDefault, reasonLabelSelector},
+
+		// The lock info, of which GitLab keeps the ID alone (issue 1597).
+		{action: actionTerraformStateLock, field: "operation"}: {DirectionGitLabRequires, categoryHandlerDefault, reasonLockInfo},
+		{action: actionTerraformStateLock, field: "info"}:      {DirectionGitLabRequires, categoryHandlerDefault, reasonLockInfo},
+		{action: actionTerraformStateLock, field: "who"}:       {DirectionGitLabRequires, categoryHandlerDefault, reasonLockInfo},
+		{action: actionTerraformStateLock, field: "version"}:   {DirectionGitLabRequires, categoryHandlerDefault, reasonLockInfo},
+		{action: actionTerraformStateLock, field: "created"}:   {DirectionGitLabRequires, categoryHandlerDefault, reasonLockInfo},
+		{action: actionTerraformStateLock, field: "path"}:      {DirectionGitLabRequires, categoryHandlerDefault, reasonLockInfo},
 	}
 }
 
@@ -258,7 +272,21 @@ type paramAlias struct {
 func declaredAliases() map[aliasKey]paramAlias {
 	const groupShared = "the body param group_id of POST /groups/:id/share is the group shared with, which the input names %s, " +
 		"its group_id being the :id of the path"
+	const lockInfoKey = "GitLab spells the keys of terraform's lock info as terraform's LockInfo does, " +
+		"capitalized; the input writes %s in lower case, as every input here writes a parameter"
+	const lockID = "GitLab's ID is the lock's, beside the project's id of the path; the input names it lock_id, " +
+		"since a bare id would read as the project or the state, and the unlock reads an id as the state's name"
+	// lockAction keys the seven aliases of the lock's parameters below.
+	const lockAction = "admin.terraform_state_lock"
 	aliased := map[aliasKey]paramAlias{
+		{action: lockAction, param: "ID"}:                     {Field: "lock_id", Reason: lockID},
+		{action: "admin.terraform_state_unlock", param: "ID"}: {Field: "lock_id", Reason: lockID},
+		{action: lockAction, param: "Operation"}:              {Field: "operation", Reason: fmt.Sprintf(lockInfoKey, "Operation")},
+		{action: lockAction, param: "Info"}:                   {Field: "info", Reason: fmt.Sprintf(lockInfoKey, "Info")},
+		{action: lockAction, param: "Who"}:                    {Field: "who", Reason: fmt.Sprintf(lockInfoKey, "Who")},
+		{action: lockAction, param: "Version"}:                {Field: "version", Reason: fmt.Sprintf(lockInfoKey, "Version")},
+		{action: lockAction, param: "Created"}:                {Field: "created", Reason: fmt.Sprintf(lockInfoKey, "Created")},
+		{action: lockAction, param: "Path"}:                   {Field: "path", Reason: fmt.Sprintf(lockInfoKey, "Path")},
 		{action: "project.milestone_promote", param: "milestone_id"}: {
 			Field: "milestone_iid",
 			Reason: "the :milestone_id of POST /projects/:id/milestones/:milestone_id/promote is the ID in the answer of a " +
