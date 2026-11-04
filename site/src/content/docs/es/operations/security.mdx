@@ -231,10 +231,11 @@ Por tanto, `GITLAB_MCP_YOLO_MODE` y `AUTOPILOT` omiten el mismo paso en las tres
 
 ### Cuando deciden los argumentos
 
-Un bit por acción no puede describir una acción que destruye algo con unos argumentos y nada con el resto, y clasificar una acción así pondría una confirmación delante de cada edición corriente, que es una confirmación que quien llama aprende a aceptar sin mirar. Dos acciones se protegen en su propio handler, con la misma precedencia, y declaran un campo `confirm` para que su esquema de entrada lo muestre:
+Un bit por acción no puede describir una acción que destruye algo con unos argumentos y nada con el resto, y clasificar una acción así pondría una confirmación delante de cada edición corriente, que es una confirmación que quien llama aprende a aceptar sin mirar. Tres acciones se protegen en su propio handler, con la misma precedencia, y declaran un campo `confirm` para que su esquema de entrada lo muestre:
 
 - `issue.work_item_update`: un `assignee_ids` o `crm_contact_ids` vacío y explícito quita todas las entradas actuales, mientras que omitir el campo lo deja intacto. Vaciar entradas que existen necesita la confirmación.
 - `project.pull_mirror_configure`: `mirror_overwrites_diverged_branches` hace que cada sincronización sustituya las ramas divergentes de este proyecto por las del origen, lo que [GitLab documenta](https://docs.gitlab.com/user/project/repository/mirror/pull/) como la pérdida de los cambios locales. La protección pregunta cuando la configuración que deja la llamada a la vez trae cambios del origen y sobrescribe, y es esta llamada la que la arma o la redirige: al activar el indicador, al habilitar el mirror o al cambiar su URL.
+- `project.update`: `PUT /projects/:id` acepta los mismos tres ajustes como `mirror`, `import_url` y `mirror_overwrites_diverged_branches`, así que una actualización puede armar la misma sobrescritura. Pasa por la protección de `project.pull_mirror_configure` y pregunta en los mismos casos, con `mirror` en el papel de habilitar el mirror e `import_url` en el de su URL; una actualización que no envía ninguno de los tres no pregunta nada.
 
 La configuración de un mirror de pull en conjunto no es destructiva a propósito, como decidió el [issue 674](https://github.com/jmrplens/gitlab-mcp-server/issues/674): sin el indicador de sobrescritura GitLab deja de actualizar una rama divergente en lugar de sustituirla, nada del proyecto sale de la instancia, y clasificar la acción pondría una confirmación delante de desactivar un mirror hostil.
 
