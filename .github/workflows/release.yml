@@ -2376,7 +2376,9 @@ jobs:
     # A rehearsal runs this job too, and everything in it but the three steps
     # that write and the last one, which reads the submission's outcome: the
     # fork sync, the submission, the cleanup and that step are skipped, and
-    # komac builds the manifests dry instead.
+    # komac builds the manifests dry instead. The lookup of a pull request
+    # already open or merged for the version reads only, so it runs and says
+    # what a release would do.
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
       WINGET_IDENTIFIER: jmrplens.gitlab-mcp-server
@@ -2396,10 +2398,14 @@ jobs:
       KOMAC_VERSION: "2.17.1"
       KOMAC_SHA256_X64: "a97c002c5ffa15f232af117efac6774e755d27acc47eba00f1661033267d7438"
       KOMAC_SHA256_ARM64: "be644ceab89470229d4e21525ccd2adf43de3f5a2f363d1ff848f38f05e1c7b9"
+    # Publishes a version-update PR to microsoft/winget-pkgs via the
+    # jmrplens/winget-pkgs fork, unless a pull request for the version is
+    # already open or merged there.
+    #
     # Every write authenticates with WINGET_TOKEN. The job's own token reads
-    # only public data: the release this run names, and in a rehearsal what
-    # komac reads of winget-pkgs and of this repository to build the
-    # manifests.
+    # only public data: the release this run names, winget-pkgs' pull
+    # requests for the version, and in a rehearsal what komac reads of
+    # winget-pkgs and of this repository to build the manifests.
     #
     # WINGET_TOKEN is a classic personal access token of the maintainer's
     # with the scopes public_repo and workflow, set on 2026-11-04, after
@@ -2418,24 +2424,6 @@ jobs:
     # workflow scope", on 2.7.4).
     permissions: {}
     steps:
-      # Publishes a version-update PR to microsoft/winget-pkgs via the
-      # jmrplens/winget-pkgs fork.
-      #
-      # The fork MUST be synced first: komac creates its branch on the fork,
-      # and a stale fork fails with "Ref cannot be created". Behind the
-      # submission's continue-on-error, when no step after it reported the
-      # failure, that exact combination silently skipped the 2.7.2 and 2.7.3
-      # submissions (fork 24 days behind). This step is deliberately
-      # blocking: if the sync fails (409 divergence, 422), the submission
-      # would fail against the stale fork anyway. A red winget job is the
-      # visibility that was missing, and no other job of this workflow needs
-      # this one.
-      - name: Sync winget-pkgs fork with upstream
-        if: env.REHEARSAL != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
-        run: gh api -X POST repos/jmrplens/winget-pkgs/merge-upstream -f branch=master
-
       # Not under continue-on-error: a binary that does not hash to the
       # recorded digest is the one failure this job must never hide.
       - name: Install komac
@@ -2491,6 +2479,100 @@ jobs:
           "version=$($release.tag_name -replace '^v')" >> $env:GITHUB_OUTPUT
           "urls=$($urls -join ' ')" >> $env:GITHUB_OUTPUT
 
+      # microsoft/winget-pkgs takes a version from anyone, and a community
+      # bot, damn-good-b0t, has submitted every 3.x version of this package,
+      # from an hour and a half to under two days after its release; 3.4.0's
+      # is microsoft/winget-pkgs#468042, "Update version:
+      # jmrplens.gitlab-mcp-server version 3.4.0". A second pull request for a
+      # version is a duplicate for winget's moderators to close, so when one
+      # is already open or merged this job submits nothing and names it. That
+      # is most likely on a re-run of the job after a failed submission. One
+      # closed without a merge does not count, since it submitted nothing,
+      # and neither does one whose title starts with Remove, which takes the
+      # version out.
+      #
+      # The search reads public data with the job's own token and matches the
+      # identifier and the version as whole words of a title, as komac does,
+      # so 3.4.0 is found neither in 3.4.01 nor in 13.4.0. A search that fails,
+      # or answers incomplete results without a match, skips nothing: it
+      # warns, and the submission keeps komac's own check of existing pull
+      # requests, which runs the same search with WINGET_TOKEN and so is a
+      # second chance to avoid a duplicate. When this search does answer, the
+      # submission passes --skip-pr-check instead, because komac's check ends
+      # a run in CI without a word on a pull request of any state, a closed
+      # one included, and would leave the job green with nothing submitted.
+      # Neither search sees a pull request opened moments earlier, which the
+      # index has not reached. A rehearsal runs this step for the version it
+      # reads and says what a release would do.
+      - name: Look for a pull request that already submits the version
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.installers.outputs.version }}
+        run: |
+          # A workflow command's message ends at a line break and reads % as
+          # the start of an escape.
+          function Format-Message([string] $text) { $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A') }
+          $subject = "$env:WINGET_IDENTIFIER $env:VERSION"
+          $query = "repo:microsoft/winget-pkgs is:pr in:title $subject"
+          $errors = Join-Path $env:RUNNER_TEMP 'lookup-errors.txt'
+          $body = gh api -X GET search/issues -f "q=$query" -f per_page=100 2> $errors
+          $code = $LASTEXITCODE
+          $failure = $null
+          $found = @()
+          if ($code -ne 0) {
+            $failure = "gh api exited with code $code"
+            if (Test-Path -LiteralPath $errors) { $failure += ": $((Get-Content -LiteralPath $errors) -join ' ')" }
+          } else {
+            try {
+              $result = $body | ConvertFrom-Json
+              $found = @($result.items | Where-Object {
+                $words = -split $_.title
+                $words -contains $env:WINGET_IDENTIFIER -and $words -contains $env:VERSION -and
+                  $words[0] -ne 'Remove' -and
+                  ($_.state -eq 'open' -or $_.pull_request.merged_at)
+              })
+              if ($found.Count -eq 0 -and $result.incomplete_results) {
+                $failure = 'the search answered incomplete results'
+              }
+            } catch {
+              $failure = "the search's answer did not decode: $_"
+            }
+          }
+          if ($failure) {
+            "answered=false" >> $env:GITHUB_OUTPUT
+            $message = "Could not tell whether microsoft/winget-pkgs already has a pull request for $subject ($failure). The submission goes ahead, with komac's own check of existing pull requests."
+            Write-Output "::warning title=winget lookup failed::$(Format-Message $message)"
+            exit 0
+          }
+          "answered=true" >> $env:GITHUB_OUTPUT
+          if ($found.Count -eq 0) {
+            Write-Output "microsoft/winget-pkgs has no open or merged pull request for $subject"
+            exit 0
+          }
+          $pull = $found[0]
+          $state = if ($pull.state -eq 'open') { 'open' } else { 'merged' }
+          $outcome = if ($env:REHEARSAL -eq 'true') { 'a release would submit nothing' } else { 'this job submits nothing' }
+          "pull_request=$($pull.html_url)" >> $env:GITHUB_OUTPUT
+          $message = "microsoft/winget-pkgs#$($pull.number) ($state, ""$($pull.title)"") already submits $subject, so $outcome."
+          Write-Output "::notice title=winget::$(Format-Message $message)"
+
+      # The fork MUST be synced before the submission: komac creates its
+      # branch on the fork, and a stale fork fails with "Ref cannot be
+      # created". Behind the submission's continue-on-error, when no step
+      # after it reported the failure, that exact combination silently
+      # skipped the 2.7.2 and 2.7.3 submissions (fork 24 days behind). This
+      # step is deliberately blocking: if the sync fails (409 divergence,
+      # 422), the submission would fail against the stale fork anyway. A red
+      # winget job is the visibility that was missing, and no other job of
+      # this workflow needs this one. When a pull request for the version
+      # already exists there is nothing to submit, and the fork is left alone.
+      - name: Sync winget-pkgs fork with upstream
+        if: env.REHEARSAL != 'true' && steps.existing.outputs.pull_request == ''
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: gh api -X POST repos/jmrplens/winget-pkgs/merge-upstream -f branch=master
+
       # The command winget-releaser ran, with its arguments. Two of its
       # variables are left out: KOMAC_CREATED_WITH and its URL, which would
       # stamp every manifest and the pull request with "WinGet Releaser", a
@@ -2506,18 +2588,29 @@ jobs:
       # (issue 1665). komac writes its error report to stderr, one numbered
       # line per cause and in color, so the report goes to a file, is printed
       # after komac exits, and its causes are this step's output.
+      #
+      # --skip-pr-check is passed only when the lookup above answered, for
+      # the reason given there. A run that ends well names the pull request
+      # it opened in a notice, read from komac's "Successfully created
+      # microsoft/winget-pkgs#N"; one that ends well without that line is a
+      # warning, since it is komac's own check stepping aside without a word,
+      # or a komac whose output changed.
       - name: Submit the version to winget-pkgs
         id: submit
-        if: env.REHEARSAL != 'true'
+        if: env.REHEARSAL != 'true' && steps.existing.outputs.pull_request == ''
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
           KOMAC_FORK_OWNER: jmrplens
           VERSION: ${{ steps.installers.outputs.version }}
           URLS: ${{ steps.installers.outputs.urls }}
+          ANSWERED: ${{ steps.existing.outputs.answered }}
         run: |
+          $arguments = @('update', $env:WINGET_IDENTIFIER, '--version', $env:VERSION, '--submit')
+          if ($env:ANSWERED -eq 'true') { $arguments += '--skip-pr-check' }
+          $arguments += @('--urls') + @($env:URLS -split ' ')
           $report = Join-Path $env:RUNNER_TEMP 'komac-errors.txt'
-          & $env:KOMAC update $env:WINGET_IDENTIFIER --version $env:VERSION --submit --urls @($env:URLS -split ' ') 2> $report
+          & $env:KOMAC @arguments 2> $report | Tee-Object -Variable printed
           $code = $LASTEXITCODE
           $lines = @()
           if (Test-Path -LiteralPath $report) { $lines = @(Get-Content -LiteralPath $report) }
@@ -2526,6 +2619,12 @@ jobs:
             $causes = @($lines -replace '\e\[[0-9;]*m' -match '^\s*\d+: ' -replace '^\s*\d+: +')
             if ($causes.Count -eq 0) { $causes = @("komac exited with code $code") }
             "cause=$($causes.Trim() -join '; ')" >> $env:GITHUB_OUTPUT
+          } elseif ("$printed" -match 'microsoft/winget-pkgs#\d+') {
+            Write-Output "::notice title=winget::$env:WINGET_IDENTIFIER $env:VERSION was submitted as $($Matches[0])."
+          } elseif ($env:ANSWERED -eq 'true') {
+            Write-Output "::warning title=winget::komac exited without naming a pull request it created for $env:WINGET_IDENTIFIER $env:VERSION; its output above says what it did."
+          } else {
+            Write-Output "::warning title=winget::komac exited without creating a pull request for $env:WINGET_IDENTIFIER ${env:VERSION}: in CI its own check of existing pull requests stops it without a word when it finds one for the version, and the lookup above could not say which."
           }
           exit $code
 
