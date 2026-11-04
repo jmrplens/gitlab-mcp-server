@@ -131,7 +131,7 @@ func TestRunValidateDocsMode_MissingRoot_IsFatal(t *testing.T) {
 	t.Cleanup(func() { repositoryRoot = original })
 	repositoryRoot = func(string) (string, error) { return "", errors.New("no go.mod above here") }
 
-	runValidateDocsMode(filepath.Join(t.TempDir(), "docs.json"), false, true, 0)
+	runValidateDocsMode(filepath.Join(t.TempDir(), "docs.json"), "", false, true, 0)
 	if len(*messages) != 1 || !strings.Contains((*messages)[0], "find repository root: no go.mod above here") {
 		t.Errorf("fatal messages = %v, want the root error", *messages)
 	}
@@ -145,14 +145,14 @@ func TestRunValidateDocsMode_MissingRoot_IsFatal(t *testing.T) {
 // between them was evaluated one way in every run and a mode that always
 // exited fatally would have passed. The tree is planted, because the
 // repository's own citations are hundreds of pages nothing local can answer
-// for; the cache is the one the fetcher reads for that root, so the mode
-// builds its own fetcher exactly as it does in production.
+// for; the cache is the one the fetcher reads for that root at master, so the
+// mode builds its own fetcher exactly as it does in production.
 func TestRunValidateDocsMode_EveryCitationCached_ExitsWithoutAFatal(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"cmd/audit_1to1/main.go":              "package main // see doc/api/alpha.md",
-		".cache/gitlab-api-docs/alpha.md":     "# alpha",
-		".cache/gitlab-api-docs/unrelated.md": "# not cited by the planted source",
+		"cmd/audit_1to1/main.go":                     "package main // see doc/api/alpha.md",
+		".cache/gitlab-api-docs@master/alpha.md":     "# alpha",
+		".cache/gitlab-api-docs@master/unrelated.md": "# not cited by the planted source",
 	})
 
 	original := repositoryRoot
@@ -161,7 +161,7 @@ func TestRunValidateDocsMode_EveryCitationCached_ExitsWithoutAFatal(t *testing.T
 	messages := captureFatal(t)
 
 	output := filepath.Join(t.TempDir(), "docs.json")
-	runValidateDocsMode(output, false, true, 0)
+	runValidateDocsMode(output, "", false, true, 0)
 
 	if len(*messages) != 0 {
 		t.Fatalf("runValidateDocsMode reported %v, want a clean exit", *messages)
@@ -949,6 +949,61 @@ func TestMain_ValidateDocsOffline_ReportsTheOfflineReason(t *testing.T) {
 	}
 	if reason, _ := entry["error"].(string); !strings.Contains(reason, "not cached and offline") {
 		t.Errorf("stale reason = %v, want the offline refusal", entry["error"])
+	}
+}
+
+// TestMain_ValidateDocs_ReadsTheCitedPagesAtTheRef verifies -validate-docs
+// reads the cited pages through the repository files API at a ref, master
+// unless -doc-ref names another, rather than through the raw web route the
+// shared fetcher defaults to, which answered a weekly sweep with HTTP 429. The
+// cache each fetcher keeps says which one ran, so each case caches the cited
+// page where one of them would look and runs offline: a page cached under the
+// ref passes, and the same page cached where the raw route's fetcher keeps it
+// is a stale citation, since nothing reads there any more. A -doc-ref that is
+// not a ref is refused before anything is read.
+func TestMain_ValidateDocs_ReadsTheCitedPagesAtTheRef(t *testing.T) {
+	tests := []struct {
+		name string
+		// cached is where under the root the cited page is cached, relative
+		// to the fetchers' shared cache directory name.
+		cached    string
+		args      []string
+		wantFatal string
+	}{
+		{name: "master by default", cached: "@master"},
+		{name: "the ref -doc-ref names", cached: "@v19.5.0-ee", args: []string{"-doc-ref", "v19.5.0-ee"}},
+		{name: "the raw route's cache is not read", cached: "", wantFatal: "stale doc/api citations found"},
+		{name: "another ref's cache is not read", cached: "@v19.5.0-ee", wantFatal: "stale doc/api citations found"},
+		{name: "a doc-ref that is not a ref is refused", cached: "@master", args: []string{"-doc-ref", "not a ref"}, wantFatal: `"not a ref" is not a ref this can read doc/api at`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeTree(t, root, map[string]string{"cmd/audit_1to1/main.go": "package main // see doc/api/delta.md"})
+			cache := apidocs.CacheDir(root) + tt.cached
+			writeTree(t, cache, map[string]string{"delta.md": "# Delta API\n"})
+			original := repositoryRoot
+			t.Cleanup(func() { repositoryRoot = original })
+			repositoryRoot = func(string) (string, error) { return root, nil }
+			messages := captureFatal(t)
+
+			output := filepath.Join(t.TempDir(), "docs.json")
+			resetFlags(t, append([]string{"-validate-docs", "-offline", "-output", output}, tt.args...)...)
+			main()
+
+			if tt.wantFatal == "" {
+				if len(*messages) != 0 {
+					t.Fatalf("main reported %v, want every citation read from %s", *messages, cache)
+				}
+				if ok, _ := readJSONFile(t, output)["ok"].(float64); ok != 1 {
+					t.Errorf("report ok = %v, want the one cited page", ok)
+				}
+				return
+			}
+			if len(*messages) != 1 || !strings.Contains((*messages)[0], tt.wantFatal) {
+				t.Errorf("main reported %v, want one fatal message containing %q", *messages, tt.wantFatal)
+			}
+		})
 	}
 }
 
