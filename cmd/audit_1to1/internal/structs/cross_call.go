@@ -539,7 +539,9 @@ func handedAt(handed []bool, i int) bool {
 
 // fieldVars returns the variable each entry of a parameter, result or
 // receiver list is bound to, in order, nil for one with no name or an
-// underscore; nil for no list.
+// underscore; nil for no list. go/types defines a variable for an underscore
+// too, one nothing can name, so it is dropped here rather than read as an
+// entry the body could hand on.
 func fieldVars(info *types.Info, list *ast.FieldList) []*types.Var {
 	if list == nil {
 		return nil
@@ -552,6 +554,9 @@ func fieldVars(info *types.Info, list *ast.FieldList) []*types.Var {
 		}
 		for _, name := range field.Names {
 			bound, _ := info.Defs[name].(*types.Var)
+			if name.Name == "_" {
+				bound = nil
+			}
 			out = append(out, bound)
 		}
 	}
@@ -847,16 +852,17 @@ func (s literalSends) sendsInPlace(call *ast.CallExpr, handed func(ast.Expr) boo
 // handed in the entry variable is bound to: its body calls a service method
 // that takes name with variable, or something holding it, or hands one of
 // them on to a function that sends it. A service method that takes name and
-// that the body names as a value sends whatever the body is handed, since
-// what the value is called with is out of sight. A body that calls such a
-// method only with values of its own sends nothing of what it is handed, and
-// an entry with no name hands nothing on.
+// that the body names as a value sends whatever the body is handed in an
+// entry with a name, since what the value is called with is out of sight. A
+// body that calls such a method only with values of its own sends nothing of
+// what it is handed, and an entry with no name hands nothing on, not even to
+// such a value: the body cannot name what it was handed in it.
 func (s literalSends) sends(decl *ast.FuncDecl, variable *types.Var) bool {
-	if valueStructs(s.info, decl.Body)[s.name] {
-		return true
-	}
 	if variable == nil || s.read[variable] {
 		return false
+	}
+	if valueStructs(s.info, decl.Body)[s.name] {
+		return true
 	}
 	s.read[variable] = true
 	holding := holdIntermediates(s.info, decl.Body, variable, nil, nil).from

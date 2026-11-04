@@ -1565,6 +1565,18 @@ func (l lister) blind(*gl.ListWidgetsOptions) error {
 	return listWith(l.c, &gl.ListWidgetsOptions{})
 }
 
+// blindValue gives the options it is handed no name, and hands on beside
+// options of its own the service method that sends them, as a value.
+func (l lister) blindValue(*gl.ListWidgetsOptions) error {
+	return through(l.c.Widgets.ListWidgets, &gl.ListWidgetsOptions{})
+}
+
+// blankValue is blindValue with the options it is handed named by the blank
+// identifier.
+func (l lister) blankValue(_ *gl.ListWidgetsOptions) error {
+	return through(l.c.Widgets.ListWidgets, &gl.ListWidgetsOptions{})
+}
+
 // query embeds the options beside the client that sends them.
 type query struct {
 	gl.ListWidgetsOptions
@@ -1668,6 +1680,30 @@ type BlindInput struct {
 func blinded(c *gl.Client, in BlindInput) *gl.ListWidgetsOptions {
 	opts := &gl.ListWidgetsOptions{}
 	_ = (lister{c: c}).blind(opts)
+	return opts
+}
+
+type BlindValueInput struct {
+	Search string ~json:"search"~
+}
+
+// blindValued hands the options it builds to a helper that drops them
+// beside a method value of the service.
+func blindValued(c *gl.Client, in BlindValueInput) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{}
+	_ = (lister{c: c}).blindValue(opts)
+	return opts
+}
+
+type BlankValueInput struct {
+	Search string ~json:"search"~
+}
+
+// blankValued hands the options it builds to a helper that names them by
+// the blank identifier and drops them beside a method value of the service.
+func blankValued(c *gl.Client, in BlankValueInput) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{}
+	_ = (lister{c: c}).blankValue(opts)
 	return opts
 }
 
@@ -1789,10 +1825,12 @@ func direct(c *gl.Client, in DirectInput) *gl.ListWidgetsOptions {
 // afterwards. A helper that sends options of the same type it is never
 // handed is no send of the literal, whether the helper builds them or the
 // function hands it other options of its own, nor is one it is handed to
-// that reads it, that hands it only to itself, that gives it no name, that
-// lists with options of its own beside it or that hands a field of it to a
-// service method of another type, so each of those builders pairs its
-// literal with its input, as one that sends nothing does.
+// that reads it, that hands it only to itself, that gives it no name or
+// names it by the blank identifier (even beside a method value of the
+// service that sends its type, which can be called with nothing the helper
+// was handed there), that lists with options of its own beside it or that
+// hands a field of it to a service method of another type, so each of those
+// builders pairs its literal with its input, as one that sends nothing does.
 func TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHandedOn(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/lookups", source: lookupsSource})[0]
 
@@ -1807,6 +1845,8 @@ func TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHande
 		{name: "handed to a helper that reads it", input: "InspectedInput", paired: true},
 		{name: "handed to a helper that hands it only to itself", input: "SpunInput", paired: true},
 		{name: "handed to a helper that gives it no name", input: "BlindInput", paired: true},
+		{name: "handed to a helper that gives it no name beside a method value that sends", input: "BlindValueInput", paired: true},
+		{name: "handed to a helper that names it blank beside a method value that sends", input: "BlankValueInput", paired: true},
 		{name: "handed to a helper that lists with options of its own", input: "OwnInput", paired: true},
 		{name: "handed to a helper that hands a field of it to a method of another type", input: "ProtectedInput", paired: true},
 		{name: "handed in place to a helper that sends it", input: "InPlaceInput"},
