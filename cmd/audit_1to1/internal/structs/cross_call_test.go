@@ -984,6 +984,31 @@ func Ninth(c *gl.Client, in NinthInput) (Output, error) {
 	return Output{}, err
 }
 
+// optionsPaired builds the options and the protection out of the filter and
+// a guard of constants, and writes the guard it is handed into the options
+// alone, the first of the two that builder hands back.
+func optionsPaired(f filter, g guard) (*gl.ListWidgetsOptions, *gl.ProtectOptions) {
+	list, protect := listOrProtect(f, guard{Name: "x"})
+	list.Search = &g.Name
+	return list, protect
+}
+
+type ThirteenthInput struct {
+	Search string ~json:"search"~
+	Name   string ~json:"name"~
+}
+
+// Thirteenth hands that builder a filter and a guard it fills from its
+// input: the guard reaches the options and nothing of the protection.
+func Thirteenth(c *gl.Client, in ThirteenthInput) (Output, error) {
+	list, protect := optionsPaired(filter{Search: in.Search}, guard{Name: in.Name})
+	if err := c.Widgets.Protect(1, protect); err != nil {
+		return Output{}, err
+	}
+	_, err := c.Widgets.ListWidgets(list)
+	return Output{}, err
+}
+
 // optionsVia has the builder its caller passes build the options out of the
 // filter, a call whose body is out of sight.
 func optionsVia(f filter, build func(filter) *gl.ListWidgetsOptions) *gl.ListWidgetsOptions {
@@ -1181,10 +1206,12 @@ func inputGaps(pkg *packages.Package, keys ...string) (gaps, stale []string) {
 //
 // A struct a builder takes goes through into what it reaches of what the
 // builder builds, and only that: through a helper further down, and through
-// what such a helper hands back when the builder writes the struct into it.
-// A request the builder makes of constants beside, or out of another struct
-// it takes, at the call or down the chain, goes through nothing the caller
-// hands, so a declaration on the struct answers nothing of it.
+// what such a helper hands back when the builder writes the struct into it,
+// in the result it writes it into alone. A request the builder makes of
+// constants beside, or out of another struct it takes, at the call or down
+// the chain, goes through nothing the caller hands, so a declaration on the
+// struct answers nothing of it, and neither does one of several results of
+// a call that nothing of the caller's is written into or handed back in.
 func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclaration(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/fixturepkg", source: throughSource})[0]
 	fourthGap := "FourthInput ListWidgetsOptions caller page"
@@ -1202,6 +1229,7 @@ func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclara
 			fourthGap,
 			"GuardInput ProtectOptions caller allowed,by_user,levels,page,since",
 			"NinthInput ProtectOptions caller allowed,by_user,levels,page,since",
+			"ThirteenthInput ProtectOptions caller allowed,by_user,levels,page,since",
 			"TwelfthInput ListWidgetsOptions caller page,search",
 			"guard ProtectOptions  allowed,by_user,levels,page,since",
 		}
@@ -1228,6 +1256,7 @@ func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclara
 			"SixthInput ListWidgetsOptions caller page",
 			"TenthInput ListWidgetsOptions caller page",
 			"ThirdInput ListWidgetsOptions caller page",
+			"ThirteenthInput ProtectOptions caller allowed,by_user,levels,page,since",
 			"filter ListWidgetsOptions  page",
 		}
 		if !slices.Equal(gaps, want) {
@@ -1258,6 +1287,8 @@ func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclara
 			{input: "TwelfthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.guard"}},
 			{input: "NinthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.filter"}},
 			{input: "NinthInput", sdk: "ProtectOptions", want: []string{"fixturepkg.guard"}},
+			{input: "ThirteenthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.filter", "fixturepkg.guard"}},
+			{input: "ThirteenthInput", sdk: "ProtectOptions", want: []string{}},
 		} {
 			t.Run(tc.input+" "+tc.sdk, func(t *testing.T) {
 				pair, found := inputs[[2]string{tc.input, tc.sdk}]
@@ -1481,6 +1512,269 @@ func TestCollectHelpers_ADeclarationWithNoObjectOrNoBody_IsPassedOver(t *testing
 	collectNestedInputs(pkg, pairs)
 	if len(pairs) != 0 {
 		t.Errorf("collectCallerInputs and collectNestedInputs = %v, want no pair", pairs)
+	}
+}
+
+// handBacksSource is a tool package of helpers that hand back what they
+// build in each shape a return can take, and one that writes an entry into
+// one of several results another helper hands back.
+const handBacksSource = `package backs
+
+import gl "` + fixtureSDKPath + `"
+
+// filter is the struct the builders take.
+type filter struct {
+	search string
+}
+
+// guard is the struct a builder writes into what another hands back.
+type guard struct {
+	name string
+}
+
+// optionsOf builds the options out of the filter, in its one result.
+func optionsOf(f filter) *gl.ListWidgetsOptions { return &gl.ListWidgetsOptions{Search: &f.search} }
+
+// protectOf builds the protection out of the guard, in its one result.
+func protectOf(g guard) *gl.ProtectOptions { return &gl.ProtectOptions{Name: &g.name} }
+
+// pair hands back the options a builder builds first, and a protection it
+// builds in place second.
+func pair(f filter) (*gl.ListWidgetsOptions, *gl.ProtectOptions) {
+	return optionsOf(f), &gl.ProtectOptions{}
+}
+
+// swapped takes both results of pair and hands them back the other way
+// round.
+func swapped(f filter) (*gl.ProtectOptions, *gl.ListWidgetsOptions) {
+	list, protect := pair(f)
+	return protect, list
+}
+
+// relayed hands back the results of pair whole.
+func relayed(f filter) (*gl.ListWidgetsOptions, *gl.ProtectOptions) { return pair(f) }
+
+// both assigns each of two targets a value of its own, the second a call,
+// and hands them back in order.
+func both(g guard) (*gl.ListWidgetsOptions, *gl.ProtectOptions) {
+	list, protect := &gl.ListWidgetsOptions{}, protectOf(g)
+	return list, protect
+}
+
+// named builds the options into its first named result and hands both back
+// by a bare return.
+func named(f filter) (list *gl.ListWidgetsOptions, err error) {
+	list = optionsOf(f)
+	return
+}
+
+// kept hands back the options it is handed, and builds none.
+func kept(opts *gl.ListWidgetsOptions) (*gl.ListWidgetsOptions, error) { return opts, nil }
+
+// viaKept hands back the results of kept, handed the options it builds.
+func viaKept() (*gl.ListWidgetsOptions, error) {
+	opts := &gl.ListWidgetsOptions{}
+	return kept(opts)
+}
+
+// viaValue hands back the results of the function its caller passes,
+// handed the options and the protection it builds in place.
+func viaValue(split func(*gl.ListWidgetsOptions, *gl.ProtectOptions) (*gl.ListWidgetsOptions, error)) (*gl.ListWidgetsOptions, error) {
+	return split(&gl.ListWidgetsOptions{}, &gl.ProtectOptions{})
+}
+
+// closed builds the protection in a closure, whose return is the closure's
+// own, and hands back what the closure answers second.
+func closed() (*gl.ListWidgetsOptions, *gl.ProtectOptions) {
+	protect := func() *gl.ProtectOptions { return &gl.ProtectOptions{} }
+	return &gl.ListWidgetsOptions{}, protect()
+}
+
+// declared declares the options before it builds them, and builds a
+// protection it hands back nowhere.
+func declared() (*gl.ListWidgetsOptions, error) {
+	var opts *gl.ListWidgetsOptions
+	opts = &gl.ListWidgetsOptions{}
+	_ = &gl.ProtectOptions{}
+	return opts, nil
+}
+
+// defaultOptions builds options of constants.
+func defaultOptions() *gl.ListWidgetsOptions { return &gl.ListWidgetsOptions{} }
+
+// defaulted writes the guard's name into the options a builder it hands
+// nothing builds, and so builds nothing itself.
+func defaulted(g guard) *gl.ListWidgetsOptions {
+	opts := defaultOptions()
+	opts.Search = &g.name
+	return opts
+}
+
+// pairNamed writes the guard's name into the first of the two results of
+// pair, and hands both back.
+func pairNamed(f filter, g guard) (*gl.ListWidgetsOptions, *gl.ProtectOptions) {
+	list, protect := pair(f)
+	list.Search = &g.name
+	return list, protect
+}
+
+// second hands back the second of the two values it is handed.
+func second(_ *gl.ListWidgetsOptions, p *gl.ProtectOptions) *gl.ProtectOptions { return p }
+
+// forwarded hands both results of pair on to second, and hands back what
+// second answers.
+func forwarded(f filter) *gl.ProtectOptions { return second(pair(f)) }
+
+// forwardedNamed writes the guard's name into what forwarded hands back.
+func forwardedNamed(f filter, g guard) *gl.ProtectOptions {
+	protect := forwarded(f)
+	protect.Name = &g.name
+	return protect
+}
+
+// fill writes the filter's search into the guard through its pointer
+// receiver.
+func (g *guard) fill(f filter) { g.name = f.search }
+
+// guarded fills a guard from the filter through that method, and hands it
+// back first of two results.
+func guarded(f filter) (guard, error) {
+	g := guard{}
+	g.fill(f)
+	return g, nil
+}
+
+// filled builds the options out of the guard guarded hands back.
+func filled(f filter) *gl.ListWidgetsOptions {
+	g, _ := guarded(f)
+	return &gl.ListWidgetsOptions{Search: &g.name}
+}
+`
+
+// lateBacksSource is a tool package of three helpers alone, declared so
+// that where the second hands back what it builds is known only on a pass
+// that finds nothing else, which the first reads.
+const lateBacksSource = `package lates
+
+import gl "` + fixtureSDKPath + `"
+
+// filter is the struct the builders take.
+type filter struct {
+	search string
+}
+
+// guard is the struct the first builder writes into what another hands
+// back.
+type guard struct {
+	name string
+}
+
+// pairLate builds options of its own, or writes the guard's name into the
+// first result of a builder declared after it that it hands nothing of its
+// own. Where that builder hands the options back is known only once the one
+// it relays is read, a pass after this body is, and that pass finds nothing
+// else.
+func pairLate(g guard, fresh bool) *gl.ListWidgetsOptions {
+	if fresh {
+		return &gl.ListWidgetsOptions{}
+	}
+	list, _ := pairRelay(filter{search: "x"})
+	list.Search = &g.name
+	return list
+}
+
+// pairRelay hands back the results of pairBuilt whole.
+func pairRelay(f filter) (*gl.ListWidgetsOptions, *gl.ProtectOptions) { return pairBuilt(f) }
+
+// pairBuilt builds the options and the protection in place.
+func pairBuilt(f filter) (*gl.ListWidgetsOptions, *gl.ProtectOptions) {
+	return &gl.ListWidgetsOptions{Search: &f.search}, &gl.ProtectOptions{}
+}
+`
+
+// TestCollectHelpers_WhatAHelperHandsBack_IsRecordedByTheResultItHoldsIt
+// verifies the places among a helper's results that each struct it builds
+// is recorded as handed back in. A return of as many values as there are
+// results hands it back where a value builds it, through a literal or a
+// helper that hands it back in its one result, or reads a variable that
+// holds it, which is a target assigned a value of its own or the place a
+// call's result takes, or is a call that is handed it, the results of a
+// builder forwarded whole to another function included, whatever place the
+// builder hands it back in; a return of one call's results, where that
+// helper hands it back, or everywhere when the call builds none of it and is
+// handed it, or is a function value; a bare return, in each named result
+// holding it; and a closure's return in nowhere of the helper's. A struct
+// built and handed back nowhere is in no place, and a helper that writes
+// into what a builder it hands nothing builds builds nothing. An entry
+// written into one of several results of a call reaches only the struct
+// handed back in that place, and the entry handed to the call reaches the
+// struct the call's own route says it does, and no other; it does so too
+// when where the call hands the struct back is known only on a pass that
+// finds nothing else, which another pass then reads. An entry written into
+// what a forwarding call hands back reaches every struct that call is
+// handed, and an entry reaches a literal built out of a variable that one of
+// several results of a call holds when the callee fills the result from it
+// through a pointer.
+func TestCollectHelpers_WhatAHelperHandsBack_IsRecordedByTheResultItHoldsIt(t *testing.T) {
+	pkgs := checkedTree(t, pairingSDK,
+		toolSource{path: "example.com/x/internal/tools/backs", source: handBacksSource},
+		toolSource{path: "example.com/x/internal/tools/lates", source: lateBacksSource})
+	builds := collectHelpers(pkgs[0])
+	maps.Copy(builds, collectHelpers(pkgs[1]))
+	recorded := func(helper string, read func(helperBuild) []int) map[string][]int {
+		out := map[string][]int{}
+		for name, built := range builds["example.com/x/internal/tools/"+helper] {
+			out[name.Name()] = read(built)
+		}
+		return out
+	}
+	results := func(built helperBuild) []int { return slices.Sorted(maps.Keys(built.results)) }
+
+	for _, tc := range []struct {
+		helper string
+		want   map[string][]int
+	}{
+		{helper: "backs.optionsOf", want: map[string][]int{"ListWidgetsOptions": {0}}},
+		{helper: "backs.pair", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": {1}}},
+		{helper: "backs.swapped", want: map[string][]int{"ListWidgetsOptions": {1}, "ProtectOptions": {0}}},
+		{helper: "backs.relayed", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": {1}}},
+		{helper: "backs.both", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": {1}}},
+		{helper: "backs.named", want: map[string][]int{"ListWidgetsOptions": {0}}},
+		{helper: "backs.viaKept", want: map[string][]int{"ListWidgetsOptions": {0, 1}}},
+		{helper: "backs.viaValue", want: map[string][]int{"ListWidgetsOptions": {0, 1}, "ProtectOptions": {0, 1}}},
+		{helper: "backs.closed", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": {1}}},
+		{helper: "backs.declared", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": nil}},
+		{helper: "backs.defaulted", want: map[string][]int{}},
+		{helper: "backs.pairNamed", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": {1}}},
+		{helper: "backs.forwarded", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": {0}}},
+		{helper: "backs.forwardedNamed", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": {0}}},
+		{helper: "backs.filled", want: map[string][]int{"ListWidgetsOptions": {0}}},
+		{helper: "lates.pairLate", want: map[string][]int{"ListWidgetsOptions": {0}}},
+		{helper: "lates.pairRelay", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": {1}}},
+	} {
+		t.Run(tc.helper, func(t *testing.T) {
+			if got := recorded(tc.helper, results); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("%s hands back %v, want %v", tc.helper, got, tc.want)
+			}
+		})
+	}
+
+	entries := func(built helperBuild) []int { return slices.Sorted(maps.Keys(built.through)) }
+	for _, tc := range []struct {
+		helper string
+		want   map[string][]int
+	}{
+		{helper: "backs.pairNamed", want: map[string][]int{"ListWidgetsOptions": {0, 1}, "ProtectOptions": nil}},
+		{helper: "backs.forwardedNamed", want: map[string][]int{"ListWidgetsOptions": {0, 1}, "ProtectOptions": {0, 1}}},
+		{helper: "backs.filled", want: map[string][]int{"ListWidgetsOptions": {0}}},
+		{helper: "lates.pairRelay", want: map[string][]int{"ListWidgetsOptions": {0}, "ProtectOptions": nil}},
+		{helper: "lates.pairLate", want: map[string][]int{"ListWidgetsOptions": {0}}},
+	} {
+		t.Run("the entries that reach what "+tc.helper+" builds", func(t *testing.T) {
+			if got := recorded(tc.helper, entries); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("%s is reached by %v, want %v", tc.helper, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -1810,6 +2104,36 @@ func direct(c *gl.Client, in DirectInput) *gl.ListWidgetsOptions {
 	}
 	return &gl.ListWidgetsOptions{}
 }
+
+// guard is what a lookup fills from its input before it builds the options
+// out of it.
+type guard struct {
+	name string
+}
+
+// set writes the name into the guard through its pointer receiver.
+func (g *guard) set(name string) { g.name = name }
+
+type FilledInput struct {
+	Search string ~json:"search"~
+}
+
+// guardOf fills a guard from the input through that method, and hands it
+// back first of two results.
+func guardOf(in FilledInput) (guard, error) {
+	g := guard{}
+	g.set(in.Search)
+	return g, nil
+}
+
+// filled builds the options out of the guard guardOf hands back, and hands
+// them to a helper that sends them.
+func filled(c *gl.Client, in FilledInput) *gl.ListWidgetsOptions {
+	g, _ := guardOf(in)
+	opts := &gl.ListWidgetsOptions{Search: &g.name}
+	_ = listWith(c, opts)
+	return opts
+}
 `
 
 // TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHandedOn
@@ -1831,6 +2155,9 @@ func direct(c *gl.Client, in DirectInput) *gl.ListWidgetsOptions {
 // was handed there), that lists with options of its own beside it or that
 // hands a field of it to a service method of another type, so each of those
 // builders pairs its literal with its input, as one that sends nothing does.
+// A literal that reads the input pairs with it wherever it is sent, one that
+// reads it through the first of two results a function of the package fills
+// from it through a pointer included.
 func TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHandedOn(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/lookups", source: lookupsSource})[0]
 
@@ -1849,6 +2176,7 @@ func TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHande
 		{name: "handed to a helper that names it blank beside a method value that sends", input: "BlankValueInput", paired: true},
 		{name: "handed to a helper that lists with options of its own", input: "OwnInput", paired: true},
 		{name: "handed to a helper that hands a field of it to a method of another type", input: "ProtectedInput", paired: true},
+		{name: "reading the input through a result filled from it through a pointer, handed to a helper that sends it", input: "FilledInput", paired: true},
 		{name: "handed in place to a helper that sends it", input: "InPlaceInput"},
 		{name: "handed to a helper that sends a copy of it", input: "CopiedInput"},
 		{name: "handed to a helper that hands it on beside a method value that sends it", input: "ValuedInput"},

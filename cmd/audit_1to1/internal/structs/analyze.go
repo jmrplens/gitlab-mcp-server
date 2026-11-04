@@ -2039,9 +2039,12 @@ func readingLiterals(info *types.Info, body *ast.BlockStmt, input *types.Var, de
 }
 
 // heldFrom returns input and the variables of body that hold something of
-// it, filled from it after they were built included.
+// it, filled from it after they were built included. Of several results of
+// one call of a function of decls assigned at once, only those it hands
+// back something of what it is handed in hold it, as
+// [intermediates.assign] reads them.
 func heldFrom(info *types.Info, body *ast.BlockStmt, input *types.Var, decls map[*types.Func]*ast.FuncDecl) map[*types.Var]bool {
-	filled := holdIntermediates(info, body, input, nil, nil)
+	filled := holdIntermediates(info, body, input, nil, decls)
 	for filled.fillThroughPointers(body, decls) {
 		filled.hold(body)
 	}

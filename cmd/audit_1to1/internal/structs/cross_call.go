@@ -33,13 +33,20 @@ const receiverEntry = math.MaxInt
 // only when a value handed in it reaches the struct: a literal of it reads
 // the value, as [readingLiterals] reads a literal for an input, a helper the
 // entry is handed on to builds it, or the value is written into what such a
-// helper hands back. A caller's value goes through what the entries it is
-// handed in lead to, and only those: a struct a builder hands on what it
-// takes beside the caller's value is no struct the caller's value went
-// through, and neither is one the entry it is handed in reaches nothing of.
+// helper hands back in the place that holds the struct. A caller's value
+// goes through what the entries it is handed in lead to, and only those: a
+// struct a builder hands on what it takes beside the caller's value is no
+// struct the caller's value went through, and neither is one the entry it is
+// handed in reaches nothing of.
+//
+// results are the places among the helper's results it hands the struct
+// back in, as [helperDecl.handBack] reads its body: a caller that assigns
+// the results of one call to several targets holds the struct in the
+// targets in those places alone.
 type helperBuild struct {
 	named   *types.Named
 	through map[int][]*types.TypeName
+	results map[int]bool
 }
 
 // build is one request struct a call builds for its caller, with the structs
@@ -356,10 +363,26 @@ func assignedValue(rhs []ast.Expr, i int) ast.Expr {
 	return nil
 }
 
+// resultPlace returns the place among the results of the value rhs assigns
+// to the target at i that the target takes: its own, when one value is
+// assigned to every target, which takes the results of one call in turn,
+// and the first otherwise, when each target is assigned a value of its own
+// (a single target included, whose place is its own all the same).
+func resultPlace(rhs []ast.Expr, i int) int {
+	if len(rhs) == 1 {
+		return i
+	}
+	return 0
+}
+
 // resultsHolding says, for value a call of a function the package declares
 // with n results, which of them hold something of what the call hands it,
 // and returns nil for anything else (a range, a type assertion, a call of a
-// function of another package), whose every target holds what it reads.
+// function of another package), whose every target holds what it reads. A
+// result holds what its function's body fills from what it is handed
+// through a pointer as well (g := guard{}, then g.set(in.Search)), read as
+// [heldFrom] reads a body, or a value built that way and handed back would
+// leave the target in its place holding nothing.
 func (h *intermediates) resultsHolding(value ast.Expr, n int) []bool {
 	call, isCall := ast.Unparen(value).(*ast.CallExpr)
 	if !isCall {
@@ -368,6 +391,9 @@ func (h *intermediates) resultsHolding(value ast.Expr, n int) []bool {
 	inner, decl := h.enter(call)
 	if inner == nil || decl.Type.Results.NumFields() != n {
 		return nil
+	}
+	for inner.fillThroughPointers(decl.Body, h.decls) {
+		inner.hold(decl.Body)
 	}
 	results := make([]bool, n)
 	named := fieldVars(h.info, decl.Type.Results)
@@ -1037,10 +1063,11 @@ func declaredHelpers(pkg *packages.Package, bodies map[*types.Func]*ast.FuncDecl
 // entries to another helper, of its package or of imported, and the structs
 // what it hands goes through on the way, under the entry it was handed in,
 // and what such a helper hands back into a variable an entry is then
-// written into, under that entry. The passes repeat until one adds nothing,
-// which they reach because what a helper builds, the entries that reach
-// each, and what each of those goes through from each entry, only grow and
-// all are finite.
+// written into, under that entry, with the places each helper hands back
+// what it builds in. The passes repeat until one adds nothing, which they
+// reach because what a helper builds, the entries that reach each, what each
+// of those goes through from each entry and the places each is handed back
+// in, only grow and all are finite.
 func closeHelpers(info *types.Info, decls []helperDecl, builds, imported helperBuilds, bodies map[*types.Func]*ast.FuncDecl) {
 	for grew := true; grew; {
 		grew = false
@@ -1063,6 +1090,7 @@ func closeHelpers(info *types.Info, decls []helperDecl, builds, imported helperB
 				}
 				return true
 			})
+			grew = helper.handBack(info, reachable, builds[helper.key]) || grew
 		}
 	}
 }
@@ -1074,7 +1102,11 @@ func closeHelpers(info *types.Info, decls []helperDecl, builds, imported helperB
 // opts.Search = &g.Name) reaches that request as surely as one the builder
 // is handed. It goes through nothing further down, since the builder was
 // never handed it, and it reaches only what the helper builds already by
-// another route, so what a helper builds is what it was before.
+// another route, so what a helper builds is what it was before. A target
+// holds only what the helper hands back in the place it takes, so of several
+// results of one call (list, protect := listOrProtect(f, g), then
+// list.Search = &h.Name) the entry reaches the options and not the
+// protection.
 func (d helperDecl) reachAssigned(info *types.Info, lhs, rhs []ast.Expr, reachable helperBuilds, builds map[*types.TypeName]helperBuild, bodies map[*types.Func]*ast.FuncDecl) bool {
 	grew := false
 	for i, target := range lhs {
@@ -1093,13 +1125,177 @@ func (d helperDecl) reachAssigned(info *types.Info, lhs, rhs []ast.Expr, reachab
 			}
 			for _, b := range reachable[funcKey(fn)] {
 				_, built := builds[b.named.Obj()]
-				if built {
+				if built && b.results[resultPlace(rhs, i)] {
 					grew = mergeBuild(builds, entry, build{named: b.named, reached: true}) || grew
 				}
 			}
 		}
 	}
 	return grew
+}
+
+// handBack adds to the results of each struct of builds the places a return
+// of the helper's body hands back something holding it in, and reports
+// whether it added one. A return of as many values as the helper has
+// results hands it back in the place of each value holding it; one of the
+// results of a single call, in the places that call hands it back in when
+// it is a call of a helper of reachable that builds the struct, and in every
+// place when it is any other call holding it; and a bare return, in the
+// place of each named result holding it. A return inside a closure is the
+// closure's, and hands back nothing of the helper's.
+func (d helperDecl) handBack(info *types.Info, reachable helperBuilds, builds map[*types.TypeName]helperBuild) bool {
+	named := fieldVars(info, d.fn.Type.Results)
+	grew := false
+	for name, built := range builds {
+		back := handedBack{info: info, name: name, reachable: reachable}
+		held := back.holding(d.fn.Body)
+		ast.Inspect(d.fn.Body, func(node ast.Node) bool {
+			switch typed := node.(type) {
+			case *ast.FuncLit:
+				return false
+			case *ast.ReturnStmt:
+				for _, place := range back.places(typed, held, named) {
+					grew = addPlace(built.results, place) || grew
+				}
+			}
+			return true
+		})
+	}
+	return grew
+}
+
+// addPlace records place among results and reports whether it was not
+// there before, which is the only growth a pass counts.
+func addPlace(results map[int]bool, place int) bool {
+	if results[place] {
+		return false
+	}
+	results[place] = true
+	return true
+}
+
+// handedBack reads a helper's body for where it hands back name, one struct
+// it builds, the helpers of reachable it calls being read by the places they
+// hand it back in.
+type handedBack struct {
+	info      *types.Info
+	name      *types.TypeName
+	reachable helperBuilds
+}
+
+// holding returns the variables of body that hold the struct: one assigned a
+// value that builds it, a target in the place a call of a helper that builds
+// it hands it back in, and one assigned a value read off such a variable,
+// however many assignments down.
+func (b handedBack) holding(body *ast.BlockStmt) map[*types.Var]bool {
+	held := &intermediates{info: b.info, from: map[*types.Var]bool{}, beside: map[*ast.Ident]bool{}, reading: map[*types.Func]bool{}}
+	assigned := func(lhs, rhs []ast.Expr) {
+		for i, target := range lhs {
+			variable, value := rootVar(b.info, target), assignedValue(rhs, i)
+			if variable != nil && value != nil && b.at(value, resultPlace(rhs, i), nil) {
+				held.from[variable] = true
+			}
+		}
+	}
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.AssignStmt:
+			assigned(typed.Lhs, typed.Rhs)
+		case *ast.ValueSpec:
+			assigned(specNames(typed), typed.Values)
+		}
+		return true
+	})
+	held.hold(body)
+	return held.from
+}
+
+// places returns the places among the helper's results, named being the
+// variable each is bound to, that ret hands back something holding the
+// struct in, held being the variables that hold it. Those are the three
+// shapes a return can take, as [intermediates.returned] reads them.
+func (b handedBack) places(ret *ast.ReturnStmt, held map[*types.Var]bool, named []*types.Var) []int {
+	var out []int
+	switch len(ret.Results) {
+	case len(named):
+		for place, value := range ret.Results {
+			if b.holds(value, held) {
+				out = append(out, place)
+			}
+		}
+	case 1:
+		for place := range named {
+			if b.at(ret.Results[0], place, held) {
+				out = append(out, place)
+			}
+		}
+	default:
+		for place, variable := range named {
+			if held[variable] {
+				out = append(out, place)
+			}
+		}
+	}
+	return out
+}
+
+// at reports whether value holds the struct in the place among the results
+// it hands back: a call of a helper of reachable that builds it holds it in
+// the places that helper hands it back in, and any other value in each place
+// when it holds it at all.
+func (b handedBack) at(value ast.Expr, place int, held map[*types.Var]bool) bool {
+	if places, builds := b.placesOf(value); builds {
+		return places[place]
+	}
+	return b.holds(value, held)
+}
+
+// holds reports whether expr holds the struct: it builds it, or it reads one
+// of held.
+func (b handedBack) holds(expr ast.Expr, held map[*types.Var]bool) bool {
+	return b.builds(expr) || reads(b.info, expr, held)
+}
+
+// builds reports whether expr is or contains what builds the struct: a
+// literal of it, or a call of a helper of reachable that hands it back in
+// any place. Inside a value such a call is either a call of one result,
+// whose only place is the first, or the one argument of a call it forwards
+// all its results to (second(pair(f))), which is handed the struct whatever
+// place the helper hands it back in.
+func (b handedBack) builds(expr ast.Expr) bool {
+	found := false
+	ast.Inspect(expr, func(node ast.Node) bool {
+		if found {
+			return false
+		}
+		switch typed := node.(type) {
+		case *ast.CompositeLit:
+			found = slices.ContainsFunc(builtRequests(b.info.TypeOf(typed)), b.isStruct)
+		case *ast.CallExpr:
+			places, _ := b.placesOf(typed)
+			found = len(places) > 0
+		}
+		return !found
+	})
+	return found
+}
+
+// isStruct reports whether named is the struct read for.
+func (b handedBack) isStruct(named *types.Named) bool { return named.Obj() == b.name }
+
+// placesOf returns the places a call of a helper of reachable that builds
+// the struct hands it back in, and whether expr is such a call.
+func (b handedBack) placesOf(expr ast.Expr) (map[int]bool, bool) {
+	call, isCall := ast.Unparen(expr).(*ast.CallExpr)
+	if !isCall {
+		return nil, false
+	}
+	fn, _ := calledFunc(b.info, call)
+	if fn == nil {
+		return nil, false
+	}
+	built, builds := b.reachable[funcKey(fn)][b.name]
+	return built.results, builds
 }
 
 // requestLiterals returns the request structs a composite literal in the
@@ -1118,7 +1314,7 @@ func (d helperDecl) requestLiterals(info *types.Info, bodies map[*types.Func]*as
 		for _, named := range builtRequests(info.TypeOf(lit)) {
 			literals[lit] = append(literals[lit], named)
 			if _, found := out[named.Obj()]; !found {
-				out[named.Obj()] = helperBuild{named: named, through: map[int][]*types.TypeName{}}
+				out[named.Obj()] = helperBuild{named: named, through: map[int][]*types.TypeName{}, results: map[int]bool{}}
 			}
 		}
 		return true
@@ -1147,7 +1343,7 @@ func (d helperDecl) requestLiterals(info *types.Info, bodies map[*types.Func]*as
 func mergeBuild(builds map[*types.TypeName]helperBuild, entry int, b build) bool {
 	existing, found := builds[b.named.Obj()]
 	if !found {
-		existing = helperBuild{named: b.named, through: map[int][]*types.TypeName{}}
+		existing = helperBuild{named: b.named, through: map[int][]*types.TypeName{}, results: map[int]bool{}}
 		builds[b.named.Obj()] = existing
 	}
 	if !b.reached {
