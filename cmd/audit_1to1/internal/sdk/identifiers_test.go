@@ -1207,15 +1207,19 @@ func TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept(t 
 // method and input field, its status and the record's route and
 // placeholder, spelled as the report spells them.
 var witnessIdentifierArguments = map[string]string{
-	"users.GetStatus Users.GetUserStatus users.GetStatusInput.UserID":                                                                 "declared tracked GET /users/:user_id/status user_id name-or-path",
-	"users.ListContributionEvents Users.ListUserContributionEvents users.ListContributionEventsInput.UserID":                          "declared tracked GET /users/:id/events id name-or-path",
-	"users.ListSSHKeysForUser Users.ListSSHKeysForUser users.ListSSHKeysForUserInput.UserID":                                          "declared tracked GET /users/:user_id/keys user_id name-or-path",
-	"containerregistry.GetRepository ContainerRegistry.GetSingleRegistryRepository containerregistry.GetRepositoryInput.RepositoryID": "id_only  GET /registry/repositories/:id id id",
-	"runners.Get Runners.GetRunnerDetails runners.GetInput.RunnerID":                                                                  "id_only  GET /runners/:id id id",
-	"runners.ListJobs Runners.ListRunnerJobs runners.ListJobsInput.RunnerID":                                                          "id_only  GET /runners/:id/jobs id id",
-	"runners.ListManagers Runners.ListRunnerManagers runners.ListManagersInput.RunnerID":                                              "id_only  GET /runners/:id/managers id id",
-	"runners.Remove Runners.RemoveRunner runners.RemoveInput.RunnerID":                                                                "id_only  DELETE /runners/:id id id",
-	"runners.Update Runners.UpdateRunnerDetails runners.UpdateInput.RunnerID":                                                         "id_only  PUT /runners/:id id id",
+	"users.GetStatus Users.GetUserStatus users.GetStatusInput.UserID":                                                                           "declared tracked GET /users/:user_id/status user_id name-or-path",
+	"users.ListContributionEvents Users.ListUserContributionEvents users.ListContributionEventsInput.UserID":                                    "declared tracked GET /users/:id/events id name-or-path",
+	"users.ListSSHKeysForUser Users.ListSSHKeysForUser users.ListSSHKeysForUserInput.UserID":                                                    "declared tracked GET /users/:user_id/keys user_id name-or-path",
+	"containerregistry.GetRepository ContainerRegistry.GetSingleRegistryRepository containerregistry.GetRepositoryInput.RepositoryID":           "id_only  GET /registry/repositories/:id id id",
+	"runners.Get Runners.GetRunnerDetails runners.GetInput.RunnerID":                                                                            "id_only  GET /runners/:id id id",
+	"runners.ListJobs Runners.ListRunnerJobs runners.ListJobsInput.RunnerID":                                                                    "id_only  GET /runners/:id/jobs id id",
+	"runners.ListManagers Runners.ListRunnerManagers runners.ListManagersInput.RunnerID":                                                        "id_only  GET /runners/:id/managers id id",
+	"runners.Remove Runners.RemoveRunner runners.RemoveInput.RunnerID":                                                                          "id_only  DELETE /runners/:id id id",
+	"runners.Update Runners.UpdateRunnerDetails runners.UpdateInput.RunnerID":                                                                   "id_only  PUT /runners/:id id id",
+	"jobtokenscope.AddGroupAllowlist JobTokenScope.AddGroupToJobTokenAllowlist jobtokenscope.AddGroupAllowlistInput.ProjectID":                  "id_only  POST /projects/:id/job_token_scope/groups_allowlist id id",
+	"jobtokenscope.AddProjectAllowlist JobTokenScope.AddProjectToJobScopeAllowList jobtokenscope.AddProjectAllowlistInput.ProjectID":            "id_only  POST /projects/:id/job_token_scope/allowlist id id",
+	"jobtokenscope.RemoveGroupAllowlist JobTokenScope.RemoveGroupFromJobTokenAllowlist jobtokenscope.RemoveGroupAllowlistInput.ProjectID":       "id_only  DELETE /projects/:id/job_token_scope/groups_allowlist/:target_group_id id id",
+	"jobtokenscope.RemoveProjectAllowlist JobTokenScope.RemoveProjectFromJobScopeAllowList jobtokenscope.RemoveProjectAllowlistInput.ProjectID": "id_only  DELETE /projects/:id/job_token_scope/allowlist/:target_project_id id id",
 }
 
 // witnessSDKNarrowed is what the witness expects client-go v3.30.0 to

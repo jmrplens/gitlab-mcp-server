@@ -179,6 +179,7 @@ for the fork, branch, fix, test and MR workflow.
   - [A release update with an empty `released_at` answers 500 from a not-null violation](#a-release-update-with-an-empty-released_at-answers-500-from-a-not-null-violation)
   - [A project update that sends only `mirror_branch_regex` is refused as sending nothing](#a-project-update-that-sends-only-mirror_branch_regex-is-refused-as-sending-nothing)
   - [A service account update with an empty email keeps the address, as GitLab intends](#a-service-account-update-with-an-empty-email-keeps-the-address-as-gitlab-intends)
+  - [The job token allowlist writes refuse a project path their page says they accept](#the-job-token-allowlist-writes-refuse-a-project-path-their-page-says-they-accept)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -422,6 +423,7 @@ readable without opening the tracker:
 | 154 | gitlab-org/gitlab | [A release update with an empty `released_at` answers 500](#a-release-update-with-an-empty-released_at-answers-500-from-a-not-null-violation) | Yes, by the merge request | Yes, [gitlab-org/gitlab!266907](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266907), opened and readied on 2026-11-02, waiting on its reviewer | No | No | None needed: `release.update` sends `released_at` only when it is set |
 | 155 | gitlab-org/gitlab | [A project update with only `mirror_branch_regex` is refused as sending nothing](#a-project-update-that-sends-only-mirror_branch_regex-is-refused-as-sending-nothing) | Yes, by the merge request | Yes, [gitlab-org/gitlab!266909](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266909), opened and readied on 2026-11-02; its first reviewer found it good the same day and asked a second for a review before merging, with no approval yet; it adds all four pull mirror params the list leaves out | No | No | None yet; refusing the field alone before the request is part of issue 1306 |
 | 156 | gitlab-org/gitlab | [A service account update with an empty email keeps the address, as GitLab intends](#a-service-account-update-with-an-empty-email-keeps-the-address-as-gitlab-intends) | Not needed: GitLab drops a blank value on purpose since [gitlab-org/gitlab!215942](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215942), merged on 2025-12-15; unsetting the address is another user's open feature request, [gitlab-org/gitlab#631255](https://gitlab.com/gitlab-org/gitlab/-/issues/631255) | No, and none is coming from here | No, works as intended upstream | No | None needed: the three service account updates send `email` only when it is set |
+| 157 | gitlab-org/gitlab | [The job token allowlist writes refuse a project path their page says they accept](#the-job-token-allowlist-writes-refuse-a-project-path-their-page-says-they-accept) | No; a fix is to be prepared, and its merge request is linked here when opened | No | No | No | Yes, the four allowlist writes take `project_id` as the numeric ID alone |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -17271,6 +17273,64 @@ answer GitLab means to give.
 1306, on 2026-11-01, which read each account's address back from the
 database after the request; reading the service and its history the same day
 showed the filter is intended.
+
+### The job token allowlist writes refuse a project path their page says they accept
+
+- **Reported**: no. The fix to send is the code's rather than the page's:
+  the four `requires :id` declarations below take `types: [String, Integer]`
+  as the reads beside them do, with a request spec per route. It is to be
+  prepared from the community fork, and its merge request is linked here when
+  it is opened. Searched on 2026-11-02, no open issue or merge request
+  upstream is about it.
+- **In review**: no.
+- **Merged**: no. Read at GitLab master `e0f678adfc1c` (2026-11-01), and
+  again at `d3dae8923596` (2026-11-02), where nothing below has changed: the
+  four writes still declare `type: Integer` at the same lines, the reads
+  `types: [String, Integer]`, and the page "integer or string" on every
+  route. The API file was last changed on 2026-10-06 (`d5978261`) and the
+  page on 2026-07-30 (`e5fabf7e`).
+- **Blocking**: no. The routes take the numeric ID, and a caller who sends
+  one is served.
+- **Workaround**: yes. The four allowlist writes, `job.token_scope_add_project`,
+  `job.token_scope_remove_project`, `job.token_scope_add_group` and
+  `job.token_scope_remove_group` (`internal/tools/jobtokenscope/job_token_scope.go`),
+  take `project_id` as an integer, described as the numeric ID the route
+  takes, and refuse a missing one before the request;
+  `TestAllowlistWrites_ProjectID_IsTheNumericIDTheRouteTakes` holds the four
+  schemas. The reads and the settings routes of the same API declare
+  `types: [String, Integer]` and keep taking either spelling. It retires when
+  the routes accept a path, or when the page says they do not, in which case
+  only the description's reason changes.
+
+**Where**: `lib/api/project_job_token_scope.rb` declares `requires :id, ...,
+type: Integer` on `POST :id/job_token_scope/allowlist` (line 124),
+`POST :id/job_token_scope/groups_allowlist` (line 166),
+`DELETE :id/job_token_scope/groups_allowlist/:target_group_id` (line 207) and
+`DELETE :id/job_token_scope/allowlist/:target_project_id` (line 250), while the reads
+beside them (`GET :id/job_token_scope`, `GET :id/job_token_scope/allowlist`,
+`GET :id/job_token_scope/groups_allowlist`) declare `types: [String, Integer]`.
+`doc/api/project_job_token_scopes.md` documents `id` as "integer or string",
+"ID or URL-encoded path of the project", on every route of the page, the four
+writes included.
+
+**What**: Grape coerces the path segment to an Integer and answers a path with
+`400 {"error":"id is invalid"}`. Measured on 2026-11-01 against
+`gitlab/gitlab-ce:19.5.0-ce.0` and `gitlab/gitlab-ee:19.5.0-ee.0` by the
+`fake:perfect` model evaluation run, whose replay of
+`job.token_scope_remove_project` named the project by its path:
+`DELETE /api/v4/projects/e2e-tester%2Fjobtokensource-.../job_token_scope/allowlist/122`
+answered `400 {error: id is invalid}`, and the project stayed on the
+allowlist. The route's own failure list names 400, and the page promises the
+path, so either the parameter or the page is wrong.
+
+**What it costs this server**: a schema that says the numeric ID where every
+other project route here takes either spelling, so a model given a path has
+to read the ID first. Until 2026-11-01 the inputs promised a path, as the page
+does, and a call that followed them was refused by GitLab after it was sent.
+
+**How we found it**: the cases MT-066 and MS-005 of the model evaluation, whose
+`fake:perfect` replay failed its recipe check on 2026-11-01 because the
+removal had been refused.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

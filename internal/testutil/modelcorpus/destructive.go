@@ -30,6 +30,14 @@ package modelcorpus
 // rewritten, because the prompt audit reads a multi-word argument name as the
 // phrase it reads as and those sentences hand the answer over.
 //
+// One text changed after the port, and it changes what the model is asked:
+// MT-066 gives the model the project's numeric ID and not its path. The job
+// token allowlist writes take project_id as an integer, because GitLab's
+// routes refuse a path although its page says they take one
+// (docs/development/upstream-bugs.md, row 157), so a path is a value the
+// schema refuses and the case would be completable only through a lookup call
+// the key does not name: MT-007's reason in mutating.go.
+//
 //nolint:maintidx // one table of data, cyclomatic complexity 1: see readCases.
 func destructiveCases() []Case {
 	return []Case{
@@ -192,10 +200,10 @@ func destructiveCases() []Case {
 		{
 			ID: "MT-066",
 			Prompt: "Remove project `{{ .Facts.job_token_target_project_id }}` from the CI job token " +
-				"allowlist of project `{{ .Facts.project_path }}`.",
+				"allowlist of project `{{ .Facts.project_id }}`.",
 			Recipe: RecipeJobTokenScope,
 			key: Key{Steps: []Step{
-				step("job.token_scope_remove_project", project(),
+				step("job.token_scope_remove_project", req("project_id", fact(FactProjectID)),
 					req("target_project_id", fact(FactJobTokenTargetProjectID))),
 			}},
 		},
