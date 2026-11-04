@@ -14,7 +14,9 @@
 #     package under internal/, which is all the binary links of this module,
 #     and compiling every test. It is red from the first release after the
 #     pin until the bump answers what that release changed, and its summary
-#     is that bump's work list, counter by counter against the pin.
+#     is that bump's work list: the counters whose totals differ from the pin,
+#     and every finding the newest report holds, none of which the pin holds
+#     once it has passed the gate.
 #  2. citations: every doc/api page an adjudication table cites still reads at
 #     master (make audit-1to1-validate-docs). A page GitLab renamed or removed
 #     leaves the decision that cites it resting on nothing.
@@ -184,20 +186,58 @@ jobs:
               echo "package under \`internal/\` and every test compile against it, and the gate finds"
               echo "nothing there."
             else
-              echo "**\`${NEWEST}\` moves what the gate holds.** The counters below are the bump's work list:"
-              echo "each one that differs from the pin is something the bump has to answer, and the"
-              echo "report artifact carries every finding."
+              echo "**\`${NEWEST}\` moves what the gate holds.**"
             fi
+            # Both reports exist only once the gate has passed at the pin,
+            # since every step after it is skipped otherwise, so the pin's
+            # counters of findings are all 0 and its lists empty here: a
+            # finding at the newest release moves its counter, and the newest
+            # report's lists are the whole difference.
             if [ -f "${RUNNER_TEMP}/pinned.json" ] && [ -f "${RUNNER_TEMP}/newest.json" ]; then
-              echo
-              echo "| Counter | At the pin | At the newest |"
-              echo "| --- | ---: | ---: |"
-              jq -r --slurpfile newest "${RUNNER_TEMP}/newest.json" \
+              rows="$(jq -r --slurpfile newest "${RUNNER_TEMP}/newest.json" \
                 '.summary as $pin | $newest[0].summary as $new
                  | ($pin + $new | keys_unsorted)[]
                  | select($pin[.] != $new[.])
                  | "| `\(.)` | \($pin[.] // 0) | \($new[.] // 0) |"' \
-                "${RUNNER_TEMP}/pinned.json"
+                "${RUNNER_TEMP}/pinned.json")"
+              if [ -n "${rows}" ]; then
+                echo
+                if [ "${GATE}" = "success" ]; then
+                  echo "The counters below are the ones whose totals differ from the pin, and none of them"
+                  echo "is a finding, since the gate passes at \`${NEWEST}\`."
+                else
+                  echo "The counters below are the ones whose totals differ from the pin, which passed the"
+                  echo "gate, so every counter that holds a finding is among them: they say how many and"
+                  echo "where, and the findings listed after them name each one. The report artifact carries"
+                  echo "every finding whole."
+                fi
+                echo
+                echo "| Counter | At the pin | At the newest |"
+                echo "| --- | ---: | ---: |"
+                echo "${rows}"
+              fi
+              # Every finding by the list it is in and what it says, since
+              # -gaps-only keeps nothing else in the lists: the counters say
+              # how many, this names which.
+              jq -r 'paths(type == "array") as $p
+                | select(all($p[]; type == "string"))
+                | ($p | join(".")) as $list
+                | getpath($p)[]
+                | "\($list) \(tojson)"' "${RUNNER_TEMP}/newest.json" | sort -u > "${RUNNER_TEMP}/findings.txt"
+              if [ -s "${RUNNER_TEMP}/findings.txt" ]; then
+                count="$(wc -l < "${RUNNER_TEMP}/findings.txt")"
+                echo
+                echo "<details><summary>${count} findings at \`${NEWEST}\`</summary>"
+                echo
+                echo '```text'
+                head -n 300 "${RUNNER_TEMP}/findings.txt" | cut -c1-400
+                if [ "${count}" -gt 300 ]; then
+                  echo "... and $((count - 300)) more, in the report artifact"
+                fi
+                echo '```'
+                echo
+                echo "</details>"
+              fi
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
