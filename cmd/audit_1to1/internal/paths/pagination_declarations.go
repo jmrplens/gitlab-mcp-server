@@ -77,6 +77,12 @@ const (
 // not one of these.
 var declaredUnpaginatedCollections = []paginationDeclaration{
 	{
+		Package:  customAttributesPkg,
+		Action:   "admin.custom_attr_list",
+		Category: categoryEndpointNotPaginated,
+		Reason:   "the attributes of a user, a group or a project come from GET /users/:id/custom_attributes and its two siblings, which the record holds with no page and no per_page, and whose handler presents resource.custom_attributes without paginate (lib/api/custom_attributes_endpoints.rb at v19.5.0-ee). What put this on the list is GET /users, the read of the same action that finds the one user a username names, which GitLab does paginate.",
+	},
+	{
 		Package:  toolsDir + "/epics",
 		Action:   "group.epic_get_links",
 		Category: categoryEndpointNotPaginated,

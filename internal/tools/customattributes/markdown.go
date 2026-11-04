@@ -6,6 +6,8 @@ package customattributes
 import (
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -18,6 +20,39 @@ var (
 	hintDeleteAttribute = toolutil.HintAction("admin.custom_attr_delete", "remove it")
 	hintVerifyAttribute = toolutil.HintAction("admin.custom_attr_get", "verify the value")
 )
+
+// unresolvedOutput is what an action answers when the path or the username in
+// resource_id names nothing GitLab could find.
+type unresolvedOutput struct {
+	ResourceType string `json:"resource_type"`
+	Identifier   string `json:"identifier"`
+}
+
+// unresolvedAnswers says, for each resource type, what the not-found result
+// calls it and where its name can be read from.
+var unresolvedAnswers = map[string]struct {
+	label string
+	hints []string
+}{
+	resourceUser: {"User", []string{
+		"Use user.list to search users by username or email",
+		"Pass the user's numeric ID as resource_id if the username has changed",
+	}},
+	resourceGroup: {"Group", []string{
+		"Use group.list to find the group's full path",
+		"Pass the group's numeric ID as resource_id if the group has moved",
+	}},
+	resourceProject: {"Project", []string{
+		"Use project.list to find the project's full path",
+		"Pass the project's numeric ID as resource_id if the project has moved",
+	}},
+}
+
+// formatUnresolved renders the not-found result of a name nothing answers to.
+func formatUnresolved(out unresolvedOutput) *mcp.CallToolResult {
+	answer := unresolvedAnswers[out.ResourceType]
+	return toolutil.NotFoundResult(answer.label, out.Identifier, answer.hints...)
+}
 
 // FormatListMarkdown renders custom attributes as the collection they are: one
 // table row per key and value, with both escaped, since an attribute is
@@ -73,4 +108,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatGetMarkdown)
 	toolutil.RegisterMarkdown(FormatSetMarkdown)
+	toolutil.RegisterMarkdownResult(formatUnresolved)
 }

@@ -8,10 +8,13 @@ package projectstoragemoves
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -301,7 +304,7 @@ func TestRetrieveForProject_Ordering(t *testing.T) {
 	}))
 
 	in := ListForProjectInput{
-		ProjectID: 42,
+		ProjectID: "42",
 		OrderBy:   "id",
 		Sort:      "asc",
 	}
@@ -331,7 +334,7 @@ func TestRetrieveForProject(t *testing.T) {
 			// instance-wide one does; both are asserted here because each is
 			// filled by a statement of this handler's own.
 			name:  "returns moves for project with pagination",
-			input: ListForProjectInput{ProjectID: 42},
+			input: ListForProjectInput{ProjectID: "42"},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/repository_storage_moves")
@@ -363,7 +366,7 @@ func TestRetrieveForProject(t *testing.T) {
 		},
 		{
 			name:  "returns error on 404 not found",
-			input: ListForProjectInput{ProjectID: 999},
+			input: ListForProjectInput{ProjectID: "999"},
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
 			},
@@ -371,7 +374,7 @@ func TestRetrieveForProject(t *testing.T) {
 		},
 		{
 			name:  "returns error on 403 forbidden",
-			input: ListForProjectInput{ProjectID: 42},
+			input: ListForProjectInput{ProjectID: "42"},
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
 			},
@@ -407,7 +410,7 @@ func TestRetrieveForProject_ContextCanceled(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := RetrieveForProject(ctx, client, ListForProjectInput{ProjectID: 42})
+	_, err := RetrieveForProject(ctx, client, ListForProjectInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
 	}
@@ -531,7 +534,7 @@ func TestGetForProject(t *testing.T) {
 	}{
 		{
 			name:  "returns storage move for project",
-			input: ProjectMoveInput{ProjectID: 42, ID: 1},
+			input: ProjectMoveInput{ProjectID: "42", ID: 1},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/repository_storage_moves/1")
@@ -552,7 +555,7 @@ func TestGetForProject(t *testing.T) {
 		},
 		{
 			name:    "returns error for missing id",
-			input:   ProjectMoveInput{ProjectID: 42},
+			input:   ProjectMoveInput{ProjectID: "42"},
 			handler: func(http.ResponseWriter, *http.Request) {},
 			wantErr: true,
 		},
@@ -564,7 +567,7 @@ func TestGetForProject(t *testing.T) {
 		},
 		{
 			name:  "returns error on 404 not found",
-			input: ProjectMoveInput{ProjectID: 42, ID: 999},
+			input: ProjectMoveInput{ProjectID: "42", ID: 999},
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 			},
@@ -595,7 +598,7 @@ func TestGetForProject_ContextCanceled(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := GetForProject(ctx, client, ProjectMoveInput{ProjectID: 42, ID: 1})
+	_, err := GetForProject(ctx, client, ProjectMoveInput{ProjectID: "42", ID: 1})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
 	}
@@ -614,7 +617,7 @@ func TestSchedule(t *testing.T) {
 	}{
 		{
 			name:  "schedules move with destination",
-			input: ScheduleInput{ProjectID: 42, DestinationStorageName: &dest},
+			input: ScheduleInput{ProjectID: "42", DestinationStorageName: &dest},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodPost)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/repository_storage_moves")
@@ -633,7 +636,7 @@ func TestSchedule(t *testing.T) {
 		},
 		{
 			name:  "schedules move without destination (auto-select)",
-			input: ScheduleInput{ProjectID: 42},
+			input: ScheduleInput{ProjectID: "42"},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				// An unset destination must be absent rather than sent empty:
 				// GitLab picks a shard by weight only when the key is missing.
@@ -655,7 +658,7 @@ func TestSchedule(t *testing.T) {
 		},
 		{
 			name:  "returns error on 404 not found",
-			input: ScheduleInput{ProjectID: 999},
+			input: ScheduleInput{ProjectID: "999"},
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
 			},
@@ -663,7 +666,7 @@ func TestSchedule(t *testing.T) {
 		},
 		{
 			name:  "returns error on 403 forbidden",
-			input: ScheduleInput{ProjectID: 42},
+			input: ScheduleInput{ProjectID: "42"},
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
 			},
@@ -694,7 +697,7 @@ func TestSchedule_ContextCanceled(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := Schedule(ctx, client, ScheduleInput{ProjectID: 42})
+	_, err := Schedule(ctx, client, ScheduleInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
 	}
@@ -951,7 +954,7 @@ func TestProjectStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
 		}},
 		{Name: "retrieve_for_project", Call: func() error {
 			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
-			_, err := RetrieveForProject(context.Background(), client, ListForProjectInput{ProjectID: 42})
+			_, err := RetrieveForProject(context.Background(), client, ListForProjectInput{ProjectID: "42"})
 			return err
 		}},
 		{Name: "get", Call: func() error {
@@ -961,12 +964,12 @@ func TestProjectStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
 		}},
 		{Name: "get_for_project", Call: func() error {
 			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
-			_, err := GetForProject(context.Background(), client, ProjectMoveInput{ProjectID: 42, ID: 1})
+			_, err := GetForProject(context.Background(), client, ProjectMoveInput{ProjectID: "42", ID: 1})
 			return err
 		}},
 		{Name: "schedule", Call: func() error {
 			client := poisoned(`{"id":1,"state":"scheduled","error_message":42}`)
-			_, err := Schedule(context.Background(), client, ScheduleInput{ProjectID: 42})
+			_, err := Schedule(context.Background(), client, ScheduleInput{ProjectID: "42"})
 			return err
 		}},
 	})
@@ -978,4 +981,161 @@ func mustParseTime(s string) time.Time {
 		panic(err)
 	}
 	return t
+}
+
+// requestLog records the escaped path of each request a mock receives, in the
+// order they arrive, from the goroutines it answers them on.
+type requestLog struct {
+	mu   sync.Mutex
+	sent []string
+}
+
+// add records one request.
+func (l *requestLog) add(r *http.Request) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sent = append(l.sent, r.Method+" "+r.URL.EscapedPath())
+}
+
+// requests lists what was recorded.
+func (l *requestLog) requests() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.sent)
+}
+
+// projectScopedCalls is one call of each handler whose route names the project,
+// with the route it reaches once the project is known.
+var projectScopedCalls = []struct {
+	name, route string
+	call        func(ctx context.Context, client *gitlabclient.Client, project toolutil.StringOrInt) error
+}{
+	{"retrieve_for_project", "GET /api/v4/projects/42/repository_storage_moves", func(ctx context.Context, client *gitlabclient.Client, project toolutil.StringOrInt) error {
+		_, err := RetrieveForProject(ctx, client, ListForProjectInput{ProjectID: project})
+		return err
+	}},
+	{"get_for_project", "GET /api/v4/projects/42/repository_storage_moves/1", func(ctx context.Context, client *gitlabclient.Client, project toolutil.StringOrInt) error {
+		_, err := GetForProject(ctx, client, ProjectMoveInput{ProjectID: project, ID: 1})
+		return err
+	}},
+	{"schedule", "POST /api/v4/projects/42/repository_storage_moves", func(ctx context.Context, client *gitlabclient.Client, project toolutil.StringOrInt) error {
+		_, err := Schedule(ctx, client, ScheduleInput{ProjectID: project})
+		return err
+	}},
+}
+
+// projectAnswer answers the lookup with the project and any other route with a
+// move, or a list of one on the route that lists.
+func projectAnswer(requests *requestLog) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requests.add(r)
+		switch {
+		case r.URL.EscapedPath() == "/api/v4/projects/top%2Fapp":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42}`)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "repository_storage_moves"):
+			testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, storageMoveJSON)
+		}
+	}
+}
+
+// TestProjectScoped_APath_IsReadIntoItsIDThenTheRouteIsCalled verifies each
+// handler sends one read of the path and then its route under the ID the read
+// found, which is the point of the widened field: client-go's method takes an
+// integer and GitLab takes the path.
+func TestProjectScoped_APath_IsReadIntoItsIDThenTheRouteIsCalled(t *testing.T) {
+	for _, tc := range projectScopedCalls {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests requestLog
+			client := testutil.NewTestClient(t, projectAnswer(&requests))
+			if err := tc.call(t.Context(), client, "top/app"); err != nil {
+				t.Fatalf("handler error: %v", err)
+			}
+			want := []string{"GET /api/v4/projects/top%2Fapp", tc.route}
+			if got := requests.requests(); !slices.Equal(got, want) {
+				t.Errorf("requests = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// TestProjectScoped_ANumber_SendsNoLookup verifies a number goes straight to the
+// route, so a caller that names a project by its ID pays for no second request,
+// and one hidden or pending deletion, which the read cannot find, stays reachable.
+func TestProjectScoped_ANumber_SendsNoLookup(t *testing.T) {
+	for _, tc := range projectScopedCalls {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests requestLog
+			client := testutil.NewTestClient(t, projectAnswer(&requests))
+			if err := tc.call(t.Context(), client, "42"); err != nil {
+				t.Fatalf("handler error: %v", err)
+			}
+			if got := requests.requests(); !slices.Equal(got, []string{tc.route}) {
+				t.Errorf("requests = %q, want only %q", got, tc.route)
+			}
+		})
+	}
+}
+
+// TestResolveProjectID_AValueNoProjectCanHave_IsRefusedWithoutARequest verifies
+// nothing, zero and a negative number name the field and send nothing, and the
+// lowest number a project can carry goes through.
+func TestResolveProjectID_AValueNoProjectCanHave_IsRefusedWithoutARequest(t *testing.T) {
+	for _, value := range []toolutil.StringOrInt{"", "0", "-1"} {
+		t.Run("refused "+string(value), func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			id, err := resolveProjectID(t.Context(), client, "operation", value)
+			if err == nil || !strings.Contains(err.Error(), "project_id is required") || id != 0 {
+				t.Errorf("resolveProjectID(%q) = %d, %v, want 0 and project_id is required", value, id, err)
+			}
+		})
+	}
+	t.Run("the lowest ID", func(t *testing.T) {
+		client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+		id, err := resolveProjectID(t.Context(), client, "operation", "1")
+		if err != nil || id != 1 {
+			t.Errorf("resolveProjectID(1) = %d, %v, want 1 and no error", id, err)
+		}
+	})
+}
+
+// TestResolveProjectID_CarriesTheContext verifies the read passes the caller's
+// context, which client-go takes only as a request option.
+func TestResolveProjectID_CarriesTheContext(t *testing.T) {
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":42}`)
+	})
+	if _, err := resolveProjectID(ctx, client, "operation", "top/app"); !errors.Is(err, context.Canceled) {
+		t.Errorf("resolveProjectID() error = %v, want context.Canceled", err)
+	}
+}
+
+// TestResolveProjectID_EachRefusal_ComesToWhatItMeans verifies the two ends of a
+// failed read: GitLab's 404 is a path that names nothing, keeping the answer
+// behind it, and any other status stays GitLab's refusal under the operation's
+// label.
+func TestResolveProjectID_EachRefusal_ComesToWhatItMeans(t *testing.T) {
+	respond := func(status int) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, status, `{"message":"refused"}`)
+		}))
+	}
+
+	_, err := resolveProjectID(t.Context(), respond(http.StatusNotFound), "operation", "a/b")
+	miss, ok := errors.AsType[*unresolvedError](err)
+	if !ok {
+		t.Fatalf("a 404 = %v, want an unresolved path", err)
+	}
+	if miss.path != "a/b" || !toolutil.IsHTTPStatus(miss, http.StatusNotFound) {
+		t.Errorf("unresolved = %+v, want the path a/b and GitLab's 404", miss)
+	}
+	if want := `no project with the path "a/b" was found`; miss.Error() != want {
+		t.Errorf("Error() = %q, want %q", miss.Error(), want)
+	}
+
+	_, err = resolveProjectID(t.Context(), respond(http.StatusForbidden), "operation", "a/b")
+	if _, isMiss := errors.AsType[*unresolvedError](err); isMiss || !strings.HasPrefix(err.Error(), "operation:") {
+		t.Errorf("a 403 = %#v, want GitLab's refusal under the operation's label", err)
+	}
 }

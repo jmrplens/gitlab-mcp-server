@@ -4,6 +4,9 @@
 package projectstoragemoves
 
 import (
+	"context"
+	"errors"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -28,10 +31,26 @@ const (
 func guidanceProjectID() toolutil.ParameterGuidance {
 	return toolutil.ParameterGuidance{
 		SemanticRole:     "scope_project",
-		ValueSource:      "Numeric project ID whose repository storage move(s) you want to inspect or schedule.",
-		ExampleBinding:   `params.project_id:42`,
-		CommonConfusions: []string{"This endpoint takes the numeric project ID only, not a namespace path or the storage move ID."},
+		ValueSource:      "Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule.",
+		ExampleBinding:   `params.project_id:"group/project"`,
+		CommonConfusions: []string{"This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone."},
 	}
+}
+
+// answerUnresolved returns the route with a path that names nothing answered by
+// a not-found result in place of the error, on every later rebinding as well.
+// Any other error passes through, a 404 of the storage move route with its hint
+// among them.
+func answerUnresolved(route toolutil.ActionRoute) toolutil.ActionRoute {
+	return route.WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if miss, ok := errors.AsType[*unresolvedError](err); ok {
+				return unresolvedOutput{Path: miss.path}, nil
+			}
+			return result, err
+		}
+	})
 }
 
 // guidanceMoveID describes the storage move id parameter.
@@ -94,7 +113,7 @@ func retrieveForProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	opts.RelatedActions = []string{actionGetForProject, actionSchedule, actionRetrieveAll}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{"project_id": guidanceProjectID()}
 	opts.IndividualTool.Description = "List repository storage moves for a single project. Returns: each move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_get_project_storage_move_for_project, gitlab_schedule_project_storage_move."
-	return toolutil.NewReadActionSpec("retrieve_project", toolutil.RouteAction(client, RetrieveForProject), opts)
+	return toolutil.NewReadActionSpec("retrieve_project", answerUnresolved(toolutil.RouteAction(client, RetrieveForProject)), opts)
 }
 
 func getSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -114,7 +133,7 @@ func getForProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	opts.RelatedActions = []string{actionRetrieveOne, actionGet, actionSchedule}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{"project_id": guidanceProjectID(), "id": guidanceMoveID()}
 	opts.IndividualTool.Description = "Get a single repository storage move for a specific project by project_id and move id. Returns: the move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves."
-	return toolutil.NewReadActionSpec("get_project_for_project", toolutil.RouteAction(client, GetForProject), opts)
+	return toolutil.NewReadActionSpec("get_project_for_project", answerUnresolved(toolutil.RouteAction(client, GetForProject)), opts)
 }
 
 func scheduleSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -124,7 +143,7 @@ func scheduleSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	opts.RelatedActions = []string{actionRetrieveOne, actionGetForProject, actionScheduleAll}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{"project_id": guidanceProjectID(), "destination_storage_name": guidanceDestination()}
 	opts.IndividualTool.Description = "Schedule a repository storage move for a single project to another Gitaly storage shard. Returns: the created move's id, state, source and destination shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves, gitlab_schedule_all_project_storage_moves."
-	return toolutil.NewCreateActionSpec("schedule_project", toolutil.RouteAction(client, Schedule), opts)
+	return toolutil.NewCreateActionSpec("schedule_project", answerUnresolved(toolutil.RouteAction(client, Schedule)), opts)
 }
 
 func scheduleAllSpec(client *gitlabclient.Client) toolutil.ActionSpec {

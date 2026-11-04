@@ -496,6 +496,58 @@ func TestAdmin_CustomAttributes(t *testing.T) {
 	harness.DoVoid(s, actionAdminCustomAttrDelete, base)
 }
 
+// TestAdmin_CustomAttributes_ByName names a user by username and a project and
+// a group by path, which is what GitLab's routes take and client-go's methods
+// do not: each action reads the name into its ID first. An attribute set by name
+// is read back by ID, which shows the read found the resource the name names,
+// then listed and deleted by name, and a name that names nothing is refused as
+// not found, naming it.
+func TestAdmin_CustomAttributes_ByName(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin), harness.Locks(harness.LockCurrentUserState))
+	s := e.On(harness.SurfaceMeta)
+
+	me := harness.Do[users.Output](s, actionUserCurrent, nil)
+	if me.Username == "" {
+		e.T.Fatalf("user.current answered %+v, want the authenticated user with a username", me)
+	}
+	project := fixture.NewProject(e, fixture.WithNamePrefix("caname"))
+	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("caname"))
+
+	const key = "e2e_by_name_attr"
+	for _, resource := range []struct {
+		resourceType, name, missing string
+		id                          int64
+	}{
+		{"user", me.Username, "e2e-no-such-user", me.ID},
+		{"project", project.Path, "e2e-no-such-namespace/no-such-project", project.ID},
+		{"group", group.Path, "e2e-no-such-namespace/no-such-group", group.ID},
+	} {
+		t.Run(resource.resourceType, func(t *testing.T) {
+			byName := map[string]any{"resource_type": resource.resourceType, "resource_id": resource.name, "key": key}
+			set := harness.Do[customattributes.SetOutput](s, actionAdminCustomAttrSet, withParams(byName, map[string]any{"value": "by-name"}))
+			if set.Key != key || set.Value != "by-name" {
+				t.Fatalf("custom_attr_set by name answered key=%q value=%q, want %q by-name", set.Key, set.Value, key)
+			}
+			adminDeferDelete(e, s, "custom attribute of "+resource.name, actionAdminCustomAttrDelete, byName)
+
+			byID := map[string]any{"resource_type": resource.resourceType, "resource_id": resource.id, "key": key}
+			if got := harness.Do[customattributes.GetOutput](s, actionAdminCustomAttrGet, byID); got.Value != "by-name" {
+				t.Errorf("custom_attr_get by ID answered value=%q, want what the set by name wrote", got.Value)
+			}
+			list := harness.Do[customattributes.ListOutput](s, actionAdminCustomAttrList, map[string]any{"resource_type": resource.resourceType, "resource_id": resource.name})
+			if len(list.Attributes) == 0 {
+				t.Errorf("custom_attr_list by name answered no attributes after the set")
+			}
+			harness.DoVoid(s, actionAdminCustomAttrDelete, byName)
+
+			refused := harness.Refused(s, actionAdminCustomAttrGet, map[string]any{
+				"resource_type": resource.resourceType, "resource_id": resource.missing, "key": key,
+			}, harness.FailureNotFound)
+			assertMentions(e, "a name that names nothing", refused, resource.missing)
+		})
+	}
+}
+
 // TestAdmin_DependencyProxyPurge schedules the dependency proxy cache purge
 // for a disposable group, which GitLab accepts even on a group whose proxy
 // cache was never populated.

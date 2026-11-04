@@ -4,6 +4,9 @@
 package groupstoragemoves
 
 import (
+	"context"
+	"errors"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -31,6 +34,22 @@ type groupStorageMoveMeta struct {
 	description string
 }
 
+// answerUnresolved returns the route with a path that names nothing answered by
+// a not-found result in place of the error, on every later rebinding as well.
+// Any other error passes through, a 404 of the storage move route with its hint
+// among them.
+func answerUnresolved(route toolutil.ActionRoute) toolutil.ActionRoute {
+	return route.WrapHandler(func(next toolutil.ActionFunc) toolutil.ActionFunc {
+		return func(ctx context.Context, input map[string]any) (any, error) {
+			result, err := next(ctx, input)
+			if miss, ok := errors.AsType[*unresolvedError](err); ok {
+				return unresolvedOutput{Path: miss.path}, nil
+			}
+			return result, err
+		}
+	})
+}
+
 // ActionSpecs returns canonical specs for group repository storage move actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -41,8 +60,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			description: "List all group repository storage moves across the instance. Returns: storage moves with state, source and destination storage names, group reference, creation time, and pagination metadata. " +
 				"See also: gitlab_retrieve_group_storage_moves, gitlab_get_group_storage_move, gitlab_schedule_all_group_storage_moves.",
 		}),
-		groupStorageMoveReadSpec("retrieve_group", toolutil.RouteAction(client, RetrieveForGroup), "gitlab_retrieve_group_storage_moves", groupStorageMoveMeta{
-			usage:   "List repository storage moves for one group by numeric group ID.",
+		groupStorageMoveReadSpec("retrieve_group", answerUnresolved(toolutil.RouteAction(client, RetrieveForGroup)), "gitlab_retrieve_group_storage_moves", groupStorageMoveMeta{
+			usage:   "List repository storage moves for one group by its ID or full path.",
 			aliases: []string{"list storage moves for a group", "group repository storage moves", "moves for group"},
 			related: []string{actionRetrieveAllGroup, actionGetGroupForGroup, actionScheduleGroup},
 			description: "List repository storage moves for a single group. Returns: the group's storage moves with state, source and destination storage names, creation time, and pagination metadata. " +
@@ -55,14 +74,14 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			description: "Get a single group repository storage move by ID. Returns: the storage move with state, source and destination storage names, group reference, and creation time. " +
 				"See also: gitlab_retrieve_all_group_storage_moves, gitlab_get_group_storage_move_for_group.",
 		}),
-		groupStorageMoveReadSpec("get_group_for_group", toolutil.RouteAction(client, GetForGroup), "gitlab_get_group_storage_move_for_group", groupStorageMoveMeta{
-			usage:   "Get one repository storage move scoped to a specific group by group ID and storage move ID.",
+		groupStorageMoveReadSpec("get_group_for_group", answerUnresolved(toolutil.RouteAction(client, GetForGroup)), "gitlab_get_group_storage_move_for_group", groupStorageMoveMeta{
+			usage:   "Get one repository storage move scoped to a specific group by the group's ID or full path and the storage move ID.",
 			aliases: []string{"get a storage move for a group", "show group-scoped storage move", "group storage move for group"},
 			related: []string{actionRetrieveGroup, actionGetGroup},
 			description: "Get a single repository storage move for a specific group. Returns: the storage move with state, source and destination storage names, group reference, and creation time. " +
 				"See also: gitlab_retrieve_group_storage_moves, gitlab_get_group_storage_move.",
 		}),
-		groupStorageMoveCreateSpec("schedule_group", toolutil.RouteAction(client, Schedule), "gitlab_schedule_group_storage_move", groupStorageMoveMeta{
+		groupStorageMoveCreateSpec("schedule_group", answerUnresolved(toolutil.RouteAction(client, Schedule)), "gitlab_schedule_group_storage_move", groupStorageMoveMeta{
 			usage:   "Schedule a repository storage move for one group to a destination Gitaly shard.",
 			aliases: []string{"schedule a storage move for a group", "move group repository to another shard", "migrate group gitaly storage"},
 			related: []string{actionRetrieveGroup, actionGetGroupForGroup, actionScheduleAllGroup},

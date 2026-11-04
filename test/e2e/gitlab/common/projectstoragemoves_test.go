@@ -31,6 +31,9 @@ const (
 	missingStorage = "e2e-missing-storage"
 )
 
+// missingProjectPath is a project path nothing on an instance answers to.
+const missingProjectPath = "e2e-no-such-namespace/no-such-project"
+
 // How often and for how long the scenario reads the move it scheduled
 // while Sidekiq runs it, and how long a cleanup waits for a move the body
 // failed before waiting for: half of the 60 seconds an unlicensed instance
@@ -53,10 +56,14 @@ const storageMoveFinished = "finished"
 var storageMoveEndStates = []string{storageMoveFinished, "failed", "cleanup failed"}
 
 // TestProjectStorageMoves_SingleStorage_SchedulesListsAndRefuses schedules
-// a move of a project of the surface's own, finds it in both listings,
-// reads a move that does not exist both ways, asks for a move to a storage
-// the instance lacks, for the project and for every project, and waits for
-// the scheduled move to finish.
+// a move of a project of the surface's own, naming the project by its path,
+// finds it in both listings, by the project's ID and by its path, reads a move
+// that does not exist both ways, asks for a move of a path nothing answers to
+// and to a storage the instance lacks, for the project and for every project,
+// and waits for the scheduled move to finish.
+//
+// client-go's methods take an integer where GitLab takes the path as well, so
+// each action reads a path into its ID first, and an ID sends no such read.
 //
 // The wait is what keeps the project's cleanup from deleting the project
 // while Sidekiq still moves it: the delete and the move's worker then lock
@@ -80,7 +87,7 @@ func TestProjectStorageMoves_SingleStorage_SchedulesListsAndRefuses(t *testing.T
 			e.T.Errorf("a fresh project lists %d storage moves: %+v", len(none.Moves), none.Moves)
 		}
 
-		scheduled := harness.Do[projectstoragemoves.Output](s, actionStorageMoveScheduleProject, map[string]any{"project_id": project.ID})
+		scheduled := harness.Do[projectstoragemoves.Output](s, actionStorageMoveScheduleProject, map[string]any{"project_id": project.Path})
 		if scheduled.ID == 0 {
 			e.T.Fatalf("schedule_project answered %+v, want a move with an ID", scheduled)
 		}
@@ -95,6 +102,14 @@ func TestProjectStorageMoves_SingleStorage_SchedulesListsAndRefuses(t *testing.T
 		if !moveListed(mine.Moves, scheduled.ID) {
 			e.T.Errorf("the project's moves do not hold the scheduled move %d: %+v", scheduled.ID, mine.Moves)
 		}
+		minePath := harness.Do[projectstoragemoves.ListOutput](s, actionStorageMoveRetrieveProject, map[string]any{"project_id": project.Path})
+		if !moveListed(minePath.Moves, scheduled.ID) {
+			e.T.Errorf("the moves of the project by its path do not hold the scheduled move %d: %+v", scheduled.ID, minePath.Moves)
+		}
+		read := harness.Do[projectstoragemoves.Output](s, actionStorageMoveGetProjectForProject, map[string]any{"project_id": project.Path, "id": scheduled.ID})
+		if read.ID != scheduled.ID {
+			e.T.Errorf("the read by the project's path answered move %d, want %d", read.ID, scheduled.ID)
+		}
 		all := harness.Do[projectstoragemoves.ListOutput](s, actionStorageMoveRetrieveAllProject, map[string]any{"per_page": 100})
 		if !moveListed(all.Moves, scheduled.ID) {
 			e.T.Errorf("the instance's project moves do not hold the scheduled move %d among %d", scheduled.ID, len(all.Moves))
@@ -104,6 +119,8 @@ func TestProjectStorageMoves_SingleStorage_SchedulesListsAndRefuses(t *testing.T
 		e.T.Logf("the read of a missing move is refused: %s", firstLine(refused))
 		refused = harness.Refused(s, actionStorageMoveGetProjectForProject, map[string]any{"project_id": project.ID, "id": missingMoveID}, harness.FailureNotFound)
 		e.T.Logf("the read of a missing move of the project is refused: %s", firstLine(refused))
+		refused = harness.Refused(s, actionStorageMoveRetrieveProject, map[string]any{"project_id": missingProjectPath}, harness.FailureNotFound)
+		assertMentions(e, "a path nothing answers to", refused, missingProjectPath)
 
 		refused = harness.ExpectToolError(s, actionStorageMoveScheduleProject, map[string]any{
 			"project_id": project.ID, "destination_storage_name": missingStorage,

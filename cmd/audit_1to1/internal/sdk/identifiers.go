@@ -74,7 +74,8 @@ type identifiersReport struct {
 	Unfollowed []unfollowedValue `json:"unfollowed"`
 	// SDKNarrowed is every integer parameter of a client-go method that
 	// fills a placeholder the record says takes a name or a path: client-go
-	// narrows it, so the fix is upstream and nothing here gates on it.
+	// narrows it, so the action in front of it has to read a name into the
+	// integer, and each called one needs a declaration that says which does.
 	SDKNarrowed []sdkNarrowing `json:"sdk_narrowed"`
 }
 
@@ -129,6 +130,15 @@ type sdkNarrowing struct {
 	Placeholders []placeholder `json:"placeholders"`
 	// Called is set when a handler references the method.
 	Called bool `json:"called,omitempty"`
+	// Status is what the parameter comes to, and Action and UpstreamRow the
+	// declaration's, when one answers it.
+	Status      string `json:"status"`
+	Action      string `json:"action,omitempty"`
+	UpstreamRow int    `json:"upstream_row,omitempty"`
+	// Inputs are the input fields the integers handed to it are read from, and
+	// StoppedAt names the expressions the trace stopped at.
+	Inputs    []string `json:"inputs,omitempty"`
+	StoppedAt string   `json:"stopped_at,omitempty"`
 }
 
 // identifierCall is one integer a handler hands a client-go parameter of
@@ -144,9 +154,10 @@ type identifierCall struct {
 // value, and holds each to what the live API record says the placeholder it
 // fills takes, and to declared; it lists every method value the walk does
 // not follow, and beside them every integer parameter of client-go that
-// narrows a placeholder the record says takes a name or a path. A record
-// that cannot be read leaves every argument unplaced and is itself stale.
-func analyzeIdentifiers(root string, pkgs []*packages.Package, usage map[string]*shared.ServiceUsage, declared []identifierDeclaration) (report identifiersReport, stale []string) {
+// narrows a placeholder the record says takes a name or a path, each held to
+// narrowings. A record that cannot be read leaves every argument unplaced and
+// is itself stale.
+func analyzeIdentifiers(root string, pkgs []*packages.Package, usage map[string]*shared.ServiceUsage, declared []identifierDeclaration, narrowings narrowingTable) (report identifiersReport, stale []string) {
 	record, err := apilive.Read(filepath.Join(root, filepath.FromSlash(apilive.DefaultDir)))
 	if err != nil {
 		stale = append(stale, "identifiers: "+err.Error())
@@ -165,7 +176,10 @@ func analyzeIdentifiers(root string, pkgs []*packages.Package, usage map[string]
 		})
 	}
 	stale = append(stale, applyIdentifierDeclarations(arguments, declared)...)
-	return identifiersReport{Arguments: arguments, Unfollowed: values.unfollowed, SDKNarrowed: sdkNarrowings(reading, index, calledMethods(usage))}, stale
+	narrowed := sdkNarrowings(reading, index, calledMethods(usage))
+	read := collectNarrowingOrigins(funcs, trace, values, narrowed)
+	stale = append(stale, applyNarrowingDeclarations(root, narrowed, read, narrowings, inputHoldsName(pkgs))...)
+	return identifiersReport{Arguments: arguments, Unfollowed: values.unfollowed, SDKNarrowed: narrowed}, stale
 }
 
 // identifierStatus is what an argument comes to with the input field it is
@@ -477,10 +491,18 @@ func summarizeIdentifiers(summary *reportSummary, report identifiersReport) {
 	for _, argument := range report.Arguments {
 		*counters[argument.Status]++
 	}
+	narrowings := map[string]*int{
+		narrowingResolved: &summary.SDKNarrowedResolved, narrowingUndeclared: &summary.SDKNarrowedUndeclared,
+		narrowingUnresolved: &summary.SDKNarrowedUnresolved, narrowingNotFromInput: &summary.SDKNarrowedNotFromInput,
+		narrowingUncalled: &summary.SDKNarrowedUncalled,
+	}
+	for _, narrowing := range report.SDKNarrowed {
+		*narrowings[narrowing.Status]++
+	}
 }
 
-// keepIdentifierFindings keeps only the arguments that are a finding and the
-// method values the walk does not follow.
+// keepIdentifierFindings keeps only the arguments and the client-go parameters
+// that are a finding and the method values the walk does not follow.
 func keepIdentifierFindings(report identifiersReport) identifiersReport {
 	arguments := make([]identifierArgument, 0)
 	for _, argument := range report.Arguments {
@@ -488,5 +510,11 @@ func keepIdentifierFindings(report identifiersReport) identifiersReport {
 			arguments = append(arguments, argument)
 		}
 	}
-	return identifiersReport{Arguments: arguments, Unfollowed: report.Unfollowed, SDKNarrowed: make([]sdkNarrowing, 0)}
+	narrowed := make([]sdkNarrowing, 0)
+	for _, narrowing := range report.SDKNarrowed {
+		if isNarrowingFinding(narrowing.Status) {
+			narrowed = append(narrowed, narrowing)
+		}
+	}
+	return identifiersReport{Arguments: arguments, Unfollowed: report.Unfollowed, SDKNarrowed: narrowed}
 }
