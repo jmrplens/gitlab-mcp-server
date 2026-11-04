@@ -358,6 +358,26 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertIn("cannot compare", result.stderr)
         self.assertEqual(self.committed_actions(), [])
 
+    def test_an_uncommitted_edit_is_not_what_gets_published(self):
+        # The commit's bytes go out, never the working tree's: an edit nobody
+        # has committed must not reach a public project through a rerun.
+        base = os.path.join(ROOT, "test", "fixtures", "orbit", "kg-fixtures")
+        with open(os.path.join(base, "pyproject.toml"), "a") as f:
+            f.write("\n# an edit that exists in no commit\n")
+        self.addCleanup(
+            subprocess.run, ["git", "checkout", "--", "pyproject.toml"], cwd=base, check=True,
+        )
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [{"path": "README.md"}]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        actions = {a["file_path"]: a for a in self.committed_actions()}
+        committed = subprocess.run(
+            ["git", "show", "HEAD:./pyproject.toml"], cwd=base, check=True, stdout=subprocess.PIPE,
+        ).stdout
+        self.assertEqual(base64.b64decode(actions["pyproject.toml"]["content"]), committed)
+
     def test_a_tree_answered_with_no_list_stops_reconciliation(self):
         routes = existing_fixtures()
         routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = {"message": "not a list"}

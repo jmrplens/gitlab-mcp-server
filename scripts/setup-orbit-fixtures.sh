@@ -287,7 +287,9 @@ except Exception:
     page=$((page + 1))
   done
   # The files git tracks, never whatever else the disk holds: these projects are
-  # public, and a local .env or __pycache__ must not reach them. The answer goes
+  # public, and a local .env or __pycache__ must not reach them. Each file's
+  # bytes come from the commit, not the working tree, so an uncommitted edit
+  # cannot reach a public project either. The answer goes
   # in on stdin, never in the environment, where a variable over the kernel's
   # 128 KiB per-string limit stops python3 from starting. Any failure stops the
   # run, so that no payload can only mean the comparison ran.
@@ -310,8 +312,8 @@ replaced = ["README.md"] if present == {"README.md"} else []
 actions = []
 for rel in sorted(tracked, key=lambda rel: (rel != "LICENSE", rel)):
     if rel in replaced or rel not in present:
-        with open(os.path.join(fixture_dir, rel), "rb") as f:
-            content = base64.b64encode(f.read()).decode()
+        blob = subprocess.run(["git", "show", "HEAD:./" + rel], cwd=fixture_dir, check=True, stdout=subprocess.PIPE).stdout
+        content = base64.b64encode(blob).decode()
         actions.append({"action": "update" if rel in replaced else "create", "file_path": rel, "encoding": "base64", "content": content})
 if actions:
     print(json.dumps({"branch": "main", "commit_message": "Add the fixture files this project lacks", "actions": actions}))') || {
