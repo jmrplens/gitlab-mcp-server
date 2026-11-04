@@ -283,28 +283,20 @@ func toListOutput(discussions []*gl.Discussion, extras []toolutil.DiscussionExtr
 	}
 }
 
-// errCommitImagePosition refuses an image position on a commit discussion,
-// which GitLab completes only with its width, height, x and y
-// (ImageFormatter#complete?) and which this action cannot send them for: the
-// position client-go's CreateCommitDiscussionOptions carries is a
-// gl.NotePosition, which models no image field. GitLab would answer the
-// write with a 400 saying the position is incomplete. The gap is recorded in
-// docs/development/upstream-bugs.md, and the refusal retires when the commit
-// discussion's position carries the four fields.
-var errCommitImagePosition = errors.New(
-	"an image position cannot be placed through repository.commit_discussion_create: GitLab places an image " +
-		"comment by the image's width, height, x and y, and this action sends none of them; use position_type " +
-		"file to comment on the image as a whole, or omit position for a general commit discussion",
-)
-
 // validatePosition judges a commit discussion's position by the fields GitLab
 // reads for it, before the write is sent and with no request, since the
 // commit's diff is not read here. Every position needs the start and head
 // commits and a file path, which [toolutil.ValidatePositionAnchor] checks
 // first; a text position, which is what an unnamed type is sent as, needs a
-// line, and a file position both of its paths. An image position is refused,
-// for the reason [errCommitImagePosition] gives. A position_type GitLab does
+// line, and a file position both of its paths. A position_type GitLab does
 // not declare is left to GitLab, which refuses it by name.
+//
+// An image position is refused. GitLab completes one only with its width,
+// height, x and y (ImageFormatter#complete?), and this action cannot send
+// them: the position client-go's CreateCommitDiscussionOptions carries is a
+// gl.NotePosition, which models no image field. The gap is recorded in
+// docs/development/upstream-bugs.md, and the refusal retires when the commit
+// discussion's position carries the four fields.
 //
 // GitLab would otherwise refuse each of these with a 400 that names no field
 // (DiffNote#positions_complete).
@@ -316,7 +308,11 @@ func validatePosition(pos *PositionInput) error {
 	case "", toolutil.PositionTypeText:
 		return toolutil.ValidateTextPosition(pos.OldLine, pos.NewLine)
 	case toolutil.PositionTypeImage:
-		return errCommitImagePosition
+		return errors.New(
+			"an image position cannot be placed through repository.commit_discussion_create: GitLab places an image " +
+				"comment by the image's width, height, x and y, and this action sends none of them; use position_type " +
+				"file to comment on the image as a whole, or omit position for a general commit discussion",
+		)
 	case toolutil.PositionTypeFile:
 		return toolutil.ValidateFilePosition(pos.OldPath, pos.NewPath)
 	}
