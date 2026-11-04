@@ -26,6 +26,15 @@
 // leaves plan/1to1-backlog.json's shape readable by the tooling that already
 // reads it.
 //
+// What the scopes report without gating is held to a committed baseline,
+// docs/development/audit-1to1-baseline.json: -write-baseline records the
+// tree's findings as keys by stream, and -check-baseline fails on a finding
+// the record does not hold and on a key of it no finding answers, so a
+// client-go bump or a new handler says what it adds. -check-issues asks
+// GitHub whether each issue a tracked row of the routes and sdk scopes rests
+// on is still open, and fails on one that is not and on one it could not ask
+// about.
+//
 // Usage:
 //
 //	go run ./cmd/audit_1to1/                                  # merged backlog to stdout
@@ -36,4 +45,6 @@
 //	go run ./cmd/audit_1to1/ -scope=sdk -gaps-only            # SDK parity gate
 //	go run ./cmd/audit_1to1/ -scope=params -gaps-only         # route params (R-PARAM)
 //	go run ./cmd/audit_1to1/ -scope=routes -gaps-only         # live routes (R-ROUTE)
+//	go run ./cmd/audit_1to1/ -check-baseline                  # report-only findings against the baseline
+//	go run ./cmd/audit_1to1/ -check-issues                    # issues of the tracked rows, on GitHub
 package main
