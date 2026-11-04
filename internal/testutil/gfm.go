@@ -792,7 +792,10 @@ func (w *gfmWalk) literal(i int) (dest string, length int) {
 	}
 	if strings.ContainsRune(gfmWwwFollows, previous) && gfmLiteralWwwRe.MatchString(rest) {
 		if n, ok := gfmLiteralAddress(rest); ok {
-			return "http://" + rest[:n], n
+			// GFM itself prefixes a www. autolink with http://, so the model
+			// must too; nothing is fetched. The trailing NOSONAR suppresses
+			// go:S5332 (cleartext protocol heuristic).
+			return "http://" + rest[:n], n // NOSONAR
 		}
 	}
 	if strings.ContainsRune(gfmLetters, previous) {
