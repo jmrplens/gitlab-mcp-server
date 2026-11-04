@@ -13,7 +13,9 @@
 // after the plain HTTP matrix was already green.
 //
 // Docker is required by the nginx cases and they skip without it, because the
-// point is to run a real nginx rather than to model one. The forwarded-Host
+// point is to run a real nginx rather than to model one; where the job says
+// Docker is expected, they fail instead (environmentUnavailablef). The
+// configurations the guides print are served by proxy_guide_test.go. The forwarded-Host
 // cases at the end need no proxy at all: what a proxy does to the Host header
 // is one line the harness can send itself, and the class they pin was missed
 // for exactly as long as the nginx cases were the only ones here, since nginx
@@ -21,12 +23,8 @@
 package httpe2e
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -70,42 +68,16 @@ http {
 `
 
 // startProxy runs nginx in front of the given upstream port and returns its
-// base URL, skipping the test when Docker is unavailable.
+// base URL. Without Docker the test skips, or fails where the job says Docker
+// is expected (environmentUnavailablef).
 func startProxy(t *testing.T, upstreamPort int) string {
 	t.Helper()
 
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker not available; the proxy layer is where the header-collision class lives, so it is skipped rather than modeled")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancel()
-	if err := exec.CommandContext(ctx, "docker", "info").Run(); err != nil {
-		t.Skip("docker is installed but not usable; skipping the proxy layer")
-	}
-
 	proxyPort := freePort(t)
-	dir := t.TempDir()
-	confPath := filepath.Join(dir, "nginx.conf")
 	conf := fmt.Sprintf(proxyConfig, proxyPort, upstreamPort, upstreamPort)
-	if err := os.WriteFile(confPath, []byte(conf), 0o644); err != nil { //#nosec G306 -- nginx reads it inside a throwaway container
-		t.Fatalf("writing the nginx config: %v", err)
-	}
-
 	name := fmt.Sprintf("gitlab-mcp-httpe2e-nginx-%d", proxyPort)
-	runCtx, runCancel := context.WithTimeout(t.Context(), 2*time.Minute)
-	defer runCancel()
-	out, err := exec.CommandContext(runCtx, "docker", "run", "-d",
-		"--name", name, "--network", "host",
-		"-v", confPath+":/etc/nginx/nginx.conf:ro",
-		"nginx:alpine",
-	).CombinedOutput()
-	if err != nil {
-		t.Skipf("could not start nginx (%v):\n%s", err, out)
-	}
-	t.Cleanup(func() {
-		rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer rmCancel()
-		_ = exec.CommandContext(rmCtx, "docker", "rm", "-f", name).Run()
+	startContainer(t, name, nginxImage, []string{
+		writeContainerFile(t, containerDir(t), "nginx.conf", conf) + ":/etc/nginx/nginx.conf:ro",
 	})
 
 	base := fmt.Sprintf("http://127.0.0.1:%d", proxyPort)
@@ -117,7 +89,7 @@ func startProxy(t *testing.T, upstreamPort int) string {
 //
 // Running out of time is told apart two ways on purpose. A proxy that never
 // answered at all is a container that did not come up, which is the
-// environment and a skip. A proxy that answered and kept answering something
+// environment (environmentUnavailablef). A proxy that answered and kept answering something
 // other than 200 is nginx running on the configuration this file wrote, with
 // an upstream that was already serving before the container started, and that
 // is this module's own defect and a failure.
@@ -146,7 +118,7 @@ func waitProxy(t *testing.T, base string) {
 	if lastStatus != 0 {
 		t.Fatalf("nginx answered the health check but never forwarded it (last status %d); the proxy configuration this file writes is wrong", lastStatus)
 	}
-	t.Skipf("nginx never answered a request (%v); the container did not come up, so the proxy layer is skipped rather than failed on the environment", lastErr)
+	environmentUnavailablef(t, "nginx never answered a request (%v); the container did not come up", lastErr)
 }
 
 // TestProxy_ServerAndProxyCORSCollide verifies the failure a browser sees and

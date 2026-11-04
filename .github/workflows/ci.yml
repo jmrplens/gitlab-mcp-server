@@ -704,8 +704,12 @@ jobs:
   # here rather than only on demand. It is the gate for the handler chain in
   # package main — cross-origin, preflight, auth modes, rate limiting, and every
   # flag that restricts something — which unit tests cannot reach and which has
-  # shipped broken more than once. The nginx cases skip when Docker is
-  # unavailable.
+  # shipped broken more than once. Its proxy and balancer cases run the real
+  # proxies in Docker, which this runner has by construction, so
+  # E2E_HTTP_DOCKER=required makes a case that cannot start (an image that
+  # could not be pulled, a container that never came up) fail the job rather
+  # than skip: a skip here would report the proxy layer green whether or not
+  # it ran. race.yml runs the same module with optional instead.
   e2e-http:
     name: "🌐 HTTP transport e2e"
     runs-on: ubuntu-latest
@@ -718,6 +722,8 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       - name: HTTP transport end-to-end
+        env:
+          E2E_HTTP_DOCKER: required
         run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
 
   # stdio is the primary transport and nothing drove it until this module
