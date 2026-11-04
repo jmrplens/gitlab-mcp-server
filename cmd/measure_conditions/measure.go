@@ -87,11 +87,26 @@ func scriptMode(value string) string {
 	return ""
 }
 
+// countingMode is the mode measure counts a package's conditions in before
+// handing it to the script, from the environment's GOBCO_MODE and
+// GOBCO_GATE: the mode the script will read, and none when the script will
+// refuse either value, so that every package is handed to the script, which
+// says why it will not measure it, rather than a package with nothing to
+// measure being recorded as measured under a setting the script refuses. An
+// empty GOBCO_GATE is the script's default, which it reads.
+func countingMode(mode, gate string) string {
+	if gate != "" && !gatePattern.MatchString(gate) {
+		return ""
+	}
+	return scriptMode(mode)
+}
+
 // measurer is what every package of one run is measured with: the runner of
 // the script, the go command that lists a package's files, the module root
 // both run in, the system the records name, the directory of records they
 // are left below, what is added to the script's environment, and the mode
-// the script counts in, empty when it is one the script will refuse.
+// the script counts in, empty when the script will refuse it or the gate it
+// is run with (countingMode).
 type measurer struct {
 	run     scriptRunner
 	list    lister
@@ -157,7 +172,8 @@ func writeRecord(recordDir string, output []byte, text string) error {
 // job of the workflow does, streaming the script's output to stdout and
 // leaving each package's record below -records, where the upload step takes
 // them from. The mode a package's conditions are counted in is the one the
-// script will read, GOBCO_MODE as the job's environment gives it. It returns
+// script will read, GOBCO_MODE as the job's environment gives it, and none
+// when the script will refuse that or the environment's GOBCO_GATE. It returns
 // 2 for a usage error, 1 when a package could not be measured or a record
 // could not be written, and 0 when every package was measured, whatever the
 // figures say.
@@ -181,7 +197,7 @@ func runMeasure(args []string, stdout, stderr io.Writer, list lister, run script
 		return 2
 	}
 	var unmeasured []string
-	m := measurer{run: run, list: list, dir: *dir, system: *system, records: *records, mode: scriptMode(os.Getenv("GOBCO_MODE"))}
+	m := measurer{run: run, list: list, dir: *dir, system: *system, records: *records, mode: countingMode(os.Getenv("GOBCO_MODE"), os.Getenv("GOBCO_GATE"))}
 	for _, pkg := range packages {
 		status, nothing, measureErr := measurePackage(context.Background(), m, pkg, stdout)
 		if measureErr != nil {

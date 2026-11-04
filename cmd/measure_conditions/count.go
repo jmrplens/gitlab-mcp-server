@@ -178,8 +178,11 @@ func inGoFile(fset *token.FileSet, expr ast.Expr) int {
 
 // nothingPattern is the line a record's output holds in place of the
 // script's for a package with no condition to measure in the mode named, and
-// the only line it holds: the script is not run for it.
-var nothingPattern = regexp.MustCompile(`^measure_conditions: nothing to measure in (condition|branch) mode: `)
+// the only line it holds: the script is not run for it. It is the whole line
+// nothingLine writes, from its opening words to its closing 0 of 0, so a line
+// cut short or carrying more is not read as one, and the record that holds it
+// is refused as an output nothing writes.
+var nothingPattern = regexp.MustCompile(`^measure_conditions: nothing to measure in (condition|branch) mode: .+, and the package is measured with nothing to measure: 0 of 0$`)
 
 // nothingLine says why a package with no condition gobco counts in mode was
 // recorded as measured with nothing to measure, naming the files it read.

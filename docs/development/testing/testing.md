@@ -20,10 +20,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,271 |
-| Unit test functions                                   | 21,566 |
+| Total test functions                                  | 23,273 |
+| Unit test functions                                   | 21,568 |
 | E2E test functions                                    |  1,705 |
-| cmd test functions                                    |  5,701 |
+| cmd test functions                                    |  5,703 |
 | Test files (internal/)                                |    750 |
 | Test files (cmd/)                                     |    462 |
 | Test files (test/e2e/)                                |    438 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,699 | 58.9% |
 | `TestFunc` (no underscore)             |    903 |  3.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,669 | 37.3% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,671 | 37.3% |
 
 ## Test Distribution
 
@@ -51,8 +51,8 @@
 | Tools orchestration     |            439 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,210 |        475 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,705 |        438 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,701 |        462 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,271** |  **1,650** |                                                                                                 |
+| cmd packages            |          5,703 |        462 | server entry point and developer command utilities                                              |
+| **Total**               |     **23,273** |  **1,650** |                                                                                                 |
 
 ### Core Packages
 
@@ -65,13 +65,13 @@
 | completions              |       129 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                                                                                            |
 | config                   |       118 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
 | edition                  |         9 |   100.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                                                                                       |
-| elicitation              |       158 |    99.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                                                                                        |
+| elicitation              |       158 |   100.0% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                                                                                        |
 | finegrained              |        63 |   100.0% | Package finegrained holds what a fine-grained personal access token needs for each catalog action, and the decision this server takes on it.                                                                                                                                                                                        |
 | freshness                |         7 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                                                                             |
-| gatewaycompat            |        21 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.                                                                  |
+| gatewaycompat            |        21 |   100.0% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.                                                                  |
 | gitlab                   |       257 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
 | graphqlschema            |        28 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                                                                                    |
-| i18n                     |        45 |      n/a | Package i18n holds the texts this server shows a person directly, in every language it serves them in, and renders them in the language a request carries (issue 1547).                                                                                                                                                             |
+| i18n                     |        45 |   100.0% | Package i18n holds the texts this server shows a person directly, in every language it serves them in, and renders them in the language a request carries (issue 1547).                                                                                                                                                             |
 | mcpotel                  |       121 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                                                                                |
 | oauth                    |       113 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
 | progress                 |        23 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                                                                                       |
@@ -197,7 +197,7 @@
 | groupanalytics          |         10 |          2 |   100.0% |         3 |
 | groupboards             |         81 |          2 |   100.0% |        10 |
 | groupcredentials        |         46 |          3 |   100.0% |         4 |
-| groupepicboards         |         20 |          3 |    98.3% |         2 |
+| groupepicboards         |         20 |          3 |   100.0% |         2 |
 | groupimportexport       |         28 |          4 |   100.0% |         3 |
 | groupiterations         |         23 |          1 |   100.0% |         1 |
 | grouplabels             |         65 |          3 |   100.0% |         7 |
@@ -270,7 +270,7 @@
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
 | projectstoragemoves     |         21 |          2 |   100.0% |         6 |
 | projecttemplates        |         27 |          1 |   100.0% |         2 |
-| protectedenvdata        |          5 |          2 |      n/a |         0 |
+| protectedenvdata        |          5 |          2 |   100.0% |         0 |
 | protectedenvs           |         55 |          2 |   100.0% |         5 |
 | protectedpackages       |         44 |          2 |   100.0% |         4 |
 | releaselinks            |         72 |          2 |   100.0% |         6 |
@@ -329,15 +329,15 @@
 | cmd/audit_1to1/internal/grants            |   100.0% |
 | cmd/audit_1to1/internal/merge             |   100.0% |
 | cmd/audit_1to1/internal/metadata          |   100.0% |
-| cmd/audit_1to1/internal/params            |      n/a |
+| cmd/audit_1to1/internal/params            |   100.0% |
 | cmd/audit_1to1/internal/paths             |   100.0% |
 | cmd/audit_1to1/internal/required          |   100.0% |
-| cmd/audit_1to1/internal/routes            |      n/a |
+| cmd/audit_1to1/internal/routes            |   100.0% |
 | cmd/audit_1to1/internal/sdk               |   100.0% |
-| cmd/audit_1to1/internal/sdkoptions        |      n/a |
+| cmd/audit_1to1/internal/sdkoptions        |   100.0% |
 | cmd/audit_1to1/internal/shared            |   100.0% |
 | cmd/audit_1to1/internal/structs           |   100.0% |
-| cmd/audit_1to1/internal/waits             |      n/a |
+| cmd/audit_1to1/internal/waits             |   100.0% |
 | cmd/audit_action_ids                      |   100.0% |
 | cmd/audit_binary_vulns                    |   100.0% |
 | cmd/audit_catalog_first                   |   100.0% |
@@ -352,25 +352,25 @@
 | cmd/audit_gateway_chars                   |   100.0% |
 | cmd/audit_graphql_documents               |   100.0% |
 | cmd/audit_graphql_shapes                  |   100.0% |
-| cmd/audit_i18n                            |      n/a |
+| cmd/audit_i18n                            |   100.0% |
 | cmd/audit_image_vulns                     |   100.0% |
-| cmd/audit_install_buttons                 |    99.1% |
+| cmd/audit_install_buttons                 |   100.0% |
 | cmd/audit_md_escaping                     |   100.0% |
-| cmd/audit_meta_descriptions               |    98.2% |
+| cmd/audit_meta_descriptions               |   100.0% |
 | cmd/audit_metrics                         |   100.0% |
-| cmd/audit_plugin_manifests                |      n/a |
+| cmd/audit_plugin_manifests                |   100.0% |
 | cmd/audit_readonly_graphql                |   100.0% |
 | cmd/audit_sdk_context                     |   100.0% |
 | cmd/audit_site_headers                    |   100.0% |
 | cmd/audit_supply_chain                    |   100.0% |
-| cmd/audit_surface_quality                 |    99.8% |
+| cmd/audit_surface_quality                 |   100.0% |
 | cmd/audit_tenancy                         |   100.0% |
 | cmd/audit_test_closed_servers             |   100.0% |
 | cmd/audit_test_goroutines                 |    97.6% |
 | cmd/audit_test_names                      |   100.0% |
 | cmd/audit_test_subtests                   |    99.7% |
 | cmd/audit_tokens                          |   100.0% |
-| cmd/audit_vex                             |      n/a |
+| cmd/audit_vex                             |   100.0% |
 | cmd/bench_resources                       |   100.0% |
 | cmd/format_md_tables                      |    98.2% |
 | cmd/fuzz_targets                          |   100.0% |
@@ -408,14 +408,14 @@
 | cmd/internal/mcpsurface                   |   100.0% |
 | cmd/internal/orbitrecord                  |   100.0% |
 | cmd/internal/provenance                   |   100.0% |
-| cmd/internal/releaseassets                |      n/a |
+| cmd/internal/releaseassets                |   100.0% |
 | cmd/internal/requestinventory             |   100.0% |
 | cmd/internal/sdkroutes                    |   100.0% |
 | cmd/internal/sourcegate                   |   100.0% |
 | cmd/internal/testsource                   |   100.0% |
 | cmd/measure_conditions                    |   100.0% |
-| cmd/release_checks                        |      n/a |
-| cmd/release_packages                      |      n/a |
+| cmd/release_checks                        |   100.0% |
+| cmd/release_packages                      |   100.0% |
 | cmd/reproduce_release                     |   100.0% |
 | cmd/server                                |   100.0% |
 
@@ -430,13 +430,13 @@
 | completions              |   100.0% |
 | config                   |   100.0% |
 | edition                  |   100.0% |
-| elicitation              |    99.3% |
+| elicitation              |   100.0% |
 | finegrained              |   100.0% |
 | freshness                |   100.0% |
-| gatewaycompat            |    99.4% |
+| gatewaycompat            |   100.0% |
 | gitlab                   |   100.0% |
 | graphqlschema            |   100.0% |
-| i18n                     |      n/a |
+| i18n                     |   100.0% |
 | mcpotel                  |   100.0% |
 | oauth                    |   100.0% |
 | progress                 |   100.0% |
@@ -529,7 +529,7 @@
 | groupanalytics          |   100.0% |
 | groupboards             |   100.0% |
 | groupcredentials        |   100.0% |
-| groupepicboards         |    98.3% |
+| groupepicboards         |   100.0% |
 | groupimportexport       |   100.0% |
 | groupiterations         |   100.0% |
 | grouplabels             |   100.0% |
@@ -602,7 +602,7 @@
 | projectstatistics       |   100.0% |
 | projectstoragemoves     |   100.0% |
 | projecttemplates        |   100.0% |
-| protectedenvdata        |      n/a |
+| protectedenvdata        |   100.0% |
 | protectedenvs           |   100.0% |
 | protectedpackages       |   100.0% |
 | releaselinks            |   100.0% |
