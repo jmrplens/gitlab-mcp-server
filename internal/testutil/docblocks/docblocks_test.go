@@ -95,6 +95,19 @@ func TestParse_Fences_AreReadAsTheSiteCheckReadsThem(t *testing.T) {
 			want: []Block{{Lang: "bash", Body: "ls\n", Line: 6}},
 		},
 		{
+			name: "a fence-like line closing the frontmatter's block scalar is text",
+			src:  "---\ntitle: x\ndescription: |\n  ```not a fence\n---\n\n```bash\nls\n```\n",
+			want: []Block{{Lang: "bash", Body: "ls\n", Line: 7}},
+		},
+		{
+			name: "a page without frontmatter is read from its first line, past a thematic break",
+			src:  "```bash\nls\n```\n\n---\n\n```text\nmore\n```\n",
+			want: []Block{
+				{Lang: "bash", Body: "ls\n", Line: 1},
+				{Lang: "text", Body: "more\n", Line: 7},
+			},
+		},
+		{
 			name: "a frontmatter never closed is not one",
 			src:  "---\n```bash\nls\n```\n",
 			want: []Block{{Lang: "bash", Body: "ls\n", Line: 2}},
@@ -127,6 +140,34 @@ func TestParse_Fences_AreReadAsTheSiteCheckReadsThem(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Parse:\n got %#v\nwant %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSplitOptions_Spaces_SeparateOptionsOutsideQuotes pins the splitting the
+// key is found by: runs of spaces and tabs separate options and produce no
+// empty one, and a quote holds whatever it encloses, spaces included.
+func TestSplitOptions_Spaces_SeparateOptionsOutsideQuotes(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		options string
+		want    []string
+	}{
+		{name: "nothing", options: "", want: nil},
+		{name: "one option", options: "e2e=a", want: []string{"e2e=a"}},
+		{name: "a run of spaces and a tab", options: "a  \t b", want: []string{"a", "b"}},
+		{name: "a trailing space", options: "a ", want: []string{"a"}},
+		{name: "double quotes", options: `title="a b" c`, want: []string{`title="a b"`, "c"}},
+		{name: "single quotes holding a double one", options: `title='a "b' c`, want: []string{`title='a "b'`, "c"}},
+		{name: "an unclosed quote runs to the end", options: `title="a b`, want: []string{`title="a b`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := splitOptions(tt.options); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("splitOptions(%q) = %#v, want %#v", tt.options, got, tt.want)
 			}
 		})
 	}

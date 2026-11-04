@@ -170,28 +170,30 @@ func splitOptions(options string) []string {
 		cur   strings.Builder
 		quote rune
 	)
+	flush := func() {
+		if cur.Len() > 0 {
+			out = append(out, cur.String())
+			cur.Reset()
+		}
+	}
 	for _, r := range options {
-		switch {
-		case quote != 0:
+		if quote != 0 {
 			if r == quote {
 				quote = 0
 			}
 			cur.WriteRune(r)
-		case r == '"' || r == '\'':
-			quote = r
-			cur.WriteRune(r)
-		case r == ' ' || r == '\t':
-			if cur.Len() > 0 {
-				out = append(out, cur.String())
-				cur.Reset()
-			}
-		default:
-			cur.WriteRune(r)
+			continue
 		}
+		if r == ' ' || r == '\t' {
+			flush()
+			continue
+		}
+		if r == '"' || r == '\'' {
+			quote = r
+		}
+		cur.WriteRune(r)
 	}
-	if cur.Len() > 0 {
-		out = append(out, cur.String())
-	}
+	flush()
 	return out
 }
 
