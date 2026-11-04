@@ -4,7 +4,7 @@
 
 > **Diátaxis type**: Reference & Explanation · **Audience**: 🛠️ Contributors & maintainers
 
-The other five dimensions (R-INPUT, R-OUTPUT, R-ACTION, R-META and R-ENUM) and the flags of the command that runs all nine are in [Command-Line Utilities](cmd-utilities.md#audit_1to1).
+The other four dimensions (R-INPUT, R-OUTPUT, R-ACTION and R-ENUM) and the flags of the command that runs all eight are in [Command-Line Utilities](cmd-utilities.md#audit_1to1), which also says why the fifth, R-META, was retired.
 
 ---
 

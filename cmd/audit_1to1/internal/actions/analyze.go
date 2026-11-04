@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdk"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/waits"
 )
@@ -38,6 +39,12 @@ type report struct {
 	Summary          reportSummary     `json:"summary"`
 	Services         []serviceCoverage `json:"services"`
 	StaleAcceptances []string          `json:"stale_acceptances,omitempty"`
+	// AdjudicatedTwice lists each method more than one of the three tables
+	// answers, with the tables that do, since a method is adjudicated in
+	// one place: COVERED_RAW by the waits entry that replaces it,
+	// COVERED_GRAPHQL by the KEEP decision that reads in its place, and the
+	// rest in acceptedMissingMethods.
+	AdjudicatedTwice []string `json:"adjudicated_twice,omitempty"`
 }
 
 type reportSummary struct {
@@ -101,7 +108,36 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		Summary:          summarize(services),
 		Services:         services,
 		StaleAcceptances: staleAcceptances,
+		AdjudicatedTwice: adjudicatedTwice(),
 	}, nil
+}
+
+// adjudicatedTwice lists each method more than one table answers, as
+// "Service.Method (table, table)" with the tables in the order adjudicated
+// reads them, sorted by method.
+func adjudicatedTwice() []string {
+	tables := []struct {
+		name   string
+		answer map[string]string
+	}{
+		{"acceptedMissingMethods", acceptedMissingMethods},
+		{"the waits table", coveredRaw},
+		{"graphqlDecisions", coveredGraphQL},
+	}
+	answeredBy := map[string][]string{}
+	for _, table := range tables {
+		for key := range table.answer {
+			answeredBy[key] = append(answeredBy[key], table.name)
+		}
+	}
+	var twice []string
+	for key, names := range answeredBy {
+		if len(names) > 1 {
+			twice = append(twice, key+" ("+strings.Join(names, ", ")+")")
+		}
+	}
+	sort.Strings(twice)
+	return twice
 }
 
 // acceptedMissingMethods adjudicates SDK service methods that the scanner
@@ -129,7 +165,11 @@ var acceptedMissingMethods = map[string]string{
 	"Jobs.GetJobArtifacts":            "COVERED_VARIANT. Same GET /projects/:id/jobs/:job_id/artifacts endpoint; job.artifacts calls GetJobArtifactsWithOptions, the only binding that carries the route's file_type (declared from GitLab 19.4)",
 	"GroupMembers.ShareWithGroup":     "COVERED_VARIANT. Same POST /groups/:id/share endpoint; group.group_member_share and group.share_with_group call Groups.ShareGroupWithGroup, the only binding that carries the route's member_role_id and leaves out an expires_at the caller did not set",
 
-	// COVERED_GRAPHQL — ADR-0006 GraphQL handlers (no SDK service call).
+	// COVERED_GRAPHQL: ADR-0006 GraphQL handlers (no SDK service call),
+	// written here for the epic packages, which the sdk scope's GraphQL rule
+	// maps to no service. A method an operation of a package it does map
+	// reads in place of is named by that operation's KEEP decision in
+	// graphqlDecisions instead, and coveredGraphQL derives it from there.
 	"Epics.CreateEpic":                     coveredGraphQLEpics,
 	"Epics.DeleteEpic":                     coveredGraphQLEpics,
 	"Epics.GetEpic":                        coveredGraphQLEpics,
@@ -184,9 +224,10 @@ var acceptedMissingMethods = map[string]string{
 // writes, as a copy a caller may keep, keyed "Service.Method" and each
 // opening with its category ("COVERED_GRAPHQL. Epics pkg"). R-ROUTE reads
 // them to decide whether a route no action reaches inherits the decision
-// about the methods that send it. The COVERED_RAW adjudications are not
-// among them: they are derived from the waits table, which a reader takes
-// them from with the entry that says why.
+// about the methods that send it. The derived adjudications are not among
+// them: the COVERED_RAW ones come from the waits table and the COVERED_GRAPHQL
+// ones a KEEP decision names from graphqlDecisions, and a reader takes them
+// from there with the entry or the decision that says why.
 func AcceptedMissingMethods() map[string]string { return maps.Clone(acceptedMissingMethods) }
 
 // coveredRawCategory is how a COVERED_RAW adjudication opens, the category
@@ -205,12 +246,30 @@ var coveredRaw = func() map[string]string {
 	return out
 }()
 
-// adjudicated reports whether either table answers an SDK method the scanner
-// reports as uncovered, keyed "Service.Method".
+// coveredGraphQLCategory is how a COVERED_GRAPHQL adjudication opens, the
+// category acceptedMissingMethods spells the epic methods with.
+const coveredGraphQLCategory = "COVERED_GRAPHQL. "
+
+// coveredGraphQL adjudicates the methods a KEEP decision of the sdk scope's
+// graphqlDecisions reads in place of, derived from the decision rather than
+// written here a second time: the decision is where the sdk scope holds the
+// operation to the tree and the method to the pinned SDK, so the method
+// returns to this stream's list the day its decision retires.
+var coveredGraphQL = func() map[string]string {
+	out := map[string]string{}
+	for key, reason := range sdk.CoveredGraphQLMethods() {
+		out[key] = coveredGraphQLCategory + reason
+	}
+	return out
+}()
+
+// adjudicated reports whether any of the three tables answers an SDK method
+// the scanner reports as uncovered, keyed "Service.Method".
 func adjudicated(key string) bool {
 	_, accepted := acceptedMissingMethods[key]
 	_, replaced := coveredRaw[key]
-	return accepted || replaced
+	_, kept := coveredGraphQL[key]
+	return accepted || replaced || kept
 }
 
 // isAcceptedMissingMethod reports whether an uncovered SDK method is adjudicated as

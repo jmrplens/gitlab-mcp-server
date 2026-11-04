@@ -9,6 +9,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -216,6 +217,108 @@ func serviceForPackage(pkgName string, services map[string]sdkService, aliases m
 		}
 	}
 	return sdkService{}, false
+}
+
+// CoveredGraphQLMethods returns the client-go methods a KEEP decision of
+// graphqlDecisions reads in place of, keyed "Service.Method" as
+// acceptedMissingMethods keys them, each with the operation that replaces it
+// and why, which R-ACTION adjudicates as COVERED_GRAPHQL.
+func CoveredGraphQLMethods() map[string]string {
+	return keptReplacements(graphqlDecisions, graphqlServiceAliases)
+}
+
+// keptReplacements collects the methods the KEEP decisions of decisions
+// replace, in key order, so the operation a method is attributed to does not
+// depend on the order a map is read in. A method of a service other than the
+// one the operation's package resolves to through aliases is not collected:
+// the sdk gate refuses it, and R-ACTION goes on listing the method rather
+// than taking it as answered by an operation that cannot read in its place.
+func keptReplacements(decisions map[string]decision, aliases map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, key := range slices.Sorted(maps.Keys(decisions)) {
+		adjudged := decisions[key]
+		if adjudged.Decision != decisionKeep {
+			continue
+		}
+		for _, method := range adjudged.Replaces {
+			if _, seen := out[method]; !seen && ofOperationService(key, method, aliases) {
+				out[method] = key + ": " + adjudged.Reason
+			}
+		}
+	}
+	return out
+}
+
+// ofOperationService reports whether method, keyed "Service.Method", is a
+// method of the service the package of the operation key resolves to, the
+// way [serviceForPackage] resolves it: the service aliases names for the
+// package, or else the one whose name is the package's in any case. An
+// operation is adjudicated against that service, so it can read in place of
+// that service's methods and of no other's.
+func ofOperationService(key, method string, aliases map[string]string) bool {
+	pkg, _, _ := strings.Cut(key, ".")
+	serviceName, _, _ := strings.Cut(method, ".")
+	if alias, aliased := aliases[pkg]; aliased {
+		return alias == serviceName
+	}
+	return strings.EqualFold(serviceName, pkg)
+}
+
+// staleGraphQLReplaces lists each method a decision's Replaces names that
+// answers no method R-ACTION would list: one a MIGRATE decision names, one of
+// a service client-go does not declare, one of a service other than the one
+// the operation's package resolves to through aliases, one of a service no
+// handler calls, one the service does not declare, one a handler calls, and
+// one an earlier decision in key order already names. services is keyed by
+// bare service name and usage by interface name, as [serviceIndex] and
+// [shared.CollectServiceUsage] key them.
+func staleGraphQLReplaces(decisions map[string]decision, services map[string]sdkService, aliases map[string]string, usage map[string]*shared.ServiceUsage) []string {
+	var stale []string
+	claimed := map[string]string{}
+	for _, key := range slices.Sorted(maps.Keys(decisions)) {
+		adjudged := decisions[key]
+		for _, method := range adjudged.Replaces {
+			problem := replacesProblem(key, adjudged.Decision, method, services, aliases, usage)
+			if first, seen := claimed[method]; problem == "" && seen {
+				problem = "graphql " + first + " replaces it too"
+			}
+			if problem != "" {
+				stale = append(stale, "graphql "+key+" (replaces "+method+": "+problem+")")
+				continue
+			}
+			claimed[method] = key
+		}
+	}
+	return stale
+}
+
+// replacesProblem says why a method the decision of verdict on the operation
+// key names answers no method R-ACTION would list, or returns "" when it
+// answers one.
+func replacesProblem(key, verdict, method string, services map[string]sdkService, aliases map[string]string, usage map[string]*shared.ServiceUsage) string {
+	if verdict != decisionKeep {
+		return "only a KEEP decision stands in for a method"
+	}
+	serviceName, methodName, _ := strings.Cut(method, ".")
+	service, declared := services[serviceName]
+	if !declared {
+		return "client-go declares no such service"
+	}
+	if !ofOperationService(key, method, aliases) {
+		pkg, _, _ := strings.Cut(key, ".")
+		return "the operation's package, " + pkg + ", does not resolve to this service"
+	}
+	use, called := usage[service.Interface]
+	if !called {
+		return "no handler calls the service, which its declaration answers"
+	}
+	if !slices.Contains(shared.APIMethodNames(use.Named), methodName) {
+		return "the service declares no such method"
+	}
+	if _, reached := use.Called[methodName]; reached {
+		return "a handler calls it"
+	}
+	return ""
 }
 
 // staleGraphQLDecisions lists adjudicated operations that no longer exist, so a

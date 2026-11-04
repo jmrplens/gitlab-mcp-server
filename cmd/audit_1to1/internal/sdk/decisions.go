@@ -119,6 +119,18 @@ const (
 type decision struct {
 	Decision string
 	Reason   string
+	// Replaces names the client-go methods a KEEP operation reads in place
+	// of, keyed "Service.Method" as acceptedMissingMethods keys them: a
+	// method of a service the handlers call, which none of them calls
+	// because this operation answers what it would. The service is the one
+	// the operation's package resolves to, the one it is adjudicated
+	// against, since an operation reads in place of that service's methods
+	// and of no other's. R-ACTION adjudicates each one COVERED_GRAPHQL from
+	// here ([CoveredGraphQLMethods]), so the reason is written once, beside
+	// the operation it is about, and the method goes back to R-ACTION's list
+	// the day the decision retires. A method of a service no handler calls
+	// is answered by that service's declaration and is not named here.
+	Replaces []string
 }
 
 // graphqlServiceAliases maps a tool package to the client-go service covering
@@ -149,32 +161,32 @@ var graphqlDecisions = map[string]decision{
 	// KEEP — the wrapper exists but wraps an API upstream has deprecated in
 	// favor of the very GraphQL these handlers call, so migrating would move
 	// us onto the path GitLab is removing.
-	"epicissues.List":             {decisionKeep, "EpicIssues is documented upstream as 'Will be removed in v5 of the API, use Work Items API instead'; the handler reads the work-item hierarchy widget, which is that replacement"},
-	"epicissues.Assign":           {decisionKeep, "EpicIssues.AssignEpicIssue drives the epic REST API being removed; the handler uses the workItemUpdate hierarchy mutation instead"},
-	"epicissues.Remove":           {decisionKeep, "EpicIssues.RemoveEpicIssue drives the epic REST API being removed; the handler uses the workItemUpdate hierarchy mutation instead"},
-	"epicissues.UpdateOrder":      {decisionKeep, "EpicIssues.UpdateEpicIssueAssignment drives the epic REST API being removed; child ordering is a work-item hierarchy mutation"},
-	"epicissues.checkChildOfEpic": {decisionKeep, "the guard Remove and UpdateOrder run before they write reads the item's parent from the work-item hierarchy widget; EpicIssues has no read of the epic one issue sits in, and its list is the REST API being removed"},
+	"epicissues.List":             {Decision: decisionKeep, Reason: "EpicIssues is documented upstream as 'Will be removed in v5 of the API, use Work Items API instead'; the handler reads the work-item hierarchy widget, which is that replacement"},
+	"epicissues.Assign":           {Decision: decisionKeep, Reason: "EpicIssues.AssignEpicIssue drives the epic REST API being removed; the handler uses the workItemUpdate hierarchy mutation instead"},
+	"epicissues.Remove":           {Decision: decisionKeep, Reason: "EpicIssues.RemoveEpicIssue drives the epic REST API being removed; the handler uses the workItemUpdate hierarchy mutation instead"},
+	"epicissues.UpdateOrder":      {Decision: decisionKeep, Reason: "EpicIssues.UpdateEpicIssueAssignment drives the epic REST API being removed; child ordering is a work-item hierarchy mutation"},
+	"epicissues.checkChildOfEpic": {Decision: decisionKeep, Reason: "the guard Remove and UpdateOrder run before they write reads the item's parent from the work-item hierarchy widget; EpicIssues has no read of the epic one issue sits in, and its list is the REST API being removed"},
 
-	"vulnerabilities.List":                     {decisionKeep, "ProjectVulnerabilities is documented upstream as 'Deprecated: use GraphQL Query.vulnerabilities instead', which is precisely what this handler does"},
-	"vulnerabilities.Get":                      {decisionKeep, "same deprecation; the wrapper has no single-vulnerability read at all, only ListProjectVulnerabilities and CreateVulnerability"},
-	"vulnerabilities.SeverityCount":            {decisionKeep, "severity counts are a GraphQL aggregate (vulnerabilitySeveritiesCount) with no REST or wrapper equivalent"},
-	"vulnerabilities.PipelineSecuritySummary":  {decisionKeep, "the pipeline security report summary is GraphQL-only; the wrapper exposes nothing pipeline-scoped"},
-	"vulnerabilities.runVulnerabilityMutation": {decisionKeep, "dismiss/confirm/resolve/revert are GraphQL mutations; the wrapper exposes only CreateVulnerability"},
+	"vulnerabilities.List":                     {Decision: decisionKeep, Reason: "ProjectVulnerabilities is documented upstream as 'Deprecated: use GraphQL Query.vulnerabilities instead', which is precisely what this handler does"},
+	"vulnerabilities.Get":                      {Decision: decisionKeep, Reason: "same deprecation; the wrapper has no single-vulnerability read at all, only ListProjectVulnerabilities and CreateVulnerability"},
+	"vulnerabilities.SeverityCount":            {Decision: decisionKeep, Reason: "severity counts are a GraphQL aggregate (vulnerabilitySeveritiesCount) with no REST or wrapper equivalent"},
+	"vulnerabilities.PipelineSecuritySummary":  {Decision: decisionKeep, Reason: "the pipeline security report summary is GraphQL-only; the wrapper exposes nothing pipeline-scoped"},
+	"vulnerabilities.runVulnerabilityMutation": {Decision: decisionKeep, Reason: "dismiss/confirm/resolve/revert are GraphQL mutations; the wrapper exposes only CreateVulnerability"},
 
 	// KEEP — the security wrappers select the same fields but never read the
 	// top-level GraphQL errors array, which is where GitLab reports a rejected
 	// mutation with HTTP 200. Adopting them would turn a refusal into a
 	// success. Recorded in docs/development/upstream-bugs.md and examined in
 	// https://github.com/jmrplens/gitlab-mcp-server/issues/430.
-	"securityattributes.createSecurityAttributes":       {decisionKeep, securityWrapperSwallowsErrors},
-	"securityattributes.updateSecurityAttribute":        {decisionKeep, securityWrapperSwallowsErrors},
-	"securityattributes.destroySecurityAttribute":       {decisionKeep, securityWrapperSwallowsErrors},
-	"securityattributes.projectUpdateSecurityAttribute": {decisionKeep, securityWrapperSwallowsErrors},
-	"securityattributes.bulkUpdateSecurityAttributes":   {decisionKeep, securityWrapperSwallowsErrors},
+	"securityattributes.createSecurityAttributes":       {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
+	"securityattributes.updateSecurityAttribute":        {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
+	"securityattributes.destroySecurityAttribute":       {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
+	"securityattributes.projectUpdateSecurityAttribute": {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
+	"securityattributes.bulkUpdateSecurityAttributes":   {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
 
-	"securitycategories.createSecurityCategory":  {decisionKeep, securityWrapperSwallowsErrors},
-	"securitycategories.updateSecurityCategory":  {decisionKeep, securityWrapperSwallowsErrors},
-	"securitycategories.destroySecurityCategory": {decisionKeep, securityWrapperSwallowsErrors},
+	"securitycategories.createSecurityCategory":  {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
+	"securitycategories.updateSecurityCategory":  {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
+	"securitycategories.destroySecurityCategory": {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
 
 	// KEEP: the wrapper cannot page. TerraformStates.List sends a document that
 	// takes neither first nor after and selects neither count nor pageInfo, and
@@ -184,19 +196,29 @@ var graphqlDecisions = map[string]decision{
 	// pages, which upstream-bugs row 104 records as a commit not yet sent: it
 	// was to be added to gitlab-org/api/client-go!3063, closed unmerged on
 	// 2026-10-21, and goes out instead in a small merge request on its topic.
-	"terraformstates.listPage": {decisionKeep, "TerraformStates.List takes no first or after and selects no count or pageInfo, so a project with more than 100 states read as holding 100; the handler's paged document selects of each state what List and Get select, and retires when client-go's List pages (docs/development/upstream-bugs.md row 104)"},
+	// The handlers call TerraformStates for every other read, so the decision
+	// names List as the method it reads in place of, and R-ACTION does not list
+	// it as an action to write.
+	"terraformstates.listPage": {
+		Decision: decisionKeep,
+		Reason:   "TerraformStates.List takes no first or after and selects no count or pageInfo, so a project with more than 100 states read as holding 100; the handler's paged document selects of each state what List and Get select, and retires when client-go's List pages (docs/development/upstream-bugs.md row 104)",
+		Replaces: []string{"TerraformStates.List"},
+	},
 
 	// KEEP: client-go's Orbit service wraps the REST routes GitLab.com removed
 	// on 2026-10-27 and -28 (gitlab-org/gitlab!265633, !264745, !265998 and
 	// !266009), and GitLab answers each of these through GraphQL instead, which
 	// the service has no method for. Its Query and QueryRaw, the one route
 	// still served, are what orbit.Query calls. Each method that sends a
-	// removed route is a row of docs/development/upstream-bugs.md.
-	"orbit.Status":                 {decisionKeep, orbitRoutesRemoved},
-	"orbit.schemaPage":             {decisionKeep, orbitRoutesRemoved},
-	"orbit.graphStatusByPath":      {decisionKeep, orbitRoutesRemoved},
-	"orbit.graphStatusByGroupID":   {decisionKeep, orbitRoutesRemoved},
-	"orbit.graphStatusByProjectID": {decisionKeep, orbitRoutesRemoved},
+	// removed route is a row of docs/development/upstream-bugs.md. These
+	// replace no method here: acceptedMissingMethods answers the Orbit methods
+	// as SUPERSEDED_UPSTREAM, the decision R-ROUTE carries onto the removed
+	// routes, and R-ACTION refuses a method two tables answer.
+	"orbit.Status":                 {Decision: decisionKeep, Reason: orbitRoutesRemoved},
+	"orbit.schemaPage":             {Decision: decisionKeep, Reason: orbitRoutesRemoved},
+	"orbit.graphStatusByPath":      {Decision: decisionKeep, Reason: orbitRoutesRemoved},
+	"orbit.graphStatusByGroupID":   {Decision: decisionKeep, Reason: orbitRoutesRemoved},
+	"orbit.graphStatusByProjectID": {Decision: decisionKeep, Reason: orbitRoutesRemoved},
 }
 
 // orbitRoutesRemoved is the shared reason behind the Orbit GraphQL operations.

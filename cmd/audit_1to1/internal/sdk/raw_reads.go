@@ -166,19 +166,14 @@ func (b bodyRequests) bind(info *types.Info, lhs, rhs []ast.Expr) {
 	}
 }
 
-// assign records that variable is assigned the request at place, and
-// reports whether that changed what it holds: a variable assigned two
-// requests holds -1, which no later assignment changes.
-func (b bodyRequests) assign(variable *types.Var, place int) bool {
-	bound, isBound := b.vars[variable]
-	if isBound && bound != place {
+// assign records that variable is assigned the request at place: a
+// variable assigned two requests holds -1, which no later assignment
+// changes.
+func (b bodyRequests) assign(variable *types.Var, place int) {
+	if bound, isBound := b.vars[variable]; isBound && bound != place {
 		place = -1
 	}
-	if isBound && bound == place {
-		return false
-	}
 	b.vars[variable] = place
-	return true
 }
 
 // variableAliases returns each variable of lhs assigned the variable rhs
@@ -201,17 +196,20 @@ func variableAliases(info *types.Info, lhs, rhs []ast.Expr) []requestAlias {
 	return out
 }
 
-// follow gives each variable assigned another the request the other holds,
-// until a pass changes nothing, which it reaches because a variable's place
-// changes at most twice: so first = second, with first assigned a request
-// of its own, makes first a variable of two requests, and a call of Do
-// reading it is counted against both.
+// follow gives each variable assigned another the request the other holds:
+// so first = second, with first assigned a request of its own, makes first a
+// variable of two requests, and a call of Do reading it is counted against
+// both. A pass carries a place along every alias in turn, so it reaches at
+// least one alias further down every chain, and no chain is longer than the
+// list. As many passes as there are aliases therefore reach every variable a
+// place can reach, and the walk makes that many and stops, rather than
+// passing again until a pass changes nothing: a stop asked of what a pass
+// changed is one an operator rewritten in assign keeps from ever coming.
 func (b bodyRequests) follow(aliases []requestAlias) {
-	for changed := true; changed; {
-		changed = false
+	for range aliases {
 		for _, alias := range aliases {
 			if place, isBound := b.vars[alias.from]; isBound {
-				changed = b.assign(alias.to, place) || changed
+				b.assign(alias.to, place)
 			}
 		}
 	}

@@ -1,10 +1,10 @@
 // Copyright (c) 2026 José M. Requena Plens
 // SPDX-License-Identifier: MIT
 
-// Package auditshared holds analysis helpers shared by the discovery-metadata
-// auditors (cmd/audit_1to1 R-META and cmd/audit_discovery_completeness): the
-// projected-description probe, owner-package resolution, and the shared
-// usage/description quality checks.
+// Package auditshared holds analysis helpers shared by the auditors: the
+// projected-description probe, owner-package resolution, and the
+// usage/description quality checks cmd/audit_discovery_completeness applies,
+// which the R-META stream of cmd/audit_1to1 applied too until it was retired.
 //
 // It also holds [NewStubGitLabClient], the offline GitLab client the audit
 // commands construct. That one is a thin delegation to

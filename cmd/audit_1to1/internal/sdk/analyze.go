@@ -53,9 +53,10 @@ type report struct {
 	// that narrows a placeholder taking a name or a path.
 	Identifiers identifiersReport `json:"identifiers"`
 	// StaleDeclarations joins the seven tables' stale entries: a service
-	// declaration, a GraphQL decision, an enum exemption, an option struct
-	// declaration, an upstream wait, a capture declaration or an identifier
-	// declaration that no longer describes the code.
+	// declaration, a GraphQL decision or a method it replaces, an enum
+	// exemption, an option struct declaration, an upstream wait, a capture
+	// declaration or an identifier declaration that no longer describes the
+	// code.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
 }
 
@@ -191,7 +192,8 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	if err != nil {
 		return report{}, err
 	}
-	operations := buildGraphQLOperations(collectGraphQLSites(pkgs, graphQL), serviceIndex(services), graphqlServiceAliases, graphqlDecisions)
+	byName := serviceIndex(services)
+	operations := buildGraphQLOperations(collectGraphQLSites(pkgs, graphQL), byName, graphqlServiceAliases, graphqlDecisions)
 
 	// The enum rule loads the same packages (memoized per root) and reads
 	// the catalog compiled into this binary; with gapsOnly it already keeps
@@ -217,7 +219,8 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	// defer the scope.
 	identifiers, identifiersStale := analyzeIdentifiers(root, pkgs, usage, identifierDeclarations)
 
-	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale, waitsStale, capturesStale, identifiersStale)
+	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions),
+		staleGraphQLReplaces(graphqlDecisions, byName, graphqlServiceAliases, usage), enumRep.StaleExemptions, optionStale, waitsStale, capturesStale, identifiersStale)
 	summary := summarize(services, operations, enumRep.Summary, stale)
 	summarizeOptionStructs(&summary, options)
 	summarizeUpstreamWaits(&summary, upstream)

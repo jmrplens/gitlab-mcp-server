@@ -4,10 +4,11 @@
 // Package paths holds the 1:1 audit rule about the request an action actually
 // issues (R-PATH).
 //
-// The other five rules all describe the surface: the fields we accept
-// (R-INPUT), the fields we return (R-OUTPUT), the actions we register
-// (R-ACTION), the discovery metadata we attach (R-META) and the enum values we
-// advertise (R-ENUM). Every one of them compares what we publish against what
+// The surface rules all describe the surface: the fields we accept (R-INPUT),
+// the fields we return (R-OUTPUT), the actions we register (R-ACTION) and the
+// enum values we advertise (R-ENUM), with the discovery metadata we attach
+// (R-META) among them until cmd/audit_discovery_completeness took it over.
+// Every one of them compares what we publish against what
 // the SDK and the API documentation offer, and not one of them looks at the
 // request a handler builds. That is how nine registered tools shipped while
 // being unable to work: a perfect input struct, a perfect output struct, a

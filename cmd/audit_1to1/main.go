@@ -20,7 +20,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/grants"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/merge"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/metadata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/params"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/required"
@@ -54,7 +53,7 @@ var (
 func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
-	scope := flag.String("scope", "structs,actions,metadata,enums", "one of {structs,actions,metadata,enums,sdk,paths,grants,required,params,routes} for a single-scope report, or the first four (default) for the merged backlog; other combinations are not supported")
+	scope := flag.String("scope", "structs,actions,enums", "one of {structs,actions,enums,sdk,paths,grants,required,params,routes} for a single-scope report, or the first three (default) for the merged backlog; other combinations are not supported, and metadata (R-META) is retired in favor of cmd/audit_discovery_completeness")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
 	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint against GitLab's API documentation (needs the network and reads ~250 pages; fails on an endpoint no declaration in cmd/audit_1to1/internal/paths accounts for)")
 	e2eCalls := flag.String("e2e-calls", "", "with -scope=paths or -scope=grants, the shard directory an end-to-end run recorded its calls into (dist/e2e-calls after `make test-e2e-ce`), which lets the observation question (paths) and the request count and routes of each action (grants) be asked per action rather than per owning package; reports and never gates")
@@ -103,7 +102,7 @@ type options struct {
 }
 
 // run resolves the -scope selection, produces the report it names (the merged
-// backlog for the four candidate streams, one analyzer's native shape for a
+// backlog for the three merged streams, one analyzer's native shape for a
 // single scope) and writes it to outputPath.
 func run(ctx context.Context, opts options) error {
 	scopes, err := parseScope(opts.scope)
@@ -196,28 +195,25 @@ func validateDocs(ctx context.Context, root, outputPath string, fetcher *apidocs
 	return nil
 }
 
-// runMerged runs all four analyzers and produces the merged backlog JSON via
+// runMerged runs the three analyzers and produces the merged backlog JSON via
 // the shared merge pipeline. The root is resolved once for the three
-// filesystem scanners (structs, actions, enums); metadata uses the in-memory
-// catalog alone, and enums reads it beside the tree.
+// filesystem scanners; enums reads the in-memory catalog beside the tree.
 func runMerged(gapsOnly bool) ([]byte, error) {
 	root, err := repositoryRoot(".")
 	if err != nil {
 		return nil, fmt.Errorf("find repository root: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [1/4] analyzing struct field mapping (R-INPUT/R-OUTPUT)...")
+	cmdutil.Progressf("audit_1to1: [1/3] analyzing struct field mapping (R-INPUT/R-OUTPUT)...")
 	structBytes, err := structsRun(root, gapsOnly)
 	if err != nil {
 		return nil, fmt.Errorf("struct report: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [2/4] analyzing action coverage (R-ACTION)...")
+	cmdutil.Progressf("audit_1to1: [2/3] analyzing action coverage (R-ACTION)...")
 	actionBytes, err := actionsRun(root, gapsOnly)
 	if err != nil {
 		return nil, fmt.Errorf("action report: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [3/4] analyzing discovery metadata (R-META)...")
-	metadataBytes := metadata.Run(gapsOnly)
-	cmdutil.Progressf("audit_1to1: [4/4] analyzing enum values (R-ENUM)...")
+	cmdutil.Progressf("audit_1to1: [3/3] analyzing enum values (R-ENUM)...")
 	// The merged backlog is a report, not a gate, so the enum stream's own
 	// verdict is not consulted here; -scope=sdk is where it fails the build.
 	enumBytes, _, err := enumsRun(root, gapsOnly)
@@ -225,13 +221,13 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 		return nil, fmt.Errorf("enum report: %w", err)
 	}
 	cmdutil.Progressf("audit_1to1: merging backlog...")
-	return merge.BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes, enumBytes)
+	return merge.BuildBacklogFromBytes(structBytes, actionBytes, enumBytes)
 }
 
 // runSingle runs one analyzer and returns its native JSON shape plus whether
-// that scope's gate passes. Only sdk, enums, paths and grants gate; the three
-// candidate streams always report clean, because a listed candidate is a
-// backlog entry rather than a defect.
+// that scope's gate passes. The structs and actions streams always report
+// clean, because a listed candidate is a backlog entry rather than a defect;
+// every other scope gates.
 func runSingle(ctx context.Context, scope string, opts options) (content []byte, clean bool, err error) {
 	switch scope {
 	case "structs", "actions", "enums", "sdk", scopePaths, scopeGrants, scopeRequired, scopeParams, scopeRoutes:
@@ -265,10 +261,6 @@ func runSingle(ctx context.Context, scope string, opts options) (content []byte,
 		default:
 			return sdkRun(root, opts.gapsOnly)
 		}
-	case "metadata":
-		// The metadata analyzer reads the in-memory catalog, not the tree, so
-		// unlike the filesystem scanners it has nothing to fail at.
-		return metadata.Run(opts.gapsOnly), true, nil
 	default:
 		return nil, false, fmt.Errorf("unknown scope %q (valid: %s)", scope, strings.Join(validScopes, ", "))
 	}
@@ -310,20 +302,32 @@ const scopeRoutes = "routes"
 // paths and grants scopes are deliberately not among them: they gate rather
 // than accumulating candidates, and adding any would change the shape of
 // plan/1to1-backlog.json.
-var mergedScopes = []string{"actions", "enums", "metadata", "structs"}
+var mergedScopes = []string{"actions", "enums", "structs"}
 
 // validScopes is every value -scope accepts, in the order a message lists them.
-var validScopes = []string{"structs", "actions", "metadata", "enums", "sdk", scopePaths, scopeGrants, scopeRequired, scopeParams, scopeRoutes}
+var validScopes = []string{"structs", "actions", "enums", "sdk", scopePaths, scopeGrants, scopeRequired, scopeParams, scopeRoutes}
+
+// scopeMetadata is R-META, the discovery metadata stream, which is retired.
+const scopeMetadata = "metadata"
+
+// retiredMetadataScope is the refusal of -scope=metadata. R-META counted four
+// flags of the ActionSpec catalog and gated nothing, while
+// cmd/audit_discovery_completeness raises the same four with a severity and
+// fails on the errors among them, so a second count of them in this command
+// was a report nobody acted on.
+const retiredMetadataScope = `scope "metadata" (R-META) is retired: cmd/audit_discovery_completeness raises its four flags (generic_usage, aliases_only_toolname, empty_related, weak_individual_description) with a severity, and make audit-discovery-check fails on the errors among them`
 
 // isMergedScope reports whether scopes is exactly the merged set, so a
 // selection that merely happens to have as many entries (say
-// structs,actions,metadata,sdk) is rejected instead of silently merging.
+// structs,actions,sdk) is rejected instead of silently merging.
 func isMergedScope(scopes []string) bool {
 	return slices.Equal(scopes, mergedScopes)
 }
 
 // parseScope validates and normalizes the -scope flag. Returns the deduplicated,
 // sorted list of scopes. An empty value or "all" expands to the merged set.
+// The retired metadata scope is refused with the message that says where its
+// flags went, so the old default, which named it, is refused the same way.
 func parseScope(s string) ([]string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "all" {
@@ -333,6 +337,9 @@ func parseScope(s string) ([]string, error) {
 	var scopes []string
 	for raw := range strings.SplitSeq(s, ",") {
 		v := strings.TrimSpace(raw)
+		if v == scopeMetadata {
+			return nil, errors.New(retiredMetadataScope)
+		}
 		if !slices.Contains(validScopes, v) {
 			return nil, fmt.Errorf("invalid scope %q (valid: %s, all)", v, strings.Join(validScopes, ", "))
 		}
