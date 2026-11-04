@@ -15,6 +15,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The operations the group-scoped handlers name in what they report: the
+// resolution of the group, a refusal and a body that does not decode.
+const (
+	opRetrieveForGroup = "retrieve group storage moves"
+	opGetForGroup      = "get group storage move for group"
+	opSchedule         = "schedule group storage move"
+)
+
 // ListInput holds pagination parameters for listing all group storage moves.
 type ListInput struct {
 	toolutil.PaginationInput
@@ -167,7 +175,7 @@ func RetrieveForGroup(ctx context.Context, client *gitlabclient.Client, in ListF
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	groupID, err := resolveGroupID(ctx, client, "retrieve group storage moves", in.GroupID)
+	groupID, err := resolveGroupID(ctx, client, opRetrieveForGroup, in.GroupID)
 	if err != nil {
 		return ListOutput{}, err
 	}
@@ -183,13 +191,13 @@ func RetrieveForGroup(ctx context.Context, client *gitlabclient.Client, in ListF
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	moves, resp, err := client.GL().GroupRepositoryStorageMove.RetrieveAllStorageMovesForGroup(groupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve group storage moves", err, http.StatusNotFound,
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(opRetrieveForGroup, err, http.StatusNotFound,
 			"requires admin + Premium/Ultimate; verify group_id exists; only storage moves for the given group are returned")
 	}
 
 	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("retrieve group storage moves", err)
+		return ListOutput{}, toolutil.WrapErr(opRetrieveForGroup, err)
 	}
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
 	for i, m := range moves {
@@ -229,7 +237,7 @@ func GetForGroup(ctx context.Context, client *gitlabclient.Client, in GroupMoveI
 	if in.ID == 0 {
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
-	groupID, err := resolveGroupID(ctx, client, "get group storage move for group", in.GroupID)
+	groupID, err := resolveGroupID(ctx, client, opGetForGroup, in.GroupID)
 	if err != nil {
 		return Output{}, err
 	}
@@ -237,12 +245,12 @@ func GetForGroup(ctx context.Context, client *gitlabclient.Client, in GroupMoveI
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().GroupRepositoryStorageMove.GetStorageMoveForGroup(groupID, in.ID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get group storage move for group", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opGetForGroup, err, http.StatusNotFound,
 			"requires admin + Premium/Ultimate; verify the group_id + id pair with storage_move.retrieve_group, which lists this group's own moves; a move id belonging to another group answers 404 here, and the record may have been pruned after completion")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("get group storage move for group", err)
+		return Output{}, toolutil.WrapErr(opGetForGroup, err)
 	}
 	return toOutput(move, extra), nil
 }
@@ -252,7 +260,7 @@ func Schedule(ctx context.Context, client *gitlabclient.Client, in ScheduleInput
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	groupID, err := resolveGroupID(ctx, client, "schedule group storage move", in.GroupID)
+	groupID, err := resolveGroupID(ctx, client, opSchedule, in.GroupID)
 	if err != nil {
 		return Output{}, err
 	}
@@ -263,12 +271,12 @@ func Schedule(ctx context.Context, client *gitlabclient.Client, in ScheduleInput
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().GroupRepositoryStorageMove.ScheduleStorageMoveForGroup(groupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("schedule group storage move", err, http.StatusBadRequest,
+		return Output{}, toolutil.WrapErrWithStatusHint(opSchedule, err, http.StatusBadRequest,
 			"requires admin + Premium/Ultimate; destination_storage_name must reference an existing Gitaly shard; cannot move to the same shard")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("schedule group storage move", err)
+		return Output{}, toolutil.WrapErr(opSchedule, err)
 	}
 	return toOutput(move, extra), nil
 }

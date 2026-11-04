@@ -818,7 +818,7 @@ Action guidance:
 - custom_attr_get: Get one custom attribute by key for a user, group, or project (admin only).
 - custom_attr_list: List custom attributes set on a user, group, or project (admin only). Custom attributes are admin-only key/value metadata.
 - custom_attr_set: Set (create or update) a custom attribute by key on a user, group, or project (admin only). Provide key and value.
-- db_migration_mark: Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.
+- db_migration_mark: Mark a pending database migration as successfully executed (admin only), so db:migrate skips it. Provide the migration version and, for a database other than main, its name. Use only for a failing migration judged safe to skip.
 - dependency_proxy_delete: Purge the dependency proxy cache for a group, freeing storage used by cached upstream images. Provide the group id.
 - error_tracking_create: Create an error-tracking client key for a project's integrated error tracking. Provide project_id.
 - error_tracking_delete: Delete an error-tracking client key from a project by project_id and key id.
@@ -905,6 +905,10 @@ Parameter guidance:
 - cluster_agent_token_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - cluster_agent_token_revoke.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_token_revoke.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- custom_attr_delete.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_get.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_list.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_set.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
 - db_migration_mark.version: migration_version. Source: The migration's timestamp version, as GitLab names it in the migration file.
 - dependency_proxy_delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - error_tracking_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -1076,7 +1080,7 @@ Parameter constraints (beyond schema):
 - bulk_import_start.entities[].source_type is one of group_entity, project_entity. migrate_projects and migrate_memberships apply only to group_entity. destination_namespace must already exist on the target instance.
 - import_bitbucket_server.bitbucket_server_project is the project KEY (usually uppercase, from the Bitbucket URL), not the display name.
 - usage_data_track_event.namespace_id and .project_id are mutually-exclusive context refs (provide at most one). send_to_snowplow=false keeps the event internal to GitLab.
-- db_migration_mark.database is one of main, ci. Defaults to 'main'. Marking a non-applied migration corrupts schema_migrations. Verify first via metadata_get.
+- db_migration_mark.database is the database the migration belongs to, main unless given. Marking records a migration as executed, so db:migrate never runs it: mark only one that failed and was judged safe to skip. No action here shows whether a migration is pending or applied, while gitlab-rake db:migrate:status on the instance does.
 - terraform_state_lock fails if the state is already locked. Unlock breaks any active client session holding the lock.
 - topic_create.name must be globally unique (slug). Title is the display name shown in the UI.
 - List actions: page defaults to 1, per_page defaults to 20 (GitLab cap is 100).
@@ -10854,12 +10858,12 @@ Action guidance:
 Parameter guidance:
 - get_project.id: target_resource. Source: Numeric ID of the repository storage move, taken from a retrieve_all/retrieve_project listing. Avoid: This is the storage move record ID, not the project ID.
 - get_project_for_project.id: target_resource. Source: Numeric ID of the repository storage move, taken from a retrieve_all/retrieve_project listing. Avoid: This is the storage move record ID, not the project ID.
-- get_project_for_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
-- retrieve_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
+- get_project_for_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
+- retrieve_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
 - schedule_all_project.destination_storage_name: config_value. Source: Name of a Gitaly storage shard already configured on the instance to move the repository to. Avoid: Must reference an existing storage shard. Cannot equal the shard the project currently lives on. Omit to let GitLab pick a shard by weight.
 - schedule_all_project.source_storage_name: config_value. Source: Name of the Gitaly storage shard to drain. Every project on this shard is scheduled to move. Avoid: This is the shard to move projects away from, not the destination.
 - schedule_project.destination_storage_name: config_value. Source: Name of a Gitaly storage shard already configured on the instance to move the repository to. Avoid: Must reference an existing storage shard. Cannot equal the shard the project currently lives on. Omit to let GitLab pick a shard by weight.
-- schedule_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
+- schedule_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
 
 Manage repository storage moves for projects, groups, and snippets (admin only).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden, each with actionable hints.

@@ -20,11 +20,12 @@
 //     MCP input fields (by json tag) to find SDK fields with no MCP
 //     counterpart (R-INPUT) and advisory Go-type divergences. A struct no
 //     field of which carries a json tag is no input, and a literal a
-//     function that is no handler sends itself and never fills from the
-//     input, in its values or afterwards, is a lookup of its own, attributed
-//     to nothing. A pair found through a caller keeps the structs of ours
-//     its values went through, at the call and down the chain, and a
-//     declaration written on one of them answers it.
+//     function that is no handler sends, itself or by handing it to a helper
+//     of its package that sends it, and never fills from the input, in its
+//     values or afterwards, is a lookup of its own, attributed to nothing. A
+//     pair found through a caller keeps the structs of ours its values went
+//     through, at the call and down the chain, into the request they reach,
+//     and a declaration written on one of them answers it.
 //   - output pairs: each converter func(...src *gl.Y...) LocalStruct maps an SDK
 //     result struct to an MCP output struct, whether the package declares it or
 //     instantiates a generic one with its own output type

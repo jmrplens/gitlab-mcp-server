@@ -83,13 +83,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_group_storage_move_for_group`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Repository Storage Move: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
+- **Token de grano fino**: Repository Storage Move: Read en grupo. Algunas llamadas también necesitan: Group: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro  | Tipo      | Requerido | Descripción                    |
-| ---------- | --------- | --------- | ------------------------------ |
-| `group_id` | `integer` | sí        | Numeric ID of the group        |
-| `id`       | `integer` | sí        | Numeric ID of the storage move |
+| Parámetro  | Tipo             | Requerido | Descripción                    |
+| ---------- | ---------------- | --------- | ------------------------------ |
+| `group_id` | `string/integer` | sí        | Group ID or URL-encoded path   |
+| `id`       | `integer`        | sí        | Numeric ID of the storage move |
 
 ### `storage_move.get_project`
 
@@ -114,13 +114,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_project_storage_move_for_project`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Repository Storage Move: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
+- **Token de grano fino**: Repository Storage Move: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro    | Tipo      | Requerido | Descripción                    |
-| ------------ | --------- | --------- | ------------------------------ |
-| `id`         | `integer` | sí        | Numeric ID of the storage move |
-| `project_id` | `integer` | sí        | Numeric ID of the project      |
+| Parámetro    | Tipo             | Requerido | Descripción                    |
+| ------------ | ---------------- | --------- | ------------------------------ |
+| `id`         | `integer`        | sí        | Numeric ID of the storage move |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
 
 ### `storage_move.get_snippet`
 
@@ -215,12 +215,12 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_retrieve_group_storage_moves`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Repository Storage Move: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
+- **Token de grano fino**: Repository Storage Move: Read en grupo. Algunas llamadas también necesitan: Group: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro  | Tipo                     | Requerido | Descripción                                                                                                           |
 | ---------- | ------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| `group_id` | `integer`                | sí        | Numeric ID of the group                                                                                               |
+| `group_id` | `string/integer`         | sí        | Group ID or URL-encoded path                                                                                          |
 | `order_by` | `string`                 | no        | Column to order results by (e.g. id).                                                                                 |
 | `page`     | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
 | `per_page` | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
@@ -234,12 +234,12 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_retrieve_project_storage_moves`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Repository Storage Move: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
+- **Token de grano fino**: Repository Storage Move: Read en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro    | Tipo                     | Requerido | Descripción                                                                                                           |
 | ------------ | ------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| `project_id` | `integer`                | sí        | Numeric ID of the project                                                                                             |
+| `project_id` | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                        |
 | `order_by`   | `string`                 | no        | Column to order results by (e.g. id).                                                                                 |
 | `page`       | `integer`                | no        | Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward. |
 | `per_page`   | `integer`                | no        | Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large. |
@@ -320,13 +320,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_schedule_group_storage_move`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Repository Storage Move: Create en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
+- **Token de grano fino**: Repository Storage Move: Create en grupo. Algunas llamadas también necesitan: Group: Read en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro                  | Tipo      | Requerido | Descripción                           |
-| -------------------------- | --------- | --------- | ------------------------------------- |
-| `group_id`                 | `integer` | sí        | Numeric ID of the group               |
-| `destination_storage_name` | `string`  | no        | Name of the destination storage shard |
+| Parámetro                  | Tipo             | Requerido | Descripción                           |
+| -------------------------- | ---------------- | --------- | ------------------------------------- |
+| `group_id`                 | `string/integer` | sí        | Group ID or URL-encoded path          |
+| `destination_storage_name` | `string`         | no        | Name of the destination storage shard |
 
 ### `storage_move.schedule_project`
 
@@ -336,13 +336,13 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_schedule_project_storage_move`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: Repository Storage Move: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
+- **Token de grano fino**: Repository Storage Move: Create en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#storage_move))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro                  | Tipo      | Requerido | Descripción                           |
-| -------------------------- | --------- | --------- | ------------------------------------- |
-| `project_id`               | `integer` | sí        | Numeric ID of the project             |
-| `destination_storage_name` | `string`  | no        | Name of the destination storage shard |
+| Parámetro                  | Tipo             | Requerido | Descripción                           |
+| -------------------------- | ---------------- | --------- | ------------------------------------- |
+| `project_id`               | `string/integer` | sí        | Project ID or URL-encoded path        |
+| `destination_storage_name` | `string`         | no        | Name of the destination storage shard |
 
 ### `storage_move.schedule_snippet`
 

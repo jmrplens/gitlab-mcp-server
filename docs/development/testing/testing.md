@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,296 |
-| Unit test functions                                   | 21,591 |
-| E2E test functions                                    |  1,705 |
-| cmd test functions                                    |  5,703 |
-| Test files (internal/)                                |    750 |
-| Test files (cmd/)                                     |    462 |
+| Total test functions                                  | 23,436 |
+| Unit test functions                                   | 21,730 |
+| E2E test functions                                    |  1,706 |
+| cmd test functions                                    |  5,810 |
+| Test files (internal/)                                |    751 |
+| Test files (cmd/)                                     |    472 |
 | Test files (test/e2e/)                                |    438 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     35 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,700 | 58.8% |
-| `TestFunc` (no underscore)             |    903 |  3.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,693 | 37.3% |
+| `TestFunc_Scenario` (2-part)           | 13,714 | 58.5% |
+| `TestFunc` (no underscore)             |    901 |  3.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,821 | 37.6% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,229 |        259 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            439 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,220 |        475 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,705 |        438 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,703 |        462 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,296** |  **1,650** |                                                                                                 |
+| Tool sub-packages (181) |         11,252 |        476 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,706 |        438 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          5,810 |        472 | server entry point and developer command utilities                                              |
+| **Total**               |     **23,436** |  **1,661** |                                                                                                 |
 
 ### Core Packages
 
@@ -162,7 +162,7 @@
 | commits                 |        155 |          4 |   100.0% |        13 |
 | compliancepolicy        |         10 |          1 |   100.0% |         2 |
 | containerregistry       |        125 |          4 |   100.0% |        16 |
-| customattributes        |         33 |          1 |   100.0% |         4 |
+| customattributes        |         46 |          2 |   100.0% |         4 |
 | customemoji             |         39 |          3 |   100.0% |         3 |
 | dbmigrations            |          7 |          1 |   100.0% |         1 |
 | dependencies            |         26 |          4 |   100.0% |         4 |
@@ -214,7 +214,7 @@
 | groupscim               |         31 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |         37 |          2 |   100.0% |         9 |
 | groupsshcerts           |         32 |          5 |   100.0% |         3 |
-| groupstoragemoves       |         38 |          2 |   100.0% |         6 |
+| groupstoragemoves       |         47 |          2 |   100.0% |         6 |
 | groupvariables          |         61 |          4 |   100.0% |         5 |
 | groupwikis              |         44 |          3 |   100.0% |         5 |
 | health                  |         27 |          1 |   100.0% |         2 |
@@ -268,7 +268,7 @@
 | projects                |        507 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         28 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
-| projectstoragemoves     |         21 |          2 |   100.0% |         6 |
+| projectstoragemoves     |         31 |          2 |   100.0% |         6 |
 | projecttemplates        |         27 |          1 |   100.0% |         2 |
 | protectedenvdata        |          5 |          2 |   100.0% |         0 |
 | protectedenvs           |         55 |          2 |   100.0% |         5 |
@@ -313,7 +313,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,220** |    **475** |          | **1,195** |
+| **Total**               | **11,252** |    **476** |          | **1,195** |
 
 </details>
 
@@ -325,10 +325,11 @@
 | ----------------------------------------- | -------: |
 | cmd/audit_1to1                            |   100.0% |
 | cmd/audit_1to1/internal/actions           |   100.0% |
+| cmd/audit_1to1/internal/baseline          |      n/a |
 | cmd/audit_1to1/internal/enums             |   100.0% |
 | cmd/audit_1to1/internal/grants            |   100.0% |
+| cmd/audit_1to1/internal/issues            |      n/a |
 | cmd/audit_1to1/internal/merge             |   100.0% |
-| cmd/audit_1to1/internal/metadata          |   100.0% |
 | cmd/audit_1to1/internal/params            |   100.0% |
 | cmd/audit_1to1/internal/paths             |   100.0% |
 | cmd/audit_1to1/internal/required          |   100.0% |

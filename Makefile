@@ -1232,42 +1232,46 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/36] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/36] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/36] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/36] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/36] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/36] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
-	run_check "[7/36] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/36] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/36] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/36] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/36] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/36] pinned GraphQL schemas, gitlab.com's and the release's" $(MAKE) --no-print-directory check-graphql-schema; \
-	run_check "[13/36] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/36] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -gaps-only; \
-	run_check "[15/36] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/36] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/36] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
-	run_check "[18/36] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/36] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/36] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/36] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/36] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/36] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/36] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/36] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
-	run_check "[26/36] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
-	run_check "[27/36] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
-	run_check "[28/36] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/36] parameter requiredness (R-REQUIRED)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
-	run_check "[30/36] params of the routes reached (R-PARAM)" go run ./cmd/audit_1to1/ -scope=params -gaps-only; \
-	run_check "[31/36] routes the live record mounts (R-ROUTE)" go run ./cmd/audit_1to1/ -scope=routes -gaps-only; \
-	run_check "[32/36] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
-	run_check "[33/36] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
-	run_check "[34/36] copyright and license headers" go run ./cmd/audit_file_headers/; \
-	run_check "[35/36] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
-	run_check "[36/36] the OpenVEX document against the dependency set" go run ./cmd/audit_vex/ -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[1/40] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/40] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/40] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/40] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/40] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/40] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
+	run_check "[7/40] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/40] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/40] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/40] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/40] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/40] pinned GraphQL schemas, gitlab.com's and the release's" $(MAKE) --no-print-directory check-graphql-schema; \
+	run_check "[13/40] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/40] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -gaps-only; \
+	run_check "[15/40] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/40] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/40] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
+	run_check "[18/40] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/40] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/40] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/40] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/40] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/40] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/40] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/40] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/40] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/40] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
+	run_check "[28/40] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
+	run_check "[29/40] parameter requiredness (R-REQUIRED)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[30/40] params of the routes reached (R-PARAM)" go run ./cmd/audit_1to1/ -scope=params -gaps-only; \
+	run_check "[31/40] routes the live record mounts (R-ROUTE)" go run ./cmd/audit_1to1/ -scope=routes -gaps-only; \
+	run_check "[32/40] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
+	run_check "[33/40] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
+	run_check "[34/40] copyright and license headers" go run ./cmd/audit_file_headers/; \
+	run_check "[35/40] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
+	run_check "[36/40] the OpenVEX document against the dependency set" go run ./cmd/audit_vex/ -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[37/40] SDK parity at the pinned client-go" go run ./cmd/audit_1to1/ -scope=sdk -gaps-only; \
+	run_check "[38/40] enum values (R-ENUM)" go run ./cmd/audit_1to1/ -scope=enums -gaps-only; \
+	run_check "[39/40] report-only 1:1 findings against the committed baseline" go run ./cmd/audit_1to1/ -check-baseline; \
+	run_check "[40/40] discovery metadata (META-001)" go run ./cmd/audit_discovery_completeness/ -gaps-only -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1987,7 +1991,9 @@ audit-1to1:
 ## does not declare), an option struct no input fills, a workaround whose predicate
 ## the pinned SDK no longer meets, a captured key the SDK struct beside it models, an
 ## integer input passed where GitLab accepts a path, or a declaration or exemption
-## that has gone stale.
+## that has gone stale. Step 37 of make analyze and a step of CI's generated job, at the
+## client-go go.mod pins; .github/workflows/upstream-drift.yml asks it of the newest
+## client-go every week, so what a bump will have to answer is known before the bump.
 audit-1to1-sdk:
 	go run ./cmd/audit_1to1/ -scope=sdk -gaps-only
 
@@ -2135,11 +2141,14 @@ audit-1to1-routes-report:
 
 ## audit-1to1-enums: the enum value rule on its own (R-ENUM), in its native shape.
 ## Fails on a value the SDK declares that no schema enum or description offers, on a
-## value offered that the SDK does not declare, or on a stale exemption.
+## value offered that the SDK does not declare, or on a stale exemption. Step 38 of make
+## analyze and a step of CI's generated job.
 audit-1to1-enums:
 	go run ./cmd/audit_1to1/ -scope=enums -gaps-only
 
-## audit-1to1-validate-docs: verify every doc/api citation behind the 1:1 adjudication tables is still fetchable.
+## audit-1to1-validate-docs: verify every doc/api citation behind the 1:1 adjudication tables is
+## still fetchable from gitlab-org/gitlab's master. It needs the network, so it is not a step of
+## make analyze; .github/workflows/upstream-drift.yml runs it every week.
 audit-1to1-validate-docs:
 	go run ./cmd/audit_1to1/ -validate-docs
 
@@ -2158,7 +2167,8 @@ gen-audit-1to1-baseline:
 ## naming its stream and key, and on a key of the file no finding answers. It reads the
 ## request records make gen-action-grants and make gen-request-inventory commit, so the
 ## unit suite's comparison of the file with the tree waits on the FRESHNESS deferral, as
-## R-GRANT's does. No network.
+## R-GRANT's does, and so does its step in CI's generated job. Step 39 of make analyze. No
+## network.
 check-audit-1to1-baseline:
 	go run ./cmd/audit_1to1/ -check-baseline
 
@@ -2167,7 +2177,8 @@ check-audit-1to1-baseline:
 ## identifier of the sdk scope. FAILS on an issue that is closed, is a pull request or is not
 ## in the repository, naming the rows that rest on it, and on one it could not ask about (a
 ## refused token, a rate limit, no network), which is never a pass. It asks with
-## GITHUB_TOKEN or GH_TOKEN when either is set, and needs the network.
+## GITHUB_TOKEN or GH_TOKEN when either is set, and needs the network, so it is not a step of
+## make analyze; .github/workflows/upstream-drift.yml runs it every week.
 audit-1to1-issues:
 	go run ./cmd/audit_1to1/ -check-issues
 
@@ -2189,10 +2200,12 @@ audit-edition-tier:
 audit-discovery:
 	go run ./cmd/audit_discovery_completeness/ -gaps-only -output plan/discovery-backlog.json
 
-## audit-discovery-check: CI gate for META-001. Exits non-zero when any error-severity finding is present.
-## Note: post-Phase-0 baseline has ~439 errors (real findings); this gate is
-## designed to drive Phase 1+ waves to zero. Use `make audit-discovery` for
-## the human-readable report.
+## audit-discovery-check: gate META-001, step 40 of make analyze and a step of CI's generated
+## job. FAILS on any error-severity finding: a generic Usage line, a variant that does not tell
+## itself from its siblings, and the alias, related-action and individual description flags of
+## an action whose cluster holds a non-CRUD variant. The catalog reads 0 of them, so a change
+## that adds one fails here; `make audit-discovery` writes the whole report with its warnings
+## and infos.
 audit-discovery-check:
 	go run ./cmd/audit_discovery_completeness/ -gaps-only -check
 

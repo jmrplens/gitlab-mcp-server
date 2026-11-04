@@ -134,6 +134,35 @@ func TestAnswerUnresolved_APathThatNamesNothing_IsANotFoundResultWithAHint(t *te
 	}
 }
 
+// TestActionSpecs_AnEncodedPath_IsLookedUpEscapedOnce verifies a group path
+// sent URL-encoded, the form the schema names, reaches GitLab escaped once
+// through the route the catalog holds for each of the three actions that read a
+// path into its ID: the route decodes group_id before the handler runs, as the
+// dispatchers decode every path identifier by name, and client-go escapes the
+// plain path itself, so the lookup is top%2Fsub and never top%252Fsub.
+func TestActionSpecs_AnEncodedPath_IsLookedUpEscapedOnce(t *testing.T) {
+	for _, tc := range []struct {
+		tool, route string
+		args        map[string]any
+	}{
+		{"gitlab_retrieve_group_storage_moves", "GET /api/v4/groups/42/repository_storage_moves", map[string]any{"group_id": "top%2Fsub"}},
+		{"gitlab_get_group_storage_move_for_group", "GET /api/v4/groups/42/repository_storage_moves/1", map[string]any{"group_id": "top%2Fsub", "id": 1}},
+		{"gitlab_schedule_group_storage_move", "POST /api/v4/groups/42/repository_storage_moves", map[string]any{"group_id": "top%2Fsub"}},
+	} {
+		t.Run(tc.tool, func(t *testing.T) {
+			var requests requestLog
+			client := testutil.NewTestClient(t, groupAnswer(&requests))
+			if _, err := routeOf(t, client, tc.tool).Handler(t.Context(), tc.args); err != nil {
+				t.Fatalf("Handler() error = %v", err)
+			}
+			want := []string{"GET /api/v4/groups/top%2Fsub", tc.route}
+			if got := requests.requests(); !slices.Equal(got, want) {
+				t.Errorf("requests = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // routeOf finds the route the catalog holds for one individual tool.
 func routeOf(t *testing.T, client *gitlabclient.Client, tool string) toolutil.ActionRoute {
 	t.Helper()

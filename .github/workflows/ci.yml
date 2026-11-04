@@ -139,10 +139,15 @@ jobs:
   # would generate now. They used to sit in front of the coverage run in one
   # job, which meant a stale README table delayed the coverage result by two
   # minutes and a failing one hid it entirely. None of them needs the suite.
+  #
+  # The timeout is a bound, not an expectation: the job took 13 of the 15 it
+  # had on main on 2026-11-03, before the SDK, enum, baseline and discovery
+  # gates of the 1:1 audit joined it, and it is not on the critical path,
+  # which the platform matrix holds at well over half an hour.
   generated:
     name: "🔎 Generated artifacts"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -264,6 +269,30 @@ jobs:
       - name: Check that every live route is reached or answered (R-ROUTE)
         if: env.FRESHNESS == 'checked'
         run: make audit-1to1-routes
+      # Every client-go service, raw GraphQL operation and enum value held
+      # to a decision, with the option structs a call sends, the workarounds
+      # waiting on client-go, the captured keys and the identifiers client-go
+      # narrows, at the client-go go.mod pins. It reads the tree and the
+      # module cache, never a committed record, so it is never deferred.
+      # upstream-drift.yml asks it of the newest client-go every week.
+      - name: Check SDK parity at the pinned client-go
+        run: make audit-1to1-sdk
+      - name: Check the enum values every action offers (R-ENUM)
+        run: make audit-1to1-enums
+      # What the scopes report without gating, held to the committed
+      # docs/development/audit-1to1-baseline.json: a finding the file does
+      # not hold and a key no finding answers both fail, so a change shows
+      # what it adds to the report-only streams. Three of the scopes read the
+      # request record the derivation commits, so it is deferred with R-GRANT.
+      - name: Check the report-only 1:1 findings against the baseline
+        if: env.FRESHNESS == 'checked'
+        run: make check-audit-1to1-baseline
+      # The discovery metadata of every action (META-001): a generic Usage,
+      # a variant that does not tell itself from its siblings, and the flags
+      # a cluster with a non-CRUD variant raises to an error. It reads the
+      # catalog the tree builds, so it is never deferred.
+      - name: Check the discovery metadata of every action
+        run: make audit-discovery-check
       # The Orbit twin of the record above: what GitLab.com's Orbit routes
       # answered the requests the handlers build, as a key tree. No
       # self-managed GitLab serves Orbit, so no boot could answer it, and the
@@ -609,8 +638,7 @@ jobs:
       # tests under every e2e tag, about two minutes on five cores from an
       # empty build cache and seconds from a warm one, which is why it sits in
       # this job rather than beside the other test-convention gates in the
-      # generated one, whose runs already take eight to ten of its fifteen
-      # minutes.
+      # generated one, whose runs already take thirteen minutes and more.
       - name: Check no test uses a closed httptest server's address
         run: make check-closed-servers
 

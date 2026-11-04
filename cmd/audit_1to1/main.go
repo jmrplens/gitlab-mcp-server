@@ -4,6 +4,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -69,7 +70,7 @@ func main() {
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
 	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint with the documentation oracle "+paths.DocEndpointsFile+" (offline; fails on an endpoint neither it nor a declaration in cmd/audit_1to1/internal/paths accounts for, and on an oracle read at another release than the live record's)")
 	writeDocEndpoints := flag.Bool("write-doc-endpoints", false, "instead of the audit, read GitLab's API documentation (doc/api of gitlab-org/gitlab) at -doc-ref and write the endpoint oracle -check-endpoints reads to -output (needs the network and reads ~250 pages; make gen-api-doc-endpoints)")
-	docRef := flag.String("doc-ref", "", "with -write-doc-endpoints, the gitlab-org/gitlab tag or branch to read doc/api at (default: the tag of the live API record's release, the only ref -check-endpoints accepts)")
+	docRef := flag.String("doc-ref", "", "the gitlab-org/gitlab tag or branch to read doc/api at: with -write-doc-endpoints, by default the tag of the live API record's release, the only ref -check-endpoints accepts; with -validate-docs, by default "+citationsRef)
 	e2eCalls := flag.String("e2e-calls", "", "with -scope=paths or -scope=grants, the shard directory an end-to-end run recorded its calls into (dist/e2e-calls after `make test-e2e-ce`), which lets the observation question (paths) and the request count and routes of each action (grants) be asked per action rather than per owning package; reports and never gates, and a directory either scope cannot read fails the run")
 	refresh := flag.Bool("refresh", false, "with -validate-docs or -write-doc-endpoints, force re-fetch of the docs even when cached and fresh")
 	offline := flag.Bool("offline", false, "with -validate-docs or -write-doc-endpoints, use only cached docs; do not fetch")
@@ -80,7 +81,7 @@ func main() {
 	flag.Parse()
 
 	if *validateDocs {
-		runValidateDocsMode(*outputPath, *refresh, *offline, *maxAge)
+		runValidateDocsMode(*outputPath, *docRef, *refresh, *offline, *maxAge)
 		return
 	}
 	if *writeDocEndpoints {
@@ -189,21 +190,37 @@ func gateFailure(scopes []string) string {
 	}
 }
 
-// runValidateDocsMode resolves the repo root, builds the shared API-doc fetcher,
-// validates the cited docs, writes the report, and exits non-zero when any
-// citation is stale so it can gate CI.
-func runValidateDocsMode(outputPath string, refresh, offline bool, maxAge time.Duration) {
+// citationsRef is the gitlab-org/gitlab ref -validate-docs reads the cited
+// pages at when -doc-ref names none: master, since a citation is a claim about
+// the documentation GitLab publishes now.
+//
+// The pages are read through the repository files API at that ref, as
+// -write-doc-endpoints reads them, and not through the raw web route under
+// master the shared fetcher defaults to. Measured on 2026-11-04, the raw route
+// answered one of the 37 cited pages with HTTP 429 on all six attempts, as it
+// did the oracle's sweep after some thirty pages (see apidocs.DefaultFilesURL),
+// so a weekly run reading it reported a citation stale that was not.
+const citationsRef = "master"
+
+// runValidateDocsMode resolves the repo root, builds an API-doc fetcher at ref
+// (citationsRef when empty), validates the cited docs, writes the report, and
+// exits non-zero when any citation is stale so it can gate CI.
+func runValidateDocsMode(outputPath, ref string, refresh, offline bool, maxAge time.Duration) {
 	root, err := repositoryRoot(".")
 	if err != nil {
 		fatalf("find repository root: %v", err)
 		return
 	}
+	// Strict: a download failure (e.g. an upstream 404 for a renamed/removed doc)
+	// must surface as a stale citation rather than be masked by a cached copy.
+	fetcher, err := apidocs.NewAtRef(root, cmp.Or(ref, citationsRef), apidocs.Options{Refresh: refresh, Offline: offline, MaxAge: maxAge, Strict: true})
+	if err != nil {
+		fatalf("%v", err)
+		return
+	}
 	// Cancel the doc-fetch sweep on Ctrl+C so a slow validation aborts promptly.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	// Strict: a download failure (e.g. an upstream 404 for a renamed/removed doc)
-	// must surface as a stale citation rather than be masked by a cached copy.
-	fetcher := apidocs.New(root, apidocs.Options{Refresh: refresh, Offline: offline, MaxAge: maxAge, Strict: true})
 	if validateErr := validateDocs(ctx, root, outputPath, fetcher); validateErr != nil {
 		fatalf("%v", validateErr)
 	}

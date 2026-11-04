@@ -47,7 +47,7 @@ func TestHandlerShapes_WithoutBodyOrParams_AreSkipped(t *testing.T) {
 	pkg := &packages.Package{PkgPath: "example.com/x/internal/tools/p"}
 	bodyless := &ast.FuncDecl{Name: ast.NewIdent("Handle"), Type: &ast.FuncType{Params: &ast.FieldList{}}}
 	pairs := map[[2]string]structPair{}
-	collectHandlerInputs(pkg, bodyless, pairs)
+	collectHandlerInputs(pkg, bodyless, nil, pairs)
 	if len(pairs) != 0 {
 		t.Errorf("a bodyless handler recorded %d pairs, want none", len(pairs))
 	}
@@ -2779,7 +2779,7 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 		pkg, fn := handler(optionsNamed)
 		pairs := map[[2]string]structPair{}
 
-		collectHandlerInputs(pkg, fn, pairs)
+		collectHandlerInputs(pkg, fn, nil, pairs)
 
 		// The pair is compared side by side with ==, which holds each
 		// go/types value to the very object declared above rather than to one
@@ -2801,7 +2801,7 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 		pkg, fn := handler(resultNamed)
 		pairs := map[[2]string]structPair{}
 
-		collectHandlerInputs(pkg, fn, pairs)
+		collectHandlerInputs(pkg, fn, nil, pairs)
 
 		if len(pairs) != 0 {
 			t.Errorf("collectHandlerInputs recorded %+v, want no pair for a result literal", pairs)
@@ -2812,7 +2812,7 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 		pkg, fn := handler(localNamed)
 		pairs := map[[2]string]structPair{}
 
-		collectHandlerInputs(pkg, fn, pairs)
+		collectHandlerInputs(pkg, fn, nil, pairs)
 
 		if len(pairs) != 0 {
 			t.Errorf("collectHandlerInputs recorded %+v, want no pair for a local Options literal", pairs)
@@ -3109,28 +3109,213 @@ func copied(c *gl.Client, in CopyInput) error {
 	_, err := c.Widgets.ListWidgets(&opts)
 	return err
 }
+
+type CheckInput struct {
+	Search string ~json:"search"~
+}
+
+// check reads the options it is handed and writes none of them.
+func check(opts *gl.ListWidgetsOptions, search string) bool {
+	return opts.Search == nil && search != ""
+}
+
+// checked hands the options it sends, beside its input, to a helper that
+// only reads them.
+func checked(c *gl.Client, in CheckInput) error {
+	opts := &gl.ListWidgetsOptions{}
+	check(opts, in.Search)
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+type IgnoreInput struct {
+	Search string ~json:"search"~
+}
+
+// ignore takes the options under no name.
+func ignore(*gl.ListWidgetsOptions, string) {}
+
+// ignored hands the options it sends, beside its input, to a helper that
+// gives them no name.
+func ignored(c *gl.Client, in IgnoreInput) error {
+	opts := &gl.ListWidgetsOptions{}
+	ignore(opts, in.Search)
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+type AnyInput struct {
+	Search string ~json:"search"~
+}
+
+// fillAny fills the options it is handed as a value of any type.
+func fillAny(v any, search string) { v.(*gl.ListWidgetsOptions).Search = &search }
+
+// anyFilled has a helper that takes any value fill the options it sends.
+func anyFilled(c *gl.Client, in AnyInput) error {
+	opts := &gl.ListWidgetsOptions{}
+	fillAny(opts, in.Search)
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+type MapFillInput struct {
+	Name string ~json:"name"~
+}
+
+// revoke deletes the name it is handed from the map the options it is
+// handed hold, a write through them that no assignment spells.
+func revoke(opts *gl.ProtectOptions, name string) { delete(opts.ByUser, name) }
+
+// mapFilled has a helper write, from its input, into the map of the
+// protection it sends.
+func mapFilled(c *gl.Client, in MapFillInput) error {
+	opts := &gl.ProtectOptions{ByUser: map[string]*gl.PermissionOptions{}}
+	revoke(opts, in.Name)
+	return c.Widgets.Protect(1, opts)
+}
+
+type ValueInput struct {
+	Search string ~json:"search"~
+}
+
+// filler is fill held in a variable, whose body no call reads.
+var filler = fill
+
+// valueFilled has the helper fill the options it sends through a variable.
+func valueFilled(c *gl.Client, in ValueInput) error {
+	opts := &gl.ListWidgetsOptions{}
+	filler(opts, in.Search)
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+// peek reads the options of its receiver.
+func (w *wrapped) peek(s string) bool { return w.Search == nil && s != "" }
+
+// skip takes its receiver under no name.
+func (*wrapped) skip(string) {}
+
+type PeekInput struct {
+	Search string ~json:"search"~
+}
+
+// peeked calls, on the options it sends, a method of a pointer receiver
+// that reads them and one that gives them no name.
+func peeked(c *gl.Client, in PeekInput) error {
+	w := wrapped{}
+	w.peek(in.Search)
+	w.skip(in.Search)
+	_, err := c.Widgets.ListWidgets(&w.ListWidgetsOptions)
+	return err
+}
+
+type ListedInput struct {
+	ID int64 ~json:"id"~
+}
+
+// listWith sends the options it is handed.
+func listWith(c *gl.Client, opts *gl.ListWidgetsOptions) error {
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+// sendVia hands the options on to the helper that sends them.
+func sendVia(c *gl.Client, opts *gl.ListWidgetsOptions) error { return listWith(c, opts) }
+
+// again calls itself.
+func again(c *gl.Client, n int64) error {
+	if n <= 0 {
+		return nil
+	}
+	return again(c, n-1)
+}
+
+// listed answers with an error alone and has a helper of the package, two
+// calls down, list with constants, the way pipelineFailure would if it
+// listed through a helper.
+func listed(c *gl.Client, in ListedInput) error {
+	search := "failed"
+	if err := again(c, in.ID); err != nil {
+		return err
+	}
+	return sendVia(c, &gl.ListWidgetsOptions{Search: &search})
+}
+
+type ExistsInput struct {
+	ID int64 ~json:"id"~
+}
+
+// Exists is exported and answers with a flag, a shape no route takes, and
+// protects with constants.
+func Exists(c *gl.Client, in ExistsInput) bool {
+	return c.Widgets.Protect(in.ID, &gl.ProtectOptions{}) == nil
+}
+
+type TwiceInput struct {
+	ID int64 ~json:"id"~
+}
+
+// twice answers with two outputs and an error, three results in two
+// fields, and protects with constants.
+func twice(c *gl.Client, in TwiceInput) (first, second Output, err error) {
+	err = c.Widgets.Protect(in.ID, &gl.ProtectOptions{})
+	return first, second, err
+}
+
+// NamelessInput names no key in its tag, so encoding/json keys its field by
+// the field's own name.
+type NamelessInput struct {
+	Search string ~json:",omitempty"~
+}
+
+// Nameless lists with its input's search.
+func Nameless(c *gl.Client, in NamelessInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(&gl.ListWidgetsOptions{Search: &in.Search})
+	return Output{}, err
+}
+
+// Hidden tags its one field "-", which no encoder writes.
+type Hidden struct {
+	Search string ~json:"-"~
+}
+
+// Conceal lists with what it is handed.
+func Conceal(c *gl.Client, h Hidden) (Output, error) {
+	_, err := c.Widgets.ListWidgets(&gl.ListWidgetsOptions{Search: &h.Search})
+	return Output{}, err
+}
 `
 
 // TestDiscoverPairs_TheFunctionAndItsStruct_DecideWhetherALiteralIsPairedWithIt
 // verifies what makes a function's struct an input and its literal a request
 // built for it. A struct no field of which carries a json tag is no input a
 // model sends, so a function taking one pairs nothing with it, and one
-// taking it before such an input pairs with the input. A literal a function
-// sends itself and that reads nothing of the input pairs with it only in a
-// handler, exported or answering with an output and an error: one that is
-// neither, answering with an error alone or with a flag, lists or protects
-// with constants for a lookup of its own, whether it hands the literal on in
-// place or assigns it a variable nothing of the input reaches, and one that
-// gives its input no name reads nothing of it. A literal that reads the
-// input, in its values or through the variable it is assigned to and filled
-// from afterwards, pairs wherever it is built, and so does one a builder
-// that sends nothing hands a helper to fill. The variable is filled field by
-// field, through a chain of pointers to it however many passes the chain
-// takes, by a helper handed a pointer to it beside the input, by a method of
-// a pointer receiver called on it, and by a method of the input it is
-// handed to. A send that takes the input beside it fills none of it, and
-// neither does a function handed a copy of it, a method of a value receiver
-// called on it, nor a method called on what another function hands back.
+// taking it before such an input pairs with the input; a tag that names no
+// key is one encoding/json keys by the field's name, and a tag of "-" is
+// none. A literal a function sends, itself or through a helper of its
+// package however many calls down, and that reads nothing of the input
+// pairs with it only in a handler, in one of the two shapes a route takes:
+// answering with an output and an error, or exported and answering with an
+// error alone. One that is neither, answering with an error alone, with a
+// flag (exported or not) or with three results two of which one field
+// declares, lists or protects with constants for a lookup of its own,
+// whether it hands the literal on in place or assigns it a variable nothing
+// of the input reaches, and one that gives its input no name reads nothing
+// of it. A literal that reads the input, in its values or through the
+// variable it is assigned to and filled from afterwards, pairs wherever it
+// is built, and so does one a builder that sends nothing hands a helper to
+// fill. The variable is filled field by field, through a chain of pointers
+// to it however many passes the chain takes, by a helper handed a pointer to
+// it beside the input that writes through it, a delete from a map it holds
+// included, or that is out of sight (a function held in a variable) or takes
+// it as any value, by a method of a pointer receiver called on it, and by a
+// method of the input it is handed to. A send that takes the input beside it
+// fills none of it, and neither does a function handed a copy of it, a
+// helper that only reads it or gives it no name, a method of a pointer
+// receiver that only reads it or gives it no name, a method of a value
+// receiver called on it, nor a method called on what another function hands
+// back.
 func TestDiscoverPairs_TheFunctionAndItsStruct_DecideWhetherALiteralIsPairedWithIt(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/shapes", source: handlerShapesSource})[0]
 
@@ -3142,6 +3327,7 @@ func TestDiscoverPairs_TheFunctionAndItsStruct_DecideWhetherALiteralIsPairedWith
 	}
 	want := []string{
 		"AliasFillInput ListWidgetsOptions ",
+		"AnyInput ListWidgetsOptions ",
 		"ApplyInput ListWidgetsOptions ",
 		"BuildInput ListWidgetsOptions ",
 		"DeclaredInput ListWidgetsOptions ",
@@ -3150,10 +3336,13 @@ func TestDiscoverPairs_TheFunctionAndItsStruct_DecideWhetherALiteralIsPairedWith
 		"GuardInput ProtectOptions ",
 		"HelperFillInput ListWidgetsOptions ",
 		"LocateInput ListWidgetsOptions ",
+		"MapFillInput ProtectOptions ",
 		"MethodFillInput ListWidgetsOptions ",
+		"NamelessInput ListWidgetsOptions ",
 		"PointerFillInput ListWidgetsOptions ",
 		"ProtectInput ProtectOptions ",
 		"SearchedInput ListWidgetsOptions ",
+		"ValueInput ListWidgetsOptions ",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("discoverPairs = %q, want %q", got, want)
@@ -3226,4 +3415,207 @@ func findPackageOrEmpty(rep report, name string) packageReport {
 		}
 	}
 	return packageReport{}
+}
+
+// TestCarriesJSONTag_TheTagsOfAStruct_SayWhetherAModelSendsIt verifies what
+// makes a struct one a model fills from the JSON it sends: an exported field
+// that carries a json tag, one that names no key included, since
+// encoding/json keys that field by its own name, found on the struct or
+// through an embed whose tag names no key, down to the depth the flattener
+// reads. A tag of "-" alone, a tag of another key, no tag, an unexported
+// field, an embed with nothing tagged under it and a named field of a struct
+// that tags its own fields make no input, while an embed that carries a json
+// tag of its own is a field that does.
+func TestCarriesJSONTag_TheTagsOfAStruct_SayWhetherAModelSendsIt(t *testing.T) {
+	field := func(name, tag string) *types.Struct {
+		return makeStructWithTags(taggedField{name: name, tag: tag, goType: tString})
+	}
+	embed := func(st types.Type, tag string) *types.Struct {
+		return types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "Embedded", st, true)}, []string{tag})
+	}
+	nameless := field("Search", `json:",omitempty"`)
+	untagged := field("Search", "")
+	label := types.NewNamed(types.NewTypeName(token.NoPos, nil, "Label", nil), tString, nil)
+	cases := []struct {
+		name string
+		st   *types.Struct
+		want bool
+	}{
+		{name: "a tag naming a key", st: field("Search", `json:"search"`), want: true},
+		{name: "a tag naming no key", st: nameless, want: true},
+		{name: "a tag of a dash", st: field("Search", `json:"-"`), want: false},
+		{name: "a dash and a comma, which name the key -", st: field("Search", `json:"-,"`), want: true},
+		{name: "no tag", st: untagged, want: false},
+		{name: "a tag of another key", st: field("Search", `url:"search"`), want: false},
+		{name: "an unexported field", st: field("search", `json:"search"`), want: false},
+		{name: "an untagged embed over a tag naming no key", st: embed(nameless, ""), want: true},
+		{name: "an untagged embed over nothing tagged", st: embed(untagged, ""), want: false},
+		{name: "an embed tagged with no key over nothing tagged", st: embed(untagged, `json:",omitempty"`), want: true},
+		{name: "an embed naming a key over nothing tagged", st: embed(untagged, `json:"inner"`), want: true},
+		{name: "an embed of a dash over a tag", st: embed(nameless, `json:"-"`), want: false},
+		{name: "an embed of no struct", st: embed(label, `json:",omitempty"`), want: true},
+		{name: "a named struct field over a tag, which is no embed", st: types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "Inner", nameless, false)}, []string{""}), want: false},
+		{name: "the deepest embed read", st: embedChain(nameless, 6), want: true},
+		{name: "one embed past the limit", st: embedChain(nameless, 7), want: false},
+		{name: "no struct", st: nil, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := carriesJSONTag(tc.st); got != tc.want {
+				t.Errorf("carriesJSONTag = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// writesSource is a tool package of functions each handed a pointer to a box
+// and doing one thing with it, named for the thing.
+const writesSource = `package writes
+
+import (
+	"maps"
+	"slices"
+	"sort"
+)
+
+type box struct {
+	N     int
+	Items []string
+	M     map[string]string
+	Next  *box
+	V     any
+}
+
+var scratch = map[string]string{}
+
+func (b *box) grow()    { b.N++ }
+func (b box) size() int { return b.N }
+
+func keep(*box)  {}
+func use(int)    {}
+func useAny(any) {}
+
+func field(b *box)        { b.N = 1 }
+func rebound(b *box)      { b = nil }
+func indexed(b *box)      { b.Items[0] = "x" }
+func star(b *box)         { *b = box{} }
+func incremented(b *box)  { b.N++ }
+func addressed(b *box)    { p := &b.N; *p = 1 }
+func aliasWritten(b *box) { p := &b; (*p).N = 1 }
+func ownAddress(b *box)   { _ = &b }
+func negated(b *box)      { use(-b.N) }
+func pointerMethod(b *box) { b.grow() }
+func valueMethod(b *box)  { use(b.size()) }
+func handed(b *box)       { keep(b) }
+func handedField(b *box)  { use(b.N) }
+func handedAny(b *box)    { useAny(b.V) }
+func declared(b *box)     { var c = b; keep(c) }
+func declaredField(b *box) { var n = b.N; use(n) }
+func literal(b *box)      { keep([]*box{b}[0]) }
+func literalField(b *box) { use([]int{b.N}[0]) }
+func returned(b *box) *box { return b }
+func returnedField(b *box) int { return b.N }
+func sent(b *box, ch chan *box) { ch <- b }
+func sentField(b *box, ch chan int) { ch <- b.N }
+func assigned(b *box)     { c := b; keep(c) }
+func assignedField(b *box) { n := b.N; use(n) }
+func compared(b *box) bool { return b == nil || b.Next == nil }
+func copied(b *box)       { c := *b; use(c.N) }
+func later(b *box)        { b.N = 1; use(b.N) }
+func closure(b *box)      { func() { b.N = 1 }() }
+func indexedSlice(b *box) { b.Items[1:][0] = "x" }
+func copiedInto(b *box)   { copy(b.Items, []string{"x"}) }
+func copiedIntoTail(b *box) { copy(b.Items[1:], []string{"x"}) }
+func copiedFrom(b *box)   { copy(make([]string, 1), b.Items) }
+func cleared(b *box)      { clear(b.M) }
+func deleted(b *box)      { delete(b.M, "k") }
+func deletedKey(b *box)   { delete(scratch, b.Items[0]) }
+func mapsCopied(b *box)   { maps.Copy(b.M, map[string]string{"k": "v"}) }
+func mapsCopiedFrom(b *box) { maps.Copy(scratch, b.M) }
+func mapsDeleted(b *box)  { maps.DeleteFunc(b.M, func(string, string) bool { return true }) }
+func mapsInserted(b *box) { maps.Insert(b.M, maps.All(scratch)) }
+func sorted(b *box)       { slices.Sort(b.Items) }
+func sortedInstance(b *box) { slices.Sort[[]string](b.Items) }
+func sortedClone(b *box)  { slices.Sort(slices.Clone(b.Items)) }
+func sortedOld(b *box)    { sort.Strings(b.Items) }
+func compacted(b *box)    { use(len(slices.Compact(b.Items))) }
+func contained(b *box) bool { return slices.Contains(b.Items, "x") }
+func measured(b *box)     { use(len(b.Items)) }
+func appended(b *box)     { use(len(append(b.Items, "x"))) }
+`
+
+// TestWritesThrough_ACalleeBody_WritesWhatItAssignsOrHandsOn verifies what a
+// body handed a pointer can write through it: an assignment, an increment or
+// an address taken of something rooted at it, through a field, an index or a
+// dereference, a method of a pointer receiver called on it, a closure that
+// assigns it, and the pointer handed on whole, or a pointer or an interface
+// read off it, in a call, a declaration, a literal, a return, a send or an
+// assignment. The variable's own address counts whether or not anything is
+// written through it afterwards: the write through the alias it yields
+// (aliasWritten) is rooted at the alias, which the walk does not follow, so
+// the address alone (ownAddress) is what stands for it. Rebinding the
+// variable, reading a field, negating one, calling a method of a value
+// receiver, comparing it, copying what it points to and handing on a value
+// that reaches nothing it points to write nothing, and a write stays found
+// whatever the body reads after it.
+//
+// A slice or a map read off it is written in place by a builtin or a
+// function of the standard library that writes what its first argument
+// holds: copy into it, clear it, delete from it, maps.Copy, DeleteFunc or
+// Insert into it, and slices.Sort or Compact it, an explicit instantiation
+// and sort.Strings included, whole or as a slice of it, as an index assigned
+// on such a slice is. The same functions handed it anywhere else, as copy's
+// source, delete's key or maps.Copy's source, or handed a value of their own
+// that only reads it, write nothing through it, and neither do slices.Contains,
+// len and append, which writes past the length the box holds.
+func TestWritesThrough_ACalleeBody_WritesWhatItAssignsOrHandsOn(t *testing.T) {
+	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/writes", source: writesSource})[0]
+	writes := map[string]bool{
+		"field": true, "rebound": false, "indexed": true, "star": true, "incremented": true,
+		"addressed": true, "aliasWritten": true, "ownAddress": true, "negated": false,
+		"pointerMethod": true, "valueMethod": false,
+		"handed": true, "handedField": false, "handedAny": true, "declared": true,
+		"declaredField": false, "literal": true, "literalField": false, "returned": true,
+		"returnedField": false, "sent": true, "sentField": false, "assigned": true,
+		"assignedField": false, "compared": false, "copied": false, "later": true, "closure": true,
+		"indexedSlice": true, "copiedInto": true, "copiedIntoTail": true, "copiedFrom": false,
+		"cleared": true, "deleted": true, "deletedKey": false, "mapsCopied": true,
+		"mapsCopiedFrom": false, "mapsDeleted": true, "mapsInserted": true, "sorted": true,
+		"sortedInstance": true, "sortedClone": false, "sortedOld": true, "compacted": true,
+		"contained": false, "measured": false, "appended": false,
+	}
+	ran := 0
+	for fn, decl := range funcDecls(pkg) {
+		want, listed := writes[fn.Name()]
+		if !listed {
+			continue
+		}
+		ran++
+		t.Run(fn.Name(), func(t *testing.T) {
+			param := fieldVars(pkg.TypesInfo, decl.Type.Params)[0]
+			if got := writesThrough(pkg.TypesInfo, decl.Body, param); got != want {
+				t.Errorf("writesThrough(%s) = %t, want %t", fn.Name(), got, want)
+			}
+		})
+	}
+	if ran != len(writes) {
+		t.Errorf("ran %d of the %d cases, want every one the fixture declares", ran, len(writes))
+	}
+}
+
+// TestCalleeHelpers_NoDeclaration_NamesNoEntry verifies the guards of the
+// callee reads: a function that is no function, or that the package declares
+// no body for, has no declaration, and one with no declaration has no
+// parameter or receiver to name.
+func TestCalleeHelpers_NoDeclaration_NamesNoEntry(t *testing.T) {
+	info := &types.Info{}
+	if decl := calleeDecl(nil, map[*types.Func]*ast.FuncDecl{}); decl != nil {
+		t.Errorf("calleeDecl(nil) = %v, want nil", decl)
+	}
+	if entry := paramEntry(info, nil, 0); entry != nil {
+		t.Errorf("paramEntry(nil declaration) = %v, want nil", entry)
+	}
+	if entry := receiverVar(info, nil); entry != nil {
+		t.Errorf("receiverVar(nil declaration) = %v, want nil", entry)
+	}
 }
