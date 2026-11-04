@@ -125,6 +125,9 @@ type function struct {
 	uploadFields []string
 	graphQL      bool
 	idents       map[string]bool
+	// guards holds, for each call of the body, the nil checks of a parameter
+	// whose branch encloses it.
+	guards map[*ast.CallExpr][]NilGuard
 	// file, start and end place the body, which is how an inline GraphQL
 	// document is attributed to the function that writes it.
 	file  string
@@ -146,11 +149,12 @@ type variable struct {
 	refs  map[string]bool
 }
 
-// templateUse is one withPath call: the template and the arguments formatted
-// into it.
+// templateUse is one withPath call: the template, the arguments formatted into
+// it, and the nil checks of a parameter its call sits behind.
 type templateUse struct {
 	template string
 	args     []ast.Expr
+	guards   []NilGuard
 }
 
 // legacyUse is one request built with NewRequest or UploadRequest, and which
@@ -304,6 +308,7 @@ func (r *reading) addFunction(file parsedFile, decl *ast.FuncDecl) {
 		decl:          decl,
 		idents:        map[string]bool{},
 		directUploads: map[*ast.CallExpr]bool{},
+		guards:        map[*ast.CallExpr][]NilGuard{},
 		file:          file.path,
 		start:         file.fileSet.Position(decl.Pos()).Line,
 		end:           file.fileSet.Position(decl.End()).Line,
@@ -316,6 +321,7 @@ func (r *reading) addFunction(file parsedFile, decl *ast.FuncDecl) {
 		fn.recvType, fn.recvVar = receiver(decl.Recv)
 		fn.key = fn.recvType + "." + fn.name
 	}
+	readNilChecks(fn, decl.Body)
 	ast.Inspect(decl.Body, func(node ast.Node) bool {
 		r.readNode(fn, node)
 		return true
@@ -371,7 +377,7 @@ func (r *reading) readFunctionCall(fn *function, name string, call *ast.CallExpr
 			return
 		}
 		if template, ok := r.templateNamed(call.Args[0]); ok {
-			fn.templates = append(fn.templates, templateUse{template: template, args: call.Args[1:]})
+			fn.templates = append(fn.templates, templateUse{template: template, args: call.Args[1:], guards: fn.guards[call]})
 		}
 	case requestMachinery:
 		direct := false

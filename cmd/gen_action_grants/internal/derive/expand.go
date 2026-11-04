@@ -177,17 +177,22 @@ func (e *expansion) leaf(l *leaf, at *frame, ctx context) pathSet {
 }
 
 // sdk expands a client-go method into what it sends: one of its routes, and
-// every document it posts. Each route is recorded with the input field each
-// of its placeholders is filled from at this call, read in the frame the
-// call is written in.
+// every document it posts. A route behind a nil check this call's argument
+// cannot pass is one this call never sends, so it is no way of running the
+// action. Each route is recorded with the input field each of its placeholders
+// is filled from at this call, read in the frame the call is written in.
 func (e *expansion) sdk(l *leaf, at *frame, ctx context) pathSet {
 	routes, documents, known := e.d.sdk.Requests(l.sdk)
 	if !known {
 		return e.record(Request{Kind: KindUnresolved, Reason: "sdk-undeclared " + l.sdk}, l, ctx, l.sdk, nil)
 	}
 	fills := e.d.fills(l, at)
+	checks := e.d.sdk.NilChecks(l.sdk)
 	var routeSet pathSet
 	for _, route := range routes {
+		if neverSent(checks[route.Key()], l, at) {
+			continue
+		}
 		routeSet = append(routeSet, e.record(route, l, ctx, l.sdk, fills.of(route))...)
 	}
 	paths := unit()

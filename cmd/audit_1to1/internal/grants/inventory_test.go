@@ -6,6 +6,7 @@ package grants
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
@@ -27,6 +28,7 @@ func row(pkg, method, path string) requestinventory.Row {
 // package derives nothing for, each a lead with its reason; and the derived
 // requests no row records, each a lead with its actions.
 func TestInventoryCheck_JoinsEachRowToItsPackagesDerivation(t *testing.T) {
+	useSlashes(t)
 	rows := []requestinventory.Row{
 		row("internal/completions", "GET", "/projects"),
 		row("internal/tools/issues", "GET", "/projects/:project_id/issues"),
@@ -121,6 +123,7 @@ func TestRequestKey_KeysEachKindTheWayARowIsKeyed(t *testing.T) {
 // GraphQL row is keyed by its label's kind and root fields, and a REST row by
 // the record route it meets, with the reason when it meets none.
 func TestRowKey_PlacesAGraphQLRowByItsLabelAndARESTRowByTheRecord(t *testing.T) {
+	useSlashes(t)
 	index := apilive.NewRouteIndex(fixtureLive().Routes)
 	cases := []struct {
 		name              string
@@ -139,6 +142,128 @@ func TestRowKey_PlacesAGraphQLRowByItsLabelAndARESTRowByTheRecord(t *testing.T) 
 			key, request, why := rowKey(testCase.row, index)
 			if key != testCase.key || request != testCase.request || why != testCase.why {
 				t.Errorf("rowKey = %q, %q, %q; want %q, %q, %q", key, request, why, testCase.key, testCase.request, testCase.why)
+			}
+		})
+	}
+}
+
+// useSlashes declares placeholders that take a slash for one test.
+func useSlashes(t *testing.T, declared ...apilive.SlashPlaceholder) {
+	t.Helper()
+	original := slashPlaceholders
+	t.Cleanup(func() { slashPlaceholders = original })
+	slashPlaceholders = declared
+}
+
+// artifactLive is a record holding the routes a recorded path needs a segment
+// to take several of its own to meet, and Grape's catch-all, which any path
+// would.
+func artifactLive() *apilive.Document {
+	return &apilive.Document{Routes: []apilive.Route{
+		route("GET", "/projects/:id/jobs/:job_id/artifacts/*artifact_path", held("project", "read_build")),
+		route("GET", "/projects/:id/jobs/artifacts/:ref_name/download", held("project", "read_build")),
+		route("PUT", "/projects/:id/packages/generic/:package_name/*package_version/(*path/):file_name", held("project", "create_package")),
+		route("GET", "/*path", nil),
+	}}
+}
+
+// refDownload declares the placeholder of artifactLive's download route that
+// takes a slash.
+var refDownload = apilive.SlashPlaceholder{Route: "GET /projects/:id/jobs/artifacts/:ref_name/download", Param: "ref_name", Reason: "a requirement"}
+
+// TestInventoryCheck_ASplatHoldsWhatARowRecords verifies the row a one-segment
+// reading could not place: a splat holding several segments of a recorded path
+// joins the route the package derives, an optional group taken, and a
+// placeholder takes a slash only under a declaration. A path only the
+// catch-all meets, and an extra segment where the route has no splat, stay
+// leads.
+func TestInventoryCheck_ASplatHoldsWhatARowRecords(t *testing.T) {
+	const (
+		jobs    = "internal/tools/jobs"
+		packs   = "internal/tools/packages"
+		artFile = "GET /projects/:id/jobs/:job_id/artifacts/*artifact_path"
+		pkgFile = "PUT /projects/:id/packages/generic/:package_name/*package_version/(*path/):file_name"
+	)
+	record := actionrequests.Record{Actions: []actionrequests.RecordAction{
+		{ID: "job.artifact", Requests: []actionrequests.RecordRequest{rest(artFile, actionrequests.ClassMandatory)}},
+		{ID: "job.download", Requests: []actionrequests.RecordRequest{rest(refDownload.Route, actionrequests.ClassMandatory)}},
+		{ID: "package.publish", Requests: []actionrequests.RecordRequest{rest(pkgFile, actionrequests.ClassMandatory)}},
+	}}
+	owners := map[string]string{"job.artifact": "jobs", "job.download": "jobs", "package.publish": "packages"}
+	rows := []requestinventory.Row{
+		row(jobs, "GET", "/projects/:project_id/jobs/:job_id/artifacts/build/output/report.txt"),
+		row(jobs, "GET", "/projects/:project_id/jobs/artifacts/feature/my-branch/download"),
+		row(packs, "PUT", "/projects/:project_id/packages/generic/pkg/1.0.0/dist/linux-amd64/tool.bin"),
+		row(jobs, "GET", "/anything/at/all"),
+		row(jobs, "GET", "/projects/:project_id/jobs/artifacts/feature/download/extra"),
+	}
+	cases := []struct {
+		name     string
+		declared []apilive.SlashPlaceholder
+		derived  int
+		leads    []RowLead
+	}{
+		{
+			name: "undeclared", derived: 2,
+			leads: []RowLead{
+				{Package: jobs, Request: "GET /anything/at/all", Why: whyNoRoute},
+				{Package: jobs, Request: "GET /projects/:project_id/jobs/artifacts/feature/download/extra", Why: whyNoRoute},
+				{Package: jobs, Request: "GET /projects/:project_id/jobs/artifacts/feature/my-branch/download", Why: whyNoRoute},
+			},
+		},
+		{
+			name: "declared", declared: []apilive.SlashPlaceholder{refDownload}, derived: 3,
+			leads: []RowLead{
+				{Package: jobs, Request: "GET /anything/at/all", Why: whyNoRoute},
+				{Package: jobs, Request: "GET /projects/:project_id/jobs/artifacts/feature/download/extra", Why: whyNoRoute},
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			useSlashes(t, testCase.declared...)
+			check := inventoryCheck(rows, record, artifactLive(), owners)
+			if check.RESTRowsDerived != testCase.derived || !reflect.DeepEqual(check.NotDerived, testCase.leads) {
+				t.Errorf("derived %d, leads %+v; want %d, %+v", check.RESTRowsDerived, check.NotDerived, testCase.derived, testCase.leads)
+			}
+		})
+	}
+}
+
+// TestStaleSlashes_NamesADeclarationNoRowGoesThrough verifies a declaration
+// answers something only when a recorded row is placed through it: not a row a
+// spelling of its own length meets, not a row a splat placed, not a declaration
+// of a route the record does not mount, and not an empty inventory.
+func TestStaleSlashes_NamesADeclarationNoRowGoesThrough(t *testing.T) {
+	index := apilive.NewRouteIndex(artifactLive().Routes)
+	unmounted := apilive.SlashPlaceholder{Route: "GET /nowhere/:ref_name/download", Param: "ref_name", Reason: "a requirement"}
+	slashed := row("internal/tools/jobs", "GET", "/projects/:project_id/jobs/artifacts/feature/my-branch/download")
+	plain := row("internal/tools/jobs", "GET", "/projects/:project_id/jobs/artifacts/main/download")
+	splat := row("internal/tools/jobs", "GET", "/projects/:project_id/jobs/:job_id/artifacts/a/b")
+	cases := []struct {
+		name     string
+		rows     []requestinventory.Row
+		declared []apilive.SlashPlaceholder
+		stale    []string
+	}{
+		{name: "answered", rows: []requestinventory.Row{plain, slashed}, declared: []apilive.SlashPlaceholder{refDownload}},
+		{name: "own_length", rows: []requestinventory.Row{plain}, declared: []apilive.SlashPlaceholder{refDownload}, stale: []string{refDownload.Route}},
+		{name: "a_splat", rows: []requestinventory.Row{splat}, declared: []apilive.SlashPlaceholder{refDownload}, stale: []string{refDownload.Route}},
+		{name: "no_rows", declared: []apilive.SlashPlaceholder{refDownload}, stale: []string{refDownload.Route}},
+		{name: "unmounted", rows: []requestinventory.Row{slashed}, declared: []apilive.SlashPlaceholder{refDownload, unmounted}, stale: []string{unmounted.Route}},
+		{name: "none_declared", rows: []requestinventory.Row{slashed}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			useSlashes(t, testCase.declared...)
+			got := staleSlashes(testCase.rows, index)
+			if len(got) != len(testCase.stale) {
+				t.Fatalf("staleSlashes = %q, want one each for %q", got, testCase.stale)
+			}
+			for i, route := range testCase.stale {
+				if !strings.Contains(got[i], ":ref_name on "+route+" answers nothing") {
+					t.Errorf("staleSlashes[%d] = %q, want it to name %s", i, got[i], route)
+				}
 			}
 		})
 	}

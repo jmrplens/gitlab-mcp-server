@@ -38,8 +38,8 @@ func TestRouteMatches_ADeclaredRoute_NamesTheRoutesItSpells(t *testing.T) {
 // client-go models the param; a map input one a param an option struct
 // models or a free map carries, and never one nothing can send; a
 // declared-not-applied or webhook-payload one a param no input offers, so an
-// input that offers one is a finding again; a branch-not-taken one any
-// class.
+// input that offers one is a finding again; and a category the table does not
+// narrow any class, which staleDeclarations refuses a row for.
 func TestAnswers_ACategory_AnswersOnlyTheClassesItMay(t *testing.T) {
 	finding := func(param, class string) Finding {
 		return Finding{Route: "GET /things", Param: param, Class: class}
@@ -61,7 +61,7 @@ func TestAnswers_ACategory_AnswersOnlyTheClassesItMay(t *testing.T) {
 		{name: "not applied on an offered param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassOfferedUnrecorded)},
 		{name: "webhook payload on an unmodeled param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryWebhookPayload}, finding: finding("p", ClassUnmodeled), want: true},
 		{name: "webhook payload on an offered param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryWebhookPayload}, finding: finding("p", ClassOfferedUnrecorded)},
-		{name: "branch not taken on an offered param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: categoryBranchNotTaken}, finding: finding("p", ClassOfferedUnrecorded), want: true},
+		{name: "an unknown category on an offered param", declaration: paramDeclaration{Route: "GET /things", Param: "p", Category: "invented"}, finding: finding("p", ClassOfferedUnrecorded), want: true},
 		{name: "another param", declaration: paramDeclaration{Route: "GET /things", Param: "q", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassUnmodeled)},
 		{name: "another route", declaration: paramDeclaration{Route: "GET /other", Param: "p", Category: categoryDeclaredNotApplied}, finding: finding("p", ClassUnmodeled)},
 	}
@@ -91,7 +91,7 @@ func TestStaleDeclarations_EveryWayADeclarationFails_IsNamed(t *testing.T) {
 		{Route: "GET /a", Param: "used", Category: categoryUpstream, Reason: "r", Row: 7},
 		{Route: "GET /a", Param: "unused", Category: categoryWebhookPayload, Reason: "r"},
 		{Route: "GET /a", Param: "unknown", Category: "invented", Reason: "r"},
-		{Route: "GET /a", Param: "silent", Category: categoryBranchNotTaken, Reason: " "},
+		{Route: "GET /a", Param: "silent", Category: categoryDeclaredNotApplied, Reason: " "},
 		{Route: "GET /a", Param: "norow", Category: categoryUpstream, Reason: "r", Row: 8},
 		{Route: "GET /a", Param: "rowless", Category: categoryMapInput, Reason: "r"},
 	}
@@ -99,7 +99,7 @@ func TestStaleDeclarations_EveryWayADeclarationFails_IsNamed(t *testing.T) {
 	stale := staleDeclarations(declared, used, map[int]string{7: "row seven"})
 	want := []string{
 		"GET /a norow (upstream): names row 8, which the upstream register does not hold",
-		"GET /a silent (branch-not-taken): gives no reason",
+		"GET /a silent (declared-not-applied): gives no reason",
 		"GET /a unknown (invented): names no category this table defines",
 		"GET /a unused (webhook-payload): answers no finding",
 	}

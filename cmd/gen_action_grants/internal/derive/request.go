@@ -79,6 +79,22 @@ type Requester interface {
 	// method fills in each route it sends, nothing for a method client-go
 	// does not declare or whose arguments fill no segment.
 	Placements(method string) []Placement
+	// NilChecks answers, by [Request.Key], the routes of a method it sends
+	// only behind a nil check of one of its parameters, each with every check
+	// a call has to pass to send it. A route it does not name is sent whatever
+	// the call hands the method.
+	NilChecks(method string) map[string][]NilCheck
+}
+
+// NilCheck is one nil check of a positional argument of a client-go method
+// that a route of the method sits behind, as cmd/internal/sdkroutes reads it.
+type NilCheck struct {
+	// Index is the argument's position among the method's parameters, the
+	// first counted 0.
+	Index int
+	// Nil is true for a route sent only while the argument is nil, and false
+	// for one sent only while it is not.
+	Nil bool
 }
 
 // Placement is one path segment a positional argument of a client-go method

@@ -5,7 +5,9 @@ package apilive
 
 import (
 	"maps"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -144,6 +146,150 @@ func TestRouteIndex_Match_TakesTheClosestSpellingAndTheFirstOfEqualOnes(t *testi
 			t.Errorf("Match(POST) = %v, want no route of that verb", got)
 		}
 	})
+}
+
+// artifactRoutes are the record's routes for what [RouteIndex.MatchAcross]
+// is about: two splats and a declared placeholder of the job artifacts, the
+// generic package route whose optional group holds a splat, a route with no
+// splat that shares their head, and Grape's catch-all, under a verb a request
+// can have and under the one the record mounts it with.
+func artifactRoutes() []Route {
+	return []Route{
+		mounted("GET", "/projects/:id/jobs/artifacts/:ref_name/download"),
+		mounted("GET", "/projects/:id/jobs/artifacts/:ref_name/raw/*artifact_path"),
+		mounted("GET", "/projects/:id/jobs/:job_id/artifacts/*artifact_path"),
+		mounted("GET", "/projects/:id/jobs/:job_id/artifacts"),
+		mounted("GET", "/projects/:id/packages/generic/:package_name/*package_version/(*path/):file_name"),
+		mounted("GET", "/*path"),
+		mounted("*", "/*path"),
+		{Method: "GET", Path: "/elsewhere/*path"},
+	}
+}
+
+// slashedRef declares the placeholder artifactRoutes' download route takes a
+// slash in.
+var slashedRef = SlashPlaceholder{Route: "GET /projects/:id/jobs/artifacts/:ref_name/download", Param: "ref_name", Reason: "a requirement"}
+
+// TestRouteIndex_MatchAcross_LetsASplatTakeTheSegmentsItHolds verifies a splat
+// takes one segment, several and all that are left, before a literal, an
+// optional group either way and a splat beside another; a declared placeholder
+// takes several and says it was the declaration that placed the path, only
+// when no splat did; and what stays unmatched: a path only the catch-all
+// meets, an extra segment where the route holds no splat, a placeholder no
+// declaration names, a requested placeholder where the route has a literal, a
+// splat that would have to take nothing, a route outside the API prefix and a
+// path of another verb.
+func TestRouteIndex_MatchAcross_LetsASplatTakeTheSegmentsItHolds(t *testing.T) {
+	const (
+		jobFile     = "GET /projects/:id/jobs/:job_id/artifacts/*artifact_path"
+		refFile     = "GET /projects/:id/jobs/artifacts/:ref_name/raw/*artifact_path"
+		packageFile = "GET /projects/:id/packages/generic/:package_name/*package_version/(*path/):file_name"
+	)
+	index := NewRouteIndex(artifactRoutes())
+	cases := []struct {
+		name    string
+		method  string
+		path    string
+		slashes []SlashPlaceholder
+		want    string
+		through bool
+	}{
+		{name: "splat_takes_one", path: "/projects/:project_id/jobs/:job_id/artifacts/report.txt", want: jobFile},
+		{name: "splat_takes_several", path: "/projects/:project_id/jobs/:job_id/artifacts/build/output/report.txt", want: jobFile},
+		{name: "a_placeholder_and_a_splat", path: "/projects/:project_id/jobs/artifacts/main/raw/dist/v1.2/app.txt", want: refFile},
+		{name: "optional_group_left_out", path: "/projects/:p/packages/generic/pkg/1.0.0/tool.bin", want: packageFile},
+		{name: "optional_group_taken", path: "/projects/:p/packages/generic/pkg/1.0.0/dist/linux-amd64/tool.bin", want: packageFile},
+		{name: "declared_placeholder", path: "/projects/:p/jobs/artifacts/feature/my-branch/download", slashes: []SlashPlaceholder{slashedRef}, want: slashedRef.Route, through: true},
+		{name: "declared_second", path: "/projects/:p/jobs/artifacts/feature/my-branch/download", slashes: []SlashPlaceholder{{Route: "GET /other", Param: "x"}, slashedRef}, want: slashedRef.Route, through: true},
+		{name: "a_splat_before_the_declaration", path: "/projects/:p/jobs/artifacts/main/raw/a/b", slashes: []SlashPlaceholder{slashedRef}, want: refFile},
+		{name: "undeclared_placeholder", path: "/projects/:p/jobs/artifacts/feature/my-branch/download"},
+		{name: "declared_on_another_route", path: "/projects/:p/jobs/artifacts/feature/my-branch/download", slashes: []SlashPlaceholder{{Route: "GET /other", Param: "ref_name"}}},
+		{name: "declared_another_placeholder", path: "/projects/:p/jobs/artifacts/feature/my-branch/download", slashes: []SlashPlaceholder{{Route: slashedRef.Route, Param: "id"}}},
+		{name: "only_the_catch_all", path: "/anything/at/all"},
+		{name: "no_splat_extra_segment", path: "/projects/:p/jobs/artifacts/main/download/extra"},
+		{name: "no_splat_in_the_route", path: "/projects/:p/jobs/:j"},
+		{name: "same_length_without_a_splat", path: "/projects/:p/jobs/:j/artifacts"},
+		{name: "requested_placeholder_for_a_literal", path: "/projects/:p/jobs/:j/:artifacts/report.txt"},
+		{name: "a_splat_takes_something", path: "/projects/:p/packages/generic/pkg/tool.bin"},
+		{name: "outside_the_prefix", path: "/elsewhere/a/b"},
+		{name: "another_verb", method: "POST", path: "/projects/:p/jobs/:j/artifacts/a/b"},
+		{name: "the_catch_all_verb", method: "*", path: "/anything/at/all"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			method := testCase.method
+			if method == "" {
+				method = "GET"
+			}
+			route, through := index.MatchAcross(method, testCase.path, testCase.slashes)
+			if (route != nil) != (testCase.want != "") || route != nil && RouteName(route) != testCase.want {
+				t.Errorf("MatchAcross(%q) = %v; want %q", testCase.path, route, testCase.want)
+			}
+			if (through != nil) != testCase.through {
+				t.Errorf("MatchAcross(%q) went through %v; want a declaration: %t", testCase.path, through, testCase.through)
+			}
+		})
+	}
+}
+
+// TestRouteIndex_MatchAcross_TakesTheClosestSpelling verifies the spelling with
+// the most literal segments wins whichever comes first in the record, and the
+// first in the record's order among equally many.
+func TestRouteIndex_MatchAcross_TakesTheClosestSpelling(t *testing.T) {
+	cases := []struct {
+		name   string
+		routes []Route
+		want   string
+	}{
+		{
+			name:   "the_closer_one_first",
+			routes: []Route{mounted("GET", "/packages/*path/index"), mounted("GET", "/packages/*path")},
+			want:   "GET /packages/*path/index",
+		},
+		{
+			name:   "the_closer_one_later",
+			routes: []Route{mounted("GET", "/packages/*path"), mounted("GET", "/packages/*path/index")},
+			want:   "GET /packages/*path/index",
+		},
+		{
+			name:   "the_first_of_equal_ones",
+			routes: []Route{mounted("GET", "/packages/*first"), mounted("GET", "/packages/*second")},
+			want:   "GET /packages/*first",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			route, _ := NewRouteIndex(testCase.routes).MatchAcross("GET", "/packages/a/b/index", nil)
+			if route == nil || RouteName(route) != testCase.want {
+				t.Errorf("MatchAcross = %v, want %q", route, testCase.want)
+			}
+		})
+	}
+}
+
+// TestSlashPlaceholders_EachNamesAPlaceholderOfItsRoute holds the declarations
+// to the record's own spelling: each names a route of the committed record and
+// a placeholder that route holds, and gives its reason. That the row still
+// answers a recorded request is R-GRANT's question.
+func TestSlashPlaceholders_EachNamesAPlaceholderOfItsRoute(t *testing.T) {
+	document, err := Read(filepath.Join("..", "..", "..", DefaultDir))
+	if err != nil {
+		t.Fatalf("read the committed record: %v", err)
+	}
+	for _, declared := range SlashPlaceholders {
+		t.Run(declared.Route, func(t *testing.T) {
+			index := slices.IndexFunc(document.Routes, func(route Route) bool { return RouteName(&route) == declared.Route })
+			if index < 0 {
+				t.Fatalf("the record mounts no %s", declared.Route)
+			}
+			if !strings.Contains(document.Routes[index].Path, ":"+declared.Param) {
+				t.Errorf("%s holds no :%s", declared.Route, declared.Param)
+			}
+			if declared.Reason == "" {
+				t.Errorf("%s gives no reason", declared.Route)
+			}
+		})
+	}
 }
 
 // TestPlaceholders_NamesEachSegmentOfThePathAfterTheRoute verifies a path's

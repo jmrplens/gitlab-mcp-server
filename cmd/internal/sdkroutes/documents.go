@@ -65,11 +65,14 @@ func (r *reading) initializers(names map[string]bool) []variable {
 	for len(queue) > 0 {
 		name := queue[len(queue)-1]
 		queue = queue[:len(queue)-1]
-		declared, isVar := r.vars[name]
-		if !isVar || seen[name] {
+		if seen[name] {
 			continue
 		}
 		seen[name] = true
+		declared, isVar := r.vars[name]
+		if !isVar {
+			continue
+		}
 		out = append(out, declared)
 		for ref := range declared.refs {
 			queue = append(queue, ref)

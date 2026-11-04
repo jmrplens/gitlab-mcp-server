@@ -40,10 +40,6 @@ const (
 	// whose every other attribute the action does not send, so a call
 	// without it changes nothing.
 	categorySoleAttribute = "sole-attribute"
-	// categorySDKPositional is a parameter client-go takes as a positional
-	// argument and writes into the path whatever its value, so the call
-	// cannot leave it out.
-	categorySDKPositional = "sdk-positional"
 	// categoryModelRequires is a parameter Grape leaves optional and the
 	// model the route builds refuses to save without, so a call without it is
 	// refused all the same, one step later.
@@ -70,10 +66,9 @@ func declaredRequiredness() map[declarationKey]declaration {
 		reasonDiscussionNoteBody = "PUT .../discussions/:discussion_id/notes/:note_id takes exactly one of " +
 			"body and resolved (lib/api/discussions.rb); client-go's update options for this route carry " +
 			"body and no resolved, so body is the one this action sends"
-		reasonLabelPath = "client-go's label update and delete put any non-nil label argument in the path and " +
-			"take the body route only for nil; this handler always passes label_id, so it sends " +
-			"the route under /groups/:id/labels/:name alone, on which GitLab requires the label, and " +
-			"label_id already takes a name as well as an ID"
+		reasonLabelSelector = "the route under /projects/:id/labels/:name requires the label in its path; " +
+			"labels.labelSelector fills that segment from label_id when the caller gives it and from name otherwise, " +
+			"and the handler refuses a call with neither, as the anyOf of the schema says"
 		reasonSnippetFileName = "lib/api/helpers/snippets_helpers.rb requires file_name only in a given :content " +
 			"block; the record writes it as an unconditional requirement, and a snippet created " +
 			"from files needs none"
@@ -122,8 +117,6 @@ func declaredRequiredness() map[declarationKey]declaration {
 			"POST /users/:user_id/impersonation_tokens declares scopes optional beside granular_scopes, which client-go does not " +
 				"carry, and PersonalAccessToken validates the presence of scopes, so a token created without them is refused",
 		},
-		{action: "group.group_label_update", field: "label_id"}: {DirectionGitLabOptional, categorySDKPositional, reasonLabelPath},
-		{action: "group.group_label_delete", field: "label_id"}: {DirectionGitLabOptional, categorySDKPositional, reasonLabelPath},
 
 		// A null client-go writes in place of a key left out.
 		{action: "pipeline.schedule_edit_variable", field: "value"}: {
@@ -156,6 +149,8 @@ func declaredRequiredness() map[declarationKey]declaration {
 		},
 		{action: "repository.list_submodules", field: "ref"}:     {DirectionGitLabRequires, categoryHandlerDefault, reasonSubmoduleRef},
 		{action: "repository.read_submodule_file", field: "ref"}: {DirectionGitLabRequires, categoryHandlerDefault, reasonSubmoduleRef},
+		{action: "project.label_update", field: "name"}:          {DirectionGitLabRequires, categoryHandlerDefault, reasonLabelSelector},
+		{action: "project.label_delete", field: "name"}:          {DirectionGitLabRequires, categoryHandlerDefault, reasonLabelSelector},
 	}
 }
 

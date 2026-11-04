@@ -228,10 +228,13 @@ func useFixtures(t *testing.T) {
 	t.Helper()
 	originalRecord, originalLive, originalInventory := readRecord, readLive, readInventory
 	originalCatalog, originalTable, originalE2E := catalog, grantTable, readE2ECalls
+	originalSlashes := slashPlaceholders
 	t.Cleanup(func() {
 		readRecord, readLive, readInventory = originalRecord, originalLive, originalInventory
 		catalog, grantTable, readE2ECalls = originalCatalog, originalTable, originalE2E
+		slashPlaceholders = originalSlashes
 	})
+	slashPlaceholders = nil
 	readRecord = func(string) (actionrequests.Record, error) { return fixtureRecord(), nil }
 	readLive = func(string) (apilive.Document, error) { return *fixtureLive(), nil }
 	readInventory = func(string) (requestinventory.Inventory, error) {
@@ -324,6 +327,31 @@ func TestRun_AnInconsistentTable_FailsTheGate(t *testing.T) {
 	}
 }
 
+// TestRun_ASlashDeclarationNoRowGoesThrough_FailsTheGate verifies a declaration
+// that answers nothing is a finding of the gate, the report still written, and
+// that one a recorded row is placed through is none.
+func TestRun_ASlashDeclarationNoRowGoesThrough_FailsTheGate(t *testing.T) {
+	useFixtures(t)
+	slashPlaceholders = []apilive.SlashPlaceholder{{Route: "GET /projects/:id/issues", Param: "id", Reason: "planted"}}
+	content, clean, err := Run("root", Options{GapsOnly: true})
+	if err != nil || clean {
+		t.Fatalf("Run = clean %t, error %v; want the gate to fail with a report", clean, err)
+	}
+	report := decode(t, content)
+	if report.Summary.Inconsistencies != 1 || len(report.Inconsistencies) != 1 || !strings.Contains(report.Inconsistencies[0], "slash declaration of :id") {
+		t.Errorf("inconsistencies = %v, want the one stale declaration", report.Inconsistencies)
+	}
+
+	readInventory = func(string) (requestinventory.Inventory, error) {
+		return requestinventory.Inventory{Requests: []requestinventory.Row{
+			row("internal/tools/issues", "GET", "/projects/group/sub/issues"),
+		}}, nil
+	}
+	if _, clean, err = Run("root", Options{GapsOnly: true}); err != nil || !clean {
+		t.Errorf("Run = clean %t, error %v; want a clean run with the row placed through the declaration", clean, err)
+	}
+}
+
 // TestRun_AnInputThatCannotBeRead_StopsTheRunNamingIt verifies each input's
 // failure surfaces with what failed, and that a report that cannot be encoded
 // is an error rather than an empty file.
@@ -346,6 +374,9 @@ func TestRun_AnInputThatCannotBeRead_StopsTheRunNamingIt(t *testing.T) {
 		{name: "catalog", arrange: func(*testing.T) {
 			catalog = func() ([]actionrequests.Action, error) { return nil, boom }
 		}, wantErr: "build the action catalog: boom"},
+		{name: "end_to_end_record", arrange: func(*testing.T) {
+			readE2ECalls = func(string) ([]e2ecalls.Record, error) { return nil, boom }
+		}, wantErr: "read the end-to-end call record: boom"},
 		{name: "marshal", arrange: func(t *testing.T) {
 			t.Helper()
 			original := marshalIndent
@@ -357,7 +388,7 @@ func TestRun_AnInputThatCannotBeRead_StopsTheRunNamingIt(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			useFixtures(t)
 			testCase.arrange(t)
-			_, clean, err := Run("root", Options{})
+			_, clean, err := Run("root", Options{E2ECallsDir: "shards"})
 			if err == nil || !strings.Contains(err.Error(), testCase.wantErr) || clean {
 				t.Errorf("Run = clean %t, error %v; want an error containing %q", clean, err, testCase.wantErr)
 			}
