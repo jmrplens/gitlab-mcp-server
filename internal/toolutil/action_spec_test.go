@@ -1568,6 +1568,46 @@ func TestDefaultScopeParameterGuidance_KnownNames_ReturnsGuidance(t *testing.T) 
 	}
 }
 
+// TestDefaultScopeParameterGuidance_IntegerScope_AsksForTheNumericID verifies
+// that a project_id or group_id the schema declares as an integer, alone or
+// beside null, is guided to its numeric ID and never offered a URL-encoded
+// path it cannot decode, while one that also takes a string, as StringOrInt
+// does, or declares no type keeps the path guidance.
+func TestDefaultScopeParameterGuidance_IntegerScope_AsksForTheNumericID(t *testing.T) {
+	cases := []struct {
+		name, param string
+		kind        any
+		numeric     bool
+	}{
+		{name: "project integer", param: "project_id", kind: "integer", numeric: true},
+		{name: "project integer or null", param: "project_id", kind: []any{"integer", "null"}, numeric: true},
+		{name: "project integer as string list", param: "project_id", kind: []string{"integer"}, numeric: true},
+		{name: "group integer", param: "group_id", kind: "integer", numeric: true},
+		{name: "project string or integer", param: "project_id", kind: []any{"string", "integer"}},
+		{name: "group string or integer", param: "group_id", kind: []string{"string", "integer"}},
+		{name: "project string", param: "project_id", kind: "string"},
+		{name: "project null only", param: "project_id", kind: []any{"null"}},
+		{name: "project no type", param: "project_id"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prop := map[string]any{}
+			if tc.kind != nil {
+				prop["type"] = tc.kind
+			}
+			got := defaultScopeParameterGuidance(tc.param, map[string]any{tc.param: prop})
+			takesPath := strings.Contains(got.ValueSource, "or URL-encoded path")
+			asksNumeric := strings.HasPrefix(got.ValueSource, "Numeric ") && strings.Contains(got.ValueSource, "does not take a URL-encoded path") && !strings.Contains(got.ValueSource, ";")
+			if tc.numeric && (!asksNumeric || takesPath || !strings.HasSuffix(got.ExampleBinding, ":42")) {
+				t.Errorf("guidance = %+v, want the numeric ID asked for and no path offered", got)
+			}
+			if !tc.numeric && (!takesPath || asksNumeric) {
+				t.Errorf("guidance = %+v, want the ID or path guidance", got)
+			}
+		})
+	}
+}
+
 // TestDefaultScopeParameterGuidance_UnknownName_ReturnsZero verifies the
 // fall-through branch: names outside the scope-suggestive set yield the zero
 // ParameterGuidance so callers never attach fabricated guidance.

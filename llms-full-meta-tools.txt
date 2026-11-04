@@ -916,7 +916,7 @@ Parameter guidance:
 - feature_delete.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.
 - feature_set.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.
 - feature_set.value: feature_flag_value. Source: Desired gate value: a boolean, a percentage, or a string GitLab accepts for the gate.
-- import_cancel_github.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- import_cancel_github.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - license_add.license: license_payload. Source: The encoded license text the administrator was issued, sent whole.
 - license_delete.id: license_id. Source: License numeric ID from admin.license_get or admin.license_add output.
 - plan_limits_change.plan_name: plan_name. Source: Plan name whose limits are read or changed, for example default, free or premium.
@@ -936,7 +936,7 @@ Parameter guidance:
 - topic_update.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.
 - usage_data_track_event.event: usage_event_name. Source: The single internal event name to record.
 - usage_data_track_event.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
-- usage_data_track_event.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- usage_data_track_event.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - usage_data_track_events.events: usage_event_batch. Source: Array of event objects to record in one request.
 
 GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab-to-GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
@@ -5384,13 +5384,13 @@ Parameter guidance:
 - play.project_id: scope_project. Source: Project ID or full namespace path that owns the job. Avoid: Use project_id for project scope. pipeline_id and job_id are not substitutes for project_id.
 - retry.job_id: job_identifier. Source: Numeric CI job ID from pipeline/job list output or user-provided context. Avoid: job_id is the global database ID, not the per-pipeline index. Do not pass a pipeline ID as job_id.
 - retry.project_id: scope_project. Source: Project ID or full namespace path that owns the job. Avoid: Use project_id for project scope. pipeline_id and job_id are not substitutes for project_id.
-- token_scope_add_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- token_scope_add_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_add_group.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
+- token_scope_add_project.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - token_scope_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - token_scope_list_groups.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - token_scope_list_inbound.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - token_scope_patch.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- token_scope_remove_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_remove_group.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - token_scope_remove_project.project_id: scope_owner_project. Source: Owning project whose CI job token allowlist is being changed. Avoid: Do not use the project being removed as project_id.
 - token_scope_remove_project.target_project_id: target_project. Source: Project being removed from or added to the allowlist. Avoid: Do not put the allowlist owner project here.
 - trace.job_id: job_identifier. Source: Numeric CI job ID from pipeline/job list output or user-provided context. Avoid: job_id is the global database ID, not the per-pipeline index. Do not pass a pipeline ID as job_id.
@@ -7655,7 +7655,7 @@ Parameter guidance:
 - create_fork_relation.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - delete_fork_relation.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- delete_shared_group.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- delete_shared_group.group_id: scope_group. Source: Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.
 - delete_shared_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - download_avatar.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - export_download.project_id: scope_project. Source: Project ID or URL-encoded full path of the project being exported or imported. Avoid: Use the source project for export status/download. For import_status use the newly created target project, not the archive.
@@ -7778,7 +7778,7 @@ Parameter guidance:
 - service_account_pat_rotate.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - service_account_pat_rotate.token_id: access_token. Source: Project service account personal access token ID returned by service_account_pat_list or service_account_pat_create. Avoid: Do not use service_account_id as token_id. token_id identifies the personal access token itself.
 - service_account_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- share_with_group.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- share_with_group.group_id: scope_group. Source: Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.
 - share_with_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - star.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - start_housekeeping.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -11438,8 +11438,8 @@ Parameter guidance:
 - create.username: username. Source: GitLab username slug for the new account. Avoid: Use username without spaces. It is different from display name.
 - create_impersonation_token.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - create_personal_access_token.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
-- create_runner.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- create_runner.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- create_runner.group_id: scope_group. Source: Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.
+- create_runner.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - deactivate.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - delete.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - delete_email_for_user.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
@@ -11469,8 +11469,8 @@ Parameter guidance:
 - reject.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - revoke_impersonation_token.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - ssh_keys_for_user.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
-- todo_list.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- todo_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- todo_list.group_id: scope_group. Source: Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.
+- todo_list.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - unban.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - unblock.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 
@@ -13058,7 +13058,7 @@ Action guidance:
 - tools: List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.
 Parameter guidance:
 - graph_status.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
-- graph_status.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- graph_status.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - query.query: graph_query. Source: GQL text, one MATCH ... RETURN statement, naming the entities, properties and relationship types orbit.schema lists. orbit.dsl describes the language as GitLab.com publishes it. Avoid: Every query bounds at least one node by its id or a literal property, inline as {id: 278964} or {full_path: 'gitlab-org/gitlab'}, or in a WHERE comparison. LIMIT bounds nothing, so MATCH (p:Project) RETURN p LIMIT 5 is refused., A relationship type follows a colon, -[:IN_PROJECT]->, and several types are joined by |, -[:IN_PROJECT|CONTAINS*1..3]->. Written without the colon, -[IN_PROJECT]-> declares a variable and is refused., WHERE combines predicates on one node's properties with AND and NOT. OR, XOR, RETURN DISTINCT, count(*), OPTIONAL MATCH, WITH and UNION are refused, and a list is negated as NOT p.visibility_level IN [...], never with NOT IN. count(DISTINCT x) counts distinct values., Between labeled nodes the arrow is -> or <-. The undirected -- is for the neighbors of one node, whose far end has a variable and nothing else: MATCH (p:Project {id: 278964})--(n) RETURN n., A shortest path is MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path with both ends bounded and its relationship types named, one type or several joined by |, since a wildcard -[*1..3]-> is refused there. An aggregate is aliased to be sorted by, with one sort key: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC., A page is SKIP and LIMIT: SKIP 0 to 10000, LIMIT 1 to 1000, as in ORDER BY p.id SKIP 20 LIMIT 20. PAGE and AFTER are refused., A query written as a JSON object is the JSON DSL GitLab.com removed, and is answered compile_error at line 1, column 1. Send a GQL statement.
 
 GitLab orbit actions.
@@ -13191,7 +13191,7 @@ Action guidance:
 - update: Rename, re-describe, or recolor an editable custom security attribute by attribute_id. Provide at least one of name, description, or color. Template-provided attributes are not editable.
 Parameter guidance:
 - create.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
-- project_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- project_update.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 
 Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.
 Returns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.
