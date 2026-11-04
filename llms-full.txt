@@ -7626,7 +7626,7 @@ Action guidance:
 - transfer: Transfer a project to a different namespace (group or user). Send project_id and the target namespace ID or full path. Requires Owner on the source and create-project rights on the target. GitLab 19.4 and later move the project in the background (19.4 checks there that the name and path are free in the target namespace, which 19.5 and later check with the request too), so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed, quoting GitLab's reason from 19.5. If it has neither landed nor failed by then the answer carries transfer_queued and shows the project where it still is: read it back with project.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs.
 - unarchive: Unarchive a previously archived project to restore write access. Send project_id. Requires Owner role.
 - unstar: Remove the authenticated user's star from a project. Send project_id. Idempotent if not currently starred.
-- update: Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change.
+- update: Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change. An update that sets mirror_overwrites_diverged_branches on a mirror it leaves pulling, enables a mirror that has it, or points such a mirror at another import_url discards this project's own commits on every diverged branch, so it needs confirm=true, as project.pull_mirror_configure does: pass it only after the user approves the mirror's source.
 - upload: Use to upload a file into a project's Markdown attachments store and obtain a Markdown-embeddable reference.
 - upload_avatar: Upload an avatar image for a project. Send project_id and the image content/path. Replaces any existing avatar.
 - upload_delete: Use to permanently remove a project Markdown upload identified by its numeric upload ID.
@@ -25724,7 +25724,7 @@ Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches re
 
 - `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors
 - `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password
-- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting
+- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call arms it, or enables or re-aims a mirror that has it
 - `enabled` (boolean): Enable or disable pull mirroring
 - `mirror_branch_regex` (string): Regex to filter branches to mirror
 - `mirror_overwrites_diverged_branches` (boolean): Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true
@@ -26084,6 +26084,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `ci_restrict_pipeline_cancellation_role` (string): Role required to cancel pipelines/jobs (developer, maintainer, no_one)
 - `ci_separated_caches` (boolean): Use separate caches for protected branches
 - `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
+- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call arms it, or enables or re-aims a mirror that has it
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)
@@ -26120,7 +26121,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `merge_trains_skip_train_allowed` (boolean): Allow skipping the merge train
 - `mirror` (boolean): Enable pull mirroring from import_url
 - `mirror_branch_regex` (string): Only mirror branches matching this regex
-- `mirror_overwrites_diverged_branches` (boolean): Overwrite diverged branches when mirroring
+- `mirror_overwrites_diverged_branches` (boolean): Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true
 - `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
 - `mirror_user_id` (integer): User ID used to run mirror updates (admin only)
 - `model_experiments_access_level` (string): Model experiments access level (disabled, private, enabled)

@@ -194801,7 +194801,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting",
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call arms it, or enables or re-aims a mirror that has it",
           "type": "boolean"
         },
         "enabled": {
@@ -202821,6 +202821,10 @@
             "boolean"
           ]
         },
+        "confirm": {
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call arms it, or enables or re-aims a mirror that has it",
+          "type": "boolean"
+        },
         "container_expiration_policy_attributes": {
           "additionalProperties": false,
           "description": "Container registry cleanup policy attributes",
@@ -203088,7 +203092,7 @@
           "type": "string"
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Overwrite diverged branches when mirroring",
+          "description": "Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true",
           "type": [
             "null",
             "boolean"
