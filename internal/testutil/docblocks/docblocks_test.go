@@ -95,6 +95,11 @@ func TestParse_Fences_AreReadAsTheSiteCheckReadsThem(t *testing.T) {
 			want: []Block{{Lang: "bash", Body: "ls\n", Line: 6}},
 		},
 		{
+			name: "a frontmatter never closed is not one",
+			src:  "---\n```bash\nls\n```\n",
+			want: []Block{{Lang: "bash", Body: "ls\n", Line: 2}},
+		},
+		{
 			name: "two blocks in page order",
 			src:  "```nginx e2e=one\na\n```\n\n```nginx e2e=two\nb\n```\n",
 			want: []Block{
@@ -164,27 +169,25 @@ func TestParse_MalformedFences_AreRefused(t *testing.T) {
 }
 
 // writePages writes an English page and its Spanish twin under a fresh
-// documentation root and returns the root. A nil twin writes no twin.
-func writePages(t *testing.T, rel, english string, twin *string) string {
+// documentation root and returns the root. A nil page is not written.
+func writePages(t *testing.T, rel string, english, twin *string) string {
 	t.Helper()
 	root := t.TempDir()
-	write := func(path, body string) {
+	write := func(path string, body *string) {
+		if body == nil {
+			return
+		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatalf("creating %s: %v", filepath.Dir(path), err)
 		}
-		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(*body), 0o600); err != nil {
 			t.Fatalf("writing %s: %v", path, err)
 		}
 	}
 	write(filepath.Join(root, filepath.FromSlash(rel)), english)
-	if twin != nil {
-		write(filepath.Join(root, "es", filepath.FromSlash(rel)), *twin)
-	}
+	write(filepath.Join(root, "es", filepath.FromSlash(rel)), twin)
 	return root
 }
-
-// ptr returns a pointer to s, for a twin that exists.
-func ptr(s string) *string { return &s }
 
 // TestPageBlock_KeyedBlock_IsReturnedFromTheEnglishPage pins the one answer a
 // test builds on: the English body, whatever the Spanish fence holds around
@@ -195,7 +198,7 @@ func TestPageBlock_KeyedBlock_IsReturnedFromTheEnglishPage(t *testing.T) {
 	const rel = "operations/guide.mdx"
 	english := "# Guide\n\n```nginx e2e=nginx\n# Read me.\nserver {}\n```\n\n```bash\nls\n```\n"
 	spanish := "# Guía\n\n```nginx e2e=nginx\n# Léeme.\nserver {}\n```\n\n```bash\nls\n```\n"
-	root := writePages(t, rel, english, ptr(spanish))
+	root := writePages(t, rel, &english, &spanish)
 
 	page, err := Open(root, rel)
 	if err != nil {
@@ -259,7 +262,7 @@ func TestPageBlock_KeyNotServedOnce_IsRefused(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			root := writePages(t, rel, tt.english, ptr(tt.spanish))
+			root := writePages(t, rel, &tt.english, &tt.spanish)
 			page, err := Open(root, rel)
 			if err != nil {
 				t.Fatalf("Open: %v", err)
@@ -292,28 +295,15 @@ func TestOpen_PageOrTwinUnreadable_IsRefused(t *testing.T) {
 		want    error
 		names   []string
 	}{
-		{name: "no English page", english: nil, spanish: ptr(keyed), want: fs.ErrNotExist, names: []string{"guide.mdx"}},
-		{name: "no Spanish twin", english: ptr(keyed), spanish: nil, want: fs.ErrNotExist, names: []string{filepath.Join("es", "guide.mdx")}},
-		{name: "an unclosed fence on the English page", english: ptr("```nginx\n"), spanish: ptr(keyed), want: ErrUnclosedFence, names: []string{"guide.mdx", "line 1"}},
-		{name: "an unclosed fence on the twin", english: ptr(keyed), spanish: ptr("x\n```nginx\n"), want: ErrUnclosedFence, names: []string{filepath.Join("es", "guide.mdx"), "line 2"}},
+		{name: "no English page", english: nil, spanish: &keyed, want: fs.ErrNotExist, names: []string{"guide.mdx"}},
+		{name: "no Spanish twin", english: &keyed, spanish: nil, want: fs.ErrNotExist, names: []string{filepath.Join("es", "guide.mdx")}},
+		{name: "an unclosed fence on the English page", english: new("```nginx\n"), spanish: &keyed, want: ErrUnclosedFence, names: []string{"guide.mdx", "line 1"}},
+		{name: "an unclosed fence on the twin", english: &keyed, spanish: new("x\n```nginx\n"), want: ErrUnclosedFence, names: []string{filepath.Join("es", "guide.mdx"), "line 2"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
-			if tt.english != nil {
-				if err := os.WriteFile(filepath.Join(root, rel), []byte(*tt.english), 0o600); err != nil {
-					t.Fatalf("writing the page: %v", err)
-				}
-			}
-			if tt.spanish != nil {
-				if err := os.MkdirAll(filepath.Join(root, "es"), 0o750); err != nil {
-					t.Fatalf("creating es: %v", err)
-				}
-				if err := os.WriteFile(filepath.Join(root, "es", rel), []byte(*tt.spanish), 0o600); err != nil {
-					t.Fatalf("writing the twin: %v", err)
-				}
-			}
+			root := writePages(t, rel, tt.english, tt.spanish)
 			page, err := Open(root, rel)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("Open = %#v, %v; want an error wrapping %q", page, err, tt.want)
