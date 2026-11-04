@@ -175,7 +175,9 @@ func ValidateTextPosition(oldLine, newLine int64) error {
 // lib/api/draft_notes.rb), and Grape coerces a fraction to an integer
 // without a word, so the tools take whole pixels and convert them here, where
 // a float64 holds each of them exactly. A nil coordinate stays nil, so a
-// field left out is not sent.
+// field left out is not sent. The client-go side is recorded in
+// docs/development/upstream-bugs.md, and this retires when x and y take an
+// *int64 there.
 func ImageCoordinate(v *int64) *float64 {
 	if v == nil {
 		return nil

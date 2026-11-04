@@ -95,6 +95,7 @@ for the fork, branch, fix, test and MR workflow.
   - [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update)
   - [Eight update option structs cannot send the null or the empty list that clears a field](#eight-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field)
   - [The issue statistics options type assignee_id as an integer](#the-issue-statistics-options-type-assignee_id-as-an-integer)
+  - [PositionOptions types the image coordinates as floats, and NotePosition carries no image fields](#positionoptions-types-the-image-coordinates-as-floats-and-noteposition-carries-no-image-fields)
   - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
   - [A nil SearchOptions panics in every search method but one](#a-nil-searchoptions-panics-in-every-search-method-but-one)
   - [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter)
@@ -426,6 +427,7 @@ readable without opening the tracker:
 | 156 | gitlab-org/gitlab | [A service account update with an empty email keeps the address, as GitLab intends](#a-service-account-update-with-an-empty-email-keeps-the-address-as-gitlab-intends) | Not needed: GitLab drops a blank value on purpose since [gitlab-org/gitlab!215942](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215942), merged on 2025-12-15; unsetting the address is another user's open feature request, [gitlab-org/gitlab#631255](https://gitlab.com/gitlab-org/gitlab/-/issues/631255) | No, and none is coming from here | No, works as intended upstream | No | None needed: the three service account updates send `email` only when it is set |
 | 157 | gitlab-org/gitlab | [The job token allowlist writes refuse a project path their page says they accept](#the-job-token-allowlist-writes-refuse-a-project-path-their-page-says-they-accept) | No; a fix is to be prepared, and its merge request is linked here when opened | No | No | No | Yes, the four allowlist writes take `project_id` as the numeric ID alone |
 | 158 | client-go | [Eighteen methods take an int64 where GitLab takes a name or a path](#eighteen-methods-take-an-int64-where-gitlab-takes-a-name-or-a-path) | No | No | No | No | Yes, `admin.custom_attr_*` and the six `storage_move.*` actions that name a project or a group read a name into its ID with one more request first |
+| 159 | client-go | [`PositionOptions` types the image coordinates as floats, and `NotePosition` carries no image fields](#positionoptions-types-the-image-coordinates-as-floats-and-noteposition-carries-no-image-fields) | No | No | No | No | Yes, the three merge request position writes take `x` and `y` as integers and convert them, and the commit discussion create refuses an image position before the request |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -8000,6 +8002,54 @@ request option of their own.
 
 **Effort**: small: the type of three fields, the same change client-go made
 on the list options.
+
+### PositionOptions types the image coordinates as floats, and NotePosition carries no image fields
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. v3.43.0, and `main` as of 2026-11-04, carry the same
+  types.
+- **Blocking**: no.
+- **Workaround**: yes. `mr_review.discussion_create`,
+  `mr_review.draft_note_create` and `mr_review.draft_note_update` take `x`
+  and `y` as integers, publish them as `integer` and convert each with
+  `toolutil.ImageCoordinate`, so a fraction is refused when the params are
+  read. `repository.commit_discussion_create` refuses an image position
+  before the request. The first retires when the two fields take an
+  `*int64`, the second when the commit discussion's position models the
+  four image fields.
+
+**Where**: `discussions.go`, `PositionOptions.X` and `PositionOptions.Y`,
+each `*float64` beside the `*int64` `Width` and `Height`, sent as
+`position[x]` and `position[y]` by `CreateMergeRequestDiscussionOptions`
+to `POST /projects/:id/merge_requests/:merge_request_iid/discussions`, and
+by `CreateDraftNoteOptions` and `UpdateDraftNoteOptions` (`draft_notes.go`)
+to `POST /projects/:id/merge_requests/:merge_request_iid/draft_notes` and
+`PUT /projects/:id/merge_requests/:merge_request_iid/draft_notes/:draft_note_id`.
+And `CreateCommitDiscussionOptions.Position`, a `*NotePosition`
+(`notes.go`), which has no `Width`, `Height`, `X` or `Y`, sent to
+`POST /projects/:id/repository/commits/:commit_id/discussions`.
+
+**What**: GitLab declares `x` and `y` as `Integer` in the position params of
+`lib/api/discussions.rb`, for merge request and commit discussions alike,
+and of `lib/api/draft_notes.rb`, beside `width` and `height`. Grape coerces
+a JSON 12.5 to 12 with no error, so a caller of client-go that passes a
+fraction has its comment placed at the whole pixel below, and nothing in the
+option's type says that only whole pixels exist. The commit discussion
+route declares the same four image params, and GitLab completes an image
+position only with all four (`Gitlab::Diff::Formatters::ImageFormatter#complete?`),
+so no image position on a commit can be completed through client-go: GitLab
+answers the write with a 400 saying the position is incomplete.
+
+**How we found it**: issue 1692, which held the inline position tools to
+`Gitlab::Diff::Position`, its formatters and the Grape declarations after
+issue 1531.
+
+**Effort**: small. The type of two fields, a breaking change for callers that
+build the options, so it waits for a major version or a parallel field; and
+the four image fields on the commit discussion's position, either on
+`NotePosition`, which also decodes responses, or by having the commit
+discussion options take a `PositionOptions` instead.
 
 ### Three option structs carry a timestamp parameter as a date
 

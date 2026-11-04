@@ -288,7 +288,9 @@ func toListOutput(discussions []*gl.Discussion, extras []toolutil.DiscussionExtr
 // (ImageFormatter#complete?) and which this action cannot send them for: the
 // position client-go's CreateCommitDiscussionOptions carries is a
 // gl.NotePosition, which models no image field. GitLab would answer the
-// write with a 400 saying the position is incomplete.
+// write with a 400 saying the position is incomplete. The gap is recorded in
+// docs/development/upstream-bugs.md, and the refusal retires when the commit
+// discussion's position carries the four fields.
 var errCommitImagePosition = errors.New(
 	"an image position cannot be placed through repository.commit_discussion_create: GitLab places an image " +
 		"comment by the image's width, height, x and y, and this action sends none of them; use position_type " +
