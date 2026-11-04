@@ -321,25 +321,32 @@ func mrDraftNoteSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 	return byTool
 }
 
-// TestActionSpecs_PublishAll_ReviewerStateIsAnEnumOfGitLabsTwoValues verifies
-// that the bulk publish action publishes reviewer_state as the two values
-// GitLab's route declares, and that no other draft note action carries a
-// schema override, since none of them takes the parameter.
-func TestActionSpecs_PublishAll_ReviewerStateIsAnEnumOfGitLabsTwoValues(t *testing.T) {
+// TestActionSpecs_InputSchemaOverrides_AreTheEnumsGitLabDeclares verifies
+// that each draft note action publishes as an enum exactly the values
+// GitLab's route declares for it: the bulk publish its two reviewer_state
+// values, and the create and the update the three position_type values of
+// the positional params they share, as mr_review.discussion_create does.
+// No other draft note action carries a schema override, since none of them
+// takes either parameter.
+//
+// On the parent the create and the update publish position_type as a free
+// string, so a model could not see the three values without a refusal.
+func TestActionSpecs_InputSchemaOverrides_AreTheEnumsGitLabDeclares(t *testing.T) {
 	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
-	want := []toolutil.InputSchemaOverride{
-		{PropertyPath: "reviewer_state", Values: map[string]any{"enum": []any{"requested_changes", "reviewed"}}},
+	positionType := []toolutil.InputSchemaOverride{
+		{PropertyPath: "position.position_type", Values: map[string]any{"enum": []any{"text", "image", "file"}}},
+	}
+	want := map[string][]toolutil.InputSchemaOverride{
+		"gitlab_mr_draft_note_publish_all": {
+			{PropertyPath: "reviewer_state", Values: map[string]any{"enum": []any{"requested_changes", "reviewed"}}},
+		},
+		"gitlab_mr_draft_note_create": positionType,
+		"gitlab_mr_draft_note_update": positionType,
 	}
 	for tool, spec := range byTool {
 		t.Run(tool, func(t *testing.T) {
-			if tool == "gitlab_mr_draft_note_publish_all" {
-				if !reflect.DeepEqual(spec.InputSchemaOverrides, want) {
-					t.Errorf("input schema overrides =\n got %#v\nwant %#v", spec.InputSchemaOverrides, want)
-				}
-				return
-			}
-			if len(spec.InputSchemaOverrides) != 0 {
-				t.Errorf("input schema overrides = %#v, want none on an action that takes no reviewer_state", spec.InputSchemaOverrides)
+			if !reflect.DeepEqual(spec.InputSchemaOverrides, want[tool]) {
+				t.Errorf("input schema overrides =\n got %#v\nwant %#v", spec.InputSchemaOverrides, want[tool])
 			}
 		})
 	}

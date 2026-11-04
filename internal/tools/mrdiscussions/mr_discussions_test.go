@@ -1170,22 +1170,38 @@ func TestValidatePosition_FileWithEmptyDiff_SkipsTheLineCheck(t *testing.T) {
 }
 
 // TestValidatePosition_OldPathFallback verifies that validatePosition
-// uses OldPath when NewPath is empty.
+// looks the file up by OldPath when NewPath is empty or only blanks, as
+// GitLab reads new_path.presence || old_path. Before the blank case was
+// handled, a new_path of " " passed the anchor check and was then looked up
+// as the path " ", which no diff holds, so a position GitLab would place on
+// old_path's file was refused as not in the diff.
 func TestValidatePosition_OldPathFallback(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
-			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old.go","new_path":"renamed.go","diff":"@@ -1,2 +1,2 @@\n-x\n+y\n"}]`)
-	}))
-	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
-		BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
-		OldPath: "old.go",
-		OldLine: 1,
-	})
-	if err != nil {
-		t.Errorf("old_path fallback should match, got: %v", err)
+	tests := []struct {
+		name    string
+		newPath string
+	}{
+		{name: "new_path empty", newPath: ""},
+		{name: "new_path of blanks", newPath: "  "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+					testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old.go","new_path":"renamed.go","diff":"@@ -1,2 +1,2 @@\n-x\n+y\n"}]`)
+			}))
+			err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+				BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
+				OldPath: "old.go",
+				NewPath: tt.newPath,
+				OldLine: 1,
+			})
+			if err != nil {
+				t.Errorf("old_path fallback should match, got: %v", err)
+			}
+		})
 	}
 }
 
@@ -1238,8 +1254,8 @@ func TestCreate_FullImagePosition(t *testing.T) {
 			PositionType: "image",
 			Width:        new(int64(100)),
 			Height:       new(int64(200)),
-			X:            new(10.5),
-			Y:            new(20.5),
+			X:            new(int64(10)),
+			Y:            new(int64(20)),
 		},
 	})
 	if err != nil {
@@ -1663,12 +1679,16 @@ func TestUpdateNote_OptionalFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 // optional field of a diff position reaches GitLab exactly when it was given.
 // GitLab reads a position as a whole and refuses the ones it cannot resolve,
 // so a coordinate silently replaced by an unset one is the difference between
-// a comment landing where it was meant to and a 400 nobody can explain.
+// a comment landing where it was meant to and a 400 nobody can explain. The
+// fewest a position can carry is the line of a text position, since GitLab
+// completes none without one.
 func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 	base := DiffPosition{BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222", NewPath: "design.png"}
+	lineOnly := base
+	lineOnly.NewLine = 42
 	full := base
 	full.OldPath, full.OldLine, full.NewLine = "old.png", 7, 42
-	full.PositionType, full.Width, full.Height, full.X, full.Y = "image", new(int64(100)), new(int64(200)), new(10.5), new(20.5)
+	full.PositionType, full.Width, full.Height, full.X, full.Y = "image", new(int64(100)), new(int64(200)), new(int64(10)), new(int64(20))
 
 	for _, tc := range []struct {
 		name     string
@@ -1680,14 +1700,14 @@ func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 			position: full,
 			want: map[string]any{
 				"old_path": "old.png", "old_line": float64(7), "new_line": float64(42),
-				"width": float64(100), "height": float64(200), "x": 10.5, "y": 20.5,
+				"width": float64(100), "height": float64(200), "x": float64(10), "y": float64(20),
 			},
 		},
 		{
-			name:     "none set",
-			position: base,
+			name:     "only the line a text position needs",
+			position: lineOnly,
 			want: map[string]any{
-				"old_path": nil, "old_line": nil, "new_line": nil,
+				"old_path": nil, "old_line": nil, "new_line": float64(42),
 				"width": nil, "height": nil, "x": nil, "y": nil,
 			},
 		},
@@ -1876,12 +1896,30 @@ func positionTypeCases() []positionTypeCase {
 			wantSent: map[string]any{"position_type": "text", "new_line": float64(40)}, wantRead: true,
 		},
 		{
+			name: "text naming no line", position: at(map[string]any{"position_type": "text"}),
+			wantErr: "a text position needs new_line or old_line",
+		},
+		{
+			name: "text by default naming no line", position: at(map[string]any{}),
+			wantErr: "a text position needs new_line or old_line",
+		},
+		{
+			name:     "text naming only a line range",
+			position: at(map[string]any{"line_range": map[string]any{"start": map[string]any{"new_line": 1}, "end": map[string]any{"new_line": 1}}}),
+			wantErr:  "a text position needs new_line or old_line",
+		},
+		{
 			name:     "image with width, height, x and y",
-			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12.5, "y": 8}),
+			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12, "y": 8}),
 			wantSent: map[string]any{
-				"position_type": "image", "width": float64(64), "height": float64(32), "x": 12.5, "y": float64(8),
+				"position_type": "image", "width": float64(64), "height": float64(32), "x": float64(12), "y": float64(8),
 				"new_line": nil, "old_line": nil,
 			},
+		},
+		{
+			name:     "image at a fraction of a pixel",
+			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12.5, "y": 8}),
+			wantErr:  "position.x",
 		},
 		{
 			name:     "image at its top left corner",
@@ -1951,16 +1989,17 @@ func (c positionTypeCase) check(t *testing.T, g *positionTypeGitLab, err error) 
 
 // TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt holds
 // the position pre-check of mr_review.discussion_create to what GitLab reads
-// for each position_type. A text position, named or by default, is judged
-// against the lines of the merge request's diff. An image position is judged
-// by its width, height, x and y, and a file position by its old and new
-// paths, before any request and without reading the diff, since GitLab
-// places neither by a line. A position_type GitLab does not declare is left
-// to GitLab, which refuses it by name.
+// for each position_type. A text position, named or by default, needs a line
+// before anything is read, and is then judged against the lines of the merge
+// request's diff. An image position is judged by its width, height, x and y,
+// in whole pixels, and a file position by its old and new paths, before any
+// request and without reading the diff, since GitLab places neither by a
+// line. A position_type GitLab does not declare is left to GitLab, which
+// refuses it by name.
 //
-// On the parent every image and file case fails, and so does the undeclared
-// type: the pre-check read the diff for each and refused it as a text
-// position naming no line.
+// On the parent the three text positions naming no line are refused only
+// after the merge request and its diff are read, and the image at a fraction
+// of a pixel is sent as 12.5, which GitLab places at 12.
 func TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testing.T) {
 	for _, tc := range positionTypeCases() {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1971,6 +2010,85 @@ func TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testi
 				"project_id": testProjectID, "merge_request_iid": 1, "body": testRefactoringComment, "position": tc.position,
 			})
 			tc.check(t, gitlab, err)
+		})
+	}
+}
+
+// incompletePositionCase is a position, as a caller spells it, that GitLab
+// cannot complete, and the words its refusal names.
+type incompletePositionCase struct {
+	name     string
+	position map[string]any
+	wantErr  string
+}
+
+// incompletePositionCases lists, for each position_type GitLab declares and
+// for the text an unnamed type is sent as, a position complete in every
+// other part with one part of the anchor every type shares taken away: an
+// empty start_sha, a head_sha of blanks, or no path at all. It adds a text
+// position with its anchor and no line, the one part a text position needs
+// beyond it that is judged without the diff.
+func incompletePositionCases() []incompletePositionCase {
+	types := []struct {
+		name   string
+		fields map[string]any
+	}{
+		{name: "text", fields: map[string]any{"position_type": "text", "new_line": 1}},
+		{name: "text by default", fields: map[string]any{"new_line": 1}},
+		{name: "image", fields: map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12, "y": 8}},
+		{name: "file", fields: map[string]any{"position_type": "file", "old_path": positionTypePath}},
+	}
+	breaks := []struct {
+		name    string
+		apply   func(position map[string]any)
+		wantErr string
+	}{
+		{name: "an empty start_sha", apply: func(p map[string]any) { p["start_sha"] = "" }, wantErr: "(missing: start_sha)"},
+		{name: "a head_sha of blanks", apply: func(p map[string]any) { p["head_sha"] = "  " }, wantErr: "(missing: head_sha)"},
+		{
+			name:    "no path",
+			apply:   func(p map[string]any) { delete(p, "new_path"); delete(p, "old_path") },
+			wantErr: "(missing: a path in new_path or old_path)",
+		},
+	}
+	var cases []incompletePositionCase
+	for _, typ := range types {
+		for _, br := range breaks {
+			position := map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath}
+			maps.Copy(position, typ.fields)
+			br.apply(position)
+			cases = append(cases, incompletePositionCase{name: typ.name + " with " + br.name, position: position, wantErr: br.wantErr})
+		}
+	}
+	return append(cases, incompletePositionCase{
+		name:     "text naming no line",
+		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath},
+		wantErr:  "a text position needs new_line or old_line",
+	})
+}
+
+// TestCreate_IncompletePosition_IsRefusedBeforeAnyRequest holds
+// mr_review.discussion_create to the anchor GitLab completes every position
+// by (Position#complete?): the start and head commits of the diff and the
+// file's path, on every position type. A position missing one is refused in
+// words naming it, and nothing is sent, not even the read of the merge
+// request's diff, so the refusal holds where the diff cannot be read. GitLab
+// would answer the write with a 400 naming no field.
+//
+// On the parent every case sends a request: the image and file positions go
+// straight to the write, and a text position is judged only by the diff,
+// which a blank SHA skips and an unreadable merge request leaves to GitLab.
+func TestCreate_IncompletePosition_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, tc := range incompletePositionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+			_, err := discussionCreateRoute(t, client)(t.Context(), map[string]any{
+				"project_id": testProjectID, "merge_request_iid": 1, "body": testRefactoringComment, "position": tc.position,
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error = %v, want a refusal naming %q", err, tc.wantErr)
+			}
 		})
 	}
 }
@@ -2010,9 +2128,11 @@ func TestCreate_LineRange_SentWheneverEitherEndpointIsGiven(t *testing.T) {
 				ProjectID: testProjectID,
 				MRIID:     1,
 				Body:      testRefactoringComment,
+				// GitLab places a text position by its own line, the range's
+				// last, and a range does not stand in for it.
 				Position: &DiffPosition{
 					BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222",
-					NewPath: "main.go", LineRange: &tc.lineRange,
+					NewPath: "main.go", NewLine: 6, LineRange: &tc.lineRange,
 				},
 			}, func(body map[string]any) {
 				pos, ok := body["position"].(map[string]any)

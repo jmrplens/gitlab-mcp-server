@@ -900,16 +900,15 @@ func searchSubstring(s, substr string) bool {
 // where a 0 is present. A complete position passes, the four at 0 included,
 // and the refusal names exactly the fields left out, in that order.
 func TestValidateImagePosition_EachMissingField_IsNamed(t *testing.T) {
-	width, height, x, y := new(int64(64)), new(int64(32)), new(12.5), new(8.0)
-	zero, origin := new(int64(0)), new(0.0)
+	width, height, x, y := new(int64(64)), new(int64(32)), new(int64(12)), new(int64(8))
+	zero := new(int64(0))
 	for _, tc := range []struct {
-		name          string
-		width, height *int64
-		x, y          *float64
-		wantMissing   string
+		name                string
+		width, height, x, y *int64
+		wantMissing         string
 	}{
 		{name: "all four", width: width, height: height, x: x, y: y},
-		{name: "all four at zero", width: zero, height: zero, x: origin, y: origin},
+		{name: "all four at zero", width: zero, height: zero, x: zero, y: zero},
 		{name: "no width", height: height, x: x, y: y, wantMissing: "width"},
 		{name: "no height", width: width, x: x, y: y, wantMissing: "height"},
 		{name: "no x", width: width, height: height, y: y, wantMissing: "x"},
@@ -959,6 +958,103 @@ func TestValidateFilePosition_EachMissingPath_IsNamed(t *testing.T) {
 			want := "a file position needs both old_path and new_path (missing: " + tc.wantMissing + "): "
 			if err == nil || !strings.HasPrefix(err.Error(), want) {
 				t.Errorf("ValidateFilePosition() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
+}
+
+// TestValidatePositionAnchor_EachMissingPart_IsNamed holds the anchor check to
+// GitLab's rule for a position of any type (Position#complete? and
+// DiffRefs#complete?): start_sha and head_sha present, and a file path in
+// new_path or, when that is blank, old_path, where a value of blanks is not
+// present. One path is enough, the old one of a deleted file included, and
+// the refusal names exactly the parts left out, in that order.
+func TestValidatePositionAnchor_EachMissingPart_IsNamed(t *testing.T) {
+	const pathPart = "a path in new_path or old_path"
+	for _, tc := range []struct {
+		name                                string
+		startSHA, headSHA, oldPath, newPath string
+		wantMissing                         string
+	}{
+		{name: "both SHAs and both paths", startSHA: "start", headSHA: "head", oldPath: "a.go", newPath: "a.go"},
+		{name: "the new path alone", startSHA: "start", headSHA: "head", newPath: "a.go"},
+		{name: "the old path alone", startSHA: "start", headSHA: "head", oldPath: "a.go"},
+		{name: "a blank new path beside the old one", startSHA: "start", headSHA: "head", oldPath: "a.go", newPath: " "},
+		{name: "no start_sha", headSHA: "head", newPath: "a.go", wantMissing: "start_sha"},
+		{name: "a start_sha of blanks", startSHA: " \t", headSHA: "head", newPath: "a.go", wantMissing: "start_sha"},
+		{name: "no head_sha", startSHA: "start", newPath: "a.go", wantMissing: "head_sha"},
+		{name: "a head_sha of blanks", startSHA: "start", headSHA: "\n", newPath: "a.go", wantMissing: "head_sha"},
+		{name: "no path", startSHA: "start", headSHA: "head", wantMissing: pathPart},
+		{name: "two paths of blanks", startSHA: "start", headSHA: "head", oldPath: " ", newPath: "\t", wantMissing: pathPart},
+		{name: "none of them", wantMissing: "start_sha, head_sha, " + pathPart},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidatePositionAnchor(tc.startSHA, tc.headSHA, tc.oldPath, tc.newPath)
+			if tc.wantMissing == "" {
+				if err != nil {
+					t.Errorf("ValidatePositionAnchor() = %v, want nil for a complete anchor", err)
+				}
+				return
+			}
+			want := "a position of any type needs start_sha, head_sha and the file's new_path or old_path (missing: " + tc.wantMissing + "): "
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("ValidatePositionAnchor() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
+}
+
+// TestValidateTextPosition_NoLine_IsRefused holds the text check to GitLab's
+// rule for a text position (TextFormatter#complete?): an old_line or a
+// new_line present. Either one passes, both together pass, and neither is
+// refused in words naming the two.
+func TestValidateTextPosition_NoLine_IsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		oldLine, newLine int64
+		wantErr          bool
+	}{
+		{name: "an added line", newLine: 12},
+		{name: "a removed line", oldLine: 7},
+		{name: "an unchanged line", oldLine: 7, newLine: 12},
+		{name: "no line", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateTextPosition(tc.oldLine, tc.newLine)
+			if !tc.wantErr {
+				if err != nil {
+					t.Errorf("ValidateTextPosition() = %v, want nil for a position naming a line", err)
+				}
+				return
+			}
+			const want = "a text position needs new_line or old_line: "
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("ValidateTextPosition() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
+}
+
+// TestImageCoordinate_ConvertsWholePixelsAndKeepsAbsence verifies that an
+// image coordinate reaches client-go's float64 as the same whole number, 0
+// included, and that one left out stays nil so it is not sent.
+func TestImageCoordinate_ConvertsWholePixelsAndKeepsAbsence(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   *int64
+		want *float64
+	}{
+		{name: "left out", in: nil, want: nil},
+		{name: "the image's edge", in: new(int64(0)), want: new(0.0)},
+		{name: "a point inside", in: new(int64(1920)), want: new(1920.0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ImageCoordinate(tc.in)
+			switch {
+			case tc.want == nil && got != nil:
+				t.Errorf("ImageCoordinate(nil) = %v, want nil", *got)
+			case tc.want != nil && (got == nil || *got != *tc.want):
+				t.Errorf("ImageCoordinate(%d) = %v, want %v", *tc.in, got, *tc.want)
 			}
 		})
 	}

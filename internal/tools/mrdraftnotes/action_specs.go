@@ -113,11 +113,21 @@ func mrDraftNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 		OwnerPackage:   "mrdraftnotes",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
-	if individualTool == "gitlab_mr_draft_note_publish_all" {
+	switch individualTool {
+	case "gitlab_mr_draft_note_publish_all":
 		// GitLab declares the two values on the bulk_publish route and refuses
 		// any other with a 400; approving is a separate action.
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("reviewer_state", "requested_changes", "reviewed"),
+		}
+	case "gitlab_mr_draft_note_create", "gitlab_mr_draft_note_update":
+		// The create and update routes share the positional params of
+		// lib/api/draft_notes.rb, which declare position_type with the three
+		// values the merge request discussion route declares, and refuse any
+		// other with a 400.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("position.position_type",
+				toolutil.PositionTypeText, toolutil.PositionTypeImage, toolutil.PositionTypeFile),
 		}
 	}
 	return options
@@ -172,7 +182,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_update, gitlab_mr_draft_note_publish.",
 	},
 	"gitlab_mr_draft_note_create": {
-		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment. Include position with base_sha/start_sha/head_sha plus new_path/old_path and new_line/old_line to anchor the note to a specific diff line. The note stays author-private until published.",
+		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's new_path/old_path. A text position (the default) also needs new_line or old_line on a diff line. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.",
 		Aliases: []string{"add draft note", "draft mr review comment", "create pending mr comment", "comment on mr diff line as draft"},
 		Related: []string{actionDraftNoteList, actionDraftNotePublish, actionDraftNotePublishAll},
 		Guidance: map[string]toolutil.ParameterGuidance{
@@ -185,8 +195,8 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 			},
 			"position": {
 				SemanticRole:     "diff_position",
-				ValueSource:      "Inline diff location for a code comment. Mirror the MR diff SHAs and the target file path and line.",
-				CommonConfusions: []string{"Omit position entirely for a general MR comment. Only set it to anchor the note to a changed line."},
+				ValueSource:      "Inline diff location for a review comment, from mr_review.changes_get: the MR diff SHAs and the target file's path, plus a line for a text position.",
+				CommonConfusions: []string{"Omit position entirely for a general MR comment. A position missing start_sha, head_sha, a file path or a field its position_type needs is refused before any request, since GitLab would save the draft and publish it as a general comment with the position dropped."},
 			},
 		},
 		Description: "Create a pending draft note on a merge request. Returns: the created draft note with ID, author, body, and inline position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish, gitlab_mr_draft_note_publish_all.",

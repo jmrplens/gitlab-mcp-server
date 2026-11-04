@@ -101,10 +101,10 @@ func mergeRequestPositionSnapshotMatches(ctx context.Context, client *gitlabclie
 	return true
 }
 
-// The position types GitLab's merge request discussion and draft note routes
-// accept: both declare position_type with values text, image and file
-// (lib/api/discussions.rb and lib/api/draft_notes.rb), and the tools send
-// text when the caller names none.
+// The position types GitLab's merge request and commit discussion routes and
+// its draft note routes accept: each declares position_type with values text,
+// image and file (lib/api/discussions.rb and lib/api/draft_notes.rb), and the
+// tools send text when the caller names none.
 const (
 	// PositionTypeText places a comment on a line of a text diff.
 	PositionTypeText = "text"
@@ -113,6 +113,75 @@ const (
 	// PositionTypeFile places a comment on a whole file.
 	PositionTypeFile = "file"
 )
+
+// ValidatePositionAnchor refuses a position, whatever its type, that lacks a
+// part of the anchor GitLab completes every position by: the start and head
+// commits of the diff, and the file, named by its new or its old path.
+// Gitlab::Diff::Position#complete? asks for a file path (new_path, or
+// old_path when new_path is blank) and for DiffRefs#complete?, which is
+// start_sha and head_sha, before it asks the position type's formatter for
+// the rest, and a value of blanks is not present there. The base commit is
+// not part of it, so it is not judged here.
+//
+// It runs before the check of the position type and before any request, for
+// the reason [ValidateImagePosition] gives: GitLab's answer names no field,
+// and for a draft note it is no answer at all. Grape requires base_sha,
+// start_sha and head_sha only to be present as keys, so an empty value
+// passes it.
+func ValidatePositionAnchor(startSHA, headSHA, oldPath, newPath string) error {
+	var missing []string
+	if strings.TrimSpace(startSHA) == "" {
+		missing = append(missing, "start_sha")
+	}
+	if strings.TrimSpace(headSHA) == "" {
+		missing = append(missing, "head_sha")
+	}
+	if strings.TrimSpace(newPath) == "" && strings.TrimSpace(oldPath) == "" {
+		missing = append(missing, "a path in new_path or old_path")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"a position of any type needs start_sha, head_sha and the file's new_path or old_path (missing: %s): "+
+			"GitLab places every inline comment by the start and head commits of the diff and the file it is on, "+
+			"and keeps no position without them",
+		strings.Join(missing, ", "),
+	)
+}
+
+// ValidateTextPosition refuses a text position that names no line. GitLab
+// completes a text position only when its old_line or its new_line is present
+// (Gitlab::Diff::Formatters::TextFormatter#complete?), a line_range included,
+// whose own endpoints do not stand in for them. Which line it may be is
+// judged against the merge request's diff by [ValidateDiffPosition], when the
+// diff can be read; this check needs no request, so it holds even when that
+// one is skipped. A line is numbered from 1, so 0 is no line, as the tools
+// send none for it.
+func ValidateTextPosition(oldLine, newLine int64) error {
+	if oldLine != 0 || newLine != 0 {
+		return nil
+	}
+	return errors.New(
+		"a text position needs new_line or old_line: GitLab places a line comment by the line's number in the " +
+			"new file (an added line), in the old file (a removed line) or in both (an unchanged line), " +
+			"and a line_range does not stand in for it",
+	)
+}
+
+// ImageCoordinate converts an image coordinate to the type client-go's
+// gl.PositionOptions gives x and y. GitLab declares both as integers on the
+// discussion and draft note routes (lib/api/discussions.rb and
+// lib/api/draft_notes.rb), and Grape coerces a fraction to an integer
+// without a word, so the tools take whole pixels and convert them here, where
+// a float64 holds each of them exactly. A nil coordinate stays nil, so a
+// field left out is not sent.
+func ImageCoordinate(v *int64) *float64 {
+	if v == nil {
+		return nil
+	}
+	return new(float64(*v))
+}
 
 // ValidateImagePosition refuses an image position that lacks one of the four
 // fields GitLab places an image comment by. GitLab completes an image
@@ -128,7 +197,7 @@ const (
 // refused with a 400 saying the position is incomplete, and a draft note is
 // saved and later published as a general comment with its position dropped
 // (DraftNote#publish_params keeps the position only when it is complete).
-func ValidateImagePosition(width, height *int64, x, y *float64) error {
+func ValidateImagePosition(width, height, x, y *int64) error {
 	var missing []string
 	if width == nil {
 		missing = append(missing, "width")
@@ -171,7 +240,8 @@ func ValidateFilePosition(oldPath, newPath string) error {
 	}
 	return fmt.Errorf(
 		"a file position needs both old_path and new_path (missing: %s): take them from the file's entry in "+
-			"mr_review.changes_get, which gives an added or a deleted file the same path in both",
+			"the diff (mr_review.changes_get for a merge request, repository.commit_diff for a commit), which "+
+			"gives an added or a deleted file the same path in both",
 		strings.Join(missing, ", "),
 	)
 }

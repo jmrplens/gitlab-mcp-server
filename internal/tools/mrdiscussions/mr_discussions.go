@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -38,7 +39,10 @@ type DiffLinePositionInput struct {
 // The four image fields are pointers, as gl.PositionOptions has them, because
 // GitLab takes 0 as a value of each: an x or a y of 0 is a point on the
 // image's edge, and a plain number could not tell it from a field left out,
-// so the coordinate was dropped from the request.
+// so the coordinate was dropped from the request. x and y are integers, as
+// GitLab declares them, where gl.PositionOptions types them as floats: Grape
+// coerced a fraction to its whole part without a word, so 12.5 placed the
+// comment at 12. [toolutil.ImageCoordinate] converts them for the request.
 type DiffPosition struct {
 	BaseSHA      string              `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
 	StartSHA     string              `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
@@ -51,8 +55,8 @@ type DiffPosition struct {
 	LineRange    *DiffLineRangeInput `json:"line_range,omitempty"    jsonschema:"Start/end line range for a multi-line text diff comment."`
 	Width        *int64              `json:"width,omitempty"  jsonschema:"Image width in pixels. Required for position_type=image."`
 	Height       *int64              `json:"height,omitempty" jsonschema:"Image height in pixels. Required for position_type=image."`
-	X            *float64            `json:"x,omitempty"      jsonschema:"X coordinate of the comment on the image. Required for position_type=image."`
-	Y            *float64            `json:"y,omitempty"      jsonschema:"Y coordinate of the comment on the image. Required for position_type=image."`
+	X            *int64              `json:"x,omitempty"      jsonschema:"X coordinate of the comment on the image, in whole pixels. Required for position_type=image."`
+	Y            *int64              `json:"y,omitempty"      jsonschema:"Y coordinate of the comment on the image, in whole pixels. Required for position_type=image."`
 }
 
 // CreateInput defines parameters for creating a discussion (inline or general).
@@ -417,7 +421,8 @@ func buildPositionOptions(p *DiffPosition) *gl.PositionOptions {
 	if p.LineRange != nil {
 		pos.LineRange = buildLineRangeOptions(p.LineRange)
 	}
-	pos.Width, pos.Height, pos.X, pos.Y = p.Width, p.Height, p.X, p.Y
+	pos.Width, pos.Height = p.Width, p.Height
+	pos.X, pos.Y = toolutil.ImageCoordinate(p.X), toolutil.ImageCoordinate(p.Y)
 	return pos
 }
 
@@ -456,17 +461,25 @@ func buildLinePositionOptions(p *DiffLinePositionInput) *gl.LinePositionOptions 
 	return out
 }
 
-// validatePosition judges a position by the fields GitLab reads for its
-// position_type, before the write is sent. A text position, which is what an
-// unnamed type is sent as, is judged against the lines of the merge
-// request's diff by [validateTextPosition]. An image position is judged by
-// its width, height, x and y, and a file position by its old and new paths,
-// with no request, since GitLab places neither by a line of the diff. A
+// validatePosition judges a position by the fields GitLab reads for it,
+// before the write is sent. Every position, of any type, needs its start and
+// head commits and a file path, which [toolutil.ValidatePositionAnchor]
+// checks first. A text position, which is what an unnamed type is sent as,
+// needs a line, and is then judged against the lines of the merge request's
+// diff by [validateTextPosition]. An image position is judged by its width,
+// height, x and y, and a file position by its old and new paths, with no
+// request, since GitLab places neither by a line of the diff. A
 // position_type GitLab does not declare is left to GitLab, which refuses it
 // by name.
 func validatePosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
+	if err := toolutil.ValidatePositionAnchor(pos.StartSHA, pos.HeadSHA, pos.OldPath, pos.NewPath); err != nil {
+		return err
+	}
 	switch pos.PositionType {
 	case "", toolutil.PositionTypeText:
+		if err := toolutil.ValidateTextPosition(int64(pos.OldLine), int64(pos.NewLine)); err != nil {
+			return err
+		}
 		return validateTextPosition(ctx, client, projectID, mrIID, pos)
 	case toolutil.PositionTypeImage:
 		return toolutil.ValidateImagePosition(pos.Width, pos.Height, pos.X, pos.Y)
@@ -484,8 +497,11 @@ func validatePosition(ctx context.Context, client *gitlabclient.Client, projectI
 // SHAs name, the check is skipped and the write that follows is judged by
 // GitLab, for the reasons [toolutil.MergeRequestDiffForPositionCheck] gives.
 func validateTextPosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
+	// GitLab takes the file from new_path unless it is blank, and from old_path
+	// otherwise (new_path.presence || old_path), so a new_path of blanks names
+	// the old_path's file, as toolutil.ValidatePositionAnchor already reads it.
 	targetPath := pos.NewPath
-	if targetPath == "" {
+	if strings.TrimSpace(targetPath) == "" {
 		targetPath = pos.OldPath
 	}
 	fileDiff, ok := toolutil.MergeRequestDiffForPositionCheck(ctx, client, projectID, mrIID, targetPath, gl.MergeRequestDiffRefs{
