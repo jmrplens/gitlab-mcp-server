@@ -16763,6 +16763,7 @@ func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
 		"internal/testutil/modelscore",
 		"internal/testutil/serialtypecheck",
 		"internal/testutil/netfixture",
+		"internal/testutil/docblocks",
 		"internal/graphqlschema",
 		"internal/freshness",
 	}
