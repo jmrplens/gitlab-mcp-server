@@ -17,10 +17,15 @@ package modelcorpus
 // tier a case declares is the tier its steps need and nothing else, which is
 // why some cases in this file declare none.
 //
-// One text changed after the port, and it changes what the model is asked:
-// MS-005 names the project by its numeric ID and not its path, and binds every
-// step to that ID, for MT-066's reason in destructive.go: the allowlist removal
-// it ends with takes project_id as an integer.
+// Two texts changed after the port, and both change what the model is asked:
+//
+//   - MS-005 names the project by its numeric ID and not its path, and binds
+//     every step to that ID, for MT-066's reason in destructive.go: the
+//     allowlist removal it ends with takes project_id as an integer.
+//   - MT-145 names the link's common name beside its provider.
+//     group.ldap_link_delete_for_provider requires cn, which neither the old
+//     text nor the key gave, so no call that followed the key was accepted;
+//     the LDAP link recipe publishes the name as [FactLDAPCommonName].
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: see readCases.
 func licensedDestructiveCases() []Case {
@@ -125,12 +130,13 @@ func licensedDestructiveCases() []Case {
 		{
 			ID: "MT-145",
 			Prompt: "Delete the directory link of group `{{ .Facts.group_path }}` for the provider " +
-				"`{{ .Facts.ldap_provider }}`.",
+				"`{{ .Facts.ldap_provider }}` and the common name `{{ .Facts.ldap_common_name }}`.",
 			Recipe: RecipeLDAPLink,
 			Needs:  Needs{Tier: TierPremium, Admin: true},
 			key: Key{Steps: []Step{
 				step("group.ldap_link_delete_for_provider", group(),
-					req("provider", fact(FactLDAPProvider))),
+					req("provider", fact(FactLDAPProvider)),
+					req("cn", fact(FactLDAPCommonName))),
 			}},
 		},
 		{

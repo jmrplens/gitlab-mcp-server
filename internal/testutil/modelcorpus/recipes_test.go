@@ -82,6 +82,7 @@ func auditFacts() map[string]string {
 		FactGroupAccessTokenID:      "77",
 		FactHookID:                  "5",
 		FactJobTokenTargetProjectID: "456",
+		FactLDAPCommonName:          "eval-maintainers",
 		FactLDAPProvider:            "ldapmain",
 		FactMemberRoleID:            "44",
 		FactMilestoneIID:            "7",

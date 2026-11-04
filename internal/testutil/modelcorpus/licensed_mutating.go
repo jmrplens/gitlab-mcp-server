@@ -206,7 +206,7 @@ func licensedMutatingCases() []Case {
 			Needs:  Needs{Tier: TierUltimate},
 			key: Key{Steps: []Step{
 				step("group.security_settings_update", group(),
-					req("secret_push_protection_enabled", authored())),
+					req("secret_push_protection_enabled", implied("true"))),
 			}},
 		},
 		{
@@ -298,7 +298,7 @@ func licensedMutatingCases() []Case {
 			Needs:  Needs{Tier: TierUltimate},
 			key: Key{Steps: []Step{
 				step("project.security_settings_update", project(),
-					req("secret_push_protection_enabled", authored())),
+					req("secret_push_protection_enabled", implied("true"))),
 			}},
 		},
 		{
@@ -399,7 +399,7 @@ func licensedMutatingCases() []Case {
 			Needs:  Needs{Tier: TierUltimate},
 			key: Key{Steps: []Step{
 				step("project.security_settings_update", project(),
-					req("secret_push_protection_enabled", authored())),
+					req("secret_push_protection_enabled", implied("true"))),
 			}},
 		},
 		{
@@ -423,7 +423,7 @@ func licensedMutatingCases() []Case {
 			key: Key{Steps: []Step{
 				step("project.security_settings_get", project()),
 				step("project.security_settings_update", project(),
-					req("secret_push_protection_enabled", authored())),
+					req("secret_push_protection_enabled", implied("true"))),
 				step("project.service_account_list", project()),
 				step("project.service_account_update", project(),
 					req("service_account_id", fact(FactServiceAccountID)),

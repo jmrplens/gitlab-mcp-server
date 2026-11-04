@@ -38,6 +38,10 @@ const FailedJobArtifactPath = "coverage/report.xml"
 // GIT_STRATEGY is none so the job needs no clone, which is what keeps it fast
 // on a runner that would otherwise fetch the repository for a job that reads
 // nothing from it.
+//
+// A script line with a colon and a space in it is quoted whole: YAML reads an
+// unquoted one as a mapping, whatever shell quotes it holds, and GitLab
+// refuses the whole pipeline for it (TestPipelineConfigurations_EveryJobScript_IsAListOfStrings).
 const FailingCIYAML = `stages:
   - test
 
@@ -49,7 +53,7 @@ failing-fixture:
   script:
     - mkdir -p coverage
     - printf '<coverage />\n' > coverage/report.xml
-    - echo 'e2e: this job fails on purpose'
+    - "echo 'e2e: this job fails on purpose'"
     - exit 1
   artifacts:
     when: always
@@ -76,11 +80,16 @@ type FailedJob struct {
 // failedJobWait is the wait's budget, ten minutes, because the first job of a
 // run pulls the runner's image. A variable so the package's own tests can
 // watch a builder's wait run out, which no stub answer can make it do sooner.
-var failedJobWait = 10 * time.Minute
+//
+// It and failedJobPollInterval are written as nanoseconds rather than as
+// products of time.Second: a product at package level is an arithmetic mutant
+// no coverage profile reaches, so gremlins reports it as never covered
+// although a test holds both values to ten minutes and five seconds.
+var failedJobWait time.Duration = 600e9
 
-// failedJobPollInterval is how often the wait asks; a variable so the
-// package's own tests can ask faster than a runner answers.
-var failedJobPollInterval = 5 * time.Second
+// failedJobPollInterval is how often the wait asks, every five seconds; a
+// variable so the package's own tests can ask faster than a runner answers.
+var failedJobPollInterval time.Duration = 5e9
 
 // NewFailedJob commits the failing configuration to the project's default
 // branch, creates a pipeline on it and waits for the job to fail. The commit

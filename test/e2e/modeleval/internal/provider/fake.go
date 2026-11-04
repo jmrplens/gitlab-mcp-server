@@ -185,7 +185,7 @@ func (a fakeAdapter) call(step modelcorpus.Step, index int, replay Replay) (mode
 	}, nil
 }
 
-// arguments resolves one step's arguments from the four truths.
+// arguments resolves one step's arguments from the five truths.
 //
 // An argument whose value the fake cannot produce is omitted rather than
 // invented: the scorer then reports it missing, which is a true statement about
@@ -215,6 +215,11 @@ func (a fakeAdapter) arguments(step modelcorpus.Step, replay Replay) map[string]
 func resolveTruth(truth modelcorpus.Truth, replay Replay) (value any, found bool) {
 	if truth.Authored {
 		return authoredValue, true
+	}
+	if truth.Implied != "" {
+		// What a verb asks for is sent as a model reading it would write it:
+		// "resolve the discussion" is resolved: true, not the text "true".
+		return typedFact(truth.Implied), true
 	}
 	if truth.Literal != "" {
 		return truth.Literal, true

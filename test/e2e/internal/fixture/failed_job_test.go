@@ -48,6 +48,19 @@ func shortFailedJobWait(t *testing.T, wait time.Duration) {
 	t.Cleanup(func() { failedJobWait = saved })
 }
 
+// TestFailedJobWait_Default_IsTenMinutesAskedEveryFiveSeconds holds the two
+// durations the wait is written as, in nanoseconds, to what they stand for,
+// since a mistyped literal would pass every other test, all of which set
+// their own.
+func TestFailedJobWait_Default_IsTenMinutesAskedEveryFiveSeconds(t *testing.T) {
+	if failedJobWait != 10*time.Minute {
+		t.Errorf("failedJobWait = %s, want 10m0s", failedJobWait)
+	}
+	if failedJobPollInterval != 5*time.Second {
+		t.Errorf("failedJobPollInterval = %s, want 5s", failedJobPollInterval)
+	}
+}
+
 // jobsPath is where the pipeline's job listing lives.
 const jobsPath = "/api/v4/projects/1/pipelines/5/jobs"
 

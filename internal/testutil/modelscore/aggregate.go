@@ -318,12 +318,14 @@ func (r Ratio) add(other Ratio) Ratio {
 
 // addTally sums two named tallies into a new map, leaving both arguments
 // alone. An empty result stays nil, which is what [Aggregate]'s own readers
-// expect of a tally nothing filled.
+// expect of a tally nothing filled. The map is not sized beforehand: a size
+// hint changes nothing anyone can observe, and gremlins reported the sum that
+// computed it as a mutant no test could kill.
 func addTally[K comparable](left, right map[K]int) map[K]int {
 	if len(left) == 0 && len(right) == 0 {
 		return nil
 	}
-	sum := make(map[K]int, len(left)+len(right))
+	sum := map[K]int{}
 	for name, count := range left {
 		sum[name] += count
 	}

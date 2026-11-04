@@ -395,7 +395,7 @@ func licensedReadCases() []Case {
 			Recipe: RecipeWorld,
 			Needs:  Needs{Tier: TierUltimate},
 			key: Key{Steps: []Step{
-				step("group.list", opt("top_level_only", authored())),
+				step("group.list", opt("top_level_only", implied("true"))),
 				step("group.get", group()),
 				step("audit_event.list_group", group()),
 				step("compliance_policy.get"),
