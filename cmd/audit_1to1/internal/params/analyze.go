@@ -60,6 +60,10 @@ type Report struct {
 	// Unread are the requests whose options the walk could not read, which
 	// is why a param of their route can be unjudged.
 	Unread []UnreadRequest `json:"unread_requests,omitempty"`
+	// WorkhorseBodies are the params, as "<route> <param>", covered as the
+	// body Workhorse writes to a file for a request that carries no
+	// multipart form (see [markWorkhorseBodies]).
+	WorkhorseBodies []string `json:"workhorse_bodies,omitempty"`
 }
 
 // Finding is one param of one route nothing recorded sends.
@@ -108,9 +112,10 @@ type Summary struct {
 	RoutesWithFindings int `json:"routes_with_findings"`
 	// Params counts the params judged, path params and the attributes
 	// Workhorse fills left out, and Covered the ones a recorded request
-	// carries or a request sends on every call.
-	Params  int `json:"params_judged"`
-	Covered int `json:"params_covered"`
+	// carries or a request sends on every call, WorkhorseBodies among them.
+	Params          int `json:"params_judged"`
+	Covered         int `json:"params_covered"`
+	WorkhorseBodies int `json:"workhorse_bodies"`
 	// The four classes count the findings no declaration answers, and
 	// Declared the ones a declaration does: a container that stands for its
 	// members is one finding, so they count findings rather than params.
@@ -129,8 +134,9 @@ func (s *Summary) clean() bool { return s.Stale == 0 }
 
 // Options is what a run of this scope needs beyond the tree.
 type Options struct {
-	// GapsOnly drops the declared findings and the unread requests, keeping
-	// the findings and the stale declarations.
+	// GapsOnly drops the declared findings, the unread requests and the
+	// Workhorse bodies, keeping the findings, the stale declarations and the
+	// summary, which counts the same in both modes.
 	GapsOnly bool
 }
 
@@ -210,6 +216,7 @@ func buildReport(root string, opts Options) (Report, error) {
 	if opts.GapsOnly {
 		report.Declared = nil
 		report.Unread = nil
+		report.WorkhorseBodies = nil
 	}
 	return report, nil
 }
@@ -263,6 +270,10 @@ func judgeAll(in judgeInput) Report {
 		verdict := judgeRoute(use, recorded[name], offer.offers)
 		report.Summary.Params += verdict.judged
 		report.Summary.Covered += verdict.covered
+		report.Summary.WorkhorseBodies += len(verdict.bodies)
+		for _, param := range verdict.bodies {
+			report.WorkhorseBodies = append(report.WorkhorseBodies, name+" "+param)
+		}
 		if len(verdict.findings) > 0 {
 			report.Summary.RoutesWithFindings++
 		}

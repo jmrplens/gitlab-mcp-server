@@ -31,7 +31,8 @@ func TestRenderRequests_SpellsEachRequestByItsKind(t *testing.T) {
 					Kind: derive.KindREST, Method: "HEAD", Path: "/projects/:/files/:/raw",
 					Class: derive.ClassAlternative, Sites: []string{"pkg.Mixed"}, SDKMethods: []string{"Files.Raw"},
 					Name: "GET /projects/:id/files/:file_path/raw", Route: "HEAD /projects/:/files/:/raw",
-					Classic: finegrained.ClassicReadAPI,
+					Placeholders: map[string]string{"file_path": "path", "id": "project_id"},
+					Classic:      finegrained.ClassicReadAPI,
 				},
 				{
 					Kind: derive.KindGraphQL, Document: "query { a }",
@@ -61,6 +62,10 @@ func TestRenderRequests_SpellsEachRequestByItsKind(t *testing.T) {
           "kind": "rest",
           "route": "GET /projects/:id/files/:file_path/raw",
           "derived": "HEAD /projects/:/files/:/raw",
+          "placeholders": {
+            "file_path": "path",
+            "id": "project_id"
+          },
           "class": "alternative",
           "classic": "read_api",
           "sites": [

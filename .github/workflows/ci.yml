@@ -247,7 +247,7 @@ jobs:
       # read, held to what GitLab requires on every way an action runs. It
       # reads the request record the derivation commits, so it is deferred
       # with R-GRANT.
-      - name: Check every required parameter against the live record (R-INPUT)
+      - name: Check every required parameter against the live record (R-REQUIRED)
         if: env.FRESHNESS == 'checked'
         run: make audit-1to1-required
       # Every param a route this server reaches declares, held to whether a

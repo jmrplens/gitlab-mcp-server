@@ -794,16 +794,23 @@ func deriveWithin(t *testing.T, declarations []Declaration) Result {
 // stubSDK answers the derivation's client-go questions from a table.
 type stubSDK map[string]stubMethod
 
-// stubMethod is what one client-go method sends.
+// stubMethod is what one client-go method sends, and where its arguments land
+// in the paths of its routes.
 type stubMethod struct {
-	routes    []Request
-	documents []Request
+	routes     []Request
+	documents  []Request
+	placements []Placement
 }
 
 // Requests answers from the table, and unknown for a method it does not hold.
 func (s stubSDK) Requests(key string) (routes, documents []Request, known bool) {
 	method, ok := s[key]
 	return method.routes, method.documents, ok
+}
+
+// Placements answers from the table, nothing for a method it does not hold.
+func (s stubSDK) Placements(key string) []Placement {
+	return s[key].placements
 }
 
 // fixtureSDK is the client-go the fixture compiles against, as far as the

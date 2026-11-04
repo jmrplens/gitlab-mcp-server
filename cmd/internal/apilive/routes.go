@@ -134,6 +134,40 @@ func (index *RouteIndex) Match(method, path string) (*Route, bool) {
 	return best, best != nil
 }
 
+// Placeholders names, by the position of each segment of a path a request
+// was sent to, the placeholder or splat of a record route that segment fills:
+// read from the first spelling of the route, optional groups taken and left
+// out, that the path meets as [RouteIndex.Match] meets one. It names nothing
+// for a path no spelling of the route meets. A route mounted outside the API
+// prefix is read as written.
+func Placeholders(route *Route, path string) map[int]string {
+	requested := PathSegments(path)
+	for _, variant := range ExpandOptional(NormalizePath(route.Path)) {
+		if _, meets := agree(PathSegments(variant), requested); !meets {
+			continue
+		}
+		names := map[int]string{}
+		for i, segment := range strings.Split(strings.Trim(variant, "/"), "/") {
+			if name, isParam := placeholderOf(segment); isParam {
+				names[i] = name
+			}
+		}
+		return names
+	}
+	return nil
+}
+
+// placeholderOf reports the parameter a path segment names when it is a
+// placeholder (`:id`) or a splat (`*file_path`).
+func placeholderOf(segment string) (string, bool) {
+	for _, prefix := range []string{":", "*"} {
+		if name, isParam := strings.CutPrefix(segment, prefix); isParam {
+			return name, true
+		}
+	}
+	return "", false
+}
+
 // agree reports whether a record spelling meets a requested path, and how
 // many literal segments they share. A record placeholder may stand for a
 // requested literal; a requested placeholder never stands for a record

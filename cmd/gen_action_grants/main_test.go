@@ -149,6 +149,17 @@ func (mainSDK) Requests(method string) (routes, documents []derive.Request, know
 	return nil, nil, false
 }
 
+// Placements lands the project argument of both methods in the segment after
+// /projects.
+func (mainSDK) Placements(method string) []derive.Placement {
+	routes, _, _ := mainSDK{}.Requests(method)
+	var out []derive.Placement
+	for _, route := range routes {
+		out = append(out, derive.Placement{Index: 0, Route: route.Key(), Segment: 1})
+	}
+	return out
+}
+
 // mainRecord is the live record the fixture is joined to: the project read
 // and delete, and no GraphQL mutation.
 func mainRecord() *apilive.Document {

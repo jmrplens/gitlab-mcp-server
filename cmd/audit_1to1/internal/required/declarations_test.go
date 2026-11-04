@@ -32,6 +32,32 @@ func TestDeclaredRequiredness_EveryEntryNamesADirectionACategoryAndAReason(t *te
 	}
 }
 
+// TestDeclaredWorkhorseBodies_EveryEntryCitesTheReleaseAndRequiresSomething
+// verifies every Workhorse body names a route the request record could
+// spell, says where lib/api at the live record's release reads its params,
+// and holds at least one param GitLab refuses a request without, since a
+// body of optional params alone would place nothing the gate could fail on.
+func TestDeclaredWorkhorseBodies_EveryEntryCitesTheReleaseAndRequiresSomething(t *testing.T) {
+	declared := declaredWorkhorseBodies()
+	if len(declared) == 0 {
+		t.Fatal("the Workhorse body table is empty")
+	}
+	for route, body := range declared {
+		t.Run(route, func(t *testing.T) {
+			requires := false
+			for _, required := range body.Params {
+				requires = requires || required
+			}
+			if !strings.HasPrefix(route, "POST /") && !strings.HasPrefix(route, "PUT /") {
+				t.Errorf("route %q is not a POST or PUT the record spells", route)
+			}
+			if !requires || !strings.HasPrefix(body.Source, "lib/api/") || !strings.Contains(body.Source, " at v19.5.0-ee ") {
+				t.Errorf("body = %+v, want a required param and a lib/api citation at v19.5.0-ee", body)
+			}
+		})
+	}
+}
+
 // TestFieldAliases_EveryDeclaredAlias_IsHandedOutByActionAndParam verifies
 // the accessor another rule reads the aliases through: every declaration,
 // filed under its action and its GitLab parameter, naming the field it

@@ -5495,7 +5495,7 @@ all three surfaces, and the five scenarios behind them
 sent `"expires_at": null` and GitLab created the membership or the share. The
 `label_id` and `value` rows are read and not measured: those two handlers
 always send their field, and `pipelineschedules.EditVariable` keeps `value`
-required in its schema for that reason, a declaration of the requiredness gate
+required in its schema for that reason, a declaration of R-REQUIRED
 (`make audit-1to1-required`) saying why. The `link_type` row is read, and the
 issue link scenario stopped naming a type when
 [issue 1100](https://github.com/jmrplens/gitlab-mcp-server/issues/1100) made

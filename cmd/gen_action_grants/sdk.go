@@ -52,6 +52,16 @@ func (s *sdkSource) Requests(key string) (routes, documents []derive.Request, kn
 	return routes, documents, true
 }
 
+// Placements reads where each argument of one client-go method lands in the
+// routes it sends, keyed the way the derivation keys a REST request.
+func (s *sdkSource) Placements(key string) []derive.Placement {
+	var out []derive.Placement
+	for _, placed := range s.sdk.Placements(key) {
+		out = append(out, derive.Placement{Index: placed.Index, Route: placed.Route.String(), Segment: placed.Segment})
+	}
+	return out
+}
+
 // postingOrder puts a client-go method's documents in the order it posts
 // them, which the reading of client-go does not keep (it lists them in the
 // order they are declared): every query before every mutation, each kind in

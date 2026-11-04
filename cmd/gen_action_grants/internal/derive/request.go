@@ -67,7 +67,7 @@ func Digest(document string) string {
 }
 
 // Requester is what the derivation asks of client-go: the requests one
-// service method can send.
+// service method can send, and where its arguments land in their paths.
 type Requester interface {
 	// Requests answers the requests a method sends on one call, keyed the way
 	// a handler names it ("Issues.GetIssue"). Routes are alternatives (a call
@@ -75,4 +75,22 @@ type Requester interface {
 	// method client-go does not declare, and a known method may send nothing
 	// (one that only formats a URL).
 	Requests(method string) (routes, documents []Request, known bool)
+	// Placements answers which path segment each positional argument of a
+	// method fills in each route it sends, nothing for a method client-go
+	// does not declare or whose arguments fill no segment.
+	Placements(method string) []Placement
+}
+
+// Placement is one path segment a positional argument of a client-go method
+// fills in one route the method sends, as cmd/internal/sdkroutes reads it.
+type Placement struct {
+	// Index is the argument's position among the method's parameters, the
+	// first counted 0.
+	Index int
+	// Route is the route the segment is a part of, keyed as [Request.Key]
+	// keys a REST request ("GET /projects/:/deploy_keys/:").
+	Route string
+	// Segment is the segment's position among the segments of the route's
+	// path, the first after the leading slash counted 0.
+	Segment int
 }

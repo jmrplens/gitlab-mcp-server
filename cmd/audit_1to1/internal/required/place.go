@@ -4,6 +4,7 @@
 package required
 
 import (
+	"maps"
 	"slices"
 	"strings"
 
@@ -11,12 +12,17 @@ import (
 )
 
 // This file is how a parameter GitLab declares on a route is found among the
-// fields of an input schema. Most of them are found by name, because the
-// inputs here spell a parameter the way GitLab does (the 1:1 policy R-INPUT
-// already holds them to). The exception is a path parameter: GitLab writes the
-// project of /projects/:id as `id`, and every input here writes it as
-// `project_id`, since an input names several identifiers at once and a bare
-// `id` would say none of them.
+// fields of an input schema. A path parameter is found through the field the
+// derivation read the call filling it from, which the request record carries
+// as the request's placeholders: GitLab writes the deploy key of
+// /projects/:id/deploy_keys/:key_id as `key_id`, and the input calls it
+// `deploy_key_id`. Where the record carries none, and for every other
+// parameter, it is found by name, because the inputs here spell a parameter
+// the way GitLab does (the 1:1 policy R-INPUT already holds them to), and a
+// path parameter by the rules below: GitLab writes the project of
+// /projects/:id as `id`, and every input here writes it as `project_id`,
+// since an input names several identifiers at once and a bare `id` would say
+// none of them.
 
 // placements maps each field name a route's parameters are found under to
 // whether GitLab requires it there. A parameter nested under another
@@ -31,26 +37,46 @@ import (
 // neither required nor typed), so reading the declaration alone would call the
 // project of most project routes optional.
 //
-// aliases names, by GitLab parameter, the field an action fills it from where
-// the rules above would find the wrong one (see [declaredAliases]); the
-// parameters it names are reported in aliased, so a declaration that names
-// none the action sends can be told stale.
-func placements(route *apilive.Route, aliases map[string]string, aliased map[string]bool) map[string]bool {
+// filled names, by path parameter, the field the request's calls fill it
+// from, and it decides before anything else. A parameter it leaves out is
+// found under the field aliases names for it (see [declaredAliases]), whose
+// parameters are reported in aliased so a declaration that names none the
+// action sends can be told stale, and otherwise by name. A parameter found by
+// name under a field that fills a placeholder is not that field: one input
+// field fills one parameter, so the body `group_id` of POST /groups/:id/share,
+// beside a path the input's group_id fills, is the group shared with and some
+// other field's. body lists the params GitLab reads out of a body Workhorse
+// rewrote into a file, which the record cannot declare (see
+// [declaredWorkhorseBodies]); it is nil for any other route.
+func placements(route *apilive.Route, filled map[string]string, body map[string]bool, aliases map[string]string, aliased map[string]bool) map[string]bool {
 	path := apilive.NormalizePath(route.Path)
 	fields := pathFields(path)
-	placed := make(map[string]bool, len(route.Params))
+	filling := map[string]bool{}
+	for _, field := range filled {
+		filling[field] = true
+	}
+	declared := map[string]bool{}
 	for name, param := range route.Params {
+		declared[name] = param.Required
+	}
+	maps.Copy(declared, body)
+	placed := make(map[string]bool, len(declared))
+	for name, required := range declared {
 		if strings.Contains(name, "[") {
 			continue
 		}
-		field, required := name, param.Required
+		field := name
 		if inPath, ok := fields[name]; ok {
 			field = inPath.field
 			required = required || inPath.always
 		}
-		if alias, ok := aliases[name]; ok {
+		if filler, isFilled := filled[name]; isFilled {
+			field = filler
+		} else if alias, ok := aliases[name]; ok {
 			field = alias
 			aliased[name] = true
+		} else if filling[field] {
+			continue
 		}
 		placed[field] = placed[field] || required
 	}

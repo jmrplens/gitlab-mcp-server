@@ -70,7 +70,8 @@ type leaf struct {
 	document Request
 	// callee is the function a call leaf names, and call the call expression
 	// when the leaf is called right there, whose arguments bind the callee's
-	// parameters.
+	// parameters, or, for an sdk leaf, fill the placeholders of the routes
+	// the method sends.
 	callee *types.Func
 	call   *ast.CallExpr
 	// verb and path are a raw request's arguments, and toURL marks one built
@@ -514,7 +515,7 @@ func (b *builder) function(fn *types.Func, call *ast.CallExpr) *node {
 		return emptyNode()
 	}
 	if key, ok := actionrequests.ServiceMethod(fn); ok {
-		return b.leaf(&leaf{kind: sdkLeaf, sdk: key})
+		return b.leaf(&leaf{kind: sdkLeaf, sdk: key, call: call})
 	}
 	if call != nil && isRequestConstructor(fn) {
 		return b.raw(fn, call, 0)

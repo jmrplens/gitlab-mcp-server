@@ -103,6 +103,23 @@ func TestSDKSource_Requests_AnswersByWhatTheMethodSends(t *testing.T) {
 	}
 }
 
+// TestSDKSource_Placements_KeysEachRouteTheWayADerivedRequestIs verifies the
+// reading of where a client-go method's arguments land: each by its position
+// among the parameters, on the route spelled as [derive.Request.Key] spells a
+// REST request, in the segment it fills, and nothing for a method client-go
+// does not declare.
+func TestSDKSource_Placements_KeysEachRouteTheWayADerivedRequestIs(t *testing.T) {
+	source := &sdkSource{sdk: sdkroutes.Read(sdkFixtureDir(t))}
+	route := derive.Request{Kind: derive.KindREST, Method: "GET", Path: "/projects/:/issues/:"}.Key()
+	want := []derive.Placement{{Index: 0, Route: route, Segment: 1}, {Index: 1, Route: route, Segment: 3}}
+	if got := source.Placements("Issues.GetIssue"); !reflect.DeepEqual(got, want) {
+		t.Errorf("Placements(Issues.GetIssue) = %+v, want %+v", got, want)
+	}
+	if got := source.Placements("Absent.Method"); got != nil {
+		t.Errorf("Placements(Absent.Method) = %+v, want none", got)
+	}
+}
+
 // TestClientGoDir_IsTheModuleTheProgramImports verifies client-go is read
 // from the directory of the package the loaded program imports, and from
 // nowhere when no package imports it or the import carries no files.
