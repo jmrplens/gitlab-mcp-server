@@ -38,6 +38,14 @@ A second kind of case pins what the go-sdk this module is built against does wit
 
 The `TestProxy_*` cases run a real nginx in Docker in front of the server, and **skip** when Docker is unavailable rather than modelling one. That layer is not optional detail: a proxy answering `OPTIONS` itself hides a server that cannot, and a proxy adding its own CORS headers collides with the server's to produce a response `curl` reports as `200` and a browser refuses outright.
 
+### Cloudflare Tunnel cases
+
+```bash
+make test-e2e-cloudflare-tunnel
+```
+
+This is how to try the tunnel, and the headers Cloudflare's edge passes on, whenever a change touches them. It runs the two `TestProxyGuide_Cloudflare*` cases alone, the guide's `config.yml` checked by `cloudflared` offline and the quick tunnel case through Cloudflare's edge, with `E2E_CLOUDFLARE_QUICK_TUNNEL=true`, `E2E_HTTP_DOCKER=required` and `-timeout 20m`. It needs Docker and the Internet, and for as long as it runs it keeps a public `trycloudflare.com` address open to a server on this machine, so it never runs on CI: with `CI` set the target refuses before it builds or starts anything (decided on issue 1112, 31 October 2026). The case removes its `cloudflared` container when it ends, but an interrupted test binary runs no cleanup, so the target starts the run in a process group of its own, and on an interrupt (`INT`, `TERM` or `HUP`, the last a closed terminal or a dropped SSH session; a second one kills the run) or after any run that fails it removes each container the case named in its `if this run is interrupted: docker rm -f <name>` log line, by that exact name and never by a pattern. It reads the names from the run's own log, `dist/e2e-reports/e2e-cloudflare-tunnel-log.json`, which it deletes before the run starts. The process group is POSIX job control, so on Windows run the target under WSL. Only this target opens the tunnel: `make test-e2e-http` clears `E2E_CLOUDFLARE_QUICK_TUNNEL`, so a switch left set in the shell skips the case there rather than opening an address that run would not clean up after an interrupt.
+
 ## stdio transport module
 
 ```bash

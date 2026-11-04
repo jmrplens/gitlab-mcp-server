@@ -916,6 +916,10 @@ make test-e2e-stdio
 make test-e2e-http
 make test-e2e-harness
 
+# The HTTP module's Cloudflare Tunnel cases through a real quick tunnel: Docker
+# and the Internet, a public trycloudflare.com address while it runs, never on CI
+make test-e2e-cloudflare-tunnel
+
 # Compile-only (verify the suite builds without GitLab). One tag covers all
 # three packages, because the runtime is a property of the package.
 go test -tags e2e -c -o NUL ./test/e2e/gitlab/...          # Windows

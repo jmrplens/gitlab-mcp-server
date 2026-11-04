@@ -373,6 +373,7 @@ make test-e2e-ce                                       # ephemeral GitLab CE + r
 make test-e2e-ee                                       # ephemeral GitLab EE, licensed; runs the common and ee packages
 make test-e2e-harness                                  # the harness library's own tests: no GitLab
 make test-e2e-http                                     # HTTP transport module: no GitLab, no credentials
+make test-e2e-cloudflare-tunnel                        # its Cloudflare Tunnel cases through a real quick tunnel (Docker, Internet; a public address while it runs; never on CI)
 make test-e2e-stdio                                    # stdio transport module: no GitLab, no credentials
 make test-e2e-collector                                # telemetry into a real OTLP collector (Docker; skips without it)
 

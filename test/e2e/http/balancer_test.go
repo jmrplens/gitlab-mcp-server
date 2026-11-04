@@ -19,33 +19,34 @@
 // added for. Documenting one and testing the other would have hidden exactly
 // that difference.
 //
+// The balancers serve the blocks the pages print, read through
+// internal/testutil/docblocks (guide_test.go): the nginx balancer of the load
+// balancing page and the worked one of the remote deployment guide, and the
+// load balancing page's HAProxy, each with the three backends it lists, its
+// salt and its check interval as printed. What a case changes is its table of
+// edits, the listen port and the backend addresses; what it adds is the
+// response header that names the backend, outside the block.
+//
 // Docker is required and both skip without it, because the point is to run
 // the real balancer rather than to model one; where the job says Docker is
 // expected, they fail instead (environmentUnavailablef).
 package httpe2e
 
 import (
-	"context"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"regexp"
 	"strconv"
 	"testing"
 	"time"
 )
 
-// balancerSalt stands in for the per-deployment secret the documented
-// configurations hash the credential with.
-//
-// It is in the configuration and never in a log or a routing key, which is the
-// property being demonstrated: the balancer routes on a digest that is
-// meaningless outside this deployment, not on the credential itself.
-const balancerSalt = "e2e-only-affinity-salt"
+// haproxyImage is every HAProxy case's image, pinned to a minor version.
+const haproxyImage = "haproxy:3.4-alpine"
 
 // affinityTokens are the credentials the affinity assertions are made with.
 //
@@ -61,7 +62,8 @@ const balancerSalt = "e2e-only-affinity-salt"
 // near enough to evenly that each token is close to a coin flip, so eight
 // tokens land on one side about 2^-8 of the time per assertion, twice per test
 // and in three balancer tests, which is often enough to be seen: it was, on
-// PR 747. Twenty-four puts that at about 2^-24 and costs one more second.
+// PR 747. Twenty-four puts that at about 2^-24 and costs one more second. The
+// documented balancers list three backends, which only lowers the odds.
 var affinityTokens = []string{
 	"glpat-alpha", "glpat-bravo", "glpat-charlie", "glpat-delta",
 	"glpat-echo", "glpat-foxtrot", "glpat-golf", "glpat-hotel",
@@ -71,98 +73,115 @@ var affinityTokens = []string{
 	"glpat-uniform", "glpat-victor", "glpat-whiskey", "glpat-xray",
 }
 
-// nginxBalancerConfig is the balancer from the enterprise deployment guide,
-// with one addition: the backend that served each response is echoed in a
-// header so the test can read the routing decision it is asserting about.
+// documentedBackends are the backends the documented balancers list, in
+// order. A case starts one instance for each.
+var documentedBackends = []string{"10.0.0.11:8080", "10.0.0.12:8080", "10.0.0.13:8080"}
+
+// backendEdits replaces each documented backend with an instance the case
+// started, once each.
+func backendEdits(ports []int) []edit {
+	edits := make([]edit, 0, len(documentedBackends))
+	for i, backend := range documentedBackends {
+		edits = append(edits, edit{old: backend, new: fmt.Sprintf("127.0.0.1:%d", ports[i]), count: 1})
+	}
+	return edits
+}
+
+// nginxBalancerFrame is the nginx.conf a documented balancer is included from.
 //
-// The map chain is the documented one. The credential is normalized out of
-// either header, an absent credential falls back to the client address so
-// anonymous requests do not all collapse onto one instance, and the salt is
-// concatenated into the hash key rather than becoming a variable of its own,
-// which keeps it out of any log format that names variables.
-const nginxBalancerConfig = `events { worker_connections 64; }
+// It carries the one addition the affinity assertions need: the backend that
+// served each response, echoed in a header so the test can read the routing
+// decision it is asserting about. It is set here, at the http level, and
+// reaches the block's locations because nginx inherits add_header into a level
+// that sets none of its own, which none of the documented ones do.
+const nginxBalancerFrame = `events { worker_connections 64; }
 http {
   access_log off;
-
-  map $host $mcp_salt {
-    default "%s";
-  }
-  map $http_authorization $mcp_bearer {
-    default                     "";
-    "~*^Bearer[ ]+(?<tok>\S+)$" $tok;
-  }
-  map $mcp_bearer $mcp_credential {
-    default $mcp_bearer;
-    ""      $http_private_token;
-  }
-  map $mcp_credential $mcp_affinity {
-    default $mcp_credential;
-    ""      $remote_addr;
-  }
-
-  upstream gitlab_mcp {
-    hash "$mcp_salt$mcp_affinity" consistent;
-    server 127.0.0.1:%d max_fails=2 fail_timeout=10s;
-    server 127.0.0.1:%d max_fails=2 fail_timeout=10s;
-    keepalive 32;
-  }
-
-  server {
-    listen %d;
-    location / {
-      proxy_pass http://gitlab_mcp;
-      proxy_http_version 1.1;
-      proxy_set_header Connection "";
-      proxy_set_header Host              $host;
-      proxy_set_header X-Real-IP         $remote_addr;
-      proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
-      proxy_buffering off;
-      proxy_request_buffering off;
-      proxy_read_timeout 1h;
-      proxy_next_upstream error timeout;
-      proxy_next_upstream_tries 2;
-      add_header X-Served-By $upstream_addr always;
-    }
-  }
+  add_header X-Served-By $upstream_addr always;
+  include /etc/nginx/conf.d/mcp.conf;
 }
 `
 
-// haproxyBalancerConfig is the second balancer, the one that polls.
-//
-// Three things it does that nginx open source cannot. It hashes a digest of
-// the credential rather than the credential, computed in the configuration
-// through converters, so nothing has to be trusted to keep the raw value out
-// of a routing key. It checks /health actively, which is what makes a drain
-// window mean anything. And it refuses to retry a request that was delivered:
-// "option redispatch" is absent and retries are left at connection failures,
-// so a tools/call that created something is never replayed on a second
-// instance.
-const haproxyBalancerConfig = `global
-  daemon
-defaults
-  mode http
-  timeout connect 2s
-  timeout client 1h
-  timeout server 1h
-  retries 1
-  option http-server-close
-frontend mcp
-  bind *:%d
-  http-request set-var(txn.cred) req.hdr(PRIVATE-TOKEN)
-  http-request set-var(txn.cred) req.hdr(Authorization),regsub(^[Bb]earer\ +,) if !{ req.hdr(PRIVATE-TOKEN) -m found }
-  http-request set-var(txn.cred) src,ipmask(32,128) if !{ var(txn.cred) -m found }
-  default_backend mcp_servers
-backend mcp_servers
-  balance hash var(txn.cred),concat(%s),sha1,hex
-  hash-type consistent
-  option httpchk
-  http-check send meth GET uri /health
-  http-check expect status 200
-  http-response set-header X-Served-By %%si:%%sp
-  server one 127.0.0.1:%d check inter 500ms fall 2 rise 2
-  server two 127.0.0.1:%d check inter 500ms fall 2 rise 2
-`
+// haproxyServedBy is the same addition for HAProxy, appended to the block,
+// whose last section is the backend it applies to.
+const haproxyServedBy = "  http-response set-header X-Served-By %si:%sp\n"
+
+// balancer is a running balancer and the client that reaches it.
+type balancer struct {
+	container string
+	// through reaches the balancer as a client reaching mcp.example.com does,
+	// on a new connection every time: a kept-alive connection is already
+	// pinned to a backend, which would make the affinity assertion pass
+	// without the balancer ever hashing anything.
+	through *server
+}
+
+// startBalancer runs a balancer container and waits until it forwards to the
+// instances behind it. roots verifies its certificate; nil reaches it over
+// plain HTTP.
+func startBalancer(t *testing.T, name, image string, mounts []string, port int, roots *x509.CertPool) balancer {
+	t.Helper()
+	startContainer(t, name, image, mounts)
+	scheme := "https"
+	if roots == nil {
+		scheme = "http"
+	}
+	b := balancer{container: name, through: throughProxy(t, scheme, port, roots, clientForHeaders, nil)}
+	awaitForwarding(t, b.through, "/health", name)
+	return b
+}
+
+// startDocumentedNginx serves the nginx balancer keyed key on page, in front of
+// the instances on ports.
+func startDocumentedNginx(t *testing.T, cert *publicCert, page, key string, ports []int) balancer {
+	t.Helper()
+	port := freePort(t)
+	edits := append(backendEdits(ports), edit{old: "listen 443 ssl;", new: fmt.Sprintf("listen %d ssl;", port), count: 1})
+	block := guideBlock(t, page, key, edits...)
+	dir := containerDir(t)
+	return startBalancer(t, fmt.Sprintf("gitlab-mcp-httpe2e-lb-nginx-%d", port), nginxImage, []string{
+		writeContainerFile(t, dir, "nginx.conf", nginxBalancerFrame) + ":/etc/nginx/nginx.conf:ro",
+		writeContainerFile(t, dir, "mcp.conf", block) + ":/etc/nginx/conf.d/mcp.conf:ro",
+		cert.letsEncryptMount(),
+	}, port, cert.pool)
+}
+
+// startDocumentedHAProxy serves the load balancing page's HAProxy in front of
+// the instances on ports. Its certificate line is served as printed: HAProxy
+// reads one file holding the certificate and its key, and the case writes it
+// where the line names it.
+func startDocumentedHAProxy(t *testing.T, cert *publicCert, ports []int) balancer {
+	t.Helper()
+	port := freePort(t)
+	edits := append(backendEdits(ports), edit{old: "bind *:443 ", new: fmt.Sprintf("bind *:%d ", port), count: 1})
+	block := guideBlock(t, loadBalancingPage, "haproxy", edits...)
+	dir := containerDir(t)
+	pem := writeContainerFile(t, dir, "private/mcp.example.com.pem", cert.combinedPEM())
+	return startBalancer(t, fmt.Sprintf("gitlab-mcp-httpe2e-lb-haproxy-%d", port), haproxyImage, []string{
+		writeContainerFile(t, dir, "haproxy.cfg", block+haproxyServedBy) + ":/usr/local/etc/haproxy/haproxy.cfg:ro",
+		pem + ":/etc/ssl/private/mcp.example.com.pem:ro",
+	}, port, cert.pool)
+}
+
+// get performs one GET through the balancer and returns its status together
+// with the backend the balancer says served it.
+func (b balancer) get(t *testing.T, path string, headers ...[2]string) (status int, servedBy string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, b.through.baseURL+path, http.NoBody)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	for _, h := range headers {
+		req.Header.Set(h[0], h[1])
+	}
+	resp, err := b.through.httpClient().Do(req)
+	if err != nil {
+		return 0, ""
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, resp.Header.Get("X-Served-By")
+}
 
 // haproxyForwardforConfig is a balancer that tells the server who its client
 // was the way HAProxy does by default: option forwardfor appends an
@@ -170,10 +189,13 @@ backend mcp_servers
 // rather than extending the client's line as nginx's
 // proxy_add_x_forwarded_for does.
 //
-// It connects to the server from 127.0.0.2 so the proxy and the client are
-// different addresses on one loopback: --trusted-proxies can then name the
-// proxy without also vouching for the client, which is the deployment the
-// header exists for.
+// It is the one configuration here no page prints, because what it isolates
+// is the header, not a deployment: the load balancing page tells a reader to
+// add option forwardfor to its backend, and this is that line with nothing
+// else around it. It connects to the server from 127.0.0.2 so the proxy and
+// the client are different addresses on one loopback: --trusted-proxies can
+// then name the proxy without also vouching for the client, which is the
+// deployment the header exists for.
 const haproxyForwardforConfig = `global
   daemon
 defaults
@@ -207,9 +229,9 @@ func TestBalancer_HAProxyForwardforChargesTheRealClient(t *testing.T) {
 		"--auth-failure-limit=3",
 	)
 	port := freePort(t)
-	conf := writeBalancerConfig(t, "haproxy.cfg", fmt.Sprintf(haproxyForwardforConfig, port, upstream))
-	base := startBalancer(t, "haproxy:3.4-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
-	through := &server{baseURL: base}
+	conf := writeContainerFile(t, containerDir(t), "haproxy.cfg", fmt.Sprintf(haproxyForwardforConfig, port, upstream))
+	through := startBalancer(t, fmt.Sprintf("gitlab-mcp-httpe2e-lb-forwardfor-%d", port), haproxyImage,
+		[]string{conf + ":/usr/local/etc/haproxy/haproxy.cfg:ro"}, port, nil).through
 
 	for i := range 8 {
 		got := through.do(t, mcpPOST(map[string]string{
@@ -227,108 +249,26 @@ func TestBalancer_HAProxyForwardforChargesTheRealClient(t *testing.T) {
 		"each was charged to the address the client wrote in its own X-Forwarded-For line instead of the one HAProxy appended")
 }
 
-// startBalancer runs a container with the given configuration mounted where
-// the image expects it, and returns the base URL of the port it listens on.
-//
-// A missing Docker, an image that cannot be pulled and a container that never
-// answers are facts about the machine rather than the server under test, so
-// each skips, except where the job says Docker is expected, where each fails
-// (environmentUnavailablef): a balancer layer skipped there was reported green
-// without having run.
-func startBalancer(t *testing.T, image, confPath, confMountPath string, port int, args ...string) string {
-	t.Helper()
-	requireDocker(t)
+// declaredHost is the flag every instance behind a documented balancer is
+// started with: the balancers forward the client's Host, mcp.example.com,
+// and an instance that does not declare it refuses it.
+const declaredHost = "--public-url=https://" + publicHost
 
-	name := fmt.Sprintf("gitlab-mcp-httpe2e-lb-%d", port)
-	runArgs := []string{
-		"run", "-d", "--name", name, "--network", "host",
-		"-v", confPath + ":" + confMountPath + ":ro",
-		image,
-	}
-	runArgs = append(runArgs, args...)
-	runCtx, runCancel := context.WithTimeout(t.Context(), 3*time.Minute)
-	defer runCancel()
-	out, err := exec.CommandContext(runCtx, "docker", runArgs...).CombinedOutput()
-	if err != nil {
-		environmentUnavailablef(t, "could not start %s (%v):\n%s", image, err, out)
-	}
-	t.Cleanup(func() {
-		rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer rmCancel()
-		_ = exec.CommandContext(rmCtx, "docker", "rm", "-f", name).Run()
-	})
-
-	base := fmt.Sprintf("http://127.0.0.1:%d", port)
-	waitBalancer(t, base, name)
-	return base
-}
-
-// requireDocker ends the calling test unless Docker is present and usable:
-// a skip, or a failure where dockerMustRun says Docker is expected.
-func requireDocker(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("docker"); err != nil {
-		environmentUnavailablef(t, "docker not available; a proxy or a balancer is run rather than modeled, so this case cannot run without it")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancel()
-	if err := exec.CommandContext(ctx, "docker", "info").Run(); err != nil {
-		environmentUnavailablef(t, "docker is installed but not usable (%v), so this case cannot run", err)
-	}
-}
-
-// waitBalancer polls the balancer until it forwards a health check.
-func waitBalancer(t *testing.T, base, container string) {
-	t.Helper()
-	deadline := time.Now().Add(45 * time.Second)
-	for time.Now().Before(deadline) {
-		if status, _ := getThrough(t, base+"/health"); status == http.StatusOK {
-			return
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
-	environmentUnavailablef(t, "the balancer never forwarded a request:\n%s", containerLogs(container))
-}
-
-// getThrough performs one GET and returns its status together with the
-// backend the balancer says served it.
-func getThrough(t *testing.T, url string, headers ...[2]string) (status int, servedBy string) {
-	t.Helper()
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
-	if err != nil {
-		t.Fatalf("building the request: %v", err)
-	}
-	for _, h := range headers {
-		req.Header.Set(h[0], h[1])
-	}
-	// A client per call: a kept-alive connection is already pinned to a
-	// backend, which would make the affinity assertion pass without the
-	// balancer ever hashing anything.
-	client := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{DisableKeepAlives: true}}
-	defer client.CloseIdleConnections()
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, ""
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-	return resp.StatusCode, resp.Header.Get("X-Served-By")
-}
-
-// twoInstances starts two servers of one configuration against one fake
-// GitLab and returns their ports.
-func twoInstances(t *testing.T, flags ...string) (first, second int) {
+// instances starts one server per documented backend, of one configuration,
+// against one fake GitLab, and returns their ports.
+func instances(t *testing.T) []int {
 	t.Helper()
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	first, second = freePort(t), freePort(t)
-	for _, port := range []int{first, second} {
-		startServerOnPort(t, port, nil, append([]string{"--gitlab-url=" + gitlab.url}, flags...)...)
+	ports := make([]int, len(documentedBackends))
+	for i := range ports {
+		ports[i] = freePort(t)
+		startServerOnPort(t, ports[i], nil, "--gitlab-url="+gitlab.url, declaredHost)
 	}
-	return first, second
+	return ports
 }
 
 // TestBalancer_NginxConsistentHashPinsEachCredential proves the affinity the
-// enterprise guide's nginx balancer claims.
+// nginx balancers of both pages claim.
 //
 // Sharing the MCP server per configuration shape made affinity an
 // optimization rather than a requirement for ordinary calls, but it is still
@@ -338,18 +278,23 @@ func twoInstances(t *testing.T, flags ...string) (first, second int) {
 // resolve falls back to round robin silently, which looks identical to a
 // working deployment until someone counts.
 func TestBalancer_NginxConsistentHashPinsEachCredential(t *testing.T) {
-	first, second := twoInstances(t)
-	port := freePort(t)
-	conf := writeBalancerConfig(t, "nginx.conf",
-		fmt.Sprintf(nginxBalancerConfig, balancerSalt, first, second, port))
-	base := startBalancer(t, nginxImage, conf, "/etc/nginx/nginx.conf", port)
-
-	assertEachCredentialPins(t, base, func(token string) [2]string {
-		return [2]string{"PRIVATE-TOKEN", token}
-	})
-	assertEachCredentialPins(t, base, func(token string) [2]string {
-		return [2]string{"Authorization", "Bearer " + token}
-	})
+	t.Parallel()
+	cert := newPublicCert(t)
+	for _, tc := range []struct{ page, key string }{
+		{page: loadBalancingPage, key: "nginx"},
+		{page: remoteDeploymentPage, key: "nginx-balancer"},
+	} {
+		t.Run(tc.page, func(t *testing.T) {
+			t.Parallel()
+			b := startDocumentedNginx(t, cert, tc.page, tc.key, instances(t))
+			assertEachCredentialPins(t, b, func(token string) [2]string {
+				return [2]string{"PRIVATE-TOKEN", token}
+			})
+			assertEachCredentialPins(t, b, func(token string) [2]string {
+				return [2]string{"Authorization", "Bearer " + token}
+			})
+		})
+	}
 }
 
 // TestBalancer_HAProxyHashesADigestOfTheCredential is the second balancer,
@@ -362,16 +307,19 @@ func TestBalancer_NginxConsistentHashPinsEachCredential(t *testing.T) {
 // credential: the same token must reach the same instance every time, and
 // different tokens must not all reach one.
 func TestBalancer_HAProxyHashesADigestOfTheCredential(t *testing.T) {
-	first, second := twoInstances(t)
-	port := freePort(t)
-	conf := writeBalancerConfig(t, "haproxy.cfg",
-		fmt.Sprintf(haproxyBalancerConfig, port, balancerSalt, first, second))
-	base := startBalancer(t, "haproxy:3.4-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
-
-	assertEachCredentialPins(t, base, func(token string) [2]string {
+	t.Parallel()
+	b := startDocumentedHAProxy(t, newPublicCert(t), instances(t))
+	assertEachCredentialPins(t, b, func(token string) [2]string {
 		return [2]string{"PRIVATE-TOKEN", token}
 	})
+	assertEachCredentialPins(t, b, func(token string) [2]string {
+		return [2]string{"Authorization", "Bearer " + token}
+	})
 }
+
+// drainDelayFlag reads the drain window the load balancing page recommends
+// for its HAProxy configuration.
+var drainDelayFlag = regexp.MustCompile("--drain-delay=([0-9]+s)")
 
 // TestBalancer_HAProxyEjectsADrainingInstanceBeforeItCloses is what
 // --drain-delay exists for, and it can only be shown with a balancer that
@@ -385,56 +333,66 @@ func TestBalancer_HAProxyHashesADigestOfTheCredential(t *testing.T) {
 // the listener closes first and the balancer learns about it from a failed
 // request, which is one failed request per client.
 //
-// The assertion is on the outcome rather than on the balancer's internal
-// state: every credential keeps getting served, including the ones the hash
-// had pinned to the instance that is going away.
+// The page's configuration checks every two seconds and marks a server down
+// after two failures, and the page says the window that leaves is comfortable
+// is the --drain-delay it names; the instance drains with that one, read from
+// the page. The assertion is on the outcome rather than on the balancer's
+// internal state: every credential keeps getting served, including the ones
+// the hash had pinned to the instance that is going away.
 func TestBalancer_HAProxyEjectsADrainingInstanceBeforeItCloses(t *testing.T) {
+	t.Parallel()
 	requireDocker(t)
+	recommended := drainDelayFlag.FindStringSubmatch(guideProse(t, loadBalancingPage, "is comfortable"))
+	if recommended == nil {
+		t.Fatal("the load balancing page no longer names the --drain-delay its HAProxy configuration is comfortable with")
+	}
+	drainDelay, err := time.ParseDuration(recommended[1])
+	if err != nil {
+		t.Fatalf("the page's --drain-delay=%s: %v", recommended[1], err)
+	}
+
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	drainDelay := 6 * time.Second
 	draining := shutdownStartServer(t,
 		"--gitlab-url="+gitlab.url,
+		declaredHost,
 		"--drain-delay="+drainDelay.String(),
 	)
-	first := hostPortOf(t, draining.probe.baseURL)
-	second := freePort(t)
-	startServerOnPort(t, second, nil, "--gitlab-url="+gitlab.url)
-
-	port := freePort(t)
-	conf := writeBalancerConfig(t, "haproxy.cfg",
-		fmt.Sprintf(haproxyBalancerConfig, port, balancerSalt, first, second))
-	base := startBalancer(t, "haproxy:3.4-alpine", conf, "/usr/local/etc/haproxy/haproxy.cfg", port)
+	ports := []int{hostPortOf(t, draining.probe.baseURL), freePort(t), freePort(t)}
+	for _, port := range ports[1:] {
+		startServerOnPort(t, port, nil, "--gitlab-url="+gitlab.url, declaredHost)
+	}
+	b := startDocumentedHAProxy(t, newPublicCert(t), ports)
 
 	// Which credentials the hash sends to the instance about to drain. They
 	// are the ones whose service has to survive, and knowing them is what
 	// makes this an assertion about the drain rather than about luck.
-	target := fmt.Sprintf("127.0.0.1:%d", first)
+	target := fmt.Sprintf("127.0.0.1:%d", ports[0])
 	var pinned []string
 	for _, token := range affinityTokens {
-		if _, servedBy := getThrough(t, base+"/health", [2]string{"PRIVATE-TOKEN", token}); servedBy == target {
+		if _, servedBy := b.get(t, "/health", [2]string{"PRIVATE-TOKEN", token}); servedBy == target {
 			pinned = append(pinned, token)
 		}
 	}
-	// Every token on the other instance is the same event the affinity
-	// assertions fail on, at the same odds (about 2^-23 with this many
-	// tokens), so it fails here too rather than skipping: a skip would let a
-	// changed ring or token set retire the drain assertion in silence.
+	// Every token on the other instances is the same event the affinity
+	// assertions fail on, at smaller odds still, so it fails here too rather
+	// than skipping: a skip would let a changed ring or token set retire the
+	// drain assertion in silence.
 	if len(pinned) == 0 {
 		t.Fatalf("the hash sent none of the %d credentials to the instance under test; the ring or the token set no longer splits", len(affinityTokens))
 	}
 
-	if err := signalTermination(draining.cmd.Process); err != nil {
+	if err = signalTermination(draining.cmd.Process); err != nil {
 		t.Fatalf("signaling the draining instance: %v", err)
 	}
 
 	// Inside the drain window the balancer must have moved them, while the
-	// instance is still listening. Two check intervals plus a margin: the
-	// health check runs every 500ms and marks down after two failures.
+	// instance is still listening. The page's checks need two failures two
+	// seconds apart, so they land well inside the window it recommends.
 	deadline := time.Now().Add(drainDelay - time.Second)
 	for time.Now().Before(deadline) {
 		moved := true
 		for _, token := range pinned {
-			status, servedBy := getThrough(t, base+"/health", [2]string{"PRIVATE-TOKEN", token})
+			status, servedBy := b.get(t, "/health", [2]string{"PRIVATE-TOKEN", token})
 			if status != http.StatusOK || servedBy == target {
 				moved = false
 				break
@@ -445,8 +403,8 @@ func TestBalancer_HAProxyEjectsADrainingInstanceBeforeItCloses(t *testing.T) {
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	t.Errorf("the balancer was still routing to %s at the end of the drain window; "+
-		"the instance answers /health with 503 while draining, so a polling balancer must eject it before the listener closes", target)
+	t.Errorf("the balancer was still routing to %s at the end of the drain window the page recommends (%v); "+
+		"the instance answers /health with 503 while draining, so a polling balancer must eject it before the listener closes", target, drainDelay)
 }
 
 // TestBalancer_InstancesBehindOneBalancerAgreeOnWhatTheyServe is the fleet
@@ -496,18 +454,18 @@ func configDigestOf(t *testing.T, srv *server) string {
 
 // assertEachCredentialPins drives every token through the balancer several
 // times and checks both halves of affinity.
-func assertEachCredentialPins(t *testing.T, base string, header func(token string) [2]string) {
+func assertEachCredentialPins(t *testing.T, b balancer, header func(token string) [2]string) {
 	t.Helper()
 
-	// Four, because round robin over two backends shows itself on the second
-	// request and the count multiplies by every token: six across
+	// Four, because round robin over several backends shows itself on the
+	// second request and the count multiplies by every token: six across
 	// twenty-four tokens would spend the time the wider set was meant to buy.
 	const requestsPerToken = 4
 	backends := make(map[string]string, len(affinityTokens))
 	for _, token := range affinityTokens {
 		seen := map[string]struct{}{}
 		for range requestsPerToken {
-			status, servedBy := getThrough(t, base+"/health", header(token))
+			status, servedBy := b.get(t, "/health", header(token))
 			if status != http.StatusOK {
 				t.Fatalf("token %s: /health through the balancer = %d", token, status)
 			}
@@ -546,28 +504,4 @@ func hostPortOf(t *testing.T, baseURL string) int {
 		t.Fatalf("reading the port out of %q: %v", baseURL, err)
 	}
 	return port
-}
-
-// writeBalancerConfig writes a balancer configuration into a directory the
-// container can bind-mount.
-func writeBalancerConfig(t *testing.T, name, body string) string {
-	t.Helper()
-	// Not t.TempDir: the container runs as another user, and t.TempDir is two
-	// levels deep. The leaf it hands out is opened below and could be opened
-	// under t.TempDir just the same; what cannot be is its parent, the
-	// per-test directory t.TempDir creates 0700 and never hands out, and a
-	// bind mount under it stops the container's user at that component.
-	dir, err := os.MkdirTemp("", "mcp-lb") //nolint:usetesting // t.TempDir's own parent is 0700 and not ours to open; see above
-	if err != nil {
-		t.Fatalf("temp dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	if chmodErr := os.Chmod(dir, 0o755); chmodErr != nil { //#nosec G302 -- a throwaway directory a container must read
-		t.Fatalf("opening the config directory: %v", chmodErr)
-	}
-	path := filepath.Join(dir, name)
-	if writeErr := os.WriteFile(path, []byte(body), 0o644); writeErr != nil { //#nosec G306 -- read by a container as another user
-		t.Fatalf("writing %s: %v", name, writeErr)
-	}
-	return path
 }

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-conditions-tree coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-conditions-tree coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-cloudflare-tunnel test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab e2e-clean-orphans \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token gen-orbit-record check-orbit-record \
 	coverage \
@@ -415,12 +415,80 @@ test-e2e-stdio: ensure-gotestsum e2e-server-binary
 test-e2e-http: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/http))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) E2E_CLOUDFLARE_QUICK_TUNNEL= \
 	  $(call e2e_cover_env,http) \
 	  $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-http-junit.xml \
 	  -- -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/'
+
+## test-e2e-cloudflare-tunnel: run the HTTP module's Cloudflare Tunnel cases, a real quick tunnel through Cloudflare's edge included (Docker and Internet needed; opens a public trycloudflare.com address while it runs; refuses to run on CI).
+# Run by hand, when a change touches the tunnel or the headers the edge passes
+# on. The quick tunnel case opens a public address to a server on this
+# machine, so it never runs on CI (decided on issue 1112, 31 October 2026):
+# with CI set the target stops before it builds or starts anything, and the
+# case refuses on its own when it is run some other way.
+#
+# An interrupted test binary runs no cleanup, and go test does not pass an
+# interrupt on to it, so an interrupt would leave the cloudflared container
+# and its public address behind. The run is therefore started in a process
+# group of its own (set -m, POSIX job control: on Windows, run the target under
+# WSL), and the recipe's shell, which exec makes make's own child so that the
+# TERM make forwards reaches it, passes an INT, a TERM or a HUP (a closed
+# terminal or a dropped SSH session, which signals make's group and not the
+# run's) on to that group as an interrupt, and a second one kills the group.
+# Once the run has ended, each container the case named in its log line ("if
+# this run is interrupted: docker rm -f <name>") is removed by that exact name,
+# never by a pattern, as it is after any run that ends with a nonzero status:
+# a timeout, a panic off the test's goroutine or a killed process runs no
+# cleanup either, and a container the case's own cleanup removed is no longer
+# there to remove. The removal ignores SIGPIPE, so a reader of the output that
+# went away (ssh without a terminal) does not end it at its first message, and
+# a closed terminal under which make itself leads the session (ssh -t host
+# make ...), whose HUP make does not pass on, ends the run at its next line of
+# output, which gotestsum cannot write. The names are read from the run's own JSON log, deleted
+# before the run starts, so a name an earlier run printed is never taken for
+# one of this run's. test-e2e-http clears the quick tunnel's switch, so this
+# is the only target that opens the tunnel.
+ifneq ($(filter test-e2e-cloudflare-tunnel,$(MAKECMDGOALS)),)
+ifneq ($(CI),)
+$(error test-e2e-cloudflare-tunnel never runs on CI (CI=$(CI)): its quick tunnel opens a public trycloudflare.com address to a server on this machine, see test/e2e/README.md)
+endif
+endif
+test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	exec bash -o pipefail -c 'log=$(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-log.json; pid=; \
+	  rm -f "$$log"; \
+	  remove_named() { \
+	    trap "" PIPE; \
+	    for name in $$(sed -n "s/.*if this run is interrupted: docker rm -f \([A-Za-z0-9][A-Za-z0-9_.-]*\).*/\1/p" "$$log" 2>/dev/null | sort -u); do \
+	      if docker container inspect "$$name" >/dev/null 2>&1; then \
+	        echo "test-e2e-cloudflare-tunnel: the run $$1; removing $$name, which the case named" >&2; \
+	        docker rm -f "$$name" >/dev/null; \
+	      fi; \
+	    done; \
+	  }; \
+	  stop() { \
+	    pid=$${pid:-$$!}; \
+	    trap "kill -KILL -- -$$pid 2>/dev/null" INT TERM HUP; \
+	    if [ -n "$$pid" ]; then kill -INT -- "-$$pid" 2>/dev/null; wait "$$pid" 2>/dev/null; fi; \
+	    remove_named "was interrupted by $$1"; \
+	    exit "$$2"; \
+	  }; \
+	  trap "stop INT 130" INT; \
+	  trap "stop TERM 143" TERM; \
+	  trap "stop HUP 129" HUP; \
+	  set -m; \
+	  E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) E2E_CLOUDFLARE_QUICK_TUNNEL=true E2E_HTTP_DOCKER=required \
+	  $(GOTESTSUM) \
+	  --format standard-verbose \
+	  --junitfile $(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-junit.xml \
+	  --jsonfile "$$log" \
+	  -- -tags httpe2e -count=1 -v -timeout 20m -run TestProxyGuide_Cloudflare ./test/e2e/http/ & \
+	  pid=$$!; set +m; \
+	  wait "$$pid"; status=$$?; \
+	  if [ "$$status" -ne 0 ]; then remove_named "ended with status $$status"; fi; \
+	  exit "$$status"'
 
 ## test-e2e-collector: run this server's telemetry into a real OpenTelemetry Collector (Docker required; skips cleanly without it).
 # Deliberately absent from the push-triggered CI jobs, which run the httpe2e and
