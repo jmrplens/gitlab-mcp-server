@@ -21630,8 +21630,11 @@
           "type": "string"
         },
         "resource_id": {
-          "description": "ID of the resource",
-          "type": "integer"
+          "description": "ID of the resource, the URL-encoded path of a group or a project, or the username of a user",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
@@ -42783,8 +42786,11 @@
           "type": "string"
         },
         "resource_id": {
-          "description": "ID of the resource",
-          "type": "integer"
+          "description": "ID of the resource, the URL-encoded path of a group or a project, or the username of a user",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
@@ -45327,8 +45333,11 @@
       "additionalProperties": false,
       "properties": {
         "group_id": {
-          "description": "Numeric ID of the group",
-          "type": "integer"
+          "description": "Group ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "id": {
           "description": "Numeric ID of the storage move",
@@ -49032,8 +49041,11 @@
           "type": "integer"
         },
         "project_id": {
-          "description": "Numeric ID of the project",
-          "type": "integer"
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -112713,8 +112725,11 @@
       "additionalProperties": false,
       "properties": {
         "resource_id": {
-          "description": "ID of the resource",
-          "type": "integer"
+          "description": "ID of the resource, the URL-encoded path of a group or a project, or the username of a user",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
@@ -216211,8 +216226,11 @@
       "additionalProperties": false,
       "properties": {
         "group_id": {
-          "description": "Numeric ID of the group",
-          "type": "integer"
+          "description": "Group ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "order_by": {
           "description": "Column to order results by (e.g. id).",
@@ -216398,8 +216416,11 @@
           "type": "integer"
         },
         "project_id": {
-          "description": "Numeric ID of the project",
-          "type": "integer"
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "sort": {
           "description": "Sort direction: asc or desc.",
@@ -222015,8 +222036,11 @@
           ]
         },
         "group_id": {
-          "description": "Numeric ID of the group",
-          "type": "integer"
+          "description": "Group ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -222192,8 +222216,11 @@
           ]
         },
         "project_id": {
-          "description": "Numeric ID of the project",
-          "type": "integer"
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -225638,8 +225665,11 @@
           "type": "string"
         },
         "resource_id": {
-          "description": "ID of the resource",
-          "type": "integer"
+          "description": "ID of the resource, the URL-encoded path of a group or a project, or the username of a user",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",

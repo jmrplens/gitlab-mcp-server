@@ -696,14 +696,14 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_delete_custom_attribute`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: una de: Custom Attribute: Delete en instancia **o** Custom Attribute: Delete en grupo **o** Custom Attribute: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
+- **Token de grano fino**: una de: Custom Attribute: Delete en instancia **o** Custom Attribute: Delete en grupo **o** Custom Attribute: Delete en proyecto. Algunas llamadas también necesitan: Group: Read en grupo; User: Read en instancia; Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
-| Parámetro       | Tipo                                  | Requerido | Descripción                            |
-| --------------- | ------------------------------------- | --------- | -------------------------------------- |
-| `key`           | `string`                              | sí        | Attribute key to delete                |
-| `resource_id`   | `integer`                             | sí        | ID of the resource                     |
-| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project |
+| Parámetro       | Tipo                                  | Requerido | Descripción                                                                                 |
+| --------------- | ------------------------------------- | --------- | ------------------------------------------------------------------------------------------- |
+| `key`           | `string`                              | sí        | Attribute key to delete                                                                     |
+| `resource_id`   | `string/integer`                      | sí        | ID of the resource, the URL-encoded path of a group or a project, or the username of a user |
+| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project                                                      |
 
 ### `admin.custom_attr_get`
 
@@ -713,14 +713,14 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_get_custom_attribute`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: una de: Custom Attribute: Read en instancia **o** Custom Attribute: Read en grupo **o** Custom Attribute: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
+- **Token de grano fino**: una de: Custom Attribute: Read en instancia **o** Custom Attribute: Read en grupo **o** Custom Attribute: Read en proyecto. Algunas llamadas también necesitan: Group: Read en grupo; User: Read en instancia; Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro       | Tipo                                  | Requerido | Descripción                            |
-| --------------- | ------------------------------------- | --------- | -------------------------------------- |
-| `key`           | `string`                              | sí        | Attribute key                          |
-| `resource_id`   | `integer`                             | sí        | ID of the resource                     |
-| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project |
+| Parámetro       | Tipo                                  | Requerido | Descripción                                                                                 |
+| --------------- | ------------------------------------- | --------- | ------------------------------------------------------------------------------------------- |
+| `key`           | `string`                              | sí        | Attribute key                                                                               |
+| `resource_id`   | `string/integer`                      | sí        | ID of the resource, the URL-encoded path of a group or a project, or the username of a user |
+| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project                                                      |
 
 ### `admin.custom_attr_list`
 
@@ -730,13 +730,13 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_list_custom_attributes`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: una de: Custom Attribute: Read en instancia **o** Custom Attribute: Read en grupo **o** Custom Attribute: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
+- **Token de grano fino**: una de: Custom Attribute: Read en instancia **o** Custom Attribute: Read en grupo **o** Custom Attribute: Read en proyecto. Algunas llamadas también necesitan: Group: Read en grupo; User: Read en instancia; Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: solo lectura, idempotente
 
-| Parámetro       | Tipo                                  | Requerido | Descripción                            |
-| --------------- | ------------------------------------- | --------- | -------------------------------------- |
-| `resource_id`   | `integer`                             | sí        | ID of the resource                     |
-| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project |
+| Parámetro       | Tipo                                  | Requerido | Descripción                                                                                 |
+| --------------- | ------------------------------------- | --------- | ------------------------------------------------------------------------------------------- |
+| `resource_id`   | `string/integer`                      | sí        | ID of the resource, the URL-encoded path of a group or a project, or the username of a user |
+| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project                                                      |
 
 ### `admin.custom_attr_set`
 
@@ -746,15 +746,15 @@ Sin parámetros.
 - **Herramienta individual**: `gitlab_set_custom_attribute`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`; este servidor solo lista el grupo a un token que lleve además `admin_mode`
-- **Token de grano fino**: una de: Custom Attribute: Update en instancia **o** Custom Attribute: Update en grupo **o** Custom Attribute: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
+- **Token de grano fino**: una de: Custom Attribute: Update en instancia **o** Custom Attribute: Update en grupo **o** Custom Attribute: Update en proyecto. Algunas llamadas también necesitan: Group: Read en grupo; User: Read en instancia; Project: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#admin))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro       | Tipo                                  | Requerido | Descripción                            |
-| --------------- | ------------------------------------- | --------- | -------------------------------------- |
-| `key`           | `string`                              | sí        | Attribute key                          |
-| `resource_id`   | `integer`                             | sí        | ID of the resource                     |
-| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project |
-| `value`         | `string`                              | sí        | Attribute value                        |
+| Parámetro       | Tipo                                  | Requerido | Descripción                                                                                 |
+| --------------- | ------------------------------------- | --------- | ------------------------------------------------------------------------------------------- |
+| `key`           | `string`                              | sí        | Attribute key                                                                               |
+| `resource_id`   | `string/integer`                      | sí        | ID of the resource, the URL-encoded path of a group or a project, or the username of a user |
+| `resource_type` | `string` (`user`, `group`, `project`) | sí        | Resource type: user, group, or project                                                      |
+| `value`         | `string`                              | sí        | Attribute value                                                                             |
 
 ### `admin.db_migration_mark`
 

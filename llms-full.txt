@@ -905,6 +905,10 @@ Parameter guidance:
 - cluster_agent_token_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - cluster_agent_token_revoke.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_token_revoke.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- custom_attr_delete.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_get.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_list.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_set.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
 - db_migration_mark.version: migration_version. Source: The migration's timestamp version, as GitLab names it in the migration file.
 - dependency_proxy_delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - error_tracking_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -10854,12 +10858,12 @@ Action guidance:
 Parameter guidance:
 - get_project.id: target_resource. Source: Numeric ID of the repository storage move, taken from a retrieve_all/retrieve_project listing. Avoid: This is the storage move record ID, not the project ID.
 - get_project_for_project.id: target_resource. Source: Numeric ID of the repository storage move, taken from a retrieve_all/retrieve_project listing. Avoid: This is the storage move record ID, not the project ID.
-- get_project_for_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
-- retrieve_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
+- get_project_for_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
+- retrieve_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
 - schedule_all_project.destination_storage_name: config_value. Source: Name of a Gitaly storage shard already configured on the instance to move the repository to. Avoid: Must reference an existing storage shard. Cannot equal the shard the project currently lives on. Omit to let GitLab pick a shard by weight.
 - schedule_all_project.source_storage_name: config_value. Source: Name of the Gitaly storage shard to drain. Every project on this shard is scheduled to move. Avoid: This is the shard to move projects away from, not the destination.
 - schedule_project.destination_storage_name: config_value. Source: Name of a Gitaly storage shard already configured on the instance to move the repository to. Avoid: Must reference an existing storage shard. Cannot equal the shard the project currently lives on. Omit to let GitLab pick a shard by weight.
-- schedule_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
+- schedule_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
 
 Manage repository storage moves for projects, groups, and snippets (admin only).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden, each with actionable hints.
@@ -15253,7 +15257,7 @@ Delete a custom attribute. Returns: a success status. See also: gitlab_get_custo
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key` (string) (required): Attribute key to delete
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -17060,7 +17064,7 @@ Get a custom attribute by key. Returns: the attribute with key and value. See al
 **Parameters:**
 
 - `key` (string) (required): Attribute key
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17312,7 +17316,7 @@ Get a single repository storage move for a specific group. Returns: the storage 
 
 **Parameters:**
 
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `id` (integer) (required): Numeric ID of the storage move
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17634,7 +17638,7 @@ Get a single repository storage move for a specific project by project_id and mo
 **Parameters:**
 
 - `id` (integer) (required): Numeric ID of the storage move
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -21180,7 +21184,7 @@ List custom attributes for a resource. Returns: an array of key/value custom att
 
 **Parameters:**
 
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -27070,7 +27074,7 @@ List repository storage moves for a single group. Returns: the group's storage m
 
 **Parameters:**
 
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `order_by` (string): Column to order results by (e.g. id).
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
@@ -27087,7 +27091,7 @@ List repository storage moves for a single project. Returns: each move's id, sta
 - `order_by` (string): Column to order results by (e.g. id).
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `sort` (string): Sort direction: asc or desc.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -27676,7 +27680,7 @@ Schedule a repository storage move for a single group. Returns: the scheduled st
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -27701,7 +27705,7 @@ Schedule a repository storage move for a single project to another Gitaly storag
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -27886,7 +27890,7 @@ Set a custom attribute. Returns: the stored attribute with key and value. See al
 **Parameters:**
 
 - `key` (string) (required): Attribute key
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 - `value` (string) (required): Attribute value
 
