@@ -1582,6 +1582,40 @@ type holder struct {
 // listHeld sends the options the holder carries.
 func listHeld(c *gl.Client, h holder) error { return listWith(c, h.opts) }
 
+// own is handed options, and lists with options of its own.
+func own(c *gl.Client, opts *gl.ListWidgetsOptions) error {
+	_, err := c.Widgets.ListWidgets(&gl.ListWidgetsOptions{})
+	return err
+}
+
+// protectWith hands what the options it is handed search for to a service
+// method that takes another type.
+func protectWith(c *gl.Client, opts *gl.ListWidgetsOptions) error {
+	return c.Widgets.Protect(opts.Search, nil)
+}
+
+// listCopy sends a copy of the options it is handed.
+func listCopy(c *gl.Client, opts *gl.ListWidgetsOptions) error {
+	next := *opts
+	_, err := c.Widgets.ListWidgets(&next)
+	return err
+}
+
+// listFunc is the shape of a service method that lists widgets.
+type listFunc func(*gl.ListWidgetsOptions, ...gl.RequestOptionFunc) ([]*gl.Widget, error)
+
+// through calls the list it is handed with the options it is handed.
+func through(list listFunc, opts *gl.ListWidgetsOptions) error {
+	_, err := list(opts)
+	return err
+}
+
+// listValue hands the options it is handed on beside the service method that
+// sends them, as a value.
+func listValue(c *gl.Client, opts *gl.ListWidgetsOptions) error {
+	return through(c.Widgets.ListWidgets, opts)
+}
+
 type DetachedInput struct {
 	Search string ~json:"search"~
 }
@@ -1681,6 +1715,53 @@ func held(c *gl.Client, in HeldInput) error {
 	return listHeld(c, h)
 }
 
+type OwnInput struct {
+	Search string ~json:"search"~
+}
+
+// owned hands the options it builds to a helper that lists with options of
+// its own.
+func owned(c *gl.Client, in OwnInput) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{}
+	if own(c, opts) != nil {
+		return nil
+	}
+	return opts
+}
+
+type ProtectedInput struct {
+	Search string ~json:"search"~
+}
+
+// protected hands the options it builds to a helper that hands a field of
+// them to a service method of another type.
+func protected(c *gl.Client, in ProtectedInput) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{}
+	if protectWith(c, opts) != nil {
+		return nil
+	}
+	return opts
+}
+
+type CopiedInput struct {
+	Search string ~json:"search"~
+}
+
+// copied hands the options it builds to a helper that sends a copy of them.
+func copied(c *gl.Client, in CopiedInput) error {
+	return listCopy(c, &gl.ListWidgetsOptions{})
+}
+
+type ValuedInput struct {
+	Search string ~json:"search"~
+}
+
+// valued hands the options it builds to a helper that hands them on beside
+// the service method that sends them.
+func valued(c *gl.Client, in ValuedInput) error {
+	return listValue(c, &gl.ListWidgetsOptions{})
+}
+
 type DirectInput struct {
 	Search string ~json:"search"~
 }
@@ -1701,14 +1782,17 @@ func direct(c *gl.Client, in DirectInput) *gl.ListWidgetsOptions {
 // nothing. It is when the function references a service method that takes
 // the literal's type itself, as direct does whatever it sends, and when it
 // hands the literal on to a helper of its package that sends it: in place,
-// through a variable, inside another value, as the receiver of a method,
-// and however many calls down, a helper that hands it to itself first
-// included, whatever the function hands it to afterwards. A helper that
-// sends options of the same type it is never handed is no send of the
-// literal, whether the helper builds them or the function hands it other
-// options of its own, nor is one it is handed to that reads it, that hands
-// it only to itself, or that gives it no name, so each of those builders
-// pairs its literal with its input, as one that sends nothing does.
+// through a variable, inside another value, as the receiver of a method, as
+// a copy the helper makes, beside a method value of the service that the
+// helper hands on with it, and however many calls down, a helper that hands
+// it to itself first included, whatever the function hands it to
+// afterwards. A helper that sends options of the same type it is never
+// handed is no send of the literal, whether the helper builds them or the
+// function hands it other options of its own, nor is one it is handed to
+// that reads it, that hands it only to itself, that gives it no name, that
+// lists with options of its own beside it or that hands a field of it to a
+// service method of another type, so each of those builders pairs its
+// literal with its input, as one that sends nothing does.
 func TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHandedOn(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/lookups", source: lookupsSource})[0]
 
@@ -1723,7 +1807,11 @@ func TestSentThrough_ALiteralOfAFunctionThatIsNoHandler_IsSentOnlyWhereItIsHande
 		{name: "handed to a helper that reads it", input: "InspectedInput", paired: true},
 		{name: "handed to a helper that hands it only to itself", input: "SpunInput", paired: true},
 		{name: "handed to a helper that gives it no name", input: "BlindInput", paired: true},
+		{name: "handed to a helper that lists with options of its own", input: "OwnInput", paired: true},
+		{name: "handed to a helper that hands a field of it to a method of another type", input: "ProtectedInput", paired: true},
 		{name: "handed in place to a helper that sends it", input: "InPlaceInput"},
+		{name: "handed to a helper that sends a copy of it", input: "CopiedInput"},
+		{name: "handed to a helper that hands it on beside a method value that sends it", input: "ValuedInput"},
 		{name: "handed through a variable, two calls down", input: "RelayedInput"},
 		{name: "the receiver of a method that hands it on", input: "QueriedInput"},
 		{name: "inside a value handed to a helper that sends it", input: "HeldInput"},

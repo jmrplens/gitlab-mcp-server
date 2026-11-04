@@ -708,21 +708,53 @@ func unionTypeNames(a, b []*types.TypeName) ([]*types.TypeName, bool) {
 func sentStructs(info *types.Info, body *ast.BlockStmt) map[*types.TypeName]bool {
 	sent := map[*types.TypeName]bool{}
 	ast.Inspect(body, func(node ast.Node) bool {
-		sel, isSelector := node.(*ast.SelectorExpr)
-		if !isSelector {
-			return true
+		if sel, isSelector := node.(*ast.SelectorExpr); isSelector {
+			addReceived(sent, serviceMethodOf(info, sel))
 		}
-		if _, isService := shared.ClientGoServiceInterface(info.TypeOf(sel.X)); !isService {
-			return true
-		}
-		if method, isFunc := info.Uses[sel.Sel].(*types.Func); isFunc {
-			for _, received := range ReceivedStructs(method.Signature()) {
-				sent[received.Obj()] = true
+		return true
+	})
+	return sent
+}
+
+// valueStructs returns the client-go structs the service methods body names
+// as a value take: those it does not call in place, which whatever the value
+// is handed to may call with anything.
+func valueStructs(info *types.Info, body *ast.BlockStmt) map[*types.TypeName]bool {
+	called := map[ast.Expr]bool{}
+	sent := map[*types.TypeName]bool{}
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.CallExpr:
+			called[ast.Unparen(typed.Fun)] = true
+		case *ast.SelectorExpr:
+			if !called[typed] {
+				addReceived(sent, serviceMethodOf(info, typed))
 			}
 		}
 		return true
 	})
 	return sent
+}
+
+// serviceMethodOf returns the method of a client-go service sel names, nil
+// for any other selector and for one the type information does not resolve.
+func serviceMethodOf(info *types.Info, sel *ast.SelectorExpr) *types.Func {
+	if _, isService := shared.ClientGoServiceInterface(info.TypeOf(sel.X)); !isService {
+		return nil
+	}
+	method, _ := info.Uses[sel.Sel].(*types.Func)
+	return method
+}
+
+// addReceived adds to sent the client-go structs method takes, none for a
+// nil method.
+func addReceived(sent map[*types.TypeName]bool, method *types.Func) {
+	if method == nil {
+		return
+	}
+	for _, received := range ReceivedStructs(method.Signature()) {
+		sent[received.Obj()] = true
+	}
 }
 
 // sentThrough reports whether body sends name, the type lit builds, lit
@@ -731,8 +763,17 @@ func sentStructs(info *types.Info, body *ast.BlockStmt) map[*types.TypeName]bool
 // and when body hands lit on to a function of decls that sends what it is
 // handed, however many calls down. A function that hands what it builds to
 // a helper of its package sends it as surely as one that calls the service
-// itself, and a helper it never hands it to sends nothing of it, whatever
-// that helper lists with options of its own.
+// itself, and a helper sends nothing of it that it is never handed, or that
+// it is handed and sends none of, whatever that helper lists with options
+// of its own.
+//
+// The two halves are read differently on purpose. Body's own reference is
+// what makes the function a lookup of its own, the shape
+// pipelines.pipelineFailure takes, and a literal of the type that reads
+// nothing of the input is taken for part of that lookup wherever it goes.
+// A helper's body answers a narrower question, whether the literal it was
+// handed reaches a send, and the requests it makes with options of its own
+// say nothing about that.
 func sentThrough(info *types.Info, body *ast.BlockStmt, lit *ast.CompositeLit, name *types.TypeName, decls map[*types.Func]*ast.FuncDecl) bool {
 	if sentStructs(info, body)[name] {
 		return true
@@ -755,7 +796,8 @@ type literalSends struct {
 }
 
 // handsOn reports whether body hands what handed says holds the literal to a
-// function of decls that sends it, as its receiver or as an argument.
+// service method that takes name, or to a function of decls that sends it
+// as its receiver or as an argument.
 func (s literalSends) handsOn(body *ast.BlockStmt, handed func(ast.Expr) bool) bool {
 	found := false
 	ast.Inspect(body, func(node ast.Node) bool {
@@ -767,9 +809,14 @@ func (s literalSends) handsOn(body *ast.BlockStmt, handed func(ast.Expr) bool) b
 	return found
 }
 
-// callSends reports whether call calls a function of decls that sends what
-// it is handed in an entry the call hands the literal in.
+// callSends reports whether call sends the literal: a call of a service
+// method that takes name and is handed the literal in an argument, or of a
+// function of decls that sends what it is handed in an entry the call hands
+// the literal in.
 func (s literalSends) callSends(call *ast.CallExpr, handed func(ast.Expr) bool) bool {
+	if s.sendsInPlace(call, handed) {
+		return true
+	}
 	fn, receiver := calledFunc(s.info, call)
 	decl := calleeDecl(fn, s.decls)
 	if decl == nil {
@@ -783,12 +830,29 @@ func (s literalSends) callSends(call *ast.CallExpr, handed func(ast.Expr) bool) 
 	return false
 }
 
+// sendsInPlace reports whether call calls a method of a client-go service
+// that takes name, handing it in one of its arguments what handed says holds
+// the literal.
+func (s literalSends) sendsInPlace(call *ast.CallExpr, handed func(ast.Expr) bool) bool {
+	sel, isSelector := ast.Unparen(call.Fun).(*ast.SelectorExpr)
+	if !isSelector {
+		return false
+	}
+	received := map[*types.TypeName]bool{}
+	addReceived(received, serviceMethodOf(s.info, sel))
+	return received[s.name] && slices.ContainsFunc(call.Args, handed)
+}
+
 // sends reports whether the function declared as decl sends what it is
-// handed in the entry variable is bound to: its body references a service
-// method that takes name, or hands variable, or something holding it, on to
-// a function that sends it. An entry with no name hands nothing on.
+// handed in the entry variable is bound to: its body calls a service method
+// that takes name with variable, or something holding it, or hands one of
+// them on to a function that sends it. A service method that takes name and
+// that the body names as a value sends whatever the body is handed, since
+// what the value is called with is out of sight. A body that calls such a
+// method only with values of its own sends nothing of what it is handed, and
+// an entry with no name hands nothing on.
 func (s literalSends) sends(decl *ast.FuncDecl, variable *types.Var) bool {
-	if sentStructs(s.info, decl.Body)[s.name] {
+	if valueStructs(s.info, decl.Body)[s.name] {
 		return true
 	}
 	if variable == nil || s.read[variable] {
