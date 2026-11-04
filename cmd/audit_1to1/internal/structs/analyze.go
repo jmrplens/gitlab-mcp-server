@@ -2206,13 +2206,17 @@ func (h *intermediates) writesEntry(decl *ast.FuncDecl, entry *types.Var) bool {
 }
 
 // writesThrough reports whether body can write through variable, a pointer
-// it is bound to: when it assigns, increments, decrements or takes the
-// address of something rooted at the variable other than the variable
-// itself, calls a method of a pointer receiver on such a thing, or hands on
-// a pointer or an interface rooted at it, in a call, an assignment, a
-// declaration, a literal, a return or a send, to whoever may write through
-// it in turn. A body that reads a field of it, compares it or copies what
-// it points to writes nothing through it.
+// it is bound to: when it assigns, increments or decrements something rooted
+// at the variable other than the variable itself, which an assignment only
+// rebinds; when it takes the address of anything rooted at it or calls a
+// method of a pointer receiver on such a thing, the variable itself
+// included; or when it hands on a pointer or an interface rooted at it, in a
+// call, an assignment, a declaration, a literal, a return or a send, to
+// whoever may write through it in turn. The variable's own address is
+// counted although taking it writes nothing: it is a pointer to the pointer,
+// and a write through that alias, (*p).N after p := &b, is rooted at p,
+// which this walk does not follow. A body that reads a field of it, compares
+// it or copies what it points to writes nothing through it.
 func writesThrough(info *types.Info, body *ast.BlockStmt, variable *types.Var) bool {
 	use := pointerUse{info: info, variable: variable}
 	found := false

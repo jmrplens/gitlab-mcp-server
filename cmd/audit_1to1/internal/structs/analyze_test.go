@@ -3474,6 +3474,8 @@ func indexed(b *box)      { b.Items[0] = "x" }
 func star(b *box)         { *b = box{} }
 func incremented(b *box)  { b.N++ }
 func addressed(b *box)    { p := &b.N; *p = 1 }
+func aliasWritten(b *box) { p := &b; (*p).N = 1 }
+func ownAddress(b *box)   { _ = &b }
 func negated(b *box)      { use(-b.N) }
 func pointerMethod(b *box) { b.grow() }
 func valueMethod(b *box)  { use(b.size()) }
@@ -3502,15 +3504,20 @@ func closure(b *box)      { func() { b.N = 1 }() }
 // dereference, a method of a pointer receiver called on it, a closure that
 // assigns it, and the pointer handed on whole, or a pointer or an interface
 // read off it, in a call, a declaration, a literal, a return, a send or an
-// assignment. Rebinding the variable, reading a field, negating one, calling
-// a method of a value receiver, comparing it, copying what it points to and
-// handing on a value that reaches nothing it points to write nothing, and a
-// write stays found whatever the body reads after it.
+// assignment. The variable's own address counts whether or not anything is
+// written through it afterwards: the write through the alias it yields
+// (aliasWritten) is rooted at the alias, which the walk does not follow, so
+// the address alone (ownAddress) is what stands for it. Rebinding the
+// variable, reading a field, negating one, calling a method of a value
+// receiver, comparing it, copying what it points to and handing on a value
+// that reaches nothing it points to write nothing, and a write stays found
+// whatever the body reads after it.
 func TestWritesThrough_ACalleeBody_WritesWhatItAssignsOrHandsOn(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/writes", source: writesSource})[0]
 	writes := map[string]bool{
 		"field": true, "rebound": false, "indexed": true, "star": true, "incremented": true,
-		"addressed": true, "negated": false, "pointerMethod": true, "valueMethod": false,
+		"addressed": true, "aliasWritten": true, "ownAddress": true, "negated": false,
+		"pointerMethod": true, "valueMethod": false,
 		"handed": true, "handedField": false, "handedAny": true, "declared": true,
 		"declaredField": false, "literal": true, "literalField": false, "returned": true,
 		"returnedField": false, "sent": true, "sentField": false, "assigned": true,
