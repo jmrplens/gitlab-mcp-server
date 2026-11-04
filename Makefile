@@ -411,7 +411,7 @@ test-e2e-stdio: ensure-gotestsum e2e-server-binary
 	  --junitfile $(E2E_REPORT_DIR)/e2e-stdio-junit.xml \
 	  -- -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/'
 
-## test-e2e-http: run the HTTP transport end-to-end module (no GitLab needed; nginx layer skips without Docker).
+## test-e2e-http: run the HTTP transport end-to-end module (no GitLab needed; the documented proxies and balancers skip without Docker, and fail without it under E2E_HTTP_DOCKER=required, as ci.yml's e2e-http job sets).
 test-e2e-http: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/http))

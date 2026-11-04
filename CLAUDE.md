@@ -156,7 +156,7 @@ gitlab-mcp-server/
 │   ├── tenancy/                      # The tenant policy register (ADR-0023): decides, never enforces
 │   ├── telemetry/                    # The one place that knows the OpenTelemetry SDK
 │   ├── toolutil/                     # Shared tool utilities (errors, pagination, markdown, logging)
-│   ├── testutil/                     # Shared test helpers (NewTestClient, RespondJSON); netfixture/ for an address nothing answers
+│   ├── testutil/                     # Shared test helpers (NewTestClient, RespondJSON); netfixture/ for an address nothing answers; docblocks/ for a block a page prints
 │   ├── tools/                        # Tool orchestration layer + 181 sub-packages
 │   │   ├── action_catalog.go         # Builds the canonical action catalog from domain ActionSpecs
 │   │   ├── actiongrants/             # The generated fine-grained table (table_gen.go, never edited)
@@ -295,7 +295,8 @@ without GitLab or credentials, and both run on every CI push:
 
 - `test/e2e/http` (`httpe2e`) — the HTTP handler chain: cross-origin decisions,
   preflight, authentication modes, rate limiting, the JSON-RPC shape of a
-  rejection, and the flags that restrict them.
+  rejection, and the flags that restrict them; with Docker, the proxies and
+  balancers the documentation prints, read from the pages.
 - `test/e2e/stdio` (`stdioe2e`) — the stdio transport: pipes, process lifetime,
   stdout carrying nothing but JSON-RPC, logs on stderr, and the environment
   variables stdio configuration actually uses.

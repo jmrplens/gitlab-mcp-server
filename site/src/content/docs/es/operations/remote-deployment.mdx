@@ -483,7 +483,7 @@ despliegue local de un único usuario. La tabla completa está en
 | Requisito                           | Por qué                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Declarar el host con `--public-url` | El proxy reenvía el `Host` del cliente, y un host que nadie declaró se rechaza con `403` por considerarse un intento de DNS rebinding. `--public-url` es lo que lo declara. La alternativa es listar la dirección del propio proxy en `--trusted-proxies`, junto con la `--trusted-proxy-header` que exige: un salto por el que el operador ha respondido puede reenviar cualquier host, que es lo que hace un despliegue que atiende varios nombres. El modo OAuth sigue exigiendo `--public-url` |
-| Sin búfer de respuesta              | El HTTP transmisible responde con `text/event-stream`. Un proxy con búfer convierte un stream vivo en una única entrega al final                                                                                                                                                                                                                                                                                                                                                                   |
+| Sin búfer de respuesta              | El HTTP transmisible responde con `text/event-stream`. Un proxy que retiene el cuerpo, con un búfer o comprimiéndolo, convierte un stream vivo en una única entrega al final                                                                                                                                                                                                                                                                                                                       |
 | Timeout de lectura largo            | Un stream `subscriptions/listen` está en silencio entre notificaciones. El keep-alive SSE del servidor sale cada 25 segundos, por debajo del valor por defecto de 60 de nginx, pero un stream tranquilo quiere más margen. Una llamada a herramienta que no escribe nada hasta su resultado no recibe keep-alive, así que también se corta la que pasa en silencio más que el timeout de lectura: ponlo por encima de la llamada más larga que esperes                                             |
 | HTTP/1.1 hacia el upstream          | HTTP/1.0 hacia el upstream no tiene transferencia troceada, que es lo que usa un cuerpo SSE                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Reenviar `Authorization`            | El modo OAuth lee de ahí el token bearer; quitarla convierte cada petición en un `401`                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -561,8 +561,10 @@ su propio preflight a partir de `--trusted-origins`, a la que se añade
 automáticamente el origen de `--public-url`, y un proxy que también emita
 `Access-Control-Allow-Origin` produce dos, que los navegadores rechazan de
 plano mientras `curl` informa de un alegre `200`, así que solo falla en el único
-cliente que importa. `test/e2e/http` fija esa colisión con un nginx real, y la
-parte del servidor está en
+cliente que importa. `test/e2e/http` fija esa colisión con un nginx real, y
+sirve los bloques de nginx, Caddy, Traefik y Apache de esta página a través del
+proxy para el que está escrito cada uno, para comprobar que la cabecera del
+servidor es la única; la parte del servidor está en
 [Protección cross-origin](/gitlab-mcp-server/es/operations/security/#protección-cross-origin).
 La única excepción es un documento que el proxy sirve por sí mismo en lugar de
 reenviarlo: el AI Catalog del ejemplo de nginx nunca llega al servidor, así que
@@ -662,6 +664,16 @@ reenvían lo fijan. Vacían `Connection` por un motivo parecido: nginx envía
 `Connection: close` al upstream salvo que se le diga otra cosa, lo que cerraría
 cada conexión que `keepalive` está ahí para reutilizar.
 
+El servidor marca cada stream con `X-Accel-Buffering: no`, que por sí solo
+desactiva el búfer de nginx para esa respuesta, y un nginx con búfer sigue
+pasando cada evento en cuanto lo lee. `proxy_buffering off` es para el caso en
+que fallan las dos cosas: un salto delante del servidor que quita la cabecera, y
+un `gzip` cuyo `gzip_types` incluye `text/event-stream`. La compresión con el
+búfer activado retiene el stream hasta que el compresor tiene bastante que
+escribir, lo que en un `subscriptions/listen` tranquilo no llega nunca; sin
+búfer, nginx vacía el compresor en cada lectura y cada evento sigue llegando
+según se escribe.
+
 </TabItem>
 <TabItem label="Caddy">
 
@@ -720,7 +732,15 @@ entryPoints:
 
 `readTimeout: 0` elimina el límite de cuánto puede durar una petición, que es lo
 que necesita un stream de larga duración. Traefik pone `X-Forwarded-For` cuando
-es el borde, o cuando el salto anterior está en `forwardedHeaders.trustedIPs`.
+es el borde, o cuando el salto anterior está en `forwardedHeaders.trustedIPs`,
+así que `--trusted-proxy-header=X-Forwarded-For --trusted-proxies=127.0.0.1`
+se empareja con esto, siendo esa la dirección desde la que conecta Traefik.
+
+El `tls.certresolver=le` del router nombra un resolvedor de certificados que la
+configuración estática tiene que definir, en `certificatesResolvers.le`, con los
+datos ACME de tu cuenta. El bloque de arriba no define ninguno: Traefik registra
+entonces que el router usa un resolvedor de certificados que no existe y sirve
+para el host su propio certificado por defecto, que todo cliente rechaza.
 
 Una regla `Host()` casa con todas las rutas del host, así que el documento
 well-known queda cubierto. Una regla `PathPrefix()` es donde se abre la trampa:
@@ -750,19 +770,25 @@ servicio.
 </VirtualHost>
 ```
 
-`flushpackets=on` es la que importa: sin ella `mod_proxy_http` hace búfer del
-cuerpo de la respuesta y el stream llega todo de golpe. `timeout=3600` es el
-timeout de lectura de esta ruta, distinto del `Timeout` global del servidor.
+`flushpackets=on` envía cada trozo del cuerpo de la respuesta en cuanto lo lee
+del servidor. Sin ella `mod_proxy_http` vacía igualmente cada vez que el
+servidor no tiene nada más que enviar en ese momento, que es cada evento que
+escribe un stream tranquilo, así que httpd 2.4 entrega el stream de las dos
+formas; la opción hace de eso un ajuste y no una cuestión de tiempos.
+`timeout=3600` es el timeout de lectura de esta ruta, distinto del `Timeout`
+global del servidor.
 
 Deja la autenticación al servidor MCP, así que nada de esto debería estar tras
 `Require valid-user`; Apache reenvía `Authorization` al upstream cuando no la
-consume él mismo. `mod_remoteip` con `RemoteIPHeader X-Forwarded-For`
-corrige la dirección en los propios registros de Apache, y el servidor MCP sigue
-necesitando `--trusted-proxy-header` y `--trusted-proxies` para su propio
-limitador.
+consume él mismo. `mod_proxy_http` pone `X-Forwarded-For` en cada petición que
+reenvía, así que `--trusted-proxy-header=X-Forwarded-For --trusted-proxies=127.0.0.1`
+se empareja con esto. `mod_remoteip` con `RemoteIPHeader X-Forwarded-For`
+corrige la dirección en los propios registros de Apache, que es otra cuestión:
+el servidor MCP lee la cabecera por sí mismo.
 
 Módulos necesarios: `proxy`, `proxy_http`, `ssl`, `headers`, y `remoteip` si lo
-usas.
+usas, además de los que carga toda configuración de serie, entre ellos un MPM y
+el núcleo de autorización, sin el que httpd rechaza todas las peticiones.
 
 </TabItem>
 <TabItem label="Túnel de Cloudflare">
@@ -794,8 +820,9 @@ que el stream SSE no depende de él en ningún sentido.
 Cloudflare pone `CF-Connecting-IP`, así que nombra esa:
 `--trusted-proxy-header=CF-Connecting-IP --trusted-proxies=127.0.0.1`, ya que
 `cloudflared` conecta desde la misma máquina. Prefiérela a `X-Forwarded-For`
-aquí, porque Cloudflare la reescribe en cada petición y un cliente no puede
-falsificarla a través del borde.
+aquí, porque un cliente no puede falsificarla a través del borde: el borde la
+escribe en cada petición que reenvía, y rechaza con un `403` y su error 1000 una
+petición que ya traiga una, antes de que la petición llegue al túnel.
 
 Dos comportamientos de Cloudflare que conviene comprobar antes de culpar al
 servidor. El proxy aplica un límite de inactividad a una respuesta, y lo que
@@ -1136,6 +1163,12 @@ explícito, `set_md5 $key "$mcp_salt$mcp_affinity"` de
 `ngx_http_set_misc_module` (OpenResty, o el `nginx-extras` de Debian y Ubuntu)
 produce uno, y njs hace lo mismo en unas pocas líneas. El endpoint alojado en
 `mcp.jmrp.io` calcula así `md5(sal + bearer)`.
+
+El mismo balanceador para HAProxy está en la
+[página de balanceo de carga](/gitlab-mcp-server/es/enterprise/load-balancing/#haproxy).
+HAProxy calcula el resumen con sal en su propia configuración y sondea
+`/health`, cosa que nginx de código abierto no puede: es el de los dos que saca
+una instancia que drena antes de que se cierre su listener.
 
 :::danger[Nunca añadas `non_idempotent` a `proxy_next_upstream`]
 

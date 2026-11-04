@@ -468,7 +468,7 @@ single-user local deployment only. The full table is in
 | Requirement                          | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Declare the host with `--public-url` | The proxy forwards the client's `Host`, and a host nobody declared is refused with `403` as a DNS-rebinding attempt. `--public-url` is what declares it. Listing the proxy's own address in `--trusted-proxies`, together with the `--trusted-proxy-header` it requires, is the alternative: a hop the operator vouched for may forward any host, which is what a deployment fronting several names does. OAuth mode still requires `--public-url` |
-| No response buffering                | Streamable HTTP answers with `text/event-stream`. A buffering proxy turns a live stream into one delivery at the end                                                                                                                                                                                                                                                                                                                               |
+| No response buffering                | Streamable HTTP answers with `text/event-stream`. A proxy that holds the body, buffering it or compressing it, turns a live stream into one delivery at the end                                                                                                                                                                                                                                                                                    |
 | Long read timeout                    | A `subscriptions/listen` stream is silent between notifications. The server's SSE keep-alive fires every 25 seconds, under nginx's 60-second default, but a quiet stream still wants headroom. A tool call that writes nothing until its result gets no keep-alive, so one silent for longer than the read timeout is cut too: set it above the longest call you expect                                                                            |
 | HTTP/1.1 upstream                    | HTTP/1.0 to the upstream has no chunked transfer, which is what an SSE body uses                                                                                                                                                                                                                                                                                                                                                                   |
 | Forward `Authorization`              | OAuth mode reads the bearer token from it; stripping it turns every request into a `401`                                                                                                                                                                                                                                                                                                                                                           |
@@ -542,7 +542,9 @@ own preflight from `--trusted-origins`, to which the `--public-url` origin is
 added automatically, and a proxy that also emits `Access-Control-Allow-Origin`
 produces two of them, which browsers reject outright while `curl` reports a
 cheerful `200`, so it fails only in the one client that matters. `test/e2e/http`
-pins that collision with a real nginx, and the server's side of it is in
+pins that collision with a real nginx, and serves the nginx, Caddy, Traefik and
+Apache blocks of this page through the proxy each is written for, to check that
+the server's header is the only one; the server's side of it is in
 [Cross-origin protection](/gitlab-mcp-server/operations/security/#cross-origin-protection).
 The one exception is a document the proxy serves itself rather than forwards:
 the AI Catalog in the nginx example never reaches the server, so the proxy is
@@ -640,6 +642,15 @@ clear `Connection` for a similar reason: nginx sends `Connection: close`
 upstream unless told otherwise, which would close every connection `keepalive`
 is there to reuse.
 
+The server marks every stream `X-Accel-Buffering: no`, which turns nginx's
+buffering off for that response by itself, and an nginx that buffers still
+passes an event on as soon as it reads one. `proxy_buffering off` is for the
+case where both fail: a hop in front of the server that drops the header, and a
+`gzip` whose `gzip_types` lists `text/event-stream`. Compression with buffering
+on holds the stream until the compressor has enough to write, which for a
+quiet `subscriptions/listen` is never; with buffering off nginx flushes the
+compressor on every read and each event still arrives as it is written.
+
 </TabItem>
 <TabItem label="Caddy">
 
@@ -697,7 +708,15 @@ entryPoints:
 
 `readTimeout: 0` removes the limit on how long a request may take, which is
 what a long-lived stream needs. Traefik sets `X-Forwarded-For` when it is the
-edge, or when the previous hop is listed in `forwardedHeaders.trustedIPs`.
+edge, or when the previous hop is listed in `forwardedHeaders.trustedIPs`, so
+`--trusted-proxy-header=X-Forwarded-For --trusted-proxies=127.0.0.1` pairs
+with this, the address being the one Traefik connects from.
+
+The router's `tls.certresolver=le` names a certificate resolver that the static
+configuration has to define, under `certificatesResolvers.le`, with the ACME
+details of your account. The block above defines none: Traefik then logs that
+the router uses a nonexistent certificate resolver and serves its own default
+certificate for the host, which every client refuses.
 
 A `Host()` rule matches every path on the host, so the well-known document is
 covered. A `PathPrefix()` rule is where the trap opens: a server routed by
@@ -727,18 +746,24 @@ same service.
 </VirtualHost>
 ```
 
-`flushpackets=on` is the one that matters: without it `mod_proxy_http` buffers
-the response body and the stream arrives all at once. `timeout=3600` is this
-route's read timeout, separate from the server-wide `Timeout`.
+`flushpackets=on` sends each piece of the response body on as soon as it is
+read from the server. Without it `mod_proxy_http` still flushes whenever the
+server has nothing more to send at once, which is every event a quiet stream
+writes, so httpd 2.4 delivers the stream either way; the option makes that a
+setting rather than a matter of timing. `timeout=3600` is this route's read
+timeout, separate from the server-wide `Timeout`.
 
 Leave authentication to the MCP server, so nothing here should sit behind
 `Require valid-user`; Apache forwards `Authorization` upstream when it is not
-consuming it itself. `mod_remoteip` with `RemoteIPHeader X-Forwarded-For` fixes
-the address in Apache's own logs, and the MCP server still needs
-`--trusted-proxy-header` and `--trusted-proxies` for its own limiter.
+consuming it itself. `mod_proxy_http` sets `X-Forwarded-For` on every request
+it forwards, so `--trusted-proxy-header=X-Forwarded-For --trusted-proxies=127.0.0.1`
+pairs with this. `mod_remoteip` with `RemoteIPHeader X-Forwarded-For` fixes the
+address in Apache's own logs, which is a separate matter: the MCP server reads
+the header itself.
 
 Modules required: `proxy`, `proxy_http`, `ssl`, `headers`, and `remoteip` if you
-use it.
+use it, on top of the ones every stock configuration loads, among them an MPM
+and the authorization core, without which httpd refuses every request.
 
 </TabItem>
 <TabItem label="Cloudflare Tunnel">
@@ -769,8 +794,9 @@ depend on it either way.
 Cloudflare sets `CF-Connecting-IP`, so name that one:
 `--trusted-proxy-header=CF-Connecting-IP --trusted-proxies=127.0.0.1`, since
 `cloudflared` connects from the same host. Prefer it over `X-Forwarded-For`
-here, because Cloudflare rewrites it on every request and a client cannot forge
-it through the edge.
+here, because a client cannot forge it through the edge: the edge writes it on
+every request it forwards, and refuses a request that already carries one with
+a `403` and its error 1000, before the request reaches the tunnel.
 
 Two Cloudflare behaviours to check before blaming the server. The proxy applies
 an inactivity limit to a response, and what keeps a quiet `subscriptions/listen`
@@ -1093,6 +1119,12 @@ preferred, `set_md5 $key "$mcp_salt$mcp_affinity"` from
 `ngx_http_set_misc_module` (OpenResty, or Debian and Ubuntu's `nginx-extras`)
 produces one, and njs does the same in a few lines. The hosted endpoint at
 `mcp.jmrp.io` computes `md5(salt + bearer)` that way.
+
+The same balancer for HAProxy is on the
+[load balancing page](/gitlab-mcp-server/enterprise/load-balancing/#haproxy).
+HAProxy computes the salted digest in its own configuration, and it polls
+`/health`, which nginx open source cannot: it is the one of the two that takes
+a draining instance out before its listener closes.
 
 :::danger[Never add `non_idempotent` to `proxy_next_upstream`]
 
