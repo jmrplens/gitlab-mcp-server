@@ -25,6 +25,20 @@ const mirrorSourceURL = "https://github.com/example/repo.git"
 // toolPullMirrorConfigure is the individual tool the guarded action projects.
 const toolPullMirrorConfigure = "gitlab_project_pull_mirror_configure"
 
+// toolProjectUpdate is the individual tool project.update projects, the other
+// action that can arm the overwrite.
+const toolProjectUpdate = "gitlab_project_update"
+
+// The operation labels each guarded handler opens its refusals with.
+const (
+	opConfigurePullMirror = "projectConfigurePullMirror"
+	opProjectUpdate       = "projectUpdate"
+)
+
+// configuredMirrorSource is how the question names the source of a call that
+// sends no URL and so keeps the one the project already pulls from.
+const configuredMirrorSource = "its configured mirror source"
+
 // guardCalls counts what a configure call sent GitLab, so a test can assert
 // both that the PUT was refused and that the guard's inspection read was
 // skipped where it costs nothing.
@@ -117,7 +131,7 @@ func TestConfigurePullMirror_ArmingTheOverwrite_IsRefusedWithoutConfirmation(t *
 		t.Fatal("arming the diverged-branch overwrite was accepted without confirmation")
 	}
 	assertRefusalMentions(t, err, "confirm=true", "github.com/example/repo.git", "overwrite diverged branches")
-	if want := mirrorRefusal(mirrorSourceURL); err.Error() != want {
+	if want := mirrorRefusal(opConfigurePullMirror, mirrorSourceURL); err.Error() != want {
 		t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
 	}
 	if got := calls.writes.Load(); got != 0 {
@@ -125,12 +139,13 @@ func TestConfigurePullMirror_ArmingTheOverwrite_IsRefusedWithoutConfirmation(t *
 	}
 }
 
-// mirrorRefusal is the refusal a client that cannot ask receives for project
-// 42 pulling from source: the guard's question in English, exactly as it was
-// asked before the question became a catalog message, then how to proceed.
-// The model reads it in English whatever language the person is asked in.
-func mirrorRefusal(source string) string {
-	return "projectConfigurePullMirror: Configure project 42 to pull from " + source + " and overwrite diverged branches?" +
+// mirrorRefusal is the refusal a client that cannot ask receives from the
+// operation op for project 42 pulling from source: the guard's question in
+// English, exactly as it was asked before the question became a catalog
+// message, then how to proceed. The model reads it in English whatever
+// language the person is asked in.
+func mirrorRefusal(op, source string) string {
+	return op + ": Configure project 42 to pull from " + source + " and overwrite diverged branches?" +
 		" Every branch of this project that has diverged from that repository is replaced by its version on the next sync," +
 		" and the replaced commits cannot be recovered through the API." +
 		" Re-send the same call with confirm=true once the user has approved it"
@@ -229,8 +244,8 @@ func TestConfigurePullMirror_ArmingTheFlagOnARunningMirror_IsRefused(t *testing.
 	if err == nil {
 		t.Fatal("arming the flag on a running mirror was accepted without confirmation")
 	}
-	assertRefusalMentions(t, err, "confirm=true", "its configured mirror source")
-	if want := mirrorRefusal("its configured mirror source"); err.Error() != want {
+	assertRefusalMentions(t, err, "confirm=true", configuredMirrorSource)
+	if want := mirrorRefusal(opConfigurePullMirror, configuredMirrorSource); err.Error() != want {
 		t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
 	}
 	if got := calls.writes.Load(); got != 0 {
@@ -392,7 +407,7 @@ func TestConfigurePullMirror_DisabledMirror_ProceedsUntilItIsEnabled(t *testing.
 	if err == nil {
 		t.Fatal("enabling a mirror that overwrites diverged branches was accepted without confirmation")
 	}
-	if !strings.Contains(err.Error(), "its configured mirror source") {
+	if !strings.Contains(err.Error(), configuredMirrorSource) {
 		t.Errorf("a call that names no URL should say the source is the configured one, got: %v", err)
 	}
 }
@@ -656,6 +671,431 @@ func TestPullMirrorSourceForPrompt_Values(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := pullMirrorSourceForPrompt(tt.raw); got != tt.want {
 				t.Errorf("pullMirrorSourceForPrompt(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+// updatedProjectJSON is the project PUT /projects/:id answers with in the
+// update tests below: enough of one for the handler to build its output.
+const updatedProjectJSON = `{"id":42,"name":"repo","path_with_namespace":"group/repo","web_url":"https://gitlab.example.com/group/repo"}`
+
+// mirrorRead is what GitLab answers the guard's inspection read with: a
+// status other than 200 expresses a project with no mirror, an instance that
+// mounts no pull mirror route and an unreadable configuration, as guardHandler
+// does for the dedicated route.
+type mirrorRead struct {
+	status int
+	body   string
+}
+
+// The five answers the update tests below give the inspection read.
+// readRouteNotMounted is GitLab CE's, whose API has no pull mirror route and
+// answers it as Grape answers any path it does not route.
+var (
+	readPlainMirror       = mirrorRead{status: http.StatusOK, body: storedMirrorJSON(true, false)}
+	readOverwritingMirror = mirrorRead{status: http.StatusOK, body: storedMirrorJSON(true, true)}
+	readNotMirrored       = mirrorRead{status: http.StatusBadRequest, body: notMirroredJSON}
+	readRouteNotMounted   = mirrorRead{status: http.StatusNotFound, body: `{"error":"404 Not Found"}`}
+	readUnavailable       = mirrorRead{status: http.StatusInternalServerError, body: `{"message":"500 Internal Server Error"}`}
+)
+
+// updateGuardHandler answers the two requests a project update that touches
+// the pull mirror can send: the read of the mirror configuration the guard
+// inspects, answered with read, and the update itself.
+func updateGuardHandler(calls *guardCalls, read mirrorRead) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathProject42MirrorPull:
+			calls.reads.Add(1)
+			testutil.RespondJSON(w, read.status, read.body)
+		case r.Method == http.MethodPut && r.URL.Path == pathProject42:
+			calls.writes.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, updatedProjectJSON)
+		default:
+			http.NotFound(w, r)
+		}
+	}
+}
+
+// updateGuardedClient builds a client whose mirror read and project update
+// are served by updateGuardHandler.
+func updateGuardedClient(t *testing.T, calls *guardCalls, read mirrorRead) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, updateGuardHandler(calls, read))
+}
+
+// armingUpdate is a project update that enables the mirror, aims it at
+// mirrorSourceURL and arms the overwrite, the update every confirmation test
+// below sends.
+func armingUpdate() UpdateInput {
+	return UpdateInput{
+		ProjectID: "42", Mirror: new(true), ImportURL: mirrorSourceURL,
+		MirrorOverwritesDivergedBranches: new(true),
+	}
+}
+
+// TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation verifies
+// that project.update is held to the rule project.pull_mirror_configure is
+// held to. PUT /projects/:id takes mirror, import_url and
+// mirror_overwrites_diverged_branches too, the same three settings under the
+// names the project route gives them, so an update that leaves the project
+// pulling with the overwrite armed, and is the call that arms or re-aims it,
+// discards the project's own commits on every diverged branch exactly as the
+// dedicated route would.
+//
+// Each case is refused when nothing confirmed it, with the guard's question in
+// English and how to proceed, and GitLab is never asked to apply it. The
+// inspection read is asserted as well, since a call that sends both flags
+// already says what it leaves behind and must not pay for one.
+func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing.T) {
+	tests := []struct {
+		name      string
+		read      mirrorRead
+		input     UpdateInput
+		source    string
+		wantReads int64
+	}{
+		{
+			name:      "arming the flag on a running mirror",
+			read:      readPlainMirror,
+			input:     UpdateInput{ProjectID: "42", MirrorOverwritesDivergedBranches: new(true)},
+			source:    configuredMirrorSource,
+			wantReads: 1,
+		},
+		{
+			name:      "arming the flag beside an unrelated setting",
+			read:      readPlainMirror,
+			input:     UpdateInput{ProjectID: "42", Description: new("mirrored"), MirrorOverwritesDivergedBranches: new(true)},
+			source:    configuredMirrorSource,
+			wantReads: 1,
+		},
+		{
+			name:      "repointing a mirror that already overwrites",
+			read:      readOverwritingMirror,
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
+			source:    mirrorSourceURL,
+			wantReads: 1,
+		},
+		{
+			name:   "enabling a mirror together with the flag",
+			read:   readNotMirrored,
+			input:  armingUpdate(),
+			source: mirrorSourceURL,
+		},
+		{
+			name:      "arming the flag on a project with no mirror",
+			read:      readNotMirrored,
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL, MirrorOverwritesDivergedBranches: new(true)},
+			source:    mirrorSourceURL,
+			wantReads: 1,
+		},
+		{
+			name:      "arming the flag where no pull mirror route is mounted",
+			read:      readRouteNotMounted,
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL, MirrorOverwritesDivergedBranches: new(true)},
+			source:    mirrorSourceURL,
+			wantReads: 1,
+		},
+		{
+			name:      "a configuration the guard cannot read",
+			read:      readUnavailable,
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
+			source:    mirrorSourceURL,
+			wantReads: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := updateGuardedClient(t, &calls, tt.read)
+
+			_, err := Update(t.Context(), client, tt.input)
+			if err == nil {
+				t.Fatal("an update leaving the diverged-branch overwrite armed went out without confirmation")
+			}
+			if want := mirrorRefusal(opProjectUpdate, tt.source); err.Error() != want {
+				t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
+			}
+			if got := calls.writes.Load(); got != 0 {
+				t.Errorf("the update was applied %d time(s) despite being refused", got)
+			}
+			if got := calls.reads.Load(); got != tt.wantReads {
+				t.Errorf("reads = %d, want %d", got, tt.wantReads)
+			}
+		})
+	}
+}
+
+// TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking verifies the
+// other half of the rule on project.update: an update that cannot arm the
+// overwrite, or that leaves it disarmed, goes out without a question, and the
+// inspection read is spent only where the answer depends on what the project
+// already holds. Most project updates name no mirror setting at all, and
+// asking on the ones that switch the mirror or the overwrite off would be the
+// guard working backwards.
+//
+// The cases on an instance that mounts no pull mirror route are GitLab CE's,
+// where the read is answered 404 and there is no mirror to inherit an overwrite
+// from: refusing them would ask about a mirror the instance ignores.
+func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) {
+	tests := []struct {
+		name      string
+		read      mirrorRead
+		input     UpdateInput
+		wantReads int64
+	}{
+		{
+			name:  "an unrelated setting on a mirror that overwrites",
+			read:  readOverwritingMirror,
+			input: UpdateInput{ProjectID: "42", Description: new("renamed")},
+		},
+		{
+			name: "mirror settings that cannot arm it",
+			read: readOverwritingMirror,
+			input: UpdateInput{
+				ProjectID: "42", MirrorTriggerBuilds: new(true), OnlyMirrorProtectedBranches: new(true),
+				MirrorUserID: new(int64(7)),
+			},
+		},
+		{
+			name: "disabling the mirror",
+			read: readOverwritingMirror,
+			input: UpdateInput{
+				ProjectID: "42", Mirror: new(false), ImportURL: mirrorSourceURL,
+				MirrorOverwritesDivergedBranches: new(true),
+			},
+		},
+		{
+			name:  "clearing the flag",
+			read:  readOverwritingMirror,
+			input: UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL, MirrorOverwritesDivergedBranches: new(false)},
+		},
+		{
+			name:      "repointing a mirror that does not overwrite",
+			read:      readPlainMirror,
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
+			wantReads: 1,
+		},
+		{
+			name:      "enabling a mirror that does not overwrite",
+			read:      readPlainMirror,
+			input:     UpdateInput{ProjectID: "42", Mirror: new(true)},
+			wantReads: 1,
+		},
+		{
+			name:      "a first mirror without the flag",
+			read:      readNotMirrored,
+			input:     UpdateInput{ProjectID: "42", Mirror: new(true), ImportURL: mirrorSourceURL},
+			wantReads: 1,
+		},
+		{
+			name:      "an import_url where no pull mirror route is mounted",
+			read:      readRouteNotMounted,
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
+			wantReads: 1,
+		},
+		{
+			name:      "enabling the mirror where no pull mirror route is mounted",
+			read:      readRouteNotMounted,
+			input:     UpdateInput{ProjectID: "42", Mirror: new(true)},
+			wantReads: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := updateGuardedClient(t, &calls, tt.read)
+
+			out, err := Update(t.Context(), client, tt.input)
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.ID != 42 {
+				t.Errorf("ID = %d, want the updated project", out.ID)
+			}
+			if got := calls.writes.Load(); got != 1 {
+				t.Errorf("writes = %d, want the update applied once", got)
+			}
+			if got := calls.reads.Load(); got != tt.wantReads {
+				t.Errorf("reads = %d, want %d", got, tt.wantReads)
+			}
+		})
+	}
+}
+
+// TestUpdate_ArmingTheOverwrite_ProceedsWhenConfirmed verifies the ways past
+// the question on project.update, which are the dedicated route's: the
+// reserved confirm key in each shape a surface sends it, flat on the
+// individual tool, inside params on the meta tool and beside params on
+// gitlab_execute_action, and the operator's bypass under either of its names.
+// A confirmed call does not need to know what it is about to arm, so none of
+// them pays for the inspection read.
+//
+// The confirmation is read from the raw tool call rather than from the typed
+// input, because the reserved key is stripped before unmarshalling, so each
+// request is built the way its surface sends it.
+func TestUpdate_ArmingTheOverwrite_ProceedsWhenConfirmed(t *testing.T) {
+	const fields = `"project_id":"42","mirror":true,"import_url":"` + mirrorSourceURL + `","mirror_overwrites_diverged_branches":true`
+	tests := []struct {
+		name      string
+		env       map[string]string
+		tool      string
+		arguments string
+	}{
+		{name: "confirm on the individual tool", tool: toolProjectUpdate, arguments: `{` + fields + `,"confirm":true}`},
+		{name: "confirm inside params on the meta tool", tool: "gitlab_project", arguments: `{"action":"update","params":{` + fields + `,"confirm":true}}`},
+		{name: "confirm beside params on gitlab_execute_action", tool: "gitlab_execute_action", arguments: `{"action":"project.update","params":{` + fields + `},"confirm":true}`},
+		{name: "YOLO mode", env: map[string]string{"GITLAB_MCP_YOLO_MODE": "true"}},
+		{name: "AUTOPILOT", env: map[string]string{"AUTOPILOT": "true"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+			t.Setenv("AUTOPILOT", "")
+			for key, value := range tt.env {
+				t.Setenv(key, value)
+			}
+			var calls guardCalls
+			client := updateGuardedClient(t, &calls, readPlainMirror)
+			ctx := t.Context()
+			if tt.tool != "" {
+				ctx = toolutil.ContextWithRequest(ctx, &mcp.CallToolRequest{
+					Params: &mcp.CallToolParamsRaw{Name: tt.tool, Arguments: json.RawMessage(tt.arguments)},
+				})
+			}
+
+			if _, err := Update(ctx, client, armingUpdate()); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got := calls.writes.Load(); got != 1 {
+				t.Errorf("writes = %d, want the confirmed update applied once", got)
+			}
+			if got := calls.reads.Load(); got != 0 {
+				t.Errorf("a confirmed update paid for %d inspection read(s)", got)
+			}
+		})
+	}
+}
+
+// TestUpdate_ElicitingClient_TheAnswerDecidesTheCall verifies that a client
+// which can prompt is asked about a project update that arms the overwrite,
+// and that every outcome but an approval leaves the project untouched: the
+// first pass returns the pending input request, an approval applies the update
+// once, and a "no" in the form, a declined or dismissed dialog, an answer to
+// another question and a confirmation state this server did not issue are each
+// refused.
+func TestUpdate_ElicitingClient_TheAnswerDecidesTheCall(t *testing.T) {
+	answer := func(action string, content map[string]any) mcp.InputResponseMap {
+		return mcp.InputResponseMap{pullMirrorOverwriteConfirmID: &mcp.ElicitResult{Action: action, Content: content}}
+	}
+	tests := []struct {
+		name        string
+		answers     mcp.InputResponseMap
+		state       string
+		wantPending bool
+		wantError   string
+		wantWrites  int64
+	}{
+		{name: "the first pass asks", wantPending: true},
+		{name: "approved", answers: answer("accept", map[string]any{"confirmed": true}), wantWrites: 1},
+		{
+			name: "refused in the form", answers: answer("accept", map[string]any{"confirmed": false}),
+			wantError: opProjectUpdate + ": the user declined overwriting the project's diverged branches; send mirror_overwrites_diverged_branches=false to mirror without replacing them",
+		},
+		{name: "declined", answers: answer("decline", nil), wantError: opProjectUpdate + ": confirmation failed: elicitation: user declined"},
+		{name: "dismissed", answers: answer("cancel", nil), wantError: opProjectUpdate + ": confirmation failed: elicitation: user canceled"},
+		{
+			name: "an answer to another question", answers: answer("accept", map[string]any{"title": "unrelated"}),
+			wantError: opProjectUpdate + ": confirmation failed: elicitation: the answer did not satisfy the requested schema",
+		},
+		{name: "a state this server did not issue", state: "not a state this server issued", wantError: mirrorRefusal(opProjectUpdate, mirrorSourceURL)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := updateGuardedClient(t, &calls, readPlainMirror)
+			req := elicitingRequest(tt.answers)
+			req.Params.Name = toolProjectUpdate
+			req.Params.RequestState = tt.state
+			ctx := toolutil.ContextWithRequest(t.Context(), req)
+
+			_, err := Update(ctx, client, armingUpdate())
+			switch {
+			case tt.wantPending:
+				if _, pending := toolutil.InputRequiredResultFromError(err); !pending {
+					t.Errorf("error = %v, want the pending input request", err)
+				}
+			case tt.wantError != "":
+				if err == nil || err.Error() != tt.wantError {
+					t.Errorf("error = %v, want %q", err, tt.wantError)
+				}
+			case err != nil:
+				t.Errorf(fmtUnexpErr, err)
+			}
+			if got := calls.writes.Load(); got != tt.wantWrites {
+				t.Errorf("writes = %d, want %d", got, tt.wantWrites)
+			}
+		})
+	}
+}
+
+// TestUpdate_ThroughTheRoute_HonorsTheReservedConfirmKey drives the path every
+// surface takes to project.update, the route's own handler, given the
+// parameters as a map with the reserved key among them and the raw call in the
+// context, and checks that the input schema advertises the key.
+//
+// The schema matters on the individual surface, where it closes the object
+// with additionalProperties: false and a client that validates before sending
+// would refuse a confirm it does not declare. The unconfirmed half is asserted
+// beside the confirmed one, since a key that is accepted but never consulted
+// would pass the first half alone.
+func TestUpdate_ThroughTheRoute_HonorsTheReservedConfirmKey(t *testing.T) {
+	tests := []struct {
+		name      string
+		confirm   bool
+		wantWrite int64
+	}{
+		{name: "confirmed", confirm: true, wantWrite: 1},
+		{name: "unconfirmed", confirm: false, wantWrite: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := updateGuardedClient(t, &calls, readPlainMirror)
+			route := projectSpecsByTool(t, ActionSpecs(client, true))[toolProjectUpdate].Route
+			props, _ := route.InputSchema["properties"].(map[string]any)
+			if _, declared := props["confirm"]; !declared {
+				t.Error("the project.update input schema does not declare the reserved confirm key")
+			}
+
+			params := map[string]any{
+				"project_id": "42", "mirror": true, "import_url": mirrorSourceURL,
+				"mirror_overwrites_diverged_branches": true,
+			}
+			if tt.confirm {
+				params["confirm"] = true
+			}
+			arguments, marshalErr := json.Marshal(params)
+			if marshalErr != nil {
+				t.Fatalf("marshal params: %v", marshalErr)
+			}
+			ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
+				Params: &mcp.CallToolParamsRaw{Name: toolProjectUpdate, Arguments: arguments},
+			})
+
+			_, err := route.Handler(ctx, params)
+			if tt.confirm && err != nil {
+				t.Fatalf("a confirmed update was refused: %v", err)
+			}
+			if !tt.confirm {
+				if err == nil {
+					t.Fatal("an unconfirmed update arming the overwrite was accepted through the route")
+				}
+				assertRefusalMentions(t, err, opProjectUpdate+":", "confirm=true")
+			}
+			if got := calls.writes.Load(); got != tt.wantWrite {
+				t.Errorf("writes = %d, want %d", got, tt.wantWrite)
 			}
 		})
 	}

@@ -94,7 +94,7 @@ type ConfigurePullMirrorInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call arms it, or enables or re-aims a mirror that has it"`
 }
 
 // ConfigurePullMirror sets up or updates pull mirroring for a project.
@@ -109,7 +109,7 @@ func ConfigurePullMirror(ctx context.Context, client *gitlabclient.Client, input
 	if input.ProjectID == "" {
 		return PullMirrorOutput{}, errors.New("projectConfigurePullMirror: project_id is required")
 	}
-	if err := confirmDivergedOverwrite(ctx, client, input); err != nil {
+	if err := confirmDivergedOverwrite(ctx, client, "projectConfigurePullMirror", input); err != nil {
 		return PullMirrorOutput{}, err
 	}
 	opts := &gl.ConfigureProjectPullMirrorOptions{}

@@ -32,7 +32,16 @@ const pullMirrorOverwriteConfirmID = "project_pull_mirror_overwrite"
 const notMirroredHint = "not mirrored"
 
 // confirmDivergedOverwrite asks the caller to confirm a pull-mirror
-// configuration that would force-overwrite the project's own branches.
+// configuration that would force-overwrite the project's own branches. op is
+// the operation label the refusals open with, the handler's own.
+//
+// Two actions can leave a project in that state, and both are judged here by
+// the one rule: project.pull_mirror_configure, through PUT
+// /projects/:id/mirror/pull, and project.update, which sends the same three
+// settings to PUT /projects/:id under the names that route gives them, mirror
+// for enabled and import_url for url. [UpdateInput.pullMirrorSettings]
+// restates an update in the dedicated route's terms, so neither action is a
+// way around the question the other asks.
 //
 // Configuring a pull mirror is not destructive by itself, and is deliberately
 // not classified as such: GitLab stops updating any branch that has diverged
@@ -58,7 +67,7 @@ const notMirroredHint = "not mirrored"
 // resend with confirm=true, so the overwrite is never armed silently.
 //
 // It returns nil when the configuration may proceed.
-func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) error {
+func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, op string, input ConfigurePullMirrorInput) error {
 	if !armsOverwrite(input) {
 		return nil
 	}
@@ -92,8 +101,8 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 	flow, flowErr := elicitation.FlowFromRequest(ctx, req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
-			"projectConfigurePullMirror: %s Re-send the same call with confirm=true once the user has approved it",
-			question.English(),
+			"%s: %s Re-send the same call with confirm=true once the user has approved it",
+			op, question.English(),
 		)
 	}
 
@@ -105,12 +114,30 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 		return flow.PendingError()
 	}
 	if err != nil {
-		return fmt.Errorf("projectConfigurePullMirror: confirmation failed: %w", err)
+		return fmt.Errorf("%s: confirmation failed: %w", op, err)
 	}
 	if !confirmed {
-		return errors.New("projectConfigurePullMirror: the user declined overwriting the project's diverged branches; send mirror_overwrites_diverged_branches=false to mirror without replacing them")
+		return fmt.Errorf("%s: the user declined overwriting the project's diverged branches; send mirror_overwrites_diverged_branches=false to mirror without replacing them", op)
 	}
 	return nil
+}
+
+// pullMirrorSettings restates the pull-mirror settings a project update sends
+// in the terms of the dedicated route, so [confirmDivergedOverwrite] judges the
+// update by the rule it applies to project.pull_mirror_configure.
+//
+// PUT /projects/:id names the switch mirror and the source import_url, and the
+// dedicated route's own handler in GitLab maps its enabled and url onto exactly
+// those two project attributes (pull_mirror_update_attributes in
+// ee/lib/api/project_mirror.rb), so the two calls write the same columns. The
+// update's other mirror settings cannot arm the overwrite and are left out.
+func (input UpdateInput) pullMirrorSettings() ConfigurePullMirrorInput {
+	return ConfigurePullMirrorInput{
+		ProjectID:                        input.ProjectID,
+		Enabled:                          input.Mirror,
+		URL:                              input.ImportURL,
+		MirrorOverwritesDivergedBranches: input.MirrorOverwritesDivergedBranches,
+	}
 }
 
 // armsOverwrite reports whether this call could put the project into the
@@ -137,9 +164,16 @@ func isTrue(flag *bool) bool {
 // A project with no mirror at all inherits nothing, so an unsent overwrite flag
 // is off; an unsent enabled flag there is treated as on, because whether GitLab
 // activates a mirror created without it is not something its API documents, and
-// the guess that costs a prompt is better than the guess that skips one. Any
-// other read failure is answered the same way: a guard that cannot see the
-// configuration must not assume the harmless one.
+// the guess that costs a prompt is better than the guess that skips one.
+//
+// A 404 is read the same way, as nothing to inherit. GitLab CE does not mount
+// the pull mirror route at all, so there it is the answer to every read, and a
+// project.update naming import_url or mirror, which the meta tool hands its
+// handler although the Free schema prunes both, would otherwise be refused
+// with a question about a mirror CE ignores. On a licensed instance the
+// route's 404 means the project cannot be seen, which the write that follows
+// is refused for as well. Any other read failure is answered by asking: a
+// guard that cannot see the configuration must not assume the harmless one.
 func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) bool {
 	overwrite, overwriteSent := flagValue(input.MirrorOverwritesDivergedBranches)
 	enabled, enabledSent := flagValue(input.Enabled)
@@ -155,7 +189,7 @@ func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input
 
 	current, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		if isNotMirrored(err) {
+		if isNotMirrored(err) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return overwriteSent
 		}
 		return true
