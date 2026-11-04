@@ -15,6 +15,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The operations the project-scoped handlers name in what they report: the
+// resolution of the project, a refusal and a body that does not decode.
+const (
+	opRetrieveForProject = "retrieve project storage moves"
+	opGetForProject      = "get project storage move for project"
+	opSchedule           = "schedule project storage move"
+)
+
 // ListInput holds pagination parameters for listing all project storage moves.
 type ListInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
@@ -170,7 +178,7 @@ func RetrieveForProject(ctx context.Context, client *gitlabclient.Client, in Lis
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	projectID, err := resolveProjectID(ctx, client, "retrieve project storage moves", in.ProjectID)
+	projectID, err := resolveProjectID(ctx, client, opRetrieveForProject, in.ProjectID)
 	if err != nil {
 		return ListOutput{}, err
 	}
@@ -186,12 +194,12 @@ func RetrieveForProject(ctx context.Context, client *gitlabclient.Client, in Lis
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	moves, resp, err := client.GL().ProjectRepositoryStorageMove.RetrieveAllStorageMovesForProject(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve project storage moves", err, http.StatusNotFound,
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(opRetrieveForProject, err, http.StatusNotFound,
 			"requires admin; verify project_id exists; only storage moves for the given project are returned")
 	}
 	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("retrieve project storage moves", err)
+		return ListOutput{}, toolutil.WrapErr(opRetrieveForProject, err)
 	}
 
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
@@ -232,7 +240,7 @@ func GetForProject(ctx context.Context, client *gitlabclient.Client, in ProjectM
 	if in.ID == 0 {
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
-	projectID, err := resolveProjectID(ctx, client, "get project storage move for project", in.ProjectID)
+	projectID, err := resolveProjectID(ctx, client, opGetForProject, in.ProjectID)
 	if err != nil {
 		return Output{}, err
 	}
@@ -240,12 +248,12 @@ func GetForProject(ctx context.Context, client *gitlabclient.Client, in ProjectM
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().ProjectRepositoryStorageMove.GetStorageMoveForProject(projectID, in.ID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get project storage move for project", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opGetForProject, err, http.StatusNotFound,
 			"requires admin; verify the project_id + id pair with storage_move.retrieve_project, which lists this project's own moves; a move id belonging to another project answers 404 here, and the record may have been pruned after completion")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("get project storage move for project", err)
+		return Output{}, toolutil.WrapErr(opGetForProject, err)
 	}
 	return toOutput(move, extra), nil
 }
@@ -255,7 +263,7 @@ func Schedule(ctx context.Context, client *gitlabclient.Client, in ScheduleInput
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	projectID, err := resolveProjectID(ctx, client, "schedule project storage move", in.ProjectID)
+	projectID, err := resolveProjectID(ctx, client, opSchedule, in.ProjectID)
 	if err != nil {
 		return Output{}, err
 	}
@@ -266,12 +274,12 @@ func Schedule(ctx context.Context, client *gitlabclient.Client, in ScheduleInput
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().ProjectRepositoryStorageMove.ScheduleStorageMoveForProject(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("schedule project storage move", err, http.StatusBadRequest,
+		return Output{}, toolutil.WrapErrWithStatusHint(opSchedule, err, http.StatusBadRequest,
 			"requires admin; destination_storage_name must reference an existing Gitaly storage shard configured on the instance; cannot move to the same shard the project is already on")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("schedule project storage move", err)
+		return Output{}, toolutil.WrapErr(opSchedule, err)
 	}
 	return toOutput(move, extra), nil
 }

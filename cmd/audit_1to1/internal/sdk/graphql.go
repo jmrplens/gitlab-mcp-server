@@ -19,6 +19,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
+// graphqlEntry is how a stale declaration, and a problem with one, names an
+// adjudicated GraphQL operation: the word before its key.
+const graphqlEntry = "graphql "
+
 // graphqlOperation is one handler (or helper) function that reaches GitLab
 // through the raw GraphQL interface instead of an SDK service wrapper.
 type graphqlOperation struct {
@@ -280,10 +284,10 @@ func staleGraphQLReplaces(decisions map[string]decision, services map[string]sdk
 		for _, method := range adjudged.Replaces {
 			problem := replacesProblem(key, adjudged.Decision, method, services, aliases, usage)
 			if first, seen := claimed[method]; problem == "" && seen {
-				problem = "graphql " + first + " replaces it too"
+				problem = graphqlEntry + first + " replaces it too"
 			}
 			if problem != "" {
-				stale = append(stale, "graphql "+key+" (replaces "+method+": "+problem+")")
+				stale = append(stale, graphqlEntry+key+" (replaces "+method+": "+problem+")")
 				continue
 			}
 			claimed[method] = key
@@ -331,7 +335,7 @@ func staleGraphQLDecisions(operations []graphqlOperation, decisions map[string]d
 	var stale []string
 	for key := range decisions {
 		if _, ok := live[key]; !ok {
-			stale = append(stale, "graphql "+key)
+			stale = append(stale, graphqlEntry+key)
 		}
 	}
 	sort.Strings(stale)

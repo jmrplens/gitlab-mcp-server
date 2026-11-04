@@ -55,6 +55,16 @@ const upstreamRegister = "docs/development/upstream-bugs.md"
 // parameters below.
 const narrowedByClientGoRow = 158
 
+// The four custom attribute actions, each the one whose handler reads a
+// name into the ID of a group, a project or a user, which three methods
+// take.
+const (
+	actionCustomAttrDelete = "admin.custom_attr_delete"
+	actionCustomAttrGet    = "admin.custom_attr_get"
+	actionCustomAttrList   = "admin.custom_attr_list"
+	actionCustomAttrSet    = "admin.custom_attr_set"
+)
+
 // narrowingDeclaration answers one integer parameter of a client-go method that
 // fills a placeholder the record says takes a name or a path.
 type narrowingDeclaration struct {
@@ -73,18 +83,18 @@ type narrowingDeclaration struct {
 // or the username of a user, the handler of the action named reads a name into
 // its ID first, and a bump that widens the method leaves its row stale.
 var narrowingDeclarations = []narrowingDeclaration{
-	{Method: "CustomAttributes.DeleteCustomGroupAttribute", Param: "group", Action: "admin.custom_attr_delete", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.DeleteCustomProjectAttribute", Param: "project", Action: "admin.custom_attr_delete", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.DeleteCustomUserAttribute", Param: "user", Action: "admin.custom_attr_delete", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.GetCustomGroupAttribute", Param: "group", Action: "admin.custom_attr_get", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.GetCustomProjectAttribute", Param: "project", Action: "admin.custom_attr_get", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.GetCustomUserAttribute", Param: "user", Action: "admin.custom_attr_get", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.ListCustomGroupAttributes", Param: "group", Action: "admin.custom_attr_list", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.ListCustomProjectAttributes", Param: "project", Action: "admin.custom_attr_list", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.ListCustomUserAttributes", Param: "user", Action: "admin.custom_attr_list", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.SetCustomGroupAttribute", Param: "group", Action: "admin.custom_attr_set", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.SetCustomProjectAttribute", Param: "project", Action: "admin.custom_attr_set", UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.SetCustomUserAttribute", Param: "user", Action: "admin.custom_attr_set", UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.DeleteCustomGroupAttribute", Param: "group", Action: actionCustomAttrDelete, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.DeleteCustomProjectAttribute", Param: "project", Action: actionCustomAttrDelete, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.DeleteCustomUserAttribute", Param: "user", Action: actionCustomAttrDelete, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.GetCustomGroupAttribute", Param: "group", Action: actionCustomAttrGet, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.GetCustomProjectAttribute", Param: "project", Action: actionCustomAttrGet, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.GetCustomUserAttribute", Param: "user", Action: actionCustomAttrGet, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.ListCustomGroupAttributes", Param: "group", Action: actionCustomAttrList, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.ListCustomProjectAttributes", Param: "project", Action: actionCustomAttrList, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.ListCustomUserAttributes", Param: "user", Action: actionCustomAttrList, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.SetCustomGroupAttribute", Param: "group", Action: actionCustomAttrSet, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.SetCustomProjectAttribute", Param: "project", Action: actionCustomAttrSet, UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.SetCustomUserAttribute", Param: "user", Action: actionCustomAttrSet, UpstreamRow: narrowedByClientGoRow},
 	{Method: "GroupRepositoryStorageMove.GetStorageMoveForGroup", Param: "group", Action: "storage_move.get_group_for_group", UpstreamRow: narrowedByClientGoRow},
 	{Method: "GroupRepositoryStorageMove.RetrieveAllStorageMovesForGroup", Param: "group", Action: "storage_move.retrieve_group", UpstreamRow: narrowedByClientGoRow},
 	{Method: "GroupRepositoryStorageMove.ScheduleStorageMoveForGroup", Param: "group", Action: "storage_move.schedule_group", UpstreamRow: narrowedByClientGoRow},
