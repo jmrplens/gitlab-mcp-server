@@ -671,6 +671,29 @@ func TestGraphStatus_TopLevelGroup_PublishesAccessAndTrial(t *testing.T) {
 	}
 }
 
+// TestGraphStatus_ProjectCounts_EachLandsInItsOwnField verifies that every
+// count of GitLab's OrbitIndexingProjects reaches the output field that names
+// it, gaps and notIndexed included. The answers GitLab.com gave the fixture
+// namespaces carry both as 0, which is also what a field nothing decodes is
+// left at, so the counts here are the test's own and no two of them are equal.
+func TestGraphStatus_ProjectCounts_EachLandsInItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		readGraphQL(t, r)
+		testutil.RespondGraphQL(w, http.StatusOK, `{"group":{"orbit":{"enabled":true,"enabled_at":null,"access":null,"trial":null,`+
+			`"indexing":{"state":"INDEXING","last_completed_at":null,`+
+			`"projects":{"indexed":5,"total_known":8,"gaps":2,"not_indexed":3,"total":9},"areas":[]},`+
+			`"itemCounts":null}},"project":null}`)
+	}))
+	out, err := GraphStatus(context.Background(), client, GraphStatusInput{FullPath: "jmrp-oss"})
+	if err != nil {
+		t.Fatalf("GraphStatus() error: %v", err)
+	}
+	want := &GraphStatusProjects{Indexed: 5, TotalKnown: 8, Gaps: 2, NotIndexed: 3, Total: 9}
+	if !reflect.DeepEqual(out.Projects, want) {
+		t.Fatalf("GraphStatus().Projects = %+v, want %+v", out.Projects, want)
+	}
+}
+
 // TestGraphStatus_AccessAndTrial_PublishedUnderGitLabsNames verifies the JSON
 // a caller reads: GitLab's field names in snake case, its enums as it spells
 // them, the zero remaining credits written and every null left out.

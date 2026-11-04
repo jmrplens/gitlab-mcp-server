@@ -176,6 +176,9 @@ for the fork, branch, fix, test and MR workflow.
   - [The API pages mark parameters for a paid tier that every tier applies, or none does](#the-api-pages-mark-parameters-for-a-paid-tier-that-every-tier-applies-or-none-does)
   - [The service account token list examples sort by a value their pages do not list](#the-service-account-token-list-examples-sort-by-a-value-their-pages-do-not-list)
   - [A merge request creation can be refused for a branch that exists, from a stale branch name cache](#a-merge-request-creation-can-be-refused-for-a-branch-that-exists-from-a-stale-branch-name-cache)
+  - [A release update with an empty `released_at` answers 500 from a not-null violation](#a-release-update-with-an-empty-released_at-answers-500-from-a-not-null-violation)
+  - [A project update that sends only `mirror_branch_regex` is refused as sending nothing](#a-project-update-that-sends-only-mirror_branch_regex-is-refused-as-sending-nothing)
+  - [A service account update with an empty email keeps the address, as GitLab intends](#a-service-account-update-with-an-empty-email-keeps-the-address-as-gitlab-intends)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -285,7 +288,7 @@ readable without opening the tracker:
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | None |
 | 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | Yes, [modelcontextprotocol/go-sdk#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261) | Yes, [modelcontextprotocol/go-sdk#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269), merged | **Yes, unreleased** | No | Yes |
 | 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
-| 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | Yes, [modelcontextprotocol/go-sdk#1265](https://github.com/modelcontextprotocol/go-sdk/issues/1265) | No, proposal first; on 2026-10-27 another contributor offered an implementation of both shapes, held back until the maintainers settle its design | No | No | Yes |
+| 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | Yes, [modelcontextprotocol/go-sdk#1265](https://github.com/modelcontextprotocol/go-sdk/issues/1265) | No, proposal first; another contributor has both shapes ready and, on 2026-11-02, asked the maintainers again to settle the design, which no maintainer has answered there; on [modelcontextprotocol/go-sdk#1480](https://github.com/modelcontextprotocol/go-sdk/issues/1480), the same need for the list-changed notifications, a maintainer said that day that exposing per-session senders is fine and, of the loop that issue proposes over them, that he would not modify `Server.notifySessions` for now | No | No | Yes |
 | 24 | gitlab-org/gitlab | [Approvals GET answers 24 keys on EE under a four-key annotation](#the-merge-request-approvals-get-answers-24-keys-on-ee-under-a-four-key-annotation) | Yes, by the merge request; in part before it, by GitLab, [gitlab-org/gitlab#408183](https://gitlab.com/gitlab-org/gitlab/-/issues/408183) | Yes, [gitlab-org/gitlab!259766](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259766), merged, the page; and its follow-up for the entity and the generated document, [gitlab-org/gitlab!261004](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261004), merged | **Yes**: the page, in **19.5.0**; the annotation **unreleased**, merged on 2026-10-16 in milestone 19.5, after the 19.5 cut, so 19.6 is its first release; deployed to GitLab.com at 05:03 UTC on 2026-10-19 | No upstream block; this server publishes what each edition sends on the GET and both POSTs | Yes, a shape declaration per EE key against the CE annotation, until the live record is taken from a release that carries the annotation; the carve-outs were the defect |
 | 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
 | 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes |
@@ -310,7 +313,7 @@ readable without opening the tracker:
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | Yes, on Community Edition | None possible |
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), both merged; [gitlab-org/gitlab!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | **Yes, 19.5.0**: both halves | Was yes | Yes; the request of the handler's own to `cancel_auto_merge` moves to client-go's `MergeRequests.CancelAutoMerge`, added by [gitlab-org/api/client-go!3101](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101) (merged 2026-10-29) and first released in v3.40.0, when the pin moves there; the deprecated route and its read-back stay for an instance before 19.5 or of unknown release, and as the fallback when `cancel_auto_merge` answers 404 |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user, [gitlab-org/gitlab#24572](https://gitlab.com/gitlab-org/gitlab/-/work_items/24572), closed as completed on 2026-10-12 | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), merged | **Yes, 19.5.0** | No | None possible |
-| 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | Yes, [modelcontextprotocol/go-sdk#1359](https://github.com/modelcontextprotocol/go-sdk/issues/1359), closed on 2026-10-15 as fixed by the merge, with two listens held open at once left unanswered; named before it as a known limitation of [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275) by another user | Yes, in part, [modelcontextprotocol/go-sdk#1360](https://github.com/modelcontextprotocol/go-sdk/pull/1360), merged: the unsubscribe and subscribe again case, not two listens held open at once | **Partly, unreleased**: that case, on `main` since 2026-10-10 | No | Partial |
+| 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | Yes, [modelcontextprotocol/go-sdk#1359](https://github.com/modelcontextprotocol/go-sdk/issues/1359), closed on 2026-10-15 as fixed by the merge, with two listens held open at once left unanswered; named before it as a known limitation of [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275) by another user; that case reported on 2026-11-01 as [modelcontextprotocol/go-sdk#1489](https://github.com/modelcontextprotocol/go-sdk/issues/1489), assigned to this repository's maintainer | Yes, [modelcontextprotocol/go-sdk#1360](https://github.com/modelcontextprotocol/go-sdk/pull/1360), merged: the unsubscribe and subscribe again case; and [modelcontextprotocol/go-sdk#1490](https://github.com/modelcontextprotocol/go-sdk/pull/1490), open since 2026-11-02 with every check passing, waiting on a maintainer's review: two listens held open at once, on a URI and, since a second commit a maintainer suggested, on a list-changed notification | **Partly, unreleased**: the first case, on `main` since 2026-10-10 | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [modelcontextprotocol/go-sdk#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [modelcontextprotocol/go-sdk#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [modelcontextprotocol/go-sdk#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), merged | **Yes, unreleased** | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | Yes | Yes, [gitlab-org/api/client-go!3065](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3065), open; our request of 2026-10-21 for the reviewer to look at it again has had no answer | No | No | Yes |
@@ -416,6 +419,9 @@ readable without opening the tracker:
 | 151 | client-go | [`UploadRequest` writes only the first value of each field](#uploadrequest-writes-only-the-first-value-of-each-field) | No | No | No | No | Yes, the project and group creates send a list beside an avatar as one comma-separated value, and the group create refuses its alert list beside one; a unit test pins the behaviour |
 | 152 | gitlab-org/gitlab | [A merge request creation can be refused for a branch that exists](#a-merge-request-creation-can-be-refused-for-a-branch-that-exists-from-a-stale-branch-name-cache) | Yes, by GitLab, [gitlab-org/gitlab#506430](https://gitlab.com/gitlab-org/gitlab/-/issues/506430), open | No | No | No; it failed the e2e suite, not a tool | Yes, in the e2e fixture: `fixture.NewMergeRequest` tries the refusal again once the branch name cache lists the branch |
 | 153 | gobco | [gobco drops `GOPATH` from the `go test` it runs](#gobco-drops-gopath-from-its-go-test-which-then-reads-another-module-cache) | No | No | No | No; where `GOPATH` is not the default, that `go test` reads another module cache and needs the network to fill it | Yes, `scripts/coverage-conditions.sh` hands gobco `GOMODCACHE` as `go env` reports it, until a gobco release passes `GOPATH` on |
+| 154 | gitlab-org/gitlab | [A release update with an empty `released_at` answers 500](#a-release-update-with-an-empty-released_at-answers-500-from-a-not-null-violation) | Yes, by the merge request | Yes, [gitlab-org/gitlab!266907](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266907), opened and readied on 2026-11-02, waiting on its reviewer | No | No | None needed: `release.update` sends `released_at` only when it is set |
+| 155 | gitlab-org/gitlab | [A project update with only `mirror_branch_regex` is refused as sending nothing](#a-project-update-that-sends-only-mirror_branch_regex-is-refused-as-sending-nothing) | Yes, by the merge request | Yes, [gitlab-org/gitlab!266909](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266909), opened and readied on 2026-11-02; its first reviewer found it good the same day and asked a second for a review before merging, with no approval yet; it adds all four pull mirror params the list leaves out | No | No | None yet; refusing the field alone before the request is part of issue 1306 |
+| 156 | gitlab-org/gitlab | [A service account update with an empty email keeps the address, as GitLab intends](#a-service-account-update-with-an-empty-email-keeps-the-address-as-gitlab-intends) | Not needed: GitLab drops a blank value on purpose since [gitlab-org/gitlab!215942](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215942), merged on 2025-12-15; unsetting the address is another user's open feature request, [gitlab-org/gitlab#631255](https://gitlab.com/gitlab-org/gitlab/-/issues/631255) | No, and none is coming from here | No, works as intended upstream | No | None needed: the three service account updates send `email` only when it is set |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -6237,14 +6243,26 @@ route.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no.
-- **Workaround**: yes. `orbit.GraphStatus` (`internal/tools/orbit/orbit.go`)
-  reads `projects.gaps` from the captured response
-  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md))
-  into `GraphStatusProjects.Gaps`, and the graph status card shows it as the
-  projects out of indexing attempts. R-PATH holds the field to the Orbit
-  response record, which carries the key. `TestGraphStatus_Success_ByFullPath` holds the read and
-  `TestGraphStatus_CapturedBodyThatDoesNotDecode_ReturnsAnError` its failure.
-  It retires when the SDK models the field.
+- **Workaround**: none since 3.4.0, and none needed by this server.
+  `orbit.GraphStatus` (`internal/tools/orbit/graphql.go`) reads the index
+  through GraphQL, whose `OrbitIndexingProjects` carries `gaps`: each of the
+  four graph status documents selects it beside the other counts
+  (`graphql.go:453`, `:500`, `:555` and `:611`), the test mock validates
+  every document against the pinned schema, and the value lands in
+  `GraphStatusProjects.Gaps`, which the graph status card shows as the
+  projects out of indexing attempts. The answers GitLab.com gave on
+  2026-10-29 that `TestGraphStatus_EachScope_AsksTheMatchingDocument` and
+  `TestGraphStatus_TopLevelGroup_PublishesAccessAndTrial` replay carry the
+  key as `0` (`internal/tools/orbit/graphql_test.go:430` and `:568`), which
+  is also what a field nothing decodes is left at, so
+  `TestGraphStatus_ProjectCounts_EachLandsInItsOwnField` replays an answer of
+  its own whose five counts all differ, and fails if `gaps` stops reaching
+  `Gaps`. Until 3.4.0
+  the field was read from the captured response of `GET /orbit/graph_status`
+  ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  and that read and its two tests went with the route in
+  [pull request 1585](https://github.com/jmrplens/gitlab-mcp-server/pull/1585);
+  what is left is the gap in client-go below.
 
 **Where**: `OrbitGraphStatusProjects` in client-go v3.15.0's `orbit.go`, which
 models `indexed` and `total_known`.
@@ -10135,7 +10153,7 @@ records.
   go-sdk has no `proposal` label to give it.
 - **In review**: no. Waiting on the maintainers to say which shape they want;
   the status note on the index on 2026-10-05 asked again. Read on 2026-10-31
-  no maintainer has answered. At 02:20 UTC on 2026-10-27 another
+  no maintainer had answered. At 02:20 UTC on 2026-10-27 another
   contributor, @PoisonGodv, wrote
   ([comment 6432142639](https://github.com/modelcontextprotocol/go-sdk/issues/1265#issuecomment-6432142639))
   that they have both changes as two commits and will open no pull request
@@ -10152,7 +10170,38 @@ records.
   At 16:31 UTC on 2026-10-31 another user linked
   [modelcontextprotocol/go-sdk#1480](https://github.com/modelcontextprotocol/go-sdk/issues/1480),
   which they had opened seconds before, asking for the same per-session
-  delivery for the three list-changed notifications.
+  delivery for the three list-changed notifications:
+  `ServerSession.NotifyToolListChanged`, `NotifyPromptListChanged` and
+  `NotifyResourceListChanged`, with `Server.notifySessions` becoming a loop
+  over them. At 18:02 UTC on 2026-11-01 we answered @PoisonGodv's four
+  questions from this server's side
+  ([comment 6561771978](https://github.com/modelcontextprotocol/go-sdk/issues/1265#issuecomment-6561771978)):
+  skipping the sessions not yet written to once the caller cancels is fine,
+  since the context this server would pass is the watcher's own; a session
+  that is not subscribed answers `nil`; a 2026-07-28 session counts as
+  subscribed only while the table holds its entry; and `Server.ResourceUpdated`
+  can keep its fan-out, since this server would move to the per-session method
+  and drop the middleware below. At 00:44 UTC on 2026-11-02 they took those
+  answers as settling the four questions
+  ([comment 6566377622](https://github.com/modelcontextprotocol/go-sdk/issues/1265#issuecomment-6566377622)),
+  agreed with the author of
+  [modelcontextprotocol/go-sdk#1480](https://github.com/modelcontextprotocol/go-sdk/issues/1480)
+  that the two needs can share one delivery path, offered to send the
+  context propagation on its own, and asked @guglielmo-san and @findleyr to
+  look at the design. At 09:32 UTC that day @guglielmo-san wrote on
+  [modelcontextprotocol/go-sdk#1480](https://github.com/modelcontextprotocol/go-sdk/issues/1480),
+  not on this issue, to that proposal's author
+  ([comment 6573735131](https://github.com/modelcontextprotocol/go-sdk/issues/1480#issuecomment-6573735131)):
+  exposing the three per-session functions is fine, "but I would not modify
+  Server.notifySessions for now", and its author may send the pull request.
+  That is the first a maintainer has said about either design: a per-session
+  sender, the first of the two changes below, now has a maintainer's
+  agreement for its list-changed siblings. The sentence about
+  `Server.notifySessions` was said of the loop that issue proposes; the
+  second change below, which carries the caller's context into
+  `notifySessions` and `notifySubscribedSessions`, modifies `notifySessions`
+  too, and whether the sentence reaches it nobody has said. Read at 21:40 UTC
+  on 2026-11-02, no maintainer has answered on this issue.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. `sessionOwners.sendingMiddleware` in
@@ -10230,8 +10279,19 @@ The delivery end was the only part of the design with no per-credential seam.
   subscribed to nothing"), opened at 22:24 UTC, which keeps the keying by
   session that position holds, takes the part the Go client reaches, and sets
   out two shapes of a table keyed per listen for the maintainers to choose
-  from for the rest.
-- **In review**: yes, in part,
+  from for the rest. The rest went out at 23:27 UTC on 2026-11-01, after it
+  was reproduced against this server's binary (How we found it, below):
+  [modelcontextprotocol/go-sdk#1489](https://github.com/modelcontextprotocol/go-sdk/issues/1489)
+  ("mcp: a second subscriptions/listen for the same URI silences the
+  first"), which asks for the second of those shapes, the session's entry
+  holding the request id of every open listen for the URI, so the keying by
+  session that
+  [modelcontextprotocol/go-sdk#1275](https://github.com/modelcontextprotocol/go-sdk/pull/1275)
+  kept stays. @PoisonGodv offered to work on it at 00:57 UTC on 2026-11-02,
+  we posted the fix as a patch at 01:56 UTC, and @guglielmo-san assigned the
+  issue to this repository's maintainer at 10:26 UTC and asked for the pull
+  request.
+- **In review**: yes, in two parts. The first is
   [modelcontextprotocol/go-sdk#1360](https://github.com/modelcontextprotocol/go-sdk/pull/1360)
   ("mcp: retire a listen's subscriptions only while they are its own"),
   opened at 22:24 UTC on 2026-10-08 from `jmrp-retire-a-listens-own-subscriptions`
@@ -10246,7 +10306,27 @@ The delivery end was the only part of the design with no per-credential seam.
   checks passed, it was one commit behind `main`, and no reviewer had been
   requested or had reviewed it. @guglielmo-san approved it at 15:42 UTC that
   day, merged `main` into the branch at 08:47 UTC on 2026-10-10 (`f6796726`)
-  and squash-merged it at 09:15 UTC, below.
+  and squash-merged it at 09:15 UTC, below. The second, for the rest, is
+  [modelcontextprotocol/go-sdk#1490](https://github.com/modelcontextprotocol/go-sdk/pull/1490)
+  ("mcp: notify every listen held open on a resource URI"), opened at 11:40
+  UTC on 2026-11-02 from `jmrp-listen-keeps-every-subscription` with one
+  commit, `b3cec04b`, and no exported API change: `ResourceUpdated` delivers
+  on every listen open on the URI under that listen's own `subscriptionId`, a
+  listen's teardown removes only its own id, and `resources/subscribe` and
+  `resources/unsubscribe` keep one id per URI and session. At 14:51 UTC that
+  day @guglielmo-san asked in a review comment whether the three list-changed
+  registries should get the same change, which the description had offered.
+  They hold one request id per session and lose a second listen's
+  notification the same way. A second commit, `655fc9f5` ("mcp: notify every
+  listen held open for a list-changed notification"), whose checks started
+  at 20:29 UTC, makes them hold the id of every open listen as
+  `resourceSubscriptions` does, through the same helpers, and a test fails
+  for each of the three on `main` and on the first commit. We answered the
+  comment at 20:29 UTC
+  ([review comment 4447378838](https://github.com/modelcontextprotocol/go-sdk/pull/1490#discussion_r4447378838))
+  and brought the description to the four registries. Read at 21:40 UTC
+  that day all ten of its checks passed on `655fc9f5`, it was mergeable, and
+  it was waiting on a maintainer's review, with no approval yet.
 - **Merged**: in part, and unreleased.
   [modelcontextprotocol/go-sdk#1360](https://github.com/modelcontextprotocol/go-sdk/pull/1360)
   merged at 09:15 UTC on 2026-10-10 as `218aedde7` on `main`, co-authored by
@@ -10261,8 +10341,11 @@ The delivery end was the only part of the design with no per-credential seam.
   as completed, fixed by
   [modelcontextprotocol/go-sdk#1360](https://github.com/modelcontextprotocol/go-sdk/pull/1360),
   with no separate answer on the shape for two listens held open at once on
-  one URI, which no upstream issue now carries. Read on 2026-10-16, `main`
-  is 72 commits ahead of v1.8.0 and still no release carries the fix.
+  one URI, which no upstream issue carried until
+  [modelcontextprotocol/go-sdk#1489](https://github.com/modelcontextprotocol/go-sdk/issues/1489)
+  on 2026-11-01. Read on 2026-10-16, `main` is 72 commits ahead of v1.8.0
+  and still no release carries the fix; read on 2026-11-02 it is 125 ahead,
+  v1.8.0 is still the newest release, and the rest is in review above.
 - **Blocking**: no. It needs a client that opens two `subscriptions/listen`
   covering one URI, or mixes a legacy `resources/subscribe` with a listen, on
   stdio. Neither HTTP mode reaches it: v1.8.0's stateful handler refuses every
@@ -10298,19 +10381,36 @@ per session, which the SDK's own comment cites as "multiple concurrent
 subscriptions", so the table's key is one level coarser than the protocol it
 implements.
 
-**The fix belongs upstream**: key the table by request id, or refuse a second
-listen for a URI a session already holds. The second is a smaller change and
-would cost a client one working subscription instead of two half-working ones.
+**The fix belongs upstream**: let the session's entry hold the request id of
+every listen open on the URI, which is what
+[modelcontextprotocol/go-sdk#1490](https://github.com/modelcontextprotocol/go-sdk/pull/1490)
+does, and since its second commit the same for the three list-changed
+registries. Refusing a second listen for a URI a session already holds was the
+smaller change this entry once preferred, and it was left out of the report:
+as [modelcontextprotocol/go-sdk#1359](https://github.com/modelcontextprotocol/go-sdk/issues/1359)
+measured on a scratch copy, it refuses the Go client's own unsubscribe and
+subscribe again when the second listen arrives before the first one's
+teardown, after `Subscribe` has returned nil, so the application believes it
+is subscribed while neither side holds anything.
 
 **Still present in v1.8.0**, checked against that release's source rather than
 the pinned one. It ships several subscription fixes, including pruning
 completed listen request ids from the session, and the table's key is unchanged.
 
-**How we found it**: auditing every declared capability against the
-specification and the SDK. [ADR-0015](adr/adr-0015-polled-resource-subscriptions.md)
-recorded the overwrite half and understated it, saying a session with two
-listens sees the notification "on one of them"; the state after either close is
-neither, and the ADR now says so.
+**How we found it**: testing this server's resource subscriptions, not an
+audit of the SDK. On 2026-11-01 it was reproduced against the real binary,
+built from `a6a2c0319` with go-sdk v1.8.0, with a stand-in for GitLab and a
+client driving the server over stdio: with two listens open on the URI of
+one GitLab issue, a change of the issue reached only the second listen, and
+once the second was cancelled the first, still open, received nothing while
+the server kept polling GitLab for it, with the SDK logging a
+`subscriber_count` of 0, in 20 of 20 runs. A single listen received both
+updates in 20 of 20, and over HTTP, where each 2026-07-28 POST is its own
+session, two listens each received theirs in 20 of 20.
+[ADR-0015](adr/adr-0015-polled-resource-subscriptions.md) recorded the
+overwrite half and understated it, saying a session with two listens sees
+the notification "on one of them"; the state after either close is neither,
+and the ADR now says so.
 
 ### A tool, prompt or resource result a middleware makes carries no `resultType`
 
@@ -11170,8 +11270,24 @@ markdown. We keep emitting both.
   `licensedFeatureAvailability` of each group, which by GitLab's source
   (`load_feature_available` in `ee/app/models/ee/namespace.rb`) answers from
   the instance license wherever namespace plans are not checked, so it could
-  answer this caller without the merge request; it is kept to gitlab.com until
-  that is measured on a licensed self-managed instance. From 19.6, the first
+  answer this caller without the merge request, and it does: measured on
+  2026-11-01 against a licensed GitLab EE 19.5.0-ee, a non-administrator's
+  `read_api` token that `/license` refuses was told Ultimate by every
+  top-level group it is a member of, the answer an administrator gets, so the
+  step can answer that caller on a self-managed instance before 19.6 too,
+  where [issue 1491](https://github.com/jmrplens/gitlab-mcp-server/issues/1491)
+  takes it. The callers it leaves without an answer are fewer than every
+  member of no top-level group, as this entry said until 2026-11-02. GitLab
+  finds the root of each of the caller's groups and returns it only if the
+  caller can read it, and a private root grants `read_group` to a non-member
+  who can reach a project under it, so a member of a subgroup that holds a
+  project reads the root and is answered. Measured in the same run
+  ([comment 6562963488 on issue 1491](https://github.com/jmrplens/gitlab-mcp-server/issues/1491#issuecomment-6562963488)),
+  a caller whose only membership is a subgroup holding no project, under a
+  private top-level group, got no node, the empty page's `endCursor` naming
+  the root, and still resolves Free; asked without `topLevelOnly`, that
+  subgroup answered Ultimate, which reaches that caller too at the cost of
+  more pages. From 19.6, the first
   release to carry the merge request, a step reading `plan` from
   `GET /metadata` answers that caller on a self-managed instance; GitLab.com
   answers it `null`, so the namespace and membership steps stay there, and an
@@ -16953,6 +17069,208 @@ rebuild queue behind `ref_cache_with_rebuild_queue`, or
 
 **How we found it**: the e2e gate of the release rehearsal of 2026-10-31,
 whose failure was read against GitLab's source at `v19.5.3-ee`.
+
+### A release update with an empty `released_at` answers 500 from a not-null violation
+
+- **Reported**: yes, by the merge request below. No issue was opened: none
+  existed, and the merge request carries the measurement.
+- **In review**: yes,
+  [gitlab-org/gitlab!266907](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266907)
+  ("Return 400 when a release update sends an empty released_at"), opened
+  from the community fork at 00:59 UTC on 2026-11-02 and readied at 01:04
+  UTC with @vwolanyk as its reviewer. It declares the update's `released_at`
+  with `allow_blank: false`, so an empty string and `null` are both refused
+  with `400 {"error":"released_at is empty"}` before the service runs, and
+  the release keeps its date; its request specs send both bodies, which
+  answer `500` on `master`'s code. Creating a release is unchanged. Read at
+  19:50 UTC that day its pipeline on `4113ffce` had passed, and it had no
+  review and no approval yet.
+- **Merged**: no. Read at GitLab master `d3dae8923596` (2026-11-02), whose
+  update route still declares `optional :released_at, type: DateTime`
+  (line 325).
+- **Blocking**: no. The release keeps its date. What breaks is the answer: a
+  value the caller may not send arrives as a fault of the instance, which a
+  client retries or reports as an outage.
+- **Workaround**: none needed today. `release.update`
+  (`internal/tools/releases/releases.go`) reads `released_at` with
+  `toolutil.ParseTimeField`, which sends nothing for an empty value, so the
+  server never sends the request that fails. The field is one of the
+  `clearUnverified` entries of
+  [issue 1306](https://github.com/jmrplens/gitlab-mcp-server/issues/1306),
+  where it moves to `clearRequired` with this answer as its reason.
+
+**Where**: `PUT /projects/:id/releases/:tag_name` in `lib/api/releases.rb`
+declares `optional :released_at, type: DateTime` (line 325) and hands
+`declared_params(include_missing: false)` to `Releases::UpdateService`, whose
+`execute` runs `release.update(params)` and rescues only
+`ActiveRecord::RecordInvalid` (`app/services/releases/update_service.rb:20-30`).
+`Release` sets `released_at` in a `before_create` callback and validates
+nothing about it on update (`app/models/release.rb:29`), and the
+`releases.released_at` column is `NOT NULL`.
+
+**What**: Grape coerces an empty `released_at` to `nil`, and an explicit `null`
+arrives as one, so the update writes `NULL` into a column that refuses it and
+the database raises a `NotNullViolation` nothing rescues. Measured on
+2026-11-01 against `gitlab/gitlab-ee:19.5.0-ee.0` (revision `883b289c40e`)
+with the administrator's token, on a release whose `released_at` was
+`2026-01-01T00:00:00.000Z`: `PUT /projects/5/releases/v-probe` with
+`{"released_at": ""}` and with `{"released_at": null}` each answered
+`500 {"message":"500 Internal Server Error"}`, the release kept its date, and
+GitLab's exceptions log recorded `ActiveRecord::NotNullViolation:
+PG::NotNullViolation: ERROR: null value in column "released_at" of relation
+"releases" violates not-null constraint` for both. A `400` naming the param is
+what the route's own failure list promises for a bad request.
+
+**What it costs this server**: nothing at run time. A caller cannot clear a
+release date through any client, and this server says so rather than sending
+the request.
+
+**How we found it**: the probes of the 44 `clearUnverified` fields of issue
+1306, run against a licensed GitLab EE 19.5.0 on 2026-11-01, which sent each
+field's empty value straight to the route and read the stored value back.
+
+### A project update that sends only `mirror_branch_regex` is refused as sending nothing
+
+- **Reported**: yes, by the merge request below, which names
+  [gitlab-org/gitlab#417081](https://gitlab.com/gitlab-org/gitlab/-/issues/417081),
+  another user's report of the same `400` for `mirror_trigger_builds`.
+- **In review**: yes,
+  [gitlab-org/gitlab!266909](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266909)
+  ("Add the remaining pull mirror params to the API update allow list"),
+  opened from the community fork at 01:04 UTC on 2026-11-02 and readied at
+  01:13 UTC with @kerrizor as its reviewer. It adds the four pull mirror
+  params the list leaves out, `mirror_user_id`,
+  `only_mirror_protected_branches`, `mirror_branch_regex` and
+  `mirror_overwrites_diverged_branches`, to `update_params_at_least_one_of`,
+  with request specs that send each one alone and two that check the
+  permissions do not change. Its pipeline on `12a3a443` passed. At 21:02
+  UTC that day @kerrizor answered in the thread of the ready note, "looks
+  good, thanks!", and asked @gkatz1 to look at it before merging, adding
+  him as the second reviewer. Read at 21:40 UTC, neither reviewer had
+  approved it yet, and two approvals were still required.
+- **Merged**: no. Read at GitLab master `d3dae8923596` (2026-11-02), whose
+  EE list (`ee/lib/ee/api/helpers/projects_helpers.rb:91-125`) still leaves
+  the four out.
+- **Blocking**: no. Sent beside `description`, the one other param it was
+  measured with, the regex is stored, or cleared with `""`. Beside
+  `mirror: true` alone, on a project whose pull mirror could not be set up,
+  the update was refused for another reason,
+  `{"message":{"import_url":["can't be blank"]}}`.
+- **Workaround**: none yet. `project.update`
+  (`internal/tools/projects/projects.go`, `applyUpdateMirrorOpts`) sends the
+  regex as the caller gives it, so a call carrying nothing else is refused by
+  GitLab with the message below. Refusing the field alone before the request,
+  with a sentence that says which parameter to send beside it, is part of
+  [issue 1306](https://github.com/jmrplens/gitlab-mcp-server/issues/1306), and
+  it retires when a release that carries the fix is the oldest this server
+  serves.
+
+**Where**: `PUT /projects/:id` declares `mirror_branch_regex` among the EE
+update params (`ee/lib/ee/api/helpers/projects_helpers.rb:48`) and requires
+`at_least_one_of(*Helpers::ProjectsHelpers.update_params_at_least_one_of)`
+(`lib/api/projects.rb:768`). The EE override of that list
+(`ee/lib/ee/api/helpers/projects_helpers.rb:91-124`) adds `mirror`,
+`mirror_trigger_builds` and `import_url` and leaves out `mirror_branch_regex`,
+as it leaves out the three other pull mirror params it declares beside it
+(`mirror_user_id`, `only_mirror_protected_branches` and
+`mirror_overwrites_diverged_branches`).
+
+**What**: a body whose only param is `mirror_branch_regex`, empty or not,
+fails the at-least-one-of check although the route declares the param.
+Measured on 2026-11-01 against `gitlab/gitlab-ee:19.5.0-ee.0` (revision
+`883b289c40e`) with the administrator's token: `PUT /projects/5` with
+`{"mirror_branch_regex": "^main$"}`, `{"mirror_branch_regex": ""}` and
+`{"mirror_branch_regex": null}` each answered `400` with
+`{"error":"allow_merge_on_skipped_pipeline, analytics_access_level, ... are missing, at least one parameter must be provided"}`,
+a list of 122 names that does not hold the param it refused, while
+`{"description": "probe", "mirror_branch_regex": ""}` answered `200` and left
+the stored regex empty. Only `mirror_branch_regex` was measured; the other
+three are left out of the list by the same reading.
+
+**What it costs this server**: a caller that changes only the branch filter
+of a pull mirror is refused with GitLab's list of 122 names, which does not
+say that a body carrying another listed param beside the regex, as
+`description` did in the measurement, is accepted.
+
+**How we found it**: the probes of the 44 `clearUnverified` fields of issue
+1306, on 2026-11-01, where seeding the regex alone was refused before the
+empty value could be tried.
+
+### A service account update with an empty email keeps the address, as GitLab intends
+
+This entry is not a defect. It was written on 2026-11-01 as one, a silent
+refusal to be fixed with a `400`, and the source and its history showed the
+same day that GitLab means it. It stays because the register is permanent and
+because what it records is a missing capability this server accommodates:
+nothing can unset a service account's address, and the three updates here
+are written around that.
+
+- **Reported**: not needed. GitLab drops a blank value on purpose:
+  [gitlab-org/gitlab!215942](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215942)
+  ("Fix blank email/username handling in service accounts"), merged on
+  2025-12-15 in milestone 18.8 and written for
+  [gitlab-org/gitlab#583605](https://gitlab.com/gitlab-org/gitlab/-/issues/583605),
+  made the update service drop every blank param with `.compact_blank`, in
+  what was then `ee/app/services/users/service_accounts/update_service.rb`,
+  and its validation steps say an update that clears the username or email
+  field "should succeed without validation errors (fields remain
+  unchanged)". The filter below is that one as
+  [gitlab-org/gitlab!254608](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254608)
+  ("Allow setting the external flag on Service Accounts API", merged on
+  2026-10-09 in 19.5) rewrote it, so that an `external` of `false` is kept,
+  in the service as it stands under `app/` today.
+  `spec/services/users/service_accounts/update_service_spec.rb` pins it,
+  one example per field: "filters out blank param and leaves
+  original value unchanged". Unsetting or regenerating the address is asked
+  for as a feature in
+  [gitlab-org/gitlab#631255](https://gitlab.com/gitlab-org/gitlab/-/issues/631255)
+  ("Allow unsetting/regenerating a service account email on update",
+  `type::feature`), opened by another user on 2026-09-29; read on 2026-11-02
+  it is open, unassigned and has no merge request.
+- **In review**: no, and none is coming from here. A change of behavior is
+  agreed on that issue before a merge request, and this server needs none.
+- **Merged**: no fix; the behavior is intended upstream. Read at GitLab
+  master `d3dae8923596` (2026-11-02).
+- **Blocking**: no. A user account always has an address, so there is
+  nothing to clear.
+- **Workaround**: none needed. The three service account updates
+  (`group.service_account_update`, `project.service_account_update` and
+  `user.update_service_account`) send `email` only when it is set, so the
+  server never sends the empty value. The three fields are `clearUnverified`
+  entries of [issue 1306](https://github.com/jmrplens/gitlab-mcp-server/issues/1306),
+  where they move to `clearRequired` with this entry as their reason.
+
+**Where**: `Users::ServiceAccounts::UpdateService#initialize`
+(`app/services/users/service_accounts/update_service.rb:13-16`) keeps only the
+params whose value is `present?` (and an `external` of `false`), so an empty
+or null `email`, `name` or `username` is dropped before the update runs. The
+instance route `PATCH /service_accounts/:user_id` (`lib/api/service_accounts.rb:114`
+and `:118`) hands it `declared_params(include_missing: false)`, and the group
+and project routes reach the same service through
+`Namespaces::ServiceAccounts::BaseUpdateService`
+(`app/services/namespaces/service_accounts/base_update_service.rb`), which
+inherits that `initialize`.
+
+**What**: the update answers `200` with the account as it was. Measured on
+2026-11-01 against `gitlab/gitlab-ee:19.5.0-ee.0` (revision `883b289c40e`)
+with the administrator's token, on one service account of each kind:
+`PATCH /groups/15/service_accounts/14`, `PATCH /projects/5/service_accounts/15`
+and `PATCH /service_accounts/16`, each with `{"email": ""}` and with
+`{"email": null}`, answered `200` with the account's address in the body, and
+the `users` row kept it. On the same accounts, an update to a new address a
+moment before was applied. A request spec run on `master` `e0f678adfc1c`
+gave the same answers on all three routes, beside the service spec's three
+blank examples (12 examples, no failure), so the behavior is what the change
+above made it and not a regression.
+
+**What it costs this server**: nothing at run time, since it does not send the
+empty value. A client that does is told the update succeeded, which is the
+answer GitLab means to give.
+
+**How we found it**: the probes of the 44 `clearUnverified` fields of issue
+1306, on 2026-11-01, which read each account's address back from the
+database after the request; reading the service and its history the same day
+showed the filter is intended.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

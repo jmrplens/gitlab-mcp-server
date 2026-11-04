@@ -692,21 +692,7 @@ func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphSt
 	if err != nil {
 		return GraphStatusOutput{}, err
 	}
-	var (
-		holder *gqlOrbitHolder
-		scope  string
-	)
-	switch {
-	case input.NamespaceID > 0:
-		scope = "group " + strconv.FormatInt(input.NamespaceID, 10)
-		holder, err = graphStatusByGroupID(ctx, client, input.NamespaceID)
-	case input.ProjectID > 0:
-		scope = "project " + strconv.FormatInt(input.ProjectID, 10)
-		holder, err = graphStatusByProjectID(ctx, client, input.ProjectID)
-	default:
-		scope = "group or project " + fullPath
-		holder, err = graphStatusByPath(ctx, client, fullPath)
-	}
+	holder, scope, err := graphStatusHolder(ctx, client, input, fullPath)
 	if err != nil {
 		return GraphStatusOutput{}, err
 	}
@@ -735,6 +721,26 @@ func graphStatusAnswered(err error, responseErrors []toolutil.GraphQLError) erro
 		return wrapOrbitErr(orbitGraphStatusOp, err)
 	}
 	return toolutil.GraphQLTopLevelError(orbitGraphStatusOp, responseErrors)
+}
+
+// graphStatusHolder asks the graph status document that matches how the input
+// names its scope, a group ID, a project ID or else a full path, and returns
+// what GitLab answered with the scope as an error names it.
+//
+// It is a chain of early returns rather than a tagless switch because a case
+// expression carries no statement counter, so gremlins reads its mutants as
+// unreached and never runs them, whatever the tests do.
+func graphStatusHolder(ctx context.Context, client *gitlabclient.Client, input GraphStatusInput, fullPath string) (*gqlOrbitHolder, string, error) {
+	if input.NamespaceID > 0 {
+		holder, err := graphStatusByGroupID(ctx, client, input.NamespaceID)
+		return holder, "group " + strconv.FormatInt(input.NamespaceID, 10), err
+	}
+	if input.ProjectID > 0 {
+		holder, err := graphStatusByProjectID(ctx, client, input.ProjectID)
+		return holder, "project " + strconv.FormatInt(input.ProjectID, 10), err
+	}
+	holder, err := graphStatusByPath(ctx, client, fullPath)
+	return holder, "group or project " + fullPath, err
 }
 
 // graphStatusByPath asks for the Orbit index of a full path, and returns the
