@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"reflect"
 	"slices"
@@ -1012,6 +1013,12 @@ func (r *diffRun) isAcceptedExtraOutput(pkg, mcpType, tag string) bool {
 //     a param modeled on a nested object/slice element, a deprecated param the
 //     current endpoint replaced, or an SDK options field the endpoint doesn't accept).
 //
+// MCPType may also name a struct of ours an input's values go through on the
+// way to a helper that builds the options, the struct the helper takes
+// (projects.userProjectFilter, notifications.eventFields): the key answers
+// that struct's own pair and every pair found through a caller that went
+// through it, in whichever package the input is declared.
+//
 // This makes the auditor's missing-input total fully explained: every accepted
 // miss is here with a reason, so any NEW genuine gap still surfaces.
 var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", entries: map[string]string{
@@ -1313,9 +1320,20 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 // adjudicated legitimate omission, checking the whole-type key first then
 // per-field, with the same consequence for a shadowed per-field key that
 // isAcceptedExtraOutput describes.
-func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string) bool {
-	return r.answer(acceptedMissingInputs, pkg+"."+mcpType) ||
-		r.answer(acceptedMissingInputs, pkg+"."+mcpType+"."+tag)
+//
+// The input's own keys come first, and then those of each struct of ours the
+// pair went through, through naming them as [structPair.through] does. A
+// declaration written on such a struct is about every input handed through
+// it: every project list goes through projects.userProjectFilter, and what
+// the struct offers is what each list offers, so the reason one key gives
+// for the struct is the reason for all of them.
+func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string, through []string) bool {
+	if r.answer(acceptedMissingInputs, pkg+"."+mcpType) || r.answer(acceptedMissingInputs, pkg+"."+mcpType+"."+tag) {
+		return true
+	}
+	return slices.ContainsFunc(through, func(typeKey string) bool {
+		return r.answer(acceptedMissingInputs, typeKey) || r.answer(acceptedMissingInputs, typeKey+"."+tag)
+	})
 }
 
 // keysetListFields are the two parameters of gl.ListOptions that ask GitLab
@@ -1460,12 +1478,14 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		return report{}, err
 	}
 	run := newDiffRun()
+	analyzed := make([]packageReport, 0, len(pkgs))
 	reports := make([]packageReport, 0, len(pkgs))
 	for _, pkg := range withSharedShapes(pkgs) {
 		pr, ok := run.analyzePackage(pkg)
 		if !ok {
 			continue
 		}
+		analyzed = append(analyzed, pr)
 		if gapsOnly && !pr.hasFindings() {
 			continue
 		}
@@ -1474,9 +1494,12 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	slices.SortFunc(reports, func(a, b packageReport) int { return strings.Compare(a.Package, b.Package) })
 	// Judged after the loop and over every package, including the clean ones
 	// -gaps-only is about to drop from the report: a declaration that answers a
-	// candidate in a package with no finding left is doing its job.
+	// candidate in a package with no finding left is doing its job. The
+	// summary counts them too, so the flag shortens the list and changes no
+	// count: a package with no missing or extra field still has its pairs and
+	// its type mismatches.
 	stale := run.staleDeclarations(declarationTables)
-	summary := summarize(reports)
+	summary := summarize(analyzed)
 	summary.StaleDeclarations = len(stale)
 	return report{
 		SchemaVersion:     shared.SchemaVersion,
@@ -1766,6 +1789,12 @@ type structPair struct {
 	sdkURLTags bool
 	// via is how an input pair was found; see [Pair.Via].
 	via string
+	// through names, for a pair found through the caller of a helper, the
+	// structs of ours the values went through on the way to the literal, as
+	// a declaration key names a type ("projects.userProjectFilter"), sorted.
+	// A declaration of acceptedMissingInputs written on one of them answers
+	// the pair as it answers that struct's own pair.
+	through []string
 }
 
 // exported renders the pair in its exported form.
@@ -1790,13 +1819,24 @@ func inputPair(mcpNamed *types.Named, mcpStruct *types.Struct, sdkNamed *types.N
 }
 
 // recordInputPair records pair unless a more direct route already recorded
-// the same two structs.
+// the same two structs. A pair recorded through a caller goes through what
+// every route recorded after it went through: only a route through a caller
+// goes through anything, and the kinds are recorded in order, so a later
+// route is through a caller too or adds nothing.
 func recordInputPair(out map[[2]string]structPair, pair structPair) {
 	key := [2]string{pair.mcpName, pair.sdkNamed.Obj().Name()}
-	if _, recorded := out[key]; recorded {
+	recorded, exists := out[key]
+	if !exists {
+		out[key] = pair
 		return
 	}
-	out[key] = pair
+	if recorded.via != ViaCaller {
+		return
+	}
+	merged := append(slices.Clip(recorded.through), pair.through...)
+	slices.Sort(merged)
+	recorded.through = slices.Compact(merged)
+	out[key] = recorded
 }
 
 func sortedPairs(pairs map[[2]string]structPair) []structPair {
@@ -1909,13 +1949,29 @@ func recordConverter(mcpNamed *types.Named, mcpStruct *types.Struct, mcpName str
 // receives under another name. A nested struct is left to
 // [collectNestedInputs], which pairs it with the struct its values are read
 // from rather than with the handler's input.
+//
+// A literal fn sends itself that reads nothing of the input is a lookup of
+// fn's own, and attributed to nothing, unless fn is a handler. A handler is
+// what a model's call reaches: exported, as the delete handlers that answer
+// an error alone are, or answering with an output and an error.
+// pipelines.pipelineFailure is neither: it takes the wait's input, answers
+// with an error alone and lists the failed jobs with constants, and the job
+// list it sends is no request the wait's input describes. A builder that
+// sends nothing (systemhooks.hookAddOptions) builds for its input however
+// the literal is filled, a helper call that fills it included.
 func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string]structPair) {
 	if fn.Body == nil {
 		return
 	}
-	mcpNamed, mcpStruct, ok := handlerInputStruct(pkg, fn)
+	mcpNamed, mcpStruct, input, ok := handlerInputParam(pkg, fn)
 	if !ok {
 		return
+	}
+	handler := isHandler(pkg.TypesInfo, fn)
+	var reading map[*ast.CompositeLit]bool
+	var sent map[*types.TypeName]bool
+	if !handler {
+		reading, sent = readingLiterals(pkg.TypesInfo, fn.Body, input), sentStructs(pkg.TypesInfo, fn.Body)
 	}
 	ast.Inspect(fn.Body, func(node ast.Node) bool {
 		lit, isLit := node.(*ast.CompositeLit)
@@ -1923,11 +1979,184 @@ func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]st
 			return true
 		}
 		for _, named := range builtRequests(pkg.TypesInfo.TypeOf(lit)) {
+			if !handler && !reading[lit] && sent[named.Obj()] {
+				continue
+			}
 			_, st, _ := derefNamedStruct(named)
 			recordInputPair(out, inputPair(mcpNamed, mcpStruct, named, st, ""))
 		}
 		return true
 	})
+}
+
+// isHandler reports whether fn is a function a model's call reaches: one the
+// package exports, or one answering with an output and an error, the shape
+// a handler registered from inside the package has.
+func isHandler(info *types.Info, fn *ast.FuncDecl) bool {
+	return fn.Name.IsExported() || answersOutputAndError(info, fn)
+}
+
+// answersOutputAndError reports whether fn answers with two results, the
+// second an error.
+func answersOutputAndError(info *types.Info, fn *ast.FuncDecl) bool {
+	results := fn.Type.Results
+	if results.NumFields() != 2 {
+		return false
+	}
+	return types.Identical(info.TypeOf(results.List[len(results.List)-1].Type), types.Universe.Lookup("error").Type())
+}
+
+// readingLiterals returns the composite literals of body that read something
+// of input: one whose values read the input or a variable holding something
+// of it, and one assigned to a variable that holds something of it, which is
+// what a variable filled from the input after the literal built it holds,
+// field by field, through a pointer to it or by a call that fills it. A
+// function whose input has no name reads nothing of it.
+func readingLiterals(info *types.Info, body *ast.BlockStmt, input *types.Var) map[*ast.CompositeLit]bool {
+	reading := map[*ast.CompositeLit]bool{}
+	if input == nil {
+		return reading
+	}
+	filled := holdIntermediates(info, body, input, nil, nil)
+	for filled.fillThroughPointers(body) {
+		filled.hold(body)
+	}
+	held := filled.from
+	// A literal is a value of its own on the right of an assignment, so the
+	// target in its place is the one it is assigned to: a call is the only
+	// value assigned to several, and it is no literal.
+	assigned := func(lhs, rhs []ast.Expr) {
+		for i, value := range rhs {
+			if lit := compositeOf(value); lit != nil && held[rootVar(info, lhs[i])] {
+				reading[lit] = true
+			}
+		}
+	}
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.CompositeLit:
+			reading[typed] = reading[typed] || reads(info, typed, held)
+		case *ast.AssignStmt:
+			assigned(typed.Lhs, typed.Rhs)
+		case *ast.ValueSpec:
+			assigned(specNames(typed), typed.Values)
+		}
+		return true
+	})
+	return reading
+}
+
+// specNames returns the names a declaration declares, as the targets of an
+// assignment.
+func specNames(spec *ast.ValueSpec) []ast.Expr {
+	names := make([]ast.Expr, len(spec.Names))
+	for i, name := range spec.Names {
+		names[i] = name
+	}
+	return names
+}
+
+// fillThroughPointers runs a pass over body that marks the variables filled
+// from the input through a pointer into them, and reports whether it marked
+// any: the one a pointer that holds something of the input was taken from
+// (p := &opts, then p.Search = &in.Search), and the one a call that is
+// handed something of the input is handed a pointer into, or called on by
+// a method of a pointer receiver (fill(opts, in.Search)), which is how a
+// helper fills what it is handed. A client-go service method sends what it
+// is handed and fills none of it. What the pass finds is marked once it
+// ends, so the next pass is the first to read it.
+func (h *intermediates) fillThroughPointers(body *ast.BlockStmt) bool {
+	var filled []*types.Var
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.AssignStmt:
+			filled = append(filled, h.aliased(typed.Lhs, typed.Rhs)...)
+		case *ast.ValueSpec:
+			filled = append(filled, h.aliased(specNames(typed), typed.Values)...)
+		case *ast.CallExpr:
+			filled = append(filled, h.filledByCall(typed)...)
+		}
+		return true
+	})
+	grew := false
+	for _, variable := range filled {
+		grew = h.mark(variable) || grew
+	}
+	return grew
+}
+
+// aliased returns the variable each value of rhs points into, when the
+// target it is assigned to holds something of the input.
+func (h *intermediates) aliased(lhs, rhs []ast.Expr) []*types.Var {
+	var filled []*types.Var
+	for i, target := range lhs {
+		value := assignedValue(rhs, i)
+		if value == nil || !h.from[rootVar(h.info, target)] {
+			continue
+		}
+		if pointed := pointee(h.info, value); pointed != nil {
+			filled = append(filled, pointed)
+		}
+	}
+	return filled
+}
+
+// filledByCall returns what call can fill, when something it is handed
+// reads the input: the variable each argument points into, and the receiver
+// of a method of a pointer receiver.
+func (h *intermediates) filledByCall(call *ast.CallExpr) []*types.Var {
+	if sendsRequest(h.info, call) {
+		return nil
+	}
+	fn, receiver := calledFunc(h.info, call)
+	handed := call.Args
+	if receiver != nil {
+		handed = append(slices.Clip(handed), receiver)
+	}
+	if !slices.ContainsFunc(handed, func(expr ast.Expr) bool { return reads(h.info, expr, h.from) }) {
+		return nil
+	}
+	var filled []*types.Var
+	for _, arg := range call.Args {
+		if pointed := pointee(h.info, arg); pointed != nil {
+			filled = append(filled, pointed)
+		}
+	}
+	if receiver != nil && isPointer(fn.Signature().Recv().Type()) {
+		if variable := rootVar(h.info, receiver); variable != nil {
+			filled = append(filled, variable)
+		}
+	}
+	return filled
+}
+
+// sendsRequest reports whether call calls a method of a client-go service.
+func sendsRequest(info *types.Info, call *ast.CallExpr) bool {
+	sel, isSelector := ast.Unparen(call.Fun).(*ast.SelectorExpr)
+	if !isSelector {
+		return false
+	}
+	_, isService := shared.ClientGoServiceInterface(info.TypeOf(sel.X))
+	return isService
+}
+
+// pointee returns the variable expr points into: the one whose address, or
+// the address of a field of which, it takes, and the one it reads a pointer
+// off; nil for any other expression.
+func pointee(info *types.Info, expr ast.Expr) *types.Var {
+	if unary, isUnary := ast.Unparen(expr).(*ast.UnaryExpr); isUnary && unary.Op == token.AND {
+		return rootVar(info, unary.X)
+	}
+	if isPointer(info.TypeOf(expr)) {
+		return rootVar(info, expr)
+	}
+	return nil
+}
+
+// isPointer reports whether t is a pointer type.
+func isPointer(t types.Type) bool {
+	_, pointer := t.Underlying().(*types.Pointer)
+	return pointer
 }
 
 // handlerInputStruct returns the first parameter whose type is a struct named
@@ -1939,13 +2168,19 @@ func handlerInputStruct(pkg *packages.Package, fn *ast.FuncDecl) (*types.Named, 
 
 // handlerInputParam is [handlerInputStruct] together with the variable the
 // input is bound to, nil when the parameter is unnamed.
+//
+// A struct no field of which carries a json tag, its embeds' included, is no
+// input: a model sends JSON, and such a struct names none of the keys it
+// would send. It is a value of ours a function is handed
+// (waitpoll.TransferTarget, the project or group a transfer moved), and the
+// parameters after it are read for the input.
 func handlerInputParam(pkg *packages.Package, fn *ast.FuncDecl) (*types.Named, *types.Struct, *types.Var, bool) {
 	if fn.Type.Params == nil {
 		return nil, nil, nil, false
 	}
 	for _, field := range fn.Type.Params.List {
 		named, st, ok := localNamedStruct(pkg, pkg.TypesInfo.TypeOf(field.Type))
-		if !ok {
+		if !ok || !carriesJSONTag(st) {
 			continue
 		}
 		var bound *types.Var
@@ -1993,7 +2228,7 @@ func (r *diffRun) diffPair(pkg, kind string, pair structPair) gap {
 			// Adjudicated legitimate input omission (deliberate rename, nested-object
 			// modeling, deprecated/non-accepted param, or curated subset) — each
 			// carries a rationale in acceptedMissingInputs.
-			if kind == "input" && r.isAcceptedMissingInput(pkg, pair.mcpName, tag) {
+			if kind == "input" && r.isAcceptedMissingInput(pkg, pair.mcpName, tag, pair.through) {
 				continue
 			}
 			g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: sdkType})
@@ -2223,6 +2458,13 @@ func flattenFields(st *types.Struct, tagKeys []string) map[string]string {
 	met = met[:0]
 	flattenNamesInto(st, &met, 0)
 	return promote(met, enc)
+}
+
+// carriesJSONTag reports whether a field of st, or of an untagged embed under
+// it, carries a json tag naming a key, which is what a struct a model fills
+// from the JSON it sends has.
+func carriesJSONTag(st *types.Struct) bool {
+	return flattenInto(st, []string{tagKeyJSON}, new([]fieldCandidate), 0)
 }
 
 // flattenNamesInto is flattenInto keyed by the Go field name, for a struct that

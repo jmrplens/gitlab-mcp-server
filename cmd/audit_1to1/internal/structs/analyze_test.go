@@ -2748,9 +2748,16 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 	// cannot turn it away and only the package half of the rule does.
 	localNamed := namedStruct(local, "ScratchOptions", makeStruct(structField{"ID", "id", tInt}))
 
+	// The handler answers with an output and an error, the shape whose
+	// literals are paired with its input whatever they read, since the
+	// parameter it takes the input in has no name to read it under.
 	handler := func(literalTypes ...types.Type) (*packages.Package, *ast.FuncDecl) {
-		param := ast.NewIdent("in")
-		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{param: {Type: mcpNamed}}}
+		param, output, failure := ast.NewIdent("in"), ast.NewIdent("Output"), ast.NewIdent("error")
+		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{
+			param:   {Type: mcpNamed},
+			output:  {Type: resultNamed},
+			failure: {Type: types.Universe.Lookup("error").Type()},
+		}}
 		body := &ast.BlockStmt{}
 		for _, typ := range literalTypes {
 			lit := &ast.CompositeLit{Type: ast.NewIdent("T")}
@@ -2759,7 +2766,10 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 		}
 		fn := &ast.FuncDecl{
 			Name: ast.NewIdent("list"),
-			Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Type: param}}}},
+			Type: &ast.FuncType{
+				Params:  &ast.FieldList{List: []*ast.Field{{Type: param}}},
+				Results: &ast.FieldList{List: []*ast.Field{{Type: output}, {Type: failure}}},
+			},
 			Body: body,
 		}
 		return &packages.Package{PkgPath: pkgPath, TypesInfo: info}, fn
@@ -2771,15 +2781,18 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 
 		collectHandlerInputs(pkg, fn, pairs)
 
-		// The pair is compared field for field with ==, which holds each
+		// The pair is compared side by side with ==, which holds each
 		// go/types value to the very object declared above rather than to one
-		// that merely prints alike.
+		// that merely prints alike, and goes through nothing on the way.
+		sides := func(p structPair) [8]any {
+			return [8]any{p.mcpName, p.mcpType, p.mcpNamed, p.sdkName, p.sdkType, p.sdkNamed, p.sdkURLTags, p.via}
+		}
 		want := structPair{
 			mcpName: "ListInput", mcpType: mcpStruct, mcpNamed: mcpNamed,
 			sdkName: "v2.ListBranchesOptions", sdkType: optionsStruct, sdkNamed: optionsNamed, sdkURLTags: true,
 		}
 		got, recorded := pairs[[2]string{"ListInput", "ListBranchesOptions"}]
-		if len(pairs) != 1 || !recorded || got != want {
+		if len(pairs) != 1 || !recorded || sides(got) != sides(want) || got.through != nil {
 			t.Errorf("collectHandlerInputs = %+v, want the one pair %+v", pairs, want)
 		}
 	})
@@ -2805,4 +2818,412 @@ func TestCollectHandlerInputs_AnOptionsLiteral_IsPairedWithTheHandlersInput(t *t
 			t.Errorf("collectHandlerInputs recorded %+v, want no pair for a local Options literal", pairs)
 		}
 	})
+}
+
+// handlerShapesSource is a tool package whose functions take a struct of the
+// package and build a request literal, in the shapes that decide whether
+// the struct is an input a model sends and the literal is built for it.
+const handlerShapesSource = `package shapes
+
+import gl "` + fixtureSDKPath + `"
+
+type Output struct {
+	ID int64 ~json:"id"~
+}
+
+// Target names what a lookup reads, the way waitpoll.TransferTarget does: no
+// field carries a json tag, so no model sends it.
+type Target struct {
+	ID    int64
+	Group bool
+}
+
+// Lookup builds the options out of the target it is handed.
+func Lookup(c *gl.Client, target Target) (Output, bool, error) {
+	opts := &gl.ListWidgetsOptions{}
+	opts.Page = target.ID
+	_, err := c.Widgets.ListWidgets(opts)
+	return Output{}, false, err
+}
+
+type LocateInput struct {
+	Search string ~json:"search"~
+}
+
+// Locate takes a target before the input a model sends.
+func Locate(c *gl.Client, at Target, in LocateInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(&gl.ListWidgetsOptions{Search: &in.Search})
+	return Output{ID: at.ID}, err
+}
+
+type WaitInput struct {
+	ID int64 ~json:"id"~
+}
+
+// failure answers with an error alone and lists with constants, the way
+// pipelines.pipelineFailure reads a failed pipeline's jobs.
+func failure(c *gl.Client, in WaitInput) error {
+	search := "failed"
+	_, err := c.Widgets.ListWidgets(&gl.ListWidgetsOptions{Search: &search})
+	return err
+}
+
+type ProtectInput struct {
+	Name string ~json:"name"~
+}
+
+// Protect answers with an output and an error and sends a protection of
+// constants.
+func Protect(c *gl.Client, in ProtectInput) (Output, error) {
+	return Output{}, c.Widgets.Protect(1, &gl.ProtectOptions{})
+}
+
+type DeleteInput struct {
+	ID int64 ~json:"id"~
+}
+
+// Delete is a handler answering with an error alone, as a delete does.
+func Delete(c *gl.Client, in DeleteInput) error {
+	return c.Widgets.Protect(in.ID, &gl.ProtectOptions{})
+}
+
+type GuardInput struct {
+	ID int64 ~json:"id"~
+}
+
+// guard is a handler the package registers itself, answering with an output
+// and an error.
+func guard(c *gl.Client, in GuardInput) (Output, error) {
+	return Output{ID: in.ID}, c.Widgets.Protect(1, &gl.ProtectOptions{})
+}
+
+type ProbeInput struct {
+	ID int64 ~json:"id"~
+}
+
+// probe answers with an output and a flag, and protects with constants.
+func probe(c *gl.Client, in ProbeInput) (Output, bool) {
+	err := c.Widgets.Protect(1, &gl.ProtectOptions{})
+	return Output{ID: in.ID}, err == nil
+}
+
+type BuildInput struct {
+	Search string ~json:"search"~
+}
+
+// fill copies a search into the options it is handed.
+func fill(opts *gl.ListWidgetsOptions, search string) { opts.Search = &search }
+
+// optionsFor builds the options and has a helper fill them, sending nothing.
+func optionsFor(in BuildInput) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{}
+	fill(opts, in.Search)
+	return opts
+}
+
+type FilterInput struct {
+	Search string ~json:"search"~
+}
+
+// filtered answers with an error alone and fills the options it builds from
+// its input after building them.
+func filtered(c *gl.Client, in FilterInput) error {
+	opts := &gl.ListWidgetsOptions{}
+	opts.Search = &in.Search
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+type DeclaredInput struct {
+	Search string ~json:"search"~
+}
+
+// declared does the same through a declaration.
+func declared(c *gl.Client, in DeclaredInput) error {
+	var opts = &gl.ListWidgetsOptions{}
+	opts.Search = &in.Search
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+type SearchedInput struct {
+	Search string ~json:"search"~
+}
+
+// searched answers with an error alone and lists with its input in place.
+func searched(c *gl.Client, in SearchedInput) error {
+	_, err := c.Widgets.ListWidgets(&gl.ListWidgetsOptions{Search: &in.Search})
+	return err
+}
+
+type LookupInput struct {
+	Search string ~json:"search"~
+}
+
+// lookup answers with an error alone and lists with constants it assigns
+// a variable first, beside a search it copies from its input.
+func lookup(c *gl.Client, in LookupInput) error {
+	search := in.Search
+	opts := &gl.ListWidgetsOptions{}
+	_, err := c.Widgets.ListWidgets(opts)
+	if search == "" {
+		return nil
+	}
+	return err
+}
+
+type UnnamedInput struct {
+	Search string ~json:"search"~
+}
+
+// shared is a client no function here takes as a parameter.
+var shared *gl.Client
+
+// unnamed takes an input it gives no name to, so it can read nothing of it.
+func unnamed(UnnamedInput) error {
+	return shared.Widgets.Protect(1, &gl.ProtectOptions{})
+}
+
+type HelperFillInput struct {
+	Search string ~json:"search"~
+}
+
+// helperFilled answers with an error alone and has a helper fill, from its
+// input, the options it sends.
+func helperFilled(c *gl.Client, in HelperFillInput) error {
+	opts := &gl.ListWidgetsOptions{}
+	fill(opts, in.Search)
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+type PointerFillInput struct {
+	Search string ~json:"search"~
+	Page   int64  ~json:"page"~
+}
+
+// pointerFilled fills the options it sends through the last of a chain of
+// pointers to them, each taken from the one before, one in a declaration.
+func pointerFilled(c *gl.Client, in PointerFillInput) error {
+	opts := gl.ListWidgetsOptions{}
+	p := &opts
+	var q = p
+	r := q
+	r.Search = &in.Search
+	r.Page = -in.Page
+	_, err := c.Widgets.ListWidgets(&opts)
+	return err
+}
+
+type AliasFillInput struct {
+	Search string ~json:"search"~
+}
+
+// aliasFilled has a helper fill a pointer to the options it sends.
+func aliasFilled(c *gl.Client, in AliasFillInput) error {
+	opts := gl.ListWidgetsOptions{}
+	p := &opts
+	fill(p, in.Search)
+	_, err := c.Widgets.ListWidgets(&opts)
+	return err
+}
+
+// wrapped carries the options a method fills.
+type wrapped struct {
+	gl.ListWidgetsOptions
+}
+
+// search fills the options of its receiver.
+func (w *wrapped) search(s string) { w.Search = &s }
+
+// searched fills a copy of its receiver and hands the copy back.
+func (w wrapped) searched(s string) wrapped {
+	w.Search = &s
+	return w
+}
+
+// fresh hands back options of its own.
+func fresh() *wrapped { return &wrapped{} }
+
+type MethodFillInput struct {
+	Search string ~json:"search"~
+}
+
+// methodFilled has a method of a pointer receiver fill, through a pointer
+// declared before it is assigned, the options it sends.
+func methodFilled(c *gl.Client, in MethodFillInput) error {
+	w := wrapped{}
+	var p *wrapped
+	p = &w
+	p.search(in.Search)
+	_, err := c.Widgets.ListWidgets(&w.ListWidgetsOptions)
+	return err
+}
+
+type ApplyInput struct {
+	Search string ~json:"search"~
+}
+
+// apply fills the options it is handed from the input it is called on.
+func (in ApplyInput) apply(opts *gl.ListWidgetsOptions) { opts.Search = &in.Search }
+
+// applied has a method of its input fill the options it sends.
+func applied(c *gl.Client, in ApplyInput) error {
+	opts := &gl.ListWidgetsOptions{}
+	in.apply(opts)
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+type SentBesideInput struct {
+	ID int64 ~json:"id"~
+}
+
+// sentBeside answers with an error alone and sends a protection of
+// constants it assigns a variable, beside its input's id: the send fills
+// nothing.
+func sentBeside(c *gl.Client, in SentBesideInput) error {
+	opts := &gl.ProtectOptions{}
+	return c.Widgets.Protect(in.ID, opts)
+}
+
+type CopyInput struct {
+	Search string ~json:"search"~
+}
+
+// record reads the options it is handed a copy of.
+func record(opts gl.ListWidgetsOptions, search string) bool { return opts.Search == nil && search != "" }
+
+// copied hands its input beside a copy of the options it sends, a method of
+// a value receiver and a method called on what a function hands back: none
+// of them fills the options.
+func copied(c *gl.Client, in CopyInput) error {
+	opts := gl.ListWidgetsOptions{}
+	record(opts, in.Search)
+	w := wrapped{}
+	w.searched(in.Search)
+	fresh().search(in.Search)
+	if _, err := c.Widgets.ListWidgets(&w.ListWidgetsOptions); err != nil {
+		return err
+	}
+	_, err := c.Widgets.ListWidgets(&opts)
+	return err
+}
+`
+
+// TestDiscoverPairs_TheFunctionAndItsStruct_DecideWhetherALiteralIsPairedWithIt
+// verifies what makes a function's struct an input and its literal a request
+// built for it. A struct no field of which carries a json tag is no input a
+// model sends, so a function taking one pairs nothing with it, and one
+// taking it before such an input pairs with the input. A literal a function
+// sends itself and that reads nothing of the input pairs with it only in a
+// handler, exported or answering with an output and an error: one that is
+// neither, answering with an error alone or with a flag, lists or protects
+// with constants for a lookup of its own, whether it hands the literal on in
+// place or assigns it a variable nothing of the input reaches, and one that
+// gives its input no name reads nothing of it. A literal that reads the
+// input, in its values or through the variable it is assigned to and filled
+// from afterwards, pairs wherever it is built, and so does one a builder
+// that sends nothing hands a helper to fill. The variable is filled field by
+// field, through a chain of pointers to it however many passes the chain
+// takes, by a helper handed a pointer to it beside the input, by a method of
+// a pointer receiver called on it, and by a method of the input it is
+// handed to. A send that takes the input beside it fills none of it, and
+// neither does a function handed a copy of it, a method of a value receiver
+// called on it, nor a method called on what another function hands back.
+func TestDiscoverPairs_TheFunctionAndItsStruct_DecideWhetherALiteralIsPairedWithIt(t *testing.T) {
+	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/shapes", source: handlerShapesSource})[0]
+
+	inputs, _ := discoverPairs(pkg)
+
+	got := make([]string, 0, len(inputs))
+	for _, pair := range sortedPairs(inputs) {
+		got = append(got, pair.mcpName+" "+sdkLeaf(pair.sdkName)+" "+pair.via)
+	}
+	want := []string{
+		"AliasFillInput ListWidgetsOptions ",
+		"ApplyInput ListWidgetsOptions ",
+		"BuildInput ListWidgetsOptions ",
+		"DeclaredInput ListWidgetsOptions ",
+		"DeleteInput ProtectOptions ",
+		"FilterInput ListWidgetsOptions ",
+		"GuardInput ProtectOptions ",
+		"HelperFillInput ListWidgetsOptions ",
+		"LocateInput ListWidgetsOptions ",
+		"MethodFillInput ListWidgetsOptions ",
+		"PointerFillInput ListWidgetsOptions ",
+		"ProtectInput ProtectOptions ",
+		"SearchedInput ListWidgetsOptions ",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("discoverPairs = %q, want %q", got, want)
+	}
+}
+
+// TestBuildReport_GapsOnly_KeepsTheSummaryOfTheWholeRun verifies the summary
+// counts every package the diff ran over whatever -gaps-only says: the flag
+// drops the clean packages from the list and nothing from the counts, so the
+// pairs and the type mismatches of a package with no missing or extra field
+// are counted in both modes.
+func TestBuildReport_GapsOnly_KeepsTheSummaryOfTheWholeRun(t *testing.T) {
+	full, gapsOnly := cachedBuildReport(t, false), cachedBuildReport(t, true)
+
+	if gapsOnly.Summary != full.Summary {
+		t.Errorf("summary with -gaps-only = %+v, want the full run's %+v", gapsOnly.Summary, full.Summary)
+	}
+	if len(gapsOnly.Packages) >= len(full.Packages) {
+		t.Errorf("-gaps-only lists %d packages of %d, want the clean ones dropped", len(gapsOnly.Packages), len(full.Packages))
+	}
+}
+
+// TestBuildReport_Repository_AnswersTheCallerPairsAndPairsNoInternalStruct is
+// the witness of both on the tree as it stands. The five project lists reach
+// their options through projects.userProjectFilter and a project's
+// notification update through notifications.eventFields, and the
+// declarations written on those structs answer them. waitpoll.TransferTarget,
+// whose fields carry no json tag, and pipelines.WaitInput, which
+// pipelineFailure lists failed jobs beside with constants and answers an
+// error alone, are paired with nothing.
+func TestBuildReport_Repository_AnswersTheCallerPairsAndPairsNoInternalStruct(t *testing.T) {
+	rep := cachedBuildReport(t, false)
+	answered := map[string][]string{
+		"projects": {
+			"ListForksInput", "ListInput", "ListUserContributedProjectsInput",
+			"ListUserProjectsInput", "ListUserStarredProjectsInput",
+		},
+		"notifications": {"UpdateProjectInput"},
+	}
+	for name, inputs := range answered {
+		t.Run(name, func(t *testing.T) {
+			for _, g := range findPackage(t, rep, name).Gaps {
+				if g.Kind == "input" && slices.Contains(inputs, g.MCPType) && len(g.MissingFields) > 0 {
+					t.Errorf("%s %s still reports %+v", g.MCPType, g.SDKType, g.MissingFields)
+				}
+			}
+		})
+	}
+	for name, pair := range map[string][2]string{
+		"waitpoll":  {"TransferTarget", "ListTodosOptions"},
+		"pipelines": {"WaitInput", "ListJobsOptions"},
+	} {
+		t.Run(name+" "+pair[0], func(t *testing.T) {
+			for _, g := range findPackageOrEmpty(rep, name).Gaps {
+				if g.Kind == "input" && g.MCPType == pair[0] && sdkLeaf(g.SDKType) == pair[1] {
+					t.Errorf("%s is paired with %s, want no pair", pair[0], g.SDKType)
+				}
+			}
+		})
+	}
+}
+
+// findPackageOrEmpty returns the report of the package named name, or an
+// empty one when the report lists none, which is how a package all of whose
+// pairs are gone reads.
+func findPackageOrEmpty(rep report, name string) packageReport {
+	for _, pr := range rep.Packages {
+		if pr.Package == name {
+			return pr
+		}
+	}
+	return packageReport{}
 }

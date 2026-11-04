@@ -704,6 +704,517 @@ func List(c *gl.Client, in ListInput) error {
 	}
 }
 
+// throughSource is a tool package whose handlers reach their options through
+// the struct an options builder takes, the shape of projects.userProjectFilter
+// and notifications.eventFields: the builder's own pair is answered by a
+// declaration written on that struct, and the inputs that go through it lack
+// the same field for the same reason.
+const throughSource = `package fixturepkg
+
+import gl "` + fixtureSDKPath + `"
+
+// Output is what every handler here answers with.
+type Output struct {
+	ID int64 ~json:"id"~
+}
+
+// filter is the struct the list handlers hand the options builder. It
+// offers no page.
+type filter struct {
+	Search string ~json:"search"~
+}
+
+// optionsOf builds the options out of the filter.
+func optionsOf(f filter) *gl.ListWidgetsOptions { return &gl.ListWidgetsOptions{Search: &f.Search} }
+
+type FirstInput struct {
+	Search string ~json:"search"~
+}
+
+// First fills the filter in a literal.
+func First(c *gl.Client, in FirstInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(optionsOf(filter{Search: in.Search}))
+	return Output{}, err
+}
+
+type SecondInput struct {
+	filter
+}
+
+// Second hands the builder the filter it embeds.
+func Second(c *gl.Client, in SecondInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(optionsOf(in.filter))
+	return Output{}, err
+}
+
+// defaults is a struct of constants a builder takes before the filter:
+// nothing of an input goes through it.
+type defaults struct {
+	page int64
+}
+
+// optionsBeside builds the options out of the filter and the constants.
+func optionsBeside(d defaults, f filter) *gl.ListWidgetsOptions {
+	opts := optionsOf(f)
+	opts.Page = d.page
+	return opts
+}
+
+type ThirdInput struct {
+	Search string ~json:"search"~
+}
+
+// Third hands that builder the filter beside a literal of constants.
+func Third(c *gl.Client, in ThirdInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(optionsBeside(defaults{page: 1}, filter{Search: in.Search}))
+	return Output{}, err
+}
+
+// guard is the struct the protection builder takes.
+type guard struct {
+	Name string ~json:"name"~
+}
+
+// protectOf builds the protection out of the guard.
+func protectOf(g guard) *gl.ProtectOptions { return &gl.ProtectOptions{Name: &g.Name} }
+
+type GuardInput struct {
+	Name string ~json:"name"~
+}
+
+// Guard hands the protection builder a guard of its own.
+func Guard(c *gl.Client, in GuardInput) (Output, error) {
+	return Output{}, c.Widgets.Protect(1, protectOf(guard{Name: in.Name}))
+}
+
+// complete offers every field the options carry, so its own pair lacks
+// nothing.
+type complete struct {
+	Search string ~json:"search"~
+	Page   int64  ~json:"page"~
+}
+
+// optionsOfComplete builds the options out of a complete.
+func optionsOfComplete(k complete) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{Search: &k.Search}
+	opts.Page = k.Page
+	return opts
+}
+
+// optionsSearching hands the complete it is given on to another builder and
+// sets the search from a scalar.
+func optionsSearching(k complete, search string) *gl.ListWidgetsOptions {
+	opts := optionsOfComplete(k)
+	opts.Search = &search
+	return opts
+}
+
+type FourthInput struct {
+	Search string ~json:"search"~
+}
+
+// Fourth hands that builder a complete of constants beside its search:
+// nothing of the input goes through complete, at the call or down the
+// chain.
+func Fourth(c *gl.Client, in FourthInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(optionsSearching(complete{Search: "x", Page: 1}, in.Search))
+	return Output{}, err
+}
+
+// optionsOfEither builds the options out of the first filter with a search.
+func optionsOfEither(a, b filter) *gl.ListWidgetsOptions {
+	if a.Search == "" {
+		return optionsOf(b)
+	}
+	return optionsOf(a)
+}
+
+type SixthInput struct {
+	Search string ~json:"search"~
+}
+
+// Sixth hands that builder two filters it fills from its input, so the
+// input goes through the filter once.
+func Sixth(c *gl.Client, in SixthInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(optionsOfEither(filter{Search: in.Search}, filter{Search: in.Search}))
+	return Output{}, err
+}
+
+// scope carries a filter to a method that builds from it.
+type scope struct {
+	f filter
+}
+
+// options hands the filter its receiver carries to the builder.
+func (s scope) options() *gl.ListWidgetsOptions { return optionsOf(s.f) }
+
+type FifthInput struct {
+	Search string ~json:"search"~
+}
+
+// Fifth calls that method on a scope it fills from its input, so the input
+// goes through the scope and, down the chain, through the filter.
+func Fifth(c *gl.Client, in FifthInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(scope{f: filter{Search: in.Search}}.options())
+	return Output{}, err
+}
+`
+
+// routesSource is a tool package whose handlers reach one options struct by
+// more than one route.
+const routesSource = `package fixturepkg
+
+import gl "` + fixtureSDKPath + `"
+
+type filter struct {
+	Search string ~json:"search"~
+}
+
+// optionsOf builds the options out of the filter.
+func optionsOf(f filter) *gl.ListWidgetsOptions { return &gl.ListWidgetsOptions{Search: &f.Search} }
+
+type guard struct {
+	Name string ~json:"name"~
+}
+
+// optionsGuarded builds the options out of a guard, beside a struct of
+// client-go's own it copies the page from.
+func optionsGuarded(base *gl.ListOptions, g guard) *gl.ListWidgetsOptions {
+	opts := &gl.ListWidgetsOptions{Search: &g.Name}
+	opts.Page = base.Page
+	return opts
+}
+
+// optionsOfEach builds the options out of a prefix and every filter it is
+// handed.
+func optionsOfEach(prefix string, fs ...filter) *gl.ListWidgetsOptions {
+	search := prefix
+	for _, f := range fs {
+		search += f.Search
+	}
+	return &gl.ListWidgetsOptions{Search: &search}
+}
+
+type DirectInput struct {
+	Search string ~json:"search"~
+}
+
+// Direct builds the options itself, and through a builder when the search
+// is empty.
+func Direct(c *gl.Client, in DirectInput) error {
+	opts := &gl.ListWidgetsOptions{Search: &in.Search}
+	if in.Search == "" {
+		opts = optionsOf(filter{Search: in.Search})
+	}
+	_, err := c.Widgets.ListWidgets(opts)
+	return err
+}
+
+type BothInput struct {
+	Search string ~json:"search"~
+	Page   int64  ~json:"page"~
+}
+
+// Both reaches the options through two builders, one of which it hands a
+// struct of client-go's own beside the guard.
+func Both(c *gl.Client, in BothInput) error {
+	if _, err := c.Widgets.ListWidgets(optionsOf(filter{Search: in.Search})); err != nil {
+		return err
+	}
+	_, err := c.Widgets.ListWidgets(optionsGuarded(&gl.ListOptions{Page: in.Page}, guard{Name: in.Search}))
+	return err
+}
+
+type EachInput struct {
+	Search string ~json:"search"~
+}
+
+// Each hands a builder that takes any number of filters two of them.
+func Each(c *gl.Client, in EachInput) error {
+	_, err := c.Widgets.ListWidgets(optionsOfEach(in.Search, filter{Search: in.Search}, filter{Search: in.Search}))
+	return err
+}
+`
+
+// TestRecordInputPair_TheRoutesToOnePair_KeepTheDirectOneAndJoinTheCallerOnes
+// verifies what one pair found by several routes goes through: a handler's
+// own literal keeps its pair however a builder reaches the same struct, and
+// goes through nothing; a pair found through two builders goes through the
+// struct each takes, and never through a struct of client-go's handed
+// beside one. A builder that takes any number of filters goes through the
+// scalar it takes first and nothing else, since what it takes them in is a
+// list rather than a struct.
+func TestRecordInputPair_TheRoutesToOnePair_KeepTheDirectOneAndJoinTheCallerOnes(t *testing.T) {
+	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/fixturepkg", source: routesSource})[0]
+
+	inputs, _ := discoverPairs(pkg)
+
+	cases := []struct {
+		input, via string
+		through    []string
+	}{
+		{input: "DirectInput"},
+		{input: "BothInput", via: ViaCaller, through: []string{"fixturepkg.filter", "fixturepkg.guard"}},
+		{input: "EachInput", via: ViaCaller},
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			pair, found := inputs[[2]string{tc.input, "ListWidgetsOptions"}]
+			if !found || pair.via != tc.via || !slices.Equal(pair.through, tc.through) {
+				t.Errorf("the %s pair = found %t, via %q, through %#v; want via %q, through %#v", tc.input, found, pair.via, pair.through, tc.via, tc.through)
+			}
+		})
+	}
+}
+
+// inputGaps runs the field diff over pkg and returns each input pair it
+// reports, as "<input> <sdk struct> <via> <missing tags>", and the keys of
+// acceptedMissingInputs the run left unanswered among keys.
+func inputGaps(pkg *packages.Package, keys ...string) (gaps, stale []string) {
+	run := newDiffRun()
+	pr, _ := run.analyzePackage(pkg)
+	for _, g := range pr.Gaps {
+		if g.Kind != "input" || len(g.MissingFields) == 0 {
+			continue
+		}
+		tags := make([]string, 0, len(g.MissingFields))
+		for _, field := range g.MissingFields {
+			tags = append(tags, field.Tag)
+		}
+		gaps = append(gaps, g.MCPType+" "+sdkLeaf(g.SDKType)+" "+g.Via+" "+strings.Join(tags, ","))
+	}
+	for _, entry := range run.staleDeclarations([]*declarationTable{acceptedMissingInputs}) {
+		if slices.Contains(keys, entry.Key) {
+			stale = append(stale, entry.Key)
+		}
+	}
+	return gaps, stale
+}
+
+// TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclaration
+// verifies that a pair found through the caller of a builder is answered by a
+// declaration written on the struct the builder takes: the builder's own
+// pair and every input handed through it lack the field for one reason,
+// whether the input fills the struct in a literal, embeds it, hands it
+// beside a struct of constants, hands it twice or fills a receiver whose
+// method hands it on.
+// A declaration answers only the inputs whose values went through its
+// struct, at the call and at every step down the chain: one on a struct of
+// constants a builder takes beside the input answers nothing and is stale,
+// and so is one on a struct of constants that builder hands on to another,
+// while the input handed beside it in a scalar still reports what it lacks.
+// An input handed through a struct no declaration names reports too. The
+// whole-type form answers every field the same way.
+func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclaration(t *testing.T) {
+	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/fixturepkg", source: throughSource})[0]
+	guardGaps := []string{
+		"GuardInput ProtectOptions caller allowed,by_user,levels,page,since",
+		"guard ProtectOptions  allowed,by_user,levels,page,since",
+	}
+	fourthGap := "FourthInput ListWidgetsOptions caller page"
+
+	t.Run("a per-field declaration on the struct a builder takes", func(t *testing.T) {
+		declare(t, acceptedMissingInputs, "fixturepkg.filter.page", "the filter offers no page")
+		declare(t, acceptedMissingInputs, "fixturepkg.defaults.page", "nothing of an input goes through the constants")
+		declare(t, acceptedMissingInputs, "fixturepkg.complete.page", "nothing of an input goes through the complete")
+
+		gaps, stale := inputGaps(pkg, "fixturepkg.filter.page", "fixturepkg.defaults.page", "fixturepkg.complete.page")
+
+		if want := append([]string{fourthGap}, guardGaps...); !slices.Equal(gaps, want) {
+			t.Errorf("input gaps = %q, want only %q", gaps, want)
+		}
+		if want := []string{"fixturepkg.complete.page", "fixturepkg.defaults.page"}; !slices.Equal(stale, want) {
+			t.Errorf("stale declarations = %q, want %q", stale, want)
+		}
+	})
+
+	t.Run("a whole-type declaration on the struct a builder takes", func(t *testing.T) {
+		declare(t, acceptedMissingInputs, "fixturepkg.guard", "the guard offers the name alone")
+
+		gaps, stale := inputGaps(pkg, "fixturepkg.guard")
+
+		want := []string{
+			"FifthInput ListWidgetsOptions caller page",
+			"FirstInput ListWidgetsOptions caller page",
+			fourthGap,
+			"SecondInput ListWidgetsOptions caller page",
+			"SixthInput ListWidgetsOptions caller page",
+			"ThirdInput ListWidgetsOptions caller page",
+			"filter ListWidgetsOptions  page",
+		}
+		if !slices.Equal(gaps, want) {
+			t.Errorf("input gaps = %q, want %q", gaps, want)
+		}
+		if len(stale) != 0 {
+			t.Errorf("stale declarations = %q, want none", stale)
+		}
+	})
+
+	t.Run("what each input goes through", func(t *testing.T) {
+		inputs, _ := discoverPairs(pkg)
+
+		for input, want := range map[string][]string{
+			"FifthInput":  {"fixturepkg.filter", "fixturepkg.scope"},
+			"FourthInput": {},
+			"SixthInput":  {"fixturepkg.filter"},
+			"ThirdInput":  {"fixturepkg.filter"},
+		} {
+			t.Run(input, func(t *testing.T) {
+				if got := inputs[[2]string{input, "ListWidgetsOptions"}].through; !slices.Equal(got, want) {
+					t.Errorf("%s goes through %q, want %q", input, got, want)
+				}
+			})
+		}
+	})
+}
+
+// passesSource is a tool package whose handlers hold the input in ways only
+// a later pass over the body, a method's receiver, a field of a local or the
+// target of an assignment tells apart.
+const passesSource = `package passes
+
+import gl "` + fixtureSDKPath + `"
+
+// filter is an intermediate the handlers fill from their input.
+type filter struct {
+	search string
+}
+
+// optionsOf builds the options out of the intermediate.
+func optionsOf(f filter) *gl.ListWidgetsOptions { return &gl.ListWidgetsOptions{Search: &f.search} }
+
+// protectOf builds the protection out of the intermediate.
+func protectOf(f filter) *gl.ProtectOptions { return &gl.ProtectOptions{Name: &f.search} }
+
+type LoopInput struct {
+	Search string ~json:"search"~
+}
+
+// Loop fills the intermediate at the end of a loop whose start copies it,
+// so the copy holds the input only on the second pass over the body.
+func Loop(c *gl.Client, in LoopInput) error {
+	var first, later filter
+	for range 2 {
+		later = first
+		first = filter{search: in.Search}
+	}
+	_, err := c.Widgets.ListWidgets(optionsOf(later))
+	return err
+}
+
+type DiscardInput struct {
+	Search string ~json:"search"~
+}
+
+// Discard assigns an intermediate filled from its input to the blank
+// identifier and builds the protection from one filled with a constant.
+func Discard(c *gl.Client, in DiscardInput) error {
+	_ = filter{search: in.Search}
+	return c.Widgets.Protect(1, protectOf(filter{search: "x"}))
+}
+
+// drop hands back an intermediate of constants, whatever it is handed.
+func drop(filter) filter { return filter{search: "x"} }
+
+type SingleInput struct {
+	Search string ~json:"search"~
+}
+
+// Single takes one result from a function that drops what it is handed.
+func Single(c *gl.Client, in SingleInput) error {
+	kept := drop(filter{search: in.Search})
+	return c.Widgets.Protect(1, protectOf(kept))
+}
+
+// pair hands back its receiver first and an intermediate of constants
+// second.
+func (f filter) pair() (filter, filter) { return f, filter{search: "x"} }
+
+type MethodInput struct {
+	Search string ~json:"search"~
+}
+
+// Method takes two results from a method called on an intermediate filled
+// from its input: only the first holds the input.
+func Method(c *gl.Client, in MethodInput) error {
+	held := filter{search: in.Search}
+	first, second := held.pair()
+	if _, err := c.Widgets.ListWidgets(optionsOf(first)); err != nil {
+		return err
+	}
+	return c.Widgets.Protect(1, protectOf(second))
+}
+
+// valid reads the intermediate it is handed.
+func valid(f filter) bool { return f.search != "" }
+
+// checked hands the intermediate it is handed to another function and calls
+// the function its caller passes with constants alone.
+func checked(f filter, protect func(filter) error) error {
+	if !valid(f) {
+		return nil
+	}
+	return protect(filter{search: "w"})
+}
+
+type CheckedInput struct {
+	Search string ~json:"search"~
+}
+
+// Checked hands its closure to a function that calls it with constants
+// alone, after handing the intermediate to another function.
+func Checked(c *gl.Client, in CheckedInput) error {
+	return checked(filter{search: in.Search}, func(f filter) error { return c.Widgets.Protect(1, protectOf(f)) })
+}
+
+// wrapper holds an intermediate in a field; no handler fills one in a
+// literal.
+type wrapper struct {
+	f filter
+}
+
+type WrappedInput struct {
+	Search string ~json:"search"~
+}
+
+// Wrapped fills the field of a local from its input and hands the field to
+// the helper.
+func Wrapped(c *gl.Client, in WrappedInput) error {
+	var w wrapper
+	w.f = filter{search: in.Search}
+	_, err := c.Widgets.ListWidgets(optionsOf(w.f))
+	return err
+}
+`
+
+// TestCollectCallerInputs_WhatOnlyALaterPassOrAPlaceTellsApart_IsPairedAsItHolds
+// verifies the pairing through an intermediate where the order or the place
+// it is held in decides: a copy taken at a loop's start holds the input once
+// the loop's end fills what it copies, which takes another pass over the
+// body; a method called on a held intermediate holds it in its receiver, so
+// only the result it hands the receiver back in carries it; a field of a
+// local carries it although the local's own type is filled in no literal;
+// and a single target holds whatever its value reads, the one result of a
+// function that drops what it is handed included. An intermediate assigned
+// to the blank identifier is held by nothing, so a literal of constants
+// beside it carries nothing; and a closure a function calls with constants
+// alone holds nothing, whatever else the function hands its intermediate to.
+func TestCollectCallerInputs_WhatOnlyALaterPassOrAPlaceTellsApart_IsPairedAsItHolds(t *testing.T) {
+	pkgs := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/passes", source: passesSource})
+
+	got := callerPairs(pkgs[0])
+
+	want := []string{
+		"LoopInput v3.ListWidgetsOptions caller",
+		"MethodInput v3.ListWidgetsOptions caller",
+		"SingleInput v3.ProtectOptions caller",
+		"WrappedInput v3.ListWidgetsOptions caller",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("collectCallerInputs = %v, want %v", got, want)
+	}
+}
+
 // TestHelpersOf_APackage_IsWalkedOnce verifies the memo: a package's helpers
 // are read by every package that imports it, and each read after the first
 // is answered with the same map.
@@ -718,8 +1229,8 @@ func TestHelpersOf_APackage_IsWalkedOnce(t *testing.T) {
 	}
 	var built []string
 	for key, structs := range first {
-		for _, named := range structs {
-			built = append(built, key[strings.LastIndex(key, ".")+1:]+" "+named.Obj().Name())
+		for _, b := range structs {
+			built = append(built, key[strings.LastIndex(key, ".")+1:]+" "+b.named.Obj().Name())
 		}
 	}
 	slices.Sort(built)
@@ -772,24 +1283,24 @@ func TestCollectHelpers_ADeclarationWithNoObjectOrNoBody_IsPassedOver(t *testing
 	}
 }
 
-// TestBoundParams_ANameTheTypeInformationDoesNotDefine_IsLeftOut verifies
+// TestBoundEntries_ANameTheTypeInformationDoesNotDefine_IsLeftOut verifies
 // the variables a helper's receiver and parameters bind are the ones the type
-// information defines, an unnamed parameter and a name it has no variable
-// for left out.
-func TestBoundParams_ANameTheTypeInformationDoesNotDefine_IsLeftOut(t *testing.T) {
+// information defines, each with its entry, an unnamed parameter and a name
+// it has no variable for left out without moving the position of the others.
+func TestBoundEntries_ANameTheTypeInformationDoesNotDefine_IsLeftOut(t *testing.T) {
 	recv, defined, undefined := ast.NewIdent("w"), ast.NewIdent("page"), ast.NewIdent("search")
 	recvVar := types.NewParam(0, nil, "w", types.Typ[types.Int])
 	pageVar := types.NewParam(0, nil, "page", types.Typ[types.Int])
 	fn := &ast.FuncDecl{
 		Recv: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{recv}}}},
-		Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{defined, undefined}}, {}}}},
+		Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{}, {Names: []*ast.Ident{undefined, defined}}}}},
 	}
 	info := &types.Info{Defs: map[*ast.Ident]types.Object{recv: recvVar, defined: pageVar}}
 
-	got := boundParams(info, fn)
+	got := boundEntries(info, fn)
 
-	if want := map[*types.Var]bool{recvVar: true, pageVar: true}; !reflect.DeepEqual(got, want) {
-		t.Errorf("boundParams = %v, want %v", got, want)
+	if want := map[*types.Var]int{recvVar: receiverEntry, pageVar: 2}; !reflect.DeepEqual(got, want) {
+		t.Errorf("boundEntries = %v, want %v", got, want)
 	}
 }
 
@@ -812,8 +1323,8 @@ func TestSentStructs_ASelectorTheTypeCheckerDidNotResolve_SendsNothing(t *testin
 // type information resolves to something other than a function, such as the
 // package-level variable holding a helper that helperDataSource declares,
 // builds nothing as a helper named as a value. The intermediates record
-// functions alone beside an intermediate, so collect never hands it one; the
-// guard keeps helperValue answering for any name it is given.
+// every name beside an intermediate, variables included, and helperValue is
+// what keeps the functions among them.
 func TestHelperValue_ANameThatIsNotAFunction_BuildsNothing(t *testing.T) {
 	ident := ast.NewIdent("Builder")
 	held := types.NewVar(0, nil, "Builder", types.Typ[types.Int])

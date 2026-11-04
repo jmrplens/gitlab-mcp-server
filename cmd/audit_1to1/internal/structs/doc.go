@@ -18,7 +18,13 @@
 //     through a field is attributed to the input element its values are read
 //     from, through the locals they are assigned to. The SDK fields (by url/json tag) are diffed against the
 //     MCP input fields (by json tag) to find SDK fields with no MCP
-//     counterpart (R-INPUT) and advisory Go-type divergences.
+//     counterpart (R-INPUT) and advisory Go-type divergences. A struct no
+//     field of which carries a json tag is no input, and a literal a
+//     function that is no handler sends itself and never fills from the
+//     input, in its values or afterwards, is a lookup of its own, attributed
+//     to nothing. A pair found through a caller keeps the structs of ours
+//     its values went through, at the call and down the chain, and a
+//     declaration written on one of them answers it.
 //   - output pairs: each converter func(...src *gl.Y...) LocalStruct maps an SDK
 //     result struct to an MCP output struct, whether the package declares it or
 //     instantiates a generic one with its own output type
@@ -40,5 +46,7 @@
 // The report is the mechanical backlog that drives the 1:1 audit batches. It is
 // intentionally high-signal on *missing fields* (the gap class that the
 // client-go bumps repeatedly introduced) and advisory on type divergences,
-// because the domain legitimately maps SDK enum/time types onto scalars.
+// because the domain legitimately maps SDK enum/time types onto scalars. Its
+// summary counts every package the diff ran over, so -gaps-only shortens the
+// list of packages and changes no count.
 package structs
