@@ -114,8 +114,17 @@ That shape is what determines whether something counts as a vulnerability here.
 - **Bypassing a per-action control.** The tool exclusion list
   (`GITLAB_MCP_EXCLUDE_TOOLS`), the tier filter, the chosen tool surface and the
   confirmation a destructive action asks for are enforcement, like the read-only
-  and safe modes. A call that reaches a GitLab endpoint past any of them, or
-  runs a destructive action without its confirmation, is a vulnerability.
+  and safe modes. A call that reaches a GitLab endpoint past the exclusion list,
+  the tier filter or the surface is a vulnerability. The confirmation is
+  bypassed when, with neither `GITLAB_MCP_YOLO_MODE` nor `AUTOPILOT` set, an
+  action that asks for it runs without the person being asked: through a
+  surface or a spelling of its parameters that skips both the elicitation and
+  the explicit `confirm` the action requires, or because text this server
+  returns leads the model to send that `confirm` on its own (prompt injection
+  escaping its labelling, above). That is a vulnerability. An action that
+  should ask and does not, or that makes a change another action asks to
+  confirm, is missing a confirmation rather than bypassing one: a bug, reported
+  as an ordinary issue.
 - **Server-side request forgery.** A caller-controlled value that redirects an
   API request away from the configured `GITLAB_URL` to an internal address.
 
