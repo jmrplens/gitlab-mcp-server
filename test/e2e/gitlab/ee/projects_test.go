@@ -78,7 +78,10 @@ func TestTargetBranchRules_Lifecycle_CreatesListsAndDeletes(t *testing.T) {
 // mirror able to destroy this project's own commits, so the same call is made
 // twice: once unconfirmed, which the server must refuse without configuring
 // anything, and once with confirm. Both halves are asserted on every surface,
-// because the reserved key travels differently on each.
+// because the reserved key travels differently on each. project.update reaches
+// the same settings through the project route, so the pair is made there too:
+// repointing the overwriting mirror unconfirmed must be refused and leave its
+// source alone, and arming it with confirm must go through.
 //
 // Replaces: TestMeta_ProjectMirroring
 func TestPullMirror_Lifecycle_ConfiguresStartsAndDisables(t *testing.T) {
@@ -115,6 +118,29 @@ func TestPullMirror_Lifecycle_ConfiguresStartsAndDisables(t *testing.T) {
 		got := harness.Do[projects.PullMirrorOutput](s, actionPullMirrorGet, map[string]any{"project_id": project.IDParam()})
 		if !got.Enabled || !strings.Contains(got.URL, upstream.Path) {
 			e.T.Errorf("get answered %+v, want the enabled mirror of %s", got, upstream.Path)
+		}
+
+		// project.update reaches the same settings through PUT /projects/:id,
+		// so pointing this overwriting mirror somewhere else there is refused
+		// unconfirmed too, before anything is sent, and the mirror keeps its
+		// source. The address is never fetched: the refusal comes first.
+		repointed := harness.ExpectToolError(s, actionProjectUpdate, map[string]any{
+			"project_id": project.IDParam(), "import_url": "https://example.com/elsewhere/repo.git",
+		}, "confirm=true")
+		assertMentions(e, "the unconfirmed repointing of the overwriting mirror", repointed, "overwrite diverged branches")
+		kept := harness.Do[projects.PullMirrorOutput](s, actionPullMirrorGet, map[string]any{"project_id": project.IDParam()})
+		if !strings.Contains(kept.URL, upstream.Path) {
+			e.T.Errorf("get answered %+v after the refused update, want the mirror of %s kept", kept, upstream.Path)
+		}
+
+		// Re-sending the overwrite through project.update goes through with confirm.
+		// mirror travels beside the flag because GitLab refuses an update
+		// whose only param is the flag (docs/development/upstream-bugs.md).
+		updated := harness.Do[projects.Output](s, actionProjectUpdate, map[string]any{
+			"project_id": project.IDParam(), "mirror": true, "mirror_overwrites_diverged_branches": true, "confirm": true,
+		})
+		if !updated.Mirror || !updated.MirrorOverwritesDivergedBranches {
+			e.T.Errorf("update answered mirror=%v, mirror_overwrites_diverged_branches=%v, want both set", updated.Mirror, updated.MirrorOverwritesDivergedBranches)
 		}
 
 		harness.DoVoid(s, actionStartMirroring, map[string]any{"project_id": project.IDParam()})
