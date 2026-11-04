@@ -362,11 +362,19 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         # The commit's bytes go out, never the working tree's: an edit nobody
         # has committed must not reach a public project through a rerun.
         base = os.path.join(ROOT, "test", "fixtures", "orbit", "kg-fixtures")
-        with open(os.path.join(base, "pyproject.toml"), "a") as f:
-            f.write("\n# an edit that exists in no commit\n")
-        self.addCleanup(
-            subprocess.run, ["git", "checkout", "--", "pyproject.toml"], cwd=base, check=True,
-        )
+        pyproject = os.path.join(base, "pyproject.toml")
+        with open(pyproject, "rb") as f:
+            original = f.read()
+
+        def restore():
+            with open(pyproject, "wb") as f:
+                f.write(original)
+
+        # Restore the bytes that were here before, not the committed ones: a
+        # contributor's own uncommitted edit must survive the suite.
+        self.addCleanup(restore)
+        with open(pyproject, "ab") as f:
+            f.write(b"\n# an edit that exists in no commit\n")
         routes = existing_fixtures()
         routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [{"path": "README.md"}]
         routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
