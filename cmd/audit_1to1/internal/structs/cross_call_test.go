@@ -858,6 +858,149 @@ func Fifth(c *gl.Client, in FifthInput) (Output, error) {
 	_, err := c.Widgets.ListWidgets(scope{f: filter{Search: in.Search}}.options())
 	return Output{}, err
 }
+
+// listAndProtect builds the options out of the filter, and protects with
+// constants beside.
+func listAndProtect(c *gl.Client, f filter) (*gl.ListWidgetsOptions, error) {
+	return optionsOf(f), c.Widgets.Protect(1, &gl.ProtectOptions{})
+}
+
+type SeventhInput struct {
+	Search string ~json:"search"~
+}
+
+// Seventh hands that builder a filter it fills from its input: the input
+// goes through the filter into the options and into nothing of the
+// protection.
+func Seventh(c *gl.Client, in SeventhInput) (Output, error) {
+	opts, err := listAndProtect(c, filter{Search: in.Search})
+	if err != nil {
+		return Output{}, err
+	}
+	_, err = c.Widgets.ListWidgets(opts)
+	return Output{}, err
+}
+
+// relayProtect hands the filter on to the builder that protects with
+// constants beside.
+func relayProtect(c *gl.Client, f filter) (*gl.ListWidgetsOptions, error) {
+	return listAndProtect(c, f)
+}
+
+type TenthInput struct {
+	Search string ~json:"search"~
+}
+
+// Tenth hands the relay a filter it fills from its input: down the chain
+// too, the protection reads nothing of it.
+func Tenth(c *gl.Client, in TenthInput) (Output, error) {
+	opts, err := relayProtect(c, filter{Search: in.Search})
+	if err != nil {
+		return Output{}, err
+	}
+	_, err = c.Widgets.ListWidgets(opts)
+	return Output{}, err
+}
+
+// optionsRelayed builds options of its own, or hands the guard on to the
+// builder below, which writes it into what another builder hands back. It is
+// declared before that builder on purpose: what the guard reaches there is
+// known only after a pass over both, so it is read on the next one.
+func optionsRelayed(g guard, own bool) *gl.ListWidgetsOptions {
+	if own {
+		return &gl.ListWidgetsOptions{}
+	}
+	return optionsNamed(filter{Search: "x"}, g)
+}
+
+type TwelfthInput struct {
+	Name string ~json:"name"~
+}
+
+// Twelfth hands that relay a guard it fills from its input.
+func Twelfth(c *gl.Client, in TwelfthInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(optionsRelayed(guard{Name: in.Name}, false))
+	return Output{}, err
+}
+
+// optionsNamed builds the options out of the filter, and writes the guard's
+// name into what that builder hands back.
+func optionsNamed(f filter, g guard) *gl.ListWidgetsOptions {
+	opts := optionsOf(f)
+	opts.Search = &g.Name
+	return opts
+}
+
+type EighthInput struct {
+	Name string ~json:"name"~
+}
+
+// Eighth hands that builder a filter of constants beside a guard it fills
+// from its input, so the input reaches the options through the guard alone.
+func Eighth(c *gl.Client, in EighthInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(optionsNamed(filter{Search: "x"}, guard{Name: in.Name}))
+	return Output{}, err
+}
+
+// optionsDeclared is optionsNamed with the options it writes into declared.
+func optionsDeclared(f filter, g guard) *gl.ListWidgetsOptions {
+	var opts = optionsOf(f)
+	opts.Search = &g.Name
+	return opts
+}
+
+type EleventhInput struct {
+	Name string ~json:"name"~
+}
+
+// Eleventh hands that builder a filter of constants beside a guard it fills
+// from its input.
+func Eleventh(c *gl.Client, in EleventhInput) (Output, error) {
+	_, err := c.Widgets.ListWidgets(optionsDeclared(filter{Search: "x"}, guard{Name: in.Name}))
+	return Output{}, err
+}
+
+// listOrProtect builds the options out of the filter and the protection out
+// of the guard.
+func listOrProtect(f filter, g guard) (*gl.ListWidgetsOptions, *gl.ProtectOptions) {
+	return optionsOf(f), protectOf(g)
+}
+
+type NinthInput struct {
+	Search string ~json:"search"~
+	Name   string ~json:"name"~
+}
+
+// Ninth hands that builder a filter and a guard it fills from its input:
+// the input goes through the filter into the options and through the guard
+// into the protection.
+func Ninth(c *gl.Client, in NinthInput) (Output, error) {
+	list, protect := listOrProtect(filter{Search: in.Search}, guard{Name: in.Name})
+	if err := c.Widgets.Protect(1, protect); err != nil {
+		return Output{}, err
+	}
+	_, err := c.Widgets.ListWidgets(list)
+	return Output{}, err
+}
+
+// optionsVia has the builder its caller passes build the options out of the
+// filter, a call whose body is out of sight.
+func optionsVia(f filter, build func(filter) *gl.ListWidgetsOptions) *gl.ListWidgetsOptions {
+	opts := build(f)
+	return opts
+}
+
+// defaultOptions builds options of constants.
+func defaultOptions() *gl.ListWidgetsOptions { return &gl.ListWidgetsOptions{} }
+
+// optionsDefaulted writes the guard's name into the options of constants
+// another builder hands back, which no entry of its own reaches by a call.
+// It is the last builder here, and the declaration reaches nothing.
+func optionsDefaulted(g guard) *gl.ListWidgetsOptions {
+	var opts = defaultOptions()
+	opts.Search = &g.Name
+	return opts
+}
 `
 
 // routesSource is a tool package whose handlers reach one options struct by
@@ -934,6 +1077,33 @@ func Each(c *gl.Client, in EachInput) error {
 	_, err := c.Widgets.ListWidgets(optionsOfEach(in.Search, filter{Search: in.Search}, filter{Search: in.Search}))
 	return err
 }
+
+type LastInput struct {
+	Search string ~json:"search"~
+}
+
+// Last hands that builder a filter of constants and, after it, one it fills
+// from its input, so only a value past the first of the list carries it.
+func Last(c *gl.Client, in LastInput) error {
+	_, err := c.Widgets.ListWidgets(optionsOfEach("", filter{Search: "x"}, filter{Search: in.Search}))
+	return err
+}
+
+// applyEach hands the filter to the builder its caller passes.
+func applyEach(f filter, build func(string, ...filter) *gl.ListWidgetsOptions) *gl.ListWidgetsOptions {
+	return build("", f)
+}
+
+type ValueEachInput struct {
+	Search string ~json:"search"~
+}
+
+// ValueEach names as a value, beside a filter it fills from its input, the
+// builder that takes any number of them.
+func ValueEach(c *gl.Client, in ValueEachInput) error {
+	_, err := c.Widgets.ListWidgets(applyEach(filter{Search: in.Search}, optionsOfEach))
+	return err
+}
 `
 
 // TestRecordInputPair_TheRoutesToOnePair_KeepTheDirectOneAndJoinTheCallerOnes
@@ -942,8 +1112,8 @@ func Each(c *gl.Client, in EachInput) error {
 // goes through nothing; a pair found through two builders goes through the
 // struct each takes, and never through a struct of client-go's handed
 // beside one. A builder that takes any number of filters goes through the
-// scalar it takes first and nothing else, since what it takes them in is a
-// list rather than a struct.
+// filter, the struct of each value its last parameter takes, whether it is
+// called with them or named as a value beside one.
 func TestRecordInputPair_TheRoutesToOnePair_KeepTheDirectOneAndJoinTheCallerOnes(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/fixturepkg", source: routesSource})[0]
 
@@ -955,7 +1125,9 @@ func TestRecordInputPair_TheRoutesToOnePair_KeepTheDirectOneAndJoinTheCallerOnes
 	}{
 		{input: "DirectInput"},
 		{input: "BothInput", via: ViaCaller, through: []string{"fixturepkg.filter", "fixturepkg.guard"}},
-		{input: "EachInput", via: ViaCaller},
+		{input: "EachInput", via: ViaCaller, through: []string{"fixturepkg.filter"}},
+		{input: "LastInput", via: ViaCaller, through: []string{"fixturepkg.filter"}},
+		{input: "ValueEachInput", via: ViaCaller, through: []string{"fixturepkg.filter"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.input, func(t *testing.T) {
@@ -1005,12 +1177,15 @@ func inputGaps(pkg *packages.Package, keys ...string) (gaps, stale []string) {
 // while the input handed beside it in a scalar still reports what it lacks.
 // An input handed through a struct no declaration names reports too. The
 // whole-type form answers every field the same way.
+//
+// A struct a builder takes goes through into what it reaches of what the
+// builder builds, and only that: through a helper further down, and through
+// what such a helper hands back when the builder writes the struct into it.
+// A request the builder makes of constants beside, or out of another struct
+// it takes, at the call or down the chain, goes through nothing the caller
+// hands, so a declaration on the struct answers nothing of it.
 func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclaration(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/fixturepkg", source: throughSource})[0]
-	guardGaps := []string{
-		"GuardInput ProtectOptions caller allowed,by_user,levels,page,since",
-		"guard ProtectOptions  allowed,by_user,levels,page,since",
-	}
 	fourthGap := "FourthInput ListWidgetsOptions caller page"
 
 	t.Run("a per-field declaration on the struct a builder takes", func(t *testing.T) {
@@ -1020,8 +1195,17 @@ func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclara
 
 		gaps, stale := inputGaps(pkg, "fixturepkg.filter.page", "fixturepkg.defaults.page", "fixturepkg.complete.page")
 
-		if want := append([]string{fourthGap}, guardGaps...); !slices.Equal(gaps, want) {
-			t.Errorf("input gaps = %q, want only %q", gaps, want)
+		wantGaps := []string{
+			"EighthInput ListWidgetsOptions caller page,search",
+			"EleventhInput ListWidgetsOptions caller page,search",
+			fourthGap,
+			"GuardInput ProtectOptions caller allowed,by_user,levels,page,since",
+			"NinthInput ProtectOptions caller allowed,by_user,levels,page,since",
+			"TwelfthInput ListWidgetsOptions caller page,search",
+			"guard ProtectOptions  allowed,by_user,levels,page,since",
+		}
+		if !slices.Equal(gaps, wantGaps) {
+			t.Errorf("input gaps = %q, want only %q", gaps, wantGaps)
 		}
 		if want := []string{"fixturepkg.complete.page", "fixturepkg.defaults.page"}; !slices.Equal(stale, want) {
 			t.Errorf("stale declarations = %q, want %q", stale, want)
@@ -1037,8 +1221,11 @@ func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclara
 			"FifthInput ListWidgetsOptions caller page",
 			"FirstInput ListWidgetsOptions caller page",
 			fourthGap,
+			"NinthInput ListWidgetsOptions caller page",
 			"SecondInput ListWidgetsOptions caller page",
+			"SeventhInput ListWidgetsOptions caller page",
 			"SixthInput ListWidgetsOptions caller page",
+			"TenthInput ListWidgetsOptions caller page",
 			"ThirdInput ListWidgetsOptions caller page",
 			"filter ListWidgetsOptions  page",
 		}
@@ -1053,15 +1240,28 @@ func TestAnalyzePackage_ACallerPairThroughADeclaredStruct_IsAnsweredByItsDeclara
 	t.Run("what each input goes through", func(t *testing.T) {
 		inputs, _ := discoverPairs(pkg)
 
-		for input, want := range map[string][]string{
-			"FifthInput":  {"fixturepkg.filter", "fixturepkg.scope"},
-			"FourthInput": {},
-			"SixthInput":  {"fixturepkg.filter"},
-			"ThirdInput":  {"fixturepkg.filter"},
+		for _, tc := range []struct {
+			input, sdk string
+			want       []string
+		}{
+			{input: "FifthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.filter", "fixturepkg.scope"}},
+			{input: "FourthInput", sdk: "ListWidgetsOptions", want: []string{}},
+			{input: "SixthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.filter"}},
+			{input: "ThirdInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.filter"}},
+			{input: "SeventhInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.filter"}},
+			{input: "SeventhInput", sdk: "ProtectOptions", want: []string{}},
+			{input: "TenthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.filter"}},
+			{input: "TenthInput", sdk: "ProtectOptions", want: []string{}},
+			{input: "EighthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.guard"}},
+			{input: "EleventhInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.guard"}},
+			{input: "TwelfthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.guard"}},
+			{input: "NinthInput", sdk: "ListWidgetsOptions", want: []string{"fixturepkg.filter"}},
+			{input: "NinthInput", sdk: "ProtectOptions", want: []string{"fixturepkg.guard"}},
 		} {
-			t.Run(input, func(t *testing.T) {
-				if got := inputs[[2]string{input, "ListWidgetsOptions"}].through; !slices.Equal(got, want) {
-					t.Errorf("%s goes through %q, want %q", input, got, want)
+			t.Run(tc.input+" "+tc.sdk, func(t *testing.T) {
+				pair, found := inputs[[2]string{tc.input, tc.sdk}]
+				if !found || !slices.Equal(pair.through, tc.want) {
+					t.Errorf("%s %s found %t, goes through %q; want %q", tc.input, tc.sdk, found, pair.through, tc.want)
 				}
 			})
 		}

@@ -29,10 +29,14 @@ const receiverEntry = math.MaxInt
 // helperBuild is one request struct a helper builds, with what a value the
 // helper is handed goes through further down the chain, entry by entry: for
 // its receiver and for each parameter, the structs of ours that the helpers
-// it hands that one entry on to take it in. A caller's value goes through
-// what the entries it is handed in lead to, and only those: a struct a
-// builder hands on what it takes beside the caller's value is no struct the
-// caller's value went through.
+// it hands that one entry on to take it in. An entry is a key of through
+// only when a value handed in it reaches the struct: a literal of it reads
+// the value, as [readingLiterals] reads a literal for an input, a helper the
+// entry is handed on to builds it, or the value is written into what such a
+// helper hands back. A caller's value goes through what the entries it is
+// handed in lead to, and only those: a struct a builder hands on what it
+// takes beside the caller's value is no struct the caller's value went
+// through, and neither is one the entry it is handed in reaches nothing of.
 type helperBuild struct {
 	named   *types.Named
 	through map[int][]*types.TypeName
@@ -43,10 +47,14 @@ type helperBuild struct {
 // and the receiver, that each helper down the chain was handed them in
 // (projects.userProjectFilter, which buildUserProjectOpts takes, for every
 // project list). A declaration written on one of them answers what the
-// struct lacks for every input whose values went through it.
+// struct lacks for every input whose values went through it. reached says
+// whether a value the call hands reaches the struct at all: one the helper
+// builds of constants beside is built for the caller all the same, and goes
+// through nothing.
 type build struct {
 	named   *types.Named
 	through []*types.TypeName
+	reached bool
 }
 
 // helperCache memoizes the helpers of a package: a package's helpers are read
@@ -615,7 +623,8 @@ func elementValues(lit *ast.CompositeLit) []ast.Expr {
 // helperValue returns what the helper ident names builds, when the helper
 // takes one of carried among its parameters: a helper handed on as a value
 // beside an intermediate, which whoever calls it hands the intermediate. What
-// it builds goes through each of carried it takes, and what those parameters
+// it builds goes through each of carried it takes that reaches it, the
+// element a variadic parameter takes included, and what those parameters
 // lead to down the chain.
 func helperValue(info *types.Info, ident *ast.Ident, helpers helperBuilds, carried map[*types.TypeName]bool) []build {
 	fn, isFunc := info.Uses[ident].(*types.Func)
@@ -626,43 +635,57 @@ func helperValue(info *types.Info, ident *ast.Ident, helpers helperBuilds, carri
 	if !isHelper {
 		return nil
 	}
-	params := fn.Signature().Params()
+	sig := fn.Signature()
 	var entries []int
-	for i := range params.Len() {
-		if named, _, isStruct := derefNamedStruct(params.At(i).Type()); isStruct && carried[named.Obj()] {
+	for i := range sig.Params().Len() {
+		if named, _, isStruct := derefNamedStruct(entryType(sig, i)); isStruct && carried[named.Obj()] {
 			entries = append(entries, i)
 		}
 	}
 	if entries == nil {
 		return nil
 	}
-	return reachedThrough(fn.Signature(), built, entries)
+	return reachedThrough(sig, built, entries)
 }
 
 // reachedThrough returns what a helper of signature sig builds for a caller
 // that hands it values in entries, each build going through the struct of
-// ours each of those entries is, or points to, and what that entry leads to
-// down the chain.
+// ours each of those entries that reaches it is, or points to, and what that
+// entry leads to down the chain. A build no entry of them reaches is
+// returned too, through nothing.
 func reachedThrough(sig *types.Signature, built map[*types.TypeName]helperBuild, entries []int) []build {
 	out := make([]build, 0, len(built))
 	for _, b := range built {
-		var through []*types.TypeName
+		reached := build{named: b.named}
 		for _, entry := range entries {
-			through = appendToolStruct(through, entryType(sig, entry))
-			through, _ = unionTypeNames(through, b.through[entry])
+			deeper, reaches := b.through[entry]
+			if !reaches {
+				continue
+			}
+			reached.reached = true
+			reached.through = appendToolStruct(reached.through, entryType(sig, entry))
+			reached.through, _ = unionTypeNames(reached.through, deeper)
 		}
-		out = append(out, build{named: b.named, through: through})
+		out = append(out, reached)
 	}
 	return out
 }
 
 // entryType returns the type of the entry of a function of signature sig:
-// its receiver's at [receiverEntry], a parameter's at its position.
+// its receiver's at [receiverEntry], a parameter's at its position, and for
+// the last parameter of a variadic function the type of each value it takes
+// (filter for fs ...filter), since a caller hands those one by one. go/types
+// gives that parameter an unnamed slice type always.
 func entryType(sig *types.Signature, entry int) types.Type {
 	if entry == receiverEntry {
 		return sig.Recv().Type()
 	}
-	return sig.Params().At(entry).Type()
+	params := sig.Params()
+	if sig.Variadic() && entry == params.Len()-1 {
+		slice, _ := params.At(entry).Type().(*types.Slice)
+		return slice.Elem()
+	}
+	return params.At(entry).Type()
 }
 
 // unionTypeNames returns a with every name of b it lacks appended once, in a
@@ -699,6 +722,34 @@ func sentStructs(info *types.Info, body *ast.BlockStmt) map[*types.TypeName]bool
 		}
 		return true
 	})
+	return sent
+}
+
+// sentThrough returns what [sentStructs] returns for body and for the body
+// of every function of decls that body calls, and that one calls in turn,
+// each read once: a function that hands what it builds to a helper of its
+// package sends it as surely as one that calls the service itself.
+func sentThrough(info *types.Info, body *ast.BlockStmt, decls map[*types.Func]*ast.FuncDecl) map[*types.TypeName]bool {
+	sent := map[*types.TypeName]bool{}
+	read := map[*ast.BlockStmt]bool{}
+	var walk func(*ast.BlockStmt)
+	walk = func(block *ast.BlockStmt) {
+		if read[block] {
+			return
+		}
+		read[block] = true
+		maps.Copy(sent, sentStructs(info, block))
+		ast.Inspect(block, func(node ast.Node) bool {
+			if call, isCall := node.(*ast.CallExpr); isCall {
+				fn, _ := calledFunc(info, call)
+				if decl := calleeDecl(fn, decls); decl != nil {
+					walk(decl.Body)
+				}
+			}
+			return true
+		})
+	}
+	walk(body)
 	return sent
 }
 
@@ -752,31 +803,48 @@ func helpersOf(pkg *packages.Package) helperBuilds {
 
 // helperDecl is one function without an input struct of its own: its
 // declaration and the variables its receiver and parameters are bound to,
-// each with its entry.
+// each with its entry, and, read once and kept by entry, what its body holds
+// of the value handed in each.
 type helperDecl struct {
 	key     string
 	fn      *ast.FuncDecl
 	entries map[*types.Var]int
+	held    map[int]map[*types.Var]bool
+}
+
+// holding returns what the helper's body holds of the value handed in the
+// entry variable is bound to, read the way [readingLiterals] reads a body for
+// its input, with the calls of bodies read through theirs.
+func (d helperDecl) holding(info *types.Info, variable *types.Var, bodies map[*types.Func]*ast.FuncDecl) map[*types.Var]bool {
+	entry := d.entries[variable]
+	if held, read := d.held[entry]; read {
+		return held
+	}
+	held := heldFrom(info, d.fn.Body, variable, bodies)
+	d.held[entry] = held
+	return held
 }
 
 // collectHelpers finds pkg's helpers and what each builds, a helper that
 // hands one of its parameters to another helper building what that one
 // builds, however deep the chain.
 func collectHelpers(pkg *packages.Package) helperBuilds {
-	decls, builds := declaredHelpers(pkg)
+	bodies := funcDecls(pkg)
+	decls, builds := declaredHelpers(pkg, bodies)
 	imported := helperBuilds{}
 	for _, dep := range importedToolPackages(pkg) {
 		maps.Copy(imported, helpersOf(dep))
 	}
-	closeHelpers(pkg.TypesInfo, decls, builds, imported)
+	closeHelpers(pkg.TypesInfo, decls, builds, imported, bodies)
 	return builds
 }
 
 // declaredHelpers lists pkg's helpers, each with the request structs its own
-// literals build. A function that takes an exported input is a handler when
-// it references a service method, since it sends its own request, and a
-// helper when it references none, since it only builds one for its caller.
-func declaredHelpers(pkg *packages.Package) ([]helperDecl, helperBuilds) {
+// literals build, bodies being the functions of pkg with a body. A function
+// that takes an exported input is a handler when it references a service
+// method, since it sends its own request, and a helper when it references
+// none, since it only builds one for its caller.
+func declaredHelpers(pkg *packages.Package, bodies map[*types.Func]*ast.FuncDecl) ([]helperDecl, helperBuilds) {
 	var decls []helperDecl
 	builds := helperBuilds{}
 	for _, file := range pkg.Syntax {
@@ -792,9 +860,9 @@ func declaredHelpers(pkg *packages.Package) ([]helperDecl, helperBuilds) {
 			if !isFunc {
 				continue
 			}
-			helper := helperDecl{key: funcKey(obj), fn: fn, entries: boundEntries(pkg.TypesInfo, fn)}
+			helper := helperDecl{key: funcKey(obj), fn: fn, entries: boundEntries(pkg.TypesInfo, fn), held: map[int]map[*types.Var]bool{}}
 			decls = append(decls, helper)
-			builds[helper.key] = requestLiterals(pkg.TypesInfo, fn.Body)
+			builds[helper.key] = helper.requestLiterals(pkg.TypesInfo, bodies)
 		}
 	}
 	return decls, builds
@@ -802,26 +870,31 @@ func declaredHelpers(pkg *packages.Package) ([]helperDecl, helperBuilds) {
 
 // closeHelpers adds to builds what each helper builds by handing one of its
 // entries to another helper, of its package or of imported, and the structs
-// what it hands goes through on the way, under the entry it was handed in.
-// The passes repeat until one adds nothing, which they reach because what a
-// helper builds, and what each of those goes through from each entry, only
-// grows and both are finite.
-func closeHelpers(info *types.Info, decls []helperDecl, builds, imported helperBuilds) {
+// what it hands goes through on the way, under the entry it was handed in,
+// and what such a helper hands back into a variable an entry is then
+// written into, under that entry. The passes repeat until one adds nothing,
+// which they reach because what a helper builds, the entries that reach
+// each, and what each of those goes through from each entry, only grow and
+// all are finite.
+func closeHelpers(info *types.Info, decls []helperDecl, builds, imported helperBuilds, bodies map[*types.Func]*ast.FuncDecl) {
 	for grew := true; grew; {
 		grew = false
 		reachable := maps.Clone(imported)
 		maps.Copy(reachable, builds)
 		for _, helper := range decls {
 			ast.Inspect(helper.fn.Body, func(node ast.Node) bool {
-				call, isCall := node.(*ast.CallExpr)
-				if !isCall {
-					return true
-				}
-				for variable, entry := range helper.entries {
-					readsEntry := func(arg ast.Expr) bool { return reads(info, arg, map[*types.Var]bool{variable: true}) }
-					for _, built := range helperCall(info, call, reachable, readsEntry) {
-						grew = mergeBuild(builds[helper.key], entry, built) || grew
+				switch typed := node.(type) {
+				case *ast.CallExpr:
+					for variable, entry := range helper.entries {
+						readsEntry := func(arg ast.Expr) bool { return reads(info, arg, map[*types.Var]bool{variable: true}) }
+						for _, built := range helperCall(info, typed, reachable, readsEntry) {
+							grew = mergeBuild(builds[helper.key], entry, built) || grew
+						}
 					}
+				case *ast.AssignStmt:
+					grew = helper.reachAssigned(info, typed.Lhs, typed.Rhs, reachable, builds[helper.key], bodies) || grew
+				case *ast.ValueSpec:
+					grew = helper.reachAssigned(info, specNames(typed), typed.Values, reachable, builds[helper.key], bodies) || grew
 				}
 				return true
 			})
@@ -829,39 +902,96 @@ func closeHelpers(info *types.Info, decls []helperDecl, builds, imported helperB
 	}
 }
 
-// requestLiterals returns the request structs a composite literal in body
-// builds, each once and through nothing yet from any entry: what a caller's
-// value goes through is the entry its caller hands it in.
-func requestLiterals(info *types.Info, body *ast.BlockStmt) map[*types.TypeName]helperBuild {
+// reachAssigned marks in builds, under every entry whose value the target of
+// an assignment comes to hold, what the helper of reachable whose call is
+// the value assigned builds, and reports whether builds grew: an entry
+// written into what an inner builder hands back (opts := optionsOf(f), then
+// opts.Search = &g.Name) reaches that request as surely as one the builder
+// is handed. It goes through nothing further down, since the builder was
+// never handed it, and it reaches only what the helper builds already by
+// another route, so what a helper builds is what it was before.
+func (d helperDecl) reachAssigned(info *types.Info, lhs, rhs []ast.Expr, reachable helperBuilds, builds map[*types.TypeName]helperBuild, bodies map[*types.Func]*ast.FuncDecl) bool {
+	grew := false
+	for i, target := range lhs {
+		call, isCall := ast.Unparen(assignedValue(rhs, i)).(*ast.CallExpr)
+		if !isCall {
+			continue
+		}
+		fn, _ := calledFunc(info, call)
+		if fn == nil {
+			continue
+		}
+		variable := rootVar(info, target)
+		for entryVar, entry := range d.entries {
+			if !d.holding(info, entryVar, bodies)[variable] {
+				continue
+			}
+			for _, b := range reachable[funcKey(fn)] {
+				_, built := builds[b.named.Obj()]
+				if built {
+					grew = mergeBuild(builds, entry, build{named: b.named, reached: true}) || grew
+				}
+			}
+		}
+	}
+	return grew
+}
+
+// requestLiterals returns the request structs a composite literal in the
+// helper's body builds, each once and through nothing yet from any entry,
+// each reached by the entries a literal of it reads, as [readingLiterals]
+// reads a literal for an input: what a caller's value goes through is the
+// entry its caller hands it in, when that entry reaches the struct.
+func (d helperDecl) requestLiterals(info *types.Info, bodies map[*types.Func]*ast.FuncDecl) map[*types.TypeName]helperBuild {
 	out := map[*types.TypeName]helperBuild{}
-	ast.Inspect(body, func(node ast.Node) bool {
+	literals := map[*ast.CompositeLit][]*types.Named{}
+	ast.Inspect(d.fn.Body, func(node ast.Node) bool {
 		lit, isLit := node.(*ast.CompositeLit)
 		if !isLit {
 			return true
 		}
 		for _, named := range builtRequests(info.TypeOf(lit)) {
+			literals[lit] = append(literals[lit], named)
 			if _, found := out[named.Obj()]; !found {
 				out[named.Obj()] = helperBuild{named: named, through: map[int][]*types.TypeName{}}
 			}
 		}
 		return true
 	})
+	if len(literals) == 0 {
+		return out
+	}
+	for variable, entry := range d.entries {
+		reading := readingIn(info, d.fn.Body, d.holding(info, variable, bodies))
+		for lit, built := range literals {
+			for _, named := range built {
+				if reading[lit] {
+					out[named.Obj()].through[entry] = nil
+				}
+			}
+		}
+	}
 	return out
 }
 
-// mergeBuild adds b, reached by handing on the helper's entry, to builds, or
-// what b went through to what that entry of the build of the same struct
-// leads to already, and reports whether builds grew either way. Like
-// [unionTypeNames], it reports growth by what it adds and compares nothing.
+// mergeBuild adds b, built by a helper the helper's entry is handed on to,
+// to builds, and when the entry reaches it, what b went through to what that
+// entry of the build of the same struct leads to already, and reports
+// whether builds grew either way. Like [unionTypeNames], it reports growth
+// by what it adds and compares nothing.
 func mergeBuild(builds map[*types.TypeName]helperBuild, entry int, b build) bool {
 	existing, found := builds[b.named.Obj()]
 	if !found {
-		builds[b.named.Obj()] = helperBuild{named: b.named, through: map[int][]*types.TypeName{entry: b.through}}
-		return true
+		existing = helperBuild{named: b.named, through: map[int][]*types.TypeName{}}
+		builds[b.named.Obj()] = existing
 	}
-	through, grew := unionTypeNames(existing.through[entry], b.through)
-	existing.through[entry] = through
-	return grew
+	if !b.reached {
+		return !found
+	}
+	through, present := existing.through[entry]
+	merged, grew := unionTypeNames(through, b.through)
+	existing.through[entry] = merged
+	return grew || !present
 }
 
 // boundEntries returns the variables a function's receiver and parameters
@@ -885,7 +1015,8 @@ func boundEntries(info *types.Info, fn *ast.FuncDecl) map[*types.Var]int {
 // helperCall returns what the helper call calls builds, when one of its
 // arguments, or its receiver, is one handed says the caller hands on, each
 // going through the structs of ours among the parameters, and the receiver,
-// the call hands those to, and what those lead to down the chain.
+// the call hands those to and that reach it, and what those lead to down
+// the chain.
 func helperCall(info *types.Info, call *ast.CallExpr, helpers helperBuilds, handed func(ast.Expr) bool) []build {
 	fn, receiver := calledFunc(info, call)
 	if fn == nil {
