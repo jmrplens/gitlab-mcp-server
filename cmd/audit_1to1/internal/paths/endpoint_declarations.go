@@ -60,6 +60,14 @@ const (
 	// reference instead.
 	categoryUndocumentedAPI = "undocumented-api"
 
+	// categoryPlaceholderTakesASlash is an endpoint the documentation spells
+	// with a placeholder that the route lets carry a slash, so a value with one
+	// fills two segments of the recorded path where the documented line has one.
+	// The comparison holds a placeholder to one segment, which is right for
+	// every placeholder GitLab declares no such requirement for, and the
+	// documentation does not say which ones it declares.
+	categoryPlaceholderTakesASlash = "placeholder-takes-a-slash"
+
 	// categoryClientDefect is a path we send that GitLab does not have, and
 	// the defect is in client-go rather than here. It is declared rather than
 	// fixed because the fix belongs upstream, and it is named here so the
@@ -80,16 +88,17 @@ var declaredUndocumentedEndpoints = []endpointDeclaration{
 		Shape:    "/projects/*/services/...",
 		Category: categoryUndocumentedAlias,
 		Reason: "client-go addresses the project integrations through /services/, the spelling GitLab replaced with " +
-			"/integrations/ and still serves. integrations.md documents only the new one, so every integration " +
+			"/integrations/ and still serves. project_integrations.md documents only the new one, so every integration " +
 			"endpoint we reach looks undocumented. The request works; the day it stops, client-go is where it changes.",
 	},
 	{
 		Shape:    "/projects/*/repository/files/*/raw",
 		Methods:  []string{"HEAD"},
 		Category: categoryUndocumentedMethod,
-		Reason: "repository_files.md documents the GET. GitLab answers HEAD on it with the same headers and no " +
-			"body, which is how the file tools read a file's size and content type without downloading it, and " +
-			"the documentation writes no HEAD line for any endpoint.",
+		Reason: "repository_files.md documents the GET of /raw, and spells HEAD only for the file's metadata route " +
+			"(HEAD /projects/:id/repository/files/:file_path) and its blame. GitLab answers HEAD on /raw too, with the " +
+			"same headers and no body, which is how repository.file_raw_metadata reads a file's size and content type " +
+			"(client-go's GetRawFileMetaData) without downloading it.",
 	},
 	{
 		Shape:    "/projects/*/packages/generic/...",
@@ -116,6 +125,16 @@ var declaredUndocumentedEndpoints = []endpointDeclaration{
 			"the new one, while still serving the old. job.list_bridges sends trigger_jobs to an instance known to " +
 			"run 19.2 or later and keeps bridges, through client-go's deprecated ListPipelineBridges, for an older " +
 			"instance or one whose release it cannot read, which is the request recorded here.",
+	},
+	{
+		Shape:    "/projects/*/jobs/artifacts/*/*/download",
+		Methods:  []string{"GET"},
+		Category: categoryPlaceholderTakesASlash,
+		Reason: "job_artifacts.md documents GET /projects/:id/jobs/artifacts/:ref_name/download, and " +
+			"lib/api/ci/job_artifacts.rb mounts it with `requirements: { ref_name: /.+/ }`, so a branch named feature/x " +
+			"is sent as the two segments job.download_artifacts escapes one by one (toolutil.EscapePathSegments) and " +
+			"GitLab reads as one ref. The recordings are the slashed refs the handler's tests send; a ref of three " +
+			"segments would be a shape of its own.",
 	},
 	{
 		Shape:    "/projects/*/terraform/state/...",

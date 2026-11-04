@@ -4,10 +4,11 @@
 package paths
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
@@ -21,6 +22,17 @@ func withE2ERecord(t *testing.T, read func(string) ([]e2ecalls.Record, error)) {
 	original := readE2ECalls
 	readE2ECalls = read
 	t.Cleanup(func() { readE2ECalls = original })
+}
+
+// observe is [e2eObservation] for a case whose record the reader can read, so
+// an error is the case failing rather than something to assert on.
+func observe(t *testing.T, dir string, actions []requestinventory.Action) E2EObservation {
+	t.Helper()
+	observation, err := e2eObservation(dir, actions)
+	if err != nil {
+		t.Fatalf("e2eObservation(%q) error = %v, want the record read", dir, err)
+	}
+	return observation
 }
 
 // dispatchRecordOf wraps one dispatch line the way a shard holds it.
@@ -68,7 +80,7 @@ func TestE2EObservation_ClassifiesPerAction(t *testing.T) {
 		{ID: "issue.update", Owner: "issues"},
 	}
 
-	observation := e2eObservation("dist/e2e-calls", actions)
+	observation := observe(t, "dist/e2e-calls", actions)
 
 	if !observation.Ran || observation.Directory != "dist/e2e-calls" {
 		t.Fatalf("observation = %+v, want a run over the named directory", observation)
@@ -128,7 +140,7 @@ func TestE2EObservation_ATraceWrittenTwice_IsStillOneDispatch(t *testing.T) {
 		{ID: "issue.get", Owner: "issues"},
 	}
 
-	observation := e2eObservation("dist/e2e-calls", actions)
+	observation := observe(t, "dist/e2e-calls", actions)
 
 	// Two for the trace-less pair: a line naming no trace is folded with
 	// nothing, since merging those would join two calls that never said they
@@ -222,9 +234,9 @@ func TestE2EObservation_NoDirectory_AsksNothing(t *testing.T) {
 		return nil, nil
 	})
 
-	observation := e2eObservation("", []requestinventory.Action{{ID: "issue.list", Owner: "issues"}})
+	observation := observe(t, "", []requestinventory.Action{{ID: "issue.list", Owner: "issues"}})
 
-	if observation.Ran || observation.Directory != "" || observation.Error != "" {
+	if observation.Ran || observation.Directory != "" {
 		t.Errorf("observation = %+v, want the zero value", observation)
 	}
 }
@@ -243,37 +255,33 @@ func TestE2EObservation_ASchemaOneShard_IsReadForItsDispatchLines(t *testing.T) 
 		t.Fatalf("WriteFile error = %v", err)
 	}
 
-	observation := e2eObservation(dir, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}})
+	observation := observe(t, dir, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}})
 
-	if observation.Error != "" {
-		t.Fatalf("observation error = %q, want the schema 1 shard read", observation.Error)
-	}
 	if !slices.Equal(observation.Issuing, []string{"issue.list"}) {
 		t.Errorf("issuing = %v, want the action its dispatch line credits", observation.Issuing)
 	}
 }
 
-// TestE2EObservation_UnreadableRecord_IsANoteAndNotAFailure verifies the
-// failure this check answers with rather than propagates.
+// TestE2EObservation_ADirectoryItCannotRead_IsAnError verifies the failure
+// this check propagates (issue 1688).
 //
 // It reads a directory a Docker run wrote, which may be missing, half-written
-// or from another version of the record. None of that is a fact about the
-// server, and failing R-PATH on it would fail a gate about this repository for
-// a reason outside it, so the reason is published and the run goes on.
-func TestE2EObservation_UnreadableRecord_IsANoteAndNotAFailure(t *testing.T) {
-	withE2ERecord(t, func(string) ([]e2ecalls.Record, error) {
-		return nil, errors.New("no calls-*.jsonl shard under dist/e2e-calls")
-	})
+// or from another version of the record. A run that names one asked for the
+// per-action answer, and a record it cannot read gives no answer at all, so
+// the run stops the way an unreadable inventory stops it. It used to publish
+// the reason inside the report and exit 0, so a run whose Docker session wrote
+// nothing read like one whose every action was observed. The real reader is
+// what is asked here, of a directory that does not exist, which is the run
+// measured before the change: -e2e-calls /nonexistent exited 0.
+func TestE2EObservation_ADirectoryItCannotRead_IsAnError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nonexistent")
 
-	observation := e2eObservation("dist/e2e-calls", nil)
+	observation, err := e2eObservation(missing, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}})
 
-	if !observation.Ran {
-		t.Error("a read that failed was reported as no read at all")
+	if err == nil || !strings.Contains(err.Error(), "read the end-to-end call record") || !strings.Contains(err.Error(), missing) {
+		t.Errorf("e2eObservation(%q) error = %v, want the read named with the directory", missing, err)
 	}
-	if observation.Error == "" {
-		t.Error("the read failure was absorbed rather than published")
-	}
-	if len(observation.Issuing) != 0 || len(observation.Silent) != 0 {
-		t.Errorf("observation = %+v, want no claim about any action", observation)
+	if !reflect.DeepEqual(observation, E2EObservation{}) {
+		t.Errorf("observation = %+v, want nothing claimed about any action", observation)
 	}
 }

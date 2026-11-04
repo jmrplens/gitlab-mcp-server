@@ -1131,6 +1131,17 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: groupsPkg, Entity: todoEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferFailureTodos},
 	{Package: toolsDir + "/projects", Entity: todoEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferFailureTodos},
 
+	// The instance version four packages read to choose what to send: the
+	// route a release added, or whether to ask GraphQL for a transfer's
+	// reason. The client asks GET /version for them (gitlabclient.AtLeast),
+	// and a splat is the right answer for the reason the other reads for a
+	// package's own use are one: nothing of the answer is published, so a key
+	// GitLab adds to the entity is not one the package leaves out.
+	{Package: groupsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferReasonVersion},
+	{Package: projectsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferReasonVersion},
+	{Package: toolsDir + "/jobs", Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonBridgesRouteVersion},
+	{Package: mergeRequestsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonCancelAutoMergeVersion},
+
 	// The release link the dynamic surface's own test creates through
 	// gitlab_execute_action, which answers with the release link package's
 	// output.
@@ -1246,6 +1257,29 @@ const reasonTransferFailureTodos = "a project or group transfer reads the caller
 	"to the transfer_failed action and the object moved, in waitpoll.TransferFailed) only to learn whether GitLab's " +
 	"background worker failed the transfer, which since 19.4 only such an item reports, and publishes the destination it " +
 	"names rather than the item. user.todo_list is the action that answers with to-do items."
+
+// reasonTransferReasonVersion answers the instance version a failed transfer
+// reads before it asks GraphQL for GitLab's reason.
+const reasonTransferReasonVersion = "a project or group transfer that GitLab's worker failed asks for the reason " +
+	"(waitpoll.TransferFailureReason) only from an instance that may run 19.5 or later, the release whose GraphQL to-do " +
+	"item carries transferFailureReason, so the client reads GET /version first (gitlabclient.AtLeast, once per client) " +
+	"and keeps only whether the release is that one or later. Nothing of the answer is published; admin.metadata_get is " +
+	"the action that answers with the instance metadata."
+
+// reasonBridgesRouteVersion answers the instance version the bridge listing
+// reads to choose its route.
+const reasonBridgesRouteVersion = "job.list_bridges sends GET /projects/:id/pipelines/:pipeline_id/trigger_jobs to an " +
+	"instance known to run 19.2 or later and the deprecated bridges route otherwise, so the client reads GET /version " +
+	"first (gitlabclient.AtLeast, once per client) and keeps only whether the release is 19.2 or later. Nothing of the " +
+	"answer is published; admin.metadata_get is the action that answers with the instance metadata."
+
+// reasonCancelAutoMergeVersion answers the instance version the auto-merge
+// cancel reads to choose its route.
+const reasonCancelAutoMergeVersion = "merge_request.cancel_auto_merge sends POST " +
+	"/projects/:id/merge_requests/:merge_request_iid/cancel_auto_merge to an instance known to run 19.5 or later and the " +
+	"deprecated cancel_merge_when_pipeline_succeeds route otherwise, so the client reads GET /version first " +
+	"(gitlabclient.AtLeast, once per client) and keeps only whether the release is 19.5 or later. Nothing of the answer " +
+	"is published; admin.metadata_get is the action that answers with the instance metadata."
 
 // reasonTerraformStateProjectPath answers the project the Terraform state
 // package reads to name it to GraphQL.

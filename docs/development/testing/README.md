@@ -582,11 +582,14 @@ most often meets are not the first ones listed.
   buffer of exactly that length is cut to the length it already has, and
   `tierFromNamespaces`' `tier > best`, where a second namespace on the tier
   already held assigned `best` the value it had and changed nothing but
-  whether one more debug line was written. So are three of `cmd/internal/apidocs`' four:
-  `if secs <= 0 { return 0 }` is followed by `return time.Duration(secs) * time.Second`, `if d := time.Until(t);
-  d > 0 { return d }` falls through to `return 0`, and `sleepCtx`'s
-  `if d <= 0 { return ctx.Err() }` falls through to a zero timer that fires at
-  once — at zero, each pair returns the same thing just as promptly.
+  whether one more debug line was written. So were three of `cmd/internal/apidocs`'
+  four until issue 1688: `if secs <= 0 { return 0 }` was followed by
+  `return time.Duration(secs) * time.Second` and `if d := time.Until(t); d > 0
+  { return d }` fell through to `return 0`, both now written with `max`, and
+  `sleepCtx`'s `if d <= 0 { return ctx.Err() }` fell through to a zero timer
+  that fires at once, where it now asks the context before making the timer and
+  leaves a non-positive wait to the timer. At zero, each pair returned the same
+  thing just as promptly.
   Where the branch does nothing but cut a value down to the bound, the `min`
   or `max` builtin says the same thing with no comparison left to flip, and
   that is the better answer: `internal/config`'s `announcedKeys` cut its list
@@ -606,13 +609,17 @@ most often meets are not the first ones listed.
   1901-12-13, so `time.Time.Sub` never reaches the saturation that would pin
   both sides to `math.MaxInt64`), and the wall clock moves between the write
   and the comparison. Killing it would mean indirecting the clock in production
-  to assert a spelling. `cmd/internal/apidocs`' cache-freshness check is the
-  one here. `internal/gitlab`'s initialization cooldown was the second until
-  issue 952 tested it in a `testing/synctest` bubble: there both ends of the
-  comparison are the bubble's clock, which moves only when the test sleeps,
-  so the test lands on the boundary to the nanosecond. A boundary whose other
-  end is a time the program holds, rather than one the filesystem stamps, can
-  be scheduled that way, and is no longer this kind.
+  to assert a spelling. No survivor of this kind is left. `internal/gitlab`'s
+  initialization cooldown was one until issue 952 tested it in a
+  `testing/synctest` bubble: there both ends of the comparison are the bubble's
+  clock, which moves only when the test sleeps, so the test lands on the
+  boundary to the nanosecond. `cmd/internal/apidocs`' cache-freshness check was
+  the other until issue 1688, which runs it in a bubble too and stamps the file
+  from the bubble's clock with `os.Chtimes`: the mtime is then a time the test
+  chose, whole seconds from the bubble's midnight that every filesystem a test
+  runs on stores exactly, and the age the check reads is the window to the
+  nanosecond. A boundary either end of which a test can stamp from the bubble
+  can be scheduled that way, and is not this kind.
 - **A guard that a second guard makes unobservable.** The negative token
   cache used to check "disabled" in `Lookup` and `Contains` as well as in
   `RecordKind`, the only place an entry is stored, so removing either copy

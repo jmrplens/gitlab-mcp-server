@@ -165,7 +165,7 @@ func TestRun_TheOrbitRecord_IsJudgedAndGatesNothing(t *testing.T) {
 	}
 	t.Cleanup(func() { readDecoders = previous })
 
-	content, clean, err := Run(t.Context(), root, Options{})
+	content, clean, err := Run(root, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestRun_AStaleOrbitDeclaration_FailsTheGate(t *testing.T) {
 	root := orbitRunTree(t)
 	declaredOrbitFields = []orbitDeclaration{{Package: "internal/tools/orbitx", Output: "StatusOutput", Path: "gone", Direction: orbitPublished, Category: "c", Reason: "r"}}
 
-	content, clean, err := Run(t.Context(), root, Options{})
+	content, clean, err := Run(root, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

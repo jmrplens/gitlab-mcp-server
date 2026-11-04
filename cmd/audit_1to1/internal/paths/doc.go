@@ -58,7 +58,8 @@
 // travel through a batching processor that drops silently when its queue
 // overflows, so a trace whose client spans were dropped reads as an action
 // that issued nothing. A positive claim here is therefore solid and a negative
-// one is a lead.
+// one is a lead. A directory named and not readable is not absence, and fails
+// the run.
 //
 // An action whose declared owner names no package at all is a finding of its
 // own rather than a curiosity. Nothing in the catalog validates that an owner
@@ -133,9 +134,11 @@
 //
 // # Does the endpoint exist
 //
-// Each recorded REST endpoint against GitLab's own API documentation. It runs
-// only when asked for, because the oracle is 250 pages over the network, and
-// when it runs it gates: an endpoint no declaration in endpoint_declarations.go
+// Each recorded REST endpoint against GitLab's own API documentation, read
+// from a committed oracle ([DocEndpoints]) that [BuildDocEndpoints] writes from
+// doc/api at the tag of the live record's release. It runs when
+// -check-endpoints asks for it, which every gate does, and it gates: an
+// endpoint neither the oracle nor a declaration in endpoint_declarations.go
 // accounts for fails the run, which is what the issue behind this dimension
 // asked for. The declarations are what make that safe, since the oracle is
 // prose and a handful of endpoints GitLab serves are written down in a way no
@@ -144,8 +147,10 @@
 // # Does GitLab say it sends what we publish
 //
 // The one check here whose oracle is GitLab itself: the record a booted GitLab
-// produced, pinned by cmd/gen_api_live. It reports and never gates, and it asks
-// its question at two grains, both published so a reader can compare them.
+// produced, pinned by cmd/gen_api_live. It reports, and gates only on the
+// package grain of its reverse question, a field sent that no declaration
+// answers ([SentCheck]), and it asks its question at two grains, both
+// published so a reader can compare them.
 //
 // One record answers both halves of it, which is why a finding can always say
 // when GitLab sends a field. The two records this replaced could not: a

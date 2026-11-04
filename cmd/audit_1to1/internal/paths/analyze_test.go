@@ -4,7 +4,6 @@
 package paths
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"go/token"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
@@ -27,8 +25,8 @@ import (
 // stubInputs replaces the four inputs with fixtures, so a case can describe a
 // tree rather than wait for one: the committed inventory, the catalog compiled
 // into the binary, the type-checked read of every GraphQL document, and the
-// documentation comparison, which would otherwise download 250 pages from
-// gitlab.com the moment a case handed Run a real fetcher.
+// documentation comparison, which would otherwise ask a planted root for an
+// oracle and a live record it does not hold.
 func stubInputs(t *testing.T, rows []requestinventory.Row, actions []requestinventory.Action, documents graphqldocs.Result) {
 	t.Helper()
 	inventory, catalog, graphQL, endpoints := readInventory, catalogActions, auditGraphQL, auditEndpoints
@@ -40,9 +38,20 @@ func stubInputs(t *testing.T, rows []requestinventory.Row, actions []requestinve
 	}
 	catalogActions = func() ([]requestinventory.Action, error) { return actions, nil }
 	auditGraphQL = func(graphqldocs.Options) (graphqldocs.Result, error) { return documents, nil }
-	auditEndpoints = func(context.Context, *apidocs.Fetcher, []requestinventory.Row) (EndpointCheck, error) {
+	auditEndpoints = func(string, []requestinventory.Row) (EndpointCheck, error) {
 		return EndpointCheck{Ran: true}, nil
 	}
+}
+
+// withPlantedTables empties the declaration tables that read a live record,
+// for a case that plants one: every entry of the real tables is about the real
+// tree, and against a planted record each would be stale and fail the run for
+// a reason the case is not about.
+func withPlantedTables(t *testing.T) {
+	t.Helper()
+	stubTypeGrainInputs(t, structs.Pairings{}, nil, nil)
+	withPaginationDeclarations(t, nil)
+	withKeysetDeclarations(t, nil)
 }
 
 // oneRow is an inventory with one recorded request in it, which is enough for
@@ -92,7 +101,7 @@ func TestRun_ACleanTree_PassesTheGateAndCountsWhatItSaw(t *testing.T) {
 		[]requestinventory.Action{{ID: "issue.list", Owner: "issues"}},
 		graphqldocs.Result{Documents: []graphqldocs.Document{{Name: "query"}}})
 
-	content, clean, err := Run(t.Context(), root, Options{})
+	content, clean, err := Run(root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
@@ -110,7 +119,7 @@ func TestRun_ACleanTree_PassesTheGateAndCountsWhatItSaw(t *testing.T) {
 		t.Errorf("report names the inventory %q, want %q", report.Inventory, requestinventory.Path)
 	}
 	if report.Endpoints.Ran {
-		t.Error("the documentation comparison ran without a fetcher")
+		t.Error("the documentation comparison ran without being asked for")
 	}
 }
 
@@ -184,7 +193,7 @@ func TestRun_TheFourFindings_FailTheGate(t *testing.T) {
 			root := t.TempDir()
 			testCase.arrange(t, root)
 
-			content, clean, err := Run(t.Context(), root, Options{})
+			content, clean, err := Run(root, Options{})
 			if err != nil {
 				t.Fatalf("Run() error = %v, want the finding in the report", err)
 			}
@@ -213,7 +222,7 @@ func TestRun_TheRefusedDocument_IsNamedWhereAReaderCanOpenIt(t *testing.T) {
 		}},
 	})
 
-	content, _, err := Run(t.Context(), root, Options{})
+	content, _, err := Run(root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -253,11 +262,11 @@ func TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext(t *testing.T) {
 		{ID: "c.list", Owner: "nowhere"},
 	}, graphqldocs.Result{})
 
-	full, _, err := Run(t.Context(), root, Options{})
+	full, _, err := Run(root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	gaps, _, err := Run(t.Context(), root, Options{GapsOnly: true})
+	gaps, _, err := Run(root, Options{GapsOnly: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -302,11 +311,11 @@ func TestRun_GapsOnly_KeepsTheKeysetWorkAndDropsItsDeclaredFindings(t *testing.T
 		listAction("thing.search", "things", reflect.TypeFor[fixturePaginatedListOutput](), withoutPageToken),
 	}, graphqldocs.Result{})
 
-	full, _, err := Run(t.Context(), root, Options{})
+	full, _, err := Run(root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	gaps, _, err := Run(t.Context(), root, Options{GapsOnly: true})
+	gaps, _, err := Run(root, Options{GapsOnly: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -353,11 +362,11 @@ func TestRun_GapsOnly_DropsTheListingsOfClientGosDocuments(t *testing.T) {
 			return graphqldocs.Result{Documents: got}, nil
 		})
 
-	full, _, err := Run(t.Context(), root, Options{})
+	full, _, err := Run(root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	gaps, _, err := Run(t.Context(), root, Options{GapsOnly: true})
+	gaps, _, err := Run(root, Options{GapsOnly: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -406,7 +415,7 @@ func TestRun_AnEndToEndRecord_AnswersTheObservationQuestionPerAction(t *testing.
 		}, nil
 	})
 
-	content, clean, err := Run(t.Context(), root, Options{E2ECallsDir: "dist/e2e-calls"})
+	content, clean, err := Run(root, Options{E2ECallsDir: "dist/e2e-calls"})
 	if err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
@@ -422,7 +431,7 @@ func TestRun_AnEndToEndRecord_AnswersTheObservationQuestionPerAction(t *testing.
 	}
 
 	t.Run("gaps-only keeps the lead and drops the context", func(t *testing.T) {
-		gaps, _, gapsErr := Run(t.Context(), root, Options{GapsOnly: true, E2ECallsDir: "dist/e2e-calls"})
+		gaps, _, gapsErr := Run(root, Options{GapsOnly: true, E2ECallsDir: "dist/e2e-calls"})
 		if gapsErr != nil {
 			t.Fatalf("Run() error = %v, want nil", gapsErr)
 		}
@@ -436,43 +445,44 @@ func TestRun_AnEndToEndRecord_AnswersTheObservationQuestionPerAction(t *testing.
 	})
 }
 
-// TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher verifies the switch,
-// since the comparison needs the network and two minutes of it: a run that
-// only wants the other two checks must not pay for it.
-//
-// When it does run it gates, on the endpoints no declaration accounts for.
-// The undocumented endpoint stubbed here is declared by nothing, so the gate
-// fails and the run that never compared anything passes.
-func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
+// TestRun_TheDocumentationComparison_RunsWhenAskedFor verifies the switch and
+// the root it is handed. A run that does not ask reads no oracle, which is what
+// a planted tree without one needs; one that asks reads it under the root the
+// run audits, and gates on the endpoints no declaration accounts for. The
+// undocumented endpoint stubbed here is declared by nothing, so the gate fails
+// and the run that never compared anything passes.
+func TestRun_TheDocumentationComparison_RunsWhenAskedFor(t *testing.T) {
 	root := t.TempDir()
 	makeToolsPackage(t, root, "issues")
 	withDeclarations(t, map[string]silentOwnerDeclaration{})
 	stubInputs(t, oneRow, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}}, graphqldocs.Result{})
 	called := 0
+	var askedRoot string
 	original := auditEndpoints
 	t.Cleanup(func() { auditEndpoints = original })
-	auditEndpoints = func(context.Context, *apidocs.Fetcher, []requestinventory.Row) (EndpointCheck, error) {
+	auditEndpoints = func(at string, _ []requestinventory.Row) (EndpointCheck, error) {
 		called++
+		askedRoot = at
 		return EndpointCheck{Ran: true, Undocumented: []Endpoint{{Method: "GET", Path: "/nowhere"}}}, nil
 	}
 
-	_, cleanWithout, err := Run(t.Context(), root, Options{})
+	_, cleanWithout, err := Run(root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	if called != 0 {
-		t.Errorf("the comparison ran %d time(s) without a fetcher, want none", called)
+		t.Errorf("the comparison ran %d time(s) without being asked for, want none", called)
 	}
 	if !cleanWithout {
 		t.Error("the gate failed on a comparison that never ran")
 	}
 
-	content, clean, err := Run(t.Context(), root, Options{Fetcher: apidocs.New(root, apidocs.Options{})})
+	content, clean, err := Run(root, Options{CheckEndpoints: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if called != 1 {
-		t.Errorf("the comparison ran %d time(s) with a fetcher, want one", called)
+	if called != 1 || askedRoot != root {
+		t.Errorf("the comparison ran %d time(s) on %q when asked for, want once on %q", called, askedRoot, root)
 	}
 	if clean {
 		t.Error("an endpoint no declaration accounts for passed the gate")
@@ -482,7 +492,7 @@ func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
 		t.Errorf("summary = %+v, want the endpoint counted as undocumented and undeclared", summary)
 	}
 	t.Run("the work list keeps it", func(t *testing.T) {
-		gaps, _, gapsErr := Run(t.Context(), root, Options{GapsOnly: true, Fetcher: apidocs.New(root, apidocs.Options{})})
+		gaps, _, gapsErr := Run(root, Options{GapsOnly: true, CheckEndpoints: true})
 		if gapsErr != nil {
 			t.Fatalf("Run() error = %v", gapsErr)
 		}
@@ -490,6 +500,73 @@ func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
 			t.Errorf("the gaps-only report lists %+v, want the undeclared endpoint", found)
 		}
 	})
+}
+
+// TestRun_TheCommittedOracle_JudgesEveryRecordedEndpointOffline verifies the
+// comparison from the oracle a root commits to the verdict, with nothing
+// stubbed between them and no network (issue 1688).
+//
+// Before the oracle was committed this could not be asked offline at all: the
+// run read the page listing from a cache nothing filled, and stopped. The
+// planted case is the one that matters, an endpoint the oracle does not spell
+// and no declaration answers, which fails the gate naming the endpoint and
+// the package that sends it. The documented endpoint passes, a declaration
+// answers its endpoint, and a declaration that answers nothing is stale.
+func TestRun_TheCommittedOracle_JudgesEveryRecordedEndpointOffline(t *testing.T) {
+	issues := requestinventory.Row{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:project_id/issues"}
+	widgets := requestinventory.Row{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:project_id/widgets"}
+	widgetDeclaration := endpointDeclaration{Shape: "/projects/*/widgets", Category: categoryDocumentedElsewhere, Reason: "documented under doc/user"}
+	cases := []struct {
+		name         string
+		rows         []requestinventory.Row
+		declarations []endpointDeclaration
+		wantClean    bool
+		wantUnnamed  string
+		wantStale    string
+	}{
+		{name: "an endpoint neither the oracle nor a declaration accounts for", rows: []requestinventory.Row{issues, widgets}, wantUnnamed: widgets.Path},
+		{name: "the documented endpoint", rows: []requestinventory.Row{issues}, wantClean: true},
+		{name: "the declared endpoint", rows: []requestinventory.Row{issues, widgets}, declarations: []endpointDeclaration{widgetDeclaration}, wantClean: true},
+		{name: "a declaration that answers nothing", rows: []requestinventory.Row{issues}, declarations: []endpointDeclaration{widgetDeclaration}, wantStale: widgetDeclaration.Shape},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			withPlantedTables(t)
+			root := oracleRoot(t, encodeOracle(t, fixtureRef,
+				DocumentedEndpoint{Method: "GET", Path: "/projects/:id/issues", Areas: []string{"issues"}}))
+			makeToolsPackage(t, root, "issues")
+			withDeclarations(t, map[string]silentOwnerDeclaration{})
+			stubInputs(t, testCase.rows, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}}, graphqldocs.Result{})
+			auditEndpoints = checkEndpoints
+			withEndpointDeclarations(t, testCase.declarations)
+
+			content, clean, err := Run(root, Options{CheckEndpoints: true})
+			if err != nil {
+				t.Fatalf("Run() error = %v, want the endpoints judged", err)
+			}
+
+			report := decode(t, content)
+			if clean != testCase.wantClean {
+				t.Errorf("clean = %t, want %t: %+v", clean, testCase.wantClean, report.Summary)
+			}
+			var unnamed []Endpoint
+			for _, endpoint := range report.Endpoints.Undocumented {
+				if !endpoint.declared() {
+					unnamed = append(unnamed, endpoint)
+				}
+			}
+			switch {
+			case testCase.wantUnnamed == "" && len(unnamed) != 0:
+				t.Errorf("undeclared = %+v, want none", unnamed)
+			case testCase.wantUnnamed != "" && (len(unnamed) != 1 || unnamed[0].Path != testCase.wantUnnamed || !slices.Equal(unnamed[0].Packages, []string{"internal/tools/issues"})):
+				t.Errorf("undeclared = %+v, want %s named with the package that sends it", unnamed, testCase.wantUnnamed)
+			}
+			stale := report.StaleDeclarations
+			if (testCase.wantStale == "") != (len(stale) == 0) || (testCase.wantStale != "" && !strings.HasPrefix(stale[0], testCase.wantStale+" ")) {
+				t.Errorf("stale = %v, want %q named", stale, testCase.wantStale)
+			}
+		})
+	}
 }
 
 // TestRun_ADeclaredEndpoint_PassesAndIsNotWork verifies the other half of the
@@ -505,12 +582,12 @@ func TestRun_ADeclaredEndpoint_PassesAndIsNotWork(t *testing.T) {
 	withEndpointDeclarations(t, []endpointDeclaration{
 		{Shape: "/orbit/...", Category: categoryUndocumentedAPI, Reason: "experimental and documented nowhere"},
 	})
-	auditEndpoints = func(context.Context, *apidocs.Fetcher, []requestinventory.Row) (EndpointCheck, error) {
+	auditEndpoints = func(string, []requestinventory.Row) (EndpointCheck, error) {
 		found, unused := classifyUndocumented([]Endpoint{{Method: "GET", Path: "/orbit/status"}})
 		return EndpointCheck{Ran: true, Undocumented: found, UnusedDeclarations: unused}, nil
 	}
 
-	content, clean, err := Run(t.Context(), root, Options{Fetcher: apidocs.New(root, apidocs.Options{})})
+	content, clean, err := Run(root, Options{CheckEndpoints: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -522,7 +599,7 @@ func TestRun_ADeclaredEndpoint_PassesAndIsNotWork(t *testing.T) {
 	if len(report.Endpoints.Undocumented) != 1 || report.Endpoints.Undocumented[0].Category != categoryUndocumentedAPI {
 		t.Errorf("undocumented = %+v, want the declaration's category on it", report.Endpoints.Undocumented)
 	}
-	gaps, _, err := Run(t.Context(), root, Options{GapsOnly: true, Fetcher: apidocs.New(root, apidocs.Options{})})
+	gaps, _, err := Run(root, Options{GapsOnly: true, CheckEndpoints: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -541,11 +618,11 @@ func TestRun_ADeclarationThatMatchesNothing_IsAFinding(t *testing.T) {
 	stubInputs(t, oneRow, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}}, graphqldocs.Result{})
 	original := auditEndpoints
 	t.Cleanup(func() { auditEndpoints = original })
-	auditEndpoints = func(context.Context, *apidocs.Fetcher, []requestinventory.Row) (EndpointCheck, error) {
+	auditEndpoints = func(string, []requestinventory.Row) (EndpointCheck, error) {
 		return EndpointCheck{Ran: true, UnusedDeclarations: []string{"/orbit/..."}}, nil
 	}
 
-	content, clean, err := Run(t.Context(), root, Options{Fetcher: apidocs.New(root, apidocs.Options{})})
+	content, clean, err := Run(root, Options{CheckEndpoints: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -587,7 +664,7 @@ func TestRun_TheNestedKeysAPartLeavesOut_AreCountedApartFromTheTopLevel(t *testi
 	withDeclarations(t, map[string]silentOwnerDeclaration{})
 	stubInputs(t, nil, nil, graphqldocs.Result{})
 
-	content, _, err := Run(t.Context(), root, Options{})
+	content, _, err := Run(root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -597,6 +674,68 @@ func TestRun_TheNestedKeysAPartLeavesOut_AreCountedApartFromTheTopLevel(t *testi
 	nested := [3]int{summary.TypedNestedUnsurfaced, summary.TypedNestedSentDeclared, summary.TypedNestedNotInSDK}
 	if top != [3]int{1, 0, 1} || nested != [3]int{3, 1, 2} {
 		t.Errorf("top level = %v, nested = %v (fields, declared, not in client-go); want [1 0 1] and [3 1 2]", top, nested)
+	}
+}
+
+// TestRun_ASentFieldNoDeclarationAnswers_FailsTheGate holds the package grain
+// of the sent comparison to the gate it joined (issue 1688): the widget list
+// sends a title the widgets package publishes nowhere, which is a finding
+// somebody has to decide about, and the run fails until a declaration answers
+// it.
+//
+// The planted finding is the shape the real tree carried unnoticed: four
+// packages read GET /version to choose a route, and the fourteen keys of the
+// metadata they publish nowhere stood as findings while the gate passed. The
+// two correct cases are the declaration that answers it, which passes, and a
+// second declaration beside it that answers nothing, which is stale.
+func TestRun_ASentFieldNoDeclarationAnswers_FailsTheGate(t *testing.T) {
+	answer := sentDeclaration{
+		Package: "internal/tools/widgets", Entity: widgetEntity, Field: "title",
+		Category: categoryReadForItsOwnUse, Reason: "the package reads the list to count the widgets",
+	}
+	gone := sentDeclaration{
+		Package: "internal/tools/widgets", Entity: widgetEntity, Field: "tint",
+		Category: categoryReadForItsOwnUse, Reason: "a key the entity no longer sends",
+	}
+	cases := []struct {
+		name           string
+		declarations   []sentDeclaration
+		wantClean      bool
+		wantUndeclared int
+		wantStale      int
+	}{
+		{name: "a field no declaration answers", wantUndeclared: 1},
+		{name: "the field a declaration answers", declarations: []sentDeclaration{answer}, wantClean: true},
+		{name: "a declaration that answers nothing", declarations: []sentDeclaration{answer, gone}, wantStale: 1},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			withPlantedTables(t)
+			declaredUnsurfaced = testCase.declarations
+			root := recordIn(t, map[string]response{"GET /api/v4/widgets": {
+				Entity:   widgetEntity,
+				Response: []string{"head_widget", "id", "title"},
+			}})
+			writeToolsPackage(t, root, "widgets", widgetListSource)
+			withDeclarations(t, map[string]silentOwnerDeclaration{})
+			stubInputs(t, []requestinventory.Row{
+				{Package: "internal/tools/widgets", Kind: requestinventory.KindREST, Method: "GET", Path: "/widgets"},
+			}, nil, graphqldocs.Result{})
+
+			content, clean, err := Run(root, Options{})
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+
+			summary := decode(t, content).Summary
+			if clean != testCase.wantClean {
+				t.Errorf("clean = %t, want %t: %+v", clean, testCase.wantClean, summary)
+			}
+			got := [4]int{summary.UnsurfacedFields, summary.UnsurfacedDeclared, summary.UnsurfacedUndeclared, summary.StaleDeclarations}
+			if want := [4]int{1, 1 - testCase.wantUndeclared, testCase.wantUndeclared, testCase.wantStale}; got != want {
+				t.Errorf("sent counts = %v (fields, declared, undeclared, stale), want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -644,16 +783,29 @@ func TestRun_AnInputItCannotRead_Fails(t *testing.T) {
 			want: "read the GraphQL documents",
 		},
 		{
-			name: "a documentation listing it cannot get",
+			name: "a documentation oracle it cannot read",
 			arrange: func(t *testing.T) {
 				t.Helper()
 				original := auditEndpoints
 				t.Cleanup(func() { auditEndpoints = original })
-				auditEndpoints = func(context.Context, *apidocs.Fetcher, []requestinventory.Row) (EndpointCheck, error) {
-					return EndpointCheck{}, errors.New("HTTP 404")
+				auditEndpoints = func(string, []requestinventory.Row) (EndpointCheck, error) {
+					return EndpointCheck{}, errors.New("no such file")
 				}
 			},
 			want: "compare the recorded endpoints",
+		},
+		{
+			// A run that names a shard directory asked for the per-action
+			// answer, and one that cannot be read gives it none. It used to
+			// exit 0 with the reason inside the report (issue 1688).
+			name: "an end-to-end record it cannot read",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				withE2ERecord(t, func(string) ([]e2ecalls.Record, error) {
+					return nil, errors.New("read shard directory dist/e2e-calls: no such file or directory")
+				})
+			},
+			want: "read the end-to-end call record",
 		},
 		{
 			name: "a report that will not marshal",
@@ -672,9 +824,12 @@ func TestRun_AnInputItCannotRead_Fails(t *testing.T) {
 			makeToolsPackage(t, root, "issues")
 			withDeclarations(t, map[string]silentOwnerDeclaration{})
 			stubInputs(t, oneRow, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}}, graphqldocs.Result{})
+			// Every input is asked for and every one but the case's own
+			// answers, so the error is the one the case planted.
+			withE2ERecord(t, func(string) ([]e2ecalls.Record, error) { return nil, nil })
 			testCase.arrange(t)
 
-			content, clean, err := Run(t.Context(), root, Options{Fetcher: apidocs.New(root, apidocs.Options{})})
+			content, clean, err := Run(root, Options{CheckEndpoints: true, E2ECallsDir: "dist/e2e-calls"})
 
 			if err == nil {
 				t.Fatalf("Run() error = nil, want one naming %q", testCase.want)
@@ -712,17 +867,30 @@ func TestRun_TheRealTree_PassesItsOwnGate(t *testing.T) {
 		t.Skipf("%s=%s: the committed inventory is being regenerated by this very run", recordingDirEnv, dir)
 	}
 
-	content, clean, err := Run(t.Context(), repoRoot(t), Options{})
+	content, clean, err := Run(repoRoot(t), Options{CheckEndpoints: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v, want the real tree audited", err)
 	}
 	report := decode(t, content)
 	if !clean {
-		t.Errorf("the repository fails its own R-PATH gate: %+v\nsilent owners: %+v\nrefusals: %+v",
-			report.Summary, report.SilentOwners, report.GraphQLRefusals)
+		t.Errorf("the repository fails its own R-PATH gate: %+v\nsilent owners: %+v\nrefusals: %+v\nstale: %v",
+			report.Summary, report.SilentOwners, report.GraphQLRefusals, report.StaleDeclarations)
 	}
 	if report.Summary.CatalogActions == 0 || report.Summary.InventoryRows == 0 || report.Summary.GraphQLDocuments == 0 {
 		t.Errorf("summary = %+v, want all three inputs to have been read", report.Summary)
+	}
+	// The endpoint comparison has to have read the committed oracle for its
+	// declarations to have been judged at all, which is what nothing did while
+	// it needed the network.
+	endpoints := report.Endpoints
+	if !endpoints.Ran || endpoints.Oracle != DocEndpointsFile || endpoints.DocumentedEndpoints == 0 || endpoints.RecordedEndpoints == 0 {
+		t.Errorf("endpoints = ran %t, oracle %q, %d documented, %d recorded; want the committed oracle read against the inventory",
+			endpoints.Ran, endpoints.Oracle, endpoints.DocumentedEndpoints, endpoints.RecordedEndpoints)
+	}
+	// Every package-grain sent finding is answered, and the gate is what
+	// holds that now, so the two figures request-paths.md quotes as equal are.
+	if sent := report.Summary; sent.UnsurfacedFields == 0 || sent.UnsurfacedFields != sent.UnsurfacedDeclared {
+		t.Errorf("sent = %d fields, %d declared; want every finding answered", sent.UnsurfacedFields, sent.UnsurfacedDeclared)
 	}
 	// The floor counts an action as accounted for when its owner recorded
 	// something or when its owner's silence is declared, rather than by

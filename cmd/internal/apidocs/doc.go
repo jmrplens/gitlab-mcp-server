@@ -5,8 +5,13 @@
 // doc/api/<area>.md files in the gitlab-org/gitlab monorepo) used as a source of
 // truth alongside the client-go SDK by the audit utilities.
 //
+// The docs are read at master by default, which is what a citation of the
+// current documentation means, and at a given ref through [NewAtRef], which is
+// how a comparison is held to the release a recording was taken from.
+//
 // Docs are cached on disk in a single shared, gitignored directory
-// (.cache/gitlab-api-docs/ under the repo root). A cached doc is reused while it
+// (.cache/gitlab-api-docs/ under the repo root, and one beside it per ref, such
+// as .cache/gitlab-api-docs@v19.5.0-ee/). A cached doc is reused while it
 // is younger than MaxAge (7 days by default); older or missing docs are
 // re-downloaded. Callers can force a full refresh or pin to offline (cached
 // only). Downloads are polite: a server Retry-After is honored, otherwise

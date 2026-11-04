@@ -317,9 +317,11 @@ jobs:
         if: env.FRESHNESS == 'checked'
         run: make check-e2e-coverage-page
       # R-PATH, the dimension that reads the request rather than the surface.
-      # It reads the committed inventory the coverage job regenerates, so it
+      # It reads the committed inventory the coverage job regenerates and the
+      # committed documentation oracle (make gen-api-doc-endpoints), so it
       # needs no suite run and no network, and it fails on a package the suite
-      # never drives as loudly as on a document GitLab would refuse.
+      # never drives as loudly as on a document GitLab would refuse or an
+      # endpoint GitLab does not document.
       - name: Check the request every action issues
         run: make audit-1to1-paths
       - name: Check the one-click install buttons

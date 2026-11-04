@@ -527,7 +527,7 @@ func TestRun_AnUndeclaredKeysetFinding_FailsTheGate(t *testing.T) {
 				listAction("thing.list", "things", reflect.TypeFor[fixturePaginatedListOutput](), testCase.input),
 			}, graphqldocs.Result{})
 
-			content, clean, err := Run(t.Context(), root, Options{})
+			content, clean, err := Run(root, Options{})
 			if err != nil {
 				t.Fatalf("Run() error = %v", err)
 			}

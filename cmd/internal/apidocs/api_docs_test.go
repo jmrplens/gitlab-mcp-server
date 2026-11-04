@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
@@ -111,6 +112,50 @@ func TestFetch_StaleCacheTriggersRedownload(t *testing.T) {
 	}
 	if got != "fresh" || *hits != 1 {
 		t.Fatalf("stale cache not refreshed: body=%q hits=%d", got, *hits)
+	}
+}
+
+// TestCachedIfUsable_ACopyExactlyAsOldAsTheWindow_IsStale holds the freshness
+// boundary to the side the comparison puts it on: a copy exactly as old as the
+// window is stale, and one a second younger is fresh.
+//
+// The wall clock moves between writing a file's time and reading it back, so
+// the case runs in a testing/synctest bubble, whose clock moves only when a
+// goroutine in it sleeps, and stamps the file from that clock: the age the
+// check computes is then the age the case wrote, to the nanosecond. The stamps
+// are whole seconds from the bubble's midnight, which every filesystem a test
+// runs on stores exactly. Without the bubble a `>` in place of the `>=` could
+// not be told apart, and was recorded as a survivor no test could kill.
+func TestCachedIfUsable_ACopyExactlyAsOldAsTheWindow_IsStale(t *testing.T) {
+	cases := []struct {
+		name      string
+		age       time.Duration
+		wantFresh bool
+	}{
+		{name: "exactly the window", age: time.Hour},
+		{name: "a second inside it", age: time.Hour - time.Second, wantFresh: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cachePath := filepath.Join(dir, "branches.md")
+			if err := os.WriteFile(cachePath, []byte("cached"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			synctest.Test(t, func(t *testing.T) {
+				stamp := time.Now().Add(-testCase.age)
+				if err := os.Chtimes(cachePath, stamp, stamp); err != nil {
+					t.Fatal(err)
+				}
+				f := New(dir, Options{MaxAge: time.Hour, CacheDir: dir})
+
+				body, fresh := f.cachedIfUsable(cachePath)
+
+				if fresh != testCase.wantFresh || (fresh && body != "cached") {
+					t.Errorf("cachedIfUsable() at %v old = %q, %t; want fresh %t", testCase.age, body, fresh, testCase.wantFresh)
+				}
+			})
+		})
 	}
 }
 
@@ -395,6 +440,28 @@ func TestFetchTuningConstants_ArePausesRatherThanZero(t *testing.T) {
 	if DefaultMaxAge <= 0 {
 		t.Errorf("DefaultMaxAge = %v; a non-positive window makes every cached copy stale on arrival, so the cache never serves anything and every run re-downloads 250 pages",
 			DefaultMaxAge)
+	}
+}
+
+// TestSleepCtx_ACancellationDuringTheWait_EndsIt verifies the select's
+// cancellation arm, which only a context cancelled after the sleep asked it
+// reaches: one cancelled before the call is answered by the check in front of
+// the timer. A wait of an hour that returns with the cancellation is the
+// proof, since the timer cannot have fired.
+func TestSleepCtx_ACancellationDuringTheWait_EndsIt(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	timer := time.AfterFunc(20*time.Millisecond, cancel)
+	defer timer.Stop()
+
+	start := time.Now()
+	err := realSleepCtx(ctx, time.Hour)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("sleepCtx() error = %v, want the cancellation", err)
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Errorf("sleepCtx() took %v, want it to end with the cancellation", elapsed)
 	}
 }
 
