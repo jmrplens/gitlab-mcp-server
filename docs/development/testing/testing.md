@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,432 |
-| Unit test functions                                   | 21,726 |
+| Total test functions                                  | 23,434 |
+| Unit test functions                                   | 21,728 |
 | E2E test functions                                    |  1,706 |
 | cmd test functions                                    |  5,808 |
 | Test files (internal/)                                |    751 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,714 | 58.5% |
 | `TestFunc` (no underscore)             |    901 |  3.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,817 | 37.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,819 | 37.6% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,229 |        259 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            439 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,250 |        476 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (181) |         11,252 |        476 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,706 |        438 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,808 |        472 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,432** |  **1,661** |                                                                                                 |
+| **Total**               |     **23,434** |  **1,661** |                                                                                                 |
 
 ### Core Packages
 
@@ -214,7 +214,7 @@
 | groupscim               |         31 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |         37 |          2 |   100.0% |         9 |
 | groupsshcerts           |         32 |          5 |   100.0% |         3 |
-| groupstoragemoves       |         46 |          2 |   100.0% |         6 |
+| groupstoragemoves       |         47 |          2 |   100.0% |         6 |
 | groupvariables          |         61 |          4 |   100.0% |         5 |
 | groupwikis              |         44 |          3 |   100.0% |         5 |
 | health                  |         27 |          1 |   100.0% |         2 |
@@ -268,7 +268,7 @@
 | projects                |        507 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         28 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
-| projectstoragemoves     |         30 |          2 |   100.0% |         6 |
+| projectstoragemoves     |         31 |          2 |   100.0% |         6 |
 | projecttemplates        |         27 |          1 |   100.0% |         2 |
 | protectedenvdata        |          5 |          2 |   100.0% |         0 |
 | protectedenvs           |         55 |          2 |   100.0% |         5 |
@@ -313,7 +313,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,250** |    **476** |          | **1,195** |
+| **Total**               | **11,252** |    **476** |          | **1,195** |
 
 </details>
 
