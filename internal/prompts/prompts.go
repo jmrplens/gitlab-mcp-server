@@ -907,7 +907,9 @@ func writeLatestPipelineLines(b *strings.Builder, pipeline pipelines.LatestOutpu
 	if pipeline.HeadSHA != "" {
 		fmt.Fprintf(b, "%s**Head SHA**: %s\n", prefix, mdInline(shortSHA(pipeline.HeadSHA)))
 	}
-	fmt.Fprintf(b, "%s**URL**: %s\n", prefix, mdInline(pipeline.WebURL))
+	// The pipeline's page is a link the prompt writes, as a card's URL row is:
+	// the inline escaper keeps an address in text from becoming one.
+	fmt.Fprintf(b, "%s**URL**: %s\n", prefix, toolutil.MdAutolink(pipeline.WebURL))
 	if pipeline.FallbackNote != "" {
 		// The note is one of the two internal/tools/pipelines writes: the
 		// server's own prose, which names no value, so it is written as it is.

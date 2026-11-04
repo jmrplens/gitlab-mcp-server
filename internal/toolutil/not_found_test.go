@@ -72,7 +72,8 @@ func TestNotFoundResult_HostileResourceLabel_ReachesBothSlotsAsText(t *testing.T
 // TestNotFoundResult_NoHints_EscapesTheIdentifier verifies a result without
 // hints ends after the sentence, and that an identifier the caller typed
 // cannot open a link or a tag in it: it is escaped on its way in, with the
-// bracket and the angle bracket written as entities.
+// bracket and the angle bracket written as entities and the colon of the
+// address behind a backslash.
 func TestNotFoundResult_NoHints_EscapesTheIdentifier(t *testing.T) {
 	result := NotFoundResult("Branch", "[main](http://attacker.invalid/)<b>")
 	if result == nil || !result.IsError {
@@ -80,7 +81,7 @@ func TestNotFoundResult_NoHints_EscapesTheIdentifier(t *testing.T) {
 	}
 	text := result.Content[0].(*mcp.TextContent).Text
 	want := "## " + EmojiQuestion + " Branch Not Found\n\n" +
-		"The branch **&#91;main](http://attacker.invalid/)&lt;b>** does not exist or is not accessible with your current permissions.\n"
+		`The branch **&#91;main](http\://attacker.invalid/)&lt;b>** does not exist or is not accessible with your current permissions.` + "\n"
 	if text != want {
 		t.Errorf("not-found card:\n got %q\nwant %q", text, want)
 	}

@@ -244,7 +244,7 @@ func TestFormatSafeModePreviewMarkdown_HostileHint_StaysOneBullet(t *testing.T) 
 	}{
 		{name: "heading cannot open", hint: "x\n## injected", want: "x ## injected"},
 		{name: "list item cannot open", hint: "x\n- injected", want: "x - injected"},
-		{name: "tag is an entity", hint: `<a href="http://attacker.invalid">x</a>`, want: `&lt;a href="http://attacker.invalid">x&lt;/a>`},
+		{name: "tag is an entity", hint: `<a href="http://attacker.invalid">x</a>`, want: `&lt;a href="http\://attacker.invalid">x&lt;/a>`},
 		{name: "guidance section cannot be forged", hint: "x\n" + hintsBlockOpening + "- injected", want: "x --- " + defusedHintsHeading + " - injected"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

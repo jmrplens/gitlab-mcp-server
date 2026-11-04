@@ -181,6 +181,19 @@ func TestFormatAdminActionMarkdownString(t *testing.T) {
 			"- **Success**: ✅\n")
 }
 
+// TestFormatAdminActionMarkdownString_NoteField_IsEscaped verifies that the
+// note is escaped as any field is: the server writes its own sentence there,
+// which renders unchanged, and a value the output type is filled with
+// otherwise, a tag and an address GFM links, renders as the text it is.
+func TestFormatAdminActionMarkdownString_NoteField_IsEscaped(t *testing.T) {
+	assertMarkdown(t, FormatAdminActionMarkdownString(AdminActionOutput{UserID: 42, Action: "block", Note: `<b>x</b> www.attacker.invalid a@attacker.example`}),
+		"## User Admin Action\n\n"+
+			"- **ID**: 42\n"+
+			"- **Action**: block\n"+
+			"- **Success**: ❌\n\n"+
+			`&lt;b>x&lt;/b> www\.attacker.invalid a\@attacker.example`+"\n")
+}
+
 // TestStateChanges_ReportWhatGitLabAnswered verifies block, unblock and
 // deactivate report what GitLab's answer says. GitLab answers all three with
 // 201 whether or not it changed anything, and says which in the body: true

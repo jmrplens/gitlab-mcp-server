@@ -293,17 +293,50 @@ func isRenderControl(r rune) bool {
 // function: a link is built by [MdTitleLink] from its raw halves and is never
 // escaped afterwards, and a cell that holds one is written as it is.
 //
-// Only '<' and '[' are escaped, since everything a renderer obeys instead of
-// reading opens with one of them (a tag, a comment, an autolink, a link, an
-// image). '>' and ']' are left alone because callers compose cells of their
-// own: a merge request's branch cell reads "feature/fix -> develop", and
-// entity-encoding the arrow the server itself wrote damages output that no
-// untrusted text ever touched.
+// Of the delimiters, only '<' and '[' are escaped, since every construct a
+// renderer obeys instead of reading that has an opening delimiter opens with
+// one of them (a tag, a comment, an autolink, a link, an image). '>' and ']'
+// are left alone because callers compose cells of their own: a merge
+// request's branch cell reads "feature/fix -> develop", and entity-encoding
+// the arrow the server itself wrote damages output that no untrusted text
+// ever touched.
+//
+// GFM adds the one link that opens with no delimiter at all: an address
+// written as text, "http://", "https://" or "www." and a domain, or an email
+// address, is a link in a client that renders GFM. It went out live: a title
+// of "x](http://attacker.invalid/y)" holds no '[', so it came back from here
+// as it was, and GFM linked it from "http" on to a host that is not GitLab.
+// The literal autolinks are therefore escaped too, by
+// [escapeLiteralAutolinks], which writes a backslash in front of the
+// character that opens one. A sentence this server wrote, whose addresses are
+// examples a caller copies, goes through [EscapeMdServerProse] instead.
+//
+// Outside a code span, every escape here renders as the text it replaces.
+// Inside a code span the value opens, CommonMark resolves neither an entity
+// nor an escape, so they show there as written: the entities always have,
+// and the backslash before an address's colon, dot or '@' does too. Both are
+// written inside a span as well, because a table splits its row at a pipe
+// even inside one, and because which bytes are a span depends on what else
+// the line holds and on the renderer, which [escapeLiteralAutolinks]
+// explains.
 //
 // The result is idempotent: nothing this function writes is anything it
 // rewrites, so a value escaped twice renders once, which is what lets a caller
-// that still escapes by hand pass its value to a helper that escapes again.
+// that still escapes by hand pass its value to a helper that escapes it as a
+// cell again, such as [Card.Field]. A link's label is not a cell:
+// [MdTitleLink] escapes its title as a label, where the backslash this
+// function writes in front of an address's colon, dot or '@' is escaped again
+// into one the reader sees, so a link is built from the raw value.
 func EscapeMdTableCell(s string) string {
+	return escapeLiteralAutolinks(escapeCellMarkup(s))
+}
+
+// escapeCellMarkup is [EscapeMdTableCell] without the literal autolinks: the
+// control bytes, the pipe, the line breaks and the two opening delimiters.
+// It is what a link label is escaped from, since GFM opens no literal
+// autolink inside a link's text and the backslash the autolink escape writes
+// would be escaped again by [EscapeMdLinkLabel] into one the reader sees.
+func escapeCellMarkup(s string) string {
 	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "|", "&#124;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
@@ -312,6 +345,123 @@ func EscapeMdTableCell(s string) string {
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
 	return s
+}
+
+// EscapeMdServerProse renders a sentence this server wrote as a table cell or a
+// list value: all that [EscapeMdTableCell] does, the literal autolinks aside.
+// The catalog's usage notes and parameter examples spell addresses a caller
+// copies, such as params.url:"https://example.com/repo.git", and the backslash
+// that escape writes would reach the model inside the example, in a form that
+// is not the address and that JSON does not accept as an escape. An address
+// the server wrote is not a link a value smuggled in, so the escape protects
+// nothing here.
+//
+// It is never for a value GitLab or a caller wrote. `make check-md-escaping`
+// does not count it as an escaper, so a value the gate follows through it is a
+// finding until a directive declares it the server's own.
+func EscapeMdServerProse(s string) string {
+	return escapeCellMarkup(s)
+}
+
+// literalAutolinkSchemes are the schemes after which "://" opens a literal
+// autolink in some GFM renderer: http and https in all of them, and ftp in
+// cmark-gfm, markdown-it and marked. They are matched in any letter case.
+var literalAutolinkSchemes = []string{"http", "https", "ftp"}
+
+// escapeLiteralAutolinks writes a backslash in front of each character of s
+// that opens a GFM literal autolink: the colon of "http://", "https://" or
+// "ftp://", the dot of "www.", and an '@' that follows a character an email
+// address can hold. All three are ASCII punctuation, so outside a code span
+// the backslash is consumed and the reader sees the text unchanged, while
+// micromark, markdown-it and marked find no address to link and cmark-gfm no
+// web address. It runs on text whose control bytes are gone, since dropping
+// one can join a scheme to its separator.
+//
+// Inside a code span the value opens, CommonMark resolves no escape, so the
+// backslash is one the reader sees there: "Pin `actions/checkout@v4`" shows
+// "actions/checkout\@v4" in its code, as an entity the cell escaper writes
+// has always shown as written in one. GFM links nothing inside a span, and
+// the spans are escaped all the same, because which bytes are a span is not
+// the value's to decide. A backtick an earlier value on the line leaves open
+// pairs with the first one of this value in every renderer, and marked reads
+// a run of backticks right after a tilde as text and lets its strikethrough
+// and emphasis pair a delimiter inside a span with one outside it, so a span
+// copied as it is could be a link. Measured on 30,000 random values, copying
+// the spans CommonMark reads left marked linking 61 of them, and of the
+// stricter rules measured, the one that kept marked from linking any changed
+// what a reader sees in the spans that hold a tilde, an asterisk or an
+// underscore.
+//
+// The match is wider than any one renderer's rule, because the renderers do
+// not agree: marked links "xhttp://" and "lodash@4.17.21", marked and remark
+// link "/www.", and markdown-it links an email address whose local part ends
+// in one of `;:&=$,"`. A wider match costs a backslash where no renderer
+// would have linked, a token or two.
+//
+// Two renderers read some of these after the escapes are resolved, so no
+// escape reaches them: remark-gfm finds every literal autolink in the decoded
+// text, and cmark-gfm finds an email address there. markdown-it links two
+// things GFM does not, a bare domain and an address that opens with "//", and
+// neither is escaped. What this closes is every GFM renderer that reads the
+// text as written.
+//
+// Nothing it writes is anything it escapes, so it is idempotent: the
+// backslash it inserts parts the scheme from its colon, "www" from its dot and
+// an address from its '@'.
+func escapeLiteralAutolinks(s string) string {
+	if !strings.ContainsAny(s, ":.@") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 4)
+	for i := range len(s) {
+		if opensLiteralAutolink(s, i) {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// opensLiteralAutolink reports whether the byte of s at i opens a literal
+// autolink: a colon that ends one of [literalAutolinkSchemes] and is followed
+// by "//", a dot after "www", or an '@' after a character the local part of an
+// email address can hold.
+func opensLiteralAutolink(s string, i int) bool {
+	switch s[i] {
+	case ':':
+		return strings.HasPrefix(s[i:], "://") && endsInAutolinkScheme(s[:i])
+	case '.':
+		return i >= 3 && strings.EqualFold(s[i-3:i], "www")
+	case '@':
+		return i > 0 && isEmailLocalByte(s[i-1])
+	}
+	return false
+}
+
+// endsInAutolinkScheme reports whether s ends in one of
+// [literalAutolinkSchemes], in any letter case.
+func endsInAutolinkScheme(s string) bool {
+	for _, scheme := range literalAutolinkSchemes {
+		if len(s) >= len(scheme) && strings.EqualFold(s[len(s)-len(scheme):], scheme) {
+			return true
+		}
+	}
+	return false
+}
+
+// isEmailLocalByte reports whether c can end the local part of an email
+// address a renderer links: an ASCII letter or digit, or one of "+-._", which
+// every GFM renderer accepts, or one of `;:&=$,"`, which markdown-it's
+// linkify accepts as well, as in "a;@evil.com". The ranges are an if
+// rather than the cases of a tagless switch: a case expression carries no
+// statement counter, so the mutation gate reports every mutant of one as not
+// covered whatever the tests assert.
+func isEmailLocalByte(c byte) bool {
+	if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' {
+		return true
+	}
+	return strings.IndexByte(`+-._;:&=$,"`, c) >= 0
 }
 
 // mdLinkLabelEscaper backslash-escapes the characters that let text inside a
@@ -418,8 +568,8 @@ func MdTitleLink(title, url string) string {
 
 // MdAutolink writes an address that is its own text as a CommonMark autolink,
 // <url>: one copy of the address where [url](url) spelled it twice, and still
-// a link a client renders as one. Every card's URL row and every cell that
-// shows an address as it is takes this form, and that second copy was a few
+// a link a client renders as one. [Card.URL] and every cell that links an
+// address as its own text take this form, and that second copy was a few
 // percent of every Markdown result, paid for by every client that reads the
 // text (issue 1396).
 //
@@ -474,6 +624,11 @@ func endsAutolink(r rune) bool {
 // escaped title alone when there is no address. An address of whitespace alone
 // is no address: it used to be written as a code span holding the spaces,
 // which gave a card's URL row a value a reader sees nothing in.
+//
+// The label is the one place the title's literal autolinks are left as they
+// are: GFM opens none inside a link's text, and the backslash the cell
+// escaper writes for them would be escaped again by the label escaper into a
+// backslash the reader sees.
 func titleLink(title, url string) string {
 	escaped := EscapeMdTableCell(title)
 	if blank(url) {
@@ -485,7 +640,7 @@ func titleLink(title, url string) string {
 		}
 		return escaped + " " + MdCodeSpanCell(url)
 	}
-	return fmt.Sprintf("[%s](%s)", EscapeMdLinkLabel(escaped), EscapeMdLinkDestination(url))
+	return fmt.Sprintf("[%s](%s)", EscapeMdLinkLabel(escapeCellMarkup(title)), EscapeMdLinkDestination(url))
 }
 
 // BuildTargetURL constructs a GitLab web URL for a target resource.
@@ -604,7 +759,9 @@ func RichContentHint(features, webURL string) string {
 // sites interpolate one value into a heading the server wrote, and the same
 // name should not turn into a live tag or a live link in a heading after
 // being neutralized in a cell. A heading therefore carries no link: a card's
-// address is its URL row.
+// address is its URL row. The literal autolinks are escaped as the cell
+// escaper escapes them, by [escapeLiteralAutolinks], so an address or an
+// email in a name is text in a heading as well.
 func EscapeMdHeading(s string) string {
 	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "<", "&lt;")
@@ -613,7 +770,7 @@ func EscapeMdHeading(s string) string {
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.TrimLeft(s, "# ")
-	return s
+	return escapeLiteralAutolinks(s)
 }
 
 // IsImageFile returns true when the filename has an image extension.

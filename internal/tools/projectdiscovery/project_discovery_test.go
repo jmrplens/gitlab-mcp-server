@@ -441,7 +441,7 @@ func TestFormatMarkdown_HostileValues(t *testing.T) {
 	md := FormatMarkdown(out)
 	want := "## Resolved GitLab Project\n\n" +
 		"- **ID**: 7\n" +
-		"- **Name**: x](http://attacker.invalid/)\n" +
+		"- **Name**: x](http\\://attacker.invalid/)\n" +
 		"- **Path**: g/p` ## Injected\n" +
 		"- **Default Branch**: main\n" +
 		"- **Description**:\n" +

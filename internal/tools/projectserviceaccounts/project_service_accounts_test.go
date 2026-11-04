@@ -813,9 +813,9 @@ func TestMarkdownFormatters(t *testing.T) {
 			"- **ID**: 7\n" +
 			"- **Name**: svc\n" +
 			"- **Username**: svc-user\n" +
-			"- **Email**: svc@example.com\n" +
-			"- **Public Email**: public@example.com\n" +
-			"- **Unconfirmed Email**: pending@example.com\n" +
+			"- **Email**: svc\\@example.com\n" +
+			"- **Public Email**: public\\@example.com\n" +
+			"- **Unconfirmed Email**: pending\\@example.com\n" +
 			"\n---\n💡 **Next steps:**\n" +
 			"- Use action 'project.service_account_update' to modify this account\n" +
 			"- Use action 'project.service_account_pat_create' to create a token for it\n"
@@ -826,7 +826,7 @@ func TestMarkdownFormatters(t *testing.T) {
 	t.Run("account list", func(t *testing.T) {
 		want := "## Project Service Accounts (1)\n\n" +
 			"| ID | Username | Name | Email |\n| --- | --- | --- | --- |\n" +
-			"| 7 | svc-user | svc | svc@example.com |\n" +
+			"| 7 | svc-user | svc | svc\\@example.com |\n" +
 			"\n---\n💡 **Next steps:**\n" +
 			"- Use action 'project.service_account_pat_list' to list one account's tokens\n"
 		if got := FormatListMarkdownString(ListOutput{Accounts: []Output{account}}); got != want {

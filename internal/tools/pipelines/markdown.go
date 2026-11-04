@@ -98,7 +98,11 @@ func FormatLatestMarkdown(out LatestOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, pipelineHeading(out.DetailOutput))
 	writePipelineDetail(c, out.DetailOutput, out.HeadSHA)
-	c.Note(out.FallbackNote)
+	// The note is one of this server's two sentences, and a field of the
+	// output all the same, so it is escaped as any value is: either sentence
+	// renders unchanged, and a value the type is filled with otherwise cannot
+	// reach the page as a tag or a link.
+	c.Note(toolutil.EscapeMdTableCell(out.FallbackNote))
 	c.End(pipelineDetailHints()...)
 	return b.String()
 }

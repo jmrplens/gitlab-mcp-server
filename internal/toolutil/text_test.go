@@ -7,6 +7,7 @@ package toolutil
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -219,7 +220,7 @@ func TestEscapeMdHeading(t *testing.T) {
 		{name: "combined hash and newline", input: "## injected\nbreak", want: "injected break"},
 		{name: "only hashes", input: "###", want: ""},
 		{name: "hash space only", input: "# ", want: ""},
-		{name: "link cannot open in a heading", input: "[x](http://attacker.invalid/)", want: "&#91;x](http://attacker.invalid/)"},
+		{name: "link cannot open in a heading", input: "[x](http://attacker.invalid/)", want: `&#91;x](http\://attacker.invalid/)`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1071,7 +1072,9 @@ func TestWrapGFMBody_DropsControlBytesAndDefusesTheHintMarker(t *testing.T) {
 //
 // The closing bracket is deliberately left alone: nothing is obeyed that did
 // not open with '<', and callers compose cells holding an arrow the server
-// itself wrote. The last two cases pin both halves of that.
+// itself wrote. The last two cases pin both halves of that. The address inside
+// each tag has its colon behind a backslash, since with the tag gone it is
+// text a GFM renderer would link.
 func TestEscapeMdTableCell_RawHTML_IsNeutralized(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1081,17 +1084,17 @@ func TestEscapeMdTableCell_RawHTML_IsNeutralized(t *testing.T) {
 		{
 			name: "anchor to another host",
 			in:   `<a href="http://attacker.invalid/x">Fix login</a>`,
-			want: `&lt;a href="http://attacker.invalid/x">Fix login&lt;/a>`,
+			want: `&lt;a href="http\://attacker.invalid/x">Fix login&lt;/a>`,
 		},
 		{
 			name: "image beacon",
 			in:   `<img src="http://attacker.invalid/p.gif">`,
-			want: `&lt;img src="http://attacker.invalid/p.gif">`,
+			want: `&lt;img src="http\://attacker.invalid/p.gif">`,
 		},
 		{
 			name: "autolink syntax",
 			in:   "<http://attacker.invalid>",
-			want: "&lt;http://attacker.invalid>",
+			want: `&lt;http\://attacker.invalid>`,
 		},
 		{
 			name: "html comment",
@@ -1123,18 +1126,19 @@ func TestEscapeMdTableCell_RawHTML_IsNeutralized(t *testing.T) {
 // opening bracket is entity-encoded, so a title written as a complete Markdown
 // link renders as the text it is. This is the gap that HintPreserveLinks made
 // exploitable, since the model is told to keep every link it is shown. A value
-// with no opening bracket is left alone, "](" included, because without the
-// bracket it is text.
+// with no opening bracket keeps its brackets, "](" included, because without
+// the opening one they are text; the address after them is a literal autolink,
+// so its colon is escaped in every case that carries one.
 func TestEscapeMdTableCell_BracketCannotOpenALink(t *testing.T) {
 	tests := []struct {
 		name string
 		in   string
 		want string
 	}{
-		{name: "complete link", in: "[click](http://attacker.invalid/)", want: "&#91;click](http://attacker.invalid/)"},
-		{name: "image", in: "![beacon](http://attacker.invalid/p.gif)", want: "!&#91;beacon](http://attacker.invalid/p.gif)"},
+		{name: "complete link", in: "[click](http://attacker.invalid/)", want: `&#91;click](http\://attacker.invalid/)`},
+		{name: "image", in: "![beacon](http://attacker.invalid/p.gif)", want: `!&#91;beacon](http\://attacker.invalid/p.gif)`},
 		{name: "reference link", in: "[click][ref]", want: "&#91;click]&#91;ref]"},
-		{name: "closing half alone is text", in: "x](http://attacker.invalid/)", want: "x](http://attacker.invalid/)"},
+		{name: "closing half alone is text", in: "x](http://attacker.invalid/)", want: `x](http\://attacker.invalid/)`},
 		{name: "bracketed tag in a title", in: "[WIP] Fix login", want: "&#91;WIP] Fix login"},
 	}
 	for _, tt := range tests {
@@ -1150,10 +1154,14 @@ func TestEscapeMdTableCell_BracketCannotOpenALink(t *testing.T) {
 // to be escaped again without changing, that a second pass is the identity
 // and that the first pass leaves none of the characters it exists to remove.
 // This is what lets a half-migrated formatter that still escapes by hand pass
-// its value to a Card, which escapes again, and render exactly what it did.
+// its value to a Card field, which escapes again, and render exactly what it
+// did; a link's label is no such helper, so MdTitleLink takes the raw value.
 // EscapeMdLinkLabel is deliberately absent: it backslash-escapes the
 // backslash, so a second pass doubles it, and MdTitleLink applies it exactly
-// once for that reason.
+// once for that reason. The cell and heading escapers also leave no literal
+// autolink opener, as [literalAutolinkOpener] reads one; the destination
+// escaper writes a destination, where an address is the point, and the prose
+// escaper a sentence of the server's, where it is what a caller copies.
 func TestEscapers_AreIdempotent(t *testing.T) {
 	inputs := []string{
 		"plain",
@@ -1163,14 +1171,20 @@ func TestEscapers_AreIdempotent(t *testing.T) {
 		"http://h/?a=(1)|2 <x>",
 		"\x1b[2J bell\x07",
 		"http://h/a\t'b'",
+		"see https://h.example, www.h.example and a@h.example",
+		"HTTPS://H FTP://h Www.h jose.ramos+ci@h.example",
+		"ht\x00tp://h ww\x1bw.h a\x7f@h",
+		"a;@h \"q\"@h x,@h",
 	}
 	escapers := []struct {
 		name      string
 		fn        func(string) string
 		forbidden string
+		autolinks bool
 	}{
-		{name: "EscapeMdTableCell", fn: EscapeMdTableCell, forbidden: "|<[\r\n"},
-		{name: "EscapeMdHeading", fn: EscapeMdHeading, forbidden: "<\r\n"},
+		{name: "EscapeMdTableCell", fn: EscapeMdTableCell, forbidden: "|<[\r\n", autolinks: true},
+		{name: "EscapeMdHeading", fn: EscapeMdHeading, forbidden: "<\r\n", autolinks: true},
+		{name: "EscapeMdServerProse", fn: EscapeMdServerProse, forbidden: "|<[\r\n"},
 		{name: "EscapeMdLinkDestination", fn: EscapeMdLinkDestination, forbidden: "()<> \"|\t\r\n"},
 	}
 	for _, e := range escapers {
@@ -1183,6 +1197,320 @@ func TestEscapers_AreIdempotent(t *testing.T) {
 				if strings.ContainsAny(once, e.forbidden) {
 					t.Errorf("%s(%q) = %q, still carries one of %q", e.name, in, once, e.forbidden)
 				}
+				if opener := literalAutolinkOpener.FindString(once); e.autolinks && opener != "" {
+					t.Errorf("%s(%q) = %q, still opens a literal autolink at %q", e.name, in, once, opener)
+				}
+			}
+		})
+	}
+}
+
+// literalAutolinkOpener matches what opens a GFM literal autolink in some
+// renderer, written apart from the escaper it checks: a scheme and "://", in
+// any letter case, "www.", and an '@' after a byte the local part of an email
+// address can hold in GFM or in markdown-it. A backslash in front of the
+// colon, the dot or the '@' leaves nothing it matches.
+var literalAutolinkOpener = regexp.MustCompile(`(?i)(?:https?|ftp)://|www\.|[a-z0-9+._;:&=$,"-]@`)
+
+// TestEscapeMdServerProse_KeepsAddressesAndEscapesTheCellMarkup verifies whole
+// output for a sentence this server wrote: an address stays as the catalog
+// spells it, since a caller copies it from there, and what could end the cell
+// or open a tag or a link is escaped as [EscapeMdTableCell] escapes it.
+func TestEscapeMdServerProse_KeepsAddressesAndEscapesTheCellMarkup(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "a web address in an example", in: `params.url:"https://example.com/repo.git"`, want: `params.url:"https://example.com/repo.git"`},
+		{name: "an email address in an example", in: `params.email:"user@example.com"`, want: `params.email:"user@example.com"`},
+		{name: "an @ after a quote", in: `params.query:"@example.com"`, want: `params.query:"@example.com"`},
+		{name: "an SSH remote", in: "ssh://git@gitlab.example.com/a/b.git", want: "ssh://git@gitlab.example.com/a/b.git"},
+		{name: "a www. address", in: "see www.example.com", want: "see www.example.com"},
+		{name: "a pipe", in: "a|b", want: "a&#124;b"},
+		{name: "a tag", in: "<b>x", want: "&lt;b>x"},
+		{name: "a link", in: "[x](y)", want: "&#91;x](y)"},
+		{name: "line breaks", in: "a\r\nb\rc\nd", want: "a b c d"},
+		{name: "control bytes", in: "a\x00b\x1bc", want: "abc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := EscapeMdServerProse(tc.in); got != tc.want {
+				t.Errorf("EscapeMdServerProse(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEscapeMdTableCell_LiteralAutolink_IsEscaped verifies whole output for a
+// value carrying an address as text: the character that opens a GFM literal
+// autolink gets a backslash in front of it, so the reader sees the text it
+// always was and no renderer that reads the text as written links it.
+//
+// The escapers handled what opens with '<' or '[', and GFM links an address
+// that opens with neither: an issue titled "x](http://attacker.invalid/y)"
+// holds no '[' to escape, so it came back from the cell escaper as it was and
+// reached the reader as a link to a host that is not GitLab, from "http" on.
+// Every input here was rendered by micromark with the GFM extension,
+// cmark-gfm, markdown-it with linkify and marked: each one links the value as
+// given, as far as its own rule reaches. micromark, markdown-it and marked
+// link none of the escaped output, which renders as the same text, and
+// cmark-gfm links only its email addresses, which it finds after resolving
+// the escapes.
+func TestEscapeMdTableCell_LiteralAutolink_IsEscaped(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "https address", in: "see https://attacker.invalid/y now", want: `see https\://attacker.invalid/y now`},
+		{name: "http address", in: "see http://attacker.invalid/y now", want: `see http\://attacker.invalid/y now`},
+		{name: "ftp address", in: "see ftp://attacker.example/y now", want: `see ftp\://attacker.example/y now`},
+		{name: "scheme in upper case", in: "see HTTPS://attacker.invalid/y", want: `see HTTPS\://attacker.invalid/y`},
+		{name: "scheme in mixed case", in: "see HtTp://attacker.invalid/y", want: `see HtTp\://attacker.invalid/y`},
+		{name: "scheme at the start", in: "http://attacker.invalid/y", want: `http\://attacker.invalid/y`},
+		{name: "letter before the scheme", in: "xhttp://attacker.invalid/y", want: `xhttp\://attacker.invalid/y`},
+		{name: "closing half of a link", in: "x](http://attacker.invalid/y)Title7", want: `x](http\://attacker.invalid/y)Title7`},
+		{name: "www address", in: "see www.attacker.invalid now", want: `see www\.attacker.invalid now`},
+		{name: "www in upper case at the start", in: "WWW.attacker.invalid", want: `WWW\.attacker.invalid`},
+		{name: "www after a slash", in: "/www.attacker.invalid", want: `/www\.attacker.invalid`},
+		{name: "address with a www host", in: "https://www.attacker.invalid", want: `https\://www\.attacker.invalid`},
+		{name: "email address", in: "mail jose@attacker.example", want: `mail jose\@attacker.example`},
+		{name: "mailto address", in: "mailto:jose@attacker.example", want: `mailto:jose\@attacker.example`},
+		{name: "version after an at sign", in: "bump lodash@4.17.21", want: `bump lodash\@4.17.21`},
+		{name: "mention is left alone", in: "ping @jose about it", want: "ping @jose about it"},
+		{name: "scheme without the slashes is left alone", in: "ratio http:2 and http:/x", want: "ratio http:2 and http:/x"},
+		{name: "separator without a scheme is left alone", in: "a://b and tp://c", want: "a://b and tp://c"},
+		{name: "www without its dot is left alone", in: "wwwx and ww.x", want: "wwwx and ww.x"},
+		{name: "escaped address is left alone", in: `http\://a www\.b c\@d.example`, want: `http\://a www\.b c\@d.example`},
+		{name: "pipe and address", in: "a|https://attacker.invalid", want: `a&#124;https\://attacker.invalid`},
+		{name: "control byte inside the scheme", in: "ht\x1btp://attacker.invalid", want: `http\://attacker.invalid`},
+		{name: "local part ending in a semicolon", in: "mail a;@attacker.example", want: `mail a;\@attacker.example`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EscapeMdTableCell(tt.in); got != tt.want {
+				t.Errorf("EscapeMdTableCell(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEscapeMdTableCell_LiteralAutolink_LeavesTheLineModelNone verifies the
+// escape one level up, through the GFM line model the registry gate reads:
+// each value, written as it is in a table cell, opens a literal autolink there,
+// and escaped opens none, so the gate that reads the model would report a
+// formatter that wrote the value unescaped and not one that escaped it.
+func TestEscapeMdTableCell_LiteralAutolink_LeavesTheLineModelNone(t *testing.T) {
+	values := []string{
+		"x](http://attacker.invalid/y)",
+		`<a href="http://attacker.invalid">x</a>`,
+		"see www.attacker.invalid",
+		"mail jose@attacker.example",
+		"HTTPS://attacker.invalid",
+	}
+	for _, v := range values {
+		t.Run(v, func(t *testing.T) {
+			raw := testutil.ScanGFM("| A |\n| --- |\n| " + strings.ReplaceAll(v, "<", "&lt;") + " |\n")
+			if len(raw.LiteralLinks) == 0 {
+				t.Fatalf("the value %q opens no literal autolink as written, so it proves nothing", v)
+			}
+			escaped := testutil.ScanGFM("| A |\n| --- |\n| " + EscapeMdTableCell(v) + " |\n")
+			if len(escaped.LiteralLinks) != 0 {
+				t.Errorf("EscapeMdTableCell(%q) still opens %q", v, escaped.LiteralLinks)
+			}
+		})
+	}
+}
+
+// TestEscapeMdTableCell_CodeSpan_MovesWithTheLine verifies, through the GFM
+// line model the registry gate reads, why a value's code span is no
+// containment of its own: two values on one list line, the first leaving a
+// backtick open and the second closing a span around an address. Written as
+// they are, the open backtick pairs with the second value's first one and the
+// address lands outside every span as a link; escaped, the address is text
+// wherever the spans fall.
+func TestEscapeMdTableCell_CodeSpan_MovesWithTheLine(t *testing.T) {
+	const first, second = "x ` y", "`https://attacker.invalid/y` z"
+	line := func(a, b string) string { return "- **A**: " + a + " **B**: " + b + "\n" }
+	raw := testutil.ScanGFM(line(first, second))
+	if len(raw.LiteralLinks) == 0 {
+		t.Fatalf("the line %q opens no literal autolink as written, so it proves nothing", line(first, second))
+	}
+	escaped := testutil.ScanGFM(line(EscapeMdTableCell(first), EscapeMdTableCell(second)))
+	if len(escaped.LiteralLinks) != 0 {
+		t.Errorf("the escaped line %q still opens %q", line(EscapeMdTableCell(first), EscapeMdTableCell(second)), escaped.LiteralLinks)
+	}
+}
+
+// TestEscapeMdHeading_LiteralAutolink_IsEscaped verifies that the heading
+// escaper escapes a literal autolink the way the cell escaper does, after the
+// leading '#' is gone, so the name a card's heading carries is text there as
+// it is in a cell, inside a code span as well.
+func TestEscapeMdHeading_LiteralAutolink_IsEscaped(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "address", in: "Mirror of https://attacker.invalid/y", want: `Mirror of https\://attacker.invalid/y`},
+		{name: "www after the stripped hash", in: "# www.attacker.invalid", want: `www\.attacker.invalid`},
+		{name: "email", in: "Owner jose@attacker.example", want: `Owner jose\@attacker.example`},
+		{name: "no address is left alone", in: "My Project", want: "My Project"},
+		{name: "address in a code span", in: "Pin `actions/checkout@v4`", want: "Pin `actions/checkout\\@v4`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EscapeMdHeading(tt.in); got != tt.want {
+				t.Errorf("EscapeMdHeading(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEscapeMdTableCell_CodeSpan_IsEscapedAsText verifies whole output for a
+// value that opens code spans of its own: the address inside a span is
+// escaped as it is outside one. In CommonMark the backslash shows inside the
+// span, "Pin `actions/checkout@v4` in CI" reading "actions/checkout\@v4" in
+// its code, and that is the price of the guarantee: which bytes are a span
+// depends on the rest of the line and on the renderer, and a span left as it
+// was is a link wherever the two disagree.
+//
+// The last three cases are the disagreements that settled it. A backtick the
+// first of two values on a line leaves open pairs with the first one of the
+// second, which moves the second value's span in every renderer. marked
+// reads a run of backticks right after a tilde as text, so it linked the
+// address of "~`a@b.example`". Its strikethrough pairs a tilde before a span
+// with one inside it, so it linked "~~x `a~~b@c.example`" as well. Each
+// output here renders with no link in micromark with the GFM extension,
+// markdown-it with linkify and marked.
+func TestEscapeMdTableCell_CodeSpan_IsEscapedAsText(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "version in a span", in: "Pin `actions/checkout@v4` in CI", want: "Pin `actions/checkout\\@v4` in CI"},
+		{name: "remote in a span", in: "Clone with `git@gitlab.com:group/project.git`", want: "Clone with `git\\@gitlab.com:group/project.git`"},
+		{name: "two spans", in: "Allow `https://` in `www.example.com` hosts", want: "Allow `https\\://` in `www\\.example.com` hosts"},
+		{name: "backtick left open", in: "x ` y", want: "x ` y"},
+		{name: "span after a tilde", in: "~`a@b.example`", want: "~`a\\@b.example`"},
+		{name: "strikethrough across a span", in: "~~x `a~~b@c.example`", want: "~~x `a~~b\\@c.example`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EscapeMdTableCell(tt.in); got != tt.want {
+				t.Errorf("EscapeMdTableCell(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEscapeLiteralAutolinks_EmailLocalByte_DecidesTheAtSign verifies the
+// byte before an '@' byte by byte: an ASCII letter or digit, at each end of
+// its range, one of "+-._", or one of `;:&=$,"`, which markdown-it's linkify
+// reads into the local part as well, opens an email address and gets the
+// backslash, and the bytes just outside each range that are not listed
+// themselves, any other punctuation, a byte of a multi-byte character and the
+// start of the value do not. Every value but the multi-byte one is shorter
+// than the room the builder grows by, so a growth that goes negative panics
+// here rather than going unnoticed.
+func TestEscapeLiteralAutolinks_EmailLocalByte_DecidesTheAtSign(t *testing.T) {
+	escaped := []string{"a", "z", "A", "Z", "0", "9", "+", "-", ".", "_", ";", ":", "&", "=", "$", ",", `"`}
+	left := []string{"`", "{", "@", "[", "/", "!", "'", "%", "é", ""}
+	for _, before := range escaped {
+		t.Run("escaped after "+before, func(t *testing.T) {
+			in := before + "@b"
+			if got, want := escapeLiteralAutolinks(in), before+`\@b`; got != want {
+				t.Errorf("escapeLiteralAutolinks(%q) = %q, want %q", in, got, want)
+			}
+		})
+	}
+	for _, before := range left {
+		t.Run("left after "+strconv.Quote(before), func(t *testing.T) {
+			in := before + "@b"
+			if got := escapeLiteralAutolinks(in); got != in {
+				t.Errorf("escapeLiteralAutolinks(%q) = %q, want it unchanged", in, got)
+			}
+		})
+	}
+}
+
+// TestEscapeLiteralAutolinks_Scheme_IsReadWhole verifies the scheme a colon
+// is escaped after: each of http, https and ftp in full, at the very start of
+// the value where nothing precedes it, and a value shorter than every scheme,
+// which is read without reaching before its start.
+func TestEscapeLiteralAutolinks_Scheme_IsReadWhole(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "http://a", want: `http\://a`},
+		{in: "https://a", want: `https\://a`},
+		{in: "ftp://a", want: `ftp\://a`},
+		{in: "FTP://a", want: `FTP\://a`},
+		{in: "tp://a", want: "tp://a"},
+		{in: "://a", want: "://a"},
+		{in: "www.", want: `www\.`},
+		{in: "w.ww.", want: "w.ww."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			if got := escapeLiteralAutolinks(tt.in); got != tt.want {
+				t.Errorf("escapeLiteralAutolinks(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdTitleLink_AddressInTheTitle_IsEscapedOutsideTheLabelOnly verifies
+// the three shapes MdTitleLink writes for a title carrying an address. Inside
+// a link's label the title is left as it was, since GFM opens no literal
+// autolink in a link's text and the label escaper would turn the cell
+// escaper's backslash into one the reader sees. Without a linkable address
+// the title is a cell, and its address is escaped as every cell's is.
+func TestMdTitleLink_AddressInTheTitle_IsEscapedOutsideTheLabelOnly(t *testing.T) {
+	const title = "Mirror of https://attacker.invalid/y for jose@attacker.example"
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{name: "linked", url: "https://gitlab.example.com/g/p", want: "[" + title + "](https://gitlab.example.com/g/p)"},
+		{name: "no address", url: "", want: `Mirror of https\://attacker.invalid/y for jose\@attacker.example`},
+		{name: "address that is not linked", url: "wss://kas.example.com", want: `Mirror of https\://attacker.invalid/y for jose\@attacker.example ` + "`wss://kas.example.com`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MdTitleLink(title, tt.url); got != tt.want {
+				t.Errorf("MdTitleLink(%q, %q) = %q, want %q", title, tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdAutolink_ServerWrittenAddress_KeepsItsLink verifies that the literal
+// autolink escape never reaches an address the server links on purpose: the
+// autolink <url> holds its address as written, since nothing inside one is
+// escaped and a backslash there would be part of the address, and the long
+// form an address keeps when an autolink cannot hold it labels the link with
+// the address unescaped, since GFM opens no literal autolink inside a link's
+// text. Each address carries all three openers.
+func TestMdAutolink_ServerWrittenAddress_KeepsItsLink(t *testing.T) {
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{name: "autolink", got: MdAutolink("https://www.example.com/u/a@b"), want: "<https://www.example.com/u/a@b>"},
+		{name: "title that is the address", got: MdTitleLink("https://www.example.com/u/a@b", "https://www.example.com/u/a@b"), want: "<https://www.example.com/u/a@b>"},
+		{name: "blank title", got: MdTitleLink("", "https://www.example.com/u/a@b"), want: "<https://www.example.com/u/a@b>"},
+		{name: "long form", got: MdAutolink("https://www.example.com/u/a@b c"), want: "[https://www.example.com/u/a@b c](https://www.example.com/u/a@b%20c)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("got %q, want %q", tt.got, tt.want)
 			}
 		})
 	}
@@ -1525,12 +1853,12 @@ func TestEscapeMdHeading_RawHTML_IsNeutralized(t *testing.T) {
 		{
 			name: "anchor to another host",
 			in:   `<a href="http://attacker.invalid/x">My Project</a>`,
-			want: `&lt;a href="http://attacker.invalid/x">My Project&lt;/a>`,
+			want: `&lt;a href="http\://attacker.invalid/x">My Project&lt;/a>`,
 		},
 		{
 			name: "image beacon",
 			in:   `<img src="http://attacker.invalid/p.gif">`,
-			want: `&lt;img src="http://attacker.invalid/p.gif">`,
+			want: `&lt;img src="http\://attacker.invalid/p.gif">`,
 		},
 		{
 			name: "heading promotion still stripped",

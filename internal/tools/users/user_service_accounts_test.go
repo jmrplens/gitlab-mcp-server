@@ -782,9 +782,9 @@ func TestFormatServiceAccountMarkdownString_WithEmail(t *testing.T) {
 			"- **ID**: 7\n"+
 			"- **Username**: svc-7\n"+
 			"- **Name**: Service Seven\n"+
-			"- **Email**: svc7@example.com\n"+
-			"- **Public Email**: public7@example.com\n"+
-			"- **Unconfirmed Email**: pending@example.com\n")
+			"- **Email**: svc7\\@example.com\n"+
+			"- **Public Email**: public7\\@example.com\n"+
+			"- **Unconfirmed Email**: pending\\@example.com\n")
 }
 
 // TestFormatServiceAccountMarkdownString_NoEmail verifies that the two absent

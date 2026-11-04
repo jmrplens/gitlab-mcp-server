@@ -10,7 +10,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -532,6 +534,120 @@ func TestBuild_AddsTheStandaloneActionsAfterFiltering(t *testing.T) {
 	if built.CountActions() <= plain.CountActions() {
 		t.Errorf("Build() has %d actions, the plain catalog %d; the standalone actions were not added", built.CountActions(), plain.CountActions())
 	}
+}
+
+// escapedAddressOpener matches the backslash the literal autolink escape writes
+// in front of an address's colon, dot or '@'.
+var escapedAddressOpener = regexp.MustCompile(`\\[:.@]`)
+
+// TestBuild_CatalogProse_ReachesDiscoveryWithItsAddressesAsWritten walks the
+// whole catalog the widest session is served, GitLab.com at Ultimate with the
+// standalone actions, and holds what the registry renders about each action. A
+// usage note and a parameter example are the server's own prose, and their
+// addresses are there to be copied: discover_project.resolve says to pass the
+// URL exactly as it appears, and "\@" and "\:" are not escapes JSON accepts. The
+// describe card, which writes all of an action's prose, is read for every
+// action, and the finder's table, which is what the default surface serves and
+// whose search is the expensive part, for the actions whose prose holds an
+// address.
+func TestBuild_CatalogProse_ReachesDiscoveryWithItsAddressesAsWritten(t *testing.T) {
+	catalog, _, err := Build(gitlabtools.UnboundClient(true), &config.ServerConfig{Tier: edition.Ultimate})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	registry := dynamictools.NewRegistryFromCatalog(catalog)
+
+	var addressed []string
+	for _, action := range catalog.Actions() {
+		id := string(action.ID)
+		t.Run("describe "+id, func(t *testing.T) {
+			text, description := describeAction(t, registry, id)
+			if row := proseRowWithEscapedAddress(text); row != "" {
+				t.Errorf("Describe(%s) escapes an address in %q", id, row)
+			}
+			if prose := fmt.Sprintf("%s %v", description.Usage, description.ParamGuidance); strings.Contains(prose, "://") || strings.Contains(prose, "@") {
+				addressed = append(addressed, id)
+			}
+		})
+	}
+
+	for _, tc := range []struct{ id, spelled string }{
+		{id: "discover_project.resolve", spelled: "git@gitlab.example.com:group/project.git"},
+		{id: "project.mirror_add", spelled: "https://example.com/repo.git"},
+	} {
+		t.Run("the finder spells the address of "+tc.id, func(t *testing.T) {
+			if !slices.Contains(addressed, tc.id) {
+				t.Fatalf("no address found in the prose of %s, among %v", tc.id, addressed)
+			}
+			if row := findActionRow(t, registry, tc.id); !strings.Contains(row, tc.spelled) {
+				t.Errorf("Find(%s) row = %q, want it to hold %q", tc.id, row, tc.spelled)
+			}
+		})
+	}
+	for _, id := range addressed {
+		t.Run("find "+id, func(t *testing.T) {
+			row := findActionRow(t, registry, id)
+			if opener := escapedAddressOpener.FindString(row); opener != "" {
+				t.Errorf("Find(%s) writes %q in %q", id, opener, row)
+			}
+		})
+	}
+}
+
+// describeAction returns the card the registry writes for the action and the
+// description the card was written from.
+func describeAction(t *testing.T, registry *dynamictools.Registry, id string) (string, dynamictools.ActionDescription) {
+	t.Helper()
+	result, output, err := registry.Describe(t.Context(), nil, dynamictools.DescribeInput{Action: id})
+	if err != nil || len(output.Actions) != 1 {
+		t.Fatalf("Describe(%s) = %d actions, error %v", id, len(output.Actions), err)
+	}
+	return resultText(t, result), output.Actions[0]
+}
+
+// proseRowWithEscapedAddress returns the first row of a describe card that
+// writes the catalog's prose and holds an escaped address, or nothing. The rest
+// of the card is not read: its fences hold JSON, where a backslash is the
+// schema's own.
+func proseRowWithEscapedAddress(card string) string {
+	for line := range strings.Lines(card) {
+		isProse := strings.HasPrefix(line, "- **Usage**:") || strings.HasPrefix(line, "- **Parameter guidance**:")
+		if isProse && escapedAddressOpener.MatchString(line) {
+			return line
+		}
+	}
+	return ""
+}
+
+// findActionRow returns the row the finder's table has for the action, asking
+// for it by its ID.
+func findActionRow(t *testing.T, registry *dynamictools.Registry, id string) string {
+	t.Helper()
+	result, _, err := registry.Find(t.Context(), nil, dynamictools.FindInput{Query: id})
+	if err != nil {
+		t.Fatalf("Find(%s) error = %v", id, err)
+	}
+	text := resultText(t, result)
+	for line := range strings.Lines(text) {
+		if strings.HasPrefix(line, "| `"+id+"` |") {
+			return line
+		}
+	}
+	t.Fatalf("Find(%s) has no row for it in %q", id, text)
+	return ""
+}
+
+// resultText returns the text of a tool result that answers with text.
+func resultText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if result == nil || len(result.Content) == 0 {
+		t.Fatalf("result = %+v, want content", result)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("result content = %#v, want text", result.Content[0])
+	}
+	return text.Text
 }
 
 // healthyGitLab answers every request well enough for the health action to

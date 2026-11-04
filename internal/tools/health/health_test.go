@@ -522,8 +522,8 @@ func TestFormatMarkdownString_Healthy(t *testing.T) {
 		"- **MCP Server Version**: 1.0.0\n" +
 		"- **Author**: Test Author\n" +
 		"- **Department**: Test Dept\n" +
-		"- **Repository**: https://example.com/repo\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Repository**: <https://example.com/repo>\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Version**: 17.5.0\n" +
 		"- **Revision**: abc123\n" +
 		"- **Authenticated**: \u2705\n" +
@@ -563,7 +563,7 @@ func TestFormatMarkdownString_EditionAndAgentServer(t *testing.T) {
 				"  - **Enabled**: ✅\n" +
 				"  - **Version**: 17.5.1\n" +
 				"  - **External URL**: grpc://kas.example.com:8150\n" +
-				"  - **Kubernetes API Proxy URL**: https://kas.example.com/k8s-proxy\n",
+				"  - **Kubernetes API Proxy URL**: https\\://kas.example.com/k8s-proxy\n",
 		},
 		{
 			name: "community edition without one",
@@ -580,7 +580,7 @@ func TestFormatMarkdownString_EditionAndAgentServer(t *testing.T) {
 			tc.out.GitLabVersion = "17.5.0"
 			got := FormatMarkdownString(tc.out)
 			want := "## ✅ GitLab Server Status: healthy\n\n" +
-				"- **GitLab URL**: https://gitlab.example.com\n" +
+				"- **GitLab URL**: <https://gitlab.example.com>\n" +
 				"- **Version**: 17.5.0\n" +
 				tc.rows +
 				"- **Authenticated**: ❌\n" +
@@ -611,8 +611,8 @@ func TestFormatMarkdownString_WithMetadata(t *testing.T) {
 		"- **MCP Server Version**: 2.3.4\n" +
 		"- **Author**: Test Author\n" +
 		"- **Department**: Test Department\n" +
-		"- **Repository**: https://github.com/jmrplens/gitlab-mcp-server\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Repository**: <https://github.com/jmrplens/gitlab-mcp-server>\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Authenticated**: ❌\n" +
 		"- **Response Time**: 0 ms\n" +
 		healthHints
@@ -631,7 +631,7 @@ func TestFormatMarkdownString_WithoutMetadata(t *testing.T) {
 	}
 	got := FormatMarkdownString(out)
 	want := "## ✅ GitLab Server Status: healthy\n\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Authenticated**: ❌\n" +
 		"- **Response Time**: 0 ms\n" +
 		healthHints
@@ -656,7 +656,7 @@ func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 	}
 	got := FormatMarkdownString(out)
 	want := "## \u274c GitLab Server Status: unhealthy\n\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Authenticated**: \u274c\n" +
 		"- **Response Time**: 100 ms\n" +
 		"- **Error**: connectivity check failed: connection refused\n" +
@@ -679,7 +679,7 @@ func TestFormatMarkdownString_UnhealthyHTMLError(t *testing.T) {
 	}
 	got := FormatMarkdownString(out)
 	want := "## \u274c GitLab Server Status: unhealthy\n\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Authenticated**: \u274c\n" +
 		"- **Response Time**: 0 ms\n" +
 		"- **Error**:\n" +
@@ -711,7 +711,7 @@ func TestFormatMarkdownString_Degraded(t *testing.T) {
 	}
 	got := FormatMarkdownString(out)
 	want := "## \u26a0\ufe0f GitLab Server Status: degraded\n\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Version**: 17.5.0\n" +
 		"- **Revision**: abc123\n" +
 		"- **Authenticated**: \u274c\n" +
@@ -738,7 +738,7 @@ func TestFormatMarkdownString_NoUsername(t *testing.T) {
 	}
 	got := FormatMarkdownString(out)
 	want := "## ✅ GitLab Server Status: healthy\n\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Authenticated**: ✅\n" +
 		"- **Response Time**: 0 ms\n" +
 		healthHints
@@ -762,7 +762,7 @@ func TestFormatMarkdownString_NoVersion(t *testing.T) {
 		Error:     "failed",
 	})
 	want := "## ❌ GitLab Server Status: unhealthy\n\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Authenticated**: ❌\n" +
 		"- **Response Time**: 0 ms\n" +
 		"- **Error**: failed\n" +
@@ -778,7 +778,7 @@ func TestFormatMarkdownString_NoVersion(t *testing.T) {
 		Authenticated: true,
 	})
 	want = "## ✅ GitLab Server Status: healthy\n\n" +
-		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **GitLab URL**: <https://gitlab.example.com>\n" +
 		"- **Version**: 17.5.0\n" +
 		"- **Authenticated**: ✅\n" +
 		"- **Response Time**: 0 ms\n" +

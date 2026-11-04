@@ -1263,7 +1263,7 @@ func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 		"- " + toolutil.EmojiWarning + " **Locked**\n" +
 		"- **Access Level**: Maintainer (40)\n" +
 		"- **URL**: <https://gitlab.example.com/alice>\n" +
-		"- **Email**: alice@example.com\n" +
+		"- **Email**: alice\\@example.com\n" +
 		"- **Member Role**: Security Lead (3)\n" +
 		"- **Created By**:\n" +
 		"  - **Name**: Admin User\n" +

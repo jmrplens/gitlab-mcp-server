@@ -258,7 +258,7 @@ func TestFormatGetMarkdown_HostileValue(t *testing.T) {
 	}),
 		"## Custom Attribute\n\n"+
 			"- **Key**: a&#124;b\n"+
-			"- **Value**: x ## injected - item &#91;click](http://attacker.invalid/)\n"+
+			"- **Value**: x ## injected - item &#91;click](http\\://attacker.invalid/)\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'admin.custom_attr_set' to update this attribute\n"+
 			"- Use action 'admin.custom_attr_delete' to remove it\n")

@@ -556,7 +556,7 @@ func TestFormatCommit_Markdown(t *testing.T) {
 
 	want := "## Commit abc123\n\n" +
 		"- **Title**: " + testTitleFixBug + "\n" +
-		"- **Author**: Dev (dev@example.com)\n" +
+		"- **Author**: Dev (dev\\@example.com)\n" +
 		"- **Date**: 1 Jan 2026\n" +
 		"- **URL**: <https://gitlab.example.com/commit/abc123>\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
@@ -998,7 +998,7 @@ func TestFormatCommit_DetailMarkdown(t *testing.T) {
 
 	want := "## Commit abc1234\n\n" +
 		"- **Title**: feat: add feature\n" +
-		"- **Author**: dev (dev@example.com)\n" +
+		"- **Author**: dev (dev\\@example.com)\n" +
 		"- **Date**: 1 Jan 2026\n" +
 		"- **Parents**: `parent1, parent2`\n" +
 		"- **Stats**: +10 -3 (13 total)\n" +
@@ -2943,10 +2943,11 @@ var mdGateHostile = []struct {
 // twice, with benign sentinels and with one hostile payload in every string
 // field a directive in the package does not declare safe, and compares the
 // structure outside quotes and fences: the count of headings, top-level
-// items, table rows and cells, the hints ExtractHints reads, and the link
-// destinations. It is the dynamic twin of the escaping gate, reading the
-// bytes the client receives rather than the source, so it does not share the
-// static walk's blind spots. It reports rather than fails.
+// items, table rows and cells, the hints ExtractHints reads, the link
+// destinations, and the addresses GFM links as text. It is the dynamic twin
+// of the escaping gate, reading the bytes the client receives rather than
+// the source, so it does not share the static walk's blind spots. It reports
+// rather than fails.
 func TestMarkdownRegistry_HostileValues_ChangeNoStructure(t *testing.T) {
 	report := mdGateScan(t)
 	exempt := map[string]map[string]bool{}
@@ -3023,6 +3024,15 @@ func mdGateHostileText(exempt map[string]bool, payload string) func(string) stri
 // wherever it sits. Every offending line is reported rather than the first,
 // since stopping at one hid two findings of the class the rule exists to
 // find.
+//
+// X3, the literal autolink rule, reads the addresses GFM links as text,
+// which the line model keeps apart from the links a formatter writes: a
+// hostile value that reaches the page with an address in it, "http://",
+// "https://", "www." or an email address, opens a link the formatter never
+// wrote, under the same instruction HintPreserveLinks gives the model to
+// keep links clickable. Its destinations are compared as X1 compares the
+// links, with the fixture's origin left out, since a formatter that prints
+// an address field as text without escaping it does so in both renders.
 func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, baseHints []string, md string) []mdGateFinding {
 	doc := testutil.ScanGFM(md)
 	state := "hostile " + hostile
@@ -3047,6 +3057,13 @@ func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, bas
 		findings = append(findings, mdGateFinding{
 			kase: c, state: state, rule: "X1", line: line, text: text,
 			detail: "the value opens a link to " + dest + ", a destination the fixture never named",
+		})
+	}
+	for _, dest := range mdGateNewForeignLinks(base.LiteralLinks, doc.LiteralLinks) {
+		line, text := mdGateLiteralLine(doc, dest)
+		findings = append(findings, mdGateFinding{
+			kase: c, state: state, rule: "X3", line: line, text: text,
+			detail: "the value reaches the page as an address GFM links, to " + dest + ", a destination the fixture never named",
 		})
 	}
 	if hostile == "html" {
@@ -3103,6 +3120,23 @@ func mdGateNewForeignLinks(base, hostile []string) []string {
 // carries the destination, which a link the model itself read cannot be.
 func mdGateLinkLine(doc *testutil.GFMDocument, dest string) (int, string) {
 	needle := "](" + dest + ")"
+	for i, line := range doc.Lines {
+		if strings.Contains(line, needle) {
+			return i + 1, line
+		}
+	}
+	return 0, ""
+}
+
+// mdGateLiteralLine finds the line a literal autolink is written on, by the
+// address as the page spells it: the destination less the "mailto:" the line
+// model gives an email address, or less the "http://" it gives a www. one.
+// It answers 0 and no text when no line carries the address.
+func mdGateLiteralLine(doc *testutil.GFMDocument, dest string) (int, string) {
+	needle := strings.TrimPrefix(dest, "mailto:")
+	if rest, ok := strings.CutPrefix(dest, "http://"); ok && strings.HasPrefix(strings.ToLower(rest), "www.") {
+		needle = rest
+	}
 	for i, line := range doc.Lines {
 		if strings.Contains(line, needle) {
 			return i + 1, line

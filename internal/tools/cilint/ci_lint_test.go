@@ -499,7 +499,7 @@ func TestFormatOutputMarkdown_ValidAllSections(t *testing.T) {
 		"\n### Includes\n\n" +
 		"| Type | Location | Context Project |\n| --- | --- | --- |\n" +
 		"| local | .gitlab-ci.yml | my/project |\n" +
-		"| remote | https://example.com/ci.yml |  |\n" +
+		"| remote | https\\://example.com/ci.yml |  |\n" +
 		"\n### Merged YAML\n\n" +
 		"```yaml\nstages:\n  - build\n```\n" +
 		"\n---\n💡 **Next steps:**\n" +

@@ -345,7 +345,7 @@ func TestFormatMarkdownString(t *testing.T) {
 	assertMarkdown(t, FormatMarkdownString(Output{ID: 1, Email: "test@example.com", ConfirmedAt: "2026-01-15"}),
 		"## Email\n\n"+
 			"- **ID**: 1\n"+
-			"- **Email**: test@example.com\n"+
+			"- **Email**: test\\@example.com\n"+
 			"- **Confirmed**: ✅ 15 Jan 2026\n")
 }
 
@@ -702,8 +702,8 @@ func TestFormatListMarkdownString_WithEmails(t *testing.T) {
 		"## Emails (2)\n\n"+
 			"| ID | Email | Confirmed |\n"+
 			"| --- | --- | --- |\n"+
-			"| 1 | confirmed@example.com | ✅ 15 Jan 2026 10:00 UTC |\n"+
-			"| 2 | unconfirmed@example.com | ❌ awaiting confirmation |\n"+
+			"| 1 | confirmed\\@example.com | ✅ 15 Jan 2026 10:00 UTC |\n"+
+			"| 2 | unconfirmed\\@example.com | ❌ awaiting confirmation |\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'user.get_email' to read one address\n")
 }
@@ -722,7 +722,7 @@ func TestFormatListMarkdownString_APageOfALongerList(t *testing.T) {
 			"Showing 1 of 2 results (page 1 of 2)\n\n"+
 			"| ID | Email | Confirmed |\n"+
 			"| --- | --- | --- |\n"+
-			"| 1 | confirmed@example.com | ✅ 15 Jan 2026 10:00 UTC |\n"+
+			"| 1 | confirmed\\@example.com | ✅ 15 Jan 2026 10:00 UTC |\n"+
 			"\nPage 1 of 2 | 2 items total | 1 per page\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'user.get_email' to read one address\n")
@@ -742,7 +742,7 @@ func TestFormatMarkdownString_WithoutConfirmedAt(t *testing.T) {
 	assertMarkdown(t, FormatMarkdownString(Output{ID: 3, Email: "noconfirm@example.com"}),
 		"## Email\n\n"+
 			"- **ID**: 3\n"+
-			"- **Email**: noconfirm@example.com\n"+
+			"- **Email**: noconfirm\\@example.com\n"+
 			"- **Confirmed**: ❌ awaiting confirmation\n")
 }
 
@@ -752,7 +752,7 @@ func TestFormatMarkdownString_Confirmed(t *testing.T) {
 	assertMarkdown(t, FormatMarkdownString(Output{ID: 4, Email: "ok@example.com", ConfirmedAt: "2026-01-15T10:00:00Z"}),
 		"## Email\n\n"+
 			"- **ID**: 4\n"+
-			"- **Email**: ok@example.com\n"+
+			"- **Email**: ok\\@example.com\n"+
 			"- **Confirmed**: ✅ 15 Jan 2026 10:00 UTC\n")
 }
 

@@ -3147,7 +3147,7 @@ func TestFormatShareProjectMarkdown_HostileMessage(t *testing.T) {
 		GroupID: 5,
 	})
 	want := "## Project Shared\n\n" +
-		"- **Message**: Project &lt;a href=\"http://attacker.invalid\">x&lt;/a> ## injected shared with group 5\n" +
+		"- **Message**: Project &lt;a href=\"http\\://attacker.invalid\">x&lt;/a> ## injected shared with group 5\n" +
 		"- **Group ID**: 5\n\n" +
 		shareHints
 	if md != want {

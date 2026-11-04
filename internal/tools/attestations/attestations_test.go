@@ -147,7 +147,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **Build ID**: 200\n" +
 				"- **Status**: success\n" +
 				"- **Predicate Kind**: slsa_provenance\n" +
-				"- **Predicate Type**: https://slsa.dev/provenance/v0.2\n" +
+				"- **Predicate Type**: https\\://slsa.dev/provenance/v0.2\n" +
 				"- **Subject Digest**: `sha256:deadbeef`\n" +
 				"- **Download URL**: <https://gitlab.example.com/download>\n" +
 				"- **Created**: 15 Jun 2026 12:00 UTC\n" +

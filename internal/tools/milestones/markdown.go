@@ -192,7 +192,10 @@ func FormatPromoteMarkdown(v PromoteOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Milestone promoted: "+v.Title)
 	c.Field("Title", v.Title)
-	c.Note(v.Message)
+	// The message names the milestone by its title, which GitLab's users
+	// wrote, so it is escaped as a cell is: written raw, a title carried a
+	// live tag or an address GFM links into the server's own sentence.
+	c.Note(toolutil.EscapeMdTableCell(v.Message))
 	c.End(toolutil.HintAction(actionGroupMilestoneList, "find the group milestone by its title"))
 	return b.String()
 }

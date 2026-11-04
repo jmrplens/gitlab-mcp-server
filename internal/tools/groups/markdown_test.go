@@ -317,7 +317,7 @@ func TestFormatHookMarkdown_SecretSectionsAppearOnlyWhenThereAreAny(t *testing.T
 func TestFormatHookMarkdown_WithoutName(t *testing.T) {
 	md := FormatHookMarkdown(HookOutput{ID: 5, URL: "https://hooks.example.com/plain"})
 
-	want := "## Group Hook: https://hooks.example.com/plain\n\n" +
+	want := "## Group Hook: https\\://hooks.example.com/plain\n\n" +
 		"- **ID**: 5\n" +
 		"- **URL**: <https://hooks.example.com/plain>\n" +
 		"- **Group ID**: 0\n" +
@@ -367,7 +367,7 @@ func TestFormatProvisionedUsersListMarkdown_Rows(t *testing.T) {
 
 	want := "## Provisioned Users (1)\n\n" +
 		"| ID | Username | Name | Account State | Email |\n| --- | --- | --- | --- | --- |\n" +
-		"| 7 | [@scim-user](https://g/scim-user) | SCIM User | active | s@e.com |\n" +
+		"| 7 | [@scim-user](https://g/scim-user) | SCIM User | active | s\\@e.com |\n" +
 		"\nPage 1 of 1 | 1 items total\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +

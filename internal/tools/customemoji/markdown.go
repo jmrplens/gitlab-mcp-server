@@ -16,13 +16,23 @@ const (
 	actionDelete = "custom_emoji.delete"
 )
 
-// emojiCell renders a custom emoji's name the way GitLab shows it, ":name:",
-// with the name escaped for a cell.
-func emojiCell(name string) string {
+// emojiText is a custom emoji's name the way GitLab shows it, ":name:", or
+// nothing for an emoji GitLab sent no name for, so a cell never reads "::".
+func emojiText(name string) string {
 	if name == "" {
 		return ""
 	}
-	return ":" + toolutil.EscapeMdTableCell(name) + ":"
+	return ":" + name + ":"
+}
+
+// emojiCell renders a custom emoji's ":name:" escaped for a cell. The whole
+// form is escaped rather than the name inside it, because whether an '@'
+// opens an email address depends on the character in front of it, and the
+// first character of a name follows the colon, which markdown-it reads as
+// part of the address: the name "@evil.com" escaped alone and put between
+// the colons is ":@evil.com:", a mailto link there.
+func emojiCell(name string) string {
+	return toolutil.EscapeMdTableCell(emojiText(name))
 }
 
 // ancestorsHint is the step a subgroup listed without its ancestor groups
@@ -71,13 +81,20 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 // nameCell renders the emoji as its ":name:" form linked to the image GitLab
-// serves for it, or as the bare form when GitLab sent no URL.
+// serves for it, as the escaped form when GitLab sent no URL, and as nothing
+// when it sent no name, since a link needs text to click.
+//
+// The form reaches [toolutil.MdTitleLink] raw, because the link helper
+// escapes its label itself: a form escaped for a cell first has the
+// backslash the cell escaper writes in front of an address's colon, dot or
+// '@' escaped again into one the reader sees, so a name holding "www." would
+// read "www\." in the link.
 func nameCell(e Item) string {
-	cell := emojiCell(e.Name)
-	if cell == "" || e.URL == "" {
-		return cell
+	text := emojiText(e.Name)
+	if text == "" {
+		return ""
 	}
-	return toolutil.MdTitleLink(cell, e.URL)
+	return toolutil.MdTitleLink(text, e.URL)
 }
 
 // FormatCreateMarkdown renders a created custom emoji as the card of one

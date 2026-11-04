@@ -4775,16 +4775,19 @@ func actionColumnsFor(rows []actionRow) actionColumns {
 
 // actionRowCells renders one row in the order of [actionMatchColumns]. The
 // guidance and why cells are escaped here even though the two renderers that
-// build them escape as well: the escaper is idempotent, so the rendering is
+// build them escape as well: the escapers are idempotent, so the rendering is
 // unchanged, and the cell is escaped where the cell is written rather than
-// two calls away, which is the rule every other formatter is held to.
+// two calls away, which is the rule every other formatter is held to. Each
+// takes the escaper its text needs: the guidance is the catalog's own prose,
+// whose example addresses a caller copies as written, and the why can quote
+// the caller's query.
 func actionRowCells(row actionRow, cols actionColumns) []string {
 	return selectColumns([]string{
 		toolutil.MdCodeSpanCell(row.id),
 		strconv.Itoa(row.score),
 		destructiveCell(row.destructive),
 		requiredParamsCell(row.requiredParams, row.alternatives, row.exclusive),
-		toolutil.EscapeMdTableCell(row.guidance),
+		toolutil.EscapeMdServerProse(row.guidance),
 		toolutil.EscapeMdTableCell(row.why),
 	}, cols)
 }
@@ -4975,15 +4978,20 @@ func formatDescribeOutput(output DescribeOutput) string {
 // caller copies from. The usage note, the parameter guidance and the example
 // are written here because the card used to compute all three and print none
 // of them, which left the one surface that has room for them showing less
-// than the finder's table.
+// than the finder's table. The usage note and the guidance are the catalog's
+// own prose, so they keep the addresses a caller copies from them as written,
+// which [toolutil.Card.Field] would escape.
 func writeActionDescription(c *toolutil.Card, action ActionDescription) {
 	c.Code("Tool", action.Tool)
 	c.Code("Action", action.Action)
 	c.Warn("Destructive", action.Destructive)
-	c.Field("Usage", action.Usage)
+	//gitlab:allow-unescaped toolutil.EscapeMdServerProse(action.Usage): the usage note an ActionSpec declares, compiled in rather than read from GitLab, whose addresses a caller copies.
+	c.Markdown("Usage", toolutil.EscapeMdServerProse(action.Usage))
 	c.Field("Required params", withAlternatives(codeSpanList(action.RequiredParams), actioncatalog.AlternativesPhrase(action.RequiredParamsAnyOf, action.ExclusiveGroups, backtickString)))
 	c.Field("Related actions", codeSpanList(action.RelatedActions))
-	c.Field("Parameter guidance", compactParameterGuidance(action.ParamGuidance, len(action.ParamGuidance), action.RequiredParams...))
+	guidance := compactParameterGuidance(action.ParamGuidance, len(action.ParamGuidance), action.RequiredParams...)
+	//gitlab:allow-unescaped toolutil.EscapeMdServerProse(guidance): the parameter guidance an ActionSpec declares, compiled in rather than read from GitLab, whose example addresses a caller copies.
+	c.Markdown("Parameter guidance", toolutil.EscapeMdServerProse(guidance))
 	c.Code("Schema URI", action.SchemaURI)
 	c.Fence("Input schema", "json", compactSchemaJSON(action.InputSchema))
 	c.Fence("Example call", "json", compactExampleJSON(action.Example))
@@ -5095,7 +5103,8 @@ func compactSearchGuidance(result SearchResult) string {
 
 // compactGuidance renders the Guidance cell of one row: the disambiguation
 // note, the parameter bindings worth naming, and the confirmation a
-// destructive action needs, in that order.
+// destructive action needs, in that order. All of it is the catalog's own
+// prose, so an address it spells stays as a caller copies it.
 func compactGuidance(usage string, guidance map[string]toolutil.ParameterGuidance, requiredParams []string, destructive bool) string {
 	parts := make([]string, 0, 3)
 	if usage = strings.TrimSpace(usage); usage != "" {
@@ -5110,7 +5119,7 @@ func compactGuidance(usage string, guidance map[string]toolutil.ParameterGuidanc
 	if len(parts) == 0 {
 		return dashCell
 	}
-	return toolutil.EscapeMdTableCell(strings.Join(parts, " "))
+	return toolutil.EscapeMdServerProse(strings.Join(parts, " "))
 }
 
 func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, limit int, requiredParams ...string) string {

@@ -1424,7 +1424,7 @@ func TestFormatSignatureMarkdownString(t *testing.T) {
 		"- **Verification Status**: verified\n" +
 		"\n### X.509 Certificate\n\n" +
 		"- **Subject**: CN=Test\n" +
-		"- **Email**: test@example.com\n" +
+		"- **Email**: test\\@example.com\n" +
 		"- **Status**: good\n" +
 		"- **Serial Number**: `12345`\n" +
 		"\n### Issuer\n\n" +

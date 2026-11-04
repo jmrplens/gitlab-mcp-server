@@ -1883,7 +1883,7 @@ func TestFormatGetMarkdown_IdentifierLink(t *testing.T) {
 	}
 
 	md := FormatGetMarkdown(out)
-	if !contains(md, "| [CWE-79](https://cwe.mitre.org/data/definitions/79.html) | cwe | 79 | https://cwe.mitre.org/data/definitions/79.html |\n") {
+	if !contains(md, "| [CWE-79](https://cwe.mitre.org/data/definitions/79.html) | cwe | 79 | https\\://cwe.mitre.org/data/definitions/79.html |\n") {
 		t.Fatalf("markdown missing linked identifier: %s", md)
 	}
 }
@@ -2569,7 +2569,7 @@ func TestFormatGetMarkdown_TriageRowsAndCollections(t *testing.T) {
 		"- **Scanner**: ZAP (GitLab)\n" +
 		"- **Location**: `/search?q=`\n" +
 		"- **Request Method**: GET\n" +
-		"- **Hostname**: https://app.example\n" +
+		"- **Hostname**: https\\://app.example\n" +
 		"- **Parameter**: `q`\n" +
 		"- **Detected**: 15 Jan 2026 10:00 UTC\n" +
 		"- **Updated**: 3 Feb 2026 09:00 UTC\n" +
@@ -2611,8 +2611,8 @@ func TestFormatGetMarkdown_TriageRowsAndCollections(t *testing.T) {
 		"### Links\n\n" +
 		"| Name | URL |\n" +
 		"| --- | --- |\n" +
-		"| [OWASP XSS](https://owasp.org/www-community/attacks/xss/) | https://owasp.org/www-community/attacks/xss/ |\n" +
-		"| <https://example.com/advisory> | https://example.com/advisory |\n\n" +
+		"| [OWASP XSS](https://owasp.org/www-community/attacks/xss/) | https\\://owasp.org/www-community/attacks/xss/ |\n" +
+		"| <https://example.com/advisory> | https\\://example.com/advisory |\n\n" +
 		"### Linked Issues\n\n" +
 		"| Issue | State | Link Type |\n" +
 		"| --- | --- | --- |\n" +

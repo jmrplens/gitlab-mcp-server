@@ -936,9 +936,9 @@ func TestFormatMarkdownString(t *testing.T) {
 			"- **ID**: 10\n" +
 			"- **Name**: svc\n" +
 			"- **Username**: svc-user\n" +
-			"- **Email**: svc@e.com\n" +
-			"- **Public Email**: pub@e.com\n" +
-			"- **Unconfirmed Email**: new@e.com\n" +
+			"- **Email**: svc\\@e.com\n" +
+			"- **Public Email**: pub\\@e.com\n" +
+			"- **Unconfirmed Email**: new\\@e.com\n" +
 			"\n---\n💡 **Next steps:**\n" +
 			"- Use action 'group.service_account_update' to change this account's name or username\n" +
 			"- Use action 'group.service_account_pat_create' to create a token for it\n"
@@ -971,7 +971,7 @@ func TestFormatListMarkdownString(t *testing.T) {
 		}
 		want := "## Group Service Accounts (1)\n\n" +
 			"| ID | Username | Name | Email |\n| --- | --- | --- | --- |\n" +
-			"| 1 | au | a | a@t.com |\n" +
+			"| 1 | au | a | a\\@t.com |\n" +
 			"\nPage 1 of 1 | 1 items total\n" +
 			"\n---\n💡 **Next steps:**\n" +
 			"- Use action 'group.service_account_pat_list' to list one account's tokens\n"
