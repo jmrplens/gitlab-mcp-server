@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -93,41 +94,28 @@ type measurement struct {
 // gobco's report does not name, or a status that disagrees with whether
 // anything was held, means the output is not what the script writes, and is
 // refused rather than tabulated.
+//
+// The line measurePackage writes for a package with nothing to measure in
+// the mode stands for the figure 0 of 0, and is the whole of what such a run
+// leaves: beside a figure or a condition it is an output nothing writes, and
+// is refused. In the other mode's words it is passed over, as that mode's
+// figure is.
 func parseMeasurement(output string, status int, mode string) (measurement, error) {
-	var found measurement
 	label := coverageModes[mode].figure
-	figure := ""
-	heldLines := map[string]bool{}
-	for line := range strings.SplitSeq(output, "\n") {
-		line = strings.TrimSuffix(line, "\r")
-		if match := figurePattern.FindStringSubmatch(line); match != nil {
-			if match[1] == label {
-				figure = line
-			}
-			continue
-		}
-		if rest, indented := strings.CutPrefix(line, heldIndent); indented {
-			if conditionPattern.MatchString(rest) {
-				heldLines[rest] = true
-			}
-			continue
-		}
-		if match := conditionPattern.FindStringSubmatch(line); match != nil {
-			found.conditions = append(found.conditions, condition{
-				text: line,
-				file: strings.ReplaceAll(match[1], `\`, "/"),
-				line: match[2],
-				code: unquoteCode(match[3]),
-				says: match[4],
-			})
-		}
+	read := scanOutput(output, mode)
+	found := measurement{conditions: read.conditions}
+	figure, nothing, heldLines := read.figure, read.nothing, read.heldLines
+	if nothing && (figure != "" || len(found.conditions) > 0 || len(heldLines) > 0) {
+		return measurement{}, errors.New("the output says there was nothing to measure, and carries a figure or a condition as well")
 	}
-	if figure == "" {
+	if figure == "" && !nothing {
 		return measurement{}, fmt.Errorf("the script's status says it measured, and its output carries no %s figure", label)
 	}
-	var err error
-	if found.covered, found.total, err = readFigure(figure); err != nil {
-		return measurement{}, err
+	if figure != "" {
+		var err error
+		if found.covered, found.total, err = readFigure(figure); err != nil {
+			return measurement{}, err
+		}
 	}
 	for i := range found.conditions {
 		if heldLines[found.conditions[i].text] {
@@ -142,6 +130,60 @@ func parseMeasurement(output string, status int, mode string) (measurement, erro
 		return measurement{}, fmt.Errorf("the script exited %d and its gate held %d condition(s)", status, found.held)
 	}
 	return found, nil
+}
+
+// scanned is what the lines of one run's output say, before they are held to
+// each other: the last figure in the words of the mode, whether the line that
+// says there was nothing to measure in the mode is there, every condition
+// gobco named, and the lines the gate printed as held.
+type scanned struct {
+	figure     string
+	nothing    bool
+	conditions []condition
+	heldLines  map[string]bool
+}
+
+// scanOutput reads the output of a run line by line, in the mode the runs
+// were asked for, and keeps what each line says (scanned.read).
+func scanOutput(output, mode string) scanned {
+	read := scanned{heldLines: map[string]bool{}}
+	label := coverageModes[mode].figure
+	for line := range strings.SplitSeq(output, "\n") {
+		read.read(strings.TrimSuffix(line, "\r"), label, mode)
+	}
+	return read
+}
+
+// read keeps what one line says: a figure, which counts only in the words of
+// the mode, label; the line saying there was nothing to measure, which counts
+// only in the mode's own name; a condition the gate held, printed indented
+// under its verdict; or a condition gobco named. Any other line says nothing.
+func (s *scanned) read(line, label, mode string) {
+	if match := figurePattern.FindStringSubmatch(line); match != nil {
+		if match[1] == label {
+			s.figure = line
+		}
+		return
+	}
+	if match := nothingPattern.FindStringSubmatch(line); match != nil {
+		s.nothing = s.nothing || match[1] == mode
+		return
+	}
+	if rest, indented := strings.CutPrefix(line, heldIndent); indented {
+		if conditionPattern.MatchString(rest) {
+			s.heldLines[rest] = true
+		}
+		return
+	}
+	if match := conditionPattern.FindStringSubmatch(line); match != nil {
+		s.conditions = append(s.conditions, condition{
+			text: line,
+			file: strings.ReplaceAll(match[1], `\`, "/"),
+			line: match[2],
+			code: unquoteCode(match[3]),
+			says: match[4],
+		})
+	}
 }
 
 // readFigure reads the two counts of a line figurePattern matched. A count

@@ -64,6 +64,169 @@ func readFile(t *testing.T, path string) string {
 	return string(data)
 }
 
+// unlisted is a lister that lists nothing, so no package's conditions can be
+// counted and every package is handed to the script.
+func unlisted(context.Context, string, []string, ...string) ([]byte, error) {
+	return nil, errors.New("not listed here")
+}
+
+// plantedNothing is the line a record of a planted package with nothing to
+// measure holds, the files the go command builds of it named as given.
+func plantedNothing(pkg, mode, files string) string {
+	return "measure_conditions: nothing to measure in " + mode + " mode: gobco v1.3.4 counts no condition in the files the go command builds of " +
+		pkg + " on " + platform + " (" + files + "), so scripts/coverage-conditions.sh was not run, and the package is measured with nothing to measure: 0 of 0\n"
+}
+
+// TestRunMeasure_PlantedPackages_NothingToMeasureIsMeasured verifies issue
+// 1667 on the planted module, in each mode the job's environment can name: a
+// package with no condition gobco counts in that mode is never handed to the
+// script, and is recorded as measured, with the line that says why in place
+// of the script's output, which streams to stdout as the script's would; a
+// package with conditions is handed to the script as before, so a 0/0 the
+// script refuses for one of them still fails the job.
+func TestRunMeasure_PlantedPackages_NothingToMeasureIsMeasured(t *testing.T) {
+	const refusal = "gobco: the report above measured no condition of ./internal/some (Condition coverage: 0/0); refusing to pass it on as a measurement\n"
+	cases := []struct {
+		mode        string
+		env         string
+		scripted    []string
+		nothing     map[string]string
+		wantVerdict map[string]string
+	}{
+		{
+			mode: "condition", env: "",
+			scripted: []string{"./internal/branchless", "./internal/some"},
+			nothing:  map[string]string{"./cmd/none": "none.go", "./internal/testonly": "none but its tests"},
+			wantVerdict: map[string]string{
+				"./cmd/none": "measured, nothing to measure (no condition, the script not run)", "./internal/branchless": "measured (exit 0)",
+				"./internal/some": "not measured (exit 1)", "./internal/testonly": "measured, nothing to measure (no condition, the script not run)",
+			},
+		},
+		{
+			mode: "branch", env: "branch",
+			scripted: []string{"./internal/some"},
+			nothing:  map[string]string{"./cmd/none": "none.go", "./internal/branchless": "branchless.go", "./internal/testonly": "none but its tests"},
+			wantVerdict: map[string]string{
+				"./cmd/none": "measured, nothing to measure (no condition, the script not run)", "./internal/branchless": "measured, nothing to measure (no condition, the script not run)",
+				"./internal/some": "not measured (exit 1)", "./internal/testonly": "measured, nothing to measure (no condition, the script not run)",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.mode, func(t *testing.T) {
+			t.Setenv("GOBCO_MODE", tc.env)
+			script := &fakeScript{
+				outputs: map[string]string{"./internal/branchless": "Condition coverage: 2/2\n", "./internal/some": refusal},
+				status:  map[string]int{"./internal/branchless": 0, "./internal/some": 1},
+			}
+			records := t.TempDir()
+			var stdout, stderr bytes.Buffer
+			args := []string{"-packages", strings.Join(plantedOrder, " "), "-system", "s", "-records", records, "-dir", plantedModule}
+			if got := runMeasure(args, &stdout, &stderr, goList, script.run); got != 1 {
+				t.Fatalf("runMeasure() = %d, want 1 for the refused 0/0; stderr:\n%s", got, stderr.String())
+			}
+			called := make([]string, 0, len(script.calls))
+			for _, call := range script.calls {
+				called = append(called, call.pkg)
+			}
+			if !reflect.DeepEqual(called, tc.scripted) {
+				t.Errorf("the script ran over %q, want %q", called, tc.scripted)
+			}
+			wantStdout, wantStderr := plantedStreams(tc.mode, tc.nothing, script.outputs, tc.wantVerdict)
+			if got := stdout.String(); got != wantStdout {
+				t.Errorf("stdout =\n%s\nwant\n%s", got, wantStdout)
+			}
+			if got := stderr.String(); got != wantStderr {
+				t.Errorf("stderr =\n%s\nwant\n%s", got, wantStderr)
+			}
+			checkNothingRecords(t, records, tc.mode, tc.nothing)
+		})
+	}
+}
+
+// plantedOrder is the planted module's packages, in the order a job of the
+// planted tests names them.
+var plantedOrder = []string{"./cmd/none", "./internal/branchless", "./internal/some", "./internal/testonly"}
+
+// plantedStreams is what a job over plantedOrder writes to stdout and stderr
+// in mode: the line of each package with nothing to measure, keyed to the
+// files it names, or the script's output, and each package's verdict, with
+// ./internal/some the one package not measured.
+func plantedStreams(mode string, nothing, outputs, verdicts map[string]string) (stdout, stderr string) {
+	var out, errs strings.Builder
+	for _, pkg := range plantedOrder {
+		if files, none := nothing[pkg]; none {
+			out.WriteString(plantedNothing(pkg, mode, files))
+		} else {
+			out.WriteString(outputs[pkg])
+		}
+		errs.WriteString("measure_conditions: " + pkg + " on s: " + verdicts[pkg] + "\n")
+	}
+	errs.WriteString("measure_conditions: 1 of 4 package(s) could not be measured on s: ./internal/some; the gobco: lines above say why\n")
+	return out.String(), errs.String()
+}
+
+// checkNothingRecords holds the record of each package with nothing to
+// measure to what measurePackage writes for one: a measurement's status, and
+// the line that says why in place of the script's output.
+func checkNothingRecords(t *testing.T, records, mode string, nothing map[string]string) {
+	t.Helper()
+	for pkg, files := range nothing {
+		dir := filepath.Join(records, packageSlug(pkg))
+		if got, want := readFile(t, filepath.Join(dir, recordFile)), fmt.Sprintf("package=%s\nsystem=s\nplatform=%s\nstatus=0\n", pkg, platform); got != want {
+			t.Errorf("record of %s = %q, want %q", pkg, got, want)
+		}
+		if got, want := readFile(t, filepath.Join(dir, outputFile)), plantedNothing(pkg, mode, files); got != want {
+			t.Errorf("raw output of %s = %q, want %q", pkg, got, want)
+		}
+	}
+}
+
+// TestRunMeasure_ModeTheScriptRefuses_CountsNothing verifies that a
+// GOBCO_MODE the script will refuse counts no package's conditions, so even
+// a package with none is handed to the script, which refuses the mode itself.
+func TestRunMeasure_ModeTheScriptRefuses_CountsNothing(t *testing.T) {
+	t.Setenv("GOBCO_MODE", "decision")
+	script := &fakeScript{outputs: map[string]string{"./cmd/none": "gobco: GOBCO_MODE=decision is neither condition nor branch; refusing to measure\n"}, status: map[string]int{"./cmd/none": 2}}
+	var stdout, stderr bytes.Buffer
+	args := []string{"-packages", "./cmd/none", "-system", "s", "-records", t.TempDir(), "-dir", plantedModule}
+	if got := runMeasure(args, &stdout, &stderr, goList, script.run); got != 1 || len(script.calls) != 1 {
+		t.Errorf("runMeasure() = %d after %d script call(s), want 1 after one; stderr:\n%s", got, len(script.calls), stderr.String())
+	}
+}
+
+// TestScriptMode_Environment_IsTheModeTheScriptReads verifies the mode a
+// package is counted in: gobco's default for an empty GOBCO_MODE, either mode
+// the script reads as it is, and none for a value the script refuses.
+func TestScriptMode_Environment_IsTheModeTheScriptReads(t *testing.T) {
+	t.Parallel()
+	for value, want := range map[string]string{"": "condition", "condition": "condition", "branch": "branch", "Branch": "", "decision": ""} {
+		t.Run(strconv.Quote(value), func(t *testing.T) {
+			t.Parallel()
+			if got := scriptMode(value); got != want {
+				t.Errorf("scriptMode(%q) = %q, want %q", value, got, want)
+			}
+		})
+	}
+}
+
+// TestMeasurePackage_NothingToMeasure_RecordFailureIsAnError verifies that a
+// record of a package with nothing to measure that cannot be written is the
+// failure it is, and that the script is still not run over the package.
+func TestMeasurePackage_NothingToMeasure_RecordFailureIsAnError(t *testing.T) {
+	t.Parallel()
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := &fakeScript{}
+	m := measurer{run: script.run, list: goList, dir: plantedModule, system: "s", records: file, mode: "condition"}
+	status, nothing, err := measurePackage(context.Background(), m, "./cmd/none", io.Discard)
+	if err == nil || !strings.HasPrefix(err.Error(), "mkdir ") || status != statusMeasured || !nothing || len(script.calls) != 0 {
+		t.Errorf("measurePackage() = %d, %t, %v after %d script call(s); want the mkdir failure and no call", status, nothing, err, len(script.calls))
+	}
+}
+
 // TestRunMeasure_Usage_IsRefusedWithStatus2 verifies every way the command
 // line can be wrong: an unknown flag, an argument, each of the three flags
 // left empty, and a package name the plan would refuse too.
@@ -97,7 +260,7 @@ func TestRunMeasure_Usage_IsRefusedWithStatus2(t *testing.T) {
 			t.Parallel()
 			script := &fakeScript{}
 			var stdout, stderr bytes.Buffer
-			if got := runMeasure(tc.args, &stdout, &stderr, script.run); got != 2 {
+			if got := runMeasure(tc.args, &stdout, &stderr, unlisted, script.run); got != 2 {
 				t.Fatalf("runMeasure() = %d, want 2", got)
 			}
 			if stdout.Len() != 0 || !strings.HasPrefix(stderr.String(), tc.wantStderr) || len(script.calls) != 0 {
@@ -123,7 +286,7 @@ func TestRunMeasure_Packages_AreMeasuredOneAfterAnother(t *testing.T) {
 	records := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	args := []string{"-packages", "./cmd/a ./internal/b,./internal/c", "-system", "ubuntu-latest", "-records", records, "-dir", "root"}
-	if got := runMeasure(args, &stdout, &stderr, script.run); got != 1 {
+	if got := runMeasure(args, &stdout, &stderr, unlisted, script.run); got != 1 {
 		t.Fatalf("runMeasure() = %d, want 1; stderr:\n%s", got, stderr.String())
 	}
 	wantCalls := []scriptCall{{dir: "root", pkg: "./cmd/a"}, {dir: "root", pkg: "./internal/b"}, {dir: "root", pkg: "./internal/c"}}
@@ -167,7 +330,7 @@ func TestRunMeasure_EveryPackageMeasured_Passes(t *testing.T) {
 	t.Parallel()
 	script := &fakeScript{outputs: map[string]string{"./a": "Condition coverage: 1/2\n"}, status: map[string]int{"./a": 3}}
 	var stdout, stderr bytes.Buffer
-	if got := runMeasure([]string{"-packages", "./a", "-system", "s", "-records", t.TempDir()}, &stdout, &stderr, script.run); got != 0 {
+	if got := runMeasure([]string{"-packages", "./a", "-system", "s", "-records", t.TempDir()}, &stdout, &stderr, unlisted, script.run); got != 0 {
 		t.Fatalf("runMeasure() = %d, want 0; stderr:\n%s", got, stderr.String())
 	}
 	if want := "measure_conditions: ./a on s: measured (exit 3)\n"; stderr.String() != want {
@@ -234,7 +397,7 @@ func TestRunMeasure_Failures_StopTheJobAndSayWhy(t *testing.T) {
 			}
 			script := &fakeScript{outputs: map[string]string{"./a": "x\n"}, status: map[string]int{"./a": 0}, err: errors.New("planted")}
 			var stdout, stderr bytes.Buffer
-			if got := runMeasure([]string{"-packages", pkg + " ./later", "-system", "s", "-records", records}, &stdout, &stderr, script.run); got != 1 {
+			if got := runMeasure([]string{"-packages", pkg + " ./later", "-system", "s", "-records", records}, &stdout, &stderr, unlisted, script.run); got != 1 {
 				t.Fatalf("runMeasure() = %d, want 1", got)
 			}
 			got := strings.ReplaceAll(stderr.String(), records+string(filepath.Separator), "")
@@ -255,10 +418,10 @@ func TestMeasurePackage_Record_ReadsBackAsTheSummaryReadsIt(t *testing.T) {
 	t.Parallel()
 	script := &fakeScript{outputs: map[string]string{"./internal/tools/x": "Condition coverage: 5/6\n"}, status: map[string]int{"./internal/tools/x": 3}}
 	records := t.TempDir()
-	run := measurer{run: script.run, dir: ".", system: "macos-latest", records: records, env: []string{"GOBCO_GATE=all"}}
-	status, err := measurePackage(context.Background(), run, "./internal/tools/x", io.Discard)
-	if err != nil || status != 3 {
-		t.Fatalf("measurePackage() = %d, %v; want 3", status, err)
+	run := measurer{run: script.run, list: unlisted, dir: ".", system: "macos-latest", records: records, env: []string{"GOBCO_GATE=all"}, mode: "condition"}
+	status, nothing, err := measurePackage(context.Background(), run, "./internal/tools/x", io.Discard)
+	if err != nil || status != 3 || nothing {
+		t.Fatalf("measurePackage() = %d, %t, %v; want 3, something measured", status, nothing, err)
 	}
 	got, problems := readRecords(records)
 	want := []record{{pkg: "./internal/tools/x", system: "macos-latest", platform: platform, status: 3, output: "Condition coverage: 5/6\n"}}

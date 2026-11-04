@@ -26,8 +26,9 @@
 # when somebody asks the question, and a package can take the better part of
 # an hour on Windows. Nothing here is a gate. No figure fails it, whatever the
 # gate mode holds; a run that cannot measure at all (a package go cannot load,
-# a failing test, a 0/0 report, a runtime crash of issue 467) still fails its
-# job, and says why.
+# a failing test, a 0/0 report of a package that holds conditions, a runtime
+# crash of issue 467) still fails its job, and says why; a package that holds
+# none is measured with nothing to measure, 0 of 0 (issue 1667).
 #
 # Shape: plan validates the inputs and, for an empty package list, finds the
 # packages carrying a GOOS- or GOARCH-constrained file, or with tree lists

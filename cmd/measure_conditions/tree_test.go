@@ -259,3 +259,46 @@ func TestRunTree_UnwritableRecords_FailWithEveryPackagesReason(t *testing.T) {
 		t.Errorf("stdout = %q, %d script call(s), stderr =\n%s\nwant no summary, three calls and three mkdir failures", stdout.String(), len(script.calls), stderr.String())
 	}
 }
+
+// TestRunTree_PlantedModule_MeasuresEveryPackage verifies the whole-tree
+// figure issue 1667 asked for, over the planted module and its packages below
+// cmd/ and internal/, listed and counted with the toolchain's own go command:
+// the packages with nothing to measure are measured with nothing to measure
+// and the script is run over the rest alone, so every package of the tree is
+// in the total, which the conditionless ones add nothing to.
+func TestRunTree_PlantedModule_MeasuresEveryPackage(t *testing.T) {
+	t.Parallel()
+	script := &fakeScript{
+		outputs: map[string]string{"./internal/branchless": "Condition coverage: 2/2\n", "./internal/some": "Condition coverage: 1/2\n"},
+		status:  map[string]int{"./internal/branchless": 0, "./internal/some": 0},
+	}
+	var stdout, stderr bytes.Buffer
+	args := []string{"-records", t.TempDir(), "-commit", "c0ffee", "-dir", plantedModule}
+	if got := runTree(args, &stdout, &stderr, goList, script.run); got != 0 {
+		t.Fatalf("runTree() = %d, want 0; stderr:\n%s", got, stderr.String())
+	}
+	slices.SortFunc(script.calls, func(a, b scriptCall) int { return strings.Compare(a.pkg, b.pkg) })
+	if len(script.calls) != 2 || script.calls[0].pkg != "./internal/branchless" || script.calls[1].pkg != "./internal/some" {
+		t.Errorf("script calls = %+v, want ./internal/branchless and ./internal/some alone", script.calls)
+	}
+	local := "`local` (" + platform + ")"
+	want := summaryIntro("all", "c0ffee") +
+		"| `./cmd/none` | " + local + " | nothing to measure (0 of 0) | 0 | 0 | `cmd-none` |\n" +
+		"| `./internal/branchless` | " + local + " | 2 of 2 | 0 | 0 | `internal-branchless` |\n" +
+		"| `./internal/some` | " + local + " | 1 of 2 | 0 | 0 | `internal-some` |\n" +
+		"| `./internal/testonly` | " + local + " | nothing to measure (0 of 0) | 0 | 0 | `internal-testonly` |\n" +
+		totalsTable("| `local` | 4 of 4 | 3 of 4 | 75.0% |")
+	if stdout.String() != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout.String(), want)
+	}
+	progress := slices.Sorted(slices.Values(strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")[1:]))
+	wantProgress := []string{
+		"measure_conditions: ./cmd/none: measured, nothing to measure (no condition, the script not run)",
+		"measure_conditions: ./internal/branchless: measured (exit 0)",
+		"measure_conditions: ./internal/some: measured (exit 0)",
+		"measure_conditions: ./internal/testonly: measured, nothing to measure (no condition, the script not run)",
+	}
+	if !reflect.DeepEqual(progress, wantProgress) {
+		t.Errorf("progress lines = %q, want %q in any order", progress, wantProgress)
+	}
+}

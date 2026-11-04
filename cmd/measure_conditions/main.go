@@ -39,7 +39,7 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 	case "plan":
 		return runPlan(args[1:], stdout, stderr, goList)
 	case "measure":
-		return runMeasure(args[1:], stdout, stderr, runScript)
+		return runMeasure(args[1:], stdout, stderr, goList, runScript)
 	case "summarize":
 		return runSummarize(args[1:], stdout, stderr)
 	case "tree":
