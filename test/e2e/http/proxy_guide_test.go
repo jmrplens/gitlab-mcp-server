@@ -137,7 +137,14 @@ func TestProxyGuide_Nginx(t *testing.T) {
 				count: 1,
 			})
 			through := compressing.behind(t, "--gitlab-url="+gitlab.url, "--public-url=https://"+publicHost).from(t, clientForHeaders)
-			frame, err := firstListenFrame(t, through, map[string]string{"PRIVATE-TOKEN": "glpat-compressed"}, heldWait)
+			// The copy that streams gets the grace every stream assertion
+			// gets, since a busy host can take seconds to answer a listen;
+			// only the one that must hold is cut short.
+			wait := streamGrace
+			if tc.held {
+				wait = heldWait
+			}
+			frame, err := firstListenFrame(t, through, map[string]string{"PRIVATE-TOKEN": "glpat-compressed"}, wait)
 			switch {
 			case tc.held && !errors.Is(err, errStreamHeld):
 				t.Errorf("through a compressing nginx that buffers, the listen's first event = %q (%v), want nothing while the stream is open: "+
