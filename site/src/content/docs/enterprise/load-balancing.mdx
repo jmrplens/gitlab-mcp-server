@@ -66,7 +66,7 @@ nginx hashes a string containing variables itself, so the salt goes into the key
 expression without ever becoming a loggable variable of its own. This needs no
 third-party module.
 
-```nginx
+```nginx e2e=nginx
 # Keep the salt out of the repository: include it from a 0600 file.
 map $host $mcp_salt {
     default "a-long-random-per-deployment-salt";
@@ -152,7 +152,7 @@ HAProxy computes the digest in its own configuration, so nothing has to be
 trusted to keep the raw credential out of a routing key, and it polls `/health`,
 which is what makes the drain window mean anything.
 
-```text comments=hash
+```text comments=hash e2e=haproxy
 global
   daemon
 defaults

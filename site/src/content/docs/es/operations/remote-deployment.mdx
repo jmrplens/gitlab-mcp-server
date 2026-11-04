@@ -575,7 +575,7 @@ un `401` suele significar que la ruta nunca llegó al manejador.
 <Tabs>
 <TabItem label="nginx">
 
-```nginx
+```nginx e2e=nginx
 upstream gitlab_mcp {
     server 127.0.0.1:8080;
     keepalive 16;
@@ -665,7 +665,7 @@ cada conexión que `keepalive` está ahí para reutilizar.
 </TabItem>
 <TabItem label="Caddy">
 
-```text
+```text e2e=caddy
 # Caddyfile
 mcp.example.com {
     reverse_proxy 127.0.0.1:8080 {
@@ -694,7 +694,7 @@ well-known ya queda enrutada.
 
 Con el proveedor Docker, sobre el contenedor del bloque de Compose de arriba:
 
-```yaml
+```yaml e2e=traefik-labels
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.mcp.rule=Host(`mcp.example.com`)"
@@ -707,7 +707,7 @@ Traefik no hace búfer de las respuestas salvo que se añada un middleware
 `buffering`, así que aquí el arreglo es no añadirlo. Lo que sí requiere atención
 es el timeout de respuesta del entry point, que es global y no por ruta:
 
-```yaml
+```yaml e2e=traefik-static
 # configuración estática de traefik
 entryPoints:
   websecure:
@@ -734,7 +734,7 @@ servicio.
 </TabItem>
 <TabItem label="Apache">
 
-```apache
+```apache e2e=apache
 <VirtualHost *:443>
     ServerName mcp.example.com
 
@@ -771,7 +771,7 @@ Un túnel sustituye por completo al listener entrante: `cloudflared` marca hacia
 fuera, así que la máquina no necesita ningún puerto abierto ni certificado
 propio.
 
-```yaml
+```yaml e2e=cloudflared
 # ~/.cloudflared/config.yml
 tunnel: <tunnel-uuid>
 credentials-file: /etc/cloudflared/<tunnel-uuid>.json
@@ -1003,7 +1003,7 @@ Tres detalles deciden si la afinidad se sostiene de verdad:
 en la expresión de la clave sin llegar a ser nunca una variable registrable por
 su cuenta. Esto no necesita ningún módulo de terceros:
 
-```nginx
+```nginx e2e=nginx-balancer
 # Mantén la sal fuera del repositorio: inclúyela desde un fichero 0600.
 map $host $mcp_salt {
     default "a-long-random-per-deployment-salt";
