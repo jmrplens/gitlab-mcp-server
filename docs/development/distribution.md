@@ -311,6 +311,27 @@ attestation states PyPI's publish predicate for the wheel's file name at the
 SHA-256 of the bytes downloaded, so a release uploaded without attestations,
 through another publisher or of other bytes fails there.
 
+The winget pull request is opened by komac, pinned and hash-checked, with
+`WINGET_TOKEN`: komac pushes a branch to the `jmrplens/winget-pkgs` fork,
+which the job first syncs with upstream, and opens the pull request from it.
+`WINGET_TOKEN` is a classic personal access token of the maintainer's with
+the `public_repo` and `workflow` scopes, set on 2026-11-04, after 3.4.0, so
+the release after 3.4.0 is the first to submit with it; until it does, that
+the old token was the cause is probable, not proven. The token it replaced,
+set on 2026-08-27, was fine-grained, and GitHub documents that a
+fine-grained token cannot contribute to a public repository its owner is not
+a member of: on 3.2.0, 3.3.0 and 3.4.0 komac created its branch on the fork
+and the pull request was refused with `Resource not accessible by personal
+access token` (issue 1665). `public_repo` is the scope komac asks for, and
+`workflow` is the fork sync's, since merging upstream writes winget-pkgs'
+`.github/workflows` files into the fork, which GitHub refuses to a token
+without that scope (HTTP 422 on 2.7.4). The submission runs under
+`continue-on-error`, so that the job's last step still runs and turns a
+failed submission red with an `::error` naming the version and komac's
+causes; the flag alone is what hid those three failures behind a green job.
+No other job of the release waits on the `winget` job, so a red one stops no
+other channel.
+
 The container image is pushed by the `docker` job, which builds each platform
 on its own, runs it (`scripts/smoke-test-image.sh`) and, before the
 multi-platform push, scans both smoke images' packages with Trivy and holds
