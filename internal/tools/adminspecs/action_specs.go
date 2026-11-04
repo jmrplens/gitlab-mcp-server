@@ -907,7 +907,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		},
 	},
 	"gitlab_mark_migration": {
-		usage:       "Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.",
+		usage:       "Mark a pending database migration as successfully executed (admin only), so db:migrate skips it. Provide the migration version and, for a database other than main, its name. Use only for a failing migration judged safe to skip.",
 		aliases:     []string{"mark migration", "mark database migration done", "force migration complete"},
 		related:     []string{actionSettingsGet, actionMetadataGet},
 		description: "Mark a database migration as complete. Returns: a success status. See also: gitlab_get_settings, gitlab_get_metadata.",
