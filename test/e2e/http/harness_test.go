@@ -222,19 +222,32 @@ func repoRoot() string {
 // freePort reserves a port by binding and releasing it. A small race with
 // another process remains, which is why startServer retries readiness rather
 // than assuming the port is ours the instant we ask for it.
+//
+// A port is handed out once per process. The kernel can give a port it has
+// just seen released straight back, so two tests running in parallel were
+// handed the same one before either bound it: the proxy cases name their
+// container after its port, and the second docker run was refused for the
+// name, which is not the exit the cases take for a port race.
 func freePort(t *testing.T) int {
 	t.Helper()
-	var lc net.ListenConfig
-	l, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserving a port: %v", err)
+	for {
+		var lc net.ListenConfig
+		l, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("reserving a port: %v", err)
+		}
+		port := l.Addr().(*net.TCPAddr).Port
+		if closeErr := l.Close(); closeErr != nil {
+			t.Fatalf("releasing the reserved port: %v", closeErr)
+		}
+		if _, given := portsHandedOut.LoadOrStore(port, struct{}{}); !given {
+			return port
+		}
 	}
-	port := l.Addr().(*net.TCPAddr).Port
-	if closeErr := l.Close(); closeErr != nil {
-		t.Fatalf("releasing the reserved port: %v", closeErr)
-	}
-	return port
 }
+
+// portsHandedOut holds every port freePort has returned in this process.
+var portsHandedOut sync.Map
 
 // server is a running binary under test.
 type server struct {

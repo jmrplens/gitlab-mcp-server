@@ -116,34 +116,47 @@ type balancer struct {
 	through *server
 }
 
-// startBalancer runs a balancer container and waits until it forwards to the
-// instances behind it. roots verifies its certificate; nil reaches it over
-// plain HTTP.
-func startBalancer(t *testing.T, name, image string, mounts []string, port int, roots *x509.CertPool) balancer {
+// startBalancer runs a balancer container on a port it picks and waits until
+// it forwards to the instances behind it, picking another port when a
+// listener took the first. mounts writes the configuration for the port it is
+// given and returns the bind mounts; roots verifies the balancer's
+// certificate, and nil reaches it over plain HTTP.
+func startBalancer(t *testing.T, kind, image string, roots *x509.CertPool, mounts func(port int) []string) balancer {
 	t.Helper()
-	startContainer(t, name, image, mounts)
 	scheme := "https"
 	if roots == nil {
 		scheme = "http"
 	}
-	b := balancer{container: name, through: throughProxy(t, scheme, port, roots, clientForHeaders, nil)}
-	awaitForwarding(t, b.through, "/health", name)
-	return b
+	for attempt := 1; ; attempt++ {
+		port := freePort(t)
+		name := fmt.Sprintf("gitlab-mcp-httpe2e-lb-%s-%d", kind, port)
+		startContainer(t, name, image, mounts(port))
+		b := balancer{container: name, through: throughProxy(t, scheme, port, roots, clientForHeaders, nil)}
+		err := awaitForwarding(t, b.through, "/health", name)
+		if err == nil {
+			return b
+		}
+		if attempt == portRaceAttempts {
+			t.Fatalf("%v, on %d ports in a row", err, attempt)
+		}
+		t.Logf("%v; starting it again on another port", err)
+	}
 }
 
 // startDocumentedNginx serves the nginx balancer keyed key on page, in front of
 // the instances on ports.
 func startDocumentedNginx(t *testing.T, cert *publicCert, page, key string, ports []int) balancer {
 	t.Helper()
-	port := freePort(t)
-	edits := append(backendEdits(ports), edit{old: "listen 443 ssl;", new: fmt.Sprintf("listen %d ssl;", port), count: 1})
-	block := guideBlock(t, page, key, edits...)
-	dir := containerDir(t)
-	return startBalancer(t, fmt.Sprintf("gitlab-mcp-httpe2e-lb-nginx-%d", port), nginxImage, []string{
-		writeContainerFile(t, dir, "nginx.conf", nginxBalancerFrame) + ":/etc/nginx/nginx.conf:ro",
-		writeContainerFile(t, dir, "mcp.conf", block) + ":/etc/nginx/conf.d/mcp.conf:ro",
-		cert.letsEncryptMount(),
-	}, port, cert.pool)
+	return startBalancer(t, "nginx", nginxImage, cert.pool, func(port int) []string {
+		edits := append(backendEdits(ports), edit{old: "listen 443 ssl;", new: fmt.Sprintf("listen %s:%d ssl;", loopbackBind, port), count: 1})
+		block := guideBlock(t, page, key, edits...)
+		dir := containerDir(t)
+		return []string{
+			writeContainerFile(t, dir, "nginx.conf", nginxBalancerFrame) + ":/etc/nginx/nginx.conf:ro",
+			writeContainerFile(t, dir, "mcp.conf", block) + ":/etc/nginx/conf.d/mcp.conf:ro",
+			cert.letsEncryptMount(),
+		}
+	})
 }
 
 // startDocumentedHAProxy serves the load balancing page's HAProxy in front of
@@ -152,15 +165,16 @@ func startDocumentedNginx(t *testing.T, cert *publicCert, page, key string, port
 // where the line names it.
 func startDocumentedHAProxy(t *testing.T, cert *publicCert, ports []int) balancer {
 	t.Helper()
-	port := freePort(t)
-	edits := append(backendEdits(ports), edit{old: "bind *:443 ", new: fmt.Sprintf("bind *:%d ", port), count: 1})
-	block := guideBlock(t, loadBalancingPage, "haproxy", edits...)
-	dir := containerDir(t)
-	pem := writeContainerFile(t, dir, "private/mcp.example.com.pem", cert.combinedPEM())
-	return startBalancer(t, fmt.Sprintf("gitlab-mcp-httpe2e-lb-haproxy-%d", port), haproxyImage, []string{
-		writeContainerFile(t, dir, "haproxy.cfg", block+haproxyServedBy) + ":/usr/local/etc/haproxy/haproxy.cfg:ro",
-		pem + ":/etc/ssl/private/mcp.example.com.pem:ro",
-	}, port, cert.pool)
+	return startBalancer(t, "haproxy", haproxyImage, cert.pool, func(port int) []string {
+		edits := append(backendEdits(ports), edit{old: "bind *:443 ", new: fmt.Sprintf("bind %s:%d ", loopbackBind, port), count: 1})
+		block := guideBlock(t, loadBalancingPage, "haproxy", edits...)
+		dir := containerDir(t)
+		pem := writeContainerFile(t, dir, "private/mcp.example.com.pem", cert.combinedPEM())
+		return []string{
+			writeContainerFile(t, dir, "haproxy.cfg", block+haproxyServedBy) + ":/usr/local/etc/haproxy/haproxy.cfg:ro",
+			pem + ":/etc/ssl/private/mcp.example.com.pem:ro",
+		}
+	})
 }
 
 // get performs one GET through the balancer and returns its status together
@@ -221,17 +235,16 @@ backend mcp_servers
 // names the client every time and the failure budget engages.
 func TestBalancer_HAProxyForwardforChargesTheRealClient(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	upstream := freePort(t)
-	startServerOnPort(t, upstream, nil,
+	upstream, _ := startServerOnFreePort(t,
 		"--gitlab-url="+gitlab.url,
 		"--trusted-proxy-header=X-Forwarded-For",
 		"--trusted-proxies=127.0.0.2",
 		"--auth-failure-limit=3",
 	)
-	port := freePort(t)
-	conf := writeContainerFile(t, containerDir(t), "haproxy.cfg", fmt.Sprintf(haproxyForwardforConfig, port, upstream))
-	through := startBalancer(t, fmt.Sprintf("gitlab-mcp-httpe2e-lb-forwardfor-%d", port), haproxyImage,
-		[]string{conf + ":/usr/local/etc/haproxy/haproxy.cfg:ro"}, port, nil).through
+	through := startBalancer(t, "forwardfor", haproxyImage, nil, func(port int) []string {
+		conf := writeContainerFile(t, containerDir(t), "haproxy.cfg", fmt.Sprintf(haproxyForwardforConfig, port, upstream))
+		return []string{conf + ":/usr/local/etc/haproxy/haproxy.cfg:ro"}
+	}).through
 
 	for i := range 8 {
 		got := through.do(t, mcpPOST(map[string]string{
@@ -261,8 +274,7 @@ func instances(t *testing.T) []int {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 	ports := make([]int, len(documentedBackends))
 	for i := range ports {
-		ports[i] = freePort(t)
-		startServerOnPort(t, ports[i], nil, "--gitlab-url="+gitlab.url, declaredHost)
+		ports[i], _ = startServerOnFreePort(t, "--gitlab-url="+gitlab.url, declaredHost)
 	}
 	return ports
 }
@@ -357,9 +369,9 @@ func TestBalancer_HAProxyEjectsADrainingInstanceBeforeItCloses(t *testing.T) {
 		declaredHost,
 		"--drain-delay="+drainDelay.String(),
 	)
-	ports := []int{hostPortOf(t, draining.probe.baseURL), freePort(t), freePort(t)}
-	for _, port := range ports[1:] {
-		startServerOnPort(t, port, nil, "--gitlab-url="+gitlab.url, declaredHost)
+	ports := []int{hostPortOf(t, draining.probe.baseURL), 0, 0}
+	for i := range ports[1:] {
+		ports[i+1], _ = startServerOnFreePort(t, "--gitlab-url="+gitlab.url, declaredHost)
 	}
 	b := startDocumentedHAProxy(t, newPublicCert(t), ports)
 

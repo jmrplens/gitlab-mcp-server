@@ -59,7 +59,7 @@ func guideNginx(cert *publicCert, extra ...edit) documentedProxy {
 			t.Helper()
 			port := freePort(t)
 			edits := append([]edit{
-				{old: "listen 443 ssl;", new: fmt.Sprintf("listen %d ssl;", port), count: 1},
+				{old: "listen 443 ssl;", new: fmt.Sprintf("listen %s:%d ssl;", loopbackBind, port), count: 1},
 				{old: "server 127.0.0.1:8080;", new: fmt.Sprintf("server 127.0.0.1:%d;", upstream), count: 1},
 			}, extra...)
 			block := guideBlock(t, remoteDeploymentPage, "nginx", edits...)

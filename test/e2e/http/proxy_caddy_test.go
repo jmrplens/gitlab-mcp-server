@@ -28,6 +28,7 @@ const caddyImage = "caddy:2.11-alpine"
 // containers would fight over.
 const caddyGlobal = `{
 	admin off
+	default_bind 127.0.0.1
 	https_port %d
 	http_port %d
 	local_certs

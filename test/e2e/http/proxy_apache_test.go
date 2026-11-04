@@ -26,7 +26,7 @@ const httpdImage = "httpd:2.4-alpine"
 // sentence says.
 const apacheFrame = `ServerRoot "/usr/local/apache2"
 ServerName localhost
-Listen %d
+Listen 127.0.0.1:%d
 PidFile /tmp/httpd.pid
 ErrorLog /proc/self/fd/2
 LogLevel warn

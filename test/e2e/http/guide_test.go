@@ -40,6 +40,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -477,12 +478,16 @@ const serverCSP = "default-src 'none'; frame-ancestors 'none'"
 // server's own headers, for as long as the server behind it has already been
 // serving, is the block this case served, and that fails: the configuration
 // does not reach the server it names.
-func awaitForwarding(t *testing.T, through *server, path, container string) {
+//
+// It returns errPortRace, for the caller to try another port, when the
+// container exited because something else bound its port first; every other
+// outcome but forwarding ends the test.
+func awaitForwarding(t *testing.T, through *server, path, container string) error {
 	t.Helper()
 	deadline := time.Now().Add(45 * time.Second)
 	var lastErr error
 	lastStatus := 0
-	for time.Now().Before(deadline) {
+	for poll := 0; time.Now().Before(deadline); poll++ {
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, through.baseURL+path, http.NoBody)
 		if err != nil {
 			t.Fatalf("building the readiness request: %v", err)
@@ -493,9 +498,16 @@ func awaitForwarding(t *testing.T, through *server, path, container string) {
 		} else {
 			_ = resp.Body.Close()
 			if resp.Header.Get("Content-Security-Policy") == serverCSP {
-				return
+				return nil
 			}
 			lastStatus = resp.StatusCode
+		}
+		// Asked once a second rather than on every poll: an exit is
+		// rare, and docker inspect is not free.
+		if poll%4 == 3 {
+			if exitErr := exitedContainer(t, container); exitErr != nil {
+				return exitErr
+			}
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
@@ -503,28 +515,89 @@ func awaitForwarding(t *testing.T, through *server, path, container string) {
 		t.Fatalf("%s answered GET %s and never with the server's answer (last status %d), with the server behind it already serving: the block served does not reach the upstream it names.\n%s",
 			container, path, lastStatus, containerLogs(container))
 	}
-	requireStillRunning(t, container)
+	if err := exitedContainer(t, container); err != nil {
+		return err
+	}
 	environmentUnavailablef(t, "%s never answered a request (%v); the container did not come up:\n%s", container, lastErr, containerLogs(container))
+	return nil
 }
 
-// requireStillRunning fails the test when a container that never answered
-// has exited.
+// errPortRace is a container that exited because another listener bound the
+// port the case had picked for it, in the moment between freePort releasing
+// the port and the container binding it. Every test here picks ports that
+// way and runs beside others, so it happens, and another port answers it.
+var errPortRace = errors.New("another listener took the port before the container bound it")
+
+// addressInUse is how the proxies here log that race.
+var addressInUse = regexp.MustCompile(`(?i)address (already )?in use|cannot bind socket`)
+
+// portRaceAttempts is how many ports a case tries before the race is taken
+// for something else.
+const portRaceAttempts = 3
+
+// loopbackBind is the address every proxy here listens on, where the
+// documented block listens on every interface.
+//
+// A wildcard listener and one on 127.0.0.1 can both hold a port when both
+// ask for address reuse, which Go's listeners and these proxies do, and the
+// one on 127.0.0.1 then takes every connection the case's client makes. A
+// server that took the case's port in the race above would answer the case
+// instead of the proxy, and the case would read a plain HTTP answer where it
+// expected TLS. Two listeners on one address cannot share the port, so the
+// proxy fails to bind and the race is seen for what it is.
+const loopbackBind = "127.0.0.1"
+
+// exitedContainer ends the test when a container has exited, unless it exited
+// because its port was taken, which it returns as errPortRace.
 //
 // An image that could not be pulled fails before the container exists, and
 // a container that runs and does not answer is the machine's to explain. One
-// that started and stopped refused the configuration it was given, which on a
-// page that changed is the page's doing, and that is a failure wherever the
-// case runs.
-func requireStillRunning(t *testing.T, container string) {
+// that started and stopped for any other reason refused the configuration it
+// was given, which on a page that changed is the page's doing, and that is a
+// failure wherever the case runs.
+func exitedContainer(t *testing.T, container string) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.State.Running}} {{.State.ExitCode}}", container).Output()
 	if err != nil {
-		return
+		return nil
 	}
-	if state := strings.Fields(string(out)); len(state) == 2 && state[0] == "false" {
-		t.Fatalf("%s exited with status %s: it refused the configuration this case served.\n%s", container, state[1], containerLogs(container))
+	state := strings.Fields(string(out))
+	if len(state) != 2 || state[0] != "false" {
+		return nil
+	}
+	logs := containerLogs(container)
+	if addressInUse.MatchString(logs) {
+		return fmt.Errorf("%s: %w", container, errPortRace)
+	}
+	t.Fatalf("%s exited with status %s: it refused the configuration this case served.\n%s", container, state[1], logs)
+	return nil
+}
+
+// requireStillRunning fails the test when a container that never answered
+// has exited, whatever the reason.
+func requireStillRunning(t *testing.T, container string) {
+	t.Helper()
+	if err := exitedContainer(t, container); err != nil {
+		t.Fatalf("%v; this container's port is not the case's to change", err)
+	}
+}
+
+// startServerOnFreePort starts a server on a port the case picks, as a proxy
+// in front of it has to name the port before the server starts, and picks
+// another when a listener took the first in the meantime.
+func startServerOnFreePort(t *testing.T, flags ...string) (int, *server) {
+	t.Helper()
+	for attempt := 1; ; attempt++ {
+		port := freePort(t)
+		srv, err := tryStartServerOnPort(t, port, nil, flags...)
+		if err == nil {
+			return port, srv
+		}
+		if !errors.Is(err, errPortTaken) || attempt == portRaceAttempts {
+			t.Fatalf("starting the server on port %d: %v", port, err)
+		}
 	}
 }
 
@@ -665,16 +738,23 @@ type proxied struct {
 // and waits until the proxy forwards to it.
 func (p documentedProxy) behind(t *testing.T, flags ...string) proxied {
 	t.Helper()
-	upstream := freePort(t)
-	srv := startServerOnPort(t, upstream, nil, flags...)
-	container, port := p.start(t, upstream)
-	running := proxied{proxy: p, port: port, logs: srv.logs}
+	upstream, srv := startServerOnFreePort(t, flags...)
 	ready := p.ready
 	if ready == "" {
 		ready = "/health"
 	}
-	awaitForwarding(t, running.from(t, clientForHeaders), ready, container)
-	return running
+	for attempt := 1; ; attempt++ {
+		container, port := p.start(t, upstream)
+		running := proxied{proxy: p, port: port, logs: srv.logs}
+		err := awaitForwarding(t, running.from(t, clientForHeaders), ready, container)
+		if err == nil {
+			return running
+		}
+		if attempt == portRaceAttempts {
+			t.Fatalf("%v, on %d ports in a row", err, attempt)
+		}
+		t.Logf("%v; starting it again on another port", err)
+	}
 }
 
 // from returns a handle that reaches the server through the proxy from

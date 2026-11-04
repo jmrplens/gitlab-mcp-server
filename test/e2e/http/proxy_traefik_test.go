@@ -169,7 +169,7 @@ func guideTraefik(cert *publicCert, reroute func(map[string]*traefikRouter, stri
 			t.Helper()
 			port := freePort(t)
 			static := guideBlock(t, remoteDeploymentPage, "traefik-static",
-				edit{old: `address: ":443"`, new: fmt.Sprintf(`address: ":%d"`, port), count: 1})
+				edit{old: `address: ":443"`, new: fmt.Sprintf(`address: "%s:%d"`, loopbackBind, port), count: 1})
 			routers, service, err := translateTraefikLabels(guideBlock(t, remoteDeploymentPage, "traefik-labels"))
 			if err != nil {
 				t.Fatalf("translating the guide's Traefik labels: %v", err)
