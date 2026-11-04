@@ -334,10 +334,10 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Job Token Scope Allowlist: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#job))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro         | Tipo             | Requerido | Descripción                             |
-| ----------------- | ---------------- | --------- | --------------------------------------- |
-| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path          |
-| `target_group_id` | `integer`        | sí        | ID of the group to add to the allowlist |
+| Parámetro         | Tipo      | Requerido | Descripción                                                                                                                                    |
+| ----------------- | --------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`      | `integer` | sí        | Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first |
+| `target_group_id` | `integer` | sí        | ID of the group to add to the allowlist                                                                                                        |
 
 ### `job.token_scope_add_project`
 
@@ -350,10 +350,10 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Job Token Scope Allowlist: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#job))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro           | Tipo             | Requerido | Descripción                               |
-| ------------------- | ---------------- | --------- | ----------------------------------------- |
-| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path            |
-| `target_project_id` | `integer`        | sí        | ID of the project to add to the allowlist |
+| Parámetro           | Tipo      | Requerido | Descripción                                                                                                                                    |
+| ------------------- | --------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`        | `integer` | sí        | Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first |
+| `target_project_id` | `integer` | sí        | ID of the project to add to the allowlist                                                                                                      |
 
 ### `job.token_scope_get`
 
@@ -435,10 +435,10 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Job Token Scope Allowlist: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#job))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
-| Parámetro         | Tipo             | Requerido | Descripción                                  |
-| ----------------- | ---------------- | --------- | -------------------------------------------- |
-| `project_id`      | `string/integer` | sí        | Project ID or URL-encoded path               |
-| `target_group_id` | `integer`        | sí        | ID of the group to remove from the allowlist |
+| Parámetro         | Tipo      | Requerido | Descripción                                                                                                                                    |
+| ----------------- | --------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`      | `integer` | sí        | Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first |
+| `target_group_id` | `integer` | sí        | ID of the group to remove from the allowlist                                                                                                   |
 
 ### `job.token_scope_remove_project`
 
@@ -451,10 +451,10 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Job Token Scope Allowlist: Delete en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#job))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
-| Parámetro           | Tipo             | Requerido | Descripción                                    |
-| ------------------- | ---------------- | --------- | ---------------------------------------------- |
-| `project_id`        | `string/integer` | sí        | Project ID or URL-encoded path                 |
-| `target_project_id` | `integer`        | sí        | ID of the project to remove from the allowlist |
+| Parámetro           | Tipo      | Requerido | Descripción                                                                                                                                    |
+| ------------------- | --------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`        | `integer` | sí        | Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first |
+| `target_project_id` | `integer` | sí        | ID of the project to remove from the allowlist                                                                                                 |
 
 ### `job.trace`
 

@@ -5,6 +5,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -165,7 +166,9 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 // a record measurePackage wrote for a package with nothing to measure: its
 // line stands for 0 of 0 in its own mode and is passed over in the other,
 // and beside a figure, a condition or a held line, or under the gate's
-// status, it is an output nothing writes and is refused.
+// status, it is an output nothing writes and is refused. A line cut short
+// before its 0 of 0, or carrying words after it, is not the line, and a
+// passing record holding nothing else is refused for its missing figure.
 func TestParseMeasurement_NothingToMeasure_IsZeroOfZero(t *testing.T) {
 	t.Parallel()
 	line := func(mode string) string {
@@ -190,6 +193,14 @@ func TestParseMeasurement_NothingToMeasure_IsZeroOfZero(t *testing.T) {
 		{name: "beside a condition", output: line("condition") + never + "\n", status: statusMeasured, mode: "condition", wantErr: both},
 		{name: "beside a held line", output: line("condition") + "  " + never + "\n", status: statusGateHeld, mode: "condition", wantErr: both},
 		{name: "under the gate's status", output: line("condition"), status: statusGateHeld, mode: "condition", wantErr: "the script exited 3 and its gate held 0 condition(s)"},
+		{
+			name: "cut short before its 0 of 0", output: strings.TrimSuffix(line("condition"), ": 0 of 0\n") + "\n", status: statusMeasured, mode: "condition",
+			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+		},
+		{
+			name: "with words after its 0 of 0", output: strings.TrimSuffix(line("condition"), "\n") + " and more\n", status: statusMeasured, mode: "condition",
+			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

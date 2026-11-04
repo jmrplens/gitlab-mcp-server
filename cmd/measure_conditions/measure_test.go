@@ -195,6 +195,47 @@ func TestRunMeasure_ModeTheScriptRefuses_CountsNothing(t *testing.T) {
 	}
 }
 
+// TestRunMeasure_GateTheScriptRefuses_CountsNothing verifies that a
+// GOBCO_GATE the script will refuse counts no package's conditions either,
+// so a package with none is handed to the script, which refuses the gate
+// itself, and the job fails rather than recording the package as measured.
+func TestRunMeasure_GateTheScriptRefuses_CountsNothing(t *testing.T) {
+	t.Setenv("GOBCO_MODE", "")
+	t.Setenv("GOBCO_GATE", "some")
+	script := &fakeScript{outputs: map[string]string{"./cmd/none": "gobco: GOBCO_GATE=some is neither all nor beyond:GOOS/GOARCH; refusing to measure\n"}, status: map[string]int{"./cmd/none": 2}}
+	var stdout, stderr bytes.Buffer
+	args := []string{"-packages", "./cmd/none", "-system", "s", "-records", t.TempDir(), "-dir", plantedModule}
+	if got := runMeasure(args, &stdout, &stderr, goList, script.run); got != 1 || len(script.calls) != 1 {
+		t.Errorf("runMeasure() = %d after %d script call(s), want 1 after one; stderr:\n%s", got, len(script.calls), stderr.String())
+	}
+}
+
+// TestCountingMode_Environment_CountsOnlyWhatTheScriptReads verifies the
+// mode measure counts in from the environment's two settings: the script's
+// mode when it reads both, its default gate included, and none when it will
+// refuse either of them.
+func TestCountingMode_Environment_CountsOnlyWhatTheScriptReads(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, mode, gate, want string
+	}{
+		{name: "both defaults", want: "condition"},
+		{name: "every gate value", mode: "branch", gate: "all", want: "branch"},
+		{name: "a platform gate", gate: "beyond:linux/amd64", want: "condition"},
+		{name: "a gate the script refuses", gate: "some"},
+		{name: "a platform gate missing its arch", gate: "beyond:linux"},
+		{name: "a mode the script refuses", mode: "decision", gate: "all"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := countingMode(tc.mode, tc.gate); got != tc.want {
+				t.Errorf("countingMode(%q, %q) = %q, want %q", tc.mode, tc.gate, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestScriptMode_Environment_IsTheModeTheScriptReads verifies the mode a
 // package is counted in: gobco's default for an empty GOBCO_MODE, either mode
 // the script reads as it is, and none for a value the script refuses.

@@ -370,7 +370,7 @@ Add a group to a project's CI/CD job token allowlist. Returns: the new allowlist
 
 **Parameters:**
 
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_group_id` (integer) (required): ID of the group to add to the allowlist
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -433,7 +433,7 @@ Add a project to a project's CI/CD job token inbound allowlist. Returns: the new
 
 **Parameters:**
 
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_project_id` (integer) (required): ID of the project to add to the allowlist
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -13323,7 +13323,7 @@ Remove a group from a project's CI/CD job token allowlist. Returns: a success co
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_group_id` (integer) (required): ID of the group to remove from the allowlist
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -13335,7 +13335,7 @@ Remove a project from a project's CI/CD job token inbound allowlist. Returns: a 
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_project_id` (integer) (required): ID of the project to remove from the allowlist
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
