@@ -637,6 +637,20 @@ func TestDecodePayload_APayloadInNoEncodingItKnows_ReturnsTheBase64Failure(t *te
 	}
 }
 
+// TestDecodePayload_TwoCandidatesInNoEncoding_ReturnsTheLastAttemptsFailure
+// verifies which failure comes back when a payload has a percent-decoded
+// form beside it and neither decodes: the one of the last attempt, which is
+// the decoded form read in the last encoding. The two forms stop at
+// different bytes, 0 for the payload as written and 4 for its decoded form,
+// so the offset says which one the error is about.
+func TestDecodePayload_TwoCandidatesInNoEncoding_ReturnsTheLastAttemptsFailure(t *testing.T) {
+	decoded, err := decodePayload("%41%41%41%41!")
+	corrupt, ok := errors.AsType[base64.CorruptInputError](err)
+	if !ok || corrupt != 4 {
+		t.Errorf("decodePayload() = %q, %v; want the failure at byte 4 of the decoded form AAAA!", decoded, err)
+	}
+}
+
 // TestCollect_APayloadThatDecodesInNoEncoding_NamesTheFileTheLineAndTheHost
 // verifies the report distinguishes a payload that never decoded from one that
 // decoded into something that is not a client entry.

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -118,11 +120,10 @@ func collect(dir string) ([]button, error) {
 		}
 		found = append(found, buttons...)
 	}
-	sort.Slice(found, func(i, j int) bool {
-		if found[i].File != found[j].File {
-			return found[i].File < found[j].File
-		}
-		return found[i].Line < found[j].Line
+	// By file and then by line, two buttons on one line kept in the order
+	// they were found.
+	slices.SortStableFunc(found, func(a, b button) int {
+		return cmp.Or(strings.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line))
 	})
 	return found, nil
 }
@@ -221,24 +222,22 @@ func decodePayload(payload string) (string, error) {
 			return candidate, nil
 		}
 	}
-	var lastErr error
+	// Every candidate is tried in every encoding, and there is always one
+	// candidate, the payload itself, so when no attempt decodes, err is the
+	// failure of the last one.
+	var err error
 	for _, candidate := range candidates {
 		for _, enc := range []*base64.Encoding{
 			base64.StdEncoding, base64.RawStdEncoding,
 			base64.URLEncoding, base64.RawURLEncoding,
 		} {
-			decoded, err := enc.DecodeString(candidate)
-			if err != nil {
-				lastErr = err
-				continue
+			var decoded []byte
+			if decoded, err = enc.DecodeString(candidate); err == nil {
+				return string(decoded), nil
 			}
-			return string(decoded), nil
 		}
 	}
-	if lastErr == nil {
-		lastErr = errors.New("no encoding matched")
-	}
-	return "", lastErr
+	return "", err
 }
 
 func lineOf(text string, offset int) int {
