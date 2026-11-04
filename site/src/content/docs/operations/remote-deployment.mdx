@@ -786,6 +786,65 @@ in exactly the same collision as a proxy-level `Access-Control-Allow-Origin`.
 </TabItem>
 </Tabs>
 
+### On a LAN, in plain HTTP
+
+Every block above serves a public name with a certificate. A proxy that serves
+a LAN in plain HTTP, reached as `http://mcp.lan` by the machines on the same
+network, is the same proxy without the certificate, and it needs one change on
+the server's side: `--public-url` takes an `https` origin, or `http` on loopback
+only, so a plain LAN name cannot be declared with it. The host is admitted by
+trusting the hop instead. The proxy and the server share the machine, the
+server listens on loopback, and `--trusted-proxies=127.0.0.1` vouches for the
+connection the proxy makes, from which any forwarded host is served:
+
+```nginx e2e=nginx-lan
+upstream gitlab_mcp {
+    server 127.0.0.1:8080;
+    keepalive 16;
+}
+
+server {
+    # The LAN address of this machine, in plain HTTP.
+    listen 192.168.1.10:80;
+    server_name mcp.lan;
+
+    location / {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Host       $host;
+        proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header Connection "";
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+}
+```
+
+```bash e2e=nginx-lan-server
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+  --gitlab-url=https://gitlab.example.com \
+  --trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1
+```
+
+The pairing that admits the host is also the one that charges each LAN client's
+failures to that client in the failure limiter, rather than to the proxy, as in
+the nginx tab above. What the plain hop gives up is the encryption of
+everything on it: each request's token crosses the LAN readable to anything on
+its path, so this shape is for a network trusted as much as the tokens are.
+OAuth mode is not available on it, since the resource identifier OAuth clients
+are given is the `--public-url` origin, and that must be `https`.
+
+With the proxy on another machine, the server's own listener is the one off
+loopback in plain HTTP. Startup then warns, naming its address;
+`--allow-plaintext-http` declares that plain hop deliberate, and
+`--allow-plaintext-http=false` (or `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false`)
+refuses to start it. `--trusted-proxies` then names the proxy's LAN address
+rather than `127.0.0.1`
+([Plain HTTP on an address other machines can reach](/gitlab-mcp-server/operations/http-server/#plain-http-on-an-address-other-machines-can-reach)).
+
 ## TLS between the proxy and the server
 
 When the proxy shares the machine, remove the hop rather than encrypting it:
