@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/go/types/typeutil"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
@@ -2210,13 +2211,21 @@ func (h *intermediates) writesEntry(decl *ast.FuncDecl, entry *types.Var) bool {
 // at the variable other than the variable itself, which an assignment only
 // rebinds; when it takes the address of anything rooted at it or calls a
 // method of a pointer receiver on such a thing, the variable itself
-// included; or when it hands on a pointer or an interface rooted at it, in a
+// included; when it hands on a pointer or an interface rooted at it, in a
 // call, an assignment, a declaration, a literal, a return or a send, to
-// whoever may write through it in turn. The variable's own address is
-// counted although taking it writes nothing: it is a pointer to the pointer,
-// and a write through that alias, (*p).N after p := &b, is rooted at p,
-// which this walk does not follow. A body that reads a field of it, compares
-// it or copies what it points to writes nothing through it.
+// whoever may write through it in turn; or when it hands a slice or a map
+// rooted at it, as the first argument, to one of [inPlaceWriters], which
+// writes in place what that argument holds (copy(opts.Labels, in.Labels),
+// delete(opts.Vars, key)). The variable's own address is counted although
+// taking it writes nothing: it is a pointer to the pointer, and a write
+// through that alias, (*p).N after p := &b, is rooted at p, which this walk
+// does not follow. A body that reads a field of it, compares it or copies
+// what it points to writes nothing through it, and neither does one that
+// hands a slice or a map read off it to any other function, append and
+// slices.Contains among them, or to one of those writers in another place,
+// as copy's source. That leaves the fills this walk misses: a slice or a map
+// read off the variable and written by any other function it is handed to,
+// one of the package included, or through a variable it is assigned to.
 func writesThrough(info *types.Info, body *ast.BlockStmt, variable *types.Var) bool {
 	use := pointerUse{info: info, variable: variable}
 	found := false
@@ -2246,7 +2255,7 @@ func (u pointerUse) writes(node ast.Node) bool {
 	case *ast.SelectorExpr:
 		return callsPointerMethod(u.info, typed) && u.rooted(typed.X)
 	case *ast.CallExpr:
-		return u.handsOn(typed.Args...)
+		return u.handsOn(typed.Args...) || u.writesInPlace(typed)
 	case *ast.ValueSpec:
 		return u.handsOn(typed.Values...)
 	case *ast.CompositeLit:
@@ -2278,8 +2287,62 @@ func (u pointerUse) handsOn(exprs ...ast.Expr) bool {
 	return slices.ContainsFunc(exprs, func(expr ast.Expr) bool { return u.rooted(expr) && aliases(u.info.TypeOf(expr)) })
 }
 
+// writesInPlace reports whether call hands what its first argument holds,
+// rooted at the variable, to one of [inPlaceWriters]. A type-checked call of
+// one of them has a first argument.
+func (u pointerUse) writesInPlace(call *ast.CallExpr) bool {
+	return inPlaceWriters[calleeName(u.info, call)] && u.rooted(call.Args[0])
+}
+
+// inPlaceWriters names the builtins, and by their full names the functions
+// of the standard library's maps, slices and sort packages, that write in
+// place what their first argument holds: the elements of a slice, which
+// every copy of the slice shares with the one a struct holds, or the entries
+// of a map. A function that only reads it, or writes past its length as
+// append does, is none of them.
+var inPlaceWriters = map[string]bool{
+	"clear":  true,
+	"copy":   true,
+	"delete": true,
+
+	"maps.Copy":       true,
+	"maps.DeleteFunc": true,
+	"maps.Insert":     true,
+
+	"slices.Compact":        true,
+	"slices.CompactFunc":    true,
+	"slices.Delete":         true,
+	"slices.DeleteFunc":     true,
+	"slices.Insert":         true,
+	"slices.Replace":        true,
+	"slices.Reverse":        true,
+	"slices.Sort":           true,
+	"slices.SortFunc":       true,
+	"slices.SortStableFunc": true,
+
+	"sort.Float64s":    true,
+	"sort.Ints":        true,
+	"sort.Slice":       true,
+	"sort.SliceStable": true,
+	"sort.Strings":     true,
+}
+
+// calleeName names what call calls the way [inPlaceWriters] does: a builtin
+// by its name, a function by its full name, an explicit instantiation
+// included, and anything else (a function value, a conversion) by nothing.
+func calleeName(info *types.Info, call *ast.CallExpr) string {
+	switch callee := typeutil.Callee(info, call).(type) {
+	case *types.Builtin:
+		return callee.Name()
+	case *types.Func:
+		return callee.FullName()
+	}
+	return ""
+}
+
 // writeRoot returns the variable at the root of a chain of selectors,
-// dereferences and indexes (opts in opts.Labels[0]), or nil.
+// dereferences, indexes and slicings (opts in opts.Labels[0] and in
+// opts.Labels[1:]), or nil.
 func writeRoot(info *types.Info, expr ast.Expr) *types.Var {
 	for {
 		switch e := ast.Unparen(expr).(type) {
@@ -2288,6 +2351,8 @@ func writeRoot(info *types.Info, expr ast.Expr) *types.Var {
 		case *ast.StarExpr:
 			expr = e.X
 		case *ast.IndexExpr:
+			expr = e.X
+		case *ast.SliceExpr:
 			expr = e.X
 		default:
 			return identVar(info, identOf(e))

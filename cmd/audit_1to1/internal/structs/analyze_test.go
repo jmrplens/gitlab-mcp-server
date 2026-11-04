@@ -3159,6 +3159,22 @@ func anyFilled(c *gl.Client, in AnyInput) error {
 	return err
 }
 
+type MapFillInput struct {
+	Name string ~json:"name"~
+}
+
+// revoke deletes the name it is handed from the map the options it is
+// handed hold, a write through them that no assignment spells.
+func revoke(opts *gl.ProtectOptions, name string) { delete(opts.ByUser, name) }
+
+// mapFilled has a helper write, from its input, into the map of the
+// protection it sends.
+func mapFilled(c *gl.Client, in MapFillInput) error {
+	opts := &gl.ProtectOptions{ByUser: map[string]*gl.PermissionOptions{}}
+	revoke(opts, in.Name)
+	return c.Widgets.Protect(1, opts)
+}
+
 type ValueInput struct {
 	Search string ~json:"search"~
 }
@@ -3291,14 +3307,15 @@ func Conceal(c *gl.Client, h Hidden) (Output, error) {
 // is built, and so does one a builder that sends nothing hands a helper to
 // fill. The variable is filled field by field, through a chain of pointers
 // to it however many passes the chain takes, by a helper handed a pointer to
-// it beside the input that writes through it, or that is out of sight (a
-// function held in a variable) or takes it as any value, by a method of a
-// pointer receiver called on it, and by a method of the input it is handed
-// to. A send that takes the input beside it fills none of it, and neither
-// does a function handed a copy of it, a helper that only reads it or gives
-// it no name, a method of a pointer receiver that only reads it or gives it
-// no name, a method of a value receiver called on it, nor a method called on
-// what another function hands back.
+// it beside the input that writes through it, a delete from a map it holds
+// included, or that is out of sight (a function held in a variable) or takes
+// it as any value, by a method of a pointer receiver called on it, and by a
+// method of the input it is handed to. A send that takes the input beside it
+// fills none of it, and neither does a function handed a copy of it, a
+// helper that only reads it or gives it no name, a method of a pointer
+// receiver that only reads it or gives it no name, a method of a value
+// receiver called on it, nor a method called on what another function hands
+// back.
 func TestDiscoverPairs_TheFunctionAndItsStruct_DecideWhetherALiteralIsPairedWithIt(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/shapes", source: handlerShapesSource})[0]
 
@@ -3319,6 +3336,7 @@ func TestDiscoverPairs_TheFunctionAndItsStruct_DecideWhetherALiteralIsPairedWith
 		"GuardInput ProtectOptions ",
 		"HelperFillInput ListWidgetsOptions ",
 		"LocateInput ListWidgetsOptions ",
+		"MapFillInput ProtectOptions ",
 		"MethodFillInput ListWidgetsOptions ",
 		"NamelessInput ListWidgetsOptions ",
 		"PointerFillInput ListWidgetsOptions ",
@@ -3454,12 +3472,21 @@ func TestCarriesJSONTag_TheTagsOfAStruct_SayWhetherAModelSendsIt(t *testing.T) {
 // and doing one thing with it, named for the thing.
 const writesSource = `package writes
 
+import (
+	"maps"
+	"slices"
+	"sort"
+)
+
 type box struct {
 	N     int
 	Items []string
+	M     map[string]string
 	Next  *box
 	V     any
 }
+
+var scratch = map[string]string{}
 
 func (b *box) grow()    { b.N++ }
 func (b box) size() int { return b.N }
@@ -3496,6 +3523,25 @@ func compared(b *box) bool { return b == nil || b.Next == nil }
 func copied(b *box)       { c := *b; use(c.N) }
 func later(b *box)        { b.N = 1; use(b.N) }
 func closure(b *box)      { func() { b.N = 1 }() }
+func indexedSlice(b *box) { b.Items[1:][0] = "x" }
+func copiedInto(b *box)   { copy(b.Items, []string{"x"}) }
+func copiedIntoTail(b *box) { copy(b.Items[1:], []string{"x"}) }
+func copiedFrom(b *box)   { copy(make([]string, 1), b.Items) }
+func cleared(b *box)      { clear(b.M) }
+func deleted(b *box)      { delete(b.M, "k") }
+func deletedKey(b *box)   { delete(scratch, b.Items[0]) }
+func mapsCopied(b *box)   { maps.Copy(b.M, map[string]string{"k": "v"}) }
+func mapsCopiedFrom(b *box) { maps.Copy(scratch, b.M) }
+func mapsDeleted(b *box)  { maps.DeleteFunc(b.M, func(string, string) bool { return true }) }
+func mapsInserted(b *box) { maps.Insert(b.M, maps.All(scratch)) }
+func sorted(b *box)       { slices.Sort(b.Items) }
+func sortedInstance(b *box) { slices.Sort[[]string](b.Items) }
+func sortedClone(b *box)  { slices.Sort(slices.Clone(b.Items)) }
+func sortedOld(b *box)    { sort.Strings(b.Items) }
+func compacted(b *box)    { use(len(slices.Compact(b.Items))) }
+func contained(b *box) bool { return slices.Contains(b.Items, "x") }
+func measured(b *box)     { use(len(b.Items)) }
+func appended(b *box)     { use(len(append(b.Items, "x"))) }
 `
 
 // TestWritesThrough_ACalleeBody_WritesWhatItAssignsOrHandsOn verifies what a
@@ -3512,6 +3558,16 @@ func closure(b *box)      { func() { b.N = 1 }() }
 // receiver, comparing it, copying what it points to and handing on a value
 // that reaches nothing it points to write nothing, and a write stays found
 // whatever the body reads after it.
+//
+// A slice or a map read off it is written in place by a builtin or a
+// function of the standard library that writes what its first argument
+// holds: copy into it, clear it, delete from it, maps.Copy, DeleteFunc or
+// Insert into it, and slices.Sort or Compact it, an explicit instantiation
+// and sort.Strings included, whole or as a slice of it, as an index assigned
+// on such a slice is. The same functions handed it anywhere else, as copy's
+// source, delete's key or maps.Copy's source, or handed a value of their own
+// that only reads it, write nothing through it, and neither do slices.Contains,
+// len and append, which writes past the length the box holds.
 func TestWritesThrough_ACalleeBody_WritesWhatItAssignsOrHandsOn(t *testing.T) {
 	pkg := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/writes", source: writesSource})[0]
 	writes := map[string]bool{
@@ -3522,6 +3578,11 @@ func TestWritesThrough_ACalleeBody_WritesWhatItAssignsOrHandsOn(t *testing.T) {
 		"declaredField": false, "literal": true, "literalField": false, "returned": true,
 		"returnedField": false, "sent": true, "sentField": false, "assigned": true,
 		"assignedField": false, "compared": false, "copied": false, "later": true, "closure": true,
+		"indexedSlice": true, "copiedInto": true, "copiedIntoTail": true, "copiedFrom": false,
+		"cleared": true, "deleted": true, "deletedKey": false, "mapsCopied": true,
+		"mapsCopiedFrom": false, "mapsDeleted": true, "mapsInserted": true, "sorted": true,
+		"sortedInstance": true, "sortedClone": false, "sortedOld": true, "compacted": true,
+		"contained": false, "measured": false, "appended": false,
 	}
 	ran := 0
 	for fn, decl := range funcDecls(pkg) {
