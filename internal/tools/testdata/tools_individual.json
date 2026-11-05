@@ -194788,7 +194788,7 @@
   },
   {
     "name": "gitlab_project_pull_mirror_configure",
-    "description": "Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces this project's diverged branches with the source's and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
+    "description": "Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces each diverged branch the mirror pulls with the source's version and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194801,7 +194801,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call arms it, or enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead",
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead",
           "type": "boolean"
         },
         "enabled": {
@@ -194816,7 +194816,7 @@
           "type": "string"
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true needs confirm=true unless the mirror stays disabled",
+          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true needs confirm=true, also while turning the mirror off. Clearing it never does",
           "type": [
             "null",
             "boolean"
@@ -202822,7 +202822,7 @@
           ]
         },
         "confirm": {
-          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call arms it, or enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead",
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead",
           "type": "boolean"
         },
         "container_expiration_policy_attributes": {
@@ -203092,7 +203092,7 @@
           "type": "string"
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true needs confirm=true unless the mirror stays disabled",
+          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true needs confirm=true, also while turning the mirror off. Clearing it never does",
           "type": [
             "null",
             "boolean"
