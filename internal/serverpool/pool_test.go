@@ -783,7 +783,9 @@ func TestGetOrCreate_ARejectedEntryIsRebuiltBeforeTheEvictionLands(t *testing.T)
 	}))
 	defer srv.Close()
 
+	captured := captureLogs(t)
 	pool := New(testConfig(srv.URL), testFactory())
+	t.Cleanup(pool.Close)
 	first, err := pool.GetOrCreate("glpat-live", srv.URL)
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
@@ -812,9 +814,17 @@ func TestGetOrCreate_ARejectedEntryIsRebuiltBeforeTheEvictionLands(t *testing.T)
 		t.Errorf("RejectedCredentialEvictions = %d, want 1: the rebuild is the eviction", got)
 	}
 
+	const message = "server pool: gitlab rejected the credential on a call, dropping the entry"
+	assertCredentialLog(t, captured, message, "glpat-live", key, srv.URL)
+	record, _ := captured.find(message)
+	if size, ok := logAttr(record, "pool_size"); !ok || size.Int64() != 0 {
+		t.Errorf("eviction pool_size = %v, present %v; want 0", size, ok)
+	}
+
 	// The pending eviction finds another entry under the key and leaves the
 	// rebuilt one alone.
 	pool.evictRejectedCredential(key, entry)
+	assertCredentialLog(t, captured, message, "glpat-live", key, srv.URL)
 	if got := pool.Size(); got != 1 {
 		t.Errorf("pool size = %d after the late eviction, want the rebuilt entry kept", got)
 	}
@@ -1437,7 +1447,7 @@ func TestEntry_CredentialEvictionLogs_CorrelateWithoutTokenMaterial(t *testing.T
 			name:    "rejected credential",
 			message: "server pool: gitlab rejected the credential on a call, dropping the entry",
 			evict: func(_ context.Context, pool *ServerPool, key string, entry *Entry) {
-				pool.evictRejectedCredential(key, entry)
+				pool.evictRejectedCredential(key, entry) //nolint:contextcheck // rejected eviction has no context parameter; its background context is only for panic logging
 			},
 		},
 		{
@@ -1483,7 +1493,7 @@ func assertCredentialEvictionLogs(t *testing.T, message, token string, evict fun
 	}
 	for _, logged := range []string{"server pool: created new entry", message} {
 		t.Run(logged, func(t *testing.T) {
-			assertCredentialLog(t, captured, logged, token, key)
+			assertCredentialLog(t, captured, logged, token, key, stubGitLabBase)
 		})
 	}
 	record, _ := captured.find(message)
@@ -1507,7 +1517,7 @@ func assertCredentialEvictionLogs(t *testing.T, message, token string, evict fun
 
 // assertCredentialLog checks the whole record for credential material as well
 // as the exact handle field, whose name makes telemetry remove it on export.
-func assertCredentialLog(t *testing.T, captured *capturedRecords, message, token, key string) {
+func assertCredentialLog(t *testing.T, captured *capturedRecords, message, token, key, gitlabURL string) {
 	t.Helper()
 	captured.mu.Lock()
 	defer captured.mu.Unlock()
@@ -1520,8 +1530,8 @@ func assertCredentialLog(t *testing.T, captured *capturedRecords, message, token
 		if handle, ok := logAttr(record, telemetry.LogFieldCredentialHash); !ok || handle.String() != CredentialHash(token) {
 			t.Errorf("%s: credential handle is absent or differs from the creation handle", message)
 		}
-		if url, ok := logAttr(record, "gitlab_url"); !ok || url.String() != stubGitLabBase {
-			t.Errorf("%s: gitlab_url = %v, present %v; want the stub URL", message, url, ok)
+		if url, ok := logAttr(record, "gitlab_url"); !ok || url.String() != gitlabURL {
+			t.Errorf("%s: gitlab_url = %v, present %v; want %s", message, url, ok, gitlabURL)
 		}
 		record.Attrs(func(attr slog.Attr) bool {
 			value := attr.Value.String()

@@ -751,7 +751,13 @@ func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *g
 		// than serving it once more, sends this request down the slow path,
 		// which rebuilds and re-verifies; the pending eviction then finds
 		// nothing under the key and does nothing.
-		p.dropRejectedEntry(key, cached)
+		droppedURL, size, dropped := p.dropRejectedEntry(key, cached)
+		if dropped {
+			slog.Info("server pool: gitlab rejected the credential on a call, dropping the entry",
+				"gitlab_url", droppedURL,
+				"pool_size", size,
+				telemetry.LogFieldCredentialHash, cached.credentialHash)
+		}
 	case stale:
 		// The credential behind this entry has not been checked with GitLab
 		// inside the ceiling, so the entry stops being an answer. Dropping it
