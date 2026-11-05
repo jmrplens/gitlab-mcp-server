@@ -173,12 +173,12 @@ func mirrorRefusal(op, source string) string {
 
 // mirrorOffRefusal is the refusal a client that cannot ask receives from the
 // operation op for a call that leaves project 42's mirror off and sets the
-// flag on it, pulling from source once it is turned back on: the question
-// says that the overwrite waits for the mirror, which a call that turns it off
+// flag on it, pulling from source once it is turned on: the question says
+// that the overwrite waits for the mirror, which a call that leaves it off
 // does not start.
 func mirrorOffRefusal(op, source string) string {
 	return op + ": Leave the pull mirror of project 42 off and set it to overwrite diverged branches from " + source +
-		" once it is turned back on? From the first sync after that, every branch the mirror pulls that has diverged" +
+		" once it is turned on? From the first sync after that, every branch the mirror pulls that has diverged" +
 		" from that repository is replaced by its version, and the replaced commits cannot be recovered through the API." +
 		" Re-send the same call with confirm=true once the user has approved it"
 }
@@ -548,7 +548,10 @@ func TestSameMirrorSource_Values(t *testing.T) {
 // mirrored, the answer a project with no mirror gets, and so hides whatever
 // flag it stores. A call that arms nothing while the mirror stays off
 // proceeds, and one that sets the flag asks, whether it sends enabled false or
-// leaves it out.
+// leaves it out. Either way it is asked whether to leave the mirror off with
+// the overwrite set: GitLab assigns the mirror's switch only when the call
+// sends enabled, so one that leaves it out leaves the mirror off as surely as
+// one that sends it false, and is not asked about a sync that will not come.
 //
 // Turning the mirror back on without the flag proceeds: the read shows no
 // stored flag to inherit, so the question for a flag set while the mirror was
@@ -569,7 +572,7 @@ func TestConfigurePullMirror_DisabledMirror_AsksWhenTheCallSetsTheOverwrite(t *t
 		{
 			name:      "setting the flag",
 			input:     ConfigurePullMirrorInput{ProjectID: "42", MirrorOverwritesDivergedBranches: new(true)},
-			refusal:   mirrorRefusal(opConfigurePullMirror, configuredMirrorSource),
+			refusal:   mirrorOffRefusal(opConfigurePullMirror, configuredMirrorSource),
 			wantReads: 1,
 		},
 		{
@@ -632,11 +635,14 @@ func TestConfigurePullMirror_FirstMirrorWithoutTheOverwrite_Proceeds(t *testing.
 	}
 }
 
-// TestConfigurePullMirror_FirstMirrorArmingTheOverwrite_IsRefused verifies the
-// unknown the "not mirrored" answer leaves: the call arms the overwrite and
-// says nothing about enabled, and whether GitLab activates a mirror created
-// without that flag is not something its API documents. The guess that costs a
-// prompt is taken over the guess that skips one.
+// TestConfigurePullMirror_FirstMirrorArmingTheOverwrite_IsRefused verifies a
+// call that gives a project with no mirror a source and the overwrite and says
+// nothing about enabled. GitLab assigns the mirror's switch only when the call
+// sends it (the route's handler passes on only the params the call declared,
+// and Repositories::PullMirrors::Attributes keeps only those), so the mirror
+// stays off and nothing is replaced yet. The call is asked all the same, since
+// it stores the flag that the call turning the mirror on would not see, and
+// the question says that the overwrite waits for the mirror to be turned on.
 func TestConfigurePullMirror_FirstMirrorArmingTheOverwrite_IsRefused(t *testing.T) {
 	var calls guardCalls
 	client := guardedClient(t, &calls, http.StatusBadRequest, notMirroredJSON)
@@ -648,6 +654,9 @@ func TestConfigurePullMirror_FirstMirrorArmingTheOverwrite_IsRefused(t *testing.
 	})
 	if err == nil {
 		t.Fatal("a first mirror that overwrites diverged branches was accepted without confirmation")
+	}
+	if want := mirrorOffRefusal(opConfigurePullMirror, mirrorSourceURL); err.Error() != want {
+		t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
 	}
 	if got := calls.writes.Load(); got != 0 {
 		t.Errorf("the configuration was applied %d time(s) despite being refused", got)
@@ -950,10 +959,13 @@ func armingUpdate() UpdateInput {
 // pulling with the overwrite armed, and is the call that arms or re-aims it,
 // discards the project's own commits on each diverged branch the mirror pulls
 // exactly as the dedicated route would. An update that sets the flag while it
-// turns the mirror off, or keeps it off, is asked too, with the question that
-// says the overwrite waits for the mirror: GitLab keeps the flag and hides it
-// until the mirror is on again, so the update that turns it back on could not
-// be asked about it (issue 1752).
+// turns the mirror off, or leaves off a mirror the read reports as not
+// mirrored, whether by sending mirror false or by not sending it, is asked too,
+// with the question that says the overwrite waits for the mirror: GitLab keeps
+// the flag and hides it until the mirror is on again, so the update that turns
+// it on could not be asked about it (issue 1752). An update that sets the flag
+// where the read fails for another reason cannot tell whether the mirror runs,
+// and is asked the question of a mirror that does.
 //
 // Each case is refused when nothing confirmed it, with the guard's question in
 // English and how to proceed, and GitLab is never asked to apply it. The
@@ -1007,6 +1019,15 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 			read:      readNotMirrored,
 			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL, MirrorOverwritesDivergedBranches: new(true)},
 			source:    mirrorSourceURL,
+			off:       true,
+			wantReads: 1,
+		},
+		{
+			name:      "setting the flag beside an unrelated setting on a mirror that is off",
+			read:      readNotMirrored,
+			input:     UpdateInput{ProjectID: "42", Description: new("mirrored"), MirrorOverwritesDivergedBranches: new(true)},
+			source:    configuredMirrorSource,
+			off:       true,
 			wantReads: 1,
 		},
 		{
@@ -1014,6 +1035,7 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 			read:      readRouteNotMounted,
 			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL, MirrorOverwritesDivergedBranches: new(true)},
 			source:    mirrorSourceURL,
+			off:       true,
 			wantReads: 1,
 		},
 		{
@@ -1021,6 +1043,13 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 			read:      readUnavailable,
 			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
 			source:    mirrorSourceURL,
+			wantReads: 1,
+		},
+		{
+			name:      "setting the flag where the configuration cannot be read",
+			read:      readUnavailable,
+			input:     UpdateInput{ProjectID: "42", Description: new("mirrored"), MirrorOverwritesDivergedBranches: new(true)},
+			source:    configuredMirrorSource,
 			wantReads: 1,
 		},
 		{
@@ -1117,7 +1146,8 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 // asking on the ones that switch the overwrite off, or the mirror without
 // setting the overwrite, would be the guard working backwards.
 //
-// Turning a mirror that is off back on without the flag proceeds too. GitLab
+// Turning a mirror that is off back on without the flag proceeds too, and so
+// does aiming one at a source without either flag, which leaves it off. GitLab
 // answers the read of such a mirror 400 not mirrored and so hides a flag it
 // stores, which is why the update that sets the flag while the mirror is off is
 // the one asked.
@@ -1170,6 +1200,12 @@ func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) 
 			name:      "turning a mirror that is off back on without the flag",
 			read:      readNotMirrored,
 			input:     UpdateInput{ProjectID: "42", Mirror: new(true)},
+			wantReads: 1,
+		},
+		{
+			name:      "aiming a mirror that is off at a source",
+			read:      readNotMirrored,
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
 			wantReads: 1,
 		},
 		{

@@ -204,7 +204,7 @@ func frozenEnglishRows() []frozenEnglish {
 			key: ConfirmPullMirrorOverwriteWhileOff, dotted: "confirm.pull_mirror.overwrite_while_off",
 			args: []Arg{S("project", sampleProject), S("source", sampleURL)},
 			want: fmt.Sprintf(
-				"Leave the pull mirror of project %s off and set it to overwrite diverged branches from %s once it is turned back on?"+
+				"Leave the pull mirror of project %s off and set it to overwrite diverged branches from %s once it is turned on?"+
 					" From the first sync after that, every branch the mirror pulls that has diverged from that repository is replaced by its version,"+
 					" and the replaced commits cannot be recovered through the API.",
 				sampleProject, sampleURL,

@@ -64,13 +64,15 @@ const notMirroredHint = "not mirrored"
 // are the remedy.
 //
 // The one exception is a call that sets the flag while it leaves the mirror
-// off, which is asked although nothing is overwritten yet (issue 1752). GitLab
-// keeps the flag on a mirror that is off and describes no such mirror, so the
-// later call that turns it back on would read nothing to ask about and every
-// sync from then on would replace the diverged branches unasked. Its question
-// says that the overwrite waits for the mirror to be turned back on. A flag
-// stored while the mirror was off before this question existed, or through
-// another client, stays out of sight all the same.
+// off, which is asked although nothing is overwritten yet (issue 1752). A call
+// leaves the mirror off by turning it off, or by not sending enabled to a
+// mirror that is off, since GitLab assigns the mirror's switch only when the
+// call sends it. GitLab keeps the flag on a mirror that is off and describes
+// no such mirror, so the later call that turns it on would read nothing to ask
+// about and every sync from then on would replace the diverged branches
+// unasked. Its question says that the overwrite waits for the mirror to be
+// turned on. A flag stored while the mirror was off before this question
+// existed, or through another client, stays out of sight all the same.
 //
 // Confirmation follows the same precedence as destructive actions: YOLO mode
 // and an explicit confirm=true proceed immediately, otherwise the caller is
@@ -88,11 +90,12 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 	if toolutil.IsYOLOMode() || toolutil.ExplicitConfirmFromRequest(req) {
 		return nil
 	}
-	if !overwritesAfterCall(ctx, client, input) {
+	asks, leftOff := overwritesAfterCall(ctx, client, input)
+	if !asks {
 		return nil
 	}
 
-	question := pullMirrorQuestion(input)
+	question := pullMirrorQuestion(input, leftOff)
 	flow, flowErr := elicitation.FlowFromRequest(ctx, req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
@@ -124,14 +127,15 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 // sentence when the client cannot ask. A call that names no URL keeps the
 // source the project has, which the question names in the person's language
 // rather than reveals; one that names a URL is asked about that URL as the
-// caller wrote it, redacted. A call that leaves the mirror off is asked
-// whether to store the overwrite for when the mirror is turned back on, since
-// nothing is pulled before that.
+// caller wrote it, redacted. A call that leaves the mirror off, which leftOff
+// reports as [overwritesAfterCall] found it, is asked whether to store the
+// overwrite for when the mirror is turned on, since nothing is pulled before
+// that.
 //
 // Each of the four is written out in full because the catalog audit reads a
 // question's key and the placeholders it fills from the call that renders it.
-func pullMirrorQuestion(input ConfigurePullMirrorInput) i18n.Message {
-	if enabled, sent := flagValue(input.Enabled); sent && !enabled {
+func pullMirrorQuestion(input ConfigurePullMirrorInput, leftOff bool) i18n.Message {
+	if leftOff {
 		if input.URL == "" {
 			return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
 				i18n.S("project", string(input.ProjectID)),
@@ -182,19 +186,22 @@ func isTrue(flag *bool) bool {
 	return flag != nil && *flag
 }
 
-// overwritesAfterCall reports whether the configuration this call leaves behind
-// both pulls and overwrites diverged branches, or would as soon as the mirror
-// is turned back on.
+// overwritesAfterCall reports, as asks, whether the configuration this call
+// leaves behind both pulls and overwrites diverged branches, or would as soon
+// as the mirror is turned on, and, as leftOff, whether that configuration
+// leaves the mirror off, which decides the question [pullMirrorQuestion] asks.
 //
 // The overwrite flag is the call's own where the call sends it and the
 // project's current one otherwise, so the answer describes the configuration
 // GitLab will hold rather than the fields this particular call happens to name.
-// The current one is read once and only when it is needed. Whether the mirror
-// pulls takes no reading of its own: GET /projects/:id/mirror/pull describes
-// only a mirror that is on (the route answers 400 unless the project mirrors,
-// and the enabled it reports is the project's mirror column), so a mirror it
-// describes is one this call leaves on, unless the call turns it off, which is
-// decided before the read.
+// The current configuration is read once, and only when the call leaves unsaid
+// something the answer turns on: the flag, where the call does not send it, or
+// whether the mirror is on, where it sets the flag without sending enabled.
+// Whether the mirror pulls takes no reading of its own: GET
+// /projects/:id/mirror/pull describes only a mirror that is on (the route
+// answers 400 unless the project mirrors, and the enabled it reports is the
+// project's mirror column), so a mirror it describes is one this call leaves
+// on, unless the call turns it off, which is decided before the read.
 //
 // Three calls say enough to be answered without a read. Clearing the overwrite
 // never asks. Setting it beside enabled asks whichever way enabled is sent,
@@ -211,45 +218,49 @@ func isTrue(flag *bool) bool {
 // [sameMirrorSource] says what counts as the same repository.
 //
 // A project with no mirror at all inherits nothing, so an unsent overwrite flag
-// is off; an unsent enabled flag there is treated as on, because whether GitLab
-// activates a mirror created without it is not something its API documents, and
-// the guess that costs a prompt is better than the guess that skips one. GitLab
-// answers the read of a mirror that is off the same way, 400 not mirrored, so a
-// flag such a mirror stores is not inherited either, which is why the call
-// that stores it is asked.
+// is off, and GitLab answers the read of a mirror that is off the same way, 400
+// not mirrored, so a flag such a mirror stores is not inherited either, which
+// is why the call that stores it is asked. A call asked on that answer sets
+// the flag without sending enabled, since one sending both is decided before
+// the read, and it leaves the mirror off: GitLab assigns the mirror's switch
+// only when the call sends it (both routes hand on only the params the call
+// declared, and Repositories::PullMirrors::Attributes and
+// Projects::UpdateService assign only those). So it is asked whether to store
+// the overwrite for when the mirror is turned on.
 //
-// A 404 is read the same way, as nothing to inherit. GitLab CE does not mount
-// the pull mirror route at all, so there it is the answer to every read, and a
-// project.update naming import_url or mirror, which the meta tool hands its
-// handler although the Free schema prunes both, would otherwise be refused
-// with a question about a mirror CE ignores. On a licensed instance the
-// route's 404 means the project cannot be seen, which the write that follows
-// is refused for as well. Any other read failure is answered by asking: a
-// guard that cannot see the configuration must not assume the harmless one.
-func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) bool {
+// A 404 is read the same way, as nothing to inherit and a mirror left off.
+// GitLab CE does not mount the pull mirror route at all, so there it is the
+// answer to every read, and a project.update naming import_url or mirror, which
+// the meta tool hands its handler although the Free schema prunes both, would
+// otherwise be refused with a question about a mirror CE ignores. On a licensed
+// instance the route's 404 means the project cannot be seen, which the write
+// that follows is refused for as well. Any other read failure is answered by
+// asking, with the question of a mirror that pulls: a guard that cannot see
+// the configuration must not assume the harmless one.
+func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) (asks, leftOff bool) {
 	overwrite, overwriteSent := flagValue(input.MirrorOverwritesDivergedBranches)
 	enabled, enabledSent := flagValue(input.Enabled)
 	if overwriteSent && !overwrite {
-		return false
+		return false, false
 	}
 	if overwriteSent && enabledSent {
-		return true
+		return true, !enabled
 	}
 	if enabledSent && !enabled {
-		return false
+		return false, false
 	}
 
 	current, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		if isNotMirrored(err) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return overwriteSent
+			return overwriteSent, overwriteSent
 		}
-		return true
+		return true, false
 	}
 	if !overwriteSent && !enabledSent && sameMirrorSource(input.URL, current.URL) {
-		return false
+		return false, false
 	}
-	return overwriteSent || current.MirrorOverwritesDivergedBranches
+	return overwriteSent || current.MirrorOverwritesDivergedBranches, false
 }
 
 // flagValue reports an optional flag's value and whether the caller sent it.

@@ -92,7 +92,7 @@ var spanish = map[Key]string{
 	ConfirmDestructiveMeta:             "¿Confirmas {tool}/{action}? Esta acción puede ser irreversible.",
 	ConfirmDestructiveIndividual:       "¿Confirmas {tool}? Esta acción puede ser irreversible.",
 	ConfirmPullMirrorOverwrite:         "¿Configurar el proyecto {project} para hacer pull desde {source} y sobrescribir las ramas divergentes? Cada rama que trae el mirror y que haya divergido de ese repositorio se sustituye por su versión en la próxima sincronización, y los commits sustituidos no se pueden recuperar mediante la API.",
-	ConfirmPullMirrorOverwriteWhileOff: "¿Dejar desactivado el mirror de pull del proyecto {project} y configurarlo para sobrescribir las ramas divergentes desde {source} cuando se vuelva a activar? Desde la primera sincronización posterior, cada rama que trae el mirror y que haya divergido de ese repositorio se sustituye por su versión, y los commits sustituidos no se pueden recuperar mediante la API.",
+	ConfirmPullMirrorOverwriteWhileOff: "¿Dejar desactivado el mirror de pull del proyecto {project} y configurarlo para sobrescribir las ramas divergentes desde {source} cuando se active? Desde la primera sincronización posterior, cada rama que trae el mirror y que haya divergido de ese repositorio se sustituye por su versión, y los commits sustituidos no se pueden recuperar mediante la API.",
 	ConfirmPullMirrorConfiguredSource:  "su origen de mirror configurado",
 	ConfirmWorkItemClear:               "¿Quitar {losses} del work item {path}#{iid}? Esto sustituye la lista y no se puede deshacer desde la respuesta.",
 	ConfirmWorkItemAssigneesUnknown:    "todos los asignados (no se pudo leer la lista actual)",
