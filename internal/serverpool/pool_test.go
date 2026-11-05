@@ -1460,7 +1460,7 @@ func TestEntry_CredentialEvictionLogs_CorrelateWithoutTokenMaterial(t *testing.T
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, token := range []string{"glpat-pooled-token-ZZZ9", "ZZZ9"} {
+			for _, token := range []string{"glpat-pooled-token-ZZZ9", "ZZZ9", "Z9"} {
 				t.Run(strconv.Itoa(len(token))+" characters", func(t *testing.T) {
 					assertCredentialEvictionLogs(t, tt.message, token, tt.evict)
 				})
@@ -1519,6 +1519,7 @@ func assertCredentialEvictionLogs(t *testing.T, message, token string, evict fun
 // as the exact handle field, whose name makes telemetry remove it on export.
 func assertCredentialLog(t *testing.T, captured *capturedRecords, message, token, key, gitlabURL string) {
 	t.Helper()
+	tail := token[max(0, len(token)-4):]
 	captured.mu.Lock()
 	defer captured.mu.Unlock()
 	count := 0
@@ -1535,7 +1536,7 @@ func assertCredentialLog(t *testing.T, captured *capturedRecords, message, token
 		}
 		record.Attrs(func(attr slog.Attr) bool {
 			value := attr.Value.String()
-			if strings.Contains(value, token) || strings.Contains(value, "ZZZ9") || strings.Contains(value, tokenHash(token)) || strings.Contains(value, key) {
+			if strings.Contains(value, token) || strings.Contains(value, tail) || strings.Contains(value, tokenHash(token)) || strings.Contains(value, key) {
 				t.Errorf("%s: %s contains credential material or an unkeyed digest", message, attr.Key)
 			}
 			return true
