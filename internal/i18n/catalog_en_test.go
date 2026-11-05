@@ -195,7 +195,7 @@ func frozenEnglishRows() []frozenEnglish {
 			args: []Arg{S("project", sampleProject), S("source", sampleURL)},
 			want: fmt.Sprintf(
 				"Configure project %s to pull from %s and overwrite diverged branches?"+
-					" Every branch of this project that has diverged from that repository is replaced by its version on the next sync,"+
+					" Every branch the mirror pulls that has diverged from that repository is replaced by its version on the next sync,"+
 					" and the replaced commits cannot be recovered through the API.",
 				sampleProject, sampleURL,
 			),

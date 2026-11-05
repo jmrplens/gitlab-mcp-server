@@ -161,7 +161,7 @@ func TestConfigurePullMirror_ArmingTheOverwrite_IsRefusedWithoutConfirmation(t *
 // language the person is asked in.
 func mirrorRefusal(op, source string) string {
 	return op + ": Configure project 42 to pull from " + source + " and overwrite diverged branches?" +
-		" Every branch of this project that has diverged from that repository is replaced by its version on the next sync," +
+		" Every branch the mirror pulls that has diverged from that repository is replaced by its version on the next sync," +
 		" and the replaced commits cannot be recovered through the API." +
 		" Re-send the same call with confirm=true once the user has approved it"
 }
@@ -828,8 +828,8 @@ func armingUpdate() UpdateInput {
 // mirror_overwrites_diverged_branches too, the same three settings under the
 // names the project route gives them, so an update that leaves the project
 // pulling with the overwrite armed, and is the call that arms or re-aims it,
-// discards the project's own commits on every diverged branch exactly as the
-// dedicated route would.
+// discards the project's own commits on each diverged branch the mirror pulls
+// exactly as the dedicated route would.
 //
 // Each case is refused when nothing confirmed it, with the guard's question in
 // English and how to proceed, and GitLab is never asked to apply it. The

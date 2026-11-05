@@ -85,7 +85,7 @@ var english = map[Key]string{
 	ConfirmDestructiveStandalone:      "Confirm destructive action {tool}?",
 	ConfirmDestructiveMeta:            "Confirm {tool}/{action}? This action may be irreversible.",
 	ConfirmDestructiveIndividual:      "Confirm {tool}? This action may be irreversible.",
-	ConfirmPullMirrorOverwrite:        "Configure project {project} to pull from {source} and overwrite diverged branches? Every branch of this project that has diverged from that repository is replaced by its version on the next sync, and the replaced commits cannot be recovered through the API.",
+	ConfirmPullMirrorOverwrite:        "Configure project {project} to pull from {source} and overwrite diverged branches? Every branch the mirror pulls that has diverged from that repository is replaced by its version on the next sync, and the replaced commits cannot be recovered through the API.",
 	ConfirmPullMirrorConfiguredSource: "its configured mirror source",
 	ConfirmWorkItemClear:              "Remove {losses} from work item {path}#{iid}? This replaces the list and cannot be undone from the response.",
 	ConfirmWorkItemAssigneesUnknown:   "every assignee (the current list could not be read)",

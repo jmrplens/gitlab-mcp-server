@@ -688,7 +688,7 @@ type UpdateInput struct {
 	Mirror                           *bool  `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url"`
 	MirrorTriggerBuilds              *bool  `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates"`
 	MirrorBranchRegex                string `json:"mirror_branch_regex,omitempty" tier:"premium" jsonschema:"Only mirror branches matching this regex"`
-	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true"`
+	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true needs confirm=true unless the mirror stays disabled"`
 	MirrorUserID                     *int64 `json:"mirror_user_id,omitempty" tier:"premium" jsonschema:"User ID used to run mirror updates (admin only)"`
 	OnlyMirrorProtectedBranches      *bool  `json:"only_mirror_protected_branches,omitempty" tier:"premium" jsonschema:"Only mirror protected branches"`
 	// Confirm is declared so the input schema advertises the reserved confirm
@@ -696,7 +696,7 @@ type UpdateInput struct {
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead. It answers only
 	// the pull-mirror question, so it carries that question's tier.
-	Confirm bool `json:"confirm,omitempty" tier:"premium" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call arms it, or enables or re-aims a mirror that has it"`
+	Confirm bool `json:"confirm,omitempty" tier:"premium" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call arms it, or enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead"`
 
 	// Container registry cleanup (additive)
 	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`

@@ -79,10 +79,10 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 			msg: New(ConfirmPullMirrorOverwrite,
 				S("project", "42"), M("source", New(ConfirmPullMirrorConfiguredSource))),
 			spanish: "¿Configurar el proyecto 42 para hacer pull desde su origen de mirror configurado y sobrescribir las ramas divergentes?" +
-				" Cada rama de este proyecto que haya divergido de ese repositorio se sustituye por su versión en la próxima sincronización," +
+				" Cada rama que trae el mirror y que haya divergido de ese repositorio se sustituye por su versión en la próxima sincronización," +
 				" y los commits sustituidos no se pueden recuperar mediante la API.",
 			english: "Configure project 42 to pull from its configured mirror source and overwrite diverged branches?" +
-				" Every branch of this project that has diverged from that repository is replaced by its version on the next sync," +
+				" Every branch the mirror pulls that has diverged from that repository is replaced by its version on the next sync," +
 				" and the replaced commits cannot be recovered through the API.",
 		},
 		{
