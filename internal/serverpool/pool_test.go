@@ -1417,6 +1417,115 @@ func TestInsertEntry_TheCreatedEntryLine_NamesTheTokenByItsHandle(t *testing.T) 
 	})
 }
 
+// TestEntry_CredentialEvictionLogs_CorrelateWithoutTokenMaterial verifies that
+// both credential drops name the same handle as creation, even for a short
+// secret, and that competing evictions log only the entry actually removed.
+func TestEntry_CredentialEvictionLogs_CorrelateWithoutTokenMaterial(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+		evict   func(*ServerPool, string, *Entry)
+	}{
+		{
+			name:    "rejected credential",
+			message: "server pool: gitlab rejected the credential on a call, dropping the entry",
+			evict:   (*ServerPool).evictRejectedCredential,
+		},
+		{
+			name:    "below minimum",
+			message: "server pool: gitlab says the credential carries neither read_api nor api, dropping the entry",
+			evict: func(pool *ServerPool, key string, entry *Entry) {
+				pool.evictBelowMinimum(t.Context(), key, entry)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, token := range []string{"glpat-pooled-token-ZZZ9", "ZZZ9"} {
+				t.Run(strconv.Itoa(len(token))+" characters", func(t *testing.T) {
+					assertCredentialEvictionLogs(t, tt.message, token, tt.evict)
+				})
+			}
+		})
+	}
+}
+
+// assertCredentialEvictionLogs drives a credential's creation, concurrent
+// removal and replacement against the loopback stub, then checks their logs.
+func assertCredentialEvictionLogs(t *testing.T, message, token string, evict func(*ServerPool, string, *Entry)) {
+	t.Helper()
+	captured := captureLogs(t)
+	pool := New(testConfig(stubGitLabBase), testFactory())
+	t.Cleanup(pool.Close)
+	entry, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(): %v", err)
+	}
+	key := sessionKey(token, stubGitLabBase)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() { evict(pool, key, entry) })
+	}
+	wg.Wait()
+
+	if pool.Size() != 0 {
+		t.Fatal("the credential is still pooled after eviction")
+	}
+	for _, logged := range []string{"server pool: created new entry", message} {
+		t.Run(logged, func(t *testing.T) {
+			assertCredentialLog(t, captured, logged, token, key)
+		})
+	}
+	record, _ := captured.find(message)
+	if size, ok := logAttr(record, "pool_size"); !ok || size.Int64() != 0 {
+		t.Errorf("eviction pool_size = %v, present %v; want 0", size, ok)
+	}
+
+	replacement, err := pool.GetOrCreateEntry(token, stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("rebuilding the entry: %v", err)
+	}
+	staleLogs := captureLogs(t)
+	evict(pool, key, entry)
+	if _, found := staleLogs.find(message); found {
+		t.Error("an eviction of the old entry logged dropping its replacement")
+	}
+	if pool.entries[key] != replacement {
+		t.Error("an eviction of the old entry removed its replacement")
+	}
+}
+
+// assertCredentialLog checks the whole record for credential material as well
+// as the exact handle field, whose name makes telemetry remove it on export.
+func assertCredentialLog(t *testing.T, captured *capturedRecords, message, token, key string) {
+	t.Helper()
+	captured.mu.Lock()
+	defer captured.mu.Unlock()
+	count := 0
+	for _, record := range captured.records {
+		if record.Message != message {
+			continue
+		}
+		count++
+		if handle, ok := logAttr(record, telemetry.LogFieldCredentialHash); !ok || handle.String() != CredentialHash(token) {
+			t.Errorf("%s: credential handle is absent or differs from the creation handle", message)
+		}
+		if url, ok := logAttr(record, "gitlab_url"); !ok || url.String() != stubGitLabBase {
+			t.Errorf("%s: gitlab_url = %v, present %v; want the stub URL", message, url, ok)
+		}
+		record.Attrs(func(attr slog.Attr) bool {
+			value := attr.Value.String()
+			if strings.Contains(value, token) || strings.Contains(value, "ZZZ9") || strings.Contains(value, tokenHash(token)) || strings.Contains(value, key) {
+				t.Errorf("%s: %s contains credential material or an unkeyed digest", message, attr.Key)
+			}
+			return true
+		})
+	}
+	if count != 1 {
+		t.Errorf("%s: logged %d records, want exactly one", message, count)
+	}
+}
+
 // TestWithMaxSize verifies WithMaxSize.
 func TestWithMaxSize(t *testing.T) {
 	cfg := testConfig(stubGitLabBase)

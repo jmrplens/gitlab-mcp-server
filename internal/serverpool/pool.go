@@ -94,6 +94,9 @@ type Entry struct {
 	// copy anywhere a log line or a dump could reach, and it is set when the
 	// entry is built.
 	rememberBelowMinimum func()
+	// credentialHash is the log handle computed at insertion, before the
+	// entry is published, and never changed or derived from the pool key.
+	credentialHash string
 }
 
 // Server returns the MCP server serving this entry, which may be shared with
@@ -1106,7 +1109,8 @@ func (p *ServerPool) evictRejectedCredential(key string, entry *Entry) {
 	}
 	slog.Info("server pool: gitlab rejected the credential on a call, dropping the entry",
 		"gitlab_url", gitlabURL,
-		"pool_size", size)
+		"pool_size", size,
+		telemetry.LogFieldCredentialHash, entry.credentialHash)
 }
 
 // dropRejectedEntry removes entry under the lock, if it is still the one
@@ -1151,7 +1155,8 @@ func (p *ServerPool) evictBelowMinimum(ctx context.Context, key string, entry *E
 	}
 	slog.InfoContext(ctx, "server pool: gitlab says the credential carries neither read_api nor api, dropping the entry",
 		"gitlab_url", gitlabURL,
-		"pool_size", size)
+		"pool_size", size,
+		telemetry.LogFieldCredentialHash, entry.credentialHash)
 }
 
 // dropBelowMinimumEntry removes entry under the lock, if it is still the one
@@ -1291,6 +1296,7 @@ func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 	entry.createdAt = now
 	entry.lastValidated = now
 	entry.lastUsed = now
+	entry.credentialHash = CredentialHash(token)
 	p.entries[key] = entry
 
 	// After the entry is reachable by key, so a callback that starts work
@@ -1310,7 +1316,7 @@ func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 		"enterprise", entry.serverConfig.Enterprise(),
 		"tier_source", p.tierSource(),
 		"scopes_detected", entry.serverConfig.TokenScopes != nil,
-		telemetry.LogFieldCredentialHash, CredentialHash(token),
+		telemetry.LogFieldCredentialHash, entry.credentialHash,
 	)
 
 	return entry
