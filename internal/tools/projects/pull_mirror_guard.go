@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -56,7 +57,8 @@ const notMirroredHint = "not mirrored"
 // when this call would leave the project pulling from its source with the
 // overwrite armed, and when it is this call that arms or re-aims it, by setting
 // the flag, by enabling the mirror, or by pointing it at another URL. Editing
-// an unrelated setting on a mirror that already overwrites asks nothing, since
+// an unrelated setting on a mirror that already overwrites asks nothing, and
+// neither does sending it the URL it already pulls from, since
 // a prompt raised by every edit is a prompt a caller learns to pass through;
 // disabling the mirror or clearing the flag asks nothing either, because both
 // are the remedy.
@@ -161,6 +163,12 @@ func isTrue(flag *bool) bool {
 // GitLab will hold rather than the fields this particular call happens to name.
 // The current one is read once and only when it is needed.
 //
+// A call that sends neither flag can arm nothing but by re-aiming the mirror,
+// so its URL is held to the source the project already pulls from, and one
+// naming that same repository is answered like the unrelated edit it is, since
+// it changes neither what the mirror pulls nor whether it overwrites.
+// [sameMirrorSource] says what counts as the same repository.
+//
 // A project with no mirror at all inherits nothing, so an unsent overwrite flag
 // is off; an unsent enabled flag there is treated as on, because whether GitLab
 // activates a mirror created without it is not something its API documents, and
@@ -194,6 +202,9 @@ func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input
 		}
 		return true
 	}
+	if !overwriteSent && !enabledSent && sameMirrorSource(input.URL, current.URL) {
+		return false
+	}
 	if !overwriteSent {
 		overwrite = current.MirrorOverwritesDivergedBranches
 	}
@@ -209,6 +220,47 @@ func flagValue(flag *bool) (value, sent bool) {
 		return false, false
 	}
 	return *flag, true
+}
+
+// sameMirrorSource reports whether sent names the repository current already
+// names, current being the url GET /projects/:id/mirror/pull reports for the
+// project's mirror.
+//
+// GitLab reports that url through Project#safe_import_url, which replaces the
+// user and the password with ***** (Gitlab::UrlSanitizer#masked_url), so the
+// two are compared without their credentials: those decide whom the mirror
+// authenticates as, not which repository it pulls. The scheme and the host
+// are compared without regard to case, as URLs define them, and the rest has
+// to match as written. A spelling GitLab might normalize, such as a default
+// port or a trailing slash, therefore reads as another source, which costs a
+// question rather than skipping one.
+func sameMirrorSource(sent, current string) bool {
+	key := mirrorSourceKey(sent)
+	return key != "" && key == mirrorSourceKey(current)
+}
+
+// mirrorSourceKey renders raw without its credentials and with its host in
+// lower case, the form [sameMirrorSource] compares, or returns "" for a URL it
+// does not compare.
+//
+// A URL net/url cannot parse is not compared, and neither is one with an @
+// left once the credentials are gone. GitLab takes everything up to the last
+// @ of the whole URL for credentials (Gitlab::UrlSanitizer#parse_url), so for
+// https://host/a@b/repo it pulls from b while net/url reads host: the two
+// parsers agree on such a URL's repository only by chance. GitLab reads every
+// url it reports through that rule, so none it reports should carry one, and
+// the comparison does not rely on that.
+func mirrorSourceKey(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	parsed.User = nil
+	parsed.Host = strings.ToLower(parsed.Host)
+	if key := parsed.String(); !strings.Contains(key, "@") {
+		return key
+	}
+	return ""
 }
 
 // isNotMirrored reports whether err is GitLab refusing to describe a pull

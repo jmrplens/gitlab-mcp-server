@@ -72,11 +72,26 @@ func guardHandler(t *testing.T, calls *guardCalls, readStatus int, readBody stri
 }
 
 // storedMirrorJSON renders the pull-mirror configuration a project already
-// holds, which decides what an unsent flag inherits.
+// holds, which decides what an unsent flag inherits. It pulls from another
+// repository than mirrorSourceURL, so a call naming that URL re-aims it.
 func storedMirrorJSON(enabled, overwrites bool) string {
-	return `{"id":5,"enabled":` + jsonBool(enabled) + `,"url":"https://github.com/example/old.git",` +
+	return storedMirrorAt(enabled, overwrites, "https://github.com/example/old.git")
+}
+
+// storedMirrorAt renders the configuration of a mirror that pulls from source,
+// the url GitLab reports for it.
+func storedMirrorAt(enabled, overwrites bool, source string) string {
+	return `{"id":5,"enabled":` + jsonBool(enabled) + `,"url":"` + source + `",` +
 		`"mirror_overwrites_diverged_branches":` + jsonBool(overwrites) + `}`
 }
+
+// maskedMirrorSourceURL is how GitLab reports mirrorSourceURL for a mirror that
+// authenticates: Project#safe_import_url replaces the user and the password
+// with ***** each.
+const maskedMirrorSourceURL = "https://*****:*****@github.com/example/repo.git"
+
+// unparseableMirrorSource is a URL net/url refuses, for an invalid escape.
+const unparseableMirrorSource = "https://github.com/example/%zz.git"
 
 // jsonBool renders a bool as the JSON literal, so the fixture reads as the
 // document GitLab sends.
@@ -381,6 +396,71 @@ func TestConfigurePullMirror_RepointingAPlainMirror_Proceeds(t *testing.T) {
 	}
 	if got := calls.writes.Load(); got != 1 {
 		t.Errorf("writes = %d, want the configuration applied once", got)
+	}
+}
+
+// TestConfigurePullMirror_ResendingTheSourceItPullsFrom_Proceeds verifies that
+// a URL is a re-aim only when it names another repository: an overwriting
+// mirror sent the source it already pulls from, here with credentials GitLab
+// reports masked, keeps pulling what the user approved when the overwrite was
+// armed, so the call is the unrelated edit the guard lets through. The read
+// that tells the two apart is the one inspection read.
+func TestConfigurePullMirror_ResendingTheSourceItPullsFrom_Proceeds(t *testing.T) {
+	var calls guardCalls
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorAt(true, true, maskedMirrorSourceURL))
+
+	if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
+		ProjectID: "42",
+		URL:       "https://user:token@github.com/example/repo.git",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if got := calls.reads.Load(); got != 1 {
+		t.Errorf("reads = %d, want the one inspection read", got)
+	}
+	if got := calls.writes.Load(); got != 1 {
+		t.Errorf("writes = %d, want the configuration applied once", got)
+	}
+}
+
+// TestSameMirrorSource_Values verifies which URLs name the repository a mirror
+// already pulls from, as GET /projects/:id/mirror/pull reports it. Credentials
+// never count, since GitLab reports them masked, and a scheme or host differing
+// only in case is the same one. Everything else has to match as written, so a
+// spelling GitLab might normalize, such as a default port or a trailing slash,
+// still reads as another source: the guard errs toward asking. A URL net/url
+// cannot parse, or one where an @ after the host leaves GitLab reading another
+// host than net/url does, is never the same source either.
+func TestSameMirrorSource_Values(t *testing.T) {
+	tests := []struct {
+		name    string
+		sent    string
+		current string
+		want    bool
+	}{
+		{name: "the same URL", sent: mirrorSourceURL, current: mirrorSourceURL, want: true},
+		{name: "credentials against GitLab's mask", sent: "https://user:token@github.com/example/repo.git", current: maskedMirrorSourceURL, want: true},
+		{name: "a user alone against its mask", sent: "https://user@github.com/example/repo.git", current: "https://*****@github.com/example/repo.git", want: true},
+		{name: "no credentials against a masked pair", sent: mirrorSourceURL, current: maskedMirrorSourceURL, want: true},
+		{name: "the host in capitals", sent: "https://GITHUB.COM/example/repo.git", current: mirrorSourceURL, want: true},
+		{name: "the scheme in capitals", sent: "HTTPS://github.com/example/repo.git", current: mirrorSourceURL, want: true},
+		{name: "another repository", sent: mirrorSourceURL, current: "https://github.com/example/old.git", want: false},
+		{name: "the path in another case", sent: "https://github.com/Example/repo.git", current: mirrorSourceURL, want: false},
+		{name: "another host", sent: "https://gitlab.com/example/repo.git", current: mirrorSourceURL, want: false},
+		{name: "another scheme", sent: "http://github.com/example/repo.git", current: mirrorSourceURL, want: false},
+		{name: "a default port written out", sent: "https://github.com:443/example/repo.git", current: mirrorSourceURL, want: false},
+		{name: "a trailing slash", sent: mirrorSourceURL + "/", current: mirrorSourceURL, want: false},
+		{name: "an @ after the host", sent: "https://github.com/example@evil.example/repo.git", current: "https://github.com/example@evil.example/repo.git", want: false},
+		{name: "a sent URL net/url refuses", sent: unparseableMirrorSource, current: mirrorSourceURL, want: false},
+		{name: "a reported URL net/url refuses", sent: mirrorSourceURL, current: unparseableMirrorSource, want: false},
+		{name: "both refused alike", sent: unparseableMirrorSource, current: unparseableMirrorSource, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sameMirrorSource(tt.sent, tt.current); got != tt.want {
+				t.Errorf("sameMirrorSource(%q, %q) = %v, want %v", tt.sent, tt.current, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -700,6 +780,13 @@ var (
 	readUnavailable       = mirrorRead{status: http.StatusInternalServerError, body: `{"message":"500 Internal Server Error"}`}
 )
 
+// readMirrorAt answers the inspection read with a mirror that pulls from
+// source, for the cases that turn on whether a call names the source the
+// mirror already has.
+func readMirrorAt(enabled, overwrites bool, source string) mirrorRead {
+	return mirrorRead{status: http.StatusOK, body: storedMirrorAt(enabled, overwrites, source)}
+}
+
 // updateGuardHandler answers the two requests a project update that touches
 // the pull mirror can send: the read of the mirror configuration the guard
 // inspects, answered with read, and the update itself.
@@ -748,6 +835,13 @@ func armingUpdate() UpdateInput {
 // English and how to proceed, and GitLab is never asked to apply it. The
 // inspection read is asserted as well, since a call that sends both flags
 // already says what it leaves behind and must not pay for one.
+//
+// A URL naming the source the mirror already pulls from re-aims nothing, but
+// it does not excuse a flag sent beside it: arming the overwrite or enabling an
+// overwriting mirror with that same URL still asks. A URL that differs from the
+// source in its path's case, that GitLab would read past an @ after the host,
+// or that either side gives in a form net/url refuses is not the same source,
+// and asks.
 func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -804,6 +898,48 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 			source:    mirrorSourceURL,
 			wantReads: 1,
 		},
+		{
+			name:      "arming the flag with the source the mirror already pulls from",
+			read:      readMirrorAt(true, false, mirrorSourceURL),
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL, MirrorOverwritesDivergedBranches: new(true)},
+			source:    mirrorSourceURL,
+			wantReads: 1,
+		},
+		{
+			name:      "enabling an overwriting mirror with the source it already has",
+			read:      readMirrorAt(false, true, mirrorSourceURL),
+			input:     UpdateInput{ProjectID: "42", Mirror: new(true), ImportURL: mirrorSourceURL},
+			source:    mirrorSourceURL,
+			wantReads: 1,
+		},
+		{
+			name:      "repointing to a path that differs only in case",
+			read:      readMirrorAt(true, true, mirrorSourceURL),
+			input:     UpdateInput{ProjectID: "42", ImportURL: "https://github.com/Example/repo.git"},
+			source:    "https://github.com/Example/repo.git",
+			wantReads: 1,
+		},
+		{
+			name:      "a source GitLab would read past its last @",
+			read:      readMirrorAt(true, true, "https://github.com/example@evil.example/repo.git"),
+			input:     UpdateInput{ProjectID: "42", ImportURL: "https://github.com/example@evil.example/repo.git"},
+			source:    "https://github.com/example@evil.example/repo.git",
+			wantReads: 1,
+		},
+		{
+			name:      "a source this server cannot parse",
+			read:      readMirrorAt(true, true, unparseableMirrorSource),
+			input:     UpdateInput{ProjectID: "42", ImportURL: unparseableMirrorSource},
+			source:    toolutil.RedactedPlaceholder,
+			wantReads: 1,
+		},
+		{
+			name:      "a reported source this server cannot parse",
+			read:      readMirrorAt(true, true, unparseableMirrorSource),
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
+			source:    mirrorSourceURL,
+			wantReads: 1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -837,7 +973,10 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 //
 // The cases on an instance that mounts no pull mirror route are GitLab CE's,
 // where the read is answered 404 and there is no mirror to inherit an overwrite
-// from: refusing them would ask about a mirror the instance ignores.
+// from: refusing them would ask about a mirror the instance ignores. The cases
+// that re-send an overwriting mirror the source it already pulls from re-aim
+// nothing, whether the URL carries credentials GitLab reports masked or a host
+// in other capitals, so they are the unrelated edit the guard lets through.
 func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -899,6 +1038,24 @@ func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) 
 			name:      "enabling the mirror where no pull mirror route is mounted",
 			read:      readRouteNotMounted,
 			input:     UpdateInput{ProjectID: "42", Mirror: new(true)},
+			wantReads: 1,
+		},
+		{
+			name:      "re-sending the source an overwriting mirror pulls from",
+			read:      readMirrorAt(true, true, mirrorSourceURL),
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
+			wantReads: 1,
+		},
+		{
+			name:      "re-sending that source with the credentials GitLab reports masked",
+			read:      readMirrorAt(true, true, maskedMirrorSourceURL),
+			input:     UpdateInput{ProjectID: "42", ImportURL: "https://user:token@github.com/example/repo.git"},
+			wantReads: 1,
+		},
+		{
+			name:      "re-sending that source with its host in capitals",
+			read:      readMirrorAt(true, true, mirrorSourceURL),
+			input:     UpdateInput{ProjectID: "42", ImportURL: "https://GitHub.com/example/repo.git"},
 			wantReads: 1,
 		},
 	}
