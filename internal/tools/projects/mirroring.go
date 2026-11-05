@@ -89,12 +89,12 @@ type ConfigurePullMirrorInput struct {
 	MirrorBranchRegex                string               `json:"mirror_branch_regex,omitempty" jsonschema:"Regex to filter branches to mirror"`
 	MirrorTriggerBuilds              *bool                `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger CI builds when mirror updates"`
 	OnlyMirrorProtectedBranches      *bool                `json:"only_mirror_protected_branches,omitempty" jsonschema:"Only mirror protected branches"`
-	MirrorOverwritesDivergedBranches *bool                `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true needs confirm=true unless the mirror stays disabled"`
+	MirrorOverwritesDivergedBranches *bool                `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true needs confirm=true, also while turning the mirror off. Clearing it never does"`
 	// Confirm is declared so the input schema advertises the reserved confirm
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call arms it, or enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead"`
 }
 
 // ConfigurePullMirror sets up or updates pull mirroring for a project.

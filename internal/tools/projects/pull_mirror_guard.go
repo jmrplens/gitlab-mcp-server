@@ -63,6 +63,15 @@ const notMirroredHint = "not mirrored"
 // disabling the mirror or clearing the flag asks nothing either, because both
 // are the remedy.
 //
+// The one exception is a call that sets the flag while it leaves the mirror
+// off, which is asked although nothing is overwritten yet (issue 1752). GitLab
+// keeps the flag on a mirror that is off and describes no such mirror, so the
+// later call that turns it back on would read nothing to ask about and every
+// sync from then on would replace the diverged branches unasked. Its question
+// says that the overwrite waits for the mirror to be turned back on. A flag
+// stored while the mirror was off before this question existed, or through
+// another client, stays out of sight all the same.
+//
 // Confirmation follows the same precedence as destructive actions: YOLO mode
 // and an explicit confirm=true proceed immediately, otherwise the caller is
 // elicited. Clients without elicitation get an actionable error telling them to
@@ -83,23 +92,7 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 		return nil
 	}
 
-	// The question has two readers: the person it is asked of, in the
-	// request's language, and the model, which reads it in English as the
-	// refusal's opening sentence when the client cannot ask. A call that names
-	// no URL keeps the source the project has, which the question names in the
-	// person's language rather than reveals; one that names a URL is asked
-	// about that URL as the caller wrote it, redacted.
-	var question i18n.Message
-	if input.URL == "" {
-		question = i18n.New(i18n.ConfirmPullMirrorOverwrite,
-			i18n.S("project", string(input.ProjectID)),
-			i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
-	} else {
-		question = i18n.New(i18n.ConfirmPullMirrorOverwrite,
-			i18n.S("project", string(input.ProjectID)),
-			i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
-	}
-
+	question := pullMirrorQuestion(input)
 	flow, flowErr := elicitation.FlowFromRequest(ctx, req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
@@ -122,6 +115,40 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 		return fmt.Errorf("%s: the user declined overwriting the project's diverged branches; send mirror_overwrites_diverged_branches=false to mirror without replacing them", op)
 	}
 	return nil
+}
+
+// pullMirrorQuestion is what [confirmDivergedOverwrite] asks about input.
+//
+// The question has two readers: the person it is asked of, in the request's
+// language, and the model, which reads it in English as the refusal's opening
+// sentence when the client cannot ask. A call that names no URL keeps the
+// source the project has, which the question names in the person's language
+// rather than reveals; one that names a URL is asked about that URL as the
+// caller wrote it, redacted. A call that leaves the mirror off is asked
+// whether to store the overwrite for when the mirror is turned back on, since
+// nothing is pulled before that.
+//
+// Each of the four is written out in full because the catalog audit reads a
+// question's key and the placeholders it fills from the call that renders it.
+func pullMirrorQuestion(input ConfigurePullMirrorInput) i18n.Message {
+	if enabled, sent := flagValue(input.Enabled); sent && !enabled {
+		if input.URL == "" {
+			return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
+				i18n.S("project", string(input.ProjectID)),
+				i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
+		}
+		return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
+			i18n.S("project", string(input.ProjectID)),
+			i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
+	}
+	if input.URL == "" {
+		return i18n.New(i18n.ConfirmPullMirrorOverwrite,
+			i18n.S("project", string(input.ProjectID)),
+			i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
+	}
+	return i18n.New(i18n.ConfirmPullMirrorOverwrite,
+		i18n.S("project", string(input.ProjectID)),
+		i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
 }
 
 // pullMirrorSettings restates the pull-mirror settings a project update sends
@@ -156,12 +183,26 @@ func isTrue(flag *bool) bool {
 }
 
 // overwritesAfterCall reports whether the configuration this call leaves behind
-// both pulls and overwrites diverged branches.
+// both pulls and overwrites diverged branches, or would as soon as the mirror
+// is turned back on.
 //
-// Each of the two flags is the call's own where the call sends it and the
+// The overwrite flag is the call's own where the call sends it and the
 // project's current one otherwise, so the answer describes the configuration
 // GitLab will hold rather than the fields this particular call happens to name.
-// The current one is read once and only when it is needed.
+// The current one is read once and only when it is needed. Whether the mirror
+// pulls takes no reading of its own: GET /projects/:id/mirror/pull describes
+// only a mirror that is on (the route answers 400 unless the project mirrors,
+// and the enabled it reports is the project's mirror column), so a mirror it
+// describes is one this call leaves on, unless the call turns it off, which is
+// decided before the read.
+//
+// Three calls say enough to be answered without a read. Clearing the overwrite
+// never asks. Setting it beside enabled asks whichever way enabled is sent,
+// also when the call turns the mirror off: GitLab keeps the flag on a mirror
+// that is off and describes no such mirror, so the call that turns it back on
+// would inherit nothing from the read, and the call that stores the flag is
+// the last one that can be asked about it (issue 1752). Turning the mirror off
+// without setting the flag asks nothing.
 //
 // A call that sends neither flag can arm nothing but by re-aiming the mirror,
 // so its URL is held to the source the project already pulls from, and one
@@ -172,7 +213,10 @@ func isTrue(flag *bool) bool {
 // A project with no mirror at all inherits nothing, so an unsent overwrite flag
 // is off; an unsent enabled flag there is treated as on, because whether GitLab
 // activates a mirror created without it is not something its API documents, and
-// the guess that costs a prompt is better than the guess that skips one.
+// the guess that costs a prompt is better than the guess that skips one. GitLab
+// answers the read of a mirror that is off the same way, 400 not mirrored, so a
+// flag such a mirror stores is not inherited either, which is why the call
+// that stores it is asked.
 //
 // A 404 is read the same way, as nothing to inherit. GitLab CE does not mount
 // the pull mirror route at all, so there it is the answer to every read, and a
@@ -188,11 +232,11 @@ func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input
 	if overwriteSent && !overwrite {
 		return false
 	}
-	if enabledSent && !enabled {
-		return false
-	}
 	if overwriteSent && enabledSent {
 		return true
+	}
+	if enabledSent && !enabled {
+		return false
 	}
 
 	current, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
@@ -205,13 +249,7 @@ func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input
 	if !overwriteSent && !enabledSent && sameMirrorSource(input.URL, current.URL) {
 		return false
 	}
-	if !overwriteSent {
-		overwrite = current.MirrorOverwritesDivergedBranches
-	}
-	if !enabledSent {
-		enabled = current.Enabled
-	}
-	return overwrite && enabled
+	return overwriteSent || current.MirrorOverwritesDivergedBranches
 }
 
 // flagValue reports an optional flag's value and whether the caller sent it.

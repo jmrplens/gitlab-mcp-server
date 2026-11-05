@@ -86,6 +86,18 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" and the replaced commits cannot be recovered through the API.",
 		},
 		{
+			name: "the same question for a mirror the call leaves off",
+			msg: New(ConfirmPullMirrorOverwriteWhileOff,
+				S("project", "42"), M("source", New(ConfirmPullMirrorConfiguredSource))),
+			spanish: "¿Dejar desactivado el mirror de pull del proyecto 42 y configurarlo para sobrescribir las ramas divergentes" +
+				" desde su origen de mirror configurado cuando se vuelva a activar? Desde la primera sincronización posterior," +
+				" cada rama que trae el mirror y que haya divergido de ese repositorio se sustituye por su versión," +
+				" y los commits sustituidos no se pueden recuperar mediante la API.",
+			english: "Leave the pull mirror of project 42 off and set it to overwrite diverged branches from its configured mirror source" +
+				" once it is turned back on? From the first sync after that, every branch the mirror pulls that has diverged" +
+				" from that repository is replaced by its version, and the replaced commits cannot be recovered through the API.",
+		},
+		{
 			name: "a list joined with the conjunction",
 			msg: New(ConfirmWorkItemClear,
 				L("losses", New(ConfirmWorkItemAssignees, N("count", 3)), New(ConfirmWorkItemCrmContacts)),

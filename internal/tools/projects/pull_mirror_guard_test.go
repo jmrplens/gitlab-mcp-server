@@ -74,14 +74,19 @@ func guardHandler(t *testing.T, calls *guardCalls, readStatus int, readBody stri
 // storedMirrorJSON renders the pull-mirror configuration a project already
 // holds, which decides what an unsent flag inherits. It pulls from another
 // repository than mirrorSourceURL, so a call naming that URL re-aims it.
-func storedMirrorJSON(enabled, overwrites bool) string {
-	return storedMirrorAt(enabled, overwrites, "https://github.com/example/old.git")
+func storedMirrorJSON(overwrites bool) string {
+	return storedMirrorAt(overwrites, "https://github.com/example/old.git")
 }
 
 // storedMirrorAt renders the configuration of a mirror that pulls from source,
 // the url GitLab reports for it.
-func storedMirrorAt(enabled, overwrites bool, source string) string {
-	return `{"id":5,"enabled":` + jsonBool(enabled) + `,"url":"` + source + `",` +
+//
+// The mirror is always enabled, because that is the only one GET
+// /projects/:id/mirror/pull describes: it answers a mirror that is off 400 not
+// mirrored, which notMirroredJSON is. A fixture that described one with
+// enabled false would test the guard against an answer GitLab never sends.
+func storedMirrorAt(overwrites bool, source string) string {
+	return `{"id":5,"enabled":true,"url":"` + source + `",` +
 		`"mirror_overwrites_diverged_branches":` + jsonBool(overwrites) + `}`
 }
 
@@ -134,7 +139,7 @@ func guardedClient(t *testing.T, calls *guardCalls, readStatus int, readBody str
 // this project's own commits.
 func TestConfigurePullMirror_ArmingTheOverwrite_IsRefusedWithoutConfirmation(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	_, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
 		ProjectID:                        "42",
@@ -166,6 +171,18 @@ func mirrorRefusal(op, source string) string {
 		" Re-send the same call with confirm=true once the user has approved it"
 }
 
+// mirrorOffRefusal is the refusal a client that cannot ask receives from the
+// operation op for a call that leaves project 42's mirror off and sets the
+// flag on it, pulling from source once it is turned back on: the question
+// says that the overwrite waits for the mirror, which a call that turns it off
+// does not start.
+func mirrorOffRefusal(op, source string) string {
+	return op + ": Leave the pull mirror of project 42 off and set it to overwrite diverged branches from " + source +
+		" once it is turned back on? From the first sync after that, every branch the mirror pulls that has diverged" +
+		" from that repository is replaced by its version, and the replaced commits cannot be recovered through the API." +
+		" Re-send the same call with confirm=true once the user has approved it"
+}
+
 // TestConfigurePullMirror_ArmingTheOverwrite_ProceedsWithExplicitConfirm
 // verifies that an explicit confirm=true applies the configuration.
 //
@@ -175,7 +192,7 @@ func mirrorRefusal(op, source string) string {
 // request is therefore built the way a caller sends it.
 func TestConfigurePullMirror_ArmingTheOverwrite_ProceedsWithExplicitConfirm(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
 		Params: &mcp.CallToolParamsRaw{
@@ -206,7 +223,7 @@ func TestConfigurePullMirror_ArmingTheOverwrite_ProceedsWithExplicitConfirm(t *t
 // params rather than at the top level.
 func TestConfigurePullMirror_ArmingTheOverwrite_ProceedsWithNestedConfirm(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
 		Params: &mcp.CallToolParamsRaw{
@@ -230,7 +247,7 @@ func TestConfigurePullMirror_ArmingTheOverwrite_ProceedsWithNestedConfirm(t *tes
 func TestConfigurePullMirror_YOLOMode_SkipsTheConfirmation(t *testing.T) {
 	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
 		ProjectID:                        "42",
@@ -250,7 +267,7 @@ func TestConfigurePullMirror_YOLOMode_SkipsTheConfirmation(t *testing.T) {
 // the prompt names the source the project already has.
 func TestConfigurePullMirror_ArmingTheFlagOnARunningMirror_IsRefused(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	_, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
 		ProjectID:                        "42",
@@ -274,7 +291,7 @@ func TestConfigurePullMirror_ArmingTheFlagOnARunningMirror_IsRefused(t *testing.
 // be the way past the guard.
 func TestConfigurePullMirror_UnreadableConfirmationState_IsRefused(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	req := elicitingRequest(nil)
 	req.Params.RequestState = "not a state this server issued"
@@ -296,23 +313,84 @@ func TestConfigurePullMirror_UnreadableConfirmationState_IsRefused(t *testing.T)
 }
 
 // TestConfigurePullMirror_DisablingTheMirror_NeverAsks verifies that turning
-// mirroring off is never interactive, even when the call carries the overwrite
-// flag: a disabled mirror pulls nothing, and asking the user to approve the
-// remedy would be the guard working backwards.
+// mirroring off is never interactive when the call does not set the overwrite
+// flag, whether it leaves the stored flag alone or clears it, and that it pays
+// for no read: a disabled mirror pulls nothing, and asking the user to approve
+// the remedy would be the guard working backwards.
 func TestConfigurePullMirror_DisablingTheMirror_NeverAsks(t *testing.T) {
-	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, true))
-
-	if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
-		ProjectID:                        "42",
-		Enabled:                          new(false),
-		MirrorOverwritesDivergedBranches: new(true),
-		URL:                              mirrorSourceURL,
-	}); err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+	tests := []struct {
+		name string
+		flag *bool
+	}{
+		{name: "leaving the stored flag alone"},
+		{name: "clearing the flag", flag: new(false)},
 	}
-	if got := calls.reads.Load(); got != 0 {
-		t.Errorf("disabling the mirror paid for %d inspection read(s)", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true))
+
+			if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
+				ProjectID:                        "42",
+				Enabled:                          new(false),
+				MirrorOverwritesDivergedBranches: tt.flag,
+				URL:                              mirrorSourceURL,
+			}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got := calls.reads.Load(); got != 0 {
+				t.Errorf("disabling the mirror paid for %d inspection read(s)", got)
+			}
+			if got := calls.writes.Load(); got != 1 {
+				t.Errorf("writes = %d, want the configuration applied once", got)
+			}
+		})
+	}
+}
+
+// TestConfigurePullMirror_SettingTheOverwriteWhileDisabling_IsRefused verifies
+// the call issue 1752 found going out unasked: one that turns the mirror off
+// and sets the overwrite flag at once. GitLab keeps the flag on a mirror that
+// is off and describes no such mirror, GET /projects/:id/mirror/pull answering
+// it 400 not mirrored, so the later call that turns the mirror back on reads
+// nothing to ask about, and every sync from then on replaces the project's
+// diverged branches. The call that stores the flag is therefore the one asked,
+// whether it names a URL or keeps the configured one, with a question saying
+// that the overwrite waits for the mirror to be turned back on. It needs no
+// read to know that, since it says itself what it leaves behind.
+func TestConfigurePullMirror_SettingTheOverwriteWhileDisabling_IsRefused(t *testing.T) {
+	tests := []struct {
+		name   string
+		url    string
+		source string
+	}{
+		{name: "keeping the configured source", source: configuredMirrorSource},
+		{name: "naming a source", url: mirrorSourceURL, source: mirrorSourceURL},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
+
+			_, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
+				ProjectID:                        "42",
+				Enabled:                          new(false),
+				URL:                              tt.url,
+				MirrorOverwritesDivergedBranches: new(true),
+			})
+			if err == nil {
+				t.Fatal("setting the overwrite while turning the mirror off was accepted without confirmation")
+			}
+			if want := mirrorOffRefusal(opConfigurePullMirror, tt.source); err.Error() != want {
+				t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
+			}
+			if got := calls.reads.Load(); got != 0 {
+				t.Errorf("reads = %d, want none: the call says what it leaves behind", got)
+			}
+			if got := calls.writes.Load(); got != 0 {
+				t.Errorf("the configuration was applied %d time(s) despite being refused", got)
+			}
+		})
 	}
 }
 
@@ -321,7 +399,7 @@ func TestConfigurePullMirror_DisablingTheMirror_NeverAsks(t *testing.T) {
 // other remedy: the mirror keeps running and stops replacing branches.
 func TestConfigurePullMirror_ClearingTheOverwrite_NeverAsks(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, true))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true))
 
 	if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
 		ProjectID:                        "42",
@@ -341,7 +419,7 @@ func TestConfigurePullMirror_ClearingTheOverwrite_NeverAsks(t *testing.T) {
 // same action is a guard a caller learns to pass through.
 func TestConfigurePullMirror_UnrelatedEdit_NeverAsks(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, true))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true))
 
 	if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
 		ProjectID:           "42",
@@ -360,7 +438,7 @@ func TestConfigurePullMirror_UnrelatedEdit_NeverAsks(t *testing.T) {
 // call names, and its branches replace the project's.
 func TestConfigurePullMirror_RepointingAnOverwritingMirror_IsRefused(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, true))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true))
 
 	_, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
 		ProjectID: "42",
@@ -386,7 +464,7 @@ func TestConfigurePullMirror_RepointingAnOverwritingMirror_IsRefused(t *testing.
 // project is lost and nothing is asked.
 func TestConfigurePullMirror_RepointingAPlainMirror_Proceeds(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
 		ProjectID: "42",
@@ -407,7 +485,7 @@ func TestConfigurePullMirror_RepointingAPlainMirror_Proceeds(t *testing.T) {
 // that tells the two apart is the one inspection read.
 func TestConfigurePullMirror_ResendingTheSourceItPullsFrom_Proceeds(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorAt(true, true, maskedMirrorSourceURL))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorAt(true, maskedMirrorSourceURL))
 
 	if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
 		ProjectID: "42",
@@ -464,31 +542,73 @@ func TestSameMirrorSource_Values(t *testing.T) {
 	}
 }
 
-// TestConfigurePullMirror_DisabledMirror_ProceedsUntilItIsEnabled verifies both
-// halves of the state rule on a mirror that is configured to overwrite but is
-// switched off: arming nothing while it stays off proceeds, and the call that
-// turns it on is the one that asks, because that is when the overwrite starts
-// happening.
-func TestConfigurePullMirror_DisabledMirror_ProceedsUntilItIsEnabled(t *testing.T) {
-	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false, true))
-
-	if _, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
-		ProjectID: "42",
-		URL:       mirrorSourceURL,
-	}); err != nil {
-		t.Fatalf("configuring a disabled mirror: %v", err)
+// TestConfigurePullMirror_DisabledMirror_AsksWhenTheCallSetsTheOverwrite
+// verifies the state rule on a mirror that is switched off, read as GitLab
+// answers it: GET /projects/:id/mirror/pull refuses such a mirror with 400 not
+// mirrored, the answer a project with no mirror gets, and so hides whatever
+// flag it stores. A call that arms nothing while the mirror stays off
+// proceeds, and one that sets the flag asks, whether it sends enabled false or
+// leaves it out.
+//
+// Turning the mirror back on without the flag proceeds: the read shows no
+// stored flag to inherit, so the question for a flag set while the mirror was
+// off is asked on the call that sets it (issue 1752), and a flag stored before
+// that question existed, or through another client, is not seen.
+func TestConfigurePullMirror_DisabledMirror_AsksWhenTheCallSetsTheOverwrite(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     ConfigurePullMirrorInput
+		refusal   string
+		wantReads int64
+	}{
+		{
+			name:      "aiming it at a source",
+			input:     ConfigurePullMirrorInput{ProjectID: "42", URL: mirrorSourceURL},
+			wantReads: 1,
+		},
+		{
+			name:      "setting the flag",
+			input:     ConfigurePullMirrorInput{ProjectID: "42", MirrorOverwritesDivergedBranches: new(true)},
+			refusal:   mirrorRefusal(opConfigurePullMirror, configuredMirrorSource),
+			wantReads: 1,
+		},
+		{
+			name: "setting the flag and keeping it off",
+			input: ConfigurePullMirrorInput{
+				ProjectID: "42", Enabled: new(false), MirrorOverwritesDivergedBranches: new(true),
+			},
+			refusal: mirrorOffRefusal(opConfigurePullMirror, configuredMirrorSource),
+		},
+		{
+			name:      "turning it back on without the flag",
+			input:     ConfigurePullMirrorInput{ProjectID: "42", Enabled: new(true)},
+			wantReads: 1,
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := guardedClient(t, &calls, http.StatusBadRequest, notMirroredJSON)
 
-	_, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
-		ProjectID: "42",
-		Enabled:   new(true),
-	})
-	if err == nil {
-		t.Fatal("enabling a mirror that overwrites diverged branches was accepted without confirmation")
-	}
-	if !strings.Contains(err.Error(), configuredMirrorSource) {
-		t.Errorf("a call that names no URL should say the source is the configured one, got: %v", err)
+			_, err := ConfigurePullMirror(t.Context(), client, tt.input)
+			wantWrites := int64(1)
+			if tt.refusal == "" {
+				if err != nil {
+					t.Fatalf(fmtUnexpErr, err)
+				}
+			} else {
+				wantWrites = 0
+				if err == nil || err.Error() != tt.refusal {
+					t.Errorf("refusal =\n%v\nwant\n%q", err, tt.refusal)
+				}
+			}
+			if got := calls.reads.Load(); got != tt.wantReads {
+				t.Errorf("reads = %d, want %d", got, tt.wantReads)
+			}
+			if got := calls.writes.Load(); got != wantWrites {
+				t.Errorf("writes = %d, want %d", got, wantWrites)
+			}
+		})
 	}
 }
 
@@ -580,7 +700,7 @@ func elicitingRequest(answers mcp.InputResponseMap) *mcp.CallToolRequest {
 // the pending input request the surface turns into an input-required result.
 func TestConfigurePullMirror_ElicitingClient_AsksBeforeArming(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	ctx := toolutil.ContextWithRequest(t.Context(), elicitingRequest(nil))
 	_, err := ConfigurePullMirror(ctx, client, ConfigurePullMirrorInput{
@@ -615,7 +735,7 @@ func TestConfigurePullMirror_ElicitedAnswer_DecidesTheCall(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls guardCalls
-			client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+			client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 			ctx := toolutil.ContextWithRequest(t.Context(), elicitingRequest(mcp.InputResponseMap{
 				pullMirrorOverwriteConfirmID: &mcp.ElicitResult{Action: "accept", Content: tt.content},
@@ -650,7 +770,7 @@ func TestConfigurePullMirror_ElicitedAnswer_DecidesTheCall(t *testing.T) {
 // and a failed confirmation fails closed rather than proceeding.
 func TestConfigurePullMirror_MalformedElicitationAnswer_IsRefused(t *testing.T) {
 	var calls guardCalls
-	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 
 	ctx := toolutil.ContextWithRequest(t.Context(), elicitingRequest(mcp.InputResponseMap{
 		pullMirrorOverwriteConfirmID: &mcp.ElicitResult{Action: "accept", Content: map[string]any{"title": "unrelated"}},
@@ -692,7 +812,7 @@ func TestConfigurePullMirror_ThroughTheRoute_HonorsTheReservedConfirmKey(t *test
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls guardCalls
-			client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(true, false))
+			client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
 			route := projectSpecsByTool(t, ActionSpecs(client, false))[toolPullMirrorConfigure].Route
 
 			params := map[string]any{
@@ -773,8 +893,8 @@ type mirrorRead struct {
 // readRouteNotMounted is GitLab CE's, whose API has no pull mirror route and
 // answers it as Grape answers any path it does not route.
 var (
-	readPlainMirror       = mirrorRead{status: http.StatusOK, body: storedMirrorJSON(true, false)}
-	readOverwritingMirror = mirrorRead{status: http.StatusOK, body: storedMirrorJSON(true, true)}
+	readPlainMirror       = mirrorRead{status: http.StatusOK, body: storedMirrorJSON(false)}
+	readOverwritingMirror = mirrorRead{status: http.StatusOK, body: storedMirrorJSON(true)}
 	readNotMirrored       = mirrorRead{status: http.StatusBadRequest, body: notMirroredJSON}
 	readRouteNotMounted   = mirrorRead{status: http.StatusNotFound, body: `{"error":"404 Not Found"}`}
 	readUnavailable       = mirrorRead{status: http.StatusInternalServerError, body: `{"message":"500 Internal Server Error"}`}
@@ -783,8 +903,8 @@ var (
 // readMirrorAt answers the inspection read with a mirror that pulls from
 // source, for the cases that turn on whether a call names the source the
 // mirror already has.
-func readMirrorAt(enabled, overwrites bool, source string) mirrorRead {
-	return mirrorRead{status: http.StatusOK, body: storedMirrorAt(enabled, overwrites, source)}
+func readMirrorAt(overwrites bool, source string) mirrorRead {
+	return mirrorRead{status: http.StatusOK, body: storedMirrorAt(overwrites, source)}
 }
 
 // updateGuardHandler answers the two requests a project update that touches
@@ -829,7 +949,11 @@ func armingUpdate() UpdateInput {
 // names the project route gives them, so an update that leaves the project
 // pulling with the overwrite armed, and is the call that arms or re-aims it,
 // discards the project's own commits on each diverged branch the mirror pulls
-// exactly as the dedicated route would.
+// exactly as the dedicated route would. An update that sets the flag while it
+// turns the mirror off, or keeps it off, is asked too, with the question that
+// says the overwrite waits for the mirror: GitLab keeps the flag and hides it
+// until the mirror is on again, so the update that turns it back on could not
+// be asked about it (issue 1752).
 //
 // Each case is refused when nothing confirmed it, with the guard's question in
 // English and how to proceed, and GitLab is never asked to apply it. The
@@ -837,17 +961,18 @@ func armingUpdate() UpdateInput {
 // already says what it leaves behind and must not pay for one.
 //
 // A URL naming the source the mirror already pulls from re-aims nothing, but
-// it does not excuse a flag sent beside it: arming the overwrite or enabling an
-// overwriting mirror with that same URL still asks. A URL that differs from the
-// source in its path's case, that GitLab would read past an @ after the host,
-// or that either side gives in a form net/url refuses is not the same source,
-// and asks.
+// it does not excuse a flag sent beside it: arming the overwrite, or re-sending
+// mirror=true to an overwriting mirror, with that same URL still asks. A URL
+// that differs from the source in its path's case, that GitLab would read past
+// an @ after the host, or that either side gives in a form net/url refuses is
+// not the same source, and asks.
 func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing.T) {
 	tests := []struct {
 		name      string
 		read      mirrorRead
 		input     UpdateInput
 		source    string
+		off       bool
 		wantReads int64
 	}{
 		{
@@ -900,45 +1025,62 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 		},
 		{
 			name:      "arming the flag with the source the mirror already pulls from",
-			read:      readMirrorAt(true, false, mirrorSourceURL),
+			read:      readMirrorAt(false, mirrorSourceURL),
 			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL, MirrorOverwritesDivergedBranches: new(true)},
 			source:    mirrorSourceURL,
 			wantReads: 1,
 		},
 		{
-			name:      "enabling an overwriting mirror with the source it already has",
-			read:      readMirrorAt(false, true, mirrorSourceURL),
+			name:      "re-sending mirror=true to an overwriting mirror with the source it already has",
+			read:      readMirrorAt(true, mirrorSourceURL),
 			input:     UpdateInput{ProjectID: "42", Mirror: new(true), ImportURL: mirrorSourceURL},
 			source:    mirrorSourceURL,
 			wantReads: 1,
 		},
 		{
 			name:      "repointing to a path that differs only in case",
-			read:      readMirrorAt(true, true, mirrorSourceURL),
+			read:      readMirrorAt(true, mirrorSourceURL),
 			input:     UpdateInput{ProjectID: "42", ImportURL: "https://github.com/Example/repo.git"},
 			source:    "https://github.com/Example/repo.git",
 			wantReads: 1,
 		},
 		{
 			name:      "a source GitLab would read past its last @",
-			read:      readMirrorAt(true, true, "https://github.com/example@evil.example/repo.git"),
+			read:      readMirrorAt(true, "https://github.com/example@evil.example/repo.git"),
 			input:     UpdateInput{ProjectID: "42", ImportURL: "https://github.com/example@evil.example/repo.git"},
 			source:    "https://github.com/example@evil.example/repo.git",
 			wantReads: 1,
 		},
 		{
 			name:      "a source this server cannot parse",
-			read:      readMirrorAt(true, true, unparseableMirrorSource),
+			read:      readMirrorAt(true, unparseableMirrorSource),
 			input:     UpdateInput{ProjectID: "42", ImportURL: unparseableMirrorSource},
 			source:    toolutil.RedactedPlaceholder,
 			wantReads: 1,
 		},
 		{
 			name:      "a reported source this server cannot parse",
-			read:      readMirrorAt(true, true, unparseableMirrorSource),
+			read:      readMirrorAt(true, unparseableMirrorSource),
 			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
 			source:    mirrorSourceURL,
 			wantReads: 1,
+		},
+		{
+			name:   "setting the flag while turning a running mirror off",
+			read:   readPlainMirror,
+			input:  UpdateInput{ProjectID: "42", Mirror: new(false), MirrorOverwritesDivergedBranches: new(true)},
+			source: configuredMirrorSource,
+			off:    true,
+		},
+		{
+			name: "setting the flag and a source on a mirror that stays off",
+			read: readNotMirrored,
+			input: UpdateInput{
+				ProjectID: "42", Mirror: new(false), ImportURL: mirrorSourceURL,
+				MirrorOverwritesDivergedBranches: new(true),
+			},
+			source: mirrorSourceURL,
+			off:    true,
 		},
 	}
 	for _, tt := range tests {
@@ -950,7 +1092,11 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 			if err == nil {
 				t.Fatal("an update leaving the diverged-branch overwrite armed went out without confirmation")
 			}
-			if want := mirrorRefusal(opProjectUpdate, tt.source); err.Error() != want {
+			want := mirrorRefusal(opProjectUpdate, tt.source)
+			if tt.off {
+				want = mirrorOffRefusal(opProjectUpdate, tt.source)
+			}
+			if err.Error() != want {
 				t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
 			}
 			if got := calls.writes.Load(); got != 0 {
@@ -968,8 +1114,13 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 // overwrite, or that leaves it disarmed, goes out without a question, and the
 // inspection read is spent only where the answer depends on what the project
 // already holds. Most project updates name no mirror setting at all, and
-// asking on the ones that switch the mirror or the overwrite off would be the
-// guard working backwards.
+// asking on the ones that switch the overwrite off, or the mirror without
+// setting the overwrite, would be the guard working backwards.
+//
+// Turning a mirror that is off back on without the flag proceeds too. GitLab
+// answers the read of such a mirror 400 not mirrored and so hides a flag it
+// stores, which is why the update that sets the flag while the mirror is off is
+// the one asked.
 //
 // The cases on an instance that mounts no pull mirror route are GitLab CE's,
 // where the read is answered 404 and there is no mirror to inherit an overwrite
@@ -998,17 +1149,28 @@ func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) 
 			},
 		},
 		{
-			name: "disabling the mirror",
+			name:  "disabling the mirror",
+			read:  readOverwritingMirror,
+			input: UpdateInput{ProjectID: "42", Mirror: new(false), ImportURL: mirrorSourceURL},
+		},
+		{
+			name: "disabling the mirror and clearing the flag",
 			read: readOverwritingMirror,
 			input: UpdateInput{
 				ProjectID: "42", Mirror: new(false), ImportURL: mirrorSourceURL,
-				MirrorOverwritesDivergedBranches: new(true),
+				MirrorOverwritesDivergedBranches: new(false),
 			},
 		},
 		{
 			name:  "clearing the flag",
 			read:  readOverwritingMirror,
 			input: UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL, MirrorOverwritesDivergedBranches: new(false)},
+		},
+		{
+			name:      "turning a mirror that is off back on without the flag",
+			read:      readNotMirrored,
+			input:     UpdateInput{ProjectID: "42", Mirror: new(true)},
+			wantReads: 1,
 		},
 		{
 			name:      "repointing a mirror that does not overwrite",
@@ -1042,19 +1204,19 @@ func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) 
 		},
 		{
 			name:      "re-sending the source an overwriting mirror pulls from",
-			read:      readMirrorAt(true, true, mirrorSourceURL),
+			read:      readMirrorAt(true, mirrorSourceURL),
 			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
 			wantReads: 1,
 		},
 		{
 			name:      "re-sending that source with the credentials GitLab reports masked",
-			read:      readMirrorAt(true, true, maskedMirrorSourceURL),
+			read:      readMirrorAt(true, maskedMirrorSourceURL),
 			input:     UpdateInput{ProjectID: "42", ImportURL: "https://user:token@github.com/example/repo.git"},
 			wantReads: 1,
 		},
 		{
 			name:      "re-sending that source with its host in capitals",
-			read:      readMirrorAt(true, true, mirrorSourceURL),
+			read:      readMirrorAt(true, mirrorSourceURL),
 			input:     UpdateInput{ProjectID: "42", ImportURL: "https://GitHub.com/example/repo.git"},
 			wantReads: 1,
 		},

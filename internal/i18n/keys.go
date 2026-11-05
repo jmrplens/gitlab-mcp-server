@@ -198,6 +198,11 @@ const (
 	// overwrite diverged branches, {project} the project and {source} what it
 	// pulls from.
 	ConfirmPullMirrorOverwrite Key = "confirm.pull_mirror.overwrite"
+	// ConfirmPullMirrorOverwriteWhileOff asks before a call leaves a pull
+	// mirror off with the overwrite of diverged branches set, which starts
+	// once the mirror is turned back on, {project} the project and {source}
+	// what it pulls from.
+	ConfirmPullMirrorOverwriteWhileOff Key = "confirm.pull_mirror.overwrite_while_off"
 	// ConfirmPullMirrorConfiguredSource names the source a pull mirror already
 	// has, for a call that does not change it.
 	ConfirmPullMirrorConfiguredSource Key = "confirm.pull_mirror.configured_source"
