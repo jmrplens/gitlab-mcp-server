@@ -1394,9 +1394,16 @@ func TestInsertEntry_TheCreatedEntryLine_NamesTheTokenByItsHandle(t *testing.T) 
 	const token = "glpat-pooled-token-ZZZ9"
 	captured := captureLogs(t)
 
-	if _, err := New(testConfig(stubGitLabBase), testFactory()).GetOrCreate(token, stubGitLabBase); err != nil {
-		t.Fatalf("GetOrCreate(): %v", err)
+	pool := New(testConfig(stubGitLabBase), testFactory())
+	t.Cleanup(pool.Close)
+	entry, err := pool.buildEntry(token, stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("buildEntry(): %v", err)
 	}
+	if entry.credentialHash != CredentialHash(token) {
+		t.Fatal("the entry carries no credential handle before insertion")
+	}
+	pool.insertEntry(sessionKey(token, stubGitLabBase), entry)
 
 	record, found := captured.find("server pool: created new entry")
 	if !found {
@@ -1424,18 +1431,20 @@ func TestEntry_CredentialEvictionLogs_CorrelateWithoutTokenMaterial(t *testing.T
 	tests := []struct {
 		name    string
 		message string
-		evict   func(*ServerPool, string, *Entry)
+		evict   func(context.Context, *ServerPool, string, *Entry)
 	}{
 		{
 			name:    "rejected credential",
 			message: "server pool: gitlab rejected the credential on a call, dropping the entry",
-			evict:   (*ServerPool).evictRejectedCredential,
+			evict: func(_ context.Context, pool *ServerPool, key string, entry *Entry) {
+				pool.evictRejectedCredential(key, entry)
+			},
 		},
 		{
 			name:    "below minimum",
 			message: "server pool: gitlab says the credential carries neither read_api nor api, dropping the entry",
-			evict: func(pool *ServerPool, key string, entry *Entry) {
-				pool.evictBelowMinimum(t.Context(), key, entry)
+			evict: func(ctx context.Context, pool *ServerPool, key string, entry *Entry) {
+				pool.evictBelowMinimum(ctx, key, entry)
 			},
 		},
 	}
@@ -1452,8 +1461,9 @@ func TestEntry_CredentialEvictionLogs_CorrelateWithoutTokenMaterial(t *testing.T
 
 // assertCredentialEvictionLogs drives a credential's creation, concurrent
 // removal and replacement against the loopback stub, then checks their logs.
-func assertCredentialEvictionLogs(t *testing.T, message, token string, evict func(*ServerPool, string, *Entry)) {
+func assertCredentialEvictionLogs(t *testing.T, message, token string, evict func(context.Context, *ServerPool, string, *Entry)) {
 	t.Helper()
+	ctx := t.Context()
 	captured := captureLogs(t)
 	pool := New(testConfig(stubGitLabBase), testFactory())
 	t.Cleanup(pool.Close)
@@ -1464,7 +1474,7 @@ func assertCredentialEvictionLogs(t *testing.T, message, token string, evict fun
 	key := sessionKey(token, stubGitLabBase)
 	var wg sync.WaitGroup
 	for range 8 {
-		wg.Go(func() { evict(pool, key, entry) })
+		wg.Go(func() { evict(ctx, pool, key, entry) })
 	}
 	wg.Wait()
 
@@ -1486,7 +1496,7 @@ func assertCredentialEvictionLogs(t *testing.T, message, token string, evict fun
 		t.Fatalf("rebuilding the entry: %v", err)
 	}
 	staleLogs := captureLogs(t)
-	evict(pool, key, entry)
+	evict(ctx, pool, key, entry)
 	if _, found := staleLogs.find(message); found {
 		t.Error("an eviction of the old entry logged dropping its replacement")
 	}
@@ -1762,7 +1772,7 @@ func TestInsertEntry_ExistingEntry(t *testing.T) {
 	// A concurrent builder lost the race: its freshly built server must be
 	// discarded in favor of the already-stored one.
 	rebuilt := mcp.NewServer(&mcp.Implementation{Name: "rebuilt", Version: "0.0.0"}, nil)
-	entry := pool.insertEntry(existingKey, "unused-token", &Entry{server: rebuilt})
+	entry := pool.insertEntry(existingKey, &Entry{server: rebuilt})
 
 	if entry.Server() != existingServer {
 		t.Fatal("insertEntry() returned the rebuilt server; want the existing cached server")

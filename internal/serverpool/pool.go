@@ -94,8 +94,13 @@ type Entry struct {
 	// copy anywhere a log line or a dump could reach, and it is set when the
 	// entry is built.
 	rememberBelowMinimum func()
-	// credentialHash is the log handle computed at insertion, before the
-	// entry is published, and never changed or derived from the pool key.
+	// credentialHash is [CredentialHash] of the entry's credential, so that
+	// [ServerPool.evictRejectedCredential] and [ServerPool.evictBelowMinimum]
+	// name it by the handle the created-entry line wrote. It is set when the
+	// entry is built, before anything can observe it, and never changed.
+	// Holding it keeps no credential material: it is the keyed digest that
+	// line already writes, and the key never leaves the process. It is not
+	// the pool key, an unkeyed digest of the token and URL that is never logged.
 	credentialHash string
 }
 
@@ -787,7 +792,7 @@ func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *g
 		if buildErr != nil {
 			return nil, buildErr
 		}
-		return p.insertEntry(key, token, entry), nil
+		return p.insertEntry(key, entry), nil
 	})
 	if err != nil {
 		return nil, err
@@ -894,8 +899,9 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 		identity:     resolveIdentity(p.lifetime(), client),
 		// Minted before anything can observe the entry, and never again: see
 		// [Entry.Owner] for why it is random rather than derived.
-		owner: rand.Text(),
-		token: facts,
+		owner:          rand.Text(),
+		credentialHash: CredentialHash(token),
+		token:          facts,
 		rememberBelowMinimum: func() {
 			if record := p.belowMinimum.Load(); record != nil {
 				(*record)(gitlabURL, token)
@@ -1279,7 +1285,7 @@ func (p *ServerPool) Admitted(token, gitlabURL string) bool {
 // been told is unusable. It is still returned, because the request that built
 // it has to be answered with something and that answer is the refusal its
 // server produces.
-func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
+func (p *ServerPool) insertEntry(key string, entry *Entry) *Entry {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -1296,7 +1302,6 @@ func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 	entry.createdAt = now
 	entry.lastValidated = now
 	entry.lastUsed = now
-	entry.credentialHash = CredentialHash(token)
 	p.entries[key] = entry
 
 	// After the entry is reachable by key, so a callback that starts work
@@ -2023,9 +2028,10 @@ func newCredentialHashKey() []byte {
 // It replaced the token's last four characters, which were credential material
 // in clear: four characters of a working token on every pooled credential, or
 // most of a short secret pasted where a token belongs. The handle keeps what
-// the suffix was there for, tying a refusal, a pool entry and an
-// ignored-options warning to the same credential within one process, and
-// nothing else. It is keyed rather than a plain digest so that a log cannot
+// the suffix was there for, tying a refusal, a pool entry's creation and its
+// drop for a rejected or below-minimum credential, and an ignored-options
+// warning to the same credential within one process, and nothing else.
+// It is keyed rather than a plain digest so that a log cannot
 // confirm a guess: hashing a candidate password yields its handle only with the
 // key, and the key never leaves the process. The price is that an operator
 // cannot compute the handle from a client's token, and that one credential's
