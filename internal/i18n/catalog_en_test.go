@@ -60,9 +60,11 @@ const (
 // (the description row), which is written as the concatenation it renders
 // to; confirm.destructive.standalone quoted the tool name with %q, which is
 // what strconv.Quote writes, so the call site passes the quoted name and the
-// row renders the old template with the bare one.
+// row renders the old template with the bare one. The pull mirror questions
+// written after that stack are [pullMirrorQuestionRows], appended here so the
+// tests below hold every entry.
 func frozenEnglishRows() []frozenEnglish {
-	return []frozenEnglish{
+	rows := []frozenEnglish{
 		{key: ElicitationSchemaConfirmTitle, dotted: "elicitation.schema.confirm.title", want: "Confirm"},
 		{key: ElicitationSchemaSelectionTitle, dotted: "elicitation.schema.selection.title", want: "Selection"},
 		{key: ElicitationSchemaSelectionsTitle, dotted: "elicitation.schema.selections.title", want: "Selections"},
@@ -201,35 +203,6 @@ func frozenEnglishRows() []frozenEnglish {
 				sampleProject, sampleURL,
 			),
 		},
-		{
-			key: ConfirmPullMirrorOverwriteWhileOff, dotted: "confirm.pull_mirror.overwrite_while_off",
-			args: []Arg{S("project", sampleProject), S("source", sampleURL)},
-			want: fmt.Sprintf(
-				"Leave the pull mirror of project %s off and set it to overwrite diverged branches from %s once it is turned on?"+
-					" From the first sync after that, every branch the mirror pulls that has diverged from that repository is replaced by its version,"+
-					" and the replaced commits cannot be recovered through the API.",
-				sampleProject, sampleURL,
-			),
-		},
-		{
-			key: ConfirmPullMirrorOverwriteWiden, dotted: "confirm.pull_mirror.overwrite_widen",
-			args: []Arg{
-				S("project", sampleProject), M("branches", New(ConfirmPullMirrorBranchesAll)), S("source", sampleURL),
-			},
-			want: fmt.Sprintf(
-				"Let the pull mirror of project %s, which overwrites diverged branches, pull every branch from %s?"+
-					" Every branch it pulls that has diverged from that repository, the ones it skipped until now included,"+
-					" is replaced by its version on the next sync, and the replaced commits cannot be recovered through the API.",
-				sampleProject, sampleURL,
-			),
-		},
-		{key: ConfirmPullMirrorBranchesAll, dotted: "confirm.pull_mirror.branches_all", want: "every branch"},
-		{key: ConfirmPullMirrorBranchesProtected, dotted: "confirm.pull_mirror.branches_protected", want: "the protected branches"},
-		{
-			key: ConfirmPullMirrorBranchesMatching, dotted: "confirm.pull_mirror.branches_matching",
-			args: []Arg{S("regex", strconv.Quote(sampleRegex))},
-			want: fmt.Sprintf("the branches whose names match %q", sampleRegex),
-		},
 		{key: ConfirmPullMirrorConfiguredSource, dotted: "confirm.pull_mirror.configured_source", want: "its configured mirror source"},
 		{
 			key: ConfirmWorkItemClear, dotted: "confirm.work_item.clear",
@@ -298,6 +271,46 @@ func frozenEnglishRows() []frozenEnglish {
 			key: ProgressPackagePublishDone, dotted: "progress.package_publish.done",
 			args: []Arg{N("published", sampleIndex), N("count", sampleCount)},
 			want: fmt.Sprintf("Published %d of %d files", sampleIndex, sampleCount),
+		},
+	}
+	return append(rows, pullMirrorQuestionRows()...)
+}
+
+// pullMirrorQuestionRows holds the questions of the pull mirror guard that
+// came after issue 1547's stack, for the mirror a call leaves off and for one
+// whose branch filter it widens, with the names of the branches the second
+// asks about. They replaced no literal, so each row pins the English it was
+// written with.
+func pullMirrorQuestionRows() []frozenEnglish {
+	return []frozenEnglish{
+		{
+			key: ConfirmPullMirrorOverwriteWhileOff, dotted: "confirm.pull_mirror.overwrite_while_off",
+			args: []Arg{S("project", sampleProject), S("source", sampleURL)},
+			want: fmt.Sprintf(
+				"Leave the pull mirror of project %s off and set it to overwrite diverged branches from %s once it is turned on?"+
+					" From the first sync after that, every branch the mirror pulls that has diverged from that repository is replaced by its version,"+
+					" and the replaced commits cannot be recovered through the API.",
+				sampleProject, sampleURL,
+			),
+		},
+		{
+			key: ConfirmPullMirrorOverwriteWiden, dotted: "confirm.pull_mirror.overwrite_widen",
+			args: []Arg{
+				S("project", sampleProject), M("branches", New(ConfirmPullMirrorBranchesAll)), S("source", sampleURL),
+			},
+			want: fmt.Sprintf(
+				"Let the pull mirror of project %s, which overwrites diverged branches, pull every branch from %s?"+
+					" Every branch it pulls that has diverged from that repository, the ones it skipped until now included,"+
+					" is replaced by its version on the next sync, and the replaced commits cannot be recovered through the API.",
+				sampleProject, sampleURL,
+			),
+		},
+		{key: ConfirmPullMirrorBranchesAll, dotted: "confirm.pull_mirror.branches_all", want: "every branch"},
+		{key: ConfirmPullMirrorBranchesProtected, dotted: "confirm.pull_mirror.branches_protected", want: "the protected branches"},
+		{
+			key: ConfirmPullMirrorBranchesMatching, dotted: "confirm.pull_mirror.branches_matching",
+			args: []Arg{S("regex", strconv.Quote(sampleRegex))},
+			want: fmt.Sprintf("the branches whose names match %q", sampleRegex),
 		},
 	}
 }
