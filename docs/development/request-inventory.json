@@ -15855,6 +15855,7 @@
         "merge_request_title_regex_description",
         "merge_train_enforcement",
         "mirror",
+        "mirror_branch_regex",
         "mirror_overwrites_diverged_branches",
         "mirror_trigger_builds",
         "mirror_user_id",

@@ -918,7 +918,6 @@
       "PUT /projects/:id | merge_requests_template",
       "PUT /projects/:id | merge_trains_enabled",
       "PUT /projects/:id | merge_trains_skip_train_allowed",
-      "PUT /projects/:id | mirror_branch_regex",
       "PUT /projects/:id | model_experiments_access_level",
       "PUT /projects/:id | model_registry_access_level",
       "PUT /projects/:id | monitor_access_level",
