@@ -25,12 +25,12 @@
     },
     "premium": {
       "visible_tools": 1027,
-      "tool_schema_tokens": 665417,
+      "tool_schema_tokens": 665427,
       "reduction_factor_vs_dynamic": 365
     },
     "ultimate": {
       "visible_tools": 1093,
-      "tool_schema_tokens": 705656,
+      "tool_schema_tokens": 705666,
       "reduction_factor_vs_dynamic": 387
     }
   }
