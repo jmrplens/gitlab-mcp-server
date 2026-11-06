@@ -125,9 +125,10 @@ That shape is what determines whether something counts as a vulnerability here.
   that skips both the elicitation and the explicit `confirm` the action
   requires, or because text this server returns leads the model to send that
   `confirm` on its own (prompt injection escaping its labelling, above). That is
-  a vulnerability. An action that should ask and does not, or that makes a
-  change another action asks to confirm, is missing a confirmation rather than
-  bypassing one: a bug, reported as an ordinary issue.
+  a vulnerability, since the action asks for the confirmation and it was
+  skipped. An action that never asks although it should, or that makes a change
+  another action asks to confirm, has no confirmation to bypass: it is missing
+  one, a bug reported as an ordinary issue.
 - **Server-side request forgery.** A caller-controlled value that redirects an
   API request away from the configured `GITLAB_URL` to an internal address.
 
