@@ -95,7 +95,7 @@ type Entry struct {
 	// entry is built.
 	rememberBelowMinimum func()
 	// credentialHash is [CredentialHash] of the entry's credential, so that
-	// [ServerPool.evictRejectedCredential] and [ServerPool.evictBelowMinimum]
+	// the lines dropping the entry for a rejected or below-minimum credential
 	// name it by the handle the created-entry line wrote. It is set when the
 	// entry is built, before anything can observe it, and never changed.
 	// Holding it keeps no credential material: it is the keyed digest that
@@ -727,10 +727,11 @@ func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *g
 	//
 	// Released explicitly rather than with defer, unlike every other lock site
 	// in this file, and it has to be: both arms of the switch below take the
-	// write lock — dropRejectedEntry directly, the stale arm through the slow
-	// path — and a read lock still held there deadlocks the process. The block
-	// under it is a map read and, for an entry it finds, two field reads, none
-	// of which can panic, so defer buys nothing here and costs the function.
+	// write lock, the rejected arm through dropRejectedCredential and the stale
+	// arm through the slow path. A read lock still held there deadlocks the
+	// process. The block under it is a map read and, for an entry it finds, two
+	// field reads, none of which can panic, so defer buys nothing here and costs
+	// the function.
 	p.mu.RLock()
 	cached, ok := p.entries[key]
 	// Read only for an entry the pool holds, and under the same lock that
@@ -750,14 +751,8 @@ func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *g
 		// that follows has not taken the lock yet. Dropping it here, rather
 		// than serving it once more, sends this request down the slow path,
 		// which rebuilds and re-verifies; the pending eviction then finds
-		// nothing under the key and does nothing.
-		droppedURL, size, dropped := p.dropRejectedEntry(key, cached)
-		if dropped {
-			slog.Info("server pool: gitlab rejected the credential on a call, dropping the entry",
-				"gitlab_url", droppedURL,
-				"pool_size", size,
-				telemetry.LogFieldCredentialHash, cached.credentialHash)
-		}
+		// nothing to drop and does nothing.
+		p.dropRejectedCredential(key, cached)
 	case stale:
 		// The credential behind this entry has not been checked with GitLab
 		// inside the ceiling, so the entry stops being an answer. Dropping it
@@ -1115,6 +1110,14 @@ func (p *ServerPool) evictRejectedCredential(key string, entry *Entry) {
 	// released by a defer for the same reason, so the panic cannot leave it
 	// held.
 	defer recoverSweep(context.Background(), "rejected-credential eviction")
+	p.dropRejectedCredential(key, entry)
+}
+
+// dropRejectedCredential removes entry, if it is still the one under key,
+// and writes the line that says so. The eviction a 401 schedules and a
+// request that finds the entry already marked both call it, so whichever
+// takes the lock first logs and the other finds nothing to drop.
+func (p *ServerPool) dropRejectedCredential(key string, entry *Entry) {
 	gitlabURL, size, dropped := p.dropRejectedEntry(key, entry)
 	if !dropped {
 		return
