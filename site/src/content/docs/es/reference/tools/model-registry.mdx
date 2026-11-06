@@ -42,7 +42,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Meta-herramienta**: `gitlab_model_registry`, acción `download`
 - **Herramienta individual**: `gitlab_download_ml_model_package`
 - **Nivel**: Free
-- **Token clásico u OAuth**: `read_api` (o `api`)
+- **Token clásico u OAuth**: `read_api` (o `api`); no un token OAuth, que GitLab rechaza en `GET /projects/:id/packages/ml_models/:model_version_id/files/(*path/):file_name`
 - **Token de grano fino**: Model Version: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#model_registry))
 - **Comportamiento**: solo lectura, idempotente
 
