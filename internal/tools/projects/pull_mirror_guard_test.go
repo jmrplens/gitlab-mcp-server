@@ -98,6 +98,15 @@ const maskedMirrorSourceURL = "https://*****:*****@github.com/example/repo.git"
 // unparseableMirrorSource is a URL net/url refuses, for an invalid escape.
 const unparseableMirrorSource = "https://github.com/example/%zz.git"
 
+// homeRelativeMirrorSource is an SSH source whose path git resolves in the
+// home directory of the account it logs in as, here bob's.
+const homeRelativeMirrorSource = "ssh://bob@host.example/~/repo.git"
+
+// maskedHomeRelativeMirrorSource is how GitLab reports such a source for a
+// mirror that logs in as another account, alice's: the user is masked, so the
+// report does not say whose home the path is in.
+const maskedHomeRelativeMirrorSource = "ssh://*****@host.example/~/repo.git"
+
 // jsonBool renders a bool as the JSON literal, so the fixture reads as the
 // document GitLab sends.
 func jsonBool(v bool) string {
@@ -508,7 +517,12 @@ func TestConfigurePullMirror_ResendingTheSourceItPullsFrom_Proceeds(t *testing.T
 // spelling GitLab might normalize, such as a default port or a trailing slash,
 // still reads as another source: the guard errs toward asking. A URL net/url
 // cannot parse, or one where an @ after the host leaves GitLab reading another
-// host than net/url does, is never the same source either.
+// host than net/url does, is never the same source either, and neither is one
+// whose path starts with ~, which git resolves in the home directory of the
+// account the URL logs in as: GitLab reports that account masked, so even the
+// URL resent as it was cannot be told from another login's repository. An
+// absolute path over SSH names its repository whoever logs in, so its user is
+// a credential like any other.
 func TestSameMirrorSource_Values(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -529,6 +543,10 @@ func TestSameMirrorSource_Values(t *testing.T) {
 		{name: "a default port written out", sent: "https://github.com:443/example/repo.git", current: mirrorSourceURL, want: false},
 		{name: "a trailing slash", sent: mirrorSourceURL + "/", current: mirrorSourceURL, want: false},
 		{name: "an @ after the host", sent: "https://github.com/example@evil.example/repo.git", current: "https://github.com/example@evil.example/repo.git", want: false},
+		{name: "an absolute SSH path under a masked login", sent: "ssh://git@host.example/srv/repo.git", current: "ssh://*****@host.example/srv/repo.git", want: true},
+		{name: "a home-relative path under another login", sent: homeRelativeMirrorSource, current: maskedHomeRelativeMirrorSource, want: false},
+		{name: "a home-relative path resent as it was", sent: "ssh://alice@host.example/~/repo.git", current: maskedHomeRelativeMirrorSource, want: false},
+		{name: "a home-relative path with no login", sent: "ssh://host.example/~/repo.git", current: "ssh://host.example/~/repo.git", want: false},
 		{name: "a sent URL net/url refuses", sent: unparseableMirrorSource, current: mirrorSourceURL, want: false},
 		{name: "a reported URL net/url refuses", sent: mirrorSourceURL, current: unparseableMirrorSource, want: false},
 		{name: "both refused alike", sent: unparseableMirrorSource, current: unparseableMirrorSource, want: false},
@@ -860,8 +878,12 @@ func TestConfigurePullMirror_ThroughTheRoute_HonorsTheReservedConfirmKey(t *test
 // project would pull from when the call names a URL. The URL is the caller's
 // own parameter, so a credential written into its userinfo must not be echoed
 // into a prompt, and a value that is not an absolute URL is withheld rather
-// than shown. A call that names none is asked about the configured source,
-// which the two refusal tests above pin.
+// than shown. So is one with an @ left after the userinfo is dropped: GitLab
+// reads everything up to the last @ as credentials, so the rendering would
+// show a password net/url took for a host and a path, or a host GitLab does
+// not pull from. An @ written escaped is not one GitLab splits at, and is
+// shown as written. A call that names none is asked about the configured
+// source, which the two refusal tests above pin.
 func TestPullMirrorSourceForPrompt_Values(t *testing.T) {
 	tests := []struct {
 		name string
@@ -871,6 +893,9 @@ func TestPullMirrorSourceForPrompt_Values(t *testing.T) {
 		{name: "host and path survive", raw: mirrorSourceURL, want: mirrorSourceURL},
 		{name: "userinfo is dropped", raw: "https://user:token@github.com/example/repo.git", want: mirrorSourceURL},
 		{name: "query and fragment are dropped", raw: "https://github.com/example/repo.git?token=secret#frag", want: mirrorSourceURL},
+		{name: "a password GitLab reads past a port is withheld", raw: "https://alice:123/secret@mirror.example/repo.git", want: toolutil.RedactedPlaceholder},
+		{name: "a host GitLab reads past an @ in the path is withheld", raw: "https://github.com/example@evil.example/repo.git", want: toolutil.RedactedPlaceholder},
+		{name: "an escaped @ is not one GitLab splits at", raw: "https://github.com/example%40team/repo.git", want: "https://github.com/example%40team/repo.git"},
 		{name: "scp syntax is withheld", raw: "git@github.com:example/repo.git", want: toolutil.RedactedPlaceholder},
 		{name: "unparseable text is withheld", raw: "https://exa mple.com/\x7f", want: toolutil.RedactedPlaceholder},
 		{name: "a bare path names no scheme and is withheld", raw: "github.com/example/repo.git", want: toolutil.RedactedPlaceholder},
@@ -976,8 +1001,11 @@ func armingUpdate() UpdateInput {
 // it does not excuse a flag sent beside it: arming the overwrite, or re-sending
 // mirror=true to an overwriting mirror, with that same URL still asks. A URL
 // that differs from the source in its path's case, that GitLab would read past
-// an @ after the host, or that either side gives in a form net/url refuses is
-// not the same source, and asks.
+// an @ after the host, that either side gives in a form net/url refuses, or
+// whose path git resolves in the home of the account it logs in as, which
+// GitLab reports masked, is not the same source, and asks. The question
+// withholds a URL GitLab would read past an @, since what it shows as the host
+// is what GitLab takes for credentials.
 func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1077,7 +1105,14 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 			name:      "a source GitLab would read past its last @",
 			read:      readMirrorAt(true, "https://github.com/example@evil.example/repo.git"),
 			input:     UpdateInput{ProjectID: "42", ImportURL: "https://github.com/example@evil.example/repo.git"},
-			source:    "https://github.com/example@evil.example/repo.git",
+			source:    toolutil.RedactedPlaceholder,
+			wantReads: 1,
+		},
+		{
+			name:      "a home-relative SSH source under another login",
+			read:      readMirrorAt(true, maskedHomeRelativeMirrorSource),
+			input:     UpdateInput{ProjectID: "42", ImportURL: homeRelativeMirrorSource},
+			source:    "ssh://host.example/~/repo.git",
 			wantReads: 1,
 		},
 		{

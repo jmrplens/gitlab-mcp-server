@@ -299,9 +299,19 @@ func sameMirrorSource(sent, current string) bool {
 // parsers agree on such a URL's repository only by chance. GitLab reads every
 // url it reports through that rule, so none it reports should carry one, and
 // the comparison does not rely on that.
+//
+// Nor is a URL whose path starts with ~ compared. Git resolves such a path in
+// the home directory of the account it logs in as, so
+// ssh://alice@host/~/repo.git and ssh://bob@host/~/repo.git name two
+// repositories, and a URL that names no user logs in as the default one.
+// There the user picks the repository rather than the credentials, and GitLab
+// reports it masked, so the url it reports cannot tell this server which.
 func mirrorSourceKey(raw string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil {
+		return ""
+	}
+	if strings.HasPrefix(parsed.Path, "/~") {
 		return ""
 	}
 	parsed.User = nil
@@ -325,14 +335,22 @@ func isNotMirrored(err error) bool {
 // The URL is the caller's own parameter and may carry credentials in its
 // userinfo despite the schema saying not to, so it is rendered through
 // [toolutil.RedactURL], and anything that does not parse as an absolute URL is
-// withheld rather than echoed. A call that sends no URL keeps the source the
-// project already has, which [confirmDivergedOverwrite] names from the catalog
-// rather than reveals: reading it would cost a round trip to tell the user
-// something the project's own settings page already shows them.
+// withheld rather than echoed. So is a URL with an @ left once the userinfo is
+// gone: GitLab takes everything up to the last @ for credentials, as
+// [mirrorSourceKey] says, so in https://alice:123/secret@mirror.example/repo.git
+// it reads the password 123/secret where net/url reads a host and a path, and
+// the rendering would both show that password and name a host GitLab does not
+// pull from. A call that sends no URL keeps the source the project already
+// has, which [confirmDivergedOverwrite] names from the catalog rather than
+// reveals: reading it would cost a round trip to tell the user something the
+// project's own settings page already shows them.
 func pullMirrorSourceForPrompt(raw string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return toolutil.RedactedPlaceholder
 	}
-	return toolutil.RedactURL(parsed)
+	if shown := toolutil.RedactURL(parsed); !strings.Contains(shown, "@") {
+		return shown
+	}
+	return toolutil.RedactedPlaceholder
 }
