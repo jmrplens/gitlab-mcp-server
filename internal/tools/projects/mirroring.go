@@ -94,7 +94,7 @@ type ConfigurePullMirrorInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables or re-aims a mirror that is on and has it, or one whose settings cannot be read. A client that supports elicitation is asked instead"`
 }
 
 // ConfigurePullMirror sets up or updates pull mirroring for a project.

@@ -696,7 +696,7 @@ type UpdateInput struct {
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead. It answers only
 	// the pull-mirror question, so it carries that question's tier.
-	Confirm bool `json:"confirm,omitempty" tier:"premium" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables or re-aims a mirror that has it or whose settings cannot be read. A client that supports elicitation is asked instead"`
+	Confirm bool `json:"confirm,omitempty" tier:"premium" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables or re-aims a mirror that is on and has it, or one whose settings cannot be read. A client that supports elicitation is asked instead"`
 
 	// Container registry cleanup (additive)
 	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
